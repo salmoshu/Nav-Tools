@@ -15,6 +15,7 @@ export default defineConfig(({ command }) => {
   return {
     plugins: [
       vue(),
+      // 只在非 no-electron 模式下启用
       electron({
         main: {
           // Shortcut of `build.lib.entry`

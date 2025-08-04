@@ -1,4 +1,4 @@
-import { app, BrowserWindow, shell, ipcMain } from 'electron'
+import { app, BrowserWindow, shell, ipcMain, Menu } from 'electron'
 import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
@@ -78,7 +78,108 @@ async function createWindow() {
   // win.webContents.on('will-navigate', (event, url) => { }) #344
 }
 
-app.whenReady().then(createWindow)
+function createMenu() {
+  const template = [
+    {
+      label: '文件',
+      submenu: [
+        {
+          label: '新建',
+          accelerator: 'CmdOrCtrl+N',
+          click: () => {
+            console.log('新建文件')
+            // 这里可以添加新建窗口或新建文件的逻辑
+          }
+        },
+        {
+          label: '打开',
+          accelerator: 'CmdOrCtrl+O',
+          click: () => {
+            console.log('打开文件')
+            // 这里可以添加打开文件的逻辑
+          }
+        },
+        { type: 'separator' },
+        {
+          label: '退出',
+          accelerator: process.platform === 'darwin' ? 'Cmd+Q' : 'Ctrl+Q',
+          click: () => {
+            app.quit()
+          }
+        }
+      ]
+    },
+    {
+      label: '视图',
+      submenu: [
+        { role: 'reload', label: '重新加载' },
+        { role: 'forceReload', label: '强制重新加载' },
+        { role: 'toggleDevTools', label: '开发者工具' },
+        { type: 'separator' },
+        { role: 'resetZoom', label: '重置缩放' },
+        { role: 'zoomIn', label: '放大' },
+        { role: 'zoomOut', label: '缩小' },
+        { type: 'separator' },
+        { role: 'togglefullscreen', label: '全屏' }
+      ]
+    },
+    {
+      label: '窗口',
+      submenu: [
+        { role: 'minimize', label: '最小化' },
+        { role: 'close', label: '关闭' }
+      ]
+    },
+    {
+      label: '|',
+      enabled: false,
+      visible: true
+    },
+    {
+      label: 'PNC',
+      click: () => {
+        win?.webContents.send('open-pnc-view')
+      }
+    },
+    {
+      label: 'GNSS',
+      click: () => {
+        win?.webContents.send('open-gnss-view')
+      }
+    },
+    {
+      label: '|',
+      enabled: false,
+      visible: true
+    },
+    {
+      label: '帮助',
+      submenu: [
+        {
+          label: '关于',
+          click: () => {
+            console.log('关于应用')
+            // 这里可以添加显示关于对话框的逻辑
+          }
+        },
+        {
+          label: '访问官网',
+          click: () => {
+            shell.openExternal('https://github.com/salmoshu/Nav-Tools')
+          }
+        }
+      ]
+    },
+  ]
+
+  const menu = Menu.buildFromTemplate(template as any)
+  Menu.setApplicationMenu(menu)
+}
+
+app.whenReady().then(() => {
+  createWindow()
+  createMenu()
+})
 
 app.on('window-all-closed', () => {
   win = null

@@ -1,4 +1,4 @@
-# electron-vite-vue
+# Nav-Tools
 
 🥳 Really simple `Electron` + `Vue` + `Vite` boilerplate.
 
@@ -23,16 +23,20 @@
 
 ```sh
 # clone the project
-git clone https://github.com/electron-vite/electron-vite-vue.git
+git clone https://github.com/salmoshu/Nav-Tools.git
 
 # enter the project directory
-cd electron-vite-vue
+cd Nav-Tools
+
+# set pnpm mirror in .npmrc
+electron_mirror=https://npmmirror.com/mirrors/electron/
 
 # install dependency
-npm install
+pnpm install
+pnpm approve-builds # for electron, esbuild
 
 # develop
-npm run dev
+pnpm run dev
 ```
 
 ## Debug
