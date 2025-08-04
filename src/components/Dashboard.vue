@@ -145,11 +145,13 @@ const handleAction = (action: string) => {
 
 onMounted(() => {
   snapToEdge()
+  window.addEventListener('resize', snapToEdge)
 })
 
 onUnmounted(() => {
   document.removeEventListener('mousemove', handleDrag)
   document.removeEventListener('mouseup', stopDrag)
+  window.removeEventListener('resize', snapToEdge)
 })
 </script>
 
