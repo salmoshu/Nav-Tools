@@ -1,9 +1,15 @@
 <script setup lang="ts">
-import HelloWorld from './components/HelloWorld.vue'
+import Dashboard from './components/Dashboard.vue'
+// import HelloWorld from './components/HelloWorld.vue'
+
 </script>
 
 <template>
-  <div>
+  <!-- GNSS & PNC -->
+  <Dashboard />
+
+  <!-- Hello World -->
+  <!-- <div>
     <a href="https://www.electronjs.org/" target="_blank">
       <img src="./assets/electron.svg" class="logo electron" alt="Electron logo" />
     </a>
@@ -18,11 +24,12 @@ import HelloWorld from './components/HelloWorld.vue'
   <div class="flex-center">
     Place static files into the <code>/public</code> folder
     <img style="width: 2.4em; margin-left: .4em;" src="/logo.svg" alt="Logo">
-  </div>
+  </div> -->
 </template>
 
 <style>
-.flex-center {
+/* Hello World */
+/* .flex-center {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -45,5 +52,5 @@ import HelloWorld from './components/HelloWorld.vue'
 
 .logo.vue:hover {
   filter: drop-shadow(0 0 2em #42b883aa);
-}
+} */
 </style>

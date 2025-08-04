@@ -25,6 +25,9 @@ a:hover {
 
 body {
   margin: 0;
+  padding: 0;
+  width: 100vw;
+  height: 100vh;
   display: flex;
   place-items: center;
   min-width: 320px;
@@ -67,9 +70,9 @@ code {
 }
 
 #app {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 2rem;
+  max-width: none;
+  margin: 0;
+  padding: 0;
   text-align: center;
 }
 

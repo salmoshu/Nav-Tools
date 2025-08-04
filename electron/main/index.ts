@@ -60,7 +60,7 @@ async function createWindow() {
   if (VITE_DEV_SERVER_URL) { // #298
     win.loadURL(VITE_DEV_SERVER_URL)
     // Open devTool if the app is not packaged
-    win.webContents.openDevTools()
+    // win.webContents.openDevTools()
   } else {
     win.loadFile(indexHtml)
   }
@@ -131,26 +131,7 @@ function createMenu() {
       ]
     },
     {
-      label: '|',
-      enabled: false,
-      visible: true
-    },
-    {
-      label: 'PNC',
-      click: () => {
-        win?.webContents.send('open-pnc-view')
-      }
-    },
-    {
-      label: 'GNSS',
-      click: () => {
-        win?.webContents.send('open-gnss-view')
-      }
-    },
-    {
-      label: '|',
-      enabled: false,
-      visible: true
+      label: '工具',
     },
     {
       label: '帮助',
@@ -169,6 +150,23 @@ function createMenu() {
           }
         }
       ]
+    },
+    {
+      label: '|',
+      enabled: false,
+      visible: true
+    },
+    {
+      label: 'PNC',
+      click: () => {
+        win?.webContents.send('open-pnc-view')
+      }
+    },
+    {
+      label: 'GNSS',
+      click: () => {
+        win?.webContents.send('open-gnss-view')
+      }
     },
   ]
 
