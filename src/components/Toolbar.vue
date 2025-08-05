@@ -18,7 +18,7 @@
         class="toolbar-btn" 
         @click="handleAction(item.msg)" 
         :title="item.title"
-        v-html="item.icon"
+        v-html="item.icon+item.text"
       >
       </button>
     </div>
@@ -33,50 +33,78 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
 import { currMode, AppMode, FuncMode } from '@/hooks/useTools'
 import { toolBarIcon } from '@/hooks/useIcon'
+
+const position = ref<'top' | 'right' | 'bottom' | 'left'>('top')
+
+function showText(position: string): boolean {
+  if (position === 'top' || position === 'bottom') {
+    return true
+  } else {
+    return false
+  }
+}
 
 // 定义按钮数据结构
 interface ButtonItem {
   title: string
   msg: string
   icon: any
+  text: string
 }
 
-// PNC模式按钮列表
-const pncList: ButtonItem[] = [
+// PNC 模式按钮列表
+const pncList: ButtonItem[] = reactive([
+
   {
     title: 'Follow',
     msg: 'follow',
-    icon: toolBarIcon.follow + '&nbsp;PID'
+    icon: toolBarIcon.follow,
+    text: showText(position.value) ? '&nbsp;PID' : '',
   },
   {
     title: 'BehaviorTree',
     msg: 'tree',
-    icon: toolBarIcon.tree + '&nbsp;Tree'
+    icon: toolBarIcon.tree,
+    text: showText(position.value) ? '&nbsp;Tree' : '',
   }
-]
+])
 
-// POS模式按钮列表
-const posList: ButtonItem[] = [
+// POS 模式按钮列表
+const posList: ButtonItem[] = reactive([
   {
     title: 'GNSS',
     msg: 'gnss',
-    icon: toolBarIcon.gnss + '&nbsp;GNSS'
-
+    icon: toolBarIcon.gnss,
+    text: showText(position.value) ? '&nbsp;GNSS' : '',
   },
   {
     title: 'IMU',
     msg: 'imu',
-    icon: toolBarIcon.imu + '&nbsp;IMU'
+    icon: toolBarIcon.imu,
+    text: showText(position.value) ? '&nbsp;IMU' : '',
   },
   {
     title: 'Vision',
     msg: 'vision',
-    icon: toolBarIcon.vision + '&nbsp;Vision'
+    icon: toolBarIcon.vision,
+    text: showText(position.value) ? '&nbsp;Vision' : '',
   }
-]
+])
+
+// 监听 position 变化
+watch(position, (newPosition) => {
+  pncList.forEach(item => {
+    item.text = showText(newPosition) ? '&nbsp;'+item.title : ''
+
+  })
+  posList.forEach(item => {
+    item.text = showText(newPosition) ? '&nbsp;'+item.title : ''
+  })
+})
+
 
 // 计算属性：根据当前模式返回对应的按钮列表
 const currentButtonList = computed(() => {
@@ -97,7 +125,7 @@ const emit = defineEmits<{
   positionChange: [position: 'top' | 'right' | 'bottom' | 'left']
 }>()
 
-const position = ref<'top' | 'right' | 'bottom' | 'left'>('top')
+
 const isDragging = ref(false)
 const dragOffset = ref({ x: 0, y: 0 })
 const toolbarRect = ref({ x: 0, y: 0 })
@@ -487,9 +515,3 @@ onUnmounted(() => {
   height: 100%;
 } */
 </style>
-
-/* 添加图标样式 */
-.icon {
-  height: 16px;
-  width: 16px;
-}

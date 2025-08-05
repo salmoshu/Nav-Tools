@@ -8,17 +8,17 @@
     <div 
       class="dashboard-content" 
       :class="{ 
-        'simulation-mode': currentMode === 'follow',
         'toolbar-top': toolbarPosition === 'top',
         'toolbar-bottom': toolbarPosition === 'bottom',
         'toolbar-left': toolbarPosition === 'left',
         'toolbar-right': toolbarPosition === 'right'
       }"
+      :style="contentStyle"
     >
-      <div v-if="currentMode === 'follow'" class="simulation-wrapper">
+      <!-- <div v-if="currentMode === 'follow'" class="simulation-wrapper">
         <PidFollowSimulation />
-      </div>
-      <div v-else class="default-content">
+      </div> -->
+      <div class="default-content">
         <h1>Dashboard</h1>
         <p>拖拽工具栏到任意边缘进行停靠</p>
       </div>
@@ -27,9 +27,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import Toolbar from './Toolbar.vue'
-import PidFollowSimulation from './pnc/PidFollowSimulation.vue'
+import { currMode, AppMode, FuncMode } from '@/hooks/useTools'
+// import PidFollowSimulation from './pnc/PidFollowSimulation.vue'
 
 const currentMode = ref<'default' | 'follow'>('default')
 const toolbarPosition = ref<'top' | 'right' | 'bottom' | 'left'>('top')
@@ -38,13 +39,30 @@ const handleToolbarAction = (action: string) => {
   console.log(`执行操作: ${action}`)
   
   switch (action) {
+    /* PNC */
     case 'follow':
       currentMode.value = 'follow'
+      currMode.FuncMode = FuncMode.Follow
       break
     case 'tree':
       currentMode.value = 'default'
+      currMode.FuncMode = FuncMode.Tree
+      break
+    /* POS */
+    case 'gnss':
+      currentMode.value = 'default'
+      currMode.FuncMode = FuncMode.Gnss
+      break
+    case 'imu':
+      currentMode.value = 'default'
+      currMode.FuncMode = FuncMode.Imu
+      break
+    case 'vision':
+      currentMode.value = 'default'
+      currMode.FuncMode = FuncMode.Vision
       break
     default:
+      currMode.FuncMode = FuncMode.None
       console.log(`未知操作: ${action}`)
   }
 }
@@ -52,6 +70,39 @@ const handleToolbarAction = (action: string) => {
 const handleToolbarPositionChange = (position: 'top' | 'right' | 'bottom' | 'left') => {
   toolbarPosition.value = position
 }
+
+const toolbarSize = ref({
+  width: 40,  // 工具栏宽度
+  height: 40  // 工具栏高度
+})
+
+const contentStyle = computed(() => {
+  const size = toolbarSize.value
+  switch (toolbarPosition.value) {
+    case 'top':
+      return {
+        height: `calc(100vh - ${size.height}px)`,
+        marginTop: `${size.height}px`
+      }
+    case 'bottom':
+      return {
+        height: `calc(100vh - ${size.height}px)`,
+        marginBottom: `${size.height}px`
+      }
+    case 'left':
+      return {
+        width: `calc(100vw - ${size.width}px)`,
+        marginLeft: `${size.width}px`
+      }
+    case 'right':
+      return {
+        width: `calc(100vw - ${size.width}px)`,
+        marginRight: `${size.width}px`
+      }
+    default:
+      return {}
+  }
+})
 </script>
 
 <style scoped>
@@ -71,45 +122,8 @@ const handleToolbarPositionChange = (position: 'top' | 'right' | 'bottom' | 'lef
   height: 100%;
   transition: all 0.3s ease;
   position: relative;
-  
-  /* 默认状态 - 为顶部工具栏预留空间 */
-  padding-top: 40px;
-  padding-right: 0;
-  padding-bottom: 0;
-  padding-left: 0;
-}
-
-/* 动态布局类 */
-.dashboard-content.toolbar-top {
-  padding-top: 40px;
-  padding-right: 0;
-  padding-bottom: 0;
-  padding-left: 0;
-}
-
-.dashboard-content.toolbar-bottom {
-  padding-top: 0;
-  padding-right: 0;
-  padding-bottom: 40px;
-  padding-left: 0;
-}
-
-.dashboard-content.toolbar-left {
-  padding-top: 0;
-  padding-right: 0;
-  padding-bottom: 0;
-  padding-left: 40px;
-}
-
-.dashboard-content.toolbar-right {
-  padding-top: 0;
-  padding-right: 40px;
-  padding-bottom: 0;
-  padding-left: 0;
-}
-
-.simulation-mode {
-  background: #f5f5f5;
+  box-sizing: border-box;
+  border: 5px solid #E0E0E0;
 }
 
 .simulation-wrapper {
