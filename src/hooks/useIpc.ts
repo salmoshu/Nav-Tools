@@ -1,5 +1,5 @@
 import { initEvent } from './example'
-import { menuEvent } from './menu'
+import { menuEvent } from './useTools'
 
 const ipcEvent = {
   // electron init

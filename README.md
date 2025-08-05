@@ -19,6 +19,16 @@
 🔩 Support C/C++ native addons  
 🖥 It's easy to implement multiple windows  
 
+## Applications
+
+1. PNC
+   - Follow
+   - BehaviorTree
+2. POS
+   - GNSS
+   - IMU
+   - Vision
+
 ## Quick Setup
 
 ```sh

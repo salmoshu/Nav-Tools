@@ -163,7 +163,7 @@ function createMenu() {
       }
     },
     {
-      label: 'GNSS',
+      label: 'POS',
       click: () => {
         win?.webContents.send('open-gnss-view')
       }
