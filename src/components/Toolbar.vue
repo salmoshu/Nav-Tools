@@ -21,6 +21,11 @@
         v-html="item.icon+item.text"
       >
       </button>
+      <span class="divider">|</span>
+      <button class="toolbar-btn">Draw</button>
+      <button class="toolbar-btn">Data</button>
+      <button class="toolbar-btn">Config</button>
+      <button class="toolbar-btn">Status</button>
     </div>
     <div class="toolbar-dock-zones" v-if="isDragging && activeDockZone">
       <div 
@@ -440,6 +445,17 @@ onUnmounted(() => {
   padding: 6px;
   cursor: pointer;
   transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.divider {
+  border: none;
+  border-radius: 4px;
+  color: #ecf0f1;
+  padding: 6px;
+  cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
