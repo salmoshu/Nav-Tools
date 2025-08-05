@@ -179,6 +179,14 @@ const getDockZoneStyle = (zone: 'top' | 'right' | 'bottom' | 'left') => {
   }
 }
 
+// 在变量声明区域添加
+const originalState = ref({
+  x: 0,
+  y: 0,
+  position: 'top' as const
+})
+
+// 修改startDrag函数
 const startDrag = (event: MouseEvent) => {
   const handle = (event.target as HTMLElement).closest('.toolbar-handle')
   if (!handle) return
@@ -186,6 +194,13 @@ const startDrag = (event: MouseEvent) => {
   event.preventDefault()
   isDragging.value = true
   activeDockZone.value = null
+
+  // 保存拖动前的状态
+  originalState.value = {
+    x: toolbarRect.value.x,
+    y: toolbarRect.value.y,
+    position: position.value
+  }
 
   const rect = (event.currentTarget as HTMLElement).getBoundingClientRect()
   dragOffset.value = {
@@ -195,6 +210,58 @@ const startDrag = (event: MouseEvent) => {
 
   document.addEventListener('mousemove', handleDrag)
   document.addEventListener('mouseup', stopDrag)
+}
+
+// 修改stopDrag函数
+const stopDrag = () => {
+  if (!isDragging.value) return
+
+  isDragging.value = false
+  
+  const threshold = 50
+  const windowWidth = window.innerWidth
+  const windowHeight = window.innerHeight
+  const x = toolbarRect.value.x
+  const y = toolbarRect.value.y
+
+  let shouldSnap = false
+  let finalPosition = position.value
+
+  // 计算最近的边缘
+  const distances = [
+    { zone: 'top' as const, distance: y },
+    { zone: 'bottom' as const, distance: windowHeight - y - 50 },
+    { zone: 'left' as const, distance: x },
+    { zone: 'right' as const, distance: windowWidth - x - 50 }
+  ]
+
+  let minDistance = Infinity
+  distances.forEach(({ zone, distance }) => {
+    if (distance < threshold && distance < minDistance) {
+      minDistance = distance
+      finalPosition = zone
+      shouldSnap = true
+    }
+  })
+
+  if (shouldSnap) {
+    // 吸附到边缘
+    position.value = finalPosition
+    emit('positionChange', finalPosition)
+    snapToEdge()
+  } else {
+    // 恢复到拖动前的状态
+    toolbarRect.value = { 
+      x: originalState.value.x, 
+      y: originalState.value.y 
+    }
+    position.value = originalState.value.position
+    emit('positionChange', originalState.value.position)
+  }
+
+  activeDockZone.value = null
+  document.removeEventListener('mousemove', handleDrag)
+  document.removeEventListener('mouseup', stopDrag)
 }
 
 const handleDrag = (event: MouseEvent) => {
@@ -231,53 +298,6 @@ const handleDrag = (event: MouseEvent) => {
 
   activeDockZone.value = nearestZone
   // 注意：这里不再调用emit('positionChange')和实时更新position
-}
-
-const stopDrag = () => {
-  if (!isDragging.value) return
-
-  isDragging.value = false
-  
-  // 只在松开时计算是否吸附
-  const threshold = 50
-  const windowWidth = window.innerWidth
-  const windowHeight = window.innerHeight
-  const x = toolbarRect.value.x
-  const y = toolbarRect.value.y
-
-  let shouldSnap = false
-  let finalPosition = position.value
-
-  // 计算最近的边缘
-  const distances = [
-    { zone: 'top' as const, distance: y },
-    { zone: 'bottom' as const, distance: windowHeight - y - 50 },
-    { zone: 'left' as const, distance: x },
-    { zone: 'right' as const, distance: windowWidth - x - 50 }
-  ]
-
-  let minDistance = Infinity
-  distances.forEach(({ zone, distance }) => {
-    if (distance < threshold && distance < minDistance) {
-      minDistance = distance
-      finalPosition = zone
-      shouldSnap = true
-    }
-  })
-
-  // 只在真正靠近边缘时才吸附
-  if (shouldSnap) {
-    position.value = finalPosition
-    emit('positionChange', finalPosition)
-    snapToEdge()
-  } else {
-    // 保持当前位置，不吸附
-    toolbarRect.value = { x, y }
-  }
-
-  activeDockZone.value = null
-  document.removeEventListener('mousemove', handleDrag)
-  document.removeEventListener('mouseup', stopDrag)
 }
 
 const snapToEdge = () => {
