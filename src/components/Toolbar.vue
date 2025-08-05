@@ -49,12 +49,12 @@ const pncList: ButtonItem[] = [
   {
     title: 'Follow',
     msg: 'follow',
-    icon: toolBarIcon.follow
+    icon: toolBarIcon.follow + '&nbsp;PID'
   },
   {
     title: 'BehaviorTree',
     msg: 'tree',
-    icon: toolBarIcon.tree
+    icon: toolBarIcon.tree + '&nbsp;Tree'
   }
 ]
 
@@ -63,17 +63,18 @@ const posList: ButtonItem[] = [
   {
     title: 'GNSS',
     msg: 'gnss',
-    icon: toolBarIcon.gnss
+    icon: toolBarIcon.gnss + '&nbsp;GNSS'
+
   },
   {
     title: 'IMU',
     msg: 'imu',
-    icon: toolBarIcon.imu
+    icon: toolBarIcon.imu + '&nbsp;IMU'
   },
   {
     title: 'Vision',
     msg: 'vision',
-    icon: toolBarIcon.vision
+    icon: toolBarIcon.vision + '&nbsp;Vision'
   }
 ]
 
@@ -374,6 +375,8 @@ onUnmounted(() => {
 .toolbar-content {
   display: flex;
   gap: 4px;
+  font-size: 12px;
+  font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif
 }
 
 .toolbar-left .toolbar-content,

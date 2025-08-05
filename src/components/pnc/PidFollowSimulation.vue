@@ -168,9 +168,9 @@
 
 <script lang="ts" setup>
 import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
-import { useCarSimulation } from './hooks/useCarSimulation'
-import { useUserControl } from './hooks/useUserControl'
-import { useFOV } from './hooks/useFOV'
+import { useCarSimulation } from '@/composables/follow/useCarSimulation'
+import { useUserControl } from '@/composables/follow/useUserControl'
+import { useFOV } from '@/composables/follow/useFOV'
 
 // 配置
 const config = reactive({

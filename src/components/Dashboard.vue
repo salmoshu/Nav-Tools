@@ -30,7 +30,6 @@
 import { ref } from 'vue'
 import Toolbar from './Toolbar.vue'
 import PidFollowSimulation from './pnc/PidFollowSimulation.vue'
-import { currMode, AppMode, FuncMode } from '@/hooks/useTools'
 
 const currentMode = ref<'default' | 'follow'>('default')
 const toolbarPosition = ref<'top' | 'right' | 'bottom' | 'left'>('top')

@@ -1,4 +1,4 @@
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onUnmounted } from 'vue'
 
 export function useUserControl(personState: any, setPersonPosition: (x: number, y: number) => void) {
   const isDraggingPerson = ref(false)
