@@ -76,11 +76,10 @@ import { Close } from '@element-plus/icons-vue'
 import Toolbar from './Toolbar.vue'
 import emitter from '@/hooks/useMitt'
 
-// 使用handle目录下的组件
-const ConfigPanel = defineAsyncComponent(() => import('./handle/Config.vue'))
-const DataPanel = defineAsyncComponent(() => import('./handle/Data.vue'))
-const DrawPanel = defineAsyncComponent(() => import('./handle/Draw.vue'))
-const StatusPanel = defineAsyncComponent(() => import('./handle/Status.vue'))
+const ConfigPanel = defineAsyncComponent(() => import('./Config.vue'))
+const DataPanel = defineAsyncComponent(() => import('./Data.vue'))
+const DrawPanel = defineAsyncComponent(() => import('./Draw.vue'))
+const StatusPanel = defineAsyncComponent(() => import('./Status.vue'))
 
 interface LayoutItem {
   x: number
