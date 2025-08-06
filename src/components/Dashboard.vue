@@ -42,27 +42,27 @@ const handleToolbarAction = (action: string) => {
     /* PNC */
     case 'follow':
       currentMode.value = 'follow'
-      currMode.FuncMode = FuncMode.Follow
+      currMode.funcMode = FuncMode.Follow
       break
     case 'tree':
       currentMode.value = 'default'
-      currMode.FuncMode = FuncMode.Tree
+      currMode.funcMode = FuncMode.BehaviorTree
       break
     /* POS */
     case 'gnss':
       currentMode.value = 'default'
-      currMode.FuncMode = FuncMode.Gnss
+      currMode.funcMode = FuncMode.Gnss
       break
     case 'imu':
       currentMode.value = 'default'
-      currMode.FuncMode = FuncMode.Imu
+      currMode.funcMode = FuncMode.Imu
       break
     case 'vision':
       currentMode.value = 'default'
-      currMode.FuncMode = FuncMode.Vision
+      currMode.funcMode = FuncMode.Vision
       break
     default:
-      currMode.FuncMode = FuncMode.None
+      currMode.funcMode = FuncMode.None
       console.log(`未知操作: ${action}`)
   }
 }

@@ -204,7 +204,7 @@ const startDrag = (event: MouseEvent) => {
   originalState.value = {
     x: toolbarRect.value.x,
     y: toolbarRect.value.y,
-    position: position.value
+    position: position.value as typeof originalState.value.position
   }
 
   const rect = (event.currentTarget as HTMLElement).getBoundingClientRect()

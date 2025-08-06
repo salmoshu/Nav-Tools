@@ -29,15 +29,25 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 18
+          node-version: 20
+          cache: 'npm'
 
-      - name: Install Dependencies
-        run: npm install
+      - name: Install Dependencies (Windows)
+        if: matrix.os == 'windows-latest'
+        run: |
+          npm config set msvs_version 2022
+          npm ci --force
+        shell: powershell
+
+      - name: Install Dependencies (Unix)
+        if: matrix.os != 'windows-latest'
+        run: npm ci
 
       - name: Build Release Files
         run: npm run build
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NODE_OPTIONS: --max-old-space-size=4096
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
