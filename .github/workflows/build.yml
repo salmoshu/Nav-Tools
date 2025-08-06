@@ -17,29 +17,37 @@ on:
 jobs:
   build:
     runs-on: ${{ matrix.os }}
-
+    timeout-minutes: 60  # 增加整体作业超时时间
+    
     strategy:
       matrix:
         os: [macos-latest, ubuntu-latest, windows-latest]
+      fail-fast: false  # 避免一个平台失败影响其他平台
 
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
+        timeout-minutes: 10  # 单独设置checkout超时
+        with:
+          fetch-depth: 1  # 只获取最新提交，减少传输量
 
       - name: Enable Corepack
         run: corepack enable
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
+        timeout-minutes: 5  # 单独设置node设置超时
         with:
           node-version: 20
           cache: 'pnpm'
 
       - name: Install Dependencies
         run: pnpm install --frozen-lockfile
+        timeout-minutes: 15  # 设置依赖安装超时
 
       - name: Build Release Files
         run: pnpm run build
+        timeout-minutes: 30  # 设置构建超时
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NODE_OPTIONS: --max-old-space-size=8192
