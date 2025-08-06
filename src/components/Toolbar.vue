@@ -21,9 +21,9 @@
         v-html="item.icon+item.text"
       >
       </button>
+
       <span v-if="upAndDown(position)" class="divider">|</span>
       <span v-else class="divider">一</span>
-
       
       <button 
         v-for="item in handleList" 
@@ -34,6 +34,20 @@
         v-html="item.icon+item.text"
       >
       </button>
+
+      <span v-if="upAndDown(position)" class="divider">|</span>
+      <span v-else class="divider">一</span>
+
+      <button 
+        v-for="item in layoutList" 
+        :key="item.msg"
+        class="toolbar-btn" 
+        @click="handleAction(item.msg)" 
+        :title="item.title"
+        v-html="item.icon+item.text"
+      >
+      </button>
+
     </div>
     <div class="toolbar-dock-zones" v-if="isDragging && activeDockZone">
       <div 
@@ -49,6 +63,7 @@
 import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
 import { currMode, AppMode, FuncMode } from '@/hooks/useTools'
 import { toolBarIcon } from '@/hooks/useIcon'
+import emitter from '@/hooks/useMitt'
 
 const position = ref<'top' | 'right' | 'bottom' | 'left'>('top')
 
@@ -112,7 +127,6 @@ const handleList: ButtonItem[] = reactive([
     msg: 'draw',
     icon: toolBarIcon.draw,
     text: upAndDown(position.value) ? '&nbsp;Draw' : '',
-
   },
   {
     title: 'Data',
@@ -134,6 +148,27 @@ const handleList: ButtonItem[] = reactive([
   },
 ])
 
+const layoutList: ButtonItem[] = reactive([
+  {
+    title: 'Edit',
+    msg: 'edit',
+    icon: toolBarIcon.edit,
+    text: upAndDown(position.value) ? '&nbsp;Edit' : '',
+  },
+  {
+    title: 'Save',
+    msg: 'save',
+    icon: toolBarIcon.save,
+    text: upAndDown(position.value) ? '&nbsp;Save' : '',
+  },
+
+  {
+    title: 'Reset',
+    msg: 'reset',
+    icon: toolBarIcon.reset,
+    text: upAndDown(position.value) ? '&nbsp;Reset' : '',
+  },
+])
 
 watch(position, (newPosition) => {
   pncList.forEach(item => {
@@ -145,7 +180,9 @@ watch(position, (newPosition) => {
   handleList.forEach(item => {
     item.text = upAndDown(newPosition) ? '&nbsp;'+item.title : ''
   })
-
+  layoutList.forEach(item => {
+    item.text = upAndDown(newPosition) ? '&nbsp;'+item.title : ''
+  })
 })
 
 // 计算属性：根据当前模式返回对应的按钮列表
@@ -166,7 +203,6 @@ const emit = defineEmits<{
   action: [action: string]
   positionChange: [position: 'top' | 'right' | 'bottom' | 'left']
 }>()
-
 
 const isDragging = ref(false)
 const dragOffset = ref({ x: 0, y: 0 })
@@ -366,6 +402,28 @@ const snapToEdge = () => {
 
 const handleAction = (action: string) => {
   emit('action', action)
+  emitter.emit(action)
+  switch (action) {
+    /* PNC */
+    case 'follow':
+      currMode.funcMode = FuncMode.Follow
+      break
+    case 'tree':
+      currMode.funcMode = FuncMode.BehaviorTree
+      break
+    /* POS */
+    case 'gnss':
+      currMode.funcMode = FuncMode.Gnss
+      break
+    case 'imu':
+      currMode.funcMode = FuncMode.Imu
+      break
+    case 'vision':
+      currMode.funcMode = FuncMode.Vision
+      break
+    default:
+      currMode.funcMode = FuncMode.None
+  }
 }
 
 onMounted(() => {

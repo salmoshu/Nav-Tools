@@ -18,8 +18,8 @@ enum FuncMode {
 }
 
 const currMode = reactive({
-  appMode: AppMode.None,
-  funcMode: FuncMode.None,
+  appMode: AppMode.Pnc,
+  funcMode: FuncMode.Follow,
 })
 
 const menuEvent = {
