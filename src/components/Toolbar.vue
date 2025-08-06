@@ -21,11 +21,19 @@
         v-html="item.icon+item.text"
       >
       </button>
-      <span class="divider">|</span>
-      <button class="toolbar-btn">Draw</button>
-      <button class="toolbar-btn">Data</button>
-      <button class="toolbar-btn">Config</button>
-      <button class="toolbar-btn">Status</button>
+      <span v-if="upAndDown(position)" class="divider">|</span>
+      <span v-else class="divider">一</span>
+
+      
+      <button 
+        v-for="item in handleList" 
+        :key="item.msg"
+        class="toolbar-btn" 
+        @click="handleAction(item.msg)" 
+        :title="item.title"
+        v-html="item.icon+item.text"
+      >
+      </button>
     </div>
     <div class="toolbar-dock-zones" v-if="isDragging && activeDockZone">
       <div 
@@ -44,7 +52,7 @@ import { toolBarIcon } from '@/hooks/useIcon'
 
 const position = ref<'top' | 'right' | 'bottom' | 'left'>('top')
 
-function showText(position: string): boolean {
+function upAndDown(position: string): boolean {
   if (position === 'top' || position === 'bottom') {
     return true
   } else {
@@ -62,18 +70,17 @@ interface ButtonItem {
 
 // PNC 模式按钮列表
 const pncList: ButtonItem[] = reactive([
-
   {
     title: 'Follow',
     msg: 'follow',
     icon: toolBarIcon.follow,
-    text: showText(position.value) ? '&nbsp;PID' : '',
+    text: upAndDown(position.value) ? '&nbsp;PID' : '',
   },
   {
     title: 'BehaviorTree',
     msg: 'tree',
     icon: toolBarIcon.tree,
-    text: showText(position.value) ? '&nbsp;Tree' : '',
+    text: upAndDown(position.value) ? '&nbsp;Tree' : '',
   }
 ])
 
@@ -83,33 +90,63 @@ const posList: ButtonItem[] = reactive([
     title: 'GNSS',
     msg: 'gnss',
     icon: toolBarIcon.gnss,
-    text: showText(position.value) ? '&nbsp;GNSS' : '',
+    text: upAndDown(position.value) ? '&nbsp;GNSS' : '',
   },
   {
     title: 'IMU',
     msg: 'imu',
     icon: toolBarIcon.imu,
-    text: showText(position.value) ? '&nbsp;IMU' : '',
+    text: upAndDown(position.value) ? '&nbsp;IMU' : '',
   },
   {
     title: 'Vision',
     msg: 'vision',
     icon: toolBarIcon.vision,
-    text: showText(position.value) ? '&nbsp;Vision' : '',
+    text: upAndDown(position.value) ? '&nbsp;Vision' : '',
   }
 ])
 
-// 监听 position 变化
+const handleList: ButtonItem[] = reactive([
+  {
+    title: 'Draw',
+    msg: 'draw',
+    icon: toolBarIcon.draw,
+    text: upAndDown(position.value) ? '&nbsp;Draw' : '',
+
+  },
+  {
+    title: 'Data',
+    msg: 'data',
+    icon: toolBarIcon.data,
+    text: upAndDown(position.value) ? '&nbsp;Data' : '',
+  },
+  {
+    title: 'Status',
+    msg: 'status',
+    icon: toolBarIcon.status,
+    text: upAndDown(position.value) ? '&nbsp;Status' : '',
+  },
+  {
+    title: 'Config',
+    msg: 'config',
+    icon: toolBarIcon.config,
+    text: upAndDown(position.value) ? '&nbsp;Config' : '',
+  },
+])
+
+
 watch(position, (newPosition) => {
   pncList.forEach(item => {
-    item.text = showText(newPosition) ? '&nbsp;'+item.title : ''
-
+    item.text = upAndDown(newPosition) ? '&nbsp;'+item.title : ''
   })
   posList.forEach(item => {
-    item.text = showText(newPosition) ? '&nbsp;'+item.title : ''
+    item.text = upAndDown(newPosition) ? '&nbsp;'+item.title : ''
   })
-})
+  handleList.forEach(item => {
+    item.text = upAndDown(newPosition) ? '&nbsp;'+item.title : ''
+  })
 
+})
 
 // 计算属性：根据当前模式返回对应的按钮列表
 const currentButtonList = computed(() => {
@@ -509,45 +546,4 @@ onUnmounted(() => {
 .dock-zone:hover {
   background: rgba(52, 152, 219, 0.4);
 }
-
-/* 移除旧的dock-zone-top/right/bottom/left样式 */
-.dock-zone-top,
-.dock-zone-right,
-.dock-zone-bottom,
-.dock-zone-left {
-  /* 这些样式现在由getDockZoneStyle动态生成 */
-  transform: none;
-}
-
-/* .dock-zone-top {
-  top: 0;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 100%;
-  height: 40px;
-}
-
-.dock-zone-right {
-  top: 50%;
-  right: 0;
-  transform: translateY(-50%);
-  width: 40px;
-  height: 100%;
-}
-
-.dock-zone-bottom {
-  bottom: 0;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 100%;
-  height: 40px;
-}
-
-.dock-zone-left {
-  top: 50%;
-  left: 0;
-  transform: translateY(-50%);
-  width: 40px;
-  height: 100%;
-} */
 </style>
