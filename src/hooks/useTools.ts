@@ -1,53 +1,28 @@
-import { reactive } from 'vue'
-
-enum AppMode {
-  None = 0,
-  Pnc,
-  Pos,
-}
-
-enum FuncMode {
-  None = 0,
-  // Pnc
-  Follow = 10,
-  BehaviorTree,
-  // Pos
-  Gnss = 20,
-  Imu,
-  Vision,
-}
-
-const currMode = reactive({
-  appMode: AppMode.Pnc,
-  funcMode: FuncMode.Follow,
-})
+import { navMode, AppMode, FuncMode } from '@/types/mode'
 
 const menuEvent = {
   openPncView,
-  openGnssView,
+  openPosView,
 }
 
 function openPncView() {
-  currMode.appMode = AppMode.Pnc
-  if (currMode.funcMode === FuncMode.None || 
-      currMode.funcMode > FuncMode.BehaviorTree || 
-      currMode.funcMode < FuncMode.Follow) {
-    currMode.funcMode = FuncMode.Follow
+  navMode.appMode = AppMode.Pnc
+  if (navMode.funcMode === FuncMode.None || 
+      navMode.funcMode > FuncMode.BehaviorTree || 
+      navMode.funcMode < FuncMode.Follow) {
+    navMode.funcMode = FuncMode.Follow
   }
 }
 
-function openGnssView() {
-  currMode.appMode = AppMode.Pos
-  if (currMode.funcMode === FuncMode.None || 
-      currMode.funcMode > FuncMode.Vision || 
-      currMode.funcMode < FuncMode.Gnss) {
-    currMode.funcMode = FuncMode.Gnss
+function openPosView() {
+  navMode.appMode = AppMode.Pos
+  if (navMode.funcMode === FuncMode.None || 
+      navMode.funcMode > FuncMode.Vision || 
+      navMode.funcMode < FuncMode.Gnss) {
+    navMode.funcMode = FuncMode.Gnss
   }
 }
 
 export { 
-  AppMode,
-  FuncMode,
-  currMode,
   menuEvent,
 }

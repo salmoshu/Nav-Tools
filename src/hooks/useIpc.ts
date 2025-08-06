@@ -7,7 +7,7 @@ const ipcEvent = {
 
   // menu bar
   'open-pnc-view': menuEvent.openPncView,
-  'open-gnss-view': menuEvent.openGnssView,
+  'open-gnss-view': menuEvent.openPosView,
 }
 
 if (window.ipcRenderer) {

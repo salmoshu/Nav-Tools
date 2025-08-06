@@ -61,7 +61,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
-import { currMode, AppMode, FuncMode } from '@/hooks/useTools'
+import { navMode, AppMode, FuncMode } from '@/types/mode'
 import { toolBarIcon } from '@/hooks/useIcon'
 import emitter from '@/hooks/useMitt'
 
@@ -187,7 +187,7 @@ watch(position, (newPosition) => {
 
 // 计算属性：根据当前模式返回对应的按钮列表
 const currentButtonList = computed(() => {
-  switch (currMode.appMode) {
+  switch (navMode.appMode) {
     case AppMode.Pnc:
       return pncList
     case AppMode.Pos:
@@ -406,23 +406,23 @@ const handleAction = (action: string) => {
   switch (action) {
     /* PNC */
     case 'follow':
-      currMode.funcMode = FuncMode.Follow
+      navMode.funcMode = FuncMode.Follow
       break
     case 'tree':
-      currMode.funcMode = FuncMode.BehaviorTree
+      navMode.funcMode = FuncMode.BehaviorTree
       break
     /* POS */
     case 'gnss':
-      currMode.funcMode = FuncMode.Gnss
+      navMode.funcMode = FuncMode.Gnss
       break
     case 'imu':
-      currMode.funcMode = FuncMode.Imu
+      navMode.funcMode = FuncMode.Imu
       break
     case 'vision':
-      currMode.funcMode = FuncMode.Vision
+      navMode.funcMode = FuncMode.Vision
       break
     default:
-      currMode.funcMode = FuncMode.None
+      navMode.funcMode = FuncMode.None
   }
 }
 
