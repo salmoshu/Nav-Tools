@@ -69,7 +69,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, defineAsyncComponent, markRaw, watch, nextTick } from 'vue'
+import { ref, computed, defineAsyncComponent, markRaw } from 'vue'
 import { GridLayout, GridItem } from 'grid-layout-plus'
 import { ElButton, ElCard, ElIcon, ElMessage } from 'element-plus'
 import { Close } from '@element-plus/icons-vue'
@@ -138,7 +138,7 @@ const createDefaultLayout = () => {
       w: 6,
       h: 4,
       i: 'draw-1',
-      titleName: '绘图面板',
+      titleName: 'Draw Panel',
       component: markRaw(DrawPanel),
       minW: 3,
       minH: 3,
@@ -151,7 +151,7 @@ const createDefaultLayout = () => {
       w: 6,
       h: 4,
       i: 'data-2',
-      titleName: '数据面板',
+      titleName: 'Data Panel',
       component: markRaw(DataPanel),
       minW: 3,
       minH: 3,
@@ -164,7 +164,7 @@ const createDefaultLayout = () => {
       w: 6,
       h: 4,
       i: 'status-3',
-      titleName: '状态面板',
+      titleName: 'Status Panel',
       component: markRaw(StatusPanel),
       minW: 3,
       minH: 3,
@@ -177,7 +177,7 @@ const createDefaultLayout = () => {
       w: 6,
       h: 4,
       i: 'config-4',
-      titleName: '配置面板',
+      titleName: 'Config Panel',
       component: markRaw(ConfigPanel),
       minW: 3,
       minH: 3,
@@ -232,44 +232,50 @@ const resetLayout = () => {
 }
 
 // 添加组件
-const addItem = () => {
+const addItem = (componentName: string) => {
   const components = [
-    { title: '绘图面板', componentName: 'DrawPanel', component: DrawPanel, minW: 3, minH: 3, maxW: 8, maxH: 8 },
-    { title: '数据面板', componentName: 'DataPanel', component: DataPanel, minW: 3, minH: 3, maxW: 6, maxH: 6 },
-    { title: '状态面板', componentName: 'StatusPanel', component: StatusPanel, minW: 3, minH: 3, maxW: 6, maxH: 6 },
-    { title: '配置面板', componentName: 'ConfigPanel', component: ConfigPanel, minW: 3, minH: 3, maxW: 6, maxH: 6 },
+    { title: 'Draw Panel', componentName: 'DrawPanel', component: DrawPanel, minW: 3, minH: 3, maxW: 8, maxH: 8 },
+    { title: 'Data Panel', componentName: 'DataPanel', component: DataPanel, minW: 3, minH: 3, maxW: 6, maxH: 6 },
+    { title: 'Status Panel', componentName: 'StatusPanel', component: StatusPanel, minW: 3, minH: 3, maxW: 6, maxH: 6 },
+    { title: 'Config Panel', componentName: 'ConfigPanel', component: ConfigPanel, minW: 3, minH: 3, maxW: 6, maxH: 6 },
   ]
   
-  const available = components.filter(c => 
-    !layoutDraggableList.value.some(item => item.component === c.component)
-  )
+  // 根据componentName查找对应组件
+  const targetComponent = components.find(c => c.componentName === componentName)
   
-  if (available.length === 0) {
-    ElMessage.warning('所有组件已添加')
+  if (!targetComponent) {
+    ElMessage.error(`未找到组件: ${componentName}`)
     return
   }
   
-  const random = available[Math.floor(Math.random() * available.length)]
+  // 检查是否已存在
+  const exists = layoutDraggableList.value.some((item: LayoutItem) => item.component === targetComponent.component)
+  if (exists) {
+    ElMessage.warning(`${targetComponent.title}已存在`)
+    return
+  }
+  
   const newItem: LayoutItem = {
     x: 0,
     y: 0,
     w: 6,
     h: 4,
-    i: `${random.componentName}-${Date.now()}`,
-    titleName: random.title,
-    component: markRaw(random.component),
-    minW: random.minW || 3,
-    minH: random.minH || 3,
-    maxW: random.maxW || 6,
-    maxH: random.maxH || 6
+    i: `${targetComponent.componentName}-${Date.now()}`,
+    titleName: targetComponent.title,
+    component: markRaw(targetComponent.component),
+    minW: targetComponent.minW || 3,
+    minH: targetComponent.minH || 3,
+    maxW: targetComponent.maxW || 6,
+    maxH: targetComponent.maxH || 6
   }
   
   layoutDraggableList.value.push(newItem)
+  ElMessage.success(`已添加${targetComponent.title}`)
 }
 
 // 删除组件
 const removeItem = (i: string) => {
-  const index = layoutDraggableList.value.findIndex(item => item.i === i)
+  const index = layoutDraggableList.value.findIndex((item: LayoutItem) => item.i === i)
   if (index !== -1) {
     layoutDraggableList.value.splice(index, 1)
   }
@@ -285,6 +291,22 @@ emitter.on('reset', () => {
 
 emitter.on('edit', () => {
   editDragDataHome()
+})
+
+emitter.on('draw', () => {
+  addItem('DrawPanel')
+})
+
+emitter.on('data', () => {
+  addItem('DataPanel')
+})
+
+emitter.on('status', () => {
+  addItem('StatusPanel')
+})
+
+emitter.on('config', () => {
+  addItem('ConfigPanel')
 })
 
 // 事件处理
