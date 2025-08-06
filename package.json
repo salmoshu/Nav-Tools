@@ -6,6 +6,7 @@
   "author": "草鞋没号 <308487730@qq.com>",
   "license": "MIT",
   "private": true,
+  "packageManager": "pnpm@10.14.0",
   "keywords": [
     "electron",
     "rollup",
