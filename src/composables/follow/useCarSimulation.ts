@@ -36,8 +36,6 @@ export function useCarSimulation(config: SimulationConfig) {
     y: 100  // 确保是数字
   })
 
-  let countDuration = 0
-
   const linearPID = usePIDController(config.linearPID)
   const angularPID = usePIDController(config.angularPID)
 

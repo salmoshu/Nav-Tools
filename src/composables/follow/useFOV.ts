@@ -1,4 +1,4 @@
-import { computed, type Ref } from 'vue'
+import { computed } from 'vue'
 
 export interface CarState {
   x: number
@@ -14,14 +14,7 @@ export interface PersonState {
 // 修改useFOV的参数定义
 export function useFOV(carState: any, personState: any, config: any) {
   // 使用config.followDistance而不是单独的followDistance参数
-  const visionRange = computed(() => Math.max(50, config.followDistance))
   const FOV_ANGLE = 80 * Math.PI / 180 // 80度视野
-
-  const normalizeAngle = (angle: number): number => {
-    while (angle > Math.PI) angle -= 2 * Math.PI
-    while (angle < -Math.PI) angle += 2 * Math.PI
-    return angle
-  }
 
   const isInFOV = computed(() => {
     // 严格的有效性检查
