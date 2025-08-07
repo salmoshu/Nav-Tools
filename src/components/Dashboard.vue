@@ -2,6 +2,7 @@
   <div class="dashboard">
     <Toolbar 
       @positionChange="handleToolbarPositionChange"
+      @funcModeChange="handleFuncModeChange"
     />
     
     <div 
@@ -58,7 +59,7 @@
                     </div>
                   </div>
                 </template>
-                <component :is="item.component" />
+                <component :is="item.component" v-bind="item.props" />
               </el-card>
             </div>
           </grid-item>
@@ -69,17 +70,41 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, defineAsyncComponent, markRaw } from 'vue'
+import { ref, computed, defineAsyncComponent, markRaw, onMounted, onUnmounted } from 'vue'
 import { GridLayout, GridItem } from 'grid-layout-plus'
 import { ElButton, ElCard, ElIcon, ElMessage } from 'element-plus'
 import { Close } from '@element-plus/icons-vue'
 import Toolbar from './Toolbar.vue'
 import emitter from '@/hooks/useMitt'
+import { useFollowMain } from '@/composables/follow/useFollowMain'
 
+
+// 使用useMain管理功能模块状态
+const {
+  carState,
+  personState,
+  distance,
+  targetAngle,
+  isInFOV,
+  visionLines,
+  visionPath,
+  handleMouseDown,
+  isDraggingPerson,
+  startAnimation,
+  stopAnimation,
+  updateConfig,
+  config
+} = useFollowMain()
+
+
+// 动态组件导入
 const ConfigPanel = defineAsyncComponent(() => import('./Config.vue'))
 const DataPanel = defineAsyncComponent(() => import('./Data.vue'))
 const DrawPanel = defineAsyncComponent(() => import('./Draw.vue'))
 const StatusPanel = defineAsyncComponent(() => import('./Status.vue'))
+const FollowDraw = defineAsyncComponent(() => import('./follow/FollowDraw.vue'))
+const FollowConfig = defineAsyncComponent(() => import('./follow/FollowConfig.vue'))
+const FollowStatus = defineAsyncComponent(() => import('./follow/FollowStatus.vue'))
 
 interface LayoutItem {
   x: number
@@ -93,32 +118,65 @@ interface LayoutItem {
   minH?: number
   maxW?: number
   maxH?: number
+  props?: Record<string, any>
+  funcMode?: string
 }
 
-// 拖拽布局相关状态
+// 功能模式枚举
+const FuncMode = {
+  Follow: 'follow',
+  Gnss: 'gnss',
+  Imu: 'imu',
+  Vision: 'vision',
+  Tree: 'tree'
+}
+
+// 状态管理
+const currentFuncMode = ref('follow')
 const isEditDraggable = ref(false)
 const draggableLayout = ref(false)
 const resizableLayout = ref(false)
 const layoutDraggableList = ref<LayoutItem[]>([])
+const toolbarPosition = ref<'top' | 'right' | 'bottom' | 'left'>('top')
 
-// 组件映射
+// 组件映射配置
 const componentMap = {
-  'DrawPanel': DrawPanel,
-  'DataPanel': DataPanel,
-  'StatusPanel': StatusPanel,
-  'ConfigPanel': ConfigPanel,
+  'DrawPanel': { component: DrawPanel, title: 'Draw Panel' },
+  'DataPanel': { component: DataPanel, title: 'Data Panel' },
+  'StatusPanel': { component: StatusPanel, title: 'Status Panel' },
+  'ConfigPanel': { component: ConfigPanel, title: 'Config Panel' },
+  'FollowDraw': { component: FollowDraw, title: 'Follow Draw', props: { carState, personState, visionLines, visionPath, isDraggingPerson, handleMouseDown } },
+  'FollowConfig': { component: FollowConfig, title: 'Follow Config', props: { config, updateConfig } },
+  'FollowStatus': { component: FollowStatus, title: 'Follow Status', props: { carState, distance, targetAngle, isInFOV } }
+}
+
+// 根据功能模式过滤组件
+const getComponentsByMode = (mode: string) => {
+  switch (mode) {
+    case FuncMode.Follow:
+      return ['FollowDraw', 'FollowConfig', 'FollowStatus']
+    case FuncMode.Gnss:
+      return ['DrawPanel', 'DataPanel', 'StatusPanel', 'ConfigPanel']
+    case FuncMode.Imu:
+      return ['DrawPanel', 'DataPanel', 'StatusPanel', 'ConfigPanel']
+    case FuncMode.Vision:
+      return ['DrawPanel', 'DataPanel', 'StatusPanel', 'ConfigPanel']
+    case FuncMode.Tree:
+      return ['DrawPanel', 'DataPanel', 'StatusPanel', 'ConfigPanel']
+    default:
+      return ['DrawPanel', 'DataPanel', 'StatusPanel', 'ConfigPanel']
+  }
 }
 
 // 初始化布局
 const initLayout = () => {
-  const savedLayout = localStorage.getItem('dashboard-layout')
+  // 先不使用本地存储
+  // const savedLayout = localStorage.getItem(`dashboard-layout-${currentFuncMode.value}`)
+  const savedLayout = null
   if (savedLayout) {
     try {
       const parsed = JSON.parse(savedLayout)
-      layoutDraggableList.value = parsed.map((item: any) => ({
-        ...item,
-        component: markRaw(componentMap[item.componentName as keyof typeof componentMap])
-      }))
+      loadLayoutFromConfig(parsed)
     } catch (error) {
       console.error('Failed to load saved layout:', error)
       createDefaultLayout()
@@ -128,62 +186,75 @@ const initLayout = () => {
   }
 }
 
+// 从配置加载布局
+const loadLayoutFromConfig = (config: any[]) => {
+  layoutDraggableList.value = config.map((item: any) => {
+    const componentConfig = componentMap[item.componentName as keyof typeof componentMap]
+    return {
+      ...item,
+      component: markRaw(componentConfig.component),
+      props: (componentConfig as { props?: Record<string, any> }).props || {}
+    }
+  })
+}
+
 // 创建默认布局
 const createDefaultLayout = () => {
-  layoutDraggableList.value = [
-    {
-      x: 0,
-      y: 0,
-      w: 6,
-      h: 4,
-      i: 'draw-1',
-      titleName: 'Draw Panel',
-      component: markRaw(DrawPanel),
-      minW: 3,
-      minH: 3,
-      maxW: 8,
-      maxH: 8
-    },
-    {
-      x: 6,
-      y: 0,
-      w: 6,
-      h: 4,
-      i: 'data-2',
-      titleName: 'Data Panel',
-      component: markRaw(DataPanel),
-      minW: 3,
-      minH: 3,
-      maxW: 6,
-      maxH: 6
-    },
-    {
-      x: 0,
-      y: 4,
-      w: 6,
-      h: 4,
-      i: 'status-3',
-      titleName: 'Status Panel',
-      component: markRaw(StatusPanel),
-      minW: 3,
-      minH: 3,
-      maxW: 6,
-      maxH: 6
-    },
-    {
-      x: 6,
-      y: 4,
-      w: 6,
-      h: 4,
-      i: 'config-4',
-      titleName: 'Config Panel',
-      component: markRaw(ConfigPanel),
-      minW: 3,
-      minH: 3,
-      maxW: 6,
-      maxH: 6
-    },
-  ]
+  const components = getComponentsByMode(currentFuncMode.value)
+  
+  const defaultLayouts = {
+    [FuncMode.Follow]: [
+      { x: 0, y: 0, w: 6, h: 6, i: 'follow-draw-1', titleName: '跟随仿真', componentName: 'FollowDraw', minW: 4, minH: 4, maxW: 8, maxH: 16 },
+      { x: 8, y: 0, w: 4, h: 3, i: 'follow-config-2', titleName: '跟随配置', componentName: 'FollowConfig', minW: 3, minH: 3, maxW: 6, maxH: 8 },
+      { x: 8, y: 3, w: 4, h: 3, i: 'follow-status-3', titleName: '跟随状态', componentName: 'FollowStatus', minW: 3, minH: 3, maxW: 6, maxH: 8 }
+    ],
+    [FuncMode.Gnss]: [
+      { x: 0, y: 0, w: 6, h: 4, i: 'draw-1', titleName: 'GNSS绘制', componentName: 'DrawPanel', minW: 3, minH: 3, maxW: 6, maxH: 8 },
+      { x: 6, y: 0, w: 6, h: 4, i: 'data-2', titleName: 'GNSS数据', componentName: 'DataPanel', minW: 3, minH: 3, maxW: 6, maxH: 6 },
+      { x: 0, y: 4, w: 6, h: 4, i: 'status-3', titleName: 'GNSS状态', componentName: 'StatusPanel', minW: 3, minH: 3, maxW: 6, maxH: 6 },
+      { x: 6, y: 4, w: 6, h: 4, i: 'config-4', titleName: 'GNSS配置', componentName: 'ConfigPanel', minW: 3, minH: 3, maxW: 6, maxH: 6 }
+    ]
+  }
+
+  const layoutConfig = defaultLayouts[currentFuncMode.value as keyof typeof defaultLayouts] || defaultLayouts[FuncMode.Follow]
+  loadLayoutFromConfig(layoutConfig)
+}
+
+// 功能模式切换处理
+const handleFuncModeChange = (mode: string) => {
+  // 保存当前布局
+  saveCurrentLayout()
+  
+  // 切换模式
+  currentFuncMode.value = mode
+  
+  // 重新初始化布局
+  initLayout()
+  
+  // 重启动画
+  stopAnimation()
+  startAnimation()
+  
+  ElMessage.success(`已切换到${mode}模式`)
+}
+
+// 保存当前布局
+const saveCurrentLayout = () => {
+  const layoutToSave = layoutDraggableList.value.map(item => ({
+    x: item.x,
+    y: item.y,
+    w: item.w,
+    h: item.h,
+    i: item.i,
+    titleName: item.titleName,
+    componentName: Object.keys(componentMap).find(key => componentMap[key as keyof typeof componentMap].component === item.component),
+    minW: item.minW,
+    minH: item.minH,
+    maxW: item.maxW,
+    maxH: item.maxH
+  }))
+  
+  localStorage.setItem(`dashboard-layout-${currentFuncMode.value}`, JSON.stringify(layoutToSave))
 }
 
 // 编辑布局
@@ -198,22 +269,8 @@ const saveDragDataHome = () => {
   isEditDraggable.value = false
   draggableLayout.value = false
   resizableLayout.value = false
+  saveCurrentLayout()
   
-  const layoutToSave = layoutDraggableList.value.map(item => ({
-    x: item.x,
-    y: item.y,
-    w: item.w,
-    h: item.h,
-    i: item.i,
-    titleName: item.titleName,
-    componentName: Object.keys(componentMap).find(key => componentMap[key as keyof typeof componentMap] === item.component),
-    minW: item.minW,
-    minH: item.minH,
-    maxW: item.maxW,
-    maxH: item.maxH
-  }))
-  
-  localStorage.setItem('dashboard-layout', JSON.stringify(layoutToSave))
   ElMessage({
     message: '布局已保存',
     type: 'success',
@@ -223,7 +280,7 @@ const saveDragDataHome = () => {
 
 // 重置布局
 const resetLayout = () => {
-  localStorage.removeItem('dashboard-layout')
+  localStorage.removeItem(`dashboard-layout-${currentFuncMode.value}`)
   createDefaultLayout()
   isEditDraggable.value = false
   draggableLayout.value = false
@@ -232,25 +289,17 @@ const resetLayout = () => {
 
 // 添加组件
 const addItem = (componentName: string) => {
-  const components = [
-    { title: 'Draw Panel', componentName: 'DrawPanel', component: DrawPanel, minW: 3, minH: 3, maxW: 8, maxH: 8 },
-    { title: 'Data Panel', componentName: 'DataPanel', component: DataPanel, minW: 3, minH: 3, maxW: 6, maxH: 6 },
-    { title: 'Status Panel', componentName: 'StatusPanel', component: StatusPanel, minW: 3, minH: 3, maxW: 6, maxH: 6 },
-    { title: 'Config Panel', componentName: 'ConfigPanel', component: ConfigPanel, minW: 3, minH: 3, maxW: 6, maxH: 6 },
-  ]
+  const componentConfig = componentMap[componentName as keyof typeof componentMap]
+  if (!componentConfig) return
   
-  // 根据componentName查找对应组件
-  const targetComponent = components.find(c => c.componentName === componentName)
+  const exists = layoutDraggableList.value.some(item => 
+    Object.keys(componentMap).find(key => 
+      componentMap[key as keyof typeof componentMap].component === item.component
+    ) === componentName
+  )
   
-  if (!targetComponent) {
-    ElMessage.error(`未找到组件: ${componentName}`)
-    return
-  }
-  
-  // 检查是否已存在
-  const exists = layoutDraggableList.value.some((item: LayoutItem) => item.component === targetComponent.component)
   if (exists) {
-    ElMessage.warning(`${targetComponent.title}已存在`)
+    ElMessage.warning(`${componentConfig.title}已存在`)
     return
   }
   
@@ -259,17 +308,18 @@ const addItem = (componentName: string) => {
     y: 0,
     w: 6,
     h: 4,
-    i: `${targetComponent.componentName}-${Date.now()}`,
-    titleName: targetComponent.title,
-    component: markRaw(targetComponent.component),
-    minW: targetComponent.minW || 3,
-    minH: targetComponent.minH || 3,
-    maxW: targetComponent.maxW || 6,
-    maxH: targetComponent.maxH || 6
+    i: `${componentName}-${Date.now()}`,
+    titleName: componentConfig.title,
+    component: markRaw(componentConfig.component),
+    props: (componentConfig as { props?: Record<string, any> }).props || {},
+    minW: 3,
+    minH: 3,
+    maxW: 6,
+    maxH: 6
   }
   
   layoutDraggableList.value.push(newItem)
-  ElMessage.success(`已添加${targetComponent.title}`)
+  ElMessage.success(`已添加${componentConfig.title}`)
 }
 
 // 删除组件
@@ -280,34 +330,6 @@ const removeItem = (i: string) => {
   }
 }
 
-emitter.on('save', () => {
-  saveDragDataHome()
-})
-
-emitter.on('reset', () => {
-  resetLayout()
-})
-
-emitter.on('edit', () => {
-  editDragDataHome()
-})
-
-emitter.on('draw', () => {
-  addItem('DrawPanel')
-})
-
-emitter.on('data', () => {
-  addItem('DataPanel')
-})
-
-emitter.on('status', () => {
-  addItem('StatusPanel')
-})
-
-emitter.on('config', () => {
-  addItem('ConfigPanel')
-})
-
 // 事件处理
 const resizeEvent = (i: string, newH: number, newW: number, newHPx: number, newWPx: number) => {
   console.log('RESIZE i=' + i + ', H=' + newH + ', W=' + newW + ', H(px)=' + newHPx + ', W(px)=' + newWPx)
@@ -317,13 +339,7 @@ const movedEvent = (i: string, newX: number, newY: number) => {
   console.log('MOVED i=' + i + ', X=' + newX + ', Y=' + newY)
 }
 
-// 其他状态
-const toolbarPosition = ref<'top' | 'right' | 'bottom' | 'left'>('top')
-
-const handleLayoutButtonAction = (action: string) => {
-  console.log(`执行布局操作: ${action}`)
-}
-
+// 工具栏位置处理
 const handleToolbarPositionChange = (position: 'top' | 'right' | 'bottom' | 'left') => {
   toolbarPosition.value = position
 }
@@ -361,11 +377,33 @@ const contentStyle = computed(() => {
   }
 })
 
+// 事件监听
+emitter.on('save', saveDragDataHome)
+emitter.on('reset', resetLayout)
+emitter.on('edit', editDragDataHome)
+emitter.on('funcModeChange', (event: unknown) => {
+  if (typeof event === 'string') {
+    handleFuncModeChange(event);
+  }
+});
+
 // 初始化
 initLayout()
+
+// 生命周期
+onMounted(() => {
+  startAnimation()
+})
+
+onUnmounted(() => {
+  stopAnimation()
+  saveCurrentLayout()
+})
 </script>
 
+<!-- 样式保持不变 -->
 <style scoped>
+/* 原有样式保持不变 */
 .dashboard {
   width: 100vw;
   height: 100vh;
@@ -379,7 +417,6 @@ initLayout()
   height: 100%;
   transition: all 0.3s ease;
   position: relative;
-  /* box-sizing: border-box; */
   border: 5px solid #E0E0E0;
 }
 
@@ -402,6 +439,7 @@ initLayout()
   height: 100%;
   border-radius: 8px;
   box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
+  overflow: auto;
 }
 
 .card-header {
@@ -429,65 +467,5 @@ initLayout()
 
 .remove-btn:hover {
   color: #F56C6C;
-}
-
-.layout-controls {
-  position: absolute;
-  top: 20px;
-  right: 20px;
-  z-index: 1000;
-  display: flex;
-  gap: 10px;
-}
-
-:deep(.vue-grid-item.vue-grid-placeholder) {
-  background: #409EFF;
-  opacity: 0.2;
-  transition-duration: 100ms;
-  z-index: 2;
-  -webkit-user-select: none;
-  -moz-user-select: none;
-  -ms-user-select: none;
-  -o-user-select: none;
-  user-select: none;
-}
-
-:deep(.vue-grid-item) {
-  background: #ffffff;
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  transition: box-shadow 0.3s ease;
-}
-
-:deep(.vue-grid-item:hover) {
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
-}
-
-:deep(.vue-grid-item .vue-resizable-handle) {
-  opacity: 0.5;
-}
-
-:deep(.vue-grid-item:hover .vue-resizable-handle) {
-  opacity: 1;
-}
-
-@media screen and (max-width: 768px) {
-  .dashboard-grid {
-    padding: 10px;
-  }
-  
-  .grid-layout {
-    min-height: calc(100vh - 200px);
-  }
-  
-  .layout-controls {
-    flex-direction: column;
-    gap: 5px;
-  }
-  
-  .layout-controls .el-button {
-    padding: 8px 12px;
-    font-size: 12px;
-  }
 }
 </style>
