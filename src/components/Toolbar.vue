@@ -62,7 +62,8 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
 import { navMode, AppMode, FuncMode } from '@/types/mode'
-import { toolBarIcon } from '@/hooks/useIcon'
+import { toolBarIcon } from '@/types/icon'
+import { getButtonList } from '@/composables/useToolsManager'
 import emitter from '@/hooks/useMitt'
 
 const position = ref<'top' | 'right' | 'bottom' | 'left'>('top')
@@ -92,7 +93,7 @@ const pncList: ButtonItem[] = reactive([
     text: upAndDown(position.value) ? '&nbsp;PID' : '',
   },
   {
-    title: 'BehaviorTree',
+    title: 'Tree',
     msg: 'tree',
     icon: toolBarIcon.tree,
     text: upAndDown(position.value) ? '&nbsp;Tree' : '',
@@ -121,32 +122,9 @@ const posList: ButtonItem[] = reactive([
   }
 ])
 
-const handleList: ButtonItem[] = reactive([
-  {
-    title: 'Draw',
-    msg: 'draw',
-    icon: toolBarIcon.draw,
-    text: upAndDown(position.value) ? '&nbsp;Draw' : '',
-  },
-  {
-    title: 'Data',
-    msg: 'data',
-    icon: toolBarIcon.data,
-    text: upAndDown(position.value) ? '&nbsp;Data' : '',
-  },
-  {
-    title: 'Status',
-    msg: 'status',
-    icon: toolBarIcon.status,
-    text: upAndDown(position.value) ? '&nbsp;Status' : '',
-  },
-  {
-    title: 'Config',
-    msg: 'config',
-    icon: toolBarIcon.config,
-    text: upAndDown(position.value) ? '&nbsp;Config' : '',
-  },
-])
+const handleList: ButtonItem[] = reactive(
+  getButtonList(FuncMode.Follow) || []
+)
 
 const layoutList: ButtonItem[] = reactive([
   {
@@ -161,7 +139,6 @@ const layoutList: ButtonItem[] = reactive([
     icon: toolBarIcon.save,
     text: upAndDown(position.value) ? '&nbsp;Save' : '',
   },
-
   {
     title: 'Reset',
     msg: 'reset',
@@ -170,7 +147,7 @@ const layoutList: ButtonItem[] = reactive([
   },
 ])
 
-watch(position, (newPosition) => {
+function adjustButtonText(newPosition: 'top' | 'right' | 'bottom' | 'left') {
   pncList.forEach(item => {
     item.text = upAndDown(newPosition) ? '&nbsp;'+item.title : ''
   })
@@ -183,6 +160,20 @@ watch(position, (newPosition) => {
   layoutList.forEach(item => {
     item.text = upAndDown(newPosition) ? '&nbsp;'+item.title : ''
   })
+}
+
+watch(() => navMode.funcMode, (newFuncMode) => {
+  const newList = getButtonList(newFuncMode)
+  if (newList) {
+    handleList.splice(0, handleList.length, ...newList)
+  } else {
+    handleList.splice(0, handleList.length, ...[])
+  }
+  adjustButtonText(position.value)
+})
+
+watch(position, (newPosition) => {
+  adjustButtonText(newPosition)
 })
 
 // 计算属性：根据当前模式返回对应的按钮列表
@@ -409,7 +400,7 @@ const handleAction = (action: string) => {
       navMode.funcMode = FuncMode.Follow
       break
     case 'tree':
-      navMode.funcMode = FuncMode.BehaviorTree
+      navMode.funcMode = FuncMode.Tree
       break
     /* POS */
     case 'gnss':
@@ -421,8 +412,6 @@ const handleAction = (action: string) => {
     case 'vision':
       navMode.funcMode = FuncMode.Vision
       break
-    default:
-      navMode.funcMode = FuncMode.None
   }
 }
 

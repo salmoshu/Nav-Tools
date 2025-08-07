@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import Dashboard from './components/Dashboard.vue'
-// import HelloWorld from './components/HelloWorld.vue'
 
 </script>
 
@@ -20,7 +19,7 @@ import Dashboard from './components/Dashboard.vue'
       <img src="./assets/vue.svg" class="logo vue" alt="Vue logo" />
     </a>
   </div>
-  <HelloWorld msg="Electron + Vite + Vue" />
+  <h1>Electron + Vite + Vue</h1>
   <div class="flex-center">
     Place static files into the <code>/public</code> folder
     <img style="width: 2.4em; margin-left: .4em;" src="/logo.svg" alt="Logo">

@@ -1,25 +1,41 @@
-import { initEvent } from './example'
-import { menuEvent } from './useTools'
+import { initEvent } from './useExample'
+import emitter from './useMitt'
+import { navMode, AppMode, FuncMode } from '@/types/mode'
 
-const ipcEvent = {
-  // electron init
-  'main-process-message': initEvent.mainProcessMessage,
+function openPncView() {
+  navMode.appMode = AppMode.Pnc
+  if (navMode.funcMode === FuncMode.None || 
+      navMode.funcMode > FuncMode.Tree || 
+      navMode.funcMode < FuncMode.Follow) {
+    navMode.funcMode = FuncMode.Follow
+  }
+}
 
-  // menu bar
-  'open-pnc-view': menuEvent.openPncView,
-  'open-gnss-view': menuEvent.openPosView,
+function openPosView() {
+  navMode.appMode = AppMode.Pos
+  if (navMode.funcMode === FuncMode.None || 
+      navMode.funcMode > FuncMode.Vision || 
+      navMode.funcMode < FuncMode.Gnss) {
+    navMode.funcMode = FuncMode.Gnss
+  }
 }
 
 if (window.ipcRenderer) {
   window.ipcRenderer.on('main-process-message', (_event, ...args) => {
-    ipcEvent['main-process-message'](_event, ...args)
+    initEvent.mainProcessMessage(_event, ...args)
   })
 
   window.ipcRenderer.on('open-pnc-view', () => {
-    ipcEvent['open-pnc-view']()
+    if (navMode.appMode !== AppMode.Pnc) {
+      emitter.emit('follow')
+    }
+    openPncView()
   })
 
   window.ipcRenderer.on('open-gnss-view', () => {
-    ipcEvent['open-gnss-view']()
+    if (navMode.appMode !== AppMode.Pos) {
+      emitter.emit('gnss')
+    }
+    openPosView()
   })
 }
