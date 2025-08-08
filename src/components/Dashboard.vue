@@ -77,11 +77,10 @@ import { Close } from '@element-plus/icons-vue'
 import Toolbar from './Toolbar.vue'
 import emitter from '@/hooks/useMitt'
 import { useLayoutManager } from '@/composables/useLayoutManager'
-import { AppMap, navMode } from '@/types/mode'
+import { AppMap, navMode, Buttons } from '@/types/mode'
 
 const {
   layoutDraggableList,
-  currentFuncMode,
   isEditDraggable,
   draggableLayout,
   resizableLayout,
@@ -158,6 +157,16 @@ onMounted(() => {
       })
     }
   }
+
+  // Buttons
+  for (const [buttonKey, buttonCfg] of Object.entries(Buttons)) {
+    emitter.on(buttonCfg.msg, () => {
+      const a = navMode.funcModeStr.charAt(0).toUpperCase() + navMode.funcModeStr.slice(1)
+      const b = buttonCfg.msg.charAt(0).toUpperCase() + buttonCfg.msg.slice(1)
+      addItem(a + b)
+    })
+  }
+
 })
 
 onUnmounted(() => {

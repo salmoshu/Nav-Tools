@@ -49,6 +49,15 @@ pnpm approve-builds # for electron, esbuild
 pnpm run dev
 ```
 
+## Develop
+
+1. 重点关注内容
+   - `src/hooks/useLayoutManager.ts`: 布局管理
+   - `src/types/mode.ts`: 应用模式和功能定义
+2. 单独应用
+   - `src/components/xxx`: 单独应用的组件
+   - `src/composables/xxx`: 对应组件的钩子函数
+
 ## Debug
 
 ![electron-vite-react-debug.gif](https://github.com/electron-vite/electron-vite-react/blob/main/electron-vite-react-debug.gif?raw=true)

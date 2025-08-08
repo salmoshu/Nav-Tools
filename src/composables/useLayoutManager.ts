@@ -4,7 +4,6 @@ import { FuncMode, navMode } from '@/types/mode'
 import { useFollowMain } from '@/composables/follow/useFollowMain'
 import { ElMessage } from 'element-plus'
 
-// 动态组件导入 - 使用现有的 follow 组件作为所有模块的占位符
 const FollowDraw = defineAsyncComponent(() => import('@/components/follow/FollowDraw.vue'))
 const FollowConfig = defineAsyncComponent(() => import('@/components/follow/FollowConfig.vue'))
 const FollowStatus = defineAsyncComponent(() => import('@/components/follow/FollowStatus.vue'))
@@ -228,7 +227,7 @@ export function useLayoutManager() {
     ElMessage({
       message: '布局已保存',
       type: 'success',
-      duration: 2000
+      duration: 1000
     })
   }
 
@@ -251,7 +250,11 @@ export function useLayoutManager() {
     )
     
     if (exists) {
-      ElMessage.warning(`${componentConfig.title}已存在`)
+      ElMessage({
+        message: `${componentConfig.title}已存在`,
+        type: 'warning',
+        duration: 1000
+      })
       return
     }
     
@@ -271,7 +274,12 @@ export function useLayoutManager() {
     }
     
     layoutDraggableList.value.push(newItem)
-    ElMessage.success(`已添加${componentConfig.title}`)
+    ElMessage({
+      message: `已添加${componentConfig.title}`,
+      type: 'success',
+      duration: 1000
+
+    })
   }
 
   // 删除组件
@@ -301,13 +309,17 @@ export function useLayoutManager() {
     stopAnimation()
     startAnimation()
 
-    ElMessage.success(`已切换到 ${FuncMode[mode].toUpperCase()} 组件`)
+    ElMessage({
+      message: `已切换到 ${FuncMode[mode].toUpperCase()} 组件`,
+      type: 'success',
+      duration: 1000
+    })
+
   }
 
   return {
     // 状态
     layoutDraggableList,
-    currentFuncMode,
     isEditDraggable,
     draggableLayout,
     resizableLayout,
