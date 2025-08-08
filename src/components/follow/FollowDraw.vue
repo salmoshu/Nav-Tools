@@ -96,7 +96,7 @@ const props = defineProps<{
   handleMouseDown: (event: MouseEvent) => void
 }>()
 
-const containerWidth = 800
+const containerWidth = 600
 const containerHeight = 600
 
 const horizontalTicks = computed(() => Math.floor(containerWidth / 50))
@@ -118,8 +118,9 @@ const carStyle = computed(() => ({
 <style scoped>
 #container {
   position: relative;
-  width: 800px;
-  height: 600px;
+  margin: 0 auto;
+  width: 640px;
+  height: 640px;
   background: white;
   border: 1px solid #ddd;
   overflow: hidden;

@@ -52,7 +52,7 @@ pnpm run dev
 ## Develop
 
 1. 重点关注内容
-   - `src/hooks/useLayoutManager.ts`: 布局管理
+   - `src/composables/useLayoutManager.ts`: 布局管理
    - `src/types/mode.ts`: 应用模式和功能定义
 2. 单独应用
    - `src/components/xxx`: 单独应用的组件

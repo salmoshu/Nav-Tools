@@ -112,9 +112,9 @@ export const getComponentsByMode = (mode: FuncMode): string[] => {
 const getDefaultLayoutConfig = (mode: FuncMode) => {
   const configs = {
     [FuncMode.Follow]: [
-      { x: 0, y: 0, w: 6, h: 6, i: 'follow-draw-1', titleName: '跟随仿真', componentName: 'FollowDraw', minW: 4, minH: 4, maxW: 8, maxH: 16 },
-      { x: 8, y: 0, w: 4, h: 3, i: 'follow-config-2', titleName: '跟随配置', componentName: 'FollowConfig', minW: 3, minH: 3, maxW: 6, maxH: 8 },
-      { x: 8, y: 3, w: 4, h: 3, i: 'follow-status-3', titleName: '跟随状态', componentName: 'FollowStatus', minW: 3, minH: 3, maxW: 6, maxH: 8 }
+      { x: 0, y: 0, w: 6, h: 11, i: 'follow-draw-1', titleName: '跟随仿真', componentName: 'FollowDraw', minW: 4, minH: 4, maxW: 8, maxH: 16 },
+      { x: 6, y: 0, w: 5, h: 5, i: 'follow-status-3', titleName: '跟随状态', componentName: 'FollowStatus', minW: 3, minH: 3, maxW: 8, maxH: 8 },
+      { x: 6, y: 3, w: 4, h: 3, i: 'follow-config-2', titleName: '跟随配置', componentName: 'FollowConfig', minW: 2, minH: 2, maxW: 6, maxH: 8 },
     ],
     [FuncMode.Gnss]: [
       { x: 0, y: 0, w: 6, h: 4, i: 'gnss-draw-1', titleName: 'GNSS绘制', componentName: 'GnssDraw', minW: 3, minH: 3, maxW: 6, maxH: 8 },
@@ -188,7 +188,8 @@ export function useLayoutManager() {
 
   // 初始化布局
   const initLayout = () => {
-    const savedLayout = localStorage.getItem(`dashboard-layout-${currentFuncMode.value}`)
+    // const savedLayout = localStorage.getItem(`dashboard-layout-${currentFuncMode.value}`)
+    const savedLayout = null
     if (savedLayout) {
       try {
         const parsed = JSON.parse(savedLayout)

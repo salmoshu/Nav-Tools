@@ -179,7 +179,7 @@ onUnmounted(() => {
   width: 100vw;
   height: 100vh;
   position: relative;
-  overflow: hidden;
+  overflow: auto;
   background-color: #F0F0F0;
 }
 
@@ -188,7 +188,6 @@ onUnmounted(() => {
   height: 100%;
   transition: all 0.3s ease;
   position: relative;
-  border: 5px solid #E0E0E0;
 }
 
 .dashboard-grid {
