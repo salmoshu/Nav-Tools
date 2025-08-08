@@ -1,23 +1,23 @@
-import { FuncMode, FuncModeMap, Buttons, ActionMap } from '@/types/mode'
+import { NavMode, Buttons, AppMap } from '@/types/mode'
 
-function createButtonList(funcModeName: string) {
-  let buttonList: any[] = []
+type AppName   = keyof typeof AppMap
+type ActionKey = keyof typeof Buttons
 
-  const modeActions = ActionMap[funcModeName as keyof typeof ActionMap];
-  for (let i = 0; i < modeActions.length; i++) {
-    buttonList.push(Buttons[modeActions[i]])
-  }
-  return buttonList
+function createButtonList(appName: string, funcModeName: string) {
+  const appCfg = AppMap[appName as AppName]
+  if (!appCfg) return []
+
+  const moduleCfg: { action: readonly string[] } = (appCfg.module as any)[funcModeName]
+  if (!moduleCfg) return []
+
+  // 过滤掉可能的非法 action
+  return moduleCfg.action
+    .filter((a): a is ActionKey => a in Buttons)
+    .map(a => Buttons[a])
 }
 
-const getButtonList = (funcMode: FuncMode) => {
-  for (let i = 0; i < FuncModeMap.length; i++) {
-    if (FuncModeMap[i][0] === funcMode) {
-      const funcModeName = FuncModeMap[i][1]
-      const buttonList = createButtonList(funcModeName)
-      return buttonList
-    }
-  }
+const getButtonList = (navMode: NavMode) => {
+  return createButtonList(navMode.appModeStr, navMode.funcModeStr)
 }
 
 export {

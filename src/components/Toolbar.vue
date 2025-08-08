@@ -82,6 +82,7 @@ interface ButtonItem {
   msg: string
   icon: any
   text: string
+  [key: string]: any
 }
 
 // PNC 模式按钮列表
@@ -123,7 +124,8 @@ const posList: ButtonItem[] = reactive([
 ])
 
 const handleList: ButtonItem[] = reactive(
-  getButtonList(FuncMode.Follow) || []
+  getButtonList(navMode) || []
+
 )
 
 const layoutList: ButtonItem[] = reactive([
@@ -162,12 +164,13 @@ function adjustButtonText(newPosition: 'top' | 'right' | 'bottom' | 'left') {
   })
 }
 
-watch(() => navMode.funcMode, (newFuncMode) => {
-  const newList = getButtonList(newFuncMode)
-  if (newList) {
-    handleList.splice(0, handleList.length, ...newList)
+watch(() => navMode.funcMode, () => {
+  const buttonList = getButtonList(navMode)
+
+  if (buttonList) {
+    handleList.splice(0, handleList.length, ...buttonList)
   } else {
-    handleList.splice(0, handleList.length, ...[])
+    handleList.splice(0, handleList.length)
   }
   adjustButtonText(position.value)
 })

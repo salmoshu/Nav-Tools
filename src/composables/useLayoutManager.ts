@@ -1,6 +1,6 @@
 import { ref, markRaw } from 'vue'
 import { defineAsyncComponent } from 'vue'
-import { FuncMode, FuncModeMap, navMode } from '@/types/mode'
+import { FuncMode, navMode } from '@/types/mode'
 import { useFollowMain } from '@/composables/follow/useFollowMain'
 import { ElMessage } from 'element-plus'
 
@@ -301,11 +301,7 @@ export function useLayoutManager() {
     stopAnimation()
     startAnimation()
 
-    FuncModeMap.forEach(([m, e]) => {
-      if (m === mode) {
-        ElMessage.success(`已切换到 ${FuncMode[m].toUpperCase()} 组件`)
-      }
-    })
+    ElMessage.success(`已切换到 ${FuncMode[mode].toUpperCase()} 组件`)
   }
 
   return {

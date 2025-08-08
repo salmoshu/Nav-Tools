@@ -77,7 +77,7 @@ import { Close } from '@element-plus/icons-vue'
 import Toolbar from './Toolbar.vue'
 import emitter from '@/hooks/useMitt'
 import { useLayoutManager } from '@/composables/useLayoutManager'
-import { FuncMode, FuncModeMap } from '@/types/mode'
+import { AppMap, navMode } from '@/types/mode'
 
 const {
   layoutDraggableList,
@@ -149,11 +149,15 @@ onMounted(() => {
   emitter.on('reset', resetLayout)
   emitter.on('edit', editLayout)
 
-  FuncModeMap.forEach(([mode, event]) => {
-    emitter.on(event, () => {
-      handleFuncModeChange(mode)
-    })
-  })
+  for (const [appKey, appCfg] of Object.entries(AppMap)) {
+    for (const [moduleKey, moduleCfg] of Object.entries(appCfg.module)) {
+      emitter.on(moduleCfg.msg, () => {
+        if (navMode.funcMode !== moduleCfg.funcMode) {
+          handleFuncModeChange(moduleCfg.funcMode)
+        }
+      })
+    }
+  }
 })
 
 onUnmounted(() => {

@@ -1,6 +1,7 @@
 import { reactive } from 'vue'
 import { toolBarIcon } from './icon'
 
+// console.log(AppMode[AppMode.Pnc])
 enum AppMode {
   None = 0,
   Pnc  = 1,
@@ -16,86 +17,178 @@ enum FuncMode {
   Vision       = 22,
 }
 
-const FuncModeMap = [
-  [FuncMode.Follow, 'follow'],
-  [FuncMode.Tree,   'tree'],
-  [FuncMode.Gnss,   'gnss'],
-  [FuncMode.Imu,    'imu'],
-  [FuncMode.Vision, 'vision'],
-] as const
+type ModuleItem = {
+  title: string
+  msg: string
+  icon: string
+  text: string
+  funcMode: FuncMode
+  action: readonly string[]
+  readonly template: string[]
+}
 
-const ActionMap = {
-  'follow': ['draw', 'status', 'config'],
-  'tree':   ['draw', 'data', 'status', 'config'],
-  'gnss':   ['draw', 'data', 'status', 'config'],
-  'imu':    ['draw', 'data', 'status', 'config'],
-  'vision': ['draw', 'data', 'status', 'config'],
+type AppMapType = typeof AppMap
+type AppName    = keyof AppMapType
+type ModuleMap<K extends AppName> = AppMapType[K]['module']
+type ModuleKey<K extends AppName> = keyof ModuleMap<K>
+
+const AppMap = {
+  pnc: {
+    title: 'PNC',
+    currMode: FuncMode.Follow,
+    module: {
+      follow: {
+        title: 'Follow',
+        msg: 'follow',
+        icon: toolBarIcon.follow,
+        text: '&nbsp;Follow',
+        funcMode: FuncMode.Follow,
+        action: ['draw', 'status', 'config'],
+        get template() { // 会根据'action'自动生成
+          return getTemplateList(this.title, [...this.action])
+        }
+      } as ModuleItem,
+      tree: {
+        title: 'Tree',
+        msg: 'tree',
+        icon: toolBarIcon.tree,
+        text: '&nbsp;Tree',
+        funcMode: FuncMode.Tree,
+        action: ['draw', 'data', 'status', 'config'],
+        get template() { // 会根据'action'自动生成
+          return getTemplateList(this.title, [...this.action])
+        }
+      } as ModuleItem,
+    },
+  },
+  pos: {
+    title: 'POS',
+    currMode: FuncMode.Gnss,
+    module: {
+      gnss: {
+        title: 'Gnss',
+        msg: 'gnss',  
+        icon: toolBarIcon.gnss,
+        text: '&nbsp;Gnss',
+        funcMode: FuncMode.Gnss,
+        action: ['draw', 'data', 'status', 'config'],
+        get template() { // 会根据'action'自动生成
+          return getTemplateList(this.title, [...this.action])
+        }
+      } as ModuleItem,
+      imu: {
+        title: 'Imu',
+        msg: 'imu',
+        icon: toolBarIcon.imu,
+        text: '&nbsp;Imu',
+        funcMode: FuncMode.Imu,
+        action: ['draw', 'data', 'status', 'config'],
+        get template() { // 会根据'action'自动生成
+          return getTemplateList(this.title, [...this.action])
+        }
+      } as ModuleItem,
+      vision: {
+        title: 'Vision',
+        msg: 'vision',
+        icon: toolBarIcon.vision,
+        text: '&nbsp;Vision',
+        funcMode: FuncMode.Vision,
+        action: ['draw', 'data', 'status', 'config'],
+        get template() { // 会根据'action'自动生成
+          return getTemplateList(this.title, [...this.action])
+        }
+      } as ModuleItem,
+    }
+  },
 } as const
 
-const TemplateMap = {
-  'follow': getTemplateList('follow'),
-  'tree':   getTemplateList('tree'),
-  'gnss':   getTemplateList('gnss'),
-  'imu':    getTemplateList('imu'),
-  'vision': getTemplateList('vision'),
+const Buttons = {
+  'draw': {
+      title: 'Draw',
+      msg: 'draw',
+      icon: toolBarIcon.draw,
+      text: '&nbsp;Draw', 
+  },
+  'data': {
+      title: 'Data',
+      msg: 'data',
+      icon: toolBarIcon.data,
+      text: '&nbsp;Data',
+  },
+  'status': {
+      title: 'Status',
+      msg: 'status',
+      icon: toolBarIcon.status,
+      text: '&nbsp;Status',
+  },
+  'config': {
+      title: 'Config',
+      msg: 'config',
+      icon: toolBarIcon.config,
+      text: '&nbsp;Config',
+
+  },
 } as const
 
-function getTemplateList(funcModeName: string) {
+function getTemplateList (name: string, actions: string[]) {
   let templateList = []
-  for (let i = 0; i < ActionMap[funcModeName as keyof typeof ActionMap].length; i++) {
-    let action = ActionMap[funcModeName as keyof typeof ActionMap][i]
-    // funcModeName 首字母大写
-    let f = funcModeName.charAt(0).toUpperCase() + funcModeName.slice(1)
-    let a = action.charAt(0).toUpperCase() + action.slice(1)
-    templateList.push(f + a + '.vue')
+  for (let i = 0; i < actions.length; i++) {
+    const action = actions[i]
+    templateList.push(
+      '@/components/' +
+      name.charAt(0).toLocaleLowerCase() + name.slice(1) + '/' +
+      name.charAt(0).toUpperCase() + name.slice(1) +
+      action.charAt(0).toUpperCase() + action.slice(1) +
+      '.vue'
+    )
   }
   return templateList
 }
 
-const Buttons = {
-    'draw': {
-        title: 'Draw',
-        msg: 'draw',
-        icon: toolBarIcon.draw,
-        text: '&nbsp;Draw', 
-    },
-    'data': {
-        title: 'Data',
-        msg: 'data',
-        icon: toolBarIcon.data,
-        text: '&nbsp;Data',
-    },
-    'status': {
-        title: 'Status',
-        msg: 'status',
-        icon: toolBarIcon.status,
-        text: '&nbsp;Status',
-    },
-    'config': {
-        title: 'Config',
-        msg: 'config',
-        icon: toolBarIcon.config,
-        text: '&nbsp;Config',
-
-    },
-} as const
-
 class NavMode {
   private currMode = reactive({
     appMode: AppMode.Pnc as AppMode,
+    appModeStr: 'pnc',
     funcMode: FuncMode.Follow as FuncMode,
+    funcModeStr: 'follow',
   })
 
-  get appMode()  { return this.currMode.appMode }
-  set appMode(m: AppMode)  { this.currMode.appMode = m }
+  get appMode()  { 
+    return this.currMode.appMode 
+  }
+  get appModeStr() { 
+    return this.currMode.appModeStr
+  }
+  set appMode(m: AppMode)  { 
+    this.currMode.appMode = m
+    this.currMode.appModeStr = AppMode[m].charAt(0).toLocaleLowerCase() + AppMode[m].slice(1)
+  }
 
-  get funcMode() { return this.currMode.funcMode }
-  set funcMode(m: FuncMode) { this.currMode.funcMode = m }
+  get funcMode() { 
+    return this.currMode.funcMode
+  }
+  get funcModeStr() { 
+    return this.currMode.funcModeStr
+  }
+  set funcMode(m: FuncMode) { 
+    this.currMode.funcMode = m
+    this.currMode.funcModeStr = FuncMode[m].charAt(0).toLocaleLowerCase() + FuncMode[m].slice(1)
+  }
 
-  get currentMode() { return this.currMode }
+  get currentMode() { 
+    return this.currMode 
+  }
 }
 
 export type AppModeType  = AppMode
 export type FuncModeType = FuncMode
 export const navMode = new NavMode()
-export { AppMode, FuncMode, FuncModeMap, Buttons, ActionMap }
+export { 
+  NavMode,
+  AppMode,
+  FuncMode,
+
+  AppMap,
+  Buttons,
+}
+
