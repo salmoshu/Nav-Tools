@@ -52,9 +52,24 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NODE_OPTIONS: --max-old-space-size=8192
 
-      - name: Upload Artifact
-        uses: actions/upload-artifact@v4
+      - name: Delete old artifacts
+        uses: geekyeggo/delete-artifact@v4
+        if: always()
         with:
           name: release_on_${{ matrix.os }}
-          path: release/
-          retention-days: 5
+          failOnError: false
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        if: github.ref == 'refs/heads/main'  # 只在主分支上传
+        with:
+          name: release_on_${{ matrix.os }}
+          path: |
+            release/*
+            !release/**/*.map
+            !release/**/*.d.ts
+            !release/**/LICENSE*
+            !release/**/*.md
+          retention-days: 1  # 减少保留天数到1天
+          compression-level: 9  # 使用最大压缩
+          if-no-files-found: ignore  # 如果没有文件就跳过上传
