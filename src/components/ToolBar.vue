@@ -392,8 +392,6 @@ const handleDrag = (event: MouseEvent) => {
   // 注意：这里不再调用emit('positionChange')和实时更新position
 }
 
-
-
 const handleAction = (action: string) => {
   emit('action', action)
   emitter.emit(action)
