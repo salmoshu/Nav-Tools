@@ -39,12 +39,26 @@
       <span v-else class="divider">一</span>
 
       <button 
-        v-for="item in layoutList" 
-        :key="item.msg"
-        class="toolbar-btn" 
-        @click="handleAction(item.msg)" 
-        :title="item.title"
-        v-html="item.icon+item.text"
+        v-if="!isEditing"
+        class="toolbar-btn"
+        @click="handleEdit"
+        :title="layoutList[0].title"
+        v-html="layoutList[0].icon+layoutList[0].text"
+      >
+      </button>
+      <button
+        v-else
+        class="toolbar-btn"
+        @click="handleSave"
+        :title="layoutList[1].title"
+        v-html="layoutList[1].icon+layoutList[1].text"
+      >
+      </button>
+      <button
+        class="toolbar-btn"
+        @click="handleAction(layoutList[2].msg)"
+        :title="layoutList[2].title"
+        v-html="layoutList[2].icon+layoutList[2].text"
       >
       </button>
 
@@ -60,13 +74,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
-import { navMode, AppMode, FuncMode } from '@/types/mode'
+import { ref, reactive, computed, onMounted, onUnmounted, watch, inject, type Ref } from 'vue'
+import { navMode, AppMode, FuncMode } from '@/types/config'
 import { toolBarIcon } from '@/types/icon'
 import { getButtonList } from '@/composables/useToolsManager'
 import emitter from '@/hooks/useMitt'
 
 const position = ref<'top' | 'right' | 'bottom' | 'left'>('top')
+const isEditing = ref(false)
 
 function upAndDown(position: string): boolean {
   if (position === 'top' || position === 'bottom') {
@@ -216,6 +231,7 @@ const getDockZoneStyle = (zone: 'top' | 'right' | 'bottom' | 'left') => {
   const windowHeight = window.innerHeight
   const dockHeight = 40
   const dockWidth = 40
+  const statusbarWidth = statusbarSize?.value?.width || 60
   
   switch (zone) {
     case 'top':
@@ -226,9 +242,11 @@ const getDockZoneStyle = (zone: 'top' | 'right' | 'bottom' | 'left') => {
         height: `${dockHeight}px`
       }
     case 'right':
+      // 当statusbar在右边时，dock-zone应该避开statusbar
+      const rightOffset = statusbarPosition?.value === 'right' ? statusbarWidth : 0
       return {
         top: '0px',
-        left: `${windowWidth - dockWidth}px`,
+        left: `${windowWidth - dockWidth - rightOffset}px`,
         width: `${dockWidth}px`,
         height: `${windowHeight}px`
       }
@@ -240,9 +258,11 @@ const getDockZoneStyle = (zone: 'top' | 'right' | 'bottom' | 'left') => {
         height: `${dockHeight}px`
       }
     case 'left':
+      // 当statusbar在左边时，dock-zone应该避开statusbar
+      const leftOffset = statusbarPosition?.value === 'left' ? statusbarWidth : 0
       return {
         top: '0px',
-        left: '0px',
+        left: `${leftOffset}px`,
         width: `${dockWidth}px`,
         height: `${windowHeight}px`
       }
@@ -372,27 +392,7 @@ const handleDrag = (event: MouseEvent) => {
   // 注意：这里不再调用emit('positionChange')和实时更新position
 }
 
-const snapToEdge = () => {
-  const windowWidth = window.innerWidth
-  const windowHeight = window.innerHeight
 
-  switch (position.value) {
-    case 'top':
-      toolbarRect.value = { x: 0, y: 0 }
-      break
-    case 'right':
-      toolbarRect.value = { x: windowWidth - 40, y: 0 }
-      break
-    case 'bottom':
-      toolbarRect.value = { x: 0, y: windowHeight - 40 }
-      break
-    case 'left':
-      toolbarRect.value = { x: 0, y: 0 }
-      break
-  }
-  
-  emit('positionChange', position.value)
-}
 
 const handleAction = (action: string) => {
   emit('action', action)
@@ -418,9 +418,55 @@ const handleAction = (action: string) => {
   }
 }
 
+const handleEdit = () => {
+  isEditing.value = true
+  emit('action', 'edit')
+  emitter.emit('edit')
+}
+
+const handleSave = () => {
+  isEditing.value = false
+  emit('action', 'save')
+  emitter.emit('save')
+}
+
+// 注入状态栏位置信息
+const statusbarPosition = inject<Ref<'left' | 'right'>>('statusbarPosition')
+const statusbarSize = inject<Ref<{width: number, height: number}>>('statusbarSize')
+
+const snapToEdge = () => {
+  const windowWidth = window.innerWidth
+  const windowHeight = window.innerHeight
+  const statusbarWidth = statusbarSize?.value?.width || 60
+
+  switch (position.value) {
+    case 'top':
+      toolbarRect.value = { x: 0, y: 0 }
+      break
+    case 'right':
+      // 当ToolBar在右边时，紧贴屏幕右边缘
+      toolbarRect.value = { x: windowWidth - 40, y: 0 }
+      break
+    case 'bottom':
+      toolbarRect.value = { x: 0, y: windowHeight - 40 }
+      break
+    case 'left':
+      // 当ToolBar在左边时，紧贴屏幕左边缘
+      toolbarRect.value = { x: 0, y: 0 }
+      break
+  }
+  
+  emit('positionChange', position.value)
+}
+
 onMounted(() => {
   snapToEdge()
   window.addEventListener('resize', snapToEdge)
+  
+  // 监听状态栏位置变化
+  watch([statusbarPosition, statusbarSize], () => {
+    snapToEdge()
+  }, { immediate: true })
 })
 
 onUnmounted(() => {
@@ -496,7 +542,7 @@ onUnmounted(() => {
   color: #ecf0f1;
   cursor: grab;
   padding: 4px;
-  margin-right: 8px;
+  margin: 8px 4px;
   opacity: 0.7;
   transition: opacity 0.2s;
 }

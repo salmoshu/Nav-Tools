@@ -1,18 +1,15 @@
 <template>
   <div class="dashboard">
-    <Toolbar 
+    <ToolBar 
       @positionChange="handleToolbarPositionChange"
       @funcModeChange="handleFuncModeChange"
     />
+
+    <StatusBar @positionChange="handleStatusbarPositionChange" />
     
     <div 
       class="dashboard-content" 
-      :class="{ 
-        'toolbar-top': toolbarPosition === 'top',
-        'toolbar-bottom': toolbarPosition === 'bottom',
-        'toolbar-left': toolbarPosition === 'left',
-        'toolbar-right': toolbarPosition === 'right'
-      }"
+      :class="contentClasses"
       :style="contentStyle"
     >
       <!-- Grid Layout Plus 拖拽布局区域 -->
@@ -48,7 +45,7 @@
                 <template #header>
                   <div class="card-header">
                     <span class="title">{{ item.titleName }}</span>
-                    <div class="card-actions">
+                    <div class="card-actions" v-if="resizableLayout">
                       <el-button 
                         type="text" 
                         @click="removeItem(item.i)"
@@ -70,14 +67,15 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import ToolBar from './ToolBar.vue'
+import StatusBar from './StatusBar.vue'
+import { ref, computed, onMounted, onUnmounted, provide } from 'vue'
 import { GridLayout, GridItem } from 'grid-layout-plus'
 import { ElButton, ElCard, ElIcon } from 'element-plus'
 import { Close } from '@element-plus/icons-vue'
-import Toolbar from './Toolbar.vue'
 import emitter from '@/hooks/useMitt'
 import { useLayoutManager } from '@/composables/useLayoutManager'
-import { AppMap, navMode, Buttons } from '@/types/mode'
+import { AppMap, navMode, Buttons } from '@/types/config'
 
 const {
   layoutDraggableList,
@@ -93,41 +91,95 @@ const {
   handleFuncModeChange
 } = useLayoutManager()
 
-// 工具栏位置状态（这是 Dashboard 特有的，不在 useLayoutManager 中）
+// 工具栏和状态栏位置状态
 const toolbarPosition = ref<'top' | 'right' | 'bottom' | 'left'>('top')
+const statusbarPosition = ref<'left' | 'right'>('right')
 const toolbarSize = ref({ width: 40, height: 40 })
+const statusbarSize = ref({ width: 150, height: 60 })
 
-// 工具栏位置处理
+// 提供工具栏和状态栏位置的响应式引用
+provide('toolbarPosition', toolbarPosition)
+provide('statusbarPosition', statusbarPosition)
+provide('toolbarSize', toolbarSize)
+provide('statusbarSize', statusbarSize)
+
+// 位置处理函数
 const handleToolbarPositionChange = (position: 'top' | 'right' | 'bottom' | 'left') => {
   toolbarPosition.value = position
 }
 
-// 内容区域样式计算
+const handleStatusbarPositionChange = (position: 'left' | 'right') => {
+  statusbarPosition.value = position
+}
+
+// 计算内容区域的类
+const contentClasses = computed(() => {
+  return {
+    'toolbar-top': toolbarPosition.value === 'top',
+    'toolbar-bottom': toolbarPosition.value === 'bottom',
+    'toolbar-left': toolbarPosition.value === 'left',
+    'toolbar-right': toolbarPosition.value === 'right',
+    'statusbar-left': statusbarPosition.value === 'left',
+    'statusbar-right': statusbarPosition.value === 'right'
+  }
+})
+
+// 计算内容区域的样式
 const contentStyle = computed(() => {
-  const size = toolbarSize.value
+  let marginTop = 0
+  let marginBottom = 0
+  let marginLeft = 0
+  let marginRight = 0
+
+  // 先计算状态栏的位置（只在左右两侧）
+  switch (statusbarPosition.value) {
+    case 'left':
+      marginLeft += statusbarSize.value.width
+      break
+    case 'right':
+      marginRight += statusbarSize.value.width
+      break
+  }
+
+  // 处理工具栏的位置，考虑与状态栏的边缘限制
   switch (toolbarPosition.value) {
     case 'top':
-      return {
-        height: `calc(100vh - ${size.height}px)`,
-        marginTop: `${size.height}px`
-      }
+      // 当ToolBar在上边时，限制ToolBar下边缘在StatusBar上边缘
+      marginTop += toolbarSize.value.height
+      break
     case 'bottom':
-      return {
-        height: `calc(100vh - ${size.height}px)`,
-        marginBottom: `${size.height}px`
-      }
+      // 当ToolBar在下边时，限制ToolBar上边缘在StatusBar下边缘
+      marginBottom += toolbarSize.value.height
+      break
     case 'left':
-      return {
-        width: `calc(100vw - ${size.width}px)`,
-        marginLeft: `${size.width}px`
+      // 当ToolBar在左边时，限制ToolBar右边缘在StatusBar左边缘
+      if (statusbarPosition.value === 'left') {
+        // 如果状态栏在左边，工具栏在状态栏右侧
+        marginLeft = statusbarSize.value.width + toolbarSize.value.width
+      } else {
+        // 如果状态栏在右边或不存在，工具栏在左侧
+        marginLeft += toolbarSize.value.width
       }
+      break
     case 'right':
-      return {
-        width: `calc(100vw - ${size.width}px)`,
-        marginRight: `${size.width}px`
+      // 当ToolBar在右边时，限制ToolBar左边缘在StatusBar右边缘
+      if (statusbarPosition.value === 'right') {
+        // 如果状态栏在右边，工具栏在状态栏左侧
+        marginRight = statusbarSize.value.width + toolbarSize.value.width
+      } else {
+        // 如果状态栏在左边或不存在，工具栏在右侧
+        marginRight += toolbarSize.value.width
       }
-    default:
-      return {}
+      break
+  }
+
+  return {
+    marginTop: `${marginTop}px`,
+    marginBottom: `${marginBottom}px`,
+    marginLeft: `${marginLeft}px`,
+    marginRight: `${marginRight}px`,
+    height: `calc(100vh - ${marginTop + marginBottom}px)`,
+    width: `calc(100vw - ${marginLeft + marginRight}px)`
   }
 })
 
@@ -166,7 +218,6 @@ onMounted(() => {
       addItem(a + b)
     })
   }
-
 })
 
 onUnmounted(() => {
@@ -179,8 +230,8 @@ onUnmounted(() => {
   width: 100vw;
   height: 100vh;
   position: relative;
-  overflow: auto;
   background-color: #F0F0F0;
+  overflow: hidden;
 }
 
 .dashboard-content {
@@ -188,6 +239,7 @@ onUnmounted(() => {
   height: 100%;
   transition: all 0.3s ease;
   position: relative;
+  overflow: auto;
 }
 
 .dashboard-grid {

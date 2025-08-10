@@ -43,7 +43,7 @@ const AppMap = {
         icon: toolBarIcon.follow,
         text: '&nbsp;Follow',
         funcMode: FuncMode.Follow,
-        action: ['draw', 'status', 'config'],
+        action: ['draw', 'config'],
         get template() { // 会根据'action'自动生成
           return getTemplateList(this.title, [...this.action])
         }
@@ -54,7 +54,7 @@ const AppMap = {
         icon: toolBarIcon.tree,
         text: '&nbsp;Tree',
         funcMode: FuncMode.Tree,
-        action: ['draw', 'data', 'status', 'config'],
+        action: ['draw', 'data', 'config'],
         get template() { // 会根据'action'自动生成
           return getTemplateList(this.title, [...this.action])
         }
@@ -71,7 +71,7 @@ const AppMap = {
         icon: toolBarIcon.gnss,
         text: '&nbsp;Gnss',
         funcMode: FuncMode.Gnss,
-        action: ['draw', 'data', 'status', 'config'],
+        action: ['draw', 'data', 'config'],
         get template() { // 会根据'action'自动生成
           return getTemplateList(this.title, [...this.action])
         }
@@ -82,7 +82,7 @@ const AppMap = {
         icon: toolBarIcon.imu,
         text: '&nbsp;Imu',
         funcMode: FuncMode.Imu,
-        action: ['draw', 'data', 'status', 'config'],
+        action: ['draw', 'data', 'config'],
         get template() { // 会根据'action'自动生成
           return getTemplateList(this.title, [...this.action])
         }
@@ -93,7 +93,7 @@ const AppMap = {
         icon: toolBarIcon.vision,
         text: '&nbsp;Vision',
         funcMode: FuncMode.Vision,
-        action: ['draw', 'data', 'status', 'config'],
+        action: ['draw', 'data', 'config'],
         get template() { // 会根据'action'自动生成
           return getTemplateList(this.title, [...this.action])
         }

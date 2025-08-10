@@ -1,4 +1,4 @@
-import { NavMode, Buttons, AppMap } from '@/types/mode'
+import { NavMode, Buttons, AppMap } from '@/types/config'
 
 type AppName   = keyof typeof AppMap
 type ActionKey = keyof typeof Buttons

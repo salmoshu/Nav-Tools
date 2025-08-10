@@ -1,6 +1,6 @@
 import { initEvent } from './useExample'
 import emitter from './useMitt'
-import { navMode, AppMode, FuncMode } from '@/types/mode'
+import { navMode, AppMode, FuncMode } from '@/types/config'
 
 function openPncView() {
   navMode.appMode = AppMode.Pnc
