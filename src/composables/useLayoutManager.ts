@@ -45,6 +45,7 @@ export interface LayoutItem {
   i: string
   titleName: string
   component: any
+  componentName: string
   minW?: number
   minH?: number
   maxW?: number
@@ -251,6 +252,7 @@ export function useLayoutManager() {
       i: `${componentName}-${Date.now()}`,
       titleName: componentConfig.title,
       component: markRaw(componentConfig.component),
+      componentName: componentName,
       props: (componentConfig as { props?: Record<string, any> }).props || {},
       minW: 3,
       minH: 3,

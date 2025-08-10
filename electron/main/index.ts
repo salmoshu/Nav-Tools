@@ -217,3 +217,53 @@ ipcMain.handle('open-win', (_, arg) => {
     childWindow.loadFile(indexHtml, { hash: arg })
   }
 })
+
+// Open card in new window
+ipcMain.handle('open-card-window', async (_, serializedData) => {
+  let cardData
+  try {
+    cardData = JSON.parse(serializedData)
+  } catch (error) {
+    console.error('Error parsing card data:', error)
+    return
+  }
+  
+  const cardWindow = new BrowserWindow({
+    title: cardData.title || 'Card Content',
+    width: cardData.width || 800,
+    height: cardData.height || 600,
+    frame: false,
+    transparent: true,
+    resizable: true,
+    webPreferences: {
+      preload,
+      nodeIntegration: false,
+      contextIsolation: true,
+    },
+  })
+
+  ipcMain.on('close-card-window', (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender)
+    win?.close()
+  })
+
+  const params = encodeURIComponent(JSON.stringify(cardData))
+  const hash = `card/${params}`
+
+  if (VITE_DEV_SERVER_URL) {
+    await cardWindow.loadURL(`${VITE_DEV_SERVER_URL}#${hash}`)
+  } else {
+    await cardWindow.loadFile(indexHtml, { hash })
+  }
+
+  return cardWindow.id
+})
+
+ipcMain.on('update-follow-config', (event, newConfig) => {
+  const sendingWin = BrowserWindow.fromWebContents(event.sender)
+  BrowserWindow.getAllWindows().forEach(win => {
+    if (win !== sendingWin) {
+      win.webContents.send('follow-config-updated', newConfig)
+    }
+  })
+})

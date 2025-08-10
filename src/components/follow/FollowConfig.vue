@@ -54,6 +54,23 @@
 
 <script lang="ts" setup>
 import { config } from '@/composables/follow/useFollowMain'
+import { watch, onMounted, onUnmounted, toRaw } from 'vue'
+
+watch(config, (newConfig) => {
+  window.ipcRenderer.send('update-follow-config', toRaw(newConfig))
+}, { deep: true })
+
+function handleConfigUpdate(event: Event, newConfig: typeof config) {
+  Object.assign(config, newConfig)
+}
+
+onMounted(() => {
+  window.ipcRenderer.on('follow-config-updated', (event: Electron.IpcRendererEvent, newConfig: typeof config) => handleConfigUpdate(event as unknown as Event, newConfig))
+})
+
+onUnmounted(() => {
+  window.ipcRenderer.off('follow-config-updated', (event: Electron.IpcRendererEvent, newConfig: typeof config) => handleConfigUpdate(event as unknown as Event, newConfig))
+})
 </script>
 
 <style scoped>

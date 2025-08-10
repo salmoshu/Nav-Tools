@@ -40,16 +40,27 @@
             @resize="resizeEvent"
             @moved="movedEvent"
           >
-            <div class="layout-component">
+            <div class="layout-component" :id="`grid-item-${item.i}`">
               <el-card class="box-card" shadow="always">
                 <template #header>
                   <div class="card-header">
                     <span class="title">{{ item.titleName }}</span>
-                    <div class="card-actions" v-if="resizableLayout">
+                    <div class="card-actions">
                       <el-button 
+                        type="text" 
+                        v-if="item.componentName.indexOf('Config') !== -1"
+                        @click="detachItem(item)"
+                        class="detach-btn"
+                        title="分离到独立窗口"
+                      >
+                        <el-icon><Share /></el-icon>
+                      </el-button>
+                      <el-button 
+                        v-if="resizableLayout"
                         type="text" 
                         @click="removeItem(item.i)"
                         class="remove-btn"
+                        title="移除卡片"
                       >
                         <el-icon><Close /></el-icon>
                       </el-button>
@@ -72,9 +83,9 @@ import StatusBar from './StatusBar.vue'
 import { ref, computed, onMounted, onUnmounted, provide } from 'vue'
 import { GridLayout, GridItem } from 'grid-layout-plus'
 import { ElButton, ElCard, ElIcon } from 'element-plus'
-import { Close } from '@element-plus/icons-vue'
+import { Close, Share } from '@element-plus/icons-vue'
 import emitter from '@/hooks/useMitt'
-import { useLayoutManager } from '@/composables/useLayoutManager'
+import { useLayoutManager, componentMap } from '@/composables/useLayoutManager'
 import { AppMap, navMode, Buttons } from '@/types/config'
 
 const {
@@ -192,6 +203,43 @@ const movedEvent = (i: string, newX: number, newY: number) => {
   console.log('MOVED i=' + i + ', X=' + newX + ', Y=' + newY)
 }
 
+// 分离卡片到独立窗口
+const detachItem = (item: any) => {
+  const componentName = Object.keys(componentMap).find(key => 
+    componentMap[key as keyof typeof componentMap].component === item.component
+  )
+  
+  if (componentName && window.ipcRenderer) {
+    console.log('Detaching item:', item)
+    console.log('Props:', item.props)
+    
+    const element = document.getElementById(`grid-item-${item.i}`)
+    const width = element ? element.clientWidth : 800
+    const height = element ? element.clientHeight : 600
+    
+    const cardData = {
+      componentName,
+      title: item.titleName,
+      props: item.props,
+      width,
+      height
+    }
+    
+    console.log('cardData to send:', cardData)
+    
+    try {
+      const serializedData = JSON.stringify(cardData)
+      console.log('Serialized data:', serializedData)
+      window.ipcRenderer.invoke('open-card-window', serializedData)
+    } catch (error) {
+      console.error('Error invoking open-card-window:', error)
+    }
+    
+    // 从主窗口中移除该卡片
+    removeItem(item.i)
+  }
+}
+
 // 生命周期
 onMounted(() => {
   initLayout()
@@ -282,9 +330,14 @@ onUnmounted(() => {
   align-items: center;
 }
 
+.detach-btn,
 .remove-btn {
   padding: 0;
   color: #909399;
+}
+
+.detach-btn:hover {
+  color: #409EFF;
 }
 
 .remove-btn:hover {
