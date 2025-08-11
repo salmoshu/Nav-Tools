@@ -168,6 +168,13 @@ function createMenu() {
         win?.webContents.send('open-gnss-view')
       }
     },
+    // {
+    //   label: 'Example',
+    //   click: () => {
+    //     win?.webContents.send('open-example-view')
+
+    //   }
+    // },
   ]
 
   const menu = Menu.buildFromTemplate(template as any)

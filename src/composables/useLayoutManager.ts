@@ -1,6 +1,6 @@
 import { ref, markRaw } from 'vue'
 import { defineAsyncComponent } from 'vue'
-import { FuncMode, navMode } from '@/types/config'
+import { FuncMode, navMode, AppMap } from '@/types/config'
 import { useFollowMain } from '@/composables/follow/useFollowMain'
 import { ElMessage } from 'element-plus'
 
@@ -38,20 +38,20 @@ const {
 
 // 布局项接口
 export interface LayoutItem {
+  titleName: string
+  component: any
+  componentName: string
+  props?: Record<string, any>
+  funcMode?: string
   x: number
   y: number
   w: number
   h: number
   i: string
-  titleName: string
-  component: any
-  componentName: string
   minW?: number
   minH?: number
   maxW?: number
   maxH?: number
-  props?: Record<string, any>
-  funcMode?: string
 }
 
 // 组件映射配置
@@ -79,6 +79,13 @@ export const componentMap = {
   'TreeDraw': { component: TreeDraw, title: 'Tree Draw', props: {} },
   'TreeData': { component: TreeData, title: 'Tree Data', props: {} },
   'TreeConfig': { component: TreeConfig, title: 'Tree Config', props: {} }
+}
+
+if ('pnc' in AppMap && 'module' in AppMap['pnc'] && 'follow' in AppMap['pnc'].module) {
+  console.log(AppMap['pnc'].module['follow'].template);
+  console.log(AppMap['pnc'].module['follow'].templateNames);
+} else {
+  console.warn('AppMap 中未找到指定路径的数据');
 }
 
 // 根据功能模式过滤组件

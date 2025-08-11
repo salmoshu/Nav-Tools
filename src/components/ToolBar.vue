@@ -11,7 +11,7 @@
       </svg>
     </div>
     <div class="toolbar-content">
-      <!-- 动态渲染按钮列表 -->
+      <!-- Modules: Follow/Tree/GNSS... -->
       <button 
         v-for="item in currentButtonList" 
         :key="item.msg"
@@ -25,6 +25,7 @@
       <span v-if="upAndDown(position)" class="divider">|</span>
       <span v-else class="divider">一</span>
       
+      <!-- Actions:Draw/Data/Config... -->
       <button 
         v-for="item in handleList" 
         :key="item.msg"
@@ -38,10 +39,11 @@
       <span v-if="upAndDown(position)" class="divider">|</span>
       <span v-else class="divider">一</span>
 
+      <!-- Layout: Edit/Save/Reset -->
       <button 
         v-if="!isEditing"
         class="toolbar-btn"
-        @click="handleEdit"
+        @click="handleLayout('edit')"
         :title="layoutList[0].title"
         v-html="layoutList[0].icon+layoutList[0].text"
       >
@@ -49,14 +51,14 @@
       <button
         v-else
         class="toolbar-btn"
-        @click="handleSave"
+        @click="handleLayout('save')"
         :title="layoutList[1].title"
         v-html="layoutList[1].icon+layoutList[1].text"
       >
       </button>
       <button
         class="toolbar-btn"
-        @click="handleAction(layoutList[2].msg)"
+        @click="handleLayout('reset')"
         :title="layoutList[2].title"
         v-html="layoutList[2].icon+layoutList[2].text"
       >
@@ -75,7 +77,8 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, onUnmounted, watch, inject, type Ref } from 'vue'
-import { navMode, AppMode, FuncMode } from '@/types/config'
+import { navMode, AppMode, FuncMode, ButtonItem, AppMap } from '@/types/config'
+
 import { toolBarIcon } from '@/types/icon'
 import { getButtonList } from '@/composables/useToolsManager'
 import emitter from '@/hooks/useMitt'
@@ -91,86 +94,35 @@ function upAndDown(position: string): boolean {
   }
 }
 
-// 定义按钮数据结构
-interface ButtonItem {
-  title: string
-  msg: string
-  icon: any
-  text: string
-  [key: string]: any
-}
-
-// PNC 模式按钮列表
-const pncList: ButtonItem[] = reactive([
-  {
-    title: 'Follow',
-    msg: 'follow',
-    icon: toolBarIcon.follow,
-    text: upAndDown(position.value) ? '&nbsp;PID' : '',
-  },
-  {
-    title: 'Tree',
-    msg: 'tree',
-    icon: toolBarIcon.tree,
-    text: upAndDown(position.value) ? '&nbsp;Tree' : '',
-  }
-])
-
-// POS 模式按钮列表
-const posList: ButtonItem[] = reactive([
-  {
-    title: 'GNSS',
-    msg: 'gnss',
-    icon: toolBarIcon.gnss,
-    text: upAndDown(position.value) ? '&nbsp;GNSS' : '',
-  },
-  {
-    title: 'IMU',
-    msg: 'imu',
-    icon: toolBarIcon.imu,
-    text: upAndDown(position.value) ? '&nbsp;IMU' : '',
-  },
-  {
-    title: 'Vision',
-    msg: 'vision',
-    icon: toolBarIcon.vision,
-    text: upAndDown(position.value) ? '&nbsp;Vision' : '',
-  }
-])
-
 const handleList: ButtonItem[] = reactive(
   getButtonList(navMode) || []
-
 )
 
 const layoutList: ButtonItem[] = reactive([
   {
     title: 'Edit',
     msg: 'edit',
+    template: '',
     icon: toolBarIcon.edit,
     text: upAndDown(position.value) ? '&nbsp;Edit' : '',
   },
   {
     title: 'Save',
     msg: 'save',
+    template: '',
     icon: toolBarIcon.save,
     text: upAndDown(position.value) ? '&nbsp;Save' : '',
   },
   {
     title: 'Reset',
     msg: 'reset',
+    template: '',
     icon: toolBarIcon.reset,
     text: upAndDown(position.value) ? '&nbsp;Reset' : '',
   },
 ])
 
 function adjustButtonText(newPosition: 'top' | 'right' | 'bottom' | 'left') {
-  pncList.forEach(item => {
-    item.text = upAndDown(newPosition) ? '&nbsp;'+item.title : ''
-  })
-  posList.forEach(item => {
-    item.text = upAndDown(newPosition) ? '&nbsp;'+item.title : ''
-  })
   handleList.forEach(item => {
     item.text = upAndDown(newPosition) ? '&nbsp;'+item.title : ''
   })
@@ -194,17 +146,20 @@ watch(position, (newPosition) => {
   adjustButtonText(newPosition)
 })
 
-// 计算属性：根据当前模式返回对应的按钮列表
 const currentButtonList = computed(() => {
-  switch (navMode.appMode) {
-    case AppMode.Pnc:
-      return pncList
-    case AppMode.Pos:
-      return posList
-    case AppMode.None:
-    default:
-      return [] // 不显示任何按钮
+  const appKey = navMode.appModeStr
+  if (!appKey || !AppMap[appKey as keyof typeof AppMap]) {
+    return []
   }
+  
+  const app = AppMap[appKey as keyof typeof AppMap]
+  return Object.values(app.module).map(module => ({
+    title: module.title,
+    msg: module.title.toLowerCase(),
+    template: '',
+    icon: module.icon,
+    text: upAndDown(position.value) ? module.text : ''
+  } as ButtonItem))
 })
 
 // 扩展事件定义
@@ -393,39 +348,34 @@ const handleDrag = (event: MouseEvent) => {
 }
 
 const handleAction = (action: string) => {
-  emit('action', action)
   emitter.emit(action)
-  switch (action) {
-    /* PNC */
-    case 'follow':
-      navMode.funcMode = FuncMode.Follow
-      break
-    case 'tree':
-      navMode.funcMode = FuncMode.Tree
-      break
-    /* POS */
-    case 'gnss':
-      navMode.funcMode = FuncMode.Gnss
-      break
-    case 'imu':
-      navMode.funcMode = FuncMode.Imu
-      break
-    case 'vision':
-      navMode.funcMode = FuncMode.Vision
-      break
+  
+  // 根据AppMap自动匹配模块对应的FuncMode
+  const appKey = navMode.appModeStr
+  if (!appKey || !AppMap[appKey as keyof typeof AppMap]) return
+  
+  const app = AppMap[appKey as keyof typeof AppMap]
+  const module = Object.values(app.module).find(m => m.title.toLowerCase() === action)
+  
+  if (module) {
+    navMode.funcMode = module.funcMode
   }
 }
 
-const handleEdit = () => {
-  isEditing.value = true
-  emit('action', 'edit')
-  emitter.emit('edit')
-}
-
-const handleSave = () => {
-  isEditing.value = false
-  emit('action', 'save')
-  emitter.emit('save')
+const handleLayout = (action: string) => {
+  switch (action) {
+    case 'edit':
+      isEditing.value = true
+      emitter.emit('edit')
+      break
+    case 'save':
+      isEditing.value = false
+      emitter.emit('save')
+      break
+    case 'reset':
+      emitter.emit('reset')
+      break
+  }
 }
 
 // 注入状态栏位置信息

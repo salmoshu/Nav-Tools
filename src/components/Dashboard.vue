@@ -86,7 +86,7 @@ import { ElButton, ElCard, ElIcon } from 'element-plus'
 import { Close, Share } from '@element-plus/icons-vue'
 import emitter from '@/hooks/useMitt'
 import { useLayoutManager, componentMap } from '@/composables/useLayoutManager'
-import { AppMap, navMode, Buttons } from '@/types/config'
+import { AppMap, navMode } from '@/types/config'
 
 const {
   layoutDraggableList,
@@ -248,9 +248,11 @@ onMounted(() => {
   emitter.on('reset', resetLayout)
   emitter.on('edit', editLayout)
 
-  for (const [appKey, appCfg] of Object.entries(AppMap)) {
-    for (const [moduleKey, moduleCfg] of Object.entries(appCfg.module)) {
-      emitter.on(moduleCfg.msg, () => {
+  // module mode
+  for (const [_, appCfg] of Object.entries(AppMap)) {
+    for (const [_, moduleCfg] of Object.entries(appCfg.module)) {
+      const moduleMsg = moduleCfg.title.toLocaleLowerCase()
+      emitter.on(moduleMsg, () => {
         if (navMode.funcMode !== moduleCfg.funcMode) {
           handleFuncModeChange(moduleCfg.funcMode)
         }
@@ -258,13 +260,17 @@ onMounted(() => {
     }
   }
 
-  // Buttons
-  for (const [buttonKey, buttonCfg] of Object.entries(Buttons)) {
-    emitter.on(buttonCfg.msg, () => {
-      const a = navMode.funcModeStr.charAt(0).toUpperCase() + navMode.funcModeStr.slice(1)
-      const b = buttonCfg.msg.charAt(0).toUpperCase() + buttonCfg.msg.slice(1)
-      addItem(a + b)
-    })
+  // module action
+  for (const [_, appCfg] of Object.entries(AppMap)) {
+    for (const [_, moduleCfg] of Object.entries(appCfg.module)) {
+      const actionButtons = moduleCfg.actionButtons
+      for (const button of actionButtons) {
+        emitter.on(button.msg, () => {
+          addItem(button.template)
+        })
+      }
+
+    }
   }
 })
 

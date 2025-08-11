@@ -20,6 +20,16 @@ function openPosView() {
   }
 }
 
+function openEmptyView() {
+  navMode.appMode = AppMode.Example
+  if (navMode.funcMode === FuncMode.None || 
+      navMode.funcMode > FuncMode.Example2 || 
+      navMode.funcMode < FuncMode.Example1) {
+    navMode.funcMode = FuncMode.Example1
+  }
+}
+
+
 if (window.ipcRenderer) {
   window.ipcRenderer.on('main-process-message', (_event, ...args) => {
     initEvent.mainProcessMessage(_event, ...args)
@@ -38,4 +48,12 @@ if (window.ipcRenderer) {
     }
     openPosView()
   })
+
+  window.ipcRenderer.on('open-example-view', () => {
+    if (navMode.appMode !== AppMode.Example) {
+      emitter.emit('example1')
+    }
+    openEmptyView()
+  })
+
 }
