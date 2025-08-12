@@ -83,6 +83,8 @@ import { toolBarIcon } from '@/types/icon'
 import { getButtonList } from '@/composables/useToolsManager'
 import emitter from '@/hooks/useMitt'
 
+const ipcRenderer = window.ipcRenderer
+
 const position = ref<'top' | 'right' | 'bottom' | 'left'>('bottom')
 const isEditing = ref(false)
 
@@ -133,6 +135,8 @@ const layoutList: ButtonItem[] = reactive([
 
 watch(() => navMode.funcMode, () => {
   const buttonList = getButtonList(navMode)
+
+  ipcRenderer.send('console-to-node', ['TEST2', AppMode[navMode.appMode], FuncMode[navMode.funcMode]])
 
   if (buttonList) {
     handleList.splice(0, handleList.length, ...buttonList)
@@ -253,6 +257,8 @@ const startDrag = (event: MouseEvent) => {
   document.addEventListener('mousemove', handleDrag)
   document.addEventListener('mouseup', stopDrag)
 }
+
+
 
 // 修改stopDrag函数
 const stopDrag = () => {

@@ -1,6 +1,7 @@
 import { ref, markRaw, defineAsyncComponent } from 'vue'
 import { FuncMode, appConfig } from '@/types/config'
 import { ElMessage } from 'element-plus'
+import { useAutoStore } from '@/hooks/usePinia'
 
 // 布局项接口
 export interface LayoutItem {
@@ -49,27 +50,63 @@ const loadComponent = (componentPath: string) => {
 // 动态加载props
 const loadProps = async (moduleName: string) => {
   const propsKey = `${moduleName}Props`
+  
   if (propsCache.has(propsKey)) {
     return propsCache.get(propsKey)
   }
 
   try {
-    // 构建 props 文件路径 - 使用相对路径
-    const propsPath = `../composables/${moduleName.toLowerCase()}/use${moduleName.charAt(0).toUpperCase() + moduleName.slice(1)}Props.ts`
-    const module = await import(/* @vite-ignore */ propsPath)
-    
-    // 使用 useFollowProps 等函数
-    const usePropsFn = module[`use${moduleName.charAt(0).toUpperCase() + moduleName.slice(1)}Props`]
-    if (usePropsFn) {
-      const props = usePropsFn()
-      propsCache.set(propsKey, props)
-      return props
+    // 使用Pinia store
+    switch (moduleName.toLowerCase()) {
+      case 'follow':
+        const { useFollowStore } = await import('@/stores/follow')
+        const followStore = useFollowStore()
+        propsCache.set(propsKey, followStore)
+        return followStore
+        
+      case 'gnss':
+        const { useGnssStore } = await import('@/stores/gnss')
+        const gnssStore = useGnssStore()
+        propsCache.set(propsKey, gnssStore)
+        return gnssStore
+        
+      case 'imu':
+        const { useImuStore } = await import('@/stores/imu')
+        const imuStore = useImuStore()
+        propsCache.set(propsKey, imuStore)
+        return imuStore
+        
+      case 'vision':
+        const { useVisionStore } = await import('@/stores/vision')
+        const visionStore = useVisionStore()
+        propsCache.set(propsKey, visionStore)
+        return visionStore
+        
+      case 'tree':
+        const { useTreeStore } = await import('@/stores/tree')
+        const treeStore = useTreeStore()
+        propsCache.set(propsKey, treeStore)
+        return treeStore
+        
+      case 'demo1':
+        const { useDemo1Store } = await import('@/stores/demo1')
+        const demo1Store = useDemo1Store()
+        propsCache.set(propsKey, demo1Store)
+        return demo1Store
+        
+      case 'demo2':
+        const { useDemo2Store } = await import('@/stores/demo2')
+        const demo2Store = useDemo2Store()
+        propsCache.set(propsKey, demo2Store)
+        return demo2Store
+        
+      default:
+        return {}
     }
   } catch (error) {
-    console.warn(`Failed to load props for ${moduleName}:`, error)
+    console.warn(`Failed to load store for ${moduleName}:`, error)
+    return {}
   }
-  
-  return {}
 }
 
 // 根据FuncMode获取对应的AppMap配置 - 自适应版本
@@ -238,12 +275,13 @@ export function useLayoutManager() {
     try {
       const layoutConfig = await getDynamicDefaultLayoutConfig(currentFuncMode.value)
       const moduleName = getModuleName(currentFuncMode.value)
-      const props = await loadProps(moduleName)
+      
+      const store = useAutoStore.byModule(moduleName)
       
       layoutDraggableList.value = layoutConfig.map((item: any) => ({
         ...item,
         component: markRaw(dynamicComponentMap.value[item.componentName]?.component || null),
-        props: item.props || props || {}
+        props: store || {}
       }))
     } catch (error) {
       console.error('Failed to create default layout:', error)

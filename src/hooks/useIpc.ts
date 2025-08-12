@@ -1,6 +1,8 @@
 import emitter from './useMitt'
 import { navMode, AppMode, FuncMode, appConfig } from '@/types/config'
 
+const ipcRenderer = window.ipcRenderer
+
 // 自动从AppMap生成所有映射
 const appModeMap = Object.fromEntries(
   Object.entries(AppMode)
@@ -46,6 +48,9 @@ function openDynamicView(appKey: string) {
   if (!isValidMode || navMode.funcMode === FuncMode.None) {
     navMode.funcMode = defaultFuncMode
   }
+
+  ipcRenderer.send('console-to-node', ['TEST1', AppMode[navMode.appMode], FuncMode[navMode.funcMode]])
+
 }
 
 if (window.ipcRenderer) {
