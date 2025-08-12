@@ -51,9 +51,7 @@ pnpm run dev
 
 ## Develop
 
-新建 App：
-
-1. 在 `src\types\config.ts` 的 `AppMap` 中配置应用信息
+1. 在 `src\types\config.ts` 的 `appConfig` 中配置应用信息
    ```typescript
       example:                                  // example 为新 App 名称，会加载在 Electron 窗口上
       {
@@ -89,7 +87,7 @@ pnpm run dev
    ```
 3. 在 src\components 和 src\composables 目录下增加相应的组件和钩子
    ```text
-   # 由于未来尽可能不会维护过多内容，因此这里采用的扁平的文件呈现方式
+   # 由于未来尽可能不会维护过多内容，因此这里采用扁平的文件呈现方式
    src\components
    - demo1
     - Demo1Draw.vue

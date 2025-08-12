@@ -1,5 +1,5 @@
 import emitter from './useMitt'
-import { navMode, AppMode, FuncMode, AppMap } from '@/types/config'
+import { navMode, AppMode, FuncMode, appConfig } from '@/types/config'
 
 // 自动从AppMap生成所有映射
 const appModeMap = Object.fromEntries(
@@ -10,17 +10,17 @@ const appModeMap = Object.fromEntries(
 
 // 自动从AppMap生成默认功能模式映射
 const defaultFuncModeMap = Object.fromEntries(
-  Object.keys(AppMap).map(appKey => {
-    const modules = AppMap[appKey as keyof typeof AppMap]?.module || {}
+  Object.keys(appConfig).map(appKey => {
+    const modules = appConfig[appKey as keyof typeof appConfig]?.module || {}
     const firstModule = Object.values(modules)[0] as unknown as { funcMode?: unknown } | undefined
-    return [appKey, firstModule?.funcMode || AppMap[appKey as keyof typeof AppMap].currMode || FuncMode.None]
+    return [appKey, firstModule?.funcMode || appConfig[appKey as keyof typeof appConfig].currMode || FuncMode.None]
   })
 )
 
 // 自动从AppMap生成事件名称映射
 const eventNameMap = Object.fromEntries(
-  Object.keys(AppMap).map(appKey => {
-    const modules = AppMap[appKey as keyof typeof AppMap]?.module || {}
+  Object.keys(appConfig).map(appKey => {
+    const modules = appConfig[appKey as keyof typeof appConfig]?.module || {}
     const firstModuleKey = Object.keys(modules)[0] || appKey
     return [appKey, firstModuleKey.toLowerCase()]
   })
@@ -38,7 +38,7 @@ function openDynamicView(appKey: string) {
   }
   
   // 获取当前app的所有功能模式范围
-  const modules = AppMap[appKey as keyof typeof AppMap]?.module || {}
+  const modules = appConfig[appKey as keyof typeof appConfig]?.module || {}
   const funcModes = Object.values(modules).map(m => (m as unknown as { funcMode?: unknown }).funcMode).filter(Boolean)
 
   // 检查当前功能模式是否在该app范围内
@@ -54,7 +54,7 @@ if (window.ipcRenderer) {
   })
 
   // 动态注册所有AppMap的事件监听
-  Object.keys(AppMap).forEach(appKey => {
+  Object.keys(appConfig).forEach(appKey => {
     const eventName = `open-${appKey}-view`
     window.ipcRenderer.on(eventName, () => {
       const emitterEvent = eventNameMap[appKey]

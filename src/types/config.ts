@@ -43,7 +43,7 @@ interface ButtonItem {
   [key: string]: any
 }
 
-type AppMapType = typeof AppMap
+type AppMapType = typeof appConfig
 type AppName    = keyof AppMapType
 type ModuleMap<K extends AppName> = AppMapType[K]['module']
 type ModuleKey<K extends AppName> = keyof ModuleMap<K>
@@ -78,7 +78,7 @@ function createAppItem(config: Omit<AppMapType[AppName], 'currMode'>) {
   }
 }
 
-const AppMap: any = {
+const appConfig: any = {
   pnc: createAppItem({
     module: {
       follow: createModuleItem({
@@ -195,9 +195,9 @@ function getActionButtons (title: string, actions: string[]) {
 // 在AppMap定义之后，NavMode类之前添加自动初始化逻辑
 // 自动获取第一个app的第一个module
 function getInitialModeFromAppMap() {
-  const appKeys = Object.keys(AppMap) as Array<keyof typeof AppMap>
+  const appKeys = Object.keys(appConfig) as Array<keyof typeof appConfig>
   if (appKeys.length === 0) {
-    console.error('Current AppMap is empty; an error occurred while Electron was loading the application!!!');
+    console.error('Current appConfig is empty; an error occurred while Electron was loading the application!!!');
     // 仍然返回默认的初始模式
     return {
       appMode: AppMode.None,
@@ -208,7 +208,7 @@ function getInitialModeFromAppMap() {
   }
 
   const firstAppKey = appKeys[0]
-  const firstApp = AppMap[firstAppKey]
+  const firstApp = appConfig[firstAppKey]
   
   const moduleKeys = Object.keys(firstApp.module) as Array<keyof typeof firstApp.module>
   if (moduleKeys.length === 0) {
@@ -273,5 +273,5 @@ export {
   FuncMode,
   type ButtonItem,
 
-  AppMap,
+  appConfig,
 }

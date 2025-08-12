@@ -1,5 +1,5 @@
 import { ref, markRaw, defineAsyncComponent } from 'vue'
-import { FuncMode, AppMap } from '@/types/config'
+import { FuncMode, appConfig } from '@/types/config'
 import { ElMessage } from 'element-plus'
 
 // 布局项接口
@@ -76,22 +76,22 @@ const loadProps = async (moduleName: string) => {
 // 根据FuncMode获取对应的AppMap配置 - 自适应版本
 const getAppMapConfig = (mode: FuncMode) => {
   // 自动匹配FuncMode到对应的AppMap模块
-  for (const [appName, appConfig] of Object.entries(AppMap)) {
-    const modules = appConfig.module as Record<string, any>
+  for (const [appName, appCfg] of Object.entries(appConfig)) {
+    const modules = appCfg.module as Record<string, any>
     for (const [moduleName, moduleConfig] of Object.entries(modules)) {
       if (moduleConfig.funcMode === mode) {
         return modules
       }
     }
   }
-  return AppMap.example.module
+  return appConfig.example.module
 }
 
 // 获取当前模式的模块名称 - 自适应版本
 const getModuleName = (mode: FuncMode): string => {
   // 自动从AppMap中查找匹配的模块名
-  for (const [appName, appConfig] of Object.entries(AppMap)) {
-    const modules = appConfig.module as Record<string, any>
+  for (const [appName, appCfg] of Object.entries(appConfig)) {
+    const modules = appCfg.module as Record<string, any>
     for (const [moduleName, moduleConfig] of Object.entries(modules)) {
       if (moduleConfig.funcMode === mode) {
         return moduleName
@@ -107,7 +107,7 @@ const getDynamicComponentMap = (mode: FuncMode) => {
   const appMapConfig = getAppMapConfig(mode)
   
   if (!(moduleName in appMapConfig)) {
-    console.warn(`Module ${moduleName} not found in AppMap`)
+    console.warn(`Module ${moduleName} not found in appConfig`)
     return {}
   }
 

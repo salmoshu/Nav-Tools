@@ -77,7 +77,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, onUnmounted, watch, inject, type Ref } from 'vue'
-import { navMode, AppMode, FuncMode, ButtonItem, AppMap } from '@/types/config'
+import { navMode, AppMode, FuncMode, ButtonItem, appConfig } from '@/types/config'
 
 import { toolBarIcon } from '@/types/icon'
 import { getButtonList } from '@/composables/useToolsManager'
@@ -143,11 +143,11 @@ watch(() => navMode.funcMode, () => {
 
 const currentButtonList = computed(() => {
   const appKey = navMode.appModeStr
-  if (!appKey || !AppMap[appKey as keyof typeof AppMap]) {
+  if (!appKey || !appConfig[appKey as keyof typeof appConfig]) {
     return []
   }
   
-  const app = AppMap[appKey as keyof typeof AppMap]
+  const app = appConfig[appKey as keyof typeof appConfig]
   return Object.values(app.module).map(module => ({
     title: module.title,
     msg: module.title.toLowerCase(),
@@ -347,9 +347,9 @@ const handleAction = (action: string) => {
   
   // 根据AppMap自动匹配模块对应的FuncMode
   const appKey = navMode.appModeStr
-  if (!appKey || !AppMap[appKey as keyof typeof AppMap]) return
+  if (!appKey || !appConfig[appKey as keyof typeof appConfig]) return
   
-  const app = AppMap[appKey as keyof typeof AppMap]
+  const app = appConfig[appKey as keyof typeof appConfig]
   const module = Object.values(app.module).find(m => m.title.toLowerCase() === action)
   
   if (module) {

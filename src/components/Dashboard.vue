@@ -86,7 +86,7 @@ import { ElButton, ElCard, ElIcon } from 'element-plus'
 import { Close, Share } from '@element-plus/icons-vue'
 import emitter from '@/hooks/useMitt'
 import { useLayoutManager } from '@/composables/useLayoutManager'
-import { AppMap, navMode } from '@/types/config'
+import { appConfig, navMode } from '@/types/config'
 
 const {
   layoutDraggableList,
@@ -246,7 +246,7 @@ onMounted(() => {
   emitter.on('edit', editLayout)
 
   // module mode
-  for (const [_, appCfg] of Object.entries(AppMap)) {
+  for (const [_, appCfg] of Object.entries(appConfig)) {
     for (const [_, moduleCfg] of Object.entries(appCfg.module)) {
       const moduleMsg = moduleCfg.title.toLocaleLowerCase()
       emitter.on(moduleMsg, () => {
@@ -258,7 +258,7 @@ onMounted(() => {
   }
 
   // module action
-  for (const [_, appCfg] of Object.entries(AppMap)) {
+  for (const [_, appCfg] of Object.entries(appConfig)) {
     for (const [_, moduleCfg] of Object.entries(appCfg.module)) {
       const actionButtons = moduleCfg.actionButtons
       for (const button of actionButtons) {

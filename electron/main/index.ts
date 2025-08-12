@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import os from 'node:os'
 // 导入AppMap配置
-import { AppMap } from '../../src/types/config'
+import { appConfig } from '../../src/types/config'
 
 const require = createRequire(import.meta.url)
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -161,7 +161,7 @@ function createMenu() {
   ]
 
   // 根据AppMap第一层内容自动生成菜单项
-  const appMenuItems = Object.entries(AppMap).map(([key, config]) => ({
+  const appMenuItems = Object.entries(appConfig).map(([key, config]) => ({
     label: key.toUpperCase(),
     click: () => {
       win?.webContents.send(`open-${key}-view`)
