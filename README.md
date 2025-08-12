@@ -51,12 +51,62 @@ pnpm run dev
 
 ## Develop
 
-1. 重点关注内容
-   - `src/composables/useLayoutManager.ts`: 布局管理
-   - `src/types/mode.ts`: 应用模式和功能定义
-2. 单独应用
-   - `src/components/xxx`: 单独应用的组件
-   - `src/composables/xxx`: 对应组件的钩子函数
+新建 App：
+
+1. 在 `src\types\config.ts` 的 `AppMap` 中配置应用信息
+   ```typescript
+      example:                                  // example 为新 App 名称，会加载在 Electron 窗口上
+      {
+         module: {
+            demo1: createModuleItem({
+               title: 'Demo1',                  // 模块名称（与 module 的键名相同，采用 PascalCase 命名规范）
+               icon: toolBarIcon.default,       // 模块图标
+               action: ['draw', 'data', 'config'], // 模块包含的子模块（draw、data、config）
+            }),
+            demo2: createModuleItem({
+               title: 'Demo2',
+               icon: toolBarIcon.default,
+               action: ['draw', 'data', 'config'],
+            }),
+            ...
+         }
+      },
+
+   ```
+2. 在 AppMode 和 FuncMode 中增加相应的枚举
+   ```typescript
+   export enum AppMode {
+      Example = 'Example',
+      ...
+   }
+   ```
+   ```typescript
+   export enum FuncMode {
+      Demo1 = 10,
+      Demo2 = 11,
+      ...
+   }
+   ```
+3. 在 src\components 和 src\composables 目录下增加相应的组件和钩子
+   ```text
+   # 由于未来尽可能不会维护过多内容，因此这里采用的扁平的文件呈现方式
+   src\components
+   - demo1
+    - Demo1Draw.vue
+    - Demo1Data.vue
+    - Demo1Config.vue
+   - demo2
+    - Demo2Draw.vue
+    - Demo2Data.vue
+    - Demo2Config.vue
+
+    src\composables
+    - demo1
+     - useDemo1Props.ts
+    - demo2
+     - useDemo2Props.ts
+   ```
+
 
 ## Debug
 

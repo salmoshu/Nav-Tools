@@ -18,7 +18,7 @@
         class="toolbar-btn" 
         @click="handleAction(item.msg)" 
         :title="item.title"
-        v-html="item.icon+item.text"
+        v-html="item.icon+getButtonText(item.title, position)"
       >
       </button>
 
@@ -32,7 +32,7 @@
         class="toolbar-btn" 
         @click="handleAction(item.msg)" 
         :title="item.title"
-        v-html="item.icon+item.text"
+        v-html="item.icon+getButtonText(item.title, position)"
       >
       </button>
 
@@ -45,7 +45,7 @@
         class="toolbar-btn"
         @click="handleLayout('edit')"
         :title="layoutList[0].title"
-        v-html="layoutList[0].icon+layoutList[0].text"
+        v-html="layoutList[0].icon+getButtonText(layoutList[0].title, position)"
       >
       </button>
       <button
@@ -53,14 +53,14 @@
         class="toolbar-btn"
         @click="handleLayout('save')"
         :title="layoutList[1].title"
-        v-html="layoutList[1].icon+layoutList[1].text"
+        v-html="layoutList[1].icon+getButtonText(layoutList[1].title, position)"
       >
       </button>
       <button
         class="toolbar-btn"
         @click="handleLayout('reset')"
         :title="layoutList[2].title"
-        v-html="layoutList[2].icon+layoutList[2].text"
+        v-html="layoutList[2].icon+getButtonText(layoutList[2].title, position)"
       >
       </button>
 
@@ -83,7 +83,7 @@ import { toolBarIcon } from '@/types/icon'
 import { getButtonList } from '@/composables/useToolsManager'
 import emitter from '@/hooks/useMitt'
 
-const position = ref<'top' | 'right' | 'bottom' | 'left'>('top')
+const position = ref<'top' | 'right' | 'bottom' | 'left'>('bottom')
 const isEditing = ref(false)
 
 function upAndDown(position: string): boolean {
@@ -93,6 +93,15 @@ function upAndDown(position: string): boolean {
     return false
   }
 }
+
+function getButtonText(msg: string, position: string): string {
+  if (upAndDown(position)) {
+    return '&nbsp;'+msg
+  } else {
+    return ''
+  }
+}
+
 
 const handleList: ButtonItem[] = reactive(
   getButtonList(navMode) || []
@@ -122,15 +131,6 @@ const layoutList: ButtonItem[] = reactive([
   },
 ])
 
-function adjustButtonText(newPosition: 'top' | 'right' | 'bottom' | 'left') {
-  handleList.forEach(item => {
-    item.text = upAndDown(newPosition) ? '&nbsp;'+item.title : ''
-  })
-  layoutList.forEach(item => {
-    item.text = upAndDown(newPosition) ? '&nbsp;'+item.title : ''
-  })
-}
-
 watch(() => navMode.funcMode, () => {
   const buttonList = getButtonList(navMode)
 
@@ -139,11 +139,6 @@ watch(() => navMode.funcMode, () => {
   } else {
     handleList.splice(0, handleList.length)
   }
-  adjustButtonText(position.value)
-})
-
-watch(position, (newPosition) => {
-  adjustButtonText(newPosition)
 })
 
 const currentButtonList = computed(() => {
@@ -158,7 +153,7 @@ const currentButtonList = computed(() => {
     msg: module.title.toLowerCase(),
     template: '',
     icon: module.icon,
-    text: upAndDown(position.value) ? module.text : ''
+    text: getButtonText(module.title, position.value)
   } as ButtonItem))
 })
 

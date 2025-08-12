@@ -3,6 +3,8 @@ import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import os from 'node:os'
+// 导入AppMap配置
+import { AppMap } from '../../src/types/config'
 
 const require = createRequire(import.meta.url)
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -78,7 +80,10 @@ async function createWindow() {
   // win.webContents.on('will-navigate', (event, url) => { }) #344
 }
 
+
+
 function createMenu() {
+  // 基础菜单模板
   const template = [
     {
       label: '文件',
@@ -88,7 +93,6 @@ function createMenu() {
           accelerator: 'CmdOrCtrl+N',
           click: () => {
             console.log('新建文件')
-            // 这里可以添加新建窗口或新建文件的逻辑
           }
         },
         {
@@ -96,7 +100,6 @@ function createMenu() {
           accelerator: 'CmdOrCtrl+O',
           click: () => {
             console.log('打开文件')
-            // 这里可以添加打开文件的逻辑
           }
         },
         { type: 'separator' },
@@ -140,7 +143,6 @@ function createMenu() {
           label: '关于',
           click: () => {
             console.log('关于应用')
-            // 这里可以添加显示关于对话框的逻辑
           }
         },
         {
@@ -156,28 +158,20 @@ function createMenu() {
       enabled: false,
       visible: true
     },
-    {
-      label: 'PNC',
-      click: () => {
-        win?.webContents.send('open-pnc-view')
-      }
-    },
-    {
-      label: 'POS',
-      click: () => {
-        win?.webContents.send('open-gnss-view')
-      }
-    },
-    // {
-    //   label: 'Example',
-    //   click: () => {
-    //     win?.webContents.send('open-example-view')
-
-    //   }
-    // },
   ]
 
-  const menu = Menu.buildFromTemplate(template as any)
+  // 根据AppMap第一层内容自动生成菜单项
+  const appMenuItems = Object.entries(AppMap).map(([key, config]) => ({
+    label: key.toUpperCase(),
+    click: () => {
+      win?.webContents.send(`open-${key}-view`)
+    }
+  }))
+
+  // 合并基础模板和动态生成的App菜单
+  const finalTemplate = [...template, ...appMenuItems]
+
+  const menu = Menu.buildFromTemplate(finalTemplate as any)
   Menu.setApplicationMenu(menu)
 }
 

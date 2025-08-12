@@ -1,5 +1,5 @@
 <template>
     <div>
-        <h1>Example Config</h1>
+        <p>Demo2 Config</p>
     </div>
 </template>

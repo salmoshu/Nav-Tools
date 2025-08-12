@@ -1,40 +1,6 @@
-import { ref, markRaw } from 'vue'
-import { defineAsyncComponent } from 'vue'
-import { FuncMode, navMode, AppMap } from '@/types/config'
-import { useFollowMain } from '@/composables/follow/useFollowMain'
+import { ref, markRaw, defineAsyncComponent } from 'vue'
+import { FuncMode, AppMap } from '@/types/config'
 import { ElMessage } from 'element-plus'
-
-const FollowDraw = defineAsyncComponent(() => import('@/components/follow/FollowDraw.vue'))
-const FollowConfig = defineAsyncComponent(() => import('@/components/follow/FollowConfig.vue'))
-const GnssDraw = defineAsyncComponent(() => import('@/components/gnss/GnssDraw.vue'))
-const GnssData = defineAsyncComponent(() => import('@/components/gnss/GnssData.vue'))
-const GnssConfig = defineAsyncComponent(() => import('@/components/gnss/GnssConfig.vue'))
-const ImuDraw = defineAsyncComponent(() => import('@/components/imu/ImuDraw.vue'))
-const ImuData = defineAsyncComponent(() => import('@/components/imu/ImuData.vue'))
-const ImuConfig = defineAsyncComponent(() => import('@/components/imu/ImuConfig.vue'))
-const VisionDraw = defineAsyncComponent(() => import('@/components/vision/VisionDraw.vue'))
-const VisionData = defineAsyncComponent(() => import('@/components/vision/VisionData.vue'))
-const VisionConfig = defineAsyncComponent(() => import('@/components/vision/VisionConfig.vue'))
-const TreeDraw = defineAsyncComponent(() => import('@/components/tree/TreeDraw.vue'))
-const TreeData = defineAsyncComponent(() => import('@/components/tree/TreeData.vue'))
-const TreeConfig = defineAsyncComponent(() => import('@/components/tree/TreeConfig.vue'))
-
-// 使用useMain管理功能模块状态
-const {
-  carState,
-  personState,
-  distance,
-  targetAngle,
-  isInFOV,
-  visionLines,
-  visionPath,
-  handleMouseDown,
-  isDraggingPerson,
-  startAnimation,
-  stopAnimation,
-  updateConfig,
-  config
-} = useFollowMain()
 
 // 布局项接口
 export interface LayoutItem {
@@ -54,88 +20,162 @@ export interface LayoutItem {
   maxH?: number
 }
 
-// 组件映射配置
-export const componentMap = {
-  // Follow模块
-  'FollowDraw': { component: FollowDraw, title: 'Follow Draw', props: { carState, personState, visionLines, visionPath, isDraggingPerson, handleMouseDown } },
-  'FollowConfig': { component: FollowConfig, title: 'Follow Config', props: { config, updateConfig } },
-  
-  // GNSS模块
-  'GnssDraw': { component: GnssDraw, title: 'GNSS Draw', props: {} },
-  'GnssData': { component: GnssData, title: 'GNSS Data', props: {} },
-  'GnssConfig': { component: GnssConfig, title: 'GNSS Config', props: {} },
-  
-  // IMU模块
-  'ImuDraw': { component: ImuDraw, title: 'IMU Draw', props: {} },
-  'ImuData': { component: ImuData, title: 'IMU Data', props: {} },
-  'ImuConfig': { component: ImuConfig, title: 'IMU Config', props: {} },
-  
-  // Vision模块
-  'VisionDraw': { component: VisionDraw, title: 'Vision Draw', props: {} },
-  'VisionData': { component: VisionData, title: 'Vision Data', props: {} },
-  'VisionConfig': { component: VisionConfig, title: 'Vision Config', props: {} },
-  
-  // Tree模块
-  'TreeDraw': { component: TreeDraw, title: 'Tree Draw', props: {} },
-  'TreeData': { component: TreeData, title: 'Tree Data', props: {} },
-  'TreeConfig': { component: TreeConfig, title: 'Tree Config', props: {} }
-}
+// 全局组件缓存
+const componentCache = new Map<string, any>()
+const propsCache = new Map<string, any>()
 
-if ('pnc' in AppMap && 'module' in AppMap['pnc'] && 'follow' in AppMap['pnc'].module) {
-  console.log(AppMap['pnc'].module['follow'].template);
-  console.log(AppMap['pnc'].module['follow'].templateNames);
-} else {
-  console.warn('AppMap 中未找到指定路径的数据');
-}
-
-// 根据功能模式过滤组件
-export const getComponentsByMode = (mode: FuncMode): string[] => {
-  switch (mode) {
-    case FuncMode.Follow:
-      return ['FollowDraw', 'FollowConfig']
-    case FuncMode.Tree:
-      return ['TreeDraw', 'TreeData', 'TreeConfig']
-    case FuncMode.Gnss:
-      return ['GnssDraw', 'GnssData', 'GnssConfig']
-    case FuncMode.Imu:
-      return ['ImuDraw', 'ImuData', 'ImuConfig']
-    case FuncMode.Vision:
-      return ['VisionDraw', 'VisionData', 'VisionConfig']
-    default:
-      return ['FollowDraw', 'FollowConfig']
+// 路径转换函数 - 将@别名转换为相对路径
+const convertPath = (path: string): string => {
+  if (path.startsWith('@/')) {
+    // 将 @/components/... 转换为 ../components/...
+    return path.replace('@/', '../')
   }
+  return path
 }
 
-// 默认布局配置
-const getDefaultLayoutConfig = (mode: FuncMode) => {
-  const configs = {
-    [FuncMode.Follow]: [
-      { x: 0, y: 0, w: 6, h: 11, i: 'follow-draw-1', titleName: '跟随仿真', componentName: 'FollowDraw', minW: 4, minH: 4, maxW: 8, maxH: 16 },
-      { x: 6, y: 3, w: 4, h: 3, i: 'follow-config-2', titleName: '跟随配置', componentName: 'FollowConfig', minW: 2, minH: 2, maxW: 6, maxH: 8 },
-    ],
-    [FuncMode.Gnss]: [
-      { x: 0, y: 0, w: 6, h: 4, i: 'gnss-draw-1', titleName: 'GNSS绘制', componentName: 'GnssDraw', minW: 3, minH: 3, maxW: 6, maxH: 8 },
-      { x: 6, y: 0, w: 6, h: 4, i: 'gnss-data-2', titleName: 'GNSS数据', componentName: 'GnssData', minW: 3, minH: 3, maxW: 6, maxH: 6 },
-      { x: 6, y: 4, w: 6, h: 4, i: 'gnss-config-4', titleName: 'GNSS配置', componentName: 'GnssConfig', minW: 3, minH: 3, maxW: 6, maxH: 6 }
-    ],
-    [FuncMode.Imu]: [
-      { x: 0, y: 0, w: 6, h: 4, i: 'imu-draw-1', titleName: 'IMU绘制', componentName: 'ImuDraw', minW: 3, minH: 3, maxW: 6, maxH: 8 },
-      { x: 6, y: 0, w: 6, h: 4, i: 'imu-data-2', titleName: 'IMU数据', componentName: 'ImuData', minW: 3, minH: 3, maxW: 6, maxH: 6 },
-      { x: 6, y: 4, w: 6, h: 4, i: 'imu-config-4', titleName: 'IMU配置', componentName: 'ImuConfig', minW: 3, minH: 3, maxW: 6, maxH: 6 }
-    ],
-    [FuncMode.Vision]: [
-      { x: 0, y: 0, w: 6, h: 4, i: 'vision-draw-1', titleName: 'Vision绘制', componentName: 'VisionDraw', minW: 3, minH: 3, maxW: 6, maxH: 8 },
-      { x: 6, y: 0, w: 6, h: 4, i: 'vision-data-2', titleName: 'Vision数据', componentName: 'VisionData', minW: 3, minH: 3, maxW: 6, maxH: 6 },
-      { x: 6, y: 4, w: 6, h: 4, i: 'vision-config-4', titleName: 'Vision配置', componentName: 'VisionConfig', minW: 3, minH: 3, maxW: 6, maxH: 6 }
-    ],
-    [FuncMode.Tree]: [
-      { x: 0, y: 0, w: 6, h: 4, i: 'tree-draw-1', titleName: 'Tree绘制', componentName: 'TreeDraw', minW: 3, minH: 3, maxW: 6, maxH: 8 },
-      { x: 6, y: 0, w: 6, h: 4, i: 'tree-data-2', titleName: 'Tree数据', componentName: 'TreeData', minW: 3, minH: 3, maxW: 6, maxH: 6 },
-      { x: 6, y: 4, w: 6, h: 4, i: 'tree-config-4', titleName: 'Tree配置', componentName: 'TreeConfig', minW: 3, minH: 3, maxW: 6, maxH: 6 }
-    ]
+// 动态加载组件
+// 动态加载组件
+const loadComponent = (componentPath: string) => {
+  const resolvedPath = convertPath(componentPath)
+  
+  if (componentCache.has(resolvedPath)) {
+    return componentCache.get(resolvedPath)
   }
   
-  return configs[mode as keyof typeof configs] || configs[FuncMode.Follow as keyof typeof configs]
+  const component = markRaw(defineAsyncComponent(() => import(/* @vite-ignore */ resolvedPath)))
+  componentCache.set(resolvedPath, component)
+  return component
+}
+
+// 动态加载props
+const loadProps = async (moduleName: string) => {
+  const propsKey = `${moduleName}Props`
+  if (propsCache.has(propsKey)) {
+    return propsCache.get(propsKey)
+  }
+
+  try {
+    // 构建props文件路径 - 使用相对路径
+    const propsPath = `../composables/${moduleName.toLowerCase()}/use${moduleName.charAt(0).toUpperCase() + moduleName.slice(1)}Props.ts`
+    const module = await import(/* @vite-ignore */ propsPath)
+    
+    // 使用useFollowMain等函数
+    const useMainFn = module[`use${moduleName.charAt(0).toUpperCase() + moduleName.slice(1)}Main`]
+    if (useMainFn) {
+      const props = useMainFn()
+      propsCache.set(propsKey, props)
+      return props
+    }
+  } catch (error) {
+    console.warn(`Failed to load props for ${moduleName}:`, error)
+  }
+  
+  return {}
+}
+
+// 根据FuncMode获取对应的AppMap配置 - 自适应版本
+const getAppMapConfig = (mode: FuncMode) => {
+  // 自动匹配FuncMode到对应的AppMap模块
+  for (const [appName, appConfig] of Object.entries(AppMap)) {
+    const modules = appConfig.module as Record<string, any>
+    for (const [moduleName, moduleConfig] of Object.entries(modules)) {
+      if (moduleConfig.funcMode === mode) {
+        return modules
+      }
+    }
+  }
+  return AppMap.example.module
+}
+
+// 获取当前模式的模块名称 - 自适应版本
+const getModuleName = (mode: FuncMode): string => {
+  // 自动从AppMap中查找匹配的模块名
+  for (const [appName, appConfig] of Object.entries(AppMap)) {
+    const modules = appConfig.module as Record<string, any>
+    for (const [moduleName, moduleConfig] of Object.entries(modules)) {
+      if (moduleConfig.funcMode === mode) {
+        return moduleName
+      }
+    }
+  }
+  return 'example'
+}
+
+// 动态获取组件映射
+const getDynamicComponentMap = (mode: FuncMode) => {
+  const moduleName = getModuleName(mode)
+  const appMapConfig = getAppMapConfig(mode)
+  
+  if (!(moduleName in appMapConfig)) {
+    console.warn(`Module ${moduleName} not found in AppMap`)
+    return {}
+  }
+
+  const moduleConfig = (appMapConfig as Record<string, any>)[moduleName]
+  const componentMap: Record<string, { component: any; title: string; props: Record<string, any> }> = {}
+
+  // 使用AppMap中的template和templateNames
+  const templates = moduleConfig.template || []
+  const templateNames = moduleConfig.templateNames || []
+  
+  templates.forEach((templatePath: string, index: number) => {
+    const templateName = templateNames[index]
+    if (templateName) {
+      componentMap[templateName] = {
+        component: loadComponent(templatePath),
+        title: `${moduleConfig.title} ${templateName.replace(moduleName, '').toLowerCase()}`,
+        props: {} // 将在运行时填充
+      }
+    }
+  })
+
+  return componentMap
+}
+
+// 动态获取默认布局配置
+const getDynamicDefaultLayoutConfig = async (mode: FuncMode) => {
+  const moduleName = getModuleName(mode)
+  const appMapConfig = getAppMapConfig(mode)
+  
+  if (!Object.prototype.hasOwnProperty.call(appMapConfig, moduleName)) {
+    return []
+  }
+
+  const moduleConfig = (appMapConfig as Record<string, any>)[moduleName]
+  const templates = moduleConfig.templateNames || []
+  const props = await loadProps(moduleName)
+  
+  // 根据模板数量生成默认布局
+  return templates.map((templateName: string, index: number) => {
+    const baseName = templateName.toLowerCase()
+
+    return {
+      x: (index % 2) * 6,
+      y: Math.floor(index / 2) * 4,
+      w: 6,
+      h: 4,
+      i: `${moduleName}-${baseName}-${index + 1}`,
+      titleName: `${moduleConfig.title} ${baseName.replace(moduleName, '').toUpperCase()}`,
+      componentName: templateName,
+      minW: 3,
+      minH: 3,
+      maxW:  6,
+      maxH: 8,
+      props
+    }
+  })
+}
+
+// 根据功能模式动态获取组件列表
+const getDynamicComponentsByMode = (mode: FuncMode): string[] => {
+  const moduleName = getModuleName(mode)
+  const appMapConfig = getAppMapConfig(mode)
+  
+  if (!Object.prototype.hasOwnProperty.call(appMapConfig, moduleName)) {
+    return []
+  }
+
+  return (appMapConfig as Record<string, any>)[moduleName]?.templateNames || []
 }
 
 // 布局管理组合式函数
@@ -146,14 +186,31 @@ export function useLayoutManager() {
   const draggableLayout = ref(false)
   const resizableLayout = ref(false)
 
+  // 动态组件映射
+  const dynamicComponentMap = ref<Record<string, any>>({})
+
+  // 更新动态组件映射
+  const updateDynamicComponentMap = (mode: FuncMode) => {
+    const componentMap = getDynamicComponentMap(mode)
+    dynamicComponentMap.value = Object.fromEntries(
+      Object.entries(componentMap).map(([key, value]) => [
+        key,
+        { ...value, component: markRaw(value.component) }
+      ])
+    )
+  }
+
   // 从配置加载布局
-  const loadLayoutFromConfig = (config: any[]) => {
+  const loadLayoutFromConfig = async (config: any[]) => {
+    const moduleName = getModuleName(currentFuncMode.value)
+    const props = await loadProps(moduleName)
+    
     layoutDraggableList.value = config.map((item: any) => {
-      const componentConfig = componentMap[item.componentName as keyof typeof componentMap]
+      const componentConfig = dynamicComponentMap.value[item.componentName]
       return {
         ...item,
-        component: markRaw(componentConfig.component),
-        props: (componentConfig as { props?: Record<string, any> }).props || {}
+        component: markRaw(componentConfig?.component || null),
+        props: item.props || props || {}
       }
     })
   }
@@ -167,9 +224,7 @@ export function useLayoutManager() {
       h: item.h,
       i: item.i,
       titleName: item.titleName,
-      componentName: Object.keys(componentMap).find(key => 
-        componentMap[key as keyof typeof componentMap].component === item.component
-      ),
+      componentName: item.componentName,
       minW: item.minW,
       minH: item.minH,
       maxW: item.maxW,
@@ -179,32 +234,46 @@ export function useLayoutManager() {
     localStorage.setItem(`dashboard-layout-${currentFuncMode.value}`, JSON.stringify(layoutToSave))
   }
 
-  // 初始化布局
-  const initLayout = () => {
-    const savedLayout = localStorage.getItem(`dashboard-layout-${currentFuncMode.value}`)
-    if (savedLayout) {
-      try {
-        const parsed = JSON.parse(savedLayout)
-        loadLayoutFromConfig(parsed)
-      } catch (error) {
-        console.error('Failed to load saved layout:', error)
-        createDefaultLayout()
-      }
-    } else {
-      createDefaultLayout()
+  // 创建默认布局
+  const createDefaultLayout = async () => {
+    try {
+      const layoutConfig = await getDynamicDefaultLayoutConfig(currentFuncMode.value)
+      const moduleName = getModuleName(currentFuncMode.value)
+      const props = await loadProps(moduleName)
+      
+      layoutDraggableList.value = layoutConfig.map((item: any) => ({
+        ...item,
+        component: markRaw(dynamicComponentMap.value[item.componentName]?.component || null),
+        props: item.props || props || {}
+      }))
+    } catch (error) {
+      console.error('Failed to create default layout:', error)
     }
   }
 
-  // 创建默认布局
-  const createDefaultLayout = () => {
-    const layoutConfig = getDefaultLayoutConfig(currentFuncMode.value as FuncMode)
-    loadLayoutFromConfig(layoutConfig)
+  // 初始化布局
+  const initLayout = async () => {
+    updateDynamicComponentMap(currentFuncMode.value)
+    
+    const savedLayout = localStorage.getItem(`dashboard-layout-${currentFuncMode.value}`)
+    
+    if (savedLayout) {
+      try {
+        const parsed = JSON.parse(savedLayout)
+        await loadLayoutFromConfig(parsed)
+      } catch (error) {
+        console.error('Failed to load saved layout:', error)
+        await createDefaultLayout()
+      }
+    } else {
+      await createDefaultLayout()
+    }
   }
 
   // 重置布局
-  const resetLayout = () => {
+  const resetLayout = async () => {
     localStorage.removeItem(`dashboard-layout-${currentFuncMode.value}`)
-    createDefaultLayout()
+    await createDefaultLayout()
     isEditDraggable.value = false
     draggableLayout.value = false
     resizableLayout.value = false
@@ -232,24 +301,29 @@ export function useLayoutManager() {
   }
 
   // 添加组件
-  const addItem = (componentName: string) => {
-    const componentConfig = componentMap[componentName as keyof typeof componentMap]
-    if (!componentConfig) return
-    
-    const exists = layoutDraggableList.value.some(item => 
-      Object.keys(componentMap).find(key => 
-        componentMap[key as keyof typeof componentMap].component === item.component
-      ) === componentName
-    )
-    
-    if (exists) {
+  const addItem = async (componentName: string) => {
+    if (!dynamicComponentMap.value[componentName]) {
       ElMessage({
-        message: `${componentConfig.title}已存在`,
+        message: `组件 ${componentName} 不存在`,
         type: 'warning',
         duration: 1000
       })
       return
     }
+
+    const exists = layoutDraggableList.value.some(item => item.componentName === componentName)
+    
+    if (exists) {
+      ElMessage({
+        message: `${dynamicComponentMap.value[componentName]?.title} 已存在`,
+        type: 'warning',
+        duration: 1000
+      })
+      return
+    }
+
+    const moduleName = getModuleName(currentFuncMode.value)
+    const props = await loadProps(moduleName)
     
     const newItem: LayoutItem = {
       x: 0,
@@ -257,10 +331,10 @@ export function useLayoutManager() {
       w: 6,
       h: 4,
       i: `${componentName}-${Date.now()}`,
-      titleName: componentConfig.title,
-      component: markRaw(componentConfig.component),
-      componentName: componentName,
-      props: (componentConfig as { props?: Record<string, any> }).props || {},
+      titleName: dynamicComponentMap.value[componentName]?.title || componentName,
+      componentName,
+      component: markRaw(dynamicComponentMap.value[componentName]?.component || null),
+      props: props || {},
       minW: 3,
       minH: 3,
       maxW: 6,
@@ -269,10 +343,9 @@ export function useLayoutManager() {
     
     layoutDraggableList.value.push(newItem)
     ElMessage({
-      message: `已添加${componentConfig.title}`,
+      message: `已添加 ${newItem.titleName}`,
       type: 'success',
       duration: 1000
-
     })
   }
 
@@ -285,8 +358,8 @@ export function useLayoutManager() {
   }
 
   // 处理功能模式切换
-  const handleFuncModeChange = (mode: FuncMode) => {
-    if (navMode.funcMode === mode) {
+  const handleFuncModeChange = async (mode: FuncMode) => {
+    if (currentFuncMode.value === mode) {
       return
     }
 
@@ -297,18 +370,13 @@ export function useLayoutManager() {
     currentFuncMode.value = mode
     
     // 重新初始化布局
-    initLayout()
+    await initLayout()
     
-    // 重启动画
-    stopAnimation()
-    startAnimation()
-
     ElMessage({
       message: `已切换到 ${FuncMode[mode].toUpperCase()} 组件`,
       type: 'success',
       duration: 1000
     })
-
   }
 
   return {

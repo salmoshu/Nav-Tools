@@ -13,14 +13,13 @@
 
 <script setup lang="ts">
 import { markRaw, onMounted, ref } from 'vue'
-import { componentMap } from '@/composables/useLayoutManager'
 import type { Component } from 'vue'
 
 const cardComponent = ref<Component | null>(null)
 const cardProps = ref<Record<string, any>>({})
 const cardTitle = ref('Card Window')
 
-onMounted(() => {
+onMounted(async () => {
   const hash = window.location.hash.slice(1) // 移除 #
   if (hash.startsWith('card/')) {
     try {
@@ -28,15 +27,17 @@ onMounted(() => {
       const decodedData = JSON.parse(decodeURIComponent(encodedData))
       const { componentName, props, title } = decodedData
 
-      const component = componentMap[componentName as keyof typeof componentMap]
+      // 动态导入组件
+      const modulePath = `/src/components/${componentName}.vue`
+      const component = await import(/* @vite-ignore */ modulePath)
       
       if (component) {
-        cardComponent.value = markRaw(component.component)
+        cardComponent.value = markRaw(component.default || component)
         cardProps.value = props || {}
         cardTitle.value = title || 'Card Window'
       }
     } catch (error) {
-      console.error('Error parsing card data:', error)
+      console.error('Error loading card component:', error)
     }
   }
 })
@@ -51,8 +52,7 @@ function closeWindow() {
   width: 100%;
   height: 100vh;
   overflow: auto;
-  background: white; /* 或其他背景 */
-  /* overflow: hidden; */
+  background: white;
 }
 
 .title-bar {

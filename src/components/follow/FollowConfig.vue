@@ -53,7 +53,7 @@
 </template>
 
 <script lang="ts" setup>
-import { config } from '@/composables/follow/useFollowMain'
+import { config } from '@/composables/follow/useFollowProps'
 import { watch, onMounted, onUnmounted, toRaw } from 'vue'
 
 watch(config, (newConfig) => {

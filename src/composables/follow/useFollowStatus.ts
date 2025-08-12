@@ -1,6 +1,6 @@
 import { reactive, computed } from 'vue'
 
-import { useFollowMain } from '@/composables/follow/useFollowMain'
+import { useFollowMain } from '@/composables/follow/useFollowProps'
 
 // 使用useFollowMain函数获取状态
 const {

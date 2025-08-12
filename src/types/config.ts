@@ -12,8 +12,8 @@ enum AppMode {
 enum FuncMode {
   None         =  0,
   // 示例模块
-  Example1     = 10,
-  Example2     = 11,
+  Demo1        = 10,
+  Demo2        = 11,
   // 导航模块
   Follow       = 20,
   Tree         = 21,
@@ -26,11 +26,11 @@ enum FuncMode {
 interface ModuleItem {
   title: string
   icon: string
-  text: string
-  funcMode: FuncMode
   action: readonly string[]
+  readonly funcMode: FuncMode
   readonly template: string[]
   readonly templateNames: string[]
+  readonly templatePropsPaths: string
   readonly actionButtons: ButtonItem[]
 }
 
@@ -49,14 +49,20 @@ type ModuleMap<K extends AppName> = AppMapType[K]['module']
 type ModuleKey<K extends AppName> = keyof ModuleMap<K>
 
 // 创建模块的工厂函数
-function createModuleItem(config: Omit<ModuleItem, 'template' | 'templateNames' | 'actionButtons'>): ModuleItem {
+function createModuleItem(config: Omit<ModuleItem, 'funcMode' | 'template' | 'templateNames' | 'actionButtons' | 'templatePropsPaths'>): ModuleItem {
   return {
     ...config,
+    get funcMode() {
+      return FuncMode[config.title as keyof typeof FuncMode]
+    },
     get template() {
       return getTemplatePaths(this.title, [...this.action])
     },
     get templateNames() {
       return getTemplateNames(this.title, [...this.action])
+    },
+    get templatePropsPaths() {
+      return getTemplatePropsPaths(this.title)
     },
     get actionButtons() {
       return getActionButtons(this.title, [...this.action])
@@ -64,74 +70,62 @@ function createModuleItem(config: Omit<ModuleItem, 'template' | 'templateNames' 
   }
 }
 
-const AppMap = {
-  pnc: {
-    title: 'PNC',
-    currMode: FuncMode.Follow,
+function createAppItem(config: Omit<AppMapType[AppName], 'currMode'>) {
+  return {
+    ...config,
+    // 设置currMode 为第一个，不然为None
+    currMode: Object.values(config.module as Record<string, ModuleItem>)[0]?.funcMode || FuncMode.None,
+  }
+}
+
+const AppMap: any = {
+  pnc: createAppItem({
     module: {
       follow: createModuleItem({
         title: 'Follow',
         icon: toolBarIcon.follow,
-        text: '&nbsp;Follow',
-        funcMode: FuncMode.Follow,
         action: ['draw', 'config'],
       }),
       tree: createModuleItem({
         title: 'Tree',
         icon: toolBarIcon.tree,
-        text: '&nbsp;Tree',
-        funcMode: FuncMode.Tree,
         action: ['draw', 'data', 'config'],
       }),
     },
-  },
-  pos: {
-    title: 'POS',
-    currMode: FuncMode.Gnss,
+  }),
+  pos: createAppItem({
     module: {
       gnss: createModuleItem({
         title: 'Gnss',
         icon: toolBarIcon.gnss,
-        text: '&nbsp;Gnss',
-        funcMode: FuncMode.Gnss,
         action: ['draw', 'data', 'config'],
       }),
       imu: createModuleItem({
         title: 'Imu',
         icon: toolBarIcon.imu,
-        text: '&nbsp;Imu',
-        funcMode: FuncMode.Imu,
         action: ['draw', 'data', 'config'],
       }),
       vision: createModuleItem({
         title: 'Vision',
         icon: toolBarIcon.vision,
-        text: '&nbsp;Vision',
-        funcMode: FuncMode.Vision,
         action: ['draw', 'data', 'config'],
       }),
     }
-  },
-  example: {
-    title: 'Example',
-    currMode: FuncMode.Example1,
+  }),
+  example: createAppItem({
     module: {
-      example1: createModuleItem({
-        title: 'Example1',
-        icon: toolBarIcon.example,
-        text: '&nbsp;Example1',
-        funcMode: FuncMode.Example1,
+      demo1: createModuleItem({
+        title: 'Demo1',
+        icon: toolBarIcon.default,
         action: ['draw', 'data', 'config'],
       }),
-      example2: createModuleItem({
-        title: 'Example2',
-        icon: toolBarIcon.example,
-        text: '&nbsp;Example2',
-        funcMode: FuncMode.Example2,
+      demo2: createModuleItem({
+        title: 'Demo2',
+        icon: toolBarIcon.default,
         action: ['draw', 'data', 'config'],
       }),
     }
-  }
+  }),
 } as const
 
 function getTemplateNames (name: string, actions: string[]) {
@@ -162,6 +156,18 @@ function getTemplatePaths (name: string, actions: string[]) {
   return templateList
 }
 
+function getTemplatePropsPaths (name: string) {
+  // example:
+  // @/components/follow/useFollowProps.vue
+
+  const propsPath = '@/composables/' +
+    name.charAt(0).toLocaleLowerCase() + name.slice(1) + '/' +
+    'use' + name.charAt(0).toUpperCase() + name.slice(1) +
+    'Props.vue'
+
+  return propsPath
+}
+
 function getActionButtons (title: string, actions: string[]) {
   // for example:
   // {
@@ -186,13 +192,50 @@ function getActionButtons (title: string, actions: string[]) {
   return buttonList
 }
 
+// 在AppMap定义之后，NavMode类之前添加自动初始化逻辑
+// 自动获取第一个app的第一个module
+function getInitialModeFromAppMap() {
+  const appKeys = Object.keys(AppMap) as Array<keyof typeof AppMap>
+  if (appKeys.length === 0) {
+    console.error('Current AppMap is empty; an error occurred while Electron was loading the application!!!');
+    // 仍然返回默认的初始模式
+    return {
+      appMode: AppMode.None,
+      appModeStr: 'none',
+      funcMode: FuncMode.None,
+      funcModeStr: 'none',
+    }
+  }
+
+  const firstAppKey = appKeys[0]
+  const firstApp = AppMap[firstAppKey]
+  
+  const moduleKeys = Object.keys(firstApp.module) as Array<keyof typeof firstApp.module>
+  if (moduleKeys.length === 0) {
+    // 如果没有module，使用app的currMode
+    const funcMode = firstApp.currMode
+    return {
+      appMode: AppMode[firstAppKey.toString().charAt(0).toUpperCase() + firstAppKey.toString().slice(1) as keyof typeof AppMode],
+      appModeStr: String(firstAppKey).toLowerCase(),
+      funcMode: funcMode,
+      funcModeStr: FuncMode[funcMode].charAt(0).toLowerCase() + FuncMode[funcMode].slice(1),
+    }
+  }
+
+  const firstModuleKey = moduleKeys[0]
+  const firstModule = firstApp.module[firstModuleKey]
+  
+  return {
+    appMode: AppMode[String(firstAppKey).charAt(0).toUpperCase() + String(firstAppKey).slice(1) as keyof typeof AppMode],
+    appModeStr: String(firstAppKey).toLowerCase(),
+    funcMode: firstModule ? (firstModule as any).funcMode : firstApp.currMode,
+    funcModeStr: String(firstModuleKey).toLowerCase(),
+  }
+}
+
+// 修改NavMode类，使用自动获取的初始值
 class NavMode {
-  private currMode = reactive({
-    appMode: AppMode.Pnc as AppMode,
-    appModeStr: 'pnc',
-    funcMode: FuncMode.Follow as FuncMode,
-    funcModeStr: 'follow',
-  })
+  private currMode = reactive(getInitialModeFromAppMap())
 
   get appMode()  { 
     return this.currMode.appMode 

@@ -85,7 +85,7 @@ import { GridLayout, GridItem } from 'grid-layout-plus'
 import { ElButton, ElCard, ElIcon } from 'element-plus'
 import { Close, Share } from '@element-plus/icons-vue'
 import emitter from '@/hooks/useMitt'
-import { useLayoutManager, componentMap } from '@/composables/useLayoutManager'
+import { useLayoutManager } from '@/composables/useLayoutManager'
 import { AppMap, navMode } from '@/types/config'
 
 const {
@@ -204,12 +204,9 @@ const movedEvent = (i: string, newX: number, newY: number) => {
 }
 
 // 分离卡片到独立窗口
+// 分离卡片到独立窗口
 const detachItem = (item: any) => {
-  const componentName = Object.keys(componentMap).find(key => 
-    componentMap[key as keyof typeof componentMap].component === item.component
-  )
-  
-  if (componentName && window.ipcRenderer) {
+  if (window.ipcRenderer && item.componentName) {
     console.log('Detaching item:', item)
     console.log('Props:', item.props)
     
@@ -218,7 +215,7 @@ const detachItem = (item: any) => {
     const height = element ? element.clientHeight : 600
     
     const cardData = {
-      componentName,
+      componentName: item.componentName,
       title: item.titleName,
       props: item.props,
       width,

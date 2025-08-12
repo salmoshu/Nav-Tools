@@ -34,6 +34,7 @@
     }">
       <!-- 扇形区域 - 黄色主题，降低透明度 -->
       <path 
+        v-if="visionPath && visionPath !== 'M 0 0 L 0 0'"
         :d="visionPath" 
         class="vision-cone"
         fill="rgba(255, 255, 0, 0.1)"
@@ -42,6 +43,7 @@
       />
       
       <line
+        v-if="visionLines && visionLines.left"
         :x1="visionLines.left.x1"
         :y1="visionLines.left.y1"
         :x2="visionLines.left.x2"
@@ -50,6 +52,7 @@
         stroke-width="1"
       />
       <line
+        v-if="visionLines && visionLines.right"
         :x1="visionLines.right.x1"
         :y1="visionLines.right.y1"
         :x2="visionLines.right.x2"
@@ -60,6 +63,7 @@
       
       <!-- 中心线 - 黄色虚线 -->
       <line
+        v-if="visionLines && visionLines.center"
         :x1="visionLines.center.x1"
         :y1="visionLines.center.y1"
         :x2="visionLines.center.x2"
@@ -103,15 +107,15 @@ const horizontalTicks = computed(() => Math.floor(containerWidth / 50))
 const verticalTicks = computed(() => Math.floor(containerHeight / 50))
 
 const personStyle = computed(() => ({
-  left: `${props.personState.x}px`,
-  top: `${props.personState.y}px`,
+  left: `${props.personState?.x ?? 0}px`,
+  top: `${props.personState?.y ?? 0}px`,
   cursor: props.isDraggingPerson ? 'grabbing' : 'grab'
 }))
 
 const carStyle = computed(() => ({
-  left: `${props.carState.x}px`,
-  top: `${props.carState.y}px`,
-  transform: `rotate(${props.carState.angle}rad)`
+  left: `${props.carState?.x ?? 0}px`,
+  top: `${props.carState?.y ?? 0}px`,
+  transform: `rotate(${props.carState?.angle ?? 0}rad)`
 }))
 </script>
 
