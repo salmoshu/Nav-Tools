@@ -204,7 +204,6 @@ const movedEvent = (i: string, newX: number, newY: number) => {
 }
 
 // 分离卡片到独立窗口
-// 分离卡片到独立窗口
 const detachItem = (item: any) => {
   if (window.ipcRenderer && item.componentName) {
     console.log('Detaching item:', item)

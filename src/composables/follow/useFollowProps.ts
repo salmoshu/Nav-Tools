@@ -14,7 +14,7 @@ const config = reactive({
 
 // 主组合式函数
 // 添加全局单例实例
-type UseFollowMainReturnType = {
+type useFollowPropsReturnType = {
   carState: ReturnType<typeof useCarSimulation>['carState']
   personState: ReturnType<typeof useCarSimulation>['personState']
   distance: ReturnType<typeof useCarSimulation>['distance']
@@ -30,11 +30,11 @@ type UseFollowMainReturnType = {
   config: typeof config
 }
 
-let globalInstance: UseFollowMainReturnType | null = null
+let globalInstance: useFollowPropsReturnType | null = null
 let instanceCount = 0
 
-// 修改useFollowMain为单例模式
-function useFollowMain() {
+// 修改useFollowProps为单例模式
+function useFollowProps() {
   if (globalInstance) {
     return globalInstance
   }
@@ -113,14 +113,14 @@ const updateConfig = (newConfig: Partial<typeof config>) => {
 }
 
 onMounted(() => {
-const { startAnimation } = useFollowMain()
+const { startAnimation } = useFollowProps()
 startAnimation()
 })
 
 onUnmounted(() => {
-  const { stopAnimation } = useFollowMain()
+  const { stopAnimation } = useFollowProps()
   stopAnimation()
 })
 
-// 只导出useFollowMain函数和config，避免循环引用
-export { useFollowMain, config }
+// 只导出useFollowProps函数和config，避免循环引用
+export { useFollowProps, config }

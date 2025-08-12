@@ -4,6 +4,7 @@ import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import electron from 'vite-plugin-electron/simple'
 import pkg from './package.json'
+import vueDevTools from 'vite-plugin-vue-devtools'
 
 // https://vitejs.dev/config/
 export default defineConfig(({ command }) => {
@@ -16,6 +17,7 @@ export default defineConfig(({ command }) => {
   return {
     plugins: [
       vue(),
+      vueDevTools(),
       // 只在非 no-electron 模式下启用
       electron({
         main: {

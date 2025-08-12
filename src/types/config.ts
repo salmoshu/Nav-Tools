@@ -1,7 +1,7 @@
 import { reactive } from 'vue'
 import { toolBarIcon } from './icon'
 
-// console.log(AppMode[AppMode.Pnc])
+// enum key: AppMode[AppMode.Pnc]
 enum AppMode {
   None = 0,
   Example = 1,
@@ -22,6 +22,56 @@ enum FuncMode {
   Imu          = 31,
   Vision       = 32,
 }
+
+const appConfig: any = {
+  pnc: createAppItem({
+    module: {
+      follow: createModuleItem({
+        title: 'Follow',
+        icon: toolBarIcon.follow,
+        action: ['draw', 'config'],
+      }),
+      tree: createModuleItem({
+        title: 'Tree',
+        icon: toolBarIcon.tree,
+        action: ['draw', 'data', 'config'],
+      }),
+    },
+  }),
+  pos: createAppItem({
+    module: {
+      gnss: createModuleItem({
+        title: 'Gnss',
+        icon: toolBarIcon.gnss,
+        action: ['draw', 'data', 'config'],
+      }),
+      imu: createModuleItem({
+        title: 'Imu',
+        icon: toolBarIcon.imu,
+        action: ['draw', 'data', 'config'],
+      }),
+      vision: createModuleItem({
+        title: 'Vision',
+        icon: toolBarIcon.vision,
+        action: ['draw', 'data', 'config'],
+      }),
+    }
+  }),
+  example: createAppItem({
+    module: {
+      demo1: createModuleItem({
+        title: 'Demo1',
+        icon: toolBarIcon.default,
+        action: ['draw', 'data', 'config'],
+      }),
+      demo2: createModuleItem({
+        title: 'Demo2',
+        icon: toolBarIcon.default,
+        action: ['draw', 'data', 'config'],
+      }),
+    }
+  }),
+} as const
 
 interface ModuleItem {
   title: string
@@ -77,56 +127,6 @@ function createAppItem(config: Omit<AppMapType[AppName], 'currMode'>) {
     currMode: Object.values(config.module as Record<string, ModuleItem>)[0]?.funcMode || FuncMode.None,
   }
 }
-
-const appConfig: any = {
-  pnc: createAppItem({
-    module: {
-      follow: createModuleItem({
-        title: 'Follow',
-        icon: toolBarIcon.follow,
-        action: ['draw', 'config'],
-      }),
-      tree: createModuleItem({
-        title: 'Tree',
-        icon: toolBarIcon.tree,
-        action: ['draw', 'data', 'config'],
-      }),
-    },
-  }),
-  pos: createAppItem({
-    module: {
-      gnss: createModuleItem({
-        title: 'Gnss',
-        icon: toolBarIcon.gnss,
-        action: ['draw', 'data', 'config'],
-      }),
-      imu: createModuleItem({
-        title: 'Imu',
-        icon: toolBarIcon.imu,
-        action: ['draw', 'data', 'config'],
-      }),
-      vision: createModuleItem({
-        title: 'Vision',
-        icon: toolBarIcon.vision,
-        action: ['draw', 'data', 'config'],
-      }),
-    }
-  }),
-  example: createAppItem({
-    module: {
-      demo1: createModuleItem({
-        title: 'Demo1',
-        icon: toolBarIcon.default,
-        action: ['draw', 'data', 'config'],
-      }),
-      demo2: createModuleItem({
-        title: 'Demo2',
-        icon: toolBarIcon.default,
-        action: ['draw', 'data', 'config'],
-      }),
-    }
-  }),
-} as const
 
 function getTemplateNames (name: string, actions: string[]) {
   const templateList: string[] = []

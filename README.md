@@ -7,6 +7,7 @@
 <!-- [![GitHub license](https://img.shields.io/github/license/caoxiemeihao/electron-vite-vue)](https://github.com/electron-vite/electron-vite-vue/blob/main/LICENSE) -->
 <!-- [![GitHub stars](https://img.shields.io/github/stars/caoxiemeihao/electron-vite-vue?color=fa6470)](https://github.com/electron-vite/electron-vite-vue) -->
 <!-- [![GitHub forks](https://img.shields.io/github/forks/caoxiemeihao/electron-vite-vue)](https://github.com/electron-vite/electron-vite-vue) -->
+
 [![GitHub Build](https://github.com/electron-vite/electron-vite-vue/actions/workflows/build.yml/badge.svg)](https://github.com/electron-vite/electron-vite-vue/actions/workflows/build.yml)
 [![GitHub Discord](https://img.shields.io/badge/chat-discord-blue?logo=discord)](https://discord.gg/sRqjYpEAUK)
 
@@ -17,7 +18,7 @@
 🌱 Extensible, really simple directory structure  
 💪 Support using Node.js API in Electron-Renderer  
 🔩 Support C/C++ native addons  
-🖥 It's easy to implement multiple windows  
+🖥 It's easy to implement multiple windows
 
 ## Applications
 
@@ -49,9 +50,10 @@ pnpm approve-builds # for electron, esbuild
 pnpm run dev
 ```
 
-## Develop
+## Development Process
 
 1. 在 `src\types\config.ts` 的 `appConfig` 中配置应用信息
+
    ```typescript
       example:                                  // example 为新 App 名称，会加载在 Electron 窗口上
       {
@@ -71,13 +73,16 @@ pnpm run dev
       },
 
    ```
+
 2. 在 AppMode 和 FuncMode 中增加相应的枚举
+
    ```typescript
    export enum AppMode {
       Example = 'Example',
       ...
    }
    ```
+
    ```typescript
    export enum FuncMode {
       Demo1 = 10,
@@ -85,26 +90,29 @@ pnpm run dev
       ...
    }
    ```
-3. 在 src\components 和 src\composables 目录下增加相应的组件和钩子
+
+3. 在 `src\components` 和 `src\composables` 目录下增加相应的组件和钩子
+
    ```text
-   # 由于未来尽可能不会维护过多内容，因此这里采用扁平的文件呈现方式
-   src\components
-   - demo1
-    - Demo1Draw.vue
-    - Demo1Data.vue
-    - Demo1Config.vue
-   - demo2
-    - Demo2Draw.vue
-    - Demo2Data.vue
-    - Demo2Config.vue
-
-    src\composables
-    - demo1
-     - useDemo1Props.ts
-    - demo2
-     - useDemo2Props.ts
+   # 组件和钩子采用扁平化文件结构
+   src
+   ├── components
+   │   ├── demo1
+   │   │   ├── Demo1Draw.vue
+   │   │   ├── Demo1Data.vue
+   │   │   └── Demo1Config.vue
+   │   ├── demo2
+   │   │   ├── Demo2Draw.vue
+   │   │   ├── Demo2Data.vue
+   │   │   └── Demo2Config.vue
+   │   └── ...
+   ├── composables
+   │   ├── demo1
+   │   │   └── useDemo1Props.ts
+   │   ├── demo2
+   │   │   └── useDemo2Props.ts
+   │   └── ...
    ```
-
 
 ## Debug
 

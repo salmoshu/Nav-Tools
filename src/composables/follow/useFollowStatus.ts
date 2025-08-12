@@ -1,14 +1,14 @@
 import { reactive, computed } from 'vue'
 
-import { useFollowMain } from '@/composables/follow/useFollowProps'
+import { useFollowProps } from '@/composables/follow/useFollowProps'
 
-// 使用useFollowMain函数获取状态
+// 使用useFollowProps函数获取状态
 const {
   carState,
   distance,
   targetAngle,
   isInFOV
-} = useFollowMain()
+} = useFollowProps()
 
 const inFovStyle = 'color: #00b894; background: rgba(0, 184, 148, 0.1); font-weight: 700;'
 const outFovStyle = 'color: #ff6b6b; background: rgba(255, 107, 107, 0.1); font-weight: 700;'

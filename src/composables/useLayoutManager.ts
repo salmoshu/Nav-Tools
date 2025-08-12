@@ -34,7 +34,6 @@ const convertPath = (path: string): string => {
 }
 
 // 动态加载组件
-// 动态加载组件
 const loadComponent = (componentPath: string) => {
   const resolvedPath = convertPath(componentPath)
   
@@ -55,14 +54,14 @@ const loadProps = async (moduleName: string) => {
   }
 
   try {
-    // 构建props文件路径 - 使用相对路径
+    // 构建 props 文件路径 - 使用相对路径
     const propsPath = `../composables/${moduleName.toLowerCase()}/use${moduleName.charAt(0).toUpperCase() + moduleName.slice(1)}Props.ts`
     const module = await import(/* @vite-ignore */ propsPath)
     
-    // 使用useFollowMain等函数
-    const useMainFn = module[`use${moduleName.charAt(0).toUpperCase() + moduleName.slice(1)}Main`]
-    if (useMainFn) {
-      const props = useMainFn()
+    // 使用 useFollowProps 等函数
+    const usePropsFn = module[`use${moduleName.charAt(0).toUpperCase() + moduleName.slice(1)}Props`]
+    if (usePropsFn) {
+      const props = usePropsFn()
       propsCache.set(propsKey, props)
       return props
     }
