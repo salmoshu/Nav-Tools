@@ -9,7 +9,7 @@
       <span>状态视图</span>
     </div>
     <div class="statusbar-content">
-      <div v-for="(statusValue, statusName) in monitorStatus" :key="statusName" class="status-item">
+      <div v-for="(statusValue, statusName) in getMonitorStatus()" :key="statusName" class="status-item">
         <div class="status-item-row">
           <span class="status-label">{{ statusName }}</span>
           <span class="status-indicator" :style="(statusValue as any).style">{{ statusValue as any }}</span>
@@ -27,13 +27,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, inject, watch, watchEffect, type Ref, reactive } from 'vue'
-import { updateStatus } from '@/composables/useStatusManager'
-import { monitorStatus } from '@/stores/monitorStatus'
+import { ref, computed, onMounted, onUnmounted, inject, watch, watchEffect, type Ref } from 'vue'
+import { getMonitorStatus } from '@/composables/useStatusManager'
+
 import { navMode } from '@/types/config'
 
 const dockWidth = 150
-
 const position = ref<'left' | 'right'>('right')
 const isDragging = ref(false)
 const dragOffset = ref({ x: 0, y: 0 })
@@ -229,10 +228,10 @@ const snapToEdge = () => {
 onMounted(() => {
   snapToEdge()
   window.addEventListener('resize', snapToEdge)
-  updateStatus(navMode.funcMode)
+  // updateStatus(navMode.funcMode)
 
   watch(() => navMode.funcMode, () => {
-    updateStatus(navMode.funcMode)
+    // updateStatus(navMode.funcMode)
   })
   
   // 监听工具栏位置变化

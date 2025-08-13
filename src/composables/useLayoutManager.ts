@@ -112,8 +112,8 @@ const loadProps = async (moduleName: string) => {
 // 根据FuncMode获取对应的AppMap配置 - 自适应版本
 const getAppMapConfig = (mode: FuncMode) => {
   // 自动匹配FuncMode到对应的AppMap模块
-  for (const [appName, appCfg] of Object.entries(appConfig)) {
-    const modules = appCfg.module as Record<string, any>
+  for (const [_, config] of Object.entries(appConfig)) {
+    const modules = (config as any).module as Record<string, any>
     for (const [moduleName, moduleConfig] of Object.entries(modules)) {
       if (moduleConfig.funcMode === mode) {
         return modules
@@ -126,8 +126,8 @@ const getAppMapConfig = (mode: FuncMode) => {
 // 获取当前模式的模块名称 - 自适应版本
 const getModuleName = (mode: FuncMode): string => {
   // 自动从AppMap中查找匹配的模块名
-  for (const [appName, appCfg] of Object.entries(appConfig)) {
-    const modules = appCfg.module as Record<string, any>
+  for (const [_, config] of Object.entries(appConfig)) {
+    const modules = (config as any).module as Record<string, any>
     for (const [moduleName, moduleConfig] of Object.entries(modules)) {
       if (moduleConfig.funcMode === mode) {
         return moduleName

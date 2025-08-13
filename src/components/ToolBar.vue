@@ -84,7 +84,6 @@ import { getButtonList } from '@/composables/useToolsManager'
 import emitter from '@/hooks/useMitt'
 
 const ipcRenderer = window.ipcRenderer
-
 const position = ref<'top' | 'right' | 'bottom' | 'left'>('bottom')
 const isEditing = ref(false)
 
@@ -153,11 +152,11 @@ const currentButtonList = computed(() => {
   
   const app = appConfig[appKey as keyof typeof appConfig]
   return Object.values(app.module).map(module => ({
-    title: module.title,
-    msg: module.title.toLowerCase(),
+    title: (module as any).title,
+    msg: (module as any).title.toLowerCase(),
     template: '',
-    icon: module.icon,
-    text: getButtonText(module.title, position.value)
+    icon: (module as any).icon,
+    text: getButtonText((module as any).title, position.value)
   } as ButtonItem))
 })
 
@@ -356,10 +355,10 @@ const handleModule = (action: string) => {
   if (!appKey || !appConfig[appKey as keyof typeof appConfig]) return
   
   const app = appConfig[appKey as keyof typeof appConfig]
-  const module = Object.values(app.module).find(m => m.title.toLowerCase() === action)
+  const module = Object.values(app.module).find(m => (m as any).title.toLowerCase() === action)
   
   if (module) {
-    navMode.funcMode = module.funcMode
+    navMode.funcMode = (module as any).funcMode
   }
 }
 
