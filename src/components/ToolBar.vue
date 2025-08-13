@@ -16,7 +16,7 @@
         v-for="item in currentButtonList" 
         :key="item.msg"
         class="toolbar-btn" 
-        @click="handleAction(item.msg)" 
+        @click="handleModule(item.msg)" 
         :title="item.title"
         v-html="item.icon+getButtonText(item.title, position)"
       >
@@ -136,7 +136,7 @@ const layoutList: ButtonItem[] = reactive([
 watch(() => navMode.funcMode, () => {
   const buttonList = getButtonList(navMode)
 
-  ipcRenderer.send('console-to-node', ['TEST2', AppMode[navMode.appMode], FuncMode[navMode.funcMode]])
+  ipcRenderer.send('console-to-node', ['watch:funcMode', AppMode[navMode.appMode], FuncMode[navMode.funcMode]])
 
   if (buttonList) {
     handleList.splice(0, handleList.length, ...buttonList)
@@ -348,9 +348,9 @@ const handleDrag = (event: MouseEvent) => {
   // 注意：这里不再调用emit('positionChange')和实时更新position
 }
 
-const handleAction = (action: string) => {
+const handleModule = (action: string) => {
   emitter.emit(action)
-  
+
   // 根据AppMap自动匹配模块对应的FuncMode
   const appKey = navMode.appModeStr
   if (!appKey || !appConfig[appKey as keyof typeof appConfig]) return
@@ -361,6 +361,10 @@ const handleAction = (action: string) => {
   if (module) {
     navMode.funcMode = module.funcMode
   }
+}
+
+const handleAction = (action: string) => {
+  emitter.emit(action)
 }
 
 const handleLayout = (action: string) => {

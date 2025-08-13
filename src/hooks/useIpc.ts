@@ -47,10 +47,8 @@ function openDynamicView(appKey: string) {
   const isValidMode = funcModes.includes(navMode.funcMode)
   if (!isValidMode || navMode.funcMode === FuncMode.None) {
     navMode.funcMode = defaultFuncMode
+    ipcRenderer.send('console-to-node', ['open-view:', AppMode[navMode.appMode], FuncMode[navMode.funcMode], 'default:'+FuncMode[defaultFuncMode]])
   }
-
-  ipcRenderer.send('console-to-node', ['TEST1', AppMode[navMode.appMode], FuncMode[navMode.funcMode]])
-
 }
 
 if (window.ipcRenderer) {

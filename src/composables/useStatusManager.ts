@@ -1,5 +1,5 @@
 import { reactive } from "vue";
-import { followStatus } from "./follow/useFollowStatus";
+// import { followStatus } from "./follow/useFollowStatus";
 import { FuncMode } from "@/types/config";
 
 const monitorStatus = reactive({});
@@ -12,7 +12,7 @@ function updateStatus(funcMode: FuncMode) {
   switch (funcMode) {
     case FuncMode.Follow:
       emptyStatus();
-      Object.assign(monitorStatus, followStatus);
+      // Object.assign(monitorStatus, followStatus);
       break;
     case FuncMode.Tree:
       emptyStatus();

@@ -265,7 +265,6 @@ onMounted(() => {
           addItem(button.template)
         })
       }
-
     }
   }
 })

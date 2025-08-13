@@ -179,7 +179,7 @@ const getDynamicDefaultLayoutConfig = async (mode: FuncMode) => {
 
   const moduleConfig = (appMapConfig as Record<string, any>)[moduleName]
   const templates = moduleConfig.templateNames || []
-  const props = await loadProps(moduleName)
+  // const props = await loadProps(moduleName)
   
   // 根据模板数量生成默认布局
   return templates.map((templateName: string, index: number) => {
@@ -197,7 +197,8 @@ const getDynamicDefaultLayoutConfig = async (mode: FuncMode) => {
       minH: 3,
       maxW:  6,
       maxH: 8,
-      props
+      // props
+      props: {}
     }
   })
 }
@@ -239,14 +240,15 @@ export function useLayoutManager() {
   // 从配置加载布局
   const loadLayoutFromConfig = async (config: any[]) => {
     const moduleName = getModuleName(currentFuncMode.value)
-    const props = await loadProps(moduleName)
+    // const props = await loadProps(moduleName)
     
     layoutDraggableList.value = config.map((item: any) => {
       const componentConfig = dynamicComponentMap.value[item.componentName]
       return {
         ...item,
         component: markRaw(componentConfig?.component || null),
-        props: item.props || props || {}
+        // props: item.props || props || {}
+        props: {}
       }
     })
   }
@@ -276,12 +278,13 @@ export function useLayoutManager() {
       const layoutConfig = await getDynamicDefaultLayoutConfig(currentFuncMode.value)
       const moduleName = getModuleName(currentFuncMode.value)
       
-      const store = useAutoStore.byModule(moduleName)
+      // const store = useAutoStore.byModule(moduleName)
       
       layoutDraggableList.value = layoutConfig.map((item: any) => ({
         ...item,
         component: markRaw(dynamicComponentMap.value[item.componentName]?.component || null),
-        props: store || {}
+        // props: store || {}
+        props: {}
       }))
     } catch (error) {
       console.error('Failed to create default layout:', error)
@@ -360,7 +363,7 @@ export function useLayoutManager() {
     }
 
     const moduleName = getModuleName(currentFuncMode.value)
-    const props = await loadProps(moduleName)
+    // const props = await loadProps(moduleName)
     
     const newItem: LayoutItem = {
       x: 0,
@@ -371,14 +374,15 @@ export function useLayoutManager() {
       titleName: dynamicComponentMap.value[componentName]?.title || componentName,
       componentName,
       component: markRaw(dynamicComponentMap.value[componentName]?.component || null),
-      props: props || {},
+      // props: props || {},
+      props: {},
       minW: 3,
       minH: 3,
       maxW: 6,
       maxH: 6
     }
     
-    layoutDraggableList.value.push(newItem)
+    layoutDraggableList.value.unshift(newItem)
     ElMessage({
       message: `已添加 ${newItem.titleName}`,
       type: 'success',
