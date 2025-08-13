@@ -96,7 +96,7 @@ interface ModuleItem {
   title: string
   icon: string
   action: readonly string[]
-  props: Record<string, any>
+  props: Record<string, any> // status or config
   readonly funcMode: FuncMode
   readonly template: string[]
   readonly templateNames: string[]
@@ -170,18 +170,6 @@ function getTemplatePaths (name: string, actions: string[]) {
     )
   }
   return templateList
-}
-
-function getTemplatePropsPaths (name: string) {
-  // example:
-  // @/components/follow/useFollowProps.vue
-
-  const propsPath = '@/composables/' +
-    name.charAt(0).toLocaleLowerCase() + name.slice(1) + '/' +
-    'use' + name.charAt(0).toUpperCase() + name.slice(1) +
-    'Props.vue'
-
-  return propsPath
 }
 
 function getActionButtons (title: string, actions: string[]) {

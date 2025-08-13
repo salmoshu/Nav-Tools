@@ -7,7 +7,6 @@ export interface LayoutItem {
   titleName: string
   component: any
   componentName: string
-  props?: Record<string, any>
   funcMode?: string
   x: number
   y: number
@@ -22,7 +21,6 @@ export interface LayoutItem {
 
 // 全局组件缓存
 const componentCache = new Map<string, any>()
-const propsCache = new Map<string, any>()
 
 // 路径转换函数 - 将@别名转换为相对路径
 const convertPath = (path: string): string => {
@@ -46,74 +44,12 @@ const loadComponent = (componentPath: string) => {
   return component
 }
 
-// 动态加载props
-const loadProps = async (moduleName: string) => {
-  const propsKey = `${moduleName}Props`
-  
-  if (propsCache.has(propsKey)) {
-    return propsCache.get(propsKey)
-  }
-
-  try {
-    // 使用Pinia store
-    switch (moduleName.toLowerCase()) {
-      case 'follow':
-        const { useFollowStore } = await import('@/stores/follow')
-        const followStore = useFollowStore()
-        propsCache.set(propsKey, followStore)
-        return followStore
-        
-      case 'gnss':
-        const { useGnssStore } = await import('@/stores/gnss')
-        const gnssStore = useGnssStore()
-        propsCache.set(propsKey, gnssStore)
-        return gnssStore
-        
-      case 'imu':
-        const { useImuStore } = await import('@/stores/imu')
-        const imuStore = useImuStore()
-        propsCache.set(propsKey, imuStore)
-        return imuStore
-        
-      case 'vision':
-        const { useVisionStore } = await import('@/stores/vision')
-        const visionStore = useVisionStore()
-        propsCache.set(propsKey, visionStore)
-        return visionStore
-        
-      case 'tree':
-        const { useTreeStore } = await import('@/stores/tree')
-        const treeStore = useTreeStore()
-        propsCache.set(propsKey, treeStore)
-        return treeStore
-        
-      case 'demo1':
-        const { useDemo1Store } = await import('@/stores/demo1')
-        const demo1Store = useDemo1Store()
-        propsCache.set(propsKey, demo1Store)
-        return demo1Store
-        
-      case 'demo2':
-        const { useDemo2Store } = await import('@/stores/demo2')
-        const demo2Store = useDemo2Store()
-        propsCache.set(propsKey, demo2Store)
-        return demo2Store
-        
-      default:
-        return {}
-    }
-  } catch (error) {
-    console.warn(`Failed to load store for ${moduleName}:`, error)
-    return {}
-  }
-}
-
 // 根据FuncMode获取对应的AppMap配置 - 自适应版本
 const getAppMapConfig = (mode: FuncMode) => {
   // 自动匹配FuncMode到对应的AppMap模块
   for (const [_, config] of Object.entries(appConfig)) {
     const modules = (config as any).module as Record<string, any>
-    for (const [moduleName, moduleConfig] of Object.entries(modules)) {
+    for (const [_, moduleConfig] of Object.entries(modules)) {
       if (moduleConfig.funcMode === mode) {
         return modules
       }
@@ -147,7 +83,7 @@ const getDynamicComponentMap = (mode: FuncMode) => {
   }
 
   const moduleConfig = (appMapConfig as Record<string, any>)[moduleName]
-  const componentMap: Record<string, { component: any; title: string; props: Record<string, any> }> = {}
+  const componentMap: Record<string, { component: any; title: string; }> = {}
 
   // 使用AppMap中的template和templateNames
   const templates = moduleConfig.template || []
@@ -159,7 +95,6 @@ const getDynamicComponentMap = (mode: FuncMode) => {
       componentMap[templateName] = {
         component: loadComponent(templatePath),
         title: `${moduleConfig.title} ${templateName.replace(moduleName, '').toLowerCase()}`,
-        props: {} // 将在运行时填充
       }
     }
   })
@@ -178,7 +113,6 @@ const getDynamicDefaultLayoutConfig = async (mode: FuncMode) => {
 
   const moduleConfig = (appMapConfig as Record<string, any>)[moduleName]
   const templates = moduleConfig.templateNames || []
-  // const props = await loadProps(moduleName)
   
   // 根据模板数量生成默认布局
   return templates.map((templateName: string, index: number) => {
@@ -196,8 +130,6 @@ const getDynamicDefaultLayoutConfig = async (mode: FuncMode) => {
       minH: 3,
       maxW:  6,
       maxH: 8,
-      // props
-      props: {}
     }
   })
 }
@@ -238,16 +170,11 @@ export function useLayoutManager() {
 
   // 从配置加载布局
   const loadLayoutFromConfig = async (config: any[]) => {
-    const moduleName = getModuleName(currentFuncMode.value)
-    // const props = await loadProps(moduleName)
-    
     layoutDraggableList.value = config.map((item: any) => {
       const componentConfig = dynamicComponentMap.value[item.componentName]
       return {
         ...item,
         component: markRaw(componentConfig?.component || null),
-        // props: item.props || props || {}
-        props: {}
       }
     })
   }
@@ -275,15 +202,10 @@ export function useLayoutManager() {
   const createDefaultLayout = async () => {
     try {
       const layoutConfig = await getDynamicDefaultLayoutConfig(currentFuncMode.value)
-      const moduleName = getModuleName(currentFuncMode.value)
-      
-      // const store = useAutoStore.byModule(moduleName)
       
       layoutDraggableList.value = layoutConfig.map((item: any) => ({
         ...item,
         component: markRaw(dynamicComponentMap.value[item.componentName]?.component || null),
-        // props: store || {}
-        props: {}
       }))
     } catch (error) {
       console.error('Failed to create default layout:', error)
@@ -361,9 +283,6 @@ export function useLayoutManager() {
       return
     }
 
-    const moduleName = getModuleName(currentFuncMode.value)
-    // const props = await loadProps(moduleName)
-    
     const newItem: LayoutItem = {
       x: 0,
       y: 0,
@@ -373,8 +292,6 @@ export function useLayoutManager() {
       titleName: dynamicComponentMap.value[componentName]?.title || componentName,
       componentName,
       component: markRaw(dynamicComponentMap.value[componentName]?.component || null),
-      // props: props || {},
-      props: {},
       minW: 3,
       minH: 3,
       maxW: 6,
@@ -419,12 +336,15 @@ export function useLayoutManager() {
     })
   }
 
+  const isCardVisible = true // to be defined
+
   return {
     // 状态
     layoutDraggableList,
     isEditDraggable,
     draggableLayout,
     resizableLayout,
+    isCardVisible,
     
     // 方法
     initLayout,

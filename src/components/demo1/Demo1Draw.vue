@@ -1,47 +1,46 @@
+<!-- src/components/demo1/Demo1Draw.vue (最终版) -->
 <template>
-  <div>
-    <div ref="chartRef" style="width: 100%; height: 200px;"></div>
+  <div class="chart-container">
+    <div ref="chartRef" class="chart-wrapper"></div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, watch, onMounted, nextTick } from 'vue'
-import * as echarts from 'echarts'
+import { watch } from 'vue'
+import { useEcharts } from '@/hooks/useEcharts'
 import { useDemo1Store } from '@/stores/demo1'
 
-const chartRef = ref<HTMLDivElement>()
 const demo1Store = useDemo1Store()
 
-let chart: echarts.ECharts | null = null
+// 使用最终版hook
+const { chartRef, updateChart } = useEcharts(
+  () => demo1Store.config,
+  {
+    type: 'bar',
+    title: 'Demo1 数据统计',
+    colors: ['#409EFF', '#67C23A', '#E6A23C']
+  }
+)
 
-function updateChart() {
-  if (!chart) return
-  chart.setOption({
-    title: { text: 'Sales Statistics (from Config)' },
-    tooltip: {},
-    xAxis: { type: 'category', data: Object.keys(demo1Store.config) },
-    yAxis: { type: 'value' },
-    series: [
-      {
-        name: 'Sales',
-        type: 'bar',
-        data: Object.values(demo1Store.config),
-        itemStyle: { color: '#409EFF' }
-      }
-    ]
-  })
-}
-
-onMounted(() => {
-  chart = echarts.init(chartRef.value!)
-  updateChart()
-  window.addEventListener('resize', () => chart?.resize())
-})
-
-// 关键：监听 Pinia 的响应式对象
+// 简单监听配置变化
 watch(
   () => demo1Store.config,
-  () => nextTick(updateChart),
+  () => updateChart(),
   { deep: true }
 )
 </script>
+
+<style scoped>
+.chart-container {
+  width: 100%;
+  height: 100%;
+  padding: 10px;
+  box-sizing: border-box;
+}
+
+.chart-wrapper {
+  width: 100%;
+  height: 100%;
+  min-height: 200px;
+}
+</style>
