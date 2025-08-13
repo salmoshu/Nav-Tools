@@ -12,7 +12,6 @@
 import { useDemo1Store } from '@/stores/demo1'
 const demo1Store = useDemo1Store()
 const handleChange = (key: any, value: any) => {
-    console.log(key)
     demo1Store.status[key] = value
 }
 </script>

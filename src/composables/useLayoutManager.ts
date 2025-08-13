@@ -1,7 +1,6 @@
 import { ref, markRaw, defineAsyncComponent } from 'vue'
 import { FuncMode, appConfig } from '@/types/config'
 import { ElMessage } from 'element-plus'
-import { useAutoStore } from '@/hooks/usePinia'
 
 // 布局项接口
 export interface LayoutItem {
@@ -355,7 +354,7 @@ export function useLayoutManager() {
     
     if (exists) {
       ElMessage({
-        message: `${dynamicComponentMap.value[componentName]?.title} 已存在`,
+        message: `${componentName} 已存在`,
         type: 'warning',
         duration: 1000
       })

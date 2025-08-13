@@ -246,11 +246,11 @@ onMounted(() => {
 
   // module mode
   for (const [_, appCfg] of Object.entries(appConfig)) {
-    for (const [_, moduleCfg] of Object.entries(appCfg.module)) {
-      const moduleMsg = moduleCfg.title.toLocaleLowerCase()
+    for (const [_, moduleCfg] of Object.entries((appCfg as any).module)) {
+      const moduleMsg = (moduleCfg as any).title.toLocaleLowerCase()
       emitter.on(moduleMsg, () => {
-        if (navMode.funcMode !== moduleCfg.funcMode) {
-          handleFuncModeChange(moduleCfg.funcMode)
+        if (navMode.funcMode !== (moduleCfg as any).funcMode) {
+          handleFuncModeChange((moduleCfg as any).funcMode)
         }
       })
     }
@@ -258,11 +258,12 @@ onMounted(() => {
 
   // module action
   for (const [_, appCfg] of Object.entries(appConfig)) {
-    for (const [_, moduleCfg] of Object.entries(appCfg.module)) {
-      const actionButtons = moduleCfg.actionButtons
-      for (const button of actionButtons) {
+    for (const [_, moduleCfg] of Object.entries((appCfg as any).module)) {
+      const actionNames = (moduleCfg as any).templateNames
+      const actionButtons = (moduleCfg as any).actionButtons
+      for (const [name, button] of Array.from({ length: Math.min(actionNames.length, actionButtons.length) }, (_, i) => [actionNames[i], actionButtons[i]])) {
         emitter.on(button.msg, () => {
-          addItem(button.template)
+          addItem(name)
         })
       }
     }
