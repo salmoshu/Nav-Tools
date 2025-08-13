@@ -30,11 +30,13 @@ const appConfig: any = {
         title: 'Follow',
         icon: toolBarIcon.follow,
         action: ['draw', 'config'],
+        props: {}
       }),
       tree: createModuleItem({
         title: 'Tree',
         icon: toolBarIcon.tree,
         action: ['draw', 'data', 'config'],
+        props: {}
       }),
     },
   }),
@@ -44,16 +46,19 @@ const appConfig: any = {
         title: 'Gnss',
         icon: toolBarIcon.gnss,
         action: ['draw', 'data', 'config'],
+        props: {}
       }),
       imu: createModuleItem({
         title: 'Imu',
         icon: toolBarIcon.imu,
         action: ['draw', 'data', 'config'],
+        props: {}
       }),
       vision: createModuleItem({
         title: 'Vision',
         icon: toolBarIcon.vision,
         action: ['draw', 'data', 'config'],
+        props: {}
       }),
     }
   }),
@@ -63,11 +68,25 @@ const appConfig: any = {
         title: 'Demo1',
         icon: toolBarIcon.default,
         action: ['draw', 'data', 'config'],
+        props: {
+          status: {
+            str: 'Nav-Tools',
+            num: 2,
+          },
+          config: {
+            'Shirt': 5,
+            'Wool Sweater': 20,
+            'Pants': 10,
+            'High Hells': 10,
+            'Socks': 20,
+          },
+        }
       }),
       demo2: createModuleItem({
         title: 'Demo2',
         icon: toolBarIcon.default,
         action: ['draw', 'data', 'config'],
+        props: {}
       }),
     }
   }),
@@ -77,10 +96,10 @@ interface ModuleItem {
   title: string
   icon: string
   action: readonly string[]
+  props: Record<string, any>
   readonly funcMode: FuncMode
   readonly template: string[]
   readonly templateNames: string[]
-  readonly templatePropsPaths: string
   readonly actionButtons: ButtonItem[]
 }
 
@@ -99,7 +118,7 @@ type ModuleMap<K extends AppName> = AppMapType[K]['module']
 type ModuleKey<K extends AppName> = keyof ModuleMap<K>
 
 // 创建模块的工厂函数
-function createModuleItem(config: Omit<ModuleItem, 'funcMode' | 'template' | 'templateNames' | 'actionButtons' | 'templatePropsPaths'>): ModuleItem {
+function createModuleItem(config: Omit<ModuleItem, 'funcMode' | 'template' | 'templateNames' | 'actionButtons'>): ModuleItem {
   return {
     ...config,
     get funcMode() {
@@ -110,9 +129,6 @@ function createModuleItem(config: Omit<ModuleItem, 'funcMode' | 'template' | 'te
     },
     get templateNames() {
       return getTemplateNames(this.title, [...this.action])
-    },
-    get templatePropsPaths() {
-      return getTemplatePropsPaths(this.title)
     },
     get actionButtons() {
       return getActionButtons(this.title, [...this.action])

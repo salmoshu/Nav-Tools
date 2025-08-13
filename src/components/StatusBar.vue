@@ -12,7 +12,7 @@
       <div v-for="(statusValue, statusName) in monitorStatus" :key="statusName" class="status-item">
         <div class="status-item-row">
           <span class="status-label">{{ statusName }}</span>
-          <span class="status-indicator" :style="(statusValue as any).style">{{ (statusValue as any).value }}</span>
+          <span class="status-indicator" :style="(statusValue as any).style">{{ statusValue as any }}</span>
         </div>
       </div>
     </div>
@@ -27,8 +27,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, inject, watch, type Ref } from 'vue'
-import { monitorStatus, updateStatus } from '@/composables/useStatusManager'
+import { ref, computed, onMounted, onUnmounted, inject, watch, watchEffect, type Ref, reactive } from 'vue'
+import { updateStatus } from '@/composables/useStatusManager'
+import { monitorStatus } from '@/stores/monitorStatus'
 import { navMode } from '@/types/config'
 
 const dockWidth = 150

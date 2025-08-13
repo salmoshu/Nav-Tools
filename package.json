@@ -41,6 +41,7 @@
   },
   "dependencies": {
     "@element-plus/icons-vue": "^2.3.2",
+    "echarts": "^6.0.0",
     "element-plus": "^2.10.5",
     "grid-layout-plus": "^1.1.0",
     "mitt": "^3.0.1",

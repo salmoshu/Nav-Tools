@@ -1,35 +1,42 @@
 import { reactive } from "vue";
 // import { followStatus } from "./follow/useFollowStatus";
 import { FuncMode } from "@/types/config";
+import { useDemo1Store } from "@/stores/demo1";
+import { monitorStatus, emptyMonitorStatus } from "@/stores/monitorStatus"
 
-const monitorStatus = reactive({});
-
-function emptyStatus() {
-  Object.keys(monitorStatus as Record<string, unknown>).forEach(k => delete (monitorStatus as Record<string, unknown>)[k]);
+function getMonitorStatus() {
+  return monitorStatus;
 }
 
 function updateStatus(funcMode: FuncMode) {
   switch (funcMode) {
     case FuncMode.Follow:
-      emptyStatus();
+      emptyMonitorStatus();
       // Object.assign(monitorStatus, followStatus);
       break;
     case FuncMode.Tree:
-      emptyStatus();
+      emptyMonitorStatus();
       break;
     case FuncMode.Gnss:
-      emptyStatus();
+      emptyMonitorStatus();
       break;
     case FuncMode.Imu:
-      emptyStatus();
+      emptyMonitorStatus();
       break;
     case FuncMode.Vision:
-      emptyStatus();
+      emptyMonitorStatus();
+      break;
+    case FuncMode.Demo1:
+      const demo1Store = useDemo1Store();
+      demo1Store.updateMonitorStatus();
+      break;
+    case FuncMode.Demo2:
+      emptyMonitorStatus();
       break;
     default:
-      emptyStatus();
+      emptyMonitorStatus();
       break;
   }
 }
 
-export { monitorStatus, updateStatus };
+export { monitorStatus, updateStatus, getMonitorStatus };
