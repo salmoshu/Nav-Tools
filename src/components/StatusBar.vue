@@ -110,7 +110,7 @@ const startDrag = (event: MouseEvent) => {
   const handle = (event.target as HTMLElement).closest('.statusbar-handle')
   if (!handle) return
 
-  event.preventDefault()
+  // event.preventDefault()
   isDragging.value = true
   activeDockZone.value = null
 
@@ -178,7 +178,7 @@ const stopDrag = () => {
 const handleDrag = (event: MouseEvent) => {
   if (!isDragging.value) return
 
-  event.preventDefault()
+  // event.preventDefault()
   const x = event.clientX - dragOffset.value.x
   const y = event.clientY - dragOffset.value.y
 
@@ -285,6 +285,10 @@ onUnmounted(() => {
   height: 100vh;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   overflow: auto;
+  user-select: none;        /* 现代浏览器 */
+  -webkit-user-select: none;/* Safari */
+  -moz-user-select: none;   /* Firefox */
+  -ms-user-select: none;    /* IE11/Edge 旧版 */
 }
 
 .statusbar:hover {

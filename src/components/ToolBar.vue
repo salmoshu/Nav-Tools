@@ -85,64 +85,19 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, onUnmounted, watch, inject, type Ref } from 'vue'
 import { navMode, AppMode, FuncMode, ButtonItem, appConfig } from '@/types/config'
-import { toolBarIcon } from '@/types/icon'
-import { getButtonList } from '@/composables/useToolsManager'
+import { getButtonList, upAndDown, getButtonText, getLayoutList } from '@/composables/useToolsManager'
 import emitter from '@/hooks/useMitt'
 
 const ipcRenderer = window.ipcRenderer
 const position = ref<'top' | 'right' | 'bottom' | 'left'>('bottom')
 const isEditing = ref(false)
 
-function upAndDown(position: string): boolean {
-  if (position === 'top' || position === 'bottom') {
-    return true
-  } else {
-    return false
-  }
-}
-
-function getButtonText(msg: string, position: string): string {
-  if (upAndDown(position)) {
-    return '&nbsp;'+msg
-  } else {
-    return ''
-  }
-}
-
 const handleList: ButtonItem[] = reactive(
   getButtonList(navMode) || []
 )
 
-const layoutList: ButtonItem[] = reactive([
-  {
-    title: 'Edit',
-    msg: 'edit',
-    template: '',
-    icon: toolBarIcon.edit,
-    text: upAndDown(position.value) ? '&nbsp;Edit' : '',
-  },
-  {
-    title: 'Save',
-    msg: 'save',
-    template: '',
-    icon: toolBarIcon.save,
-    text: upAndDown(position.value) ? '&nbsp;Save' : '',
-  },
-  {
-    title: 'Auto',
-    msg: 'auto',
-    template: '',
-    icon: toolBarIcon.auto,
-    text: upAndDown(position.value) ? '&nbsp;Auto' : '',
-  },
-  {
-    title: 'Reset',
-    msg: 'reset',
-    template: '',
-    icon: toolBarIcon.reset,
-    text: upAndDown(position.value) ? '&nbsp;Reset' : '',
-  },
-])
+// 使用computed属性替代原来的reactive数组
+const layoutList = computed(() => getLayoutList(position.value))
 
 watch(() => navMode.funcMode, () => {
   const buttonList = getButtonList(navMode)
@@ -248,7 +203,7 @@ const startDrag = (event: MouseEvent) => {
   const handle = (event.target as HTMLElement).closest('.toolbar-handle')
   if (!handle) return
 
-  event.preventDefault()
+  // event.preventDefault()
   isDragging.value = true
   activeDockZone.value = null
 
@@ -269,9 +224,6 @@ const startDrag = (event: MouseEvent) => {
   document.addEventListener('mouseup', stopDrag)
 }
 
-
-
-// 修改stopDrag函数
 const stopDrag = () => {
   if (!isDragging.value) return
 
@@ -326,7 +278,7 @@ const stopDrag = () => {
 const handleDrag = (event: MouseEvent) => {
   if (!isDragging.value) return
 
-  event.preventDefault()
+  // event.preventDefault()
   const x = event.clientX - dragOffset.value.x
   const y = event.clientY - dragOffset.value.y
 
@@ -444,6 +396,23 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+.toolbar {
+  position: fixed;
+  background: #2c3e50;
+  display: flex;
+  align-items: center;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+  z-index: 1000;
+  transition: none;
+  padding: 0;
+  margin: 0;
+  border: none;
+  user-select: none;        /* 现代浏览器 */
+  -webkit-user-select: none;/* Safari */
+  -moz-user-select: none;   /* Firefox */
+  -ms-user-select: none;    /* IE11/Edge 旧版 */
+}
+
 .toolbar-top {
   top: 0;
   left: 0;
@@ -490,19 +459,6 @@ onUnmounted(() => {
   flex-direction: column;
   padding: 0;
   margin: 0;
-}
-
-.toolbar {
-  position: fixed;
-  background: #2c3e50;
-  display: flex;
-  align-items: center;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
-  z-index: 1000;
-  transition: none;
-  padding: 0;
-  margin: 0;
-  border: none;
 }
 
 .toolbar-handle {
