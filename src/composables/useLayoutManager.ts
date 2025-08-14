@@ -90,10 +90,11 @@ const getDynamicComponentMap = (mode: FuncMode) => {
   
   templates.forEach((templatePath: string, index: number) => {
     const templateName = templateNames[index]
+    const actionName = moduleConfig.action[index]
     if (templateName) {
       componentMap[templateName] = {
         component: loadComponent(templatePath),
-        title: `${moduleConfig.title} ${templateName.replace(moduleName, '').toLowerCase()}`,
+        title: `${moduleConfig.title} ${actionName.charAt(0).toUpperCase() + actionName.slice(1)}`,
       }
     }
   })
@@ -116,14 +117,15 @@ const getDynamicDefaultLayoutConfig = async (mode: FuncMode) => {
   // 根据模板数量生成默认布局
   return templates.map((templateName: string, index: number) => {
     const baseName = templateName.toLowerCase()
-
+    const actionName = moduleConfig.action[index]
+    
     return {
       x: (index % 2) * 6,
       y: Math.floor(index / 2) * 4,
       w: 6,
       h: 4,
       i: `${moduleName}-${baseName}-${index + 1}`,
-      titleName: `${moduleConfig.title} ${baseName.replace(moduleName, '').toUpperCase()}`,
+      titleName: `${moduleConfig.title} ${actionName.charAt(0).toUpperCase() + actionName.slice(1)}`,
       componentName: templateName,
       minW: 3,
       minH: 3,
@@ -321,7 +323,7 @@ export function useLayoutManager() {
       w: 6,
       h: 4,
       i: `${componentName}-${Date.now()}`,
-      titleName: dynamicComponentMap.value[componentName]?.title || componentName,
+      titleName: dynamicComponentMap.value[componentName]?.title,
       componentName,
       component: markRaw(dynamicComponentMap.value[componentName]?.component || null),
       minW: 3,
@@ -329,7 +331,7 @@ export function useLayoutManager() {
       maxW: 8,
       maxH: 10,
     }
-    
+
     layoutDraggableList.value.unshift(newItem)
     ElMessage({
       message: `已添加 ${newItem.titleName}`,

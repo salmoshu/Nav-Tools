@@ -1,11 +1,10 @@
-<!-- src/components/follow/FollowDraw.vue -->
 <script lang="ts" setup>
-import { computed, ref, onMounted, onUnmounted } from 'vue'
+import { computed, onMounted, onUnmounted } from 'vue'
 import { useFollowStore } from '@/stores/follow'
 import { useFollowSimulation } from '@/composables/follow/useFollow'
 
 const store = useFollowStore()
-const { update } = useFollowSimulation()
+const { update, handleMouseDown, isDraggingPerson } = useFollowSimulation()
 
 // 基础状态
 const containerWidth = 800
@@ -13,9 +12,6 @@ const containerHeight = 600
 
 const horizontalTicks = computed(() => Math.floor(containerWidth / 50))
 const verticalTicks = computed(() => Math.floor(containerHeight / 50))
-
-// 拖拽状态
-const isDraggingPerson = ref(false)
 
 // 样式计算
 const personStyle = computed(() => ({
@@ -30,39 +26,10 @@ const carStyle = computed(() => ({
   transform: `rotate(${store.car.angle}rad)`
 }))
 
-// 拖拽功能
-const handleMouseDown = (event: MouseEvent) => {
-  isDraggingPerson.value = true
-  
-  const container = document.getElementById('container')
-  if (!container) return
-  
-  const rect = container.getBoundingClientRect()
-  
-  const handleMouseMove = (e: MouseEvent) => {
-    const x = e.clientX - rect.left
-    const y = e.clientY - rect.top
-    
-    store.updatePersonPosition({
-      x: Math.max(0, Math.min(x, containerWidth - 30)),
-      y: Math.max(0, Math.min(y, containerHeight - 30))
-    })
-  }
-  
-  const handleMouseUp = () => {
-    isDraggingPerson.value = false
-    document.removeEventListener('mousemove', handleMouseMove)
-    document.removeEventListener('mouseup', handleMouseUp)
-  }
-  
-  document.addEventListener('mousemove', handleMouseMove)
-  document.addEventListener('mouseup', handleMouseUp)
-}
-
 // 仿真循环
 let animationId: number
 const animate = () => {
-  update(1/60) // 60fps
+  update(1/30) // 30fps
   animationId = requestAnimationFrame(animate)
 }
 

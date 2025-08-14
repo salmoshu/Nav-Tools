@@ -29,7 +29,7 @@ const appConfig: any = {
       follow: createModuleItem({
         title: 'Follow',
         icon: toolBarIcon.follow,
-        action: ['draw', 'config'],
+        action: ['simulation', 'motion', 'config'],
         props: {}
       }),
       tree: createModuleItem({
@@ -188,7 +188,7 @@ function getActionButtons (title: string, actions: string[]) {
         title: action.charAt(0).toUpperCase() + action.slice(1),
         msg: (title + '-' + action).toLowerCase(),
         template: title + action.charAt(0).toUpperCase() + action.slice(1),
-        icon: toolBarIcon[action as keyof typeof toolBarIcon],
+        icon: toolBarIcon[action as keyof typeof toolBarIcon] || toolBarIcon.default,
         text: '&nbsp;' + action.charAt(0).toUpperCase() + action.slice(1),
       }
     )

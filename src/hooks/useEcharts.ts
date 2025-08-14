@@ -31,11 +31,75 @@ export function useEcharts(
   const defaultColors = ['#409EFF', '#67C23A', '#E6A23C', '#F56C6C', '#909399']
 
   // 创建普通对象的图表配置
+  // 在createChartOption函数中添加对多系列数据的支持
   function createChartOption(data: Record<string, any>) {
     if (!data || Object.keys(data).length === 0) return null
     
     // 确保数据是普通对象
     const plainData = JSON.parse(JSON.stringify(data))
+    
+    // 处理时间标签和多系列数据
+    if (plainData.time && Array.isArray(plainData.time)) {
+      return {
+        title: {
+          text: options.title || '数据图表',
+          left: 'center',
+          textStyle: { fontSize: 14 }
+        },
+        tooltip: { trigger: 'axis' },
+        legend: {
+          data: ['线速度', '角速度'],
+          bottom: 0
+        },
+        grid: {
+          left: '3%',
+          right: '4%',
+          bottom: '15%',
+          containLabel: true
+        },
+        xAxis: {
+          type: 'category',
+          data: plainData.time,
+          axisLabel: { interval: Math.max(1, Math.floor(plainData.time.length / 10)) }
+        },
+        yAxis: [
+          {
+            type: 'value',
+            name: '线速度',
+            position: 'left',
+            axisLine: { show: true, lineStyle: { color: '#409EFF' } },
+            axisLabel: { formatter: '{value}' }
+          },
+          {
+            type: 'value',
+            name: '角速度',
+            position: 'right',
+            axisLine: { show: true, lineStyle: { color: '#67C23A' } },
+            axisLabel: { formatter: '{value}' }
+          }
+        ],
+        series: [
+          {
+            name: '线速度',
+            type: 'line',
+            data: plainData.linearSpeed || [],
+            smooth: true,
+            itemStyle: { color: '#409EFF' },
+            yAxisIndex: 0
+          },
+          {
+            name: '角速度',
+            type: 'line',
+            data: plainData.angularSpeed || [],
+            smooth: true,
+            itemStyle: { color: '#67C23A' },
+            yAxisIndex: 1
+          }
+        ]
+      }
+    }
+    
+    // 原有代码处理其他类型的数据...
     const keys = Object.keys(plainData)
     const values = Object.values(plainData)
     
@@ -144,7 +208,7 @@ export function useEcharts(
         if (chart && chartRef.value) {
           chart.resize()
         }
-      }, 0)
+      }, 10)
       
       // 添加ResizeObserver
       if (window.ResizeObserver) {

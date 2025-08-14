@@ -270,6 +270,5 @@ ipcMain.on('update-follow-config', (event, newConfig) => {
 })
 
 ipcMain.on('console-to-node', (event, message) => {
-  console.log('From Renderer:', message)
-
+  // console.log('From Renderer:', message)
 })

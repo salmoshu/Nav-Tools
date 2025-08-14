@@ -52,11 +52,11 @@ export const useFollowStore = defineStore('follow', () => {
   })
 
   const config = ref<SimulationConfig>({
-    followDistance: 100,
+    followDistance: 150,
     maxLinearSpeed: 100,
-    maxAngularSpeed: 2,
-    linearPID: { kp: 2.0, ki: 0.0, kd: 0.5 },
-    angularPID: { kp: 3.0, ki: 0.0, kd: 0.1 }
+    maxAngularSpeed: 3,
+    linearPID: { kp: 2.0, ki: 0.1, kd: 0.5 },
+    angularPID: { kp: 1.5, ki: 0.05, kd: 0.3 }
   })
 
   const car = ref<CarState>({

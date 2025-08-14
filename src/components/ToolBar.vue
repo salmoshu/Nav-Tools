@@ -85,7 +85,6 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, onUnmounted, watch, inject, type Ref } from 'vue'
 import { navMode, AppMode, FuncMode, ButtonItem, appConfig } from '@/types/config'
-
 import { toolBarIcon } from '@/types/icon'
 import { getButtonList } from '@/composables/useToolsManager'
 import emitter from '@/hooks/useMitt'
@@ -109,7 +108,6 @@ function getButtonText(msg: string, position: string): string {
     return ''
   }
 }
-
 
 const handleList: ButtonItem[] = reactive(
   getButtonList(navMode) || []
