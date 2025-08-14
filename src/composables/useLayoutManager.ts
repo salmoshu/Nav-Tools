@@ -2,7 +2,6 @@ import { ref, markRaw, defineAsyncComponent } from 'vue'
 import { FuncMode, appConfig } from '@/types/config'
 import { ElMessage } from 'element-plus'
 
-// 布局项接口
 export interface LayoutItem {
   titleName: string
   component: any
@@ -128,8 +127,8 @@ const getDynamicDefaultLayoutConfig = async (mode: FuncMode) => {
       componentName: templateName,
       minW: 3,
       minH: 3,
-      maxW:  6,
-      maxH: 8,
+      maxW: 8,
+      maxH: 10,
     }
   })
 }
@@ -192,10 +191,34 @@ export function useLayoutManager() {
       minW: item.minW,
       minH: item.minH,
       maxW: item.maxW,
-      maxH: item.maxH
+      maxH: item.maxH,
     }))
     
     localStorage.setItem(`dashboard-layout-${currentFuncMode.value}`, JSON.stringify(layoutToSave))
+  }
+
+  // 创建最佳布局 = 组件数量 * 组件最佳宽度
+  const createBestLayout = async () => {
+    const componentCount = layoutDraggableList.value.length
+    let columnCount = 2
+    if (componentCount > 4) {
+      columnCount = 3
+    } else if (componentCount > 9) {
+      columnCount = 4
+    } else {
+      columnCount = 2
+    }
+
+    const cellWidth = 12 / columnCount
+    const cellHeight = 4 // 每个单元格的高度
+
+    layoutDraggableList.value = layoutDraggableList.value.map((item, index) => ({
+      ...item,
+      x: (index % columnCount) * cellWidth, // 根据索引计算 x 坐标
+      y: Math.floor(index / columnCount) * cellHeight, // 根据索引计算 y 坐标
+      w: cellWidth,
+      h: cellHeight,
+    }))
   }
 
   // 创建默认布局
@@ -215,7 +238,7 @@ export function useLayoutManager() {
   // 初始化布局
   const initLayout = async () => {
     updateDynamicComponentMap(currentFuncMode.value)
-    
+
     const savedLayout = localStorage.getItem(`dashboard-layout-${currentFuncMode.value}`)
     
     if (savedLayout) {
@@ -229,6 +252,15 @@ export function useLayoutManager() {
     } else {
       await createDefaultLayout()
     }
+  }
+
+  // 自适应布局
+  const autoLayout = async () => {
+    localStorage.removeItem(`dashboard-layout-${currentFuncMode.value}`)
+    await createBestLayout()
+    isEditDraggable.value = false
+    draggableLayout.value = false
+    resizableLayout.value = false
   }
 
   // 重置布局
@@ -294,8 +326,8 @@ export function useLayoutManager() {
       component: markRaw(dynamicComponentMap.value[componentName]?.component || null),
       minW: 3,
       minH: 3,
-      maxW: 6,
-      maxH: 6
+      maxW: 8,
+      maxH: 10,
     }
     
     layoutDraggableList.value.unshift(newItem)
@@ -349,6 +381,7 @@ export function useLayoutManager() {
     // 方法
     initLayout,
     saveCurrentLayout,
+    autoLayout,
     resetLayout,
     saveLayout,
     editLayout,

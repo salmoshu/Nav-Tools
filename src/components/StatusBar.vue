@@ -12,7 +12,7 @@
       <div v-for="(statusValue, statusName) in getMonitorStatus()" :key="statusName" class="status-item">
         <div class="status-item-row">
           <span class="status-label">{{ statusName }}</span>
-          <span class="status-indicator" :style="(statusValue as any).style">{{ statusValue as any }}</span>
+          <span class="status-indicator" :style="getStatusStyle(statusValue)">{{ getStatusValue(statusValue) }}</span>
         </div>
       </div>
     </div>
@@ -27,10 +27,31 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, inject, watch, watchEffect, type Ref } from 'vue'
+import { ref, computed, onMounted, onUnmounted, inject, watch, type Ref } from 'vue'
 import { getMonitorStatus } from '@/composables/useStatusManager'
-
 import { navMode } from '@/types/config'
+
+const commonStyle = {
+  trueStyle: 'color: #00b894; background: rgba(0, 184, 148, 0.1); font-weight: 700;',
+  falseStyle: 'color: #ff6b6b; background: rgba(255, 107, 107, 0.1); font-weight: 700;'
+}
+
+const getStatusStyle = (status: any) => {
+  if (typeof status === 'boolean') {
+    return status ? commonStyle.trueStyle : commonStyle.falseStyle
+  }
+  return ''
+}
+
+const getStatusValue = (status: any) => {
+  if (typeof status === 'boolean') {
+    return status ? 'True' : 'False'
+  }
+  if (typeof status === 'number') {
+    return status.toFixed(2)
+  }
+  return status
+}
 
 const dockWidth = 150
 const position = ref<'left' | 'right'>('right')
@@ -341,9 +362,9 @@ onUnmounted(() => {
   font-weight: 600;
   font-size: 12px;
   line-height: 1.5;
-  flex-basis: 50%;
   box-sizing: border-box;
   text-align: left;
+  min-width: 60px; /* 确保标签有足够宽度 */
 }
 
 .status-indicator {
@@ -353,9 +374,9 @@ onUnmounted(() => {
   padding: 4px 8px;
   border-radius: 6px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-  flex-basis: 50%;
   box-sizing: border-box;
   text-align: right;
+  flex-grow: 1; /* 让指示器占据剩余空间 */
 }
 
 .statusbar-dock-zones {

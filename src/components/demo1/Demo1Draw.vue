@@ -17,7 +17,7 @@ const { chartRef, updateChart } = useEcharts(
   () => demo1Store.config,
   {
     type: 'bar',
-    title: 'Demo1 数据统计',
+    title: '数据统计（来自Config）',
     colors: ['#409EFF', '#67C23A', '#E6A23C']
   }
 )

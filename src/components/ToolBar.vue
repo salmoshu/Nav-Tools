@@ -58,9 +58,16 @@
       </button>
       <button
         class="toolbar-btn"
-        @click="handleLayout('reset')"
+        @click="handleLayout('auto')"
         :title="layoutList[2].title"
         v-html="layoutList[2].icon+getButtonText(layoutList[2].title, position)"
+      >
+      </button>
+      <button
+        class="toolbar-btn"
+        @click="handleLayout('reset')"
+        :title="layoutList[3].title"
+        v-html="layoutList[3].icon+getButtonText(layoutList[3].title, position)"
       >
       </button>
 
@@ -122,6 +129,13 @@ const layoutList: ButtonItem[] = reactive([
     template: '',
     icon: toolBarIcon.save,
     text: upAndDown(position.value) ? '&nbsp;Save' : '',
+  },
+  {
+    title: 'Auto',
+    msg: 'auto',
+    template: '',
+    icon: toolBarIcon.auto,
+    text: upAndDown(position.value) ? '&nbsp;Auto' : '',
   },
   {
     title: 'Reset',
@@ -375,6 +389,9 @@ const handleLayout = (action: string) => {
     case 'save':
       isEditing.value = false
       emitter.emit('save')
+      break
+    case 'auto':
+      emitter.emit('auto')
       break
     case 'reset':
       emitter.emit('reset')

@@ -177,7 +177,7 @@ export function useEcharts(
           if (chart && chartRef.value) {
             chart.resize()
           }
-        }, 0)
+        }, 500)
       }
     } catch (error) {
       console.error('Failed to update chart:', error)

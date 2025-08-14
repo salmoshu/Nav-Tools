@@ -114,6 +114,21 @@ pnpm run dev
    │   └── ...
    ```
 
+4. 在 `src\stores` 目录下增加相应的组件间状态管理文件（这里使用了 Pinia）
+
+   ```text
+   src
+   ├── stores
+   │   ├── demo1.ts
+   │   ├── demo2.ts
+   │   └── ...
+   ```
+
+5. 模块运行状态
+   - 在 `src\stores\demo1.ts` 中增加相应的状态字段 `status`
+   - 在 `src\composables\useStatusManager.ts` 中应用 Pinia 定义好的状态
+   - 在 `src\components\StatusBar.vue` 中应用状态
+
 ## Debug
 
 ![electron-vite-react-debug.gif](https://github.com/electron-vite/electron-vite-react/blob/main/electron-vite-react-debug.gif?raw=true)
@@ -121,13 +136,22 @@ pnpm run dev
 ## Directory
 
 ```diff
-+ ├─┬ electron
-+ │ ├─┬ main
-+ │ │ └── index.ts    entry of Electron-Main
-+ │ └─┬ preload
-+ │   └── index.ts    entry of Preload-Scripts
+  ├─┬ electron
+  │ ├─┬ main
+  │ │ └── index.ts    entry of Electron-Main
+  │ └─┬ preload
+  │   └── index.ts    entry of Preload-Scripts
   ├─┬ src
-  │ └── main.ts       entry of Electron-Renderer
+  │ ├── assets
+  │ ├── components
+  │ ├── composables
+  │ ├── hooks
+  │ ├── stores
+  │ ├─┬ types
+  │ │ ├── config.ts    types of app config
+  │ │ └── icon.ts      types of icon
+  │ ├── App.vue
+  │ ├── main.ts       entry of Electron-Renderer
   ├── index.html
   ├── package.json
   └── vite.config.ts

@@ -67,7 +67,7 @@
                     </div>
                   </div>
                 </template>
-                <component :is="item.component" v-bind="item.props" />
+                <component :is="item.component" />
               </el-card>
             </div>
           </grid-item>
@@ -95,6 +95,7 @@ const {
   resizableLayout,
   initLayout,
   saveLayout,
+  autoLayout,
   resetLayout,
   editLayout,
   addItem,
@@ -240,9 +241,10 @@ const detachItem = (item: any) => {
 onMounted(() => {
   initLayout()
   
-  emitter.on('save', saveLayout)
-  emitter.on('reset', resetLayout)
   emitter.on('edit', editLayout)
+  emitter.on('save', saveLayout)
+  emitter.on('auto', autoLayout)
+  emitter.on('reset', resetLayout)
 
   // module mode
   for (const [_, appCfg] of Object.entries(appConfig)) {
