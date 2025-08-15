@@ -46,10 +46,11 @@
                   <div class="card-header">
                     <span class="title">{{ item.titleName }}</span>
                     <div class="card-actions">
+                      <!-- 取消了分离到独立窗口的功能，等待后续完善 -->
                       <el-button 
                         type="text" 
                         v-if="item.componentName.indexOf('Config') !== -1"
-                        @click="detachItem(item)"
+                        @click="console.log('detachItem(item)')"
                         class="detach-btn"
                         title="分离到独立窗口"
                       >
