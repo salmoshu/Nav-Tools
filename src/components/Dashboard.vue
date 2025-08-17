@@ -6,6 +6,56 @@
     />
 
     <StatusBar @positionChange="handleStatusbarPositionChange" />
+
+    <el-dialog
+      title="输入"
+      v-model="showInputDialog"
+      width="30%"
+    >
+      <el-tabs v-model="activeTab">
+        <el-tab-pane label="串口连接" name="serial">
+          <div class="input-group">
+            <span class="input-label">端口:</span>
+            <el-input v-model="serialInput" placeholder="请输入串口连接指令" />
+          </div>
+          <div class="input-group">
+            <span class="input-label">波特率:</span>
+            <el-input v-model="serialBaudRate" placeholder="请输入波特率" />
+          </div>
+          <div class="input-group" v-if="serialAdvanced">
+            <span class="input-label">数据位:</span>
+            <el-input v-model="serialDataBits" placeholder="请选择数据位" />
+          </div>
+          <div class="input-group" v-if="serialAdvanced">
+            <span class="input-label">停止位:</span>
+            <el-input v-model="serialStopBits" placeholder="请选择停止位" />
+          </div>
+          <div class="input-group" v-if="serialAdvanced">
+            <span class="input-label">校验位:</span>
+            <el-input v-model="serialParity" placeholder="请选择校验位" />
+          </div>
+          <div class="input-group">
+            <span class="input-label">高级选项:</span>
+            <el-checkbox v-model="serialAdvanced" ></el-checkbox>
+          </div>
+        </el-tab-pane>
+        <el-tab-pane label="网络连接" name="network">
+          <div class="input-group">
+            <span class="input-label">网络地址:</span>
+            <el-input v-model="networkInput" placeholder="请输入网络连接指令" />
+          </div>
+        </el-tab-pane>
+        <el-tab-pane label="文件输入" name="file">
+          <div class="input-group">
+            <span class="input-label">文件路径:</span>
+            <el-input v-model="fileInput" placeholder="请输入文件路径或指令" />
+          </div>
+        </el-tab-pane>
+      </el-tabs>
+      <template #footer>
+        <el-button type="primary" @click="handleInputSubmit">确定</el-button>
+      </template>
+    </el-dialog>
     
     <div 
       class="dashboard-content" 
@@ -35,8 +85,8 @@
             :i="item.i"
             :minW="item.minW || 3"
             :minH="item.minH || 3"
-            :maxW="item.maxW || 6"
-            :maxH="item.maxH || 6"
+            :maxW="item.maxW || 8"
+            :maxH="item.maxH || 10"
             @resize="resizeEvent"
             @moved="movedEvent"
           >
@@ -81,12 +131,13 @@
 <script setup lang="ts">
 import ToolBar from './ToolBar.vue'
 import StatusBar from './StatusBar.vue'
-import { ref, computed, onMounted, onUnmounted, provide } from 'vue'
+import { ref, computed, onMounted, onUnmounted, provide, watch } from 'vue'
 import { GridLayout, GridItem } from 'grid-layout-plus'
-import { ElButton, ElCard, ElIcon } from 'element-plus'
+import { ElButton, ElCard, ElDialog, ElIcon, ElMessage } from 'element-plus'
 import { Close, Share } from '@element-plus/icons-vue'
 import emitter from '@/hooks/useMitt'
 import { useLayoutManager } from '@/composables/useLayoutManager'
+import { deviceConnected } from '@/composables/useToolsManager'
 import { appConfig, navMode } from '@/types/config'
 
 const {
@@ -238,6 +289,53 @@ const detachItem = (item: any) => {
   }
 }
 
+const showInputDialog = ref(false)
+const activeTab = ref('serial')
+const serialInput = ref('')
+const serialBaudRate = ref('')
+const serialDataBits = ref('')
+const serialStopBits = ref('')
+const serialParity = ref('')
+const serialAdvanced = ref(false)
+const networkInput = ref('')
+const fileInput = ref('')
+
+const inputDialog = () => {
+  showInputDialog.value = true
+}
+
+const handleInputSubmit = () => {
+  let command = ''
+  
+  switch (activeTab.value) {
+    case 'serial':
+      command = serialInput.value
+      console.log('串口配置:', { port: serialInput.value, baudRate: serialBaudRate.value })
+      break
+    case 'network':
+      command = networkInput.value
+      console.log('网络配置:', networkInput.value)
+      break
+    case 'file':
+      command = fileInput.value
+      console.log('文件路径:', fileInput.value)
+      break
+  }
+  
+  if (command) {
+    console.log('输入的指令:', command)
+    showInputDialog.value = false
+    
+    // 清空所有输入框
+    serialInput.value = ''
+    serialBaudRate.value = ''
+    networkInput.value = ''
+    fileInput.value = ''
+  } else {
+    console.warn('请输入指令')
+  }
+}
+
 // 生命周期
 onMounted(() => {
   initLayout()
@@ -246,6 +344,7 @@ onMounted(() => {
   emitter.on('save', saveLayout)
   emitter.on('auto', autoLayout)
   emitter.on('reset', resetLayout)
+  emitter.on('input-event', inputDialog)
 
   // module mode
   for (const [_, appCfg] of Object.entries(appConfig)) {
@@ -347,5 +446,27 @@ onUnmounted(() => {
 
 .remove-btn:hover {
   color: #F56C6C;
+}
+
+.input-group {
+  display: flex;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.input-label {
+  min-width: 80px;
+  text-align: right;
+  margin-right: 12px;
+  font-size: 14px;
+  color: #606266;
+}
+
+.el-input {
+  flex: 1;
+}
+
+.dialog-footer {
+  text-align: right;
 }
 </style>

@@ -163,9 +163,15 @@ function createMenu() {
   // 根据AppMap第一层内容自动生成菜单项
   const appMenuItems = Object.entries(appConfig).map(([key, config]) => ({
     label: key.toUpperCase(),
-    click: () => {
-      win?.webContents.send(`open-${key}-view`)
-    }
+    // click: () => {
+    //   win?.webContents.send(`open-${key}-view`)
+    // },
+    submenu: Object.entries((config as any).module).map(([moduleKey, moduleConfig]) => ({
+      label: (moduleConfig as any).title,
+      click: () => {
+        win?.webContents.send(`open-${moduleKey}-view`)
+      }
+    }))
   }))
 
   // 合并基础模板和动态生成的App菜单

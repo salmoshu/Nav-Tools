@@ -1,5 +1,7 @@
+import { ref } from 'vue'
 import { NavMode, appConfig, ButtonItem } from '@/types/config'
 import { toolBarIcon } from '@/types/icon'
+import emitter from '@/hooks/useMitt'
 
 type AppName = keyof typeof appConfig
 
@@ -32,6 +34,25 @@ function getButtonText(msg: string, position: string): string {
   } else {
     return ''
   }
+}
+
+const getIoList = (position: string) => {
+  return [
+    {
+      title: 'Input',
+      msg: 'input',
+      template: '',
+      icon: toolBarIcon.input,
+      text: upAndDown(position) ? '&nbsp;Input' : '',
+    },
+    {
+      title: 'Log',
+      msg: 'log',
+      template: '',
+      icon: toolBarIcon.log,
+      text: upAndDown(position) ? '&nbsp;Log' : '',
+    }
+  ]
 }
 
 const getLayoutList = (position: string): ButtonItem[] => {
@@ -67,9 +88,23 @@ const getLayoutList = (position: string): ButtonItem[] => {
   ]
 }
 
+const deviceConnected = ref(false)
+const handleIo = (action: string) => {
+  if (action === 'input') {
+    emitter.emit('input-event')
+    deviceConnected.value = true
+  } else if (action === 'log') {
+    emitter.emit('log-event')
+  }
+}
+
 export {
+    deviceConnected,
+
     getButtonList,
     upAndDown,
     getButtonText,
-    getLayoutList
+    getLayoutList,
+    getIoList,
+    handleIo,
 }

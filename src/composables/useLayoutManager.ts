@@ -212,7 +212,7 @@ export function useLayoutManager() {
     }
 
     const cellWidth = 12 / columnCount
-    const cellHeight = 4 // 每个单元格的高度
+    const cellHeight = 5 // 每个单元格的高度
 
     layoutDraggableList.value = layoutDraggableList.value.map((item, index) => ({
       ...item,

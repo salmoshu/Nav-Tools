@@ -12,7 +12,7 @@
     </div>
     <div class="toolbar-content">
       <!-- Modules: Follow/Tree/GNSS... -->
-      <button 
+      <!-- <button 
         v-for="item in currentButtonList" 
         :key="item.msg"
         class="toolbar-btn" 
@@ -23,9 +23,27 @@
       </button>
 
       <span v-if="upAndDown(position)" class="divider">|</span>
+      <span v-else class="divider">一</span> -->
+
+      <!-- IO: Input/Output -->
+      <span class="device-status-icon">
+        <span v-if="deviceConnected" v-html="toolBarIcon.connected" class="divider"></span>
+        <span v-else v-html="toolBarIcon.disconnected" class="divider"></span>
+      </span>
+      <button 
+        v-for="item in ioList" 
+        :key="item.msg"
+        class="toolbar-btn" 
+        @click="handleIo(item.msg)" 
+        :title="item.title"
+        v-html="item.icon+getButtonText(item.title, position)"
+      >
+      </button>
+
+      <span v-if="upAndDown(position)" class="divider">|</span>
       <span v-else class="divider">一</span>
       
-      <!-- Actions:Draw/Data/Config... -->
+      <!-- Actions: Draw/Data/Config... -->
       <button 
         v-for="item in handleList" 
         :key="item.msg"
@@ -84,8 +102,10 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, onUnmounted, watch, inject, type Ref } from 'vue'
-import { navMode, AppMode, FuncMode, ButtonItem, appConfig } from '@/types/config'
-import { getButtonList, upAndDown, getButtonText, getLayoutList } from '@/composables/useToolsManager'
+import { navMode, AppMode, FuncMode, ButtonItem } from '@/types/config'
+import { toolBarIcon } from '@/types/icon'
+import { deviceConnected, getButtonList, upAndDown, getButtonText, getLayoutList, getIoList, handleIo } from '@/composables/useToolsManager'
+
 import emitter from '@/hooks/useMitt'
 
 const ipcRenderer = window.ipcRenderer
@@ -98,6 +118,7 @@ const handleList: ButtonItem[] = reactive(
 
 // 使用computed属性替代原来的reactive数组
 const layoutList = computed(() => getLayoutList(position.value))
+const ioList = computed(() => getIoList(position.value))
 
 watch(() => navMode.funcMode, () => {
   const buttonList = getButtonList(navMode)
@@ -111,21 +132,21 @@ watch(() => navMode.funcMode, () => {
   }
 })
 
-const currentButtonList = computed(() => {
-  const appKey = navMode.appModeStr
-  if (!appKey || !appConfig[appKey as keyof typeof appConfig]) {
-    return []
-  }
+// const currentButtonList = computed(() => {
+//   const appKey = navMode.appModeStr
+//   if (!appKey || !appConfig[appKey as keyof typeof appConfig]) {
+//     return []
+//   }
   
-  const app = appConfig[appKey as keyof typeof appConfig]
-  return Object.values(app.module).map(module => ({
-    title: (module as any).title,
-    msg: (module as any).title.toLowerCase(),
-    template: '',
-    icon: (module as any).icon,
-    text: getButtonText((module as any).title, position.value)
-  } as ButtonItem))
-})
+//   const app = appConfig[appKey as keyof typeof appConfig]
+//   return Object.values(app.module).map(module => ({
+//     title: (module as any).title,
+//     msg: (module as any).title.toLowerCase(),
+//     template: '',
+//     icon: (module as any).icon,
+//     text: getButtonText((module as any).title, position.value)
+//   } as ButtonItem))
+// })
 
 // 扩展事件定义
 const emit = defineEmits<{
@@ -311,20 +332,20 @@ const handleDrag = (event: MouseEvent) => {
   // 注意：这里不再调用emit('positionChange')和实时更新position
 }
 
-const handleModule = (action: string) => {
-  emitter.emit(action)
+// const handleModule = (action: string) => {
+//   emitter.emit(action)
 
-  // 根据AppMap自动匹配模块对应的FuncMode
-  const appKey = navMode.appModeStr
-  if (!appKey || !appConfig[appKey as keyof typeof appConfig]) return
+//   // 根据AppMap自动匹配模块对应的FuncMode
+//   const appKey = navMode.appModeStr
+//   if (!appKey || !appConfig[appKey as keyof typeof appConfig]) return
   
-  const app = appConfig[appKey as keyof typeof appConfig]
-  const module = Object.values(app.module).find(m => (m as any).title.toLowerCase() === action)
+//   const app = appConfig[appKey as keyof typeof appConfig]
+//   const module = Object.values(app.module).find(m => (m as any).title.toLowerCase() === action)
   
-  if (module) {
-    navMode.funcMode = (module as any).funcMode
-  }
-}
+//   if (module) {
+//     navMode.funcMode = (module as any).funcMode
+//   }
+// }
 
 const handleAction = (action: string) => {
   emitter.emit(action)
