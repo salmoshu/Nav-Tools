@@ -29,7 +29,7 @@ const appConfig: any = {
       gnss: createModuleItem({
         title: 'Gnss',
         icon: toolBarIcon.gnss,
-        action: ['draw', 'data', 'config'],
+        action: ['console', 'config'],
         props: {}
       }),
       imu: createModuleItem({

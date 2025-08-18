@@ -93,6 +93,7 @@
     >
       <!-- Grid Layout Plus 拖拽布局区域 -->
       <div class="dashboard-grid">
+        <!-- use-css-transforms 需设置为 false，也即禁用 CSS 变换，否则会导致内层字体模糊 -->
         <grid-layout
           v-model:layout="layoutDraggableList"
           :col-num="12"
@@ -100,7 +101,7 @@
           :is-draggable="draggableLayout"
           :is-resizable="resizableLayout"
           :vertical-compact="true"
-          :use-css-transforms="true"
+          :use-css-transforms="false" 
           :margin="[10, 10]"
           class="grid-layout"
         >

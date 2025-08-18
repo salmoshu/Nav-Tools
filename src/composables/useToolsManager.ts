@@ -93,7 +93,6 @@ const deviceConnected = ref(false)
 const handleIo = (action: string) => {
   if (action === 'input') {
     emitter.emit('input-event')
-    deviceConnected.value = true
   } else if (action === 'log') {
     emitter.emit('log-event')
     ElMessage({
