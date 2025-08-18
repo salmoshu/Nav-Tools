@@ -16,23 +16,45 @@
         <el-tab-pane label="串口连接" name="serial">
           <div class="input-group">
             <span class="input-label">端口:</span>
-            <el-input v-model="serialInput" placeholder="请输入串口连接指令" />
+            <el-select
+              v-model="serialPort"
+              placeholder="请选择串口"
+              style="flex: 1;"
+              @change="searchSerialPorts"
+            >
+              <el-option v-for="port in serialPorts" :key="port" :label="port" :value="port" />
+            </el-select>
           </div>
           <div class="input-group">
             <span class="input-label">波特率:</span>
-            <el-input v-model="serialBaudRate" placeholder="请输入波特率" />
+            <el-select
+              v-model="serialBaudRate"
+              placeholder="请选择或输入波特率"
+              filterable
+              allow-create
+              style="flex: 1;"
+            >
+              <el-option v-for="rate in baudRates" :key="rate" :label="rate" :value="rate" />
+            </el-select>
           </div>
           <div class="input-group" v-if="serialAdvanced">
             <span class="input-label">数据位:</span>
-            <el-input v-model="serialDataBits" placeholder="请选择数据位" />
+            <el-select v-model="serialDataBits" placeholder="请选择数据位" style="flex: 1;">
+              <!-- 默认为8 -->
+              <el-option v-for="bit in dataBits" :key="bit" :label="bit" :value="bit" />
+            </el-select>
           </div>
           <div class="input-group" v-if="serialAdvanced">
             <span class="input-label">停止位:</span>
-            <el-input v-model="serialStopBits" placeholder="请选择停止位" />
+            <el-select v-model="serialStopBits" placeholder="请选择停止位" style="flex: 1;">
+              <el-option v-for="bit in stopBits" :key="bit" :label="bit" :value="bit" />
+            </el-select>
           </div>
           <div class="input-group" v-if="serialAdvanced">
             <span class="input-label">校验位:</span>
-            <el-input v-model="serialParity" placeholder="请选择校验位" />
+            <el-select v-model="serialParity" placeholder="请选择校验位" style="flex: 1;">
+              <el-option v-for="parity in parities" :key="parity.value" :label="parity.label" :value="parity.value" />
+            </el-select>
           </div>
           <div class="input-group">
             <span class="input-label">高级选项:</span>
@@ -42,13 +64,20 @@
         <el-tab-pane label="网络连接" name="network">
           <div class="input-group">
             <span class="input-label">网络地址:</span>
-            <el-input v-model="networkInput" placeholder="请输入网络连接指令" />
+            <el-input v-model="networkIp" placeholder="请输入网络连接指令" />
+          </div>
+          <div class="input-group">
+            <span class="input-label">网络端口:</span>
+            <el-input v-model="networkPort" placeholder="请输入网络端口" />
           </div>
         </el-tab-pane>
         <el-tab-pane label="文件输入" name="file">
           <div class="input-group">
             <span class="input-label">文件路径:</span>
-            <el-input v-model="fileInput" placeholder="请输入文件路径或指令" />
+            <el-input v-model="fileInput" placeholder="请输入文件路径" style="flex: 1;" />
+            <el-button type="primary" @click="openFileDialog" style="margin-left: 10px;">
+              ...
+            </el-button>
           </div>
         </el-tab-pane>
       </el-tabs>
@@ -133,11 +162,11 @@ import ToolBar from './ToolBar.vue'
 import StatusBar from './StatusBar.vue'
 import { ref, computed, onMounted, onUnmounted, provide, watch } from 'vue'
 import { GridLayout, GridItem } from 'grid-layout-plus'
-import { ElButton, ElCard, ElDialog, ElIcon, ElMessage } from 'element-plus'
+import { ElButton, ElCard, ElDialog, ElIcon } from 'element-plus'
 import { Close, Share } from '@element-plus/icons-vue'
 import emitter from '@/hooks/useMitt'
 import { useLayoutManager } from '@/composables/useLayoutManager'
-import { deviceConnected } from '@/composables/useToolsManager'
+import { useDevice } from '@/hooks/useDevice'
 import { appConfig, navMode } from '@/types/config'
 
 const {
@@ -154,6 +183,29 @@ const {
   removeItem,
   handleFuncModeChange
 } = useLayoutManager()
+
+const {
+  showInputDialog,
+  activeTab,
+  serialPort,
+  serialBaudRate,
+  serialDataBits,
+  serialStopBits,
+  serialParity,
+  serialAdvanced,
+  networkIp,
+  networkPort,
+  fileInput,
+  serialPorts,
+  baudRates,
+  dataBits,
+  stopBits,
+  parities,
+  searchSerialPorts,
+  handleInputSubmit,
+  inputDialog,
+  openFileDialog  // 引入新增的方法
+} = useDevice()
 
 // 工具栏和状态栏位置状态
 const toolbarPosition = ref<'top' | 'right' | 'bottom' | 'left'>('top')
@@ -289,56 +341,10 @@ const detachItem = (item: any) => {
   }
 }
 
-const showInputDialog = ref(false)
-const activeTab = ref('serial')
-const serialInput = ref('')
-const serialBaudRate = ref('')
-const serialDataBits = ref('')
-const serialStopBits = ref('')
-const serialParity = ref('')
-const serialAdvanced = ref(false)
-const networkInput = ref('')
-const fileInput = ref('')
-
-const inputDialog = () => {
-  showInputDialog.value = true
-}
-
-const handleInputSubmit = () => {
-  let command = ''
-  
-  switch (activeTab.value) {
-    case 'serial':
-      command = serialInput.value
-      console.log('串口配置:', { port: serialInput.value, baudRate: serialBaudRate.value })
-      break
-    case 'network':
-      command = networkInput.value
-      console.log('网络配置:', networkInput.value)
-      break
-    case 'file':
-      command = fileInput.value
-      console.log('文件路径:', fileInput.value)
-      break
-  }
-  
-  if (command) {
-    console.log('输入的指令:', command)
-    showInputDialog.value = false
-    
-    // 清空所有输入框
-    serialInput.value = ''
-    serialBaudRate.value = ''
-    networkInput.value = ''
-    fileInput.value = ''
-  } else {
-    console.warn('请输入指令')
-  }
-}
-
 // 生命周期
 onMounted(() => {
   initLayout()
+  searchSerialPorts()
   
   emitter.on('edit', editLayout)
   emitter.on('save', saveLayout)

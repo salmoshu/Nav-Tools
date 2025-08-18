@@ -5,8 +5,9 @@ import path from 'node:path'
 import os from 'node:os'
 // 导入AppMap配置
 import { appConfig } from '../../src/types/config'
+import { eventsMap } from './events'
 
-const require = createRequire(import.meta.url)
+// const require = createRequire(import.meta.url)
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 // The built directory structure
@@ -275,6 +276,8 @@ ipcMain.on('update-follow-config', (event, newConfig) => {
   })
 })
 
-ipcMain.on('console-to-node', (event, message) => {
-  // console.log('From Renderer:', message)
-})
+ipcMain.on('console-to-node', eventsMap['console-to-node'])
+ipcMain.handle('open-file-dialog', eventsMap['open-file-dialog'])
+ipcMain.handle('search-serial-ports', eventsMap['search-serial-ports'])
+ipcMain.handle('open-serial-port', eventsMap['open-serial-port'])
+ipcMain.handle('close-serial-port', eventsMap['close-serial-port'])

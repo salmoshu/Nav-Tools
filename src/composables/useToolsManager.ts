@@ -2,6 +2,7 @@ import { ref } from 'vue'
 import { NavMode, appConfig, ButtonItem } from '@/types/config'
 import { toolBarIcon } from '@/types/icon'
 import emitter from '@/hooks/useMitt'
+import { ElMessage } from 'element-plus'
 
 type AppName = keyof typeof appConfig
 
@@ -95,6 +96,10 @@ const handleIo = (action: string) => {
     deviceConnected.value = true
   } else if (action === 'log') {
     emitter.emit('log-event')
+    ElMessage({
+      message: 'Log功能暂未实现',
+      type: 'info',
+    })
   }
 }
 

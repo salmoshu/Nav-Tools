@@ -24,22 +24,6 @@ enum FuncMode {
 }
 
 const appConfig: any = {
-  pnc: createAppItem({
-    module: {
-      follow: createModuleItem({
-        title: 'Follow',
-        icon: toolBarIcon.follow,
-        action: ['simulation', 'motion', 'config'],
-        props: {}
-      }),
-      tree: createModuleItem({
-        title: 'Tree',
-        icon: toolBarIcon.tree,
-        action: ['draw', 'data', 'config'],
-        props: {}
-      }),
-    },
-  }),
   pos: createAppItem({
     module: {
       gnss: createModuleItem({
@@ -61,6 +45,22 @@ const appConfig: any = {
         props: {}
       }),
     }
+  }),
+  pnc: createAppItem({
+    module: {
+      follow: createModuleItem({
+        title: 'Follow',
+        icon: toolBarIcon.follow,
+        action: ['simulation', 'motion', 'config'],
+        props: {}
+      }),
+      tree: createModuleItem({
+        title: 'Tree',
+        icon: toolBarIcon.tree,
+        action: ['draw', 'data', 'config'],
+        props: {}
+      }),
+    },
   }),
   example: createAppItem({
     module: {

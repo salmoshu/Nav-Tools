@@ -1,5 +1,5 @@
 import { ref, markRaw, defineAsyncComponent } from 'vue'
-import { FuncMode, appConfig } from '@/types/config'
+import { AppMode, FuncMode, appConfig } from '@/types/config'
 import { ElMessage } from 'element-plus'
 
 export interface LayoutItem {
@@ -149,8 +149,12 @@ const getDynamicComponentsByMode = (mode: FuncMode): string[] => {
 
 // 布局管理组合式函数
 export function useLayoutManager() {
+  const appKeys = Object.keys(appConfig) as Array<keyof typeof appConfig>
+  const firstAppKey = appKeys[0]
+  const firstApp = appConfig[firstAppKey]
+
   const layoutDraggableList = ref<LayoutItem[]>([])
-  const currentFuncMode = ref(FuncMode.Follow)
+  const currentFuncMode = ref(firstApp.currMode)
   const isEditDraggable = ref(false)
   const draggableLayout = ref(false)
   const resizableLayout = ref(false)

@@ -46,6 +46,7 @@
     "element-plus": "^2.10.5",
     "grid-layout-plus": "^1.1.0",
     "mitt": "^3.0.1",
-    "pinia": "^3.0.3"
+    "pinia": "^3.0.3",
+    "serialport": "^13.0.0"
   }
 }
