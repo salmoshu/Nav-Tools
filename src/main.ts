@@ -7,9 +7,11 @@ import ElementPlus from 'element-plus'
 import 'element-plus/dist/index.css'
 import * as ElementPlusIconsVue from '@element-plus/icons-vue'
 import 'default-passive-events'
+import { useDevice } from '@/hooks/useDevice'
 
 const app = createApp(App)
 const pinia = createPinia()
+const { closeAllDevice } = useDevice()
 
 // 使用Pinia
 app.use(pinia)
@@ -22,4 +24,8 @@ for (const [key, component] of Object.entries(ElementPlusIconsVue)) {
 
 app.mount('#app').$nextTick(() => {
   postMessage({ payload: 'removeLoading' }, '*')
+})
+
+window.addEventListener('beforeunload', () => {
+  closeAllDevice()
 })

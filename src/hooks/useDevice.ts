@@ -1,8 +1,12 @@
 import { ref } from "vue";
 import { ElMessage } from "element-plus";
+import { useNmea } from '../composables/gnss/useNmea';
 
 export const deviceConnected = ref(false);
 const deviceList: any[] = []
+
+// 初始化NMEA解析器
+const { processRawData } = useNmea();
 
 /**
  * 设备管理组合式函数
@@ -126,6 +130,10 @@ export function useDevice() {
 
     return port;
   };
+
+  window.ipcRenderer.on('serial-data-to-renderer', (event, data) => {
+    processRawData(data);
+  })
 
   /**
    * 处理网络配置提交

@@ -231,7 +231,6 @@ const startDrag = (event: MouseEvent) => {
   const handle = (event.target as HTMLElement).closest('.toolbar-handle')
   if (!handle) return
 
-  // event.preventDefault()
   isDragging.value = true
   activeDockZone.value = null
 
@@ -306,7 +305,6 @@ const stopDrag = () => {
 const handleDrag = (event: MouseEvent) => {
   if (!isDragging.value) return
 
-  // event.preventDefault()
   const x = event.clientX - dragOffset.value.x
   const y = event.clientY - dragOffset.value.y
 
@@ -532,6 +530,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
+  overflow: hidden;
 }
 
 .divider {

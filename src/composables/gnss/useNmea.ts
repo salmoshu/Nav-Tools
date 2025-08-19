@@ -1,7 +1,7 @@
 import { ref, computed } from 'vue'
 
 // NMEA数据接口定义
-export interface NmeaData {
+interface NmeaData {
   timestamp: string
   latitude: number | null
   longitude: number | null
@@ -98,29 +98,34 @@ interface GsvData {
   }>
 }
 
-export function useNmea() {
-  const nmeaData = ref<NmeaData[]>([])
-  const currentData = ref<NmeaData>({
-    timestamp: new Date().toISOString(),
-    latitude: null,
-    longitude: null,
-    altitude: null,
-    speed: null,
-    course: null,
-    satellites: null,
-    hdop: null,
-    status: null,
-    mode: null,
-    date: null,
-    time: null,
-    raw: ''
-  })
+const currentData = ref<NmeaData>({
+  timestamp: new Date().toISOString(),
+  latitude: null,
+  longitude: null,
+  altitude: null,
+  speed: null,
+  course: null,
+  satellites: null,
+  hdop: null,
+  status: null,
+  mode: null,
+  date: null,
+  time: null,
+  raw: ''
+})
 
-  // 计算属性：最新位置
-  const latestPosition = computed(() => {
-    const validData = nmeaData.value.filter(d => d.latitude !== null && d.longitude !== null)
-    return validData.length > 0 ? validData[validData.length - 1] : null
-  })
+// 将nmeaData移到模块顶层
+const nmeaData = ref<NmeaData[]>([])
+
+// 将latestPosition移到模块顶层
+const latestPosition = computed(() => {
+  const validData = nmeaData.value.filter(d => d.latitude !== null && d.longitude !== null)
+  return validData.length > 0 ? validData[validData.length - 1] : null
+})
+
+export function useNmea() {
+  // 添加数据缓冲区
+  const buffer = ref('')
 
   // 计算属性：信号质量
   const signalQuality = computed(() => {
@@ -149,20 +154,45 @@ export function useNmea() {
   // 工具函数：计算校验和
   function calculateChecksum(sentence: string): string {
     let checksum = 0
-    for (let i = 1; i < sentence.length; i++) {
+    // 从索引1开始（跳过$），到*之前结束
+    const asteriskIndex = sentence.indexOf('*')
+    const endIndex = asteriskIndex !== -1 ? asteriskIndex : sentence.length
+    
+    for (let i = 1; i < endIndex; i++) {
       checksum ^= sentence.charCodeAt(i)
     }
     return checksum.toString(16).toUpperCase().padStart(2, '0')
   }
-
+  
   // 工具函数：验证校验和
   function validateChecksum(sentence: string): boolean {
-    const asteriskIndex = sentence.indexOf('*')
-    if (asteriskIndex === -1) return false
+    // 检查是否以$开头
+    if (!sentence.startsWith('$')) {
+      return false
+    }
     
-    const data = sentence.substring(0, asteriskIndex)
-    const checksum = sentence.substring(asteriskIndex + 1)
-    return calculateChecksum(data) === checksum
+    const asteriskIndex = sentence.indexOf('*')
+    if (asteriskIndex === -1 || asteriskIndex >= sentence.length - 1) {
+      return false
+    }
+    
+    // 提取校验和（仅取*后两位）
+    const checksum = sentence.substring(asteriskIndex + 1, asteriskIndex + 3).toUpperCase()
+    
+    // 验证校验和格式是否为两位十六进制数
+    if (!/^[0-9A-F]{2}$/.test(checksum)) {
+      return false
+    }
+    
+    // 计算校验和
+    const calculatedChecksum = calculateChecksum(sentence)
+    
+    // 开发环境下输出详细信息
+    if (import.meta.env.DEV && calculatedChecksum !== checksum) {
+      console.warn(`校验和不匹配: 计算值=${calculatedChecksum}, 实际值=${checksum}, 语句=${sentence}`)
+    }
+    
+    return calculatedChecksum === checksum
   }
 
   // 解析GGA语句
@@ -290,14 +320,14 @@ export function useNmea() {
     if (!sentence || !sentence.startsWith('$')) {
       return { ...currentData.value, raw: sentence }
     }
-    
+
     if (!validateChecksum(sentence)) {
       console.warn('Invalid checksum:', sentence)
       return { ...currentData.value, raw: sentence }
     }
-    
+
     let parsedData: Partial<NmeaData> = {}
-    
+
     if (sentence.includes('GGA')) {
       parsedData = parseGga(sentence)
     } else if (sentence.includes('GLL')) {
@@ -307,21 +337,21 @@ export function useNmea() {
     } else if (sentence.includes('VTG')) {
       parsedData = parseVtg(sentence)
     }
-    
+
     const newData = {
       ...currentData.value,
       ...parsedData,
       timestamp: new Date().toISOString()
     }
-    
+
     currentData.value = newData
     nmeaData.value.push(newData)
-    
+
     // 限制历史数据数量
     if (nmeaData.value.length > 1000) {
       nmeaData.value.shift()
     }
-    
+
     return newData
   }
 
@@ -365,6 +395,67 @@ export function useNmea() {
     }
   }
 
+  // 添加处理原始数据的函数
+  function processRawData(rawData: string): void {
+    // 将新数据追加到缓冲区
+    buffer.value += rawData;
+
+    // 查找第一个 $ 的位置
+    const firstDollarIndex = buffer.value.indexOf('$');
+    if (firstDollarIndex > 0) {
+      // 丢弃 $ 之前的无效数据
+      buffer.value = buffer.value.substring(firstDollarIndex);
+    } else if (firstDollarIndex === -1) {
+      // 如果缓冲区中没有 $，清空缓冲区
+      buffer.value = '';
+      return;
+    }
+
+    // 匹配 NMEA 语句的正则表达式：以 $ 开头，以 * 加两位十六进制数结尾
+    const nmeaRegex = /\$(?:[^*]*)\*[0-9A-F]{2}/gi;
+
+    let match;
+    const completeSentences: string[] = [];
+
+    // 查找第一个匹配的NMEA语句，并将其之前的内容清空
+    if ((match = nmeaRegex.exec(buffer.value)) !== null) {
+      buffer.value = buffer.value.substring(match.index);
+    }
+
+    // 提取所有完整的 NMEA 语句
+    let lastMatchEnd = 0
+    while ((match = nmeaRegex.exec(buffer.value)) !== null) {
+      completeSentences.push(match[0]);
+      lastMatchEnd = match.index + match[0].length;
+    }
+
+    // 更新缓冲区，丢弃已处理的完整语句及无法构成完整语句的片段
+    if (completeSentences.length > 0) {
+      // 保留最后一个完整语句结束后的内容
+      buffer.value = buffer.value.substring(lastMatchEnd);
+    } else {
+      // 如果没有找到完整语句，检查缓冲区中是否有可能是完整语句的开头
+      const lastDollarIndex = buffer.value.lastIndexOf('$');
+      if (lastDollarIndex > 0) {
+        // 保留最后一个 $ 之后的内容，丢弃之前的数据
+        buffer.value = buffer.value.substring(lastDollarIndex);
+      } else if (lastDollarIndex === -1 && buffer.value.length > 0) {
+        // 如果没有 $，清空缓冲区
+        buffer.value = '';
+      }
+    }
+
+    // 处理所有完整的 NMEA 语句
+    for (const sentence of completeSentences) {
+      parseNmea(sentence.trim());
+    }
+  }
+
+  // 添加清除缓冲区的函数
+  function clearBuffer(): void {
+    buffer.value = ''
+  }
+
   return {
     nmeaData,
     currentData,
@@ -374,7 +465,9 @@ export function useNmea() {
     parseNmea,
     parseNmeaBatch,
     getStatistics,
-    clearData
+    clearData,
+    processRawData,  // 导出新函数
+    clearBuffer     // 导出新函数
   }
 }
 

@@ -1,10 +1,6 @@
 <template>
-  <div class="deviation-container" v-if="false">
-    <div class="control-panel">
-      <div class="title">
-        <div class="title-icon"></div>
-        <h2>GNSS偏差分析</h2>
-      </div>
+  <div class="deviation-container">
+    <div class="control-panel" :class="{ 'control-panel-fullscreen': isFullScreen }">
       <div class="data-cards">
         <div class="data-card">
           <div class="card-title">当前状态</div>
@@ -28,7 +24,7 @@
         <el-button type="primary" size="small" @click="clearTrack" class="clear-btn">清除轨迹</el-button>
         <el-button type="default" size="small" @click="toggleFullScreen" class="fullscreen-btn">
           <el-icon v-if="!isFullScreen"><Expand /></el-icon>
-          <el-icon v-else><MinusSquare /></el-icon> <!-- 使用MinusSquare替代Compress -->
+          <el-icon v-else><FullScreen /></el-icon>
         </el-button>
       </div>
     </div>
@@ -51,19 +47,22 @@
           ></path>
         </svg>
       </div>
+      <!-- 添加全屏状态提示 -->
+      <div v-if="isFullScreen" class="fullscreen-tip">
+        按Esc键或点击按钮退出全屏
+      </div>
     </div>
   </div>
 </template>
 
 <script setup>
-// 在文件顶部添加echarts导入
 import * as echarts from 'echarts';
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue';
 import { useNmea } from '../../composables/gnss/useNmea';
-import elementResizeDetectorMaker from 'element-resize-detector';
+import { Expand, FullScreen } from '@element-plus/icons-vue';
 
 // 初始化NMEA解析器
-const { nmeaData, currentData, latestPosition, signalQuality, fixStatus, clearData } = useNmea();
+const { nmeaData, currentData, latestPosition, signalQuality, fixStatus, clearData, processRawData } = useNmea();
 
 // 组件状态
 const chartRef = ref(null);
@@ -74,7 +73,7 @@ const rulerText = ref('');
 const deviation = ref('');
 const satellites = computed(() => currentData.value.satellites || '0');
 
-// 轨迹数据处理 - 改为普通数组，不使用ref
+// 轨迹数据处理
 let trackData = [];
 const referencePoint = ref(null);
 const maxTrackPoints = 5000; // 最大轨迹点数
@@ -83,9 +82,28 @@ const maxTrackPoints = 5000; // 最大轨迹点数
 function initChart() {
   if (!chartRef.value) return;
 
+  // 销毁已存在的图表实例
+  if (chartInstance.value) {
+    chartInstance.value.dispose();
+  }
+
   chartInstance.value = echarts.init(chartRef.value);
 
   const option = {
+    dataZoom: [
+      {
+        type: 'inside',
+        xAxisIndex: 0,
+        scrollSensitivity: 1,
+        zoomSensitivity: 1
+      },
+      {
+        type: 'inside',
+        yAxisIndex: 0,
+        scrollSensitivity: 1,
+        zoomSensitivity: 1
+      }
+    ],
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
     tooltip: {
       trigger: 'axis',
@@ -119,6 +137,9 @@ function initChart() {
           type: 'dashed',
           color: '#e0e0e0'
         }
+      },
+      axisLine: {
+        show: true
       }
     },
     yAxis: {
@@ -134,40 +155,29 @@ function initChart() {
           type: 'dashed',
           color: '#e0e0e0'
         }
+      },
+      axisLine: {
+        show: true
       }
     },
-    dataZoom: [
-      {
-        type: 'inside',
-        xAxisIndex: 0,
-        filterMode: 'none'
-      },
-      {
-        type: 'inside',
-        yAxisIndex: 0,
-        filterMode: 'none'
-      }
-    ],
     series: [
       {
         name: '轨迹',
         type: 'line',
-        data: [],  // 空数组初始化
-        coordinateSystem: 'cartesian2d',  // 添加这行
+        data: [],
+        coordinateSystem: 'cartesian2d',
         symbol: 'none',
         lineStyle: {
           color: '#4e6ef2',
           width: 2,
           opacity: 0.8
-        },
-        progressive: 1000,
-        progressiveThreshold: 500
+        }
       },
       {
         name: '当前位置',
         type: 'scatter',
         data: [],
-        coordinateSystem: 'cartesian2d',  // 添加这行
+        coordinateSystem: 'cartesian2d',
         symbolSize: 12,
         itemStyle: {
           color: '#ff4d4f'
@@ -177,7 +187,7 @@ function initChart() {
         name: '参考点',
         type: 'scatter',
         data: [],
-        coordinateSystem: 'cartesian2d',  // 添加这行
+        coordinateSystem: 'cartesian2d',
         symbolSize: 10,
         symbol: 'rect',
         itemStyle: {
@@ -189,60 +199,38 @@ function initChart() {
 
   chartInstance.value.setOption(option);
 
-  // 监听窗口大小变化
-  const erd = elementResizeDetectorMaker();
-  erd.listenTo(chartRef.value, () => {
-    // 使用setTimeout确保DOM更新完成
-    setTimeout(() => {
-      if (chartInstance.value) {
-        chartInstance.value.resize();
-        
-        // 获取当前完整的option配置
-        const currentOption = chartInstance.value.getOption();
-        
-        // 重新设置完整的配置，确保坐标系信息不丢失
-        chartInstance.value.setOption({
-          ...currentOption,
-          series: currentOption.series.map(series => ({
-            ...series,
-            coordinateSystem: 'cartesian2d'  // 确保每个系列都有坐标系配置
-          }))
-        }, { notMerge: false });  // 使用合并模式
-        
-        updateRuler();
-      }
-    }, 50);  // 50ms延迟确保DOM更新完成
-  });
+  // 添加鼠标滚轮缩放事件监听
+  const chartDom = chartRef.value;
+  chartDom.addEventListener('wheel', handleWheelZoom);
 
-  // 监听图表缩放事件
-  chartInstance.value.on('dataZoom', () => {
-    updateRuler();
+  // 监听窗口大小变化
+  window.addEventListener('resize', () => {
+    if (chartInstance.value) {
+      chartInstance.value.resize();
+    }
   });
 }
 
-// 更新比例尺
-function updateRuler() {
+// 处理鼠标滚轮缩放
+function handleWheelZoom(event) {
   if (!chartInstance.value) return;
 
-  const xAxis = chartInstance.value.getModel('xAxis', 0).getComponent('xAxis', 0).axis;
-  const interval = xAxis.scale._interval;
+  // 获取当前鼠标位置
+  const pointInPixel = [event.offsetX, event.offsetY];
+  const pointInGrid = chartInstance.value.convertFromPixel('grid', pointInPixel);
 
-  // 根据间隔确定合适的单位
-  const units = ['mm', 'cm', 'm', 'km'];
-  const factors = [0.001, 0.01, 1, 1000];
+  // 根据滚轮方向确定缩放方向
+  const zoomFactor = event.deltaY < 0 ? 1.1 : 0.9;
 
-  let m = parseFloat(interval);
-  for (let i = 0; i < units.length - 1; i++) {
-    if (m >= factors[i] && m < factors[i + 1]) {
-      const value = m / factors[i];
-      rulerText.value = value.toFixed(0) + units[i];
-      return;
-    } else if (m < factors[i]) {
-      rulerText.value = (m / factors[i]).toFixed(1) + units[i];
-      return;
-    }
-  }
-  rulerText.value = (m / factors[units.length - 1]).toFixed(0) + units[units.length - 1];
+  // 触发缩放动作
+  chartInstance.value.dispatchAction({
+    type: 'dataZoom',
+    action: 'zoom',
+    zoom: zoomFactor,
+    xAxisIndex: 0,
+    yAxisIndex: 0,
+    center: pointInGrid
+  });
 }
 
 // 处理NMEA数据更新
@@ -262,8 +250,7 @@ function handleNmeaUpdate() {
       series: [
         {
           name: '参考点',
-          data: [[0, 0]],
-          coordinateSystem: 'cartesian2d'  // 添加这行
+          data: [[0, 0]]
         }
       ]
     });
@@ -273,29 +260,31 @@ function handleNmeaUpdate() {
   const x = (latest.longitude - referencePoint.value.longitude) * 111320 * Math.cos(referencePoint.value.latitude * Math.PI / 180);
   const y = (latest.latitude - referencePoint.value.latitude) * 110574;
 
+  // 对计算结果进行四舍五入，保留3位小数
+  const roundedX = Math.round(x * 1000) / 1000;
+  const roundedY = Math.round(y * 1000) / 1000;
+
   // 更新偏差值
   deviation.value = Math.sqrt(x * x + y * y).toFixed(2);
 
   // 添加到轨迹数据
-  trackData.push([x, y]);
+  trackData.push([roundedX, roundedY]);
 
   // 限制轨迹数据量
   if (trackData.length > maxTrackPoints) {
     trackData.shift();
   }
 
-  // 更新图表 - 使用完整的数据数组
+  // 更新图表
   chartInstance.value.setOption({
     series: [
       {
         name: '轨迹',
-        data: [...trackData],  // 创建新数组引用
-        coordinateSystem: 'cartesian2d'  // 添加这行
+        data: [...trackData]
       },
       {
         name: '当前位置',
-        data: [[x, y]],
-        coordinateSystem: 'cartesian2d'  // 添加这行
+        data: [[roundedX, roundedY]]
       }
     ]
   });
@@ -306,12 +295,12 @@ function handleNmeaUpdate() {
 
     chartInstance.value.setOption({
       xAxis: {
-        min: x - padding,
-        max: x + padding
+        min: roundedX - padding,
+        max: roundedX + padding
       },
       yAxis: {
-        min: y - padding,
-        max: y + padding
+        min: roundedY - padding,
+        max: roundedY + padding
       }
     });
   }
@@ -351,74 +340,77 @@ function clearTrack() {
     series: [
       {
         name: '轨迹',
-        data: [],
-        coordinateSystem: 'cartesian2d'  // 添加这行
+        data: []
       },
       {
         name: '当前位置',
-        data: [],
-        coordinateSystem: 'cartesian2d'  // 添加这行
+        data: []
       },
       {
         name: '参考点',
-        data: [],
-        coordinateSystem: 'cartesian2d'  // 添加这行
+        data: []
       }
     ]
   });
 }
 
-// 切换全屏
 function toggleFullScreen() {
   isFullScreen.value = !isFullScreen.value;
   setTimeout(() => {
     if (chartInstance.value) {
       chartInstance.value.resize();
-      updateRuler();
     }
   }, 100);
 }
 
 // 组件挂载时初始化
 onMounted(() => {
-  initChart();
+  // 延迟初始化，确保DOM已加载
+  setTimeout(() => {
+    initChart();
+  }, 100)
 
   // 监听NMEA数据更新
   const stopWatch = watch(
     latestPosition,
     (newVal) => {
-      if (newVal) {
+      if (newVal && chartInstance.value) {
         handleNmeaUpdate();
       }
     },
     { immediate: true }
-  );
+  )
 
   // 监听串口数据
-  let buffer = '';
-
   const handleSerialData = (event, data) => {
-    buffer += data;
-    const lines = buffer.split('\n');
-    buffer = lines.pop();
-
-    for (const line of lines) {
-      if (line.startsWith('$')) {
-        currentData.value = useNmea().parseNmea(line);
-      }
-    }
-  };
+    // 使用processRawData处理原始数据
+    processRawData(data);
+  }
 
   window.ipcRenderer.on('read', handleSerialData);
 
-  // 清理函数
-  onUnmounted(() => {
-    stopWatch();
-    window.ipcRenderer.off('read', handleSerialData);
-    if (chartInstance.value) {
-      chartInstance.value.dispose();
+  // 监听键盘事件 - Esc键退出全屏
+  const handleKeyDown = (event) => {
+    if (event.key === 'Escape' && isFullScreen.value) {
+      toggleFullScreen();
     }
-  });
+  };
+
+  window.addEventListener('keydown', handleKeyDown);
+});
+
+// 清理函数
+onUnmounted(() => {
+  stopWatch();
+  window.ipcRenderer.off('read', handleSerialData);
+  window.removeEventListener('keydown', handleKeyDown); // 移除键盘事件监听
+  // 移除鼠标滚轮事件监听
+  if (chartRef.value) {
+    chartRef.value.removeEventListener('wheel', handleWheelZoom);
+  }
+  if (chartInstance.value) {
+    chartInstance.value.dispose();
+  }
 });
 </script>
 
@@ -444,14 +436,6 @@ onMounted(() => {
   display: flex;
   align-items: center;
   margin-bottom: 15px;
-}
-
-.title-icon {
-  width: 4px;
-  height: 20px;
-  background-color: #4e6ef2;
-  margin-right: 8px;
-  border-radius: 2px;
 }
 
 h2 {
@@ -525,6 +509,38 @@ h2 {
   position: relative;
   overflow: hidden;
   transition: all 0.3s ease;
+  min-height: 400px; /* 确保图表有足够的高度 */
+}
+
+.chart {
+  width: 100%;
+  height: 100%;
+  min-height: 400px; /* 确保图表有足够的高度 */
+}
+
+.control-panel-fullscreen {
+  position: fixed;
+  top: 10px;
+  left: 10px;
+  right: 10px;
+  z-index: 1001;
+  background-color: rgba(255, 255, 255, 0.9);
+  border-radius: 8px;
+  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
+  max-height: 180px; /* 限制控制面板高度 */
+}
+
+.fullscreen-tip {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: rgba(0, 0, 0, 0.7);
+  color: white;
+  padding: 5px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  z-index: 1001;
 }
 
 .full-screen {
@@ -537,9 +553,10 @@ h2 {
   background-color: #fff;
 }
 
-.chart {
-  width: 100%;
-  height: 100%;
+/* 修改全屏模式下的图表容器样式 */
+.chart-container.full-screen {
+  top: 200px; /* 位于控制面板下方 */
+  height: calc(100% - 200px); /* 高度为屏幕高度减去控制面板区域 */
 }
 
 .ruler {
