@@ -1,4 +1,3 @@
-import { ref } from 'vue'
 import { NavMode, appConfig, ButtonItem } from '@/types/config'
 import { toolBarIcon } from '@/types/icon'
 import emitter from '@/hooks/useMitt'
@@ -89,7 +88,7 @@ const getLayoutList = (position: string): ButtonItem[] => {
   ]
 }
 
-const deviceConnected = ref(false)
+// const deviceConnected = ref(false)
 const handleIo = (action: string) => {
   if (action === 'input') {
     emitter.emit('input-event')
@@ -103,8 +102,6 @@ const handleIo = (action: string) => {
 }
 
 export {
-    deviceConnected,
-
     getButtonList,
     upAndDown,
     getButtonText,

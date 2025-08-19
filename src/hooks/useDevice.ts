@@ -1,8 +1,8 @@
 import { ref } from "vue";
 import { ElMessage } from "element-plus";
-import { deviceConnected } from "@/composables/useToolsManager";
 
-const ipcRenderer = window.ipcRenderer;
+export const deviceConnected = ref(false);
+const deviceList: any[] = []
 
 /**
  * 设备管理组合式函数
@@ -59,7 +59,7 @@ export function useDevice() {
    * 自动检索当前存在的串口设备
    */
   const searchSerialPorts = () => {
-    ipcRenderer
+    window.ipcRenderer
       .invoke("search-serial-ports")
       .then((ports) => {
         serialPorts.value = ports;
@@ -92,7 +92,7 @@ export function useDevice() {
     );
     const port = match ? match[1] : "";
 
-    ipcRenderer
+    window.ipcRenderer
       .invoke("open-serial-port", {
         path: port,
         baudRate: Number(baudRate),
@@ -102,15 +102,24 @@ export function useDevice() {
       })
       .then(() => {
         deviceConnected.value = true;
+        
+        deviceList.push({
+          type: 'serial',
+          path: port,
+          baudRate: Number(baudRate),
+          dataBits: Number(dataBits),
+          stopBits: Number(stopBits),
+          parity: parity,
+        })
+
         ElMessage({
           message: `串口${port}打开成功`,
           type: "success",
         });
       })
       .catch((error) => {
-        console.error(`串口${port}打开失败:`, error);
         ElMessage({
-          message: `串口${port}打开失败: ${error.message}`,
+          message: `${error.message}`,
           type: "error",
         });
       });
@@ -153,7 +162,7 @@ export function useDevice() {
    * 打开文件选择对话框
    */
   const openFileDialog = () => {
-    ipcRenderer
+    window.ipcRenderer
       .invoke("open-file-dialog")
       .then((result) => {
         if (result.canceled) return;
@@ -169,6 +178,28 @@ export function useDevice() {
         });
       });
   };
+
+  const closeAllDevice = () => {
+    deviceList.forEach((item) => {
+      if (item.type === 'serial') {
+        window.ipcRenderer.invoke('close-serial-port', {
+          path: item.path,
+          baudRate: item.baudRate,
+          dataBits: item.dataBits,
+          stopBits: item.stopBits,
+          parity: item.parity,
+        }).then(() => {
+          const index = deviceList.indexOf(item)
+          if (index !== -1) {
+            deviceList.splice(index, 1)
+          }
+          if (deviceList.length === 0) {
+            deviceConnected.value = false
+          }
+        })
+      }
+    })
+  }
 
   /**
    * 提交输入表单
@@ -220,6 +251,7 @@ export function useDevice() {
     handleInputSubmit,
     inputDialog,
     openFileDialog,
+    closeAllDevice,
     searchSerialPorts,
   };
 }

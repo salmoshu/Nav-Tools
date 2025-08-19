@@ -26,10 +26,8 @@
       <span v-else class="divider">一</span> -->
 
       <!-- IO: Input/Output -->
-      <span class="device-status-icon">
-        <span v-if="deviceConnected" v-html="toolBarIcon.connected" class="divider"></span>
-        <span v-else v-html="toolBarIcon.disconnected" class="divider"></span>
-      </span>
+      <button v-if="deviceConnected" v-html="toolBarIcon.connected+`&nbsp;Disconnect`" type="button" @click="handleDeviceConnected" class="toolbar-btn"></button>
+      <button v-else v-html="toolBarIcon.disconnected+`&nbsp;No Device`" @click="" type="button" class="toolbar-btn"></button>
       <button 
         v-for="item in ioList" 
         :key="item.msg"
@@ -104,13 +102,22 @@
 import { ref, reactive, computed, onMounted, onUnmounted, watch, inject, type Ref } from 'vue'
 import { navMode, AppMode, FuncMode, ButtonItem } from '@/types/config'
 import { toolBarIcon } from '@/types/icon'
-import { deviceConnected, getButtonList, upAndDown, getButtonText, getLayoutList, getIoList, handleIo } from '@/composables/useToolsManager'
+import { getButtonList, upAndDown, getButtonText, getLayoutList, getIoList, handleIo } from '@/composables/useToolsManager'
 
 import emitter from '@/hooks/useMitt'
 
 const ipcRenderer = window.ipcRenderer
 const position = ref<'top' | 'right' | 'bottom' | 'left'>('bottom')
 const isEditing = ref(false)
+
+import { useDevice, deviceConnected } from '@/hooks/useDevice'
+
+const handleDeviceConnected = () => {
+  const { closeAllDevice } = useDevice()
+  if (deviceConnected.value) {
+    closeAllDevice()
+  }
+}
 
 const handleList: ButtonItem[] = reactive(
   getButtonList(navMode) || []

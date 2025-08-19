@@ -38,54 +38,58 @@ async function searchSerialPorts(_: IpcMainEvent) {
 let currentPort: SerialPort | null = null
 
 function openSerialPort(event: IpcMainEvent, serial: { path: string, baudRate: number, dataBits: number, stopBits: number, parity: string }) {
-    if (currentPort && currentPort.path === serial.path) {
-        console.log('当前串口与请求串口一致，无需打开')
-        return
-    }
+    // 返回一个 Promise
+    return new Promise((resolve, reject) => {
+        if (currentPort && currentPort.path === serial.path) {
+            reject('当前串口已打开');
+            return;
+        }
 
-    // 如果已有打开的串口，且不是相同串口，先关闭它
-    if (currentPort && currentPort.isOpen) {
-        const oldPort = currentPort.path
-        currentPort.close((err) => {
+        // 如果已有打开的串口，且不是相同串口，先关闭它
+        if (currentPort && currentPort.isOpen) {
+            const oldPort = currentPort.path;
+            currentPort.close((err) => {
+                if (err) {
+                    console.error('关闭旧串口失败:', err);
+                } else {
+                    console.log(`旧串口${oldPort}已关闭`);
+                }
+            });
+        }
+
+        // 创建新的串口实例
+        currentPort = new SerialPort({
+            path: serial.path,
+            baudRate: serial.baudRate,
+            dataBits: serial.dataBits as 5 | 6 | 7 | 8,
+            stopBits: serial.stopBits as 1 | 1.5 | 2,
+            parity: serial.parity as "none" | "even" | "odd"
+        }, (err) => {
+            // 初始化回调，处理立即发生的错误
             if (err) {
-                console.error('关闭旧串口失败:', err)
-            } else {
-                console.log(`旧串口${oldPort}已关闭`)
+                console.error(`串口${serial.path}初始化失败:`, err);
+                currentPort = null;
+                reject(err); // 拒绝 Promise，传递错误
             }
-        })
-    }
+        });
 
-    // 创建新的串口实例
-    currentPort = new SerialPort({
-        path: serial.path,
-        baudRate: serial.baudRate,
-        dataBits: serial.dataBits as 5 | 6 | 7 | 8,
-        stopBits: serial.stopBits as 1 | 1.5 | 2,
-        parity: serial.parity as "none" | "even" | "odd"
-    })
+        currentPort.on('open', () => {
+            console.log(`串口${serial.path}打开成功`);
+            resolve(`串口${serial.path}打开成功`); // 解析 Promise
+        });
 
-    currentPort.on('open', () => {
-        console.log(`串口${serial.path}打开成功`)
-    })
-    
-    currentPort.on('close', () => {
-        console.log(`串口${serial.path}关闭成功`)
-        if (currentPort?.path === serial.path) {
-            currentPort = null
-        }
-    })
-    
-    currentPort.on('error', (err) => {
-        console.error(`串口${serial.path}错误:`, err)
-        if (currentPort?.path === serial.path) {
-            currentPort = null
-        }
-    })
-    
-    currentPort.on('data', (data) => {
-        // console.log(`串口${serial.path}收到数据:`, data.toString())
-        serialDataToRenderer(event, data.toString())
-    })
+        currentPort.on('error', (err) => {
+            console.error(`串口${serial.path}错误:`, err);
+            if (currentPort?.path === serial.path) {
+                currentPort = null;
+            }
+            reject(err); // 拒绝 Promise，传递错误
+        });
+
+        currentPort.on('data', (data) => {
+            serialDataToRenderer(event, data.toString());
+        });
+    });
 }
 
 // 关闭串口设备（保持原有功能，但更新currentPort）
