@@ -1,26 +1,12 @@
 <template>
   <div class="deviation-container">
     <div class="control-panel" :class="{ 'control-panel-fullscreen': isFullScreen }">
-      <div class="data-cards">
-        <div class="data-card">
-          <div class="card-title">当前状态</div>
-          <div class="card-value">{{ fixStatus }}</div>
-          <div class="card-subtitle">定位状态</div>
-        </div>
-        <div class="data-card">
-          <div class="card-title">信号质量</div>
-          <div class="card-value">{{ signalQuality }}</div>
-          <div class="card-subtitle">{{ satellites || '0' }}颗卫星</div>
-        </div>
-        <div class="data-card">
-          <div class="card-title">偏差值</div>
-          <div class="card-value">{{ deviation || '0.00' }} m</div>
-          <div class="card-subtitle">当前位置偏差</div>
-        </div>
-      </div>
       <div class="controls">
         <el-switch v-model="isTracking" @change="toggleTracking" class="tracking-switch" />
         <span class="switch-label">实时追踪</span>
+        <el-button type="primary" size="small" @click="zoomIn" class="zoom-btn">放大</el-button>
+        <el-button type="primary" size="small" @click="zoomOut" class="zoom-btn">缩小</el-button>
+        <el-button type="primary" size="small" @click="resetZoom" class="zoom-btn">重置</el-button>
         <el-button type="primary" size="small" @click="clearTrack" class="clear-btn">清除轨迹</el-button>
         <el-button type="default" size="small" @click="toggleFullScreen" class="fullscreen-btn">
           <el-icon v-if="!isFullScreen"><Expand /></el-icon>
@@ -61,6 +47,12 @@ import { ref, onMounted, onUnmounted, computed, watch } from 'vue';
 import { useNmea } from '../../composables/gnss/useNmea';
 import { Expand, FullScreen } from '@element-plus/icons-vue';
 
+import { ScatterChart } from 'echarts/charts';
+import { GridComponent } from 'echarts/components';
+import { CanvasRenderer } from 'echarts/renderers';
+
+echarts.use([ScatterChart, GridComponent, CanvasRenderer]);
+
 // 初始化NMEA解析器
 const { nmeaData, currentData, latestPosition, signalQuality, fixStatus, clearData, processRawData } = useNmea();
 
@@ -71,7 +63,8 @@ const isTracking = ref(true);
 const isFullScreen = ref(false);
 const rulerText = ref('');
 const deviation = ref('');
-const satellites = computed(() => currentData.value.satellites || '0');
+
+const userHasZoomed = ref(false); // 添加用户缩放标志
 
 // 轨迹数据处理
 let trackData = [];
@@ -90,20 +83,6 @@ function initChart() {
   chartInstance.value = echarts.init(chartRef.value);
 
   const option = {
-    dataZoom: [
-      {
-        type: 'inside',
-        xAxisIndex: 0,
-        scrollSensitivity: 1,
-        zoomSensitivity: 1
-      },
-      {
-        type: 'inside',
-        yAxisIndex: 0,
-        scrollSensitivity: 1,
-        zoomSensitivity: 1
-      }
-    ],
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
     tooltip: {
       trigger: 'axis',
@@ -120,7 +99,7 @@ function initChart() {
     grid: {
       left: '3%',
       right: '4%',
-      bottom: '3%',
+      bottom: '8%',  // 从3%增加到8%，为x轴标签留出更多空间
       top: '15%',
       containLabel: true
     },
@@ -130,7 +109,9 @@ function initChart() {
       nameLocation: 'middle',
       nameGap: 30,
       axisLabel: {
-        formatter: '{value} m'
+        formatter: function(value) {
+          return value.toFixed(3) + ' m';
+        }
       },
       splitLine: {
         lineStyle: {
@@ -148,7 +129,9 @@ function initChart() {
       nameLocation: 'middle',
       nameGap: 40,
       axisLabel: {
-        formatter: '{value} m'
+        formatter: function(value) {
+          return value.toFixed(3) + ' m';
+        }
       },
       splitLine: {
         lineStyle: {
@@ -199,37 +182,11 @@ function initChart() {
 
   chartInstance.value.setOption(option);
 
-  // 添加鼠标滚轮缩放事件监听
-  const chartDom = chartRef.value;
-  chartDom.addEventListener('wheel', handleWheelZoom);
-
   // 监听窗口大小变化
   window.addEventListener('resize', () => {
     if (chartInstance.value) {
       chartInstance.value.resize();
     }
-  });
-}
-
-// 处理鼠标滚轮缩放
-function handleWheelZoom(event) {
-  if (!chartInstance.value) return;
-
-  // 获取当前鼠标位置
-  const pointInPixel = [event.offsetX, event.offsetY];
-  const pointInGrid = chartInstance.value.convertFromPixel('grid', pointInPixel);
-
-  // 根据滚轮方向确定缩放方向
-  const zoomFactor = event.deltaY < 0 ? 1.1 : 0.9;
-
-  // 触发缩放动作
-  chartInstance.value.dispatchAction({
-    type: 'dataZoom',
-    action: 'zoom',
-    zoom: zoomFactor,
-    xAxisIndex: 0,
-    yAxisIndex: 0,
-    center: pointInGrid
   });
 }
 
@@ -289,8 +246,8 @@ function handleNmeaUpdate() {
     ]
   });
 
-  // 如果启用了追踪，调整视图中心
-  if (isTracking.value) {
+  // 如果启用了追踪且用户没有手动缩放，调整视图中心
+  if (isTracking.value && !userHasZoomed.value) {
     const padding = 1;
 
     chartInstance.value.setOption({
@@ -309,6 +266,7 @@ function handleNmeaUpdate() {
 // 切换追踪状态
 function toggleTracking() {
   if (isTracking.value) {
+    userHasZoomed.value = false; // 切换到追踪模式时重置缩放标志
     const latest = trackData[trackData.length - 1];
     if (latest) {
       const x = latest[0];
@@ -363,6 +321,69 @@ function toggleFullScreen() {
   }, 100);
 }
 
+// 缩放功能
+function zoomIn() {
+  if (!chartInstance.value) return;
+  userHasZoomed.value = true; // 标记用户进行了缩放
+  const option = chartInstance.value.getOption();
+  const xRange = option.xAxis[0].max - option.xAxis[0].min;
+  const yRange = option.yAxis[0].max - option.yAxis[0].min;
+  const xCenter = (option.xAxis[0].max + option.xAxis[0].min) / 2;
+  const yCenter = (option.yAxis[0].max + option.yAxis[0].min) / 2;
+  
+  chartInstance.value.setOption({
+    xAxis: {
+      min: xCenter - xRange * 0.4,
+      max: xCenter + xRange * 0.4
+    },
+    yAxis: {
+      min: yCenter - yRange * 0.4,
+      max: yCenter + yRange * 0.4
+    }
+  });
+}
+
+function zoomOut() {
+  if (!chartInstance.value) return;
+  userHasZoomed.value = true; // 标记用户进行了缩放
+  const option = chartInstance.value.getOption();
+  const xRange = option.xAxis[0].max - option.xAxis[0].min;
+  const yRange = option.yAxis[0].max - option.yAxis[0].min;
+  const xCenter = (option.xAxis[0].max + option.xAxis[0].min) / 2;
+  const yCenter = (option.yAxis[0].max + option.yAxis[0].min) / 2;
+  
+  chartInstance.value.setOption({
+    xAxis: {
+      min: xCenter - xRange * 0.6,
+      max: xCenter + xRange * 0.6
+    },
+    yAxis: {
+      min: yCenter - yRange * 0.6,
+      max: yCenter + yRange * 0.6
+    }
+  });
+}
+
+function resetZoom() {
+  if (!chartInstance.value) return;
+  userHasZoomed.value = false; // 重置缩放标志
+  chartInstance.value.setOption({
+    xAxis: {
+      min: null,
+      max: null
+    },
+    yAxis: {
+      min: null,
+      max: null
+    }
+  });
+}
+
+// 声明清理函数需要的变量
+let stopWatch = null;
+let handleSerialData = null;
+let handleKeyDown = null;
+
 // 组件挂载时初始化
 onMounted(() => {
   // 延迟初始化，确保DOM已加载
@@ -371,7 +392,7 @@ onMounted(() => {
   }, 100)
 
   // 监听NMEA数据更新
-  const stopWatch = watch(
+  stopWatch = watch(
     latestPosition,
     (newVal) => {
       if (newVal && chartInstance.value) {
@@ -382,7 +403,7 @@ onMounted(() => {
   )
 
   // 监听串口数据
-  const handleSerialData = (event, data) => {
+  handleSerialData = (event, data) => {
     // 使用processRawData处理原始数据
     processRawData(data);
   }
@@ -390,7 +411,7 @@ onMounted(() => {
   window.ipcRenderer.on('read', handleSerialData);
 
   // 监听键盘事件 - Esc键退出全屏
-  const handleKeyDown = (event) => {
+  handleKeyDown = (event) => {
     if (event.key === 'Escape' && isFullScreen.value) {
       toggleFullScreen();
     }
@@ -401,13 +422,9 @@ onMounted(() => {
 
 // 清理函数
 onUnmounted(() => {
-  stopWatch();
-  window.ipcRenderer.off('read', handleSerialData);
-  window.removeEventListener('keydown', handleKeyDown); // 移除键盘事件监听
-  // 移除鼠标滚轮事件监听
-  if (chartRef.value) {
-    chartRef.value.removeEventListener('wheel', handleWheelZoom);
-  }
+  if (stopWatch) stopWatch();
+  if (handleSerialData) window.ipcRenderer.off('read', handleSerialData);
+  if (handleKeyDown) window.removeEventListener('keydown', handleKeyDown);
   if (chartInstance.value) {
     chartInstance.value.dispose();
   }
@@ -432,57 +449,6 @@ onUnmounted(() => {
   border-bottom: 1px solid #eaeaea;
 }
 
-.title {
-  display: flex;
-  align-items: center;
-  margin-bottom: 15px;
-}
-
-h2 {
-  font-size: 18px;
-  font-weight: 600;
-  color: #1f2329;
-  margin: 0;
-}
-
-.data-cards {
-  display: flex;
-  gap: 15px;
-  margin-bottom: 15px;
-}
-
-.data-card {
-  flex: 1;
-  min-width: 120px;
-  padding: 12px;
-  background-color: #f0f7ff;
-  border-radius: 6px;
-  text-align: center;
-  transition: all 0.3s ease;
-}
-
-.data-card:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 4px 10px rgba(78, 110, 242, 0.15);
-}
-
-.card-title {
-  font-size: 14px;
-  color: #6b7280;
-  margin-bottom: 5px;
-}
-
-.card-value {
-  font-size: 20px;
-  font-weight: 600;
-  color: #4e6ef2;
-  margin-bottom: 3px;
-}
-
-.card-subtitle {
-  font-size: 12px;
-  color: #9ca3af;
-}
 
 .controls {
   display: flex;
@@ -509,13 +475,15 @@ h2 {
   position: relative;
   overflow: hidden;
   transition: all 0.3s ease;
-  min-height: 400px; /* 确保图表有足够的高度 */
+  min-height: 500px; /* 从400px增加到500px，确保图表有足够的高度 */
 }
 
 .chart {
   width: 100%;
   height: 100%;
-  min-height: 400px; /* 确保图表有足够的高度 */
+  min-height: 500px; /* 从400px增加到500px */
+  touch-action: none;  /* 禁用默认触摸行为 */
+  overscroll-behavior: none;  /* 禁用过度滚动 */
 }
 
 .control-panel-fullscreen {
@@ -574,15 +542,5 @@ h2 {
 
 .ruler-icon {
   margin-left: 5px;
-}
-
-@media (max-width: 768px) {
-  .data-cards {
-    flex-wrap: wrap;
-  }
-
-  .data-card {
-    flex: 0 0 calc(50% - 7.5px);
-  }
 }
 </style>
