@@ -1,4 +1,5 @@
 import { ref, computed } from 'vue'
+import { useGnssStore } from '@/stores/gnss'
 
 // NMEA数据接口定义
 interface NmeaData {
@@ -18,7 +19,7 @@ interface NmeaData {
 }
 
 // GGA语句结构
-interface GgaData {
+export interface GgaData {
   time: string
   latitude: string
   nsIndicator: string
@@ -98,6 +99,16 @@ interface GsvData {
   }>
 }
 
+// 添加卫星SNR数据接口
+interface SatelliteSnrData {
+  prn: string
+  elevation: number
+  azimuth: number
+  snr: number
+  constellation: string // GPS, GLONASS, BEIDOU, GALILEO等
+  timestamp: string
+}
+
 const currentData = ref<NmeaData>({
   timestamp: new Date().toISOString(),
   latitude: null,
@@ -122,6 +133,8 @@ const latestPosition = computed(() => {
   const validData = nmeaData.value.filter(d => d.latitude !== null && d.longitude !== null)
   return validData.length > 0 ? validData[validData.length - 1] : null
 })
+
+const satelliteSnrData = ref<SatelliteSnrData[]>([])
 
 export function useNmea() {
   // 添加数据缓冲区
@@ -197,6 +210,8 @@ export function useNmea() {
 
   // 解析GGA语句
   function parseGga(sentence: string): Partial<NmeaData> {
+    const gnssStore = useGnssStore()
+
     const parts = sentence.split(',')
     if (parts.length < 15) return {}
     
@@ -216,6 +231,8 @@ export function useNmea() {
       dgpsAge: parts[13],
       dgpsStation: parts[14].split('*')[0]
     }
+
+    gnssStore.status = data
     
     return {
       time: data.time,
@@ -336,6 +353,8 @@ export function useNmea() {
       parsedData = parseRmc(sentence)
     } else if (sentence.includes('VTG')) {
       parsedData = parseVtg(sentence)
+    } else if (sentence.includes('GSV')) {
+      parsedData = parseGsv(sentence)
     }
 
     const newData = {
@@ -378,6 +397,7 @@ export function useNmea() {
   // 清除数据
   function clearData() {
     nmeaData.value = []
+    satelliteSnrData.value = []  // 确保清除卫星数据
     currentData.value = {
       timestamp: new Date().toISOString(),
       latitude: null,
@@ -455,21 +475,111 @@ export function useNmea() {
   function clearBuffer(): void {
     buffer.value = ''
   }
-
-  return {
-    nmeaData,
-    currentData,
-    latestPosition,
-    signalQuality,
-    fixStatus,
-    parseNmea,
-    parseNmeaBatch,
-    getStatistics,
-    clearData,
-    processRawData,  // 导出新函数
-    clearBuffer     // 导出新函数
+  
+  // 解析GSV语句
+  function parseGsv(sentence: string): Partial<NmeaData> {
+    const parts = sentence.split(',')
+    if (parts.length < 8) return {}
+    
+    const data: GsvData = {
+      totalMessages: parts[1],
+      messageNumber: parts[2],
+      satellitesInView: parts[3],
+      satellites: []
+    }
+    
+    // 从语句头部提取星座类型
+    const talkerId = sentence.substring(1, 3) // 获取GP, GL, GA, GB, GQ等
+    const constellation = getConstellationFromTalkerId(talkerId)
+    
+    // 解析卫星数据（每颗卫星4个字段）
+    for (let i = 4; i < parts.length - 1; i += 4) {
+      if (i + 3 < parts.length) {
+        const prn = parts[i]
+        const elevation = parts[i + 1]
+        const azimuth = parts[i + 2]
+        const snr = parts[i + 3]?.split('*')[0] || ''
+        
+        if (prn) {
+          data.satellites.push({
+            prn,
+            elevation,
+            azimuth,
+            snr
+          })
+          
+          // 添加到SNR数据存储
+          satelliteSnrData.value.push({
+            prn,
+            elevation: parseFloat(elevation) || 0,
+            azimuth: parseFloat(azimuth) || 0,
+            snr: parseFloat(snr) || 0,
+            constellation,
+            timestamp: new Date().toISOString()
+          })
+        }
+      }
+    }
+    
+    // 限制SNR数据数量
+    if (satelliteSnrData.value.length > 1000) {
+      satelliteSnrData.value.shift()
+    }
+    
+    return {
+      satellites: parseInt(data.satellitesInView) || null,
+      raw: sentence
+    }
   }
-}
+  
+  // 根据Talker ID判断星座类型
+  function getConstellationFromTalkerId(talkerId: string): string {
+    switch (talkerId) {
+      case 'GP':
+        return 'GPS'
+      case 'GL':
+        return 'GLONASS'
+      case 'GA':
+        return 'GALILEO'
+      case 'GB':
+        return 'BEIDOU'
+      case 'GQ':
+        return 'QZSS'
+      default:
+        return 'UNKNOWN'
+    }
+  }
+  
+  // 根据PRN号判断星座类型（保留作为备用）
+  function getConstellationFromPrn(prn: string): string {
+    const prnNum = parseInt(prn)
+    if (isNaN(prnNum)) return 'UNKNOWN'
+    
+    if (prnNum >= 1 && prnNum <= 32) return 'GPS'
+    if (prnNum >= 65 && prnNum <= 96) return 'GLO'
+    if (prnNum >= 33 && prnNum <= 64) return 'SBS' // WAAS, EGNOS, etc.
+    if (prnNum >= 193 && prnNum <= 200) return 'QZS'
+    if (prnNum >= 201 && prnNum <= 235) return 'BDS'
+    if (prnNum >= 301 && prnNum <= 336) return 'GAL'
+    
+    return 'UNKNOWN'
+  }
+
+    return {
+      nmeaData,
+      currentData,
+      latestPosition,
+      satelliteSnrData, // 添加卫星SNR数据
+      signalQuality,
+      fixStatus,
+      parseNmea,
+      parseNmeaBatch,
+      getStatistics,
+      clearData,
+      processRawData,  // 导出新函数
+      clearBuffer     // 导出新函数
+    }
+  }
 
 // 示例使用
 // const { parseNmea, currentData, latestPosition } = useNmea()

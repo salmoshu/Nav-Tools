@@ -54,7 +54,7 @@ import { CanvasRenderer } from 'echarts/renderers';
 echarts.use([ScatterChart, GridComponent, CanvasRenderer]);
 
 // 初始化NMEA解析器
-const { nmeaData, currentData, latestPosition, signalQuality, fixStatus, clearData, processRawData } = useNmea();
+const { latestPosition, clearData, processRawData } = useNmea();
 
 // 组件状态
 const chartRef = ref(null);
@@ -146,14 +146,14 @@ function initChart() {
     series: [
       {
         name: '轨迹',
-        type: 'line',
+        type: 'scatter',  // 从'line'改为'scatter'
         data: [],
         coordinateSystem: 'cartesian2d',
-        symbol: 'none',
-        lineStyle: {
+        symbolSize: 6,     // 添加散点大小
+        symbol: 'circle', // 添加散点形状
+        itemStyle: {
           color: '#4e6ef2',
-          width: 2,
-          opacity: 0.8
+          opacity: 0.6      // 调整透明度使散点更清晰
         }
       },
       {

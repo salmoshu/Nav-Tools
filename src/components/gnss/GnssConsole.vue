@@ -53,7 +53,7 @@ const handleNmeaData = (rawData: string) => {
   }
 
   // 限制消息数量
-  if (nmeaMessages.value.length > 1000) {
+  if (nmeaMessages.value.length > 200) {
     nmeaMessages.value.shift();
   }
 
