@@ -26,8 +26,22 @@
       <span v-else class="divider">一</span> -->
 
       <!-- IO: Input/Output -->
-      <button v-if="deviceConnected" v-html="toolBarIcon.connected+`&nbsp;Disconnect`" type="button" @click="handleDeviceConnected" class="toolbar-btn"></button>
-      <button v-else v-html="toolBarIcon.disconnected+`&nbsp;No Device`" @click="" type="button" class="toolbar-btn"></button>
+      <button
+        v-if="deviceConnected"
+        v-html="toolBarIcon.connected+getButtonText('Disconnect', position)"
+        type="button"
+        @click="handleDeviceConnected"
+        class="toolbar-btn"
+      >
+      </button>
+      <button
+        v-else
+        v-html="toolBarIcon.disconnected+getButtonText('No Device', position)" 
+        @click="handleDeviceConnected"
+        type="button" 
+        class="toolbar-btn"
+      >
+      </button>
       <button 
         v-for="item in ioList" 
         :key="item.msg"
@@ -191,10 +205,11 @@ const getDockZoneStyle = (zone: 'top' | 'right' | 'bottom' | 'left') => {
       }
     case 'right':
       // 当statusbar在右边时，dock-zone应该避开statusbar
-      const rightOffset = statusbarPosition?.value === 'right' ? statusbarWidth : 0
+      // const rightOffset = statusbarPosition?.value === 'right' ? statusbarWidth : 0
       return {
         top: '0px',
-        left: `${windowWidth - dockWidth - rightOffset}px`,
+        // left: `${windowWidth - dockWidth - rightOffset}px`,
+        left: `${windowWidth - dockWidth}px`,
         width: `${dockWidth}px`,
         height: `${windowHeight}px`
       }
@@ -207,10 +222,11 @@ const getDockZoneStyle = (zone: 'top' | 'right' | 'bottom' | 'left') => {
       }
     case 'left':
       // 当statusbar在左边时，dock-zone应该避开statusbar
-      const leftOffset = statusbarPosition?.value === 'left' ? statusbarWidth : 0
+      // const leftOffset = statusbarPosition?.value === 'left' ? statusbarWidth : 0
       return {
         top: '0px',
-        left: `${leftOffset}px`,
+        // left: `${leftOffset}px`,
+        left: `0px`,
         width: `${dockWidth}px`,
         height: `${windowHeight}px`
       }
