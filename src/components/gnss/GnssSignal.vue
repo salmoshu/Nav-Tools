@@ -105,15 +105,6 @@ function updateChart() {
   if (!chartInstance.value) return;
 
   const satellites = getLatestSatelliteData();
-
-    // //  采用虚拟数据，用于调试
-    // const satellites = [
-    //     { constellation: 'GPS', prn: '1', snr: 40 },
-    //     { constellation: 'GLONASS', prn: '2', snr: 30 },
-    //     { constellation: 'BEIDOU', prn: '3', snr: 20 },
-    //     { constellation: 'GALILEO', prn: '4', snr: 10 },
-    //     { constellation: 'OTHER', prn: '5', snr: 5 }
-    // ];
   
   // 按星座分组
   const constellations = ['GPS', 'GLONASS', 'BEIDOU', 'GALILEO', 'OTHER'];
@@ -159,9 +150,6 @@ function updateChart() {
       }
     };
   }).filter(series => series.data.some(item => item !== null));
-
-//   console.log(xAxisData.length, series.length);
-//   console.log(xAxisData, series)
 
   const option = {
     backgroundColor: 'rgba(255, 255, 255, 0.95)',

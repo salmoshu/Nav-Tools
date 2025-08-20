@@ -1,21 +1,25 @@
 <template>
   <div class="gnss-sky-container">
     <div class="control-panel">
-      <h3>卫星天空视图</h3>
-      <div class="buttons">
-        <button @click="refreshData" :disabled="isRefreshing">刷新数据</button>
-        <button @click="clearData">清除数据</button>
-        <label>
-          <input type="checkbox" v-model="autoRefresh" @change="toggleAutoRefresh"> 自动刷新
-        </label>
-        <select v-model="constellationFilter" @change="updateChart">
-          <option value="all">所有星座</option>
-          <option value="GPS">GPS</option>
-          <option value="GLONASS">GLONASS</option>
-          <option value="GALILEO">GALILEO</option>
-          <option value="BEIDOU">BeiDou</option>
-          <option value="QZSS">QZSS</option>
-        </select>
+      <div class="controls">
+        <el-button type="primary" size="small" @click="toggleAutoRefresh" class="refresh-btn">
+          <el-icon v-if="autoRefresh"><RefreshRight /></el-icon>
+          <el-icon v-else><VideoPause /></el-icon>
+          {{ autoRefresh ? '停止刷新' : '自动刷新' }}
+        </el-button>
+        <el-button type="default" size="small" @click="refreshData" class="refresh-btn">
+          <el-icon><Refresh /></el-icon>
+          手动刷新
+        </el-button>
+        <el-select v-model="constellationFilter" @change="updateChart" size="small" class="constellation-select">
+          <el-option label="所有星座" value="all" />
+          <el-option label="GPS" value="GPS" />
+          <el-option label="GLONASS" value="GLONASS" />
+          <el-option label="GALILEO" value="GALILEO" />
+          <el-option label="BeiDou" value="BEIDOU" />
+          <el-option label="QZSS" value="QZSS" />
+        </el-select>
+        <el-checkbox v-model="showSatelliteLabels" size="small">卫星标识</el-checkbox>
       </div>
     </div>
     <div class="sky-chart" ref="chartRef"></div>
@@ -27,25 +31,35 @@ import { ref, onMounted, onUnmounted, watch } from 'vue'
 import * as echarts from 'echarts'
 import { useNmea } from '@/composables/gnss/useNmea'
 import { useDebounceFn } from '@vueuse/core'
+import { Refresh, RefreshRight, VideoPause } from '@element-plus/icons-vue'
 
 // 获取卫星数据
-const { satelliteSnrData, clearData: clearNmeaData } = useNmea()
+const { satelliteSnrData } = useNmea()
 
 // 组件状态
 const chartRef = ref(null)
 const chartInstance = ref(null)
-const isRefreshing = ref(false)
 const autoRefresh = ref(true)
-const refreshInterval = ref(null)
 const constellationFilter = ref('all')
+const showSatelliteLabels = ref(false) // 新增：控制卫星标识显示
+
+// 星座标识映射
+const constellationPrefixes = {
+  GPS: 'G',
+  GLONASS: 'R',
+  GALILEO: 'E',
+  BEIDOU: 'C',
+  QZSS: 'J',
+  UNKNOWN: 'U'
+}
 
 // 星座颜色映射
 const constellationColors = {
-  GPS: '#1E88E5',
-  GLONASS: '#43A047',
-  GALILEO: '#FB8C00',
-  BEIDOU: '#E53935',
-  QZSS: '#8E24AA',
+  GPS: '#43A047',
+  GLONASS: '#FF9500',
+  GALILEO: '#007AFF',
+  BEIDOU: '#FF8A80',
+  QZSS: '#AF52DE',
   UNKNOWN: '#757575'
 }
 
@@ -63,9 +77,9 @@ function initChart() {
         trigger: 'item',
         formatter: function(params) {
           const data = params.data
+          const prefix = constellationPrefixes[data.constellation] || 'U'
           return `
             <div style="font-size: 14px;">卫星信息</div>
-            <div>PRN: ${data.prn}</div>
             <div>星座: ${data.constellation}</div>
             <div>仰角: ${data.elevation}°</div>
             <div>方位角: ${data.azimuth}°</div>
@@ -74,8 +88,8 @@ function initChart() {
         }
       },
       legend: {
-        data: [{  // 修改为单个图例项
-          name: '卫星分布',
+        data: [{
+          name: 'sky view',
           icon: 'circle',
           textStyle: { color: '#333' }
         }],
@@ -83,8 +97,8 @@ function initChart() {
       },
       polar: {
         radius: '75%',
-        splitNumber: 6,  // 增加分割数量使网格更精细
-        center: ['50%', '50%']  // 确保图表居中
+        splitNumber: 6,
+        center: ['50%', '50%']
       },
       angleAxis: {
         type: 'value',
@@ -93,17 +107,13 @@ function initChart() {
         clockwise: true,
         min: 0,
         max: 360,
-        interval: 45,  // 每隔45度显示一个标签
+        interval: 45,
         axisLabel: {
           formatter: function(value) {
-            if (value === 0) return '北'
-            if (value === 90) return '东'
-            if (value === 180) return '南'
-            if (value === 270) return '西'
-            if (value > 0 && value < 90) return '东北'
-            if (value > 90 && value < 180) return '东南'
-            if (value > 180 && value < 270) return '西南'
-            if (value > 270 && value < 360) return '西北'
+            if (value === 0) return 'N'
+            if (value === 90) return 'E'
+            if (value === 180) return 'S'
+            if (value === 270) return 'W'
             return ''
           },
           color: '#666',
@@ -121,7 +131,7 @@ function initChart() {
         min: 0,
         max: 90,
         inverse: true,
-        interval: 18,  // 每隔18度显示一个标签
+        interval: 30,
         axisLabel: {
           formatter: '{value}°',
           color: '#666',
@@ -140,29 +150,44 @@ function initChart() {
         }
       },
       series: [{
-        name: '卫星分布',
+        name: 'sky view',
         type: 'scatter',
         coordinateSystem: 'polar',
         data: [],
-        symbolSize: function(val) {
-          // 根据SNR值调整点的大小
-          const snr = val[2]
-          return snr > 40 ? 12 : snr > 30 ? 10 : snr > 20 ? 8 : 6
+        symbolSize: 30,
+        label: {
+          show: showSatelliteLabels.value,
+          position: 'inside',
+          formatter: function(params) {
+            const prefix = constellationPrefixes[params.data.constellation] || 'U'
+            return `${prefix}${params.data.prn}`
+          },
+          color: '#333',
+          fontSize: 8,
+          // fontWeight: 'bold',
+          // textBorderColor: '#000',
+          // textBorderWidth: 1
         },
         itemStyle: {
           color: function(params) {
             return constellationColors[params.data.constellation] || '#757575'
           },
           borderColor: '#fff',
-          borderWidth: 1
+          borderWidth: 1,
+          opacity: 1.0
         },
         emphasis: {
           itemStyle: {
             shadowBlur: 10,
             shadowColor: 'rgba(0, 0, 0, 0.3)'
+          },
+          label: {
+            show: true,
+            fontSize: 12
           }
         }
-      }]
+      }],
+      animation: false
     }
 
     chartInstance.value.setOption(option)
@@ -186,16 +211,14 @@ function updateChart() {
   // 去重：保留每个PRN的最新数据
   const uniqueDataMap = new Map()
   filteredData.forEach(sat => {
-    // 使用星座+PRN作为唯一键
     const key = `${sat.constellation}-${sat.prn}`
-    // 始终保留最新的卫星数据
     uniqueDataMap.set(key, sat)
   })
   const uniqueData = Array.from(uniqueDataMap.values())
 
-  // 转换为极坐标数据格式 [方位角, 仰角, SNR, 其他信息]
+  // 转换为极坐标数据格式 [仰角, 方位角, SNR, 其他信息]
   const polarData = uniqueData.map(sat => ({
-    value: [sat.azimuth, sat.elevation, sat.snr],
+    value: [sat.elevation, sat.azimuth, sat.snr],
     prn: sat.prn,
     constellation: sat.constellation,
     elevation: sat.elevation,
@@ -206,79 +229,49 @@ function updateChart() {
   // 更新图表
   chartInstance.value.setOption({
     series: [{
-      data: polarData
+      name: 'sky view',
+      data: polarData,
+      label: {
+        show: showSatelliteLabels.value
+      }
     }]
   })
 }
 
-// 刷新数据
+// 监听卫星标识显示状态变化
+watch(showSatelliteLabels, () => {
+  updateChart();
+})
+
+// 刷新数据 - 简化版本
 function refreshData() {
-  isRefreshing.value = true
-  updateChart()
-  setTimeout(() => {
-    isRefreshing.value = false
-  }, 1000)
+  updateChart();
 }
 
-// 清除数据
-function clearData() {
-  clearNmeaData()
-  updateChart()
-}
-
-// 切换自动刷新
 function toggleAutoRefresh() {
-  if (autoRefresh.value) {
-    startAutoRefresh()
-  } else {
-    stopAutoRefresh()
-  }
-}
-
-// 开始自动刷新
-function startAutoRefresh() {
-  if (!refreshInterval.value) {
-    refreshInterval.value = setInterval(refreshData, 5000)
-  }
-}
-
-// 停止自动刷新
-function stopAutoRefresh() {
-  if (refreshInterval.value) {
-    clearInterval(refreshInterval.value)
-    refreshInterval.value = null
-  }
+  autoRefresh.value = !autoRefresh.value;
 }
 
 // 监听卫星数据变化
 watch(satelliteSnrData, () => {
   if (autoRefresh.value) {
-    debouncedUpdateChart()
+    updateChart();
   }
-})
+}, { deep: true });
 
 // 组件挂载时
 onMounted(() => {
-  initChart()
-  updateChart()
-  if (autoRefresh.value) {
-    startAutoRefresh()
-  }
-
-  // 处理窗口大小变化
-  window.addEventListener('resize', () => {
-    if (chartInstance.value) {
-      chartInstance.value.resize()
-    }
-  })
+  initChart();
+  updateChart();
+  // 移除自动刷新相关逻辑
 })
 
 // 组件卸载时
 onUnmounted(() => {
-  stopAutoRefresh()
+  // 移除停止自动刷新逻辑
   if (chartInstance.value) {
-    chartInstance.value.dispose()
-    chartInstance.value = null
+    chartInstance.value.dispose();
+    chartInstance.value = null;
   }
 })
 </script>
@@ -289,69 +282,50 @@ onUnmounted(() => {
   flex-direction: column;
   height: 100%;
   width: 100%;
-  background-color: #f5f5f5;
+  background-color: #f5f7fa;
   border-radius: 8px;
   overflow: hidden;
+  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
 }
 
 .control-panel {
-  padding: 10px 15px;
+  padding: 15px;
   background-color: #fff;
-  border-bottom: 1px solid #e0e0e0;
-  display: flex;
-  flex-direction: column;
+  border-bottom: 1px solid #eaeaea;
 }
 
-.control-panel h3 {
-  margin: 0 0 10px 0;
-  font-size: 16px;
-  color: #333;
-}
-
-.buttons {
+.controls {
   display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
   align-items: center;
+  gap: 10px;
 }
 
-button {
-  padding: 6px 12px;
-  background-color: #1E88E5;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 14px;
+.refresh-btn {
+  margin-right: 5px;
 }
 
-button:hover:not(:disabled) {
-  background-color: #1565C0;
-}
-
-button:disabled {
-  background-color: #90CAF9;
-  cursor: not-allowed;
-}
-
-select {
-  padding: 6px 12px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  background-color: white;
-  font-size: 14px;
+.constellation-select {
+  margin-left: auto;
+  width: 120px; /* 可根据需要调整宽度 */
 }
 
 .sky-chart {
   flex: 1;
   width: 100%;
   min-height: 400px;
+  padding: 15px;
+  background-color: #fff;
 }
 
 @media (max-width: 768px) {
-  .buttons {
+  .controls {
     flex-direction: column;
     align-items: flex-start;
+  }
+  .constellation-select {
+    margin-left: 0;
+    margin-top: 10px;
+    width: 100%;
   }
 }
 </style>

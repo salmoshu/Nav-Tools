@@ -47,6 +47,8 @@ const indexHtml = path.join(RENDERER_DIST, 'index.html')
 
 async function createWindow() {
   win = new BrowserWindow({
+    width: 1200,
+    height: 800,
     title: 'Nav-Tools',
     icon: path.join(process.env.VITE_PUBLIC, 'favicon.ico'),
     webPreferences: {
@@ -80,8 +82,6 @@ async function createWindow() {
   })
   // win.webContents.on('will-navigate', (event, url) => { }) #344
 }
-
-
 
 function createMenu() {
   // 基础菜单模板
