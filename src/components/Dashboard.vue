@@ -427,12 +427,15 @@ onUnmounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0 15px;
+  padding: 0px 5px;
+  height: 5px;
 }
 
 .title {
-  font-weight: 600;
+  font-family: "Helvetica Neue", Arial, sans-serif;
   font-size: 16px;
+  font-weight: 600;
+  color: #333;
 }
 
 .card-actions {

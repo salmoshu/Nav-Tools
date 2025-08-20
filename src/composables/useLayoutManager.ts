@@ -123,7 +123,7 @@ const getDynamicDefaultLayoutConfig = async (mode: FuncMode) => {
       x: (index % 2) * 6,
       y: Math.floor(index / 2) * 4,
       w: 6,
-      h: 5,
+      h: 6,
       i: `${moduleName}-${baseName}-${index + 1}`,
       titleName: `${moduleConfig.title} ${actionName.charAt(0).toUpperCase() + actionName.slice(1)}`,
       componentName: templateName,
@@ -216,7 +216,7 @@ export function useLayoutManager() {
     }
 
     const cellWidth = 12 / columnCount
-    const cellHeight = 5 // 每个单元格的高度
+    const cellHeight = 6 // 每个单元格的高度
 
     layoutDraggableList.value = layoutDraggableList.value.map((item, index) => ({
       ...item,
@@ -325,7 +325,7 @@ export function useLayoutManager() {
       x: 0,
       y: 0,
       w: 6,
-      h: 5,
+      h: 6,
       i: `${componentName}-${Date.now()}`,
       titleName: dynamicComponentMap.value[componentName]?.title,
       componentName,
