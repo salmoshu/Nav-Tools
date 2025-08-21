@@ -130,7 +130,7 @@ onUnmounted(() => {
   padding: 8px 12px;
   background-color: #f8f9fa;
   border-bottom: 1px solid #e9ecef;
-  height: 40px;
+  height: 50px;
   box-sizing: border-box;
 }
 
@@ -231,7 +231,7 @@ onUnmounted(() => {
 }
 
 .console-footer {
-  padding: 8px 12px;
+  padding: 0px 12px;
   background-color: #f8f9fa;
   border-top: 1px solid #e9ecef;
   font-size: 12px;

@@ -4,10 +4,10 @@
       <div class="controls">
         <el-switch v-model="isTracking" @change="toggleTracking" class="tracking-switch" />
         <span class="switch-label">实时追踪</span>
-        <el-button type="primary" size="small" @click="zoomIn" class="zoom-btn">放大</el-button>
-        <el-button type="primary" size="small" @click="zoomOut" class="zoom-btn">缩小</el-button>
-        <el-button type="primary" size="small" @click="resetZoom" class="zoom-btn">重置</el-button>
-        <el-button type="primary" size="small" @click="clearTrack" class="clear-btn">清除轨迹</el-button>
+        <el-button type="primary" size="small" @click="zoomIn" class="control-btn zoom-btn">放大</el-button>
+        <el-button type="primary" size="small" @click="zoomOut" class="control-btn zoom-btn">缩小</el-button>
+        <el-button type="primary" size="small" @click="resetZoom" class="control-btn zoom-btn">重置</el-button>
+        <el-button type="primary" size="small" @click="clearTrack" class="control-btn clear-btn">清除轨迹</el-button>
         <el-button type="default" size="small" @click="toggleFullScreen" class="fullscreen-btn">
           <el-icon v-if="!isFullScreen"><Expand /></el-icon>
           <el-icon v-else><FullScreen /></el-icon>
@@ -43,10 +43,9 @@
 
 <script setup>
 import * as echarts from 'echarts';
-import { ref, onMounted, onUnmounted, computed, watch } from 'vue';
+import { ref, onMounted, onUnmounted, watch, nextTick } from 'vue';
 import { useNmea } from '../../composables/gnss/useNmea';
 import { Expand, FullScreen } from '@element-plus/icons-vue';
-
 import { ScatterChart } from 'echarts/charts';
 import { GridComponent } from 'echarts/components';
 import { CanvasRenderer } from 'echarts/renderers';
@@ -70,6 +69,29 @@ const userHasZoomed = ref(false); // 添加用户缩放标志
 let trackData = [];
 const referencePoint = ref(null);
 const maxTrackPoints = 5000; // 最大轨迹点数
+
+// ResizeObserver实例
+let resizeObserver = null;
+
+// 监听父容器尺寸变化
+function setupResizeObserver() {
+  if (!chartRef.value) return;
+
+  // 创建ResizeObserver监听父容器尺寸变化
+  resizeObserver = new ResizeObserver(() => {
+    nextTick(() => {
+      if (chartInstance.value) {
+        chartInstance.value.resize();
+      }
+    });
+  });
+
+  // 监听chartRef的父容器（即.card-content）
+  const parentElement = chartRef.value.parentElement;
+  if (parentElement) {
+    resizeObserver.observe(parentElement);
+  }
+}
 
 // 初始化图表
 function initChart() {
@@ -99,7 +121,7 @@ function initChart() {
     grid: {
       left: '3%',
       right: '4%',
-      bottom: '8%',  // 从3%增加到8%，为x轴标签留出更多空间
+      bottom: '8%',
       top: '15%',
       containLabel: true
     },
@@ -146,14 +168,14 @@ function initChart() {
     series: [
       {
         name: '轨迹',
-        type: 'scatter',  // 从'line'改为'scatter'
+        type: 'scatter',
         data: [],
         coordinateSystem: 'cartesian2d',
-        symbolSize: 6,     // 添加散点大小
-        symbol: 'circle', // 添加散点形状
+        symbolSize: 6,
+        symbol: 'circle',
         itemStyle: {
           color: '#4e6ef2',
-          opacity: 0.6      // 调整透明度使散点更清晰
+          opacity: 0.6
         }
       },
       {
@@ -181,13 +203,7 @@ function initChart() {
   };
 
   chartInstance.value.setOption(option);
-
-  // 监听窗口大小变化
-  window.addEventListener('resize', () => {
-    if (chartInstance.value) {
-      chartInstance.value.resize();
-    }
-  });
+  setupResizeObserver();
 }
 
 // 处理NMEA数据更新
@@ -266,7 +282,7 @@ function handleNmeaUpdate() {
 // 切换追踪状态
 function toggleTracking() {
   if (isTracking.value) {
-    userHasZoomed.value = false; // 切换到追踪模式时重置缩放标志
+    userHasZoomed.value = false;
     const latest = trackData[trackData.length - 1];
     if (latest) {
       const x = latest[0];
@@ -312,19 +328,20 @@ function clearTrack() {
   });
 }
 
+// 全屏切换
 function toggleFullScreen() {
   isFullScreen.value = !isFullScreen.value;
-  setTimeout(() => {
+  nextTick(() => {
     if (chartInstance.value) {
       chartInstance.value.resize();
     }
-  }, 100);
+  });
 }
 
 // 缩放功能
 function zoomIn() {
   if (!chartInstance.value) return;
-  userHasZoomed.value = true; // 标记用户进行了缩放
+  userHasZoomed.value = true;
   const option = chartInstance.value.getOption();
   const xRange = option.xAxis[0].max - option.xAxis[0].min;
   const yRange = option.yAxis[0].max - option.yAxis[0].min;
@@ -345,7 +362,7 @@ function zoomIn() {
 
 function zoomOut() {
   if (!chartInstance.value) return;
-  userHasZoomed.value = true; // 标记用户进行了缩放
+  userHasZoomed.value = true;
   const option = chartInstance.value.getOption();
   const xRange = option.xAxis[0].max - option.xAxis[0].min;
   const yRange = option.yAxis[0].max - option.yAxis[0].min;
@@ -366,7 +383,7 @@ function zoomOut() {
 
 function resetZoom() {
   if (!chartInstance.value) return;
-  userHasZoomed.value = false; // 重置缩放标志
+  userHasZoomed.value = false;
   chartInstance.value.setOption({
     xAxis: {
       min: null,
@@ -389,7 +406,7 @@ onMounted(() => {
   // 延迟初始化，确保DOM已加载
   setTimeout(() => {
     initChart();
-  }, 100)
+  }, 100);
 
   // 监听NMEA数据更新
   stopWatch = watch(
@@ -400,15 +417,16 @@ onMounted(() => {
       }
     },
     { immediate: true }
-  )
+  );
 
   // 监听串口数据
   handleSerialData = (event, data) => {
-    // 使用processRawData处理原始数据
     processRawData(data);
-  }
+  };
 
-  window.ipcRenderer.on('read', handleSerialData);
+  if (window.ipcRenderer) {
+    window.ipcRenderer.on('read', handleSerialData);
+  }
 
   // 监听键盘事件 - Esc键退出全屏
   handleKeyDown = (event) => {
@@ -423,8 +441,16 @@ onMounted(() => {
 // 清理函数
 onUnmounted(() => {
   if (stopWatch) stopWatch();
-  if (handleSerialData) window.ipcRenderer.off('read', handleSerialData);
+  if (handleSerialData && window.ipcRenderer) {
+    window.ipcRenderer.off('read', handleSerialData);
+  }
   if (handleKeyDown) window.removeEventListener('keydown', handleKeyDown);
+  
+  // 清理ResizeObserver
+  if (resizeObserver) {
+    resizeObserver.disconnect();
+  }
+  
   if (chartInstance.value) {
     chartInstance.value.dispose();
   }
@@ -444,16 +470,20 @@ onUnmounted(() => {
 }
 
 .control-panel {
-  padding: 15px;
-  background-color: #fff;
-  border-bottom: 1px solid #eaeaea;
+  padding: 0px 12px;
+  height: 50px;
+  background-color: #f8f9fa;
+  border-bottom: 1px solid #e9ecef;
+  flex-shrink: 0;
+  display: flex; /* 添加flex布局 */
+  align-items: center; /* 垂直居中 */
 }
-
 
 .controls {
   display: flex;
-  align-items: center;
+  align-items: center; /* 垂直居中 */
   justify-content: space-between;
+  width: 100%; /* 确保占满整个控制面板宽度 */
 }
 
 .tracking-switch {
@@ -461,31 +491,51 @@ onUnmounted(() => {
 }
 
 .switch-label {
-  font-size: 14px;
+  font-size: 12px;
   color: #6b7280;
   margin-right: 15px;
+  line-height: 1; /* 确保标签文本垂直居中 */
 }
 
 .clear-btn {
   margin-right: 8px;
 }
 
+.control-btn {
+  padding: 6px 12px;
+  background-color: #f8f9fa;
+  color: #495057;
+  border: 1px solid #dee2e6;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: all 0.2s ease;
+  line-height: 1; /* 确保按钮文本垂直居中 */
+  display: flex; /* 确保按钮内容垂直居中 */
+  align-items: center;
+}
+
+/* 移除按钮的默认边距，确保对齐 */
+.el-button {
+  margin: 0;
+}
+
 .chart-container {
   flex: 1;
   position: relative;
   overflow: hidden;
-  transition: all 0.3s ease;
-  min-height: 500px; /* 从400px增加到500px，确保图表有足够的高度 */
+  min-height: 0; /* 允许flex子项收缩到小于内容大小 */
 }
 
 .chart {
   width: 100%;
   height: 100%;
-  min-height: 500px; /* 从400px增加到500px */
-  touch-action: none;  /* 禁用默认触摸行为 */
-  overscroll-behavior: none;  /* 禁用过度滚动 */
+  min-height: 0; /* 移除固定最小高度，允许完全自适应 */
+  touch-action: none;
+  overscroll-behavior: none;
 }
 
+/* 全屏模式样式保持不变 */
 .control-panel-fullscreen {
   position: fixed;
   top: 10px;
@@ -495,7 +545,7 @@ onUnmounted(() => {
   background-color: rgba(255, 255, 255, 0.9);
   border-radius: 8px;
   box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
-  max-height: 180px; /* 限制控制面板高度 */
+  max-height: 180px;
 }
 
 .fullscreen-tip {
@@ -521,10 +571,9 @@ onUnmounted(() => {
   background-color: #fff;
 }
 
-/* 修改全屏模式下的图表容器样式 */
 .chart-container.full-screen {
-  top: 200px; /* 位于控制面板下方 */
-  height: calc(100% - 200px); /* 高度为屏幕高度减去控制面板区域 */
+  top: 200px;
+  height: calc(100% - 200px);
 }
 
 .ruler {
