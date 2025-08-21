@@ -128,8 +128,8 @@ const getDynamicDefaultLayoutConfig = async (mode: FuncMode) => {
       i: `${moduleName}-${baseName}-${index + 1}`,
       titleName: `${moduleConfig.title} ${actionName.charAt(0).toUpperCase() + actionName.slice(1)}`,
       componentName: templateName,
-      minW: 3,
-      minH: 3,
+      minW: 4,
+      minH: 5,
       maxW: 8,
       maxH: 10,
     }
@@ -370,8 +370,8 @@ export function useLayoutManager() {
       titleName: dynamicComponentMap.value[componentName]?.title,
       componentName,
       component: markRaw(dynamicComponentMap.value[componentName]?.component || null),
-      minW: 3,
-      minH: 3,
+      minW: 4,
+      minH: 5,
       maxW: 8,
       maxH: 10,
     }

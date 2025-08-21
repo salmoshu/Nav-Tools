@@ -70,9 +70,9 @@ const constellationPrefixes = {
 
 // 星座颜色映射
 const constellationColors = {
-  GPS: '#43A047',
-  GLONASS: '#FF9500',
-  GALILEO: '#007AFF',
+  GPS: '#BADC7E',
+  GLONASS: '#9DA007',
+  GALILEO: '#82C3E5',
   BEIDOU: '#FF8A80',
   QZSS: '#AF52DE',
   UNKNOWN: '#757575'
@@ -316,81 +316,145 @@ onUnmounted(() => {
 <style scoped>
 .gnss-sky-container {
   display: flex;
-  flex-direction: row; /* 改为水平布局 */
+  flex-direction: row;
   height: 100%;
   width: 100%;
-  background-color: #f5f7fa;
-  border-radius: 8px;
   overflow: hidden;
-  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
 }
 
 .control-panel {
-  width: 25%; /* 固定宽度 */
-  padding: 15px;
-  background-color: #fff;
-  border-right: 1px solid #eaeaea; /* 右侧边框 */
+  width: 25%;
+  padding: 20px;
+  border-right: 2px solid #e6e9f0;
   display: flex;
   flex-direction: column;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.sky-chart {
+  flex: 1;
+  width: 100%;
+  min-height: 0px;
+  padding: 15px;
+  background-color: #fff;
 }
 
 .controls {
   display: flex;
-  flex-direction: column; /* 改为垂直布局 */
-  gap: 20px; /* 垂直间距 */
-  width: 100%;
-}
-
-.constellation-select {
-  width: 100%; /* 宽度100% */
-  margin-left: 0; /* 移除左侧margin */
-  padding-top: 20px;
-}
-
-.sky-chart {
-  flex: 1; /* 占满剩余空间 */
-  width: 100%;
-  min-height: 400px;
-  padding: 15px;
-  background-color: #fff;
-}
-
-.satellite-size-control {
-  display: flex;
   flex-direction: column;
+  gap: 20px;
   width: 100%;
-  margin-left: 0; /* 移除左侧margin */
-  padding-top: 20px;
 }
 
-.satellite-size-control span {
-  margin-bottom: 5px;
-  font-size: 14px;
-  color: #666;
-}
-
+.satellite-size-control,
 .elevation-limit-control {
   display: flex;
   flex-direction: column;
   width: 100%;
-  margin-left: 0; /* 移除左侧margin */
-  padding-top: 20px;
+  padding: 15px 0;
 }
 
+.satellite-size-control span,
 .elevation-limit-control span {
-  margin-bottom: 5px;
+  margin-bottom: 10px;
   font-size: 14px;
-  color: #666;
+  font-weight: 500;
+  color: #333;
+}
+
+/* 滑块样式 */
+:deep(.el-slider) {
+  --el-slider-height: 5px; /* 轨道高度 */
+  --el-slider-button-size: 22px; /* 滑块按钮大小，适合 SVG 图标 */
+}
+
+:deep(.el-slider__runway) {
+  background-color: #e4e7ed;
+  border-radius: 4px;
+}
+
+:deep(.el-slider__bar) {
+  background: #6E6E6E;
+  border-radius: 4px;
+}
+
+:deep(.el-slider__button) {
+  width: var(--el-slider-button-size);
+  height: var(--el-slider-button-size);
+  background-image: url("data:image/svg+xml;charset=utf-8;base64,PHN2ZyBjbGFzcz0iaWNvbiIgdmlld0JveD0iMCAwIDEwMjQgMTAyNCIgdmVyc2lvbj0iMS4xIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHN0eWxlPSJoZWlnaHQ6IDE2cHg7IHdpZHRoOiAxNnB4OyI+PHBhdGggZD0iTTUxMiA2NGE0NDggNDQ4IDAgMCAxIDEzMC4yNCAxOS4yMzJjLTM3LjQwOCAxNDIuNzItMTUuMDQgMjM0LjQgNzUuODQgMjY0LjcwNGwxNy4yOCA1Ljg4OCAxNi40OCA1Ljg4OGMxMDUuNTM2IDM4Ljk3NiAxMjkuMzc2IDcxLjc0NCAxMDQuNjQgMTQ1Ljk4NC0xMS4yIDMzLjYtMzQuOTQ0IDQ5LjgyNC0xMDEuNjk2IDczLjE1MmwtMzUuODQgMTIuMjI0LTE3LjQ0IDYuMzA0Yy03Mi40NDggMjcuMTA0LTEwNC40MTYgNTIuMTI4LTEyMi41NiAxMDYuNTYtMjYuMTQ0IDc4LjM2OCA4LjY0IDE1My4zNzYgOTguMTc2IDIyNC42MDhBNDQ1Ljc5MiA0NDUuNzkyIDAgMCAxIDUxMiA5NjBjLTMyLjg2NCAwLTY0Ljg5Ni0zLjUyLTk1Ljc0NC0xMC4yNCA1Ni4wOTYtNDMuMDcyIDY2LjA0OC0xMDguOCAyNC44LTE5MS4yOTYtMjYuODgtNTMuNjk2LTY5LjI0OC04My4xMzYtMTI5LjkyLTEwMS4zNDRhNDgwLjk2IDQ4MC45NiAwIDAgMC0xOS43NDQtNS40NGwtMzMuNDA4LTcuOTM2Yy0zNC4yNC04LjEyOC00OC40OC0xMy45NTItNTQuNTI4LTIxLjYzMi02LjQtOC4xNi02LjM2OC0yNS45ODQgNi41OTItNjAuMzJsMi41Ni02LjY1NmM1My44MjQtMTM0LjU2IDE1LjEwNC0yMTkuMDcyLTEwNi40NjQtMjMzLjA4OEMxNzcuNjMyIDE2OS42IDMzMi40OCA2NCA1MTIgNjR6TTgyLjQ2NCAzODQuMjU2Yzg5LjYgMy42NDggMTEwLjYyNCA0My4wNCA3My41MDQgMTQwLjA2NGwtMi43ODQgNy4wNGMtMjMuMDQgNTcuNjk2LTI0LjEyOCA5OS42NDgtMC4wNjQgMTMwLjI3MiAxNy40MDggMjIuMjA4IDM4Ljg0OCAzMS43NzYgODIuNTYgNDIuNTZsMzMuMjggNy44NzJjOS4wMjQgMi4yMDggMTYuNjQgNC4yMjQgMjMuNzc2IDYuMzY4IDQ1LjI0OCAxMy41NjggNzMuMjQ4IDMzLjAyNCA5MS4wNzIgNjguNjcyIDM1LjIgNzAuMzY4IDIxLjQ0IDExMS4zNi01MS44NCAxMzUuMjMyQzE3NC4xNzYgODUzLjAyNCA2NCA2OTUuMzYgNjQgNTEyYzAtNDQuMzg0IDYuNDY0LTg3LjI2NCAxOC40NjQtMTI3Ljc0NHogbTYxOS44MDgtMjc3Ljk1MkM4NTQuNTYgMTc3LjgyNCA5NjAgMzMyLjYwOCA5NjAgNTEyYzAgMTYzLjUyLTg3LjYxNiAzMDYuNjI0LTIxOC40OTYgMzg0LjgzMi04OC4zMi02MS44MjQtMTE5LjY4LTExOS4xNjgtMTAxLjg1Ni0xNzIuNjQgMTEuMTY4LTMzLjUzNiAzNC44OC00OS43NiAxMDEuMzQ0LTczLjAyNGwxNy4xODQtNS44NTZjOTguNzItMzIuODk2IDEzOC4wNDgtNTYuNTEyIDE1OS4wNC0xMTkuMzYgNDIuMTc2LTEyNi41OTItMTUuNTUyLTE4NC4zMi0xNzguODgtMjM4LjcyLTQ3LjItMTUuNzQ0LTYyLjQ5Ni02OS42MzItMzguNzUyLTE3MC4wOGwyLjY4OC0xMC44OHogbS0yMzEuMTM2IDMyMy41MmMwIDM0LjY1NiA0MS4wODggODIuMTc2IDEyMy4yMzIgODIuMTc2IDgyLjE3NiAwIDgyLjE3Ni04Mi4xNDQgMC0xMjMuMjMyLTgyLjE0NC00MS4wODgtMTIzLjIgNi40MzItMTIzLjIgNDEuMDg4eiIgZmlsbD0iIzVDNUM1QyI+PC9wYXRoPjwvc3ZnPg==");
+  background-size: contain;
+  background-position: center;
+  background-repeat: no-repeat;
+  border: none; /* 移除默认边框 */
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); /* 微阴影 */
+  transition: all 0.2s ease;
+}
+
+:deep(.el-slider__button:hover) {
+  transform: scale(1.15); /* 悬停放大 */
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+:deep(.el-slider__button:active) {
+  transform: scale(0.95); /* 点击微缩 */
+}
+
+.constellation-select {
+  width: 100%;
+  padding: 15px 0;
+}
+
+:deep(.el-select) {
+  --el-select-border-color: #dcdfe6;
+  --el-select-font-size: 14px;
+}
+
+:deep(.el-select .el-input__wrapper) {
+  background-color: #fff;
+  border: 1px solid var(--el-select-border-color);
+  border-radius: 6px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  transition: all 0.2s ease;
+}
+
+:deep(.el-select .el-input__wrapper:hover) {
+  border-color: #409EFF;
+  box-shadow: 0 2px 6px rgba(64, 158, 255, 0.2);
+}
+
+:deep(.el-select .el-input__inner) {
+  font-size: var(--el-select-font-size);
+  color: #333;
+}
+
+:deep(.el-select .el-input__suffix) {
+  color: #409EFF;
+}
+
+:deep(.el-select-dropdown__item) {
+  font-size: 14px;
+  color: #333;
+  padding: 8px 20px;
+}
+
+:deep(.el-select-dropdown__item:hover) {
+  background-color: rgba(64, 158, 255, 0.1);
+  color: #409EFF;
+}
+
+:deep(.el-select-dropdown__item.selected) {
+  background-color: rgba(64, 158, 255, 0.2);
+  font-weight: 500;
 }
 
 @media (max-width: 768px) {
   .gnss-sky-container {
-    flex-direction: column; /* 小屏幕恢复垂直布局 */
+    flex-direction: column;
   }
   .control-panel {
     width: 100%;
     border-right: none;
-    border-bottom: 1px solid #eaeaea;
+    border-bottom: 1px solid #e6e9f0;
   }
   .controls {
     flex-direction: column;
@@ -398,7 +462,7 @@ onUnmounted(() => {
   }
   .constellation-select {
     width: 100%;
-    margin-top: 0;
+    padding: 15px 0;
   }
 }
 </style>
