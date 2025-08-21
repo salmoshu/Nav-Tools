@@ -127,7 +127,6 @@
                   <div class="card-header">
                     <span class="title">{{ item.titleName }}</span>
                     <div class="card-actions">
-                      <!-- 取消了分离到独立窗口的功能，等待后续完善 -->
                       <el-button 
                         type="text" 
                         v-if="item.componentName.indexOf('Config') !== -1"
@@ -148,7 +147,9 @@
                     </div>
                   </div>
                 </template>
-                <component :is="item.component" />
+                <div class="card-content">
+                  <component :is="item.component" />
+                </div>
               </el-card>
             </div>
           </grid-item>
@@ -415,17 +416,26 @@ onUnmounted(() => {
 
 .box-card {
   height: 100%;
-  border-radius: 8px;
+  border: 3px solid rgb(210, 210, 210);
   box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
   overflow: auto;
 }
 
+/* 提高优先级，确保覆盖 Element Plus 默认样式 */
+:deep(.el-card__header) {
+  padding: 0 !important; /* 移除默认内边距 */
+  box-sizing: border-box;
+}
+
 .card-header {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  padding: 0px 5px;
-  height: 5px;
+  justify-content: space-between;
+  border-bottom: 2px solid rgb(210, 210, 210);
+  height: 40px; /* 固定高度，与设计保持一致 */
+  margin: 0;
+  padding: 0 20px; /* 水平内边距，垂直内边距为 0 */
+  box-sizing: border-box;
 }
 
 .title {
@@ -475,5 +485,25 @@ onUnmounted(() => {
 
 .dialog-footer {
   text-align: right;
+}
+
+/* 调整 resizer 位置 */
+:deep(.vgl-item__resizer) {
+  position: absolute;
+  right: -2px; /* 移到 el-card 边框外部 */
+  bottom: -8px; /* 移到 el-card 边框外部 */
+  width: 15px; /* 增大锚点尺寸，便于点击 */
+  height: 15px;
+  border-radius: 50%; /* 圆形锚点 */
+  cursor: se-resize;
+  z-index: 20; /* 确保锚点在卡片上层 */
+  box-sizing: border-box;
+}
+
+/* 确保 grid-item 无内边距或边框干扰 */
+:deep(.vue-grid-item) {
+  padding: 0;
+  margin: 0;
+  border: none;
 }
 </style>
