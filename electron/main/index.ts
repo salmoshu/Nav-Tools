@@ -1,5 +1,5 @@
 import { app, BrowserWindow, shell, ipcMain, Menu } from 'electron'
-import { createRequire } from 'node:module'
+// import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import os from 'node:os'

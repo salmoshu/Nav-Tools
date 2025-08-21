@@ -129,6 +129,11 @@ pnpm run dev
    - 在 `src\composables\useStatusManager.ts` 中应用 Pinia 定义好的状态
    - 在 `src\components\StatusBar.vue` 中应用状态
 
+## Externel Tools
+
+1. Echarts
+2. Element-Plus
+
 ## Debug
 
 ![electron-vite-react-debug.gif](https://github.com/electron-vite/electron-vite-react/blob/main/electron-vite-react-debug.gif?raw=true)

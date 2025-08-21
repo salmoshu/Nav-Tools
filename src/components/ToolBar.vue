@@ -70,16 +70,8 @@
       <span v-else class="divider">一</span>
 
       <!-- Layout: Edit/Save/Reset -->
-      <button 
-        v-if="!isEditing"
-        class="toolbar-btn"
-        @click="handleLayout('edit')"
-        :title="layoutList[0].title"
-        v-html="layoutList[0].icon+getButtonText(layoutList[0].title, position)"
-      >
-      </button>
       <button
-        v-else
+        v-if="showSaveButton"
         class="toolbar-btn"
         @click="handleLayout('save')"
         :title="layoutList[1].title"
@@ -122,7 +114,7 @@ import emitter from '@/hooks/useMitt'
 
 const ipcRenderer = window.ipcRenderer
 const position = ref<'top' | 'right' | 'bottom' | 'left'>('bottom')
-const isEditing = ref(false)
+const showSaveButton = ref(false)
 
 import { useDevice, deviceConnected } from '@/hooks/useDevice'
 
@@ -141,15 +133,18 @@ const handleList: ButtonItem[] = reactive(
 const layoutList = computed(() => getLayoutList(position.value))
 const ioList = computed(() => getIoList(position.value))
 
-watch(() => navMode.funcMode, () => {
-  const buttonList = getButtonList(navMode)
-
-  ipcRenderer.send('console-to-node', ['watch:funcMode', AppMode[navMode.appMode], FuncMode[navMode.funcMode]])
-
-  if (buttonList) {
-    handleList.splice(0, handleList.length, ...buttonList)
-  } else {
-    handleList.splice(0, handleList.length)
+watch(() => navMode.funcMode, (oldMode, newMode) => {
+  if (oldMode !== newMode) {
+    showSaveButton.value = false
+    const buttonList = getButtonList(navMode)
+  
+    ipcRenderer.send('console-to-node', ['watch:funcMode', AppMode[navMode.appMode], FuncMode[navMode.funcMode]])
+  
+    if (buttonList) {
+      handleList.splice(0, handleList.length, ...buttonList)
+    } else {
+      handleList.splice(0, handleList.length)
+    }
   }
 })
 
@@ -372,14 +367,11 @@ const handleAction = (action: string) => {
   emitter.emit(action)
 }
 
+// 修改handleLayout函数
 const handleLayout = (action: string) => {
   switch (action) {
-    case 'edit':
-      isEditing.value = true
-      emitter.emit('edit')
-      break
     case 'save':
-      isEditing.value = false
+      showSaveButton.value = false
       emitter.emit('save')
       break
     case 'auto':
@@ -428,12 +420,20 @@ onMounted(() => {
   watch([statusbarPosition, statusbarSize], () => {
     snapToEdge()
   }, { immediate: true })
+  
+  // 添加布局更改监听
+  emitter.on('layout-changed', () => {
+    showSaveButton.value = true
+  })
 })
 
 onUnmounted(() => {
   document.removeEventListener('mousemove', handleDrag)
   document.removeEventListener('mouseup', stopDrag)
   window.removeEventListener('resize', snapToEdge)
+  
+  // 移除布局更改监听
+  emitter.off('layout-changed')
 })
 </script>
 

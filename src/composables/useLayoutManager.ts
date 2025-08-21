@@ -1,6 +1,7 @@
-import { ref, markRaw, defineAsyncComponent } from 'vue'
-import { AppMode, FuncMode, appConfig } from '@/types/config'
+import { ref, watch, computed, markRaw, defineAsyncComponent } from 'vue'
+import { FuncMode, appConfig } from '@/types/config'
 import { ElMessage } from 'element-plus'
+import emitter from '@/hooks/useMitt'
 
 export interface LayoutItem {
   titleName: string
@@ -155,12 +156,35 @@ export function useLayoutManager() {
 
   const layoutDraggableList = ref<LayoutItem[]>([])
   const currentFuncMode = ref(firstApp.currMode)
-  const isEditDraggable = ref(false)
-  const draggableLayout = ref(false)
-  const resizableLayout = ref(false)
 
   // 动态组件映射
   const dynamicComponentMap = ref<Record<string, any>>({})
+
+  // 添加原始布局备份，用于检测更改
+  const originalLayout = ref<LayoutItem[]>([])
+  
+  // 检测布局是否有更改
+  const hasLayoutChanged = computed(() => {
+    if (layoutDraggableList.value.length !== originalLayout.value.length) {
+      return true
+    }
+    
+    return layoutDraggableList.value.some((item, index) => {
+      const original = originalLayout.value[index]
+      return !original || 
+        item.x !== original.x || 
+        item.y !== original.y || 
+        item.w !== original.w || 
+        item.h !== original.h
+    })
+  })
+  
+  // 监听布局更改
+  watch(hasLayoutChanged, (changed) => {
+    if (changed) {
+      emitter.emit('layout-changed')
+    }
+  })
 
   // 更新动态组件映射
   const updateDynamicComponentMap = (mode: FuncMode) => {
@@ -173,6 +197,23 @@ export function useLayoutManager() {
     )
   }
 
+  const backupCurrentLayout = () => {
+    originalLayout.value = layoutDraggableList.value.map(item => ({
+      x: item.x,
+      y: item.y,
+      w: item.w,
+      h: item.h,
+      i: item.i,
+      titleName: item.titleName,
+      component: item.component,
+      componentName: item.componentName,
+      minW: item.minW,
+      minH: item.minH,
+      maxW: item.maxW,
+      maxH: item.maxH,
+    }))
+  }
+
   // 从配置加载布局
   const loadLayoutFromConfig = async (config: any[]) => {
     layoutDraggableList.value = config.map((item: any) => {
@@ -182,6 +223,8 @@ export function useLayoutManager() {
         component: markRaw(componentConfig?.component || null),
       }
     })
+    // 加载完成后备份布局
+    backupCurrentLayout()
   }
 
   // 保存当前布局
@@ -225,6 +268,8 @@ export function useLayoutManager() {
       w: cellWidth,
       h: cellHeight,
     }))
+    // 更新备份
+    backupCurrentLayout()
   }
 
   // 创建默认布局
@@ -236,6 +281,8 @@ export function useLayoutManager() {
         ...item,
         component: markRaw(dynamicComponentMap.value[item.componentName]?.component || null),
       }))
+      // 更新备份
+      backupCurrentLayout()
     } catch (error) {
       console.error('Failed to create default layout:', error)
     }
@@ -258,45 +305,38 @@ export function useLayoutManager() {
     } else {
       await createDefaultLayout()
     }
+    // 初始化时备份布局
+    backupCurrentLayout()
   }
 
   // 自适应布局
   const autoLayout = async () => {
     localStorage.removeItem(`dashboard-layout-${currentFuncMode.value}`)
     await createBestLayout()
-    isEditDraggable.value = false
-    draggableLayout.value = false
-    resizableLayout.value = false
+    backupCurrentLayout()
   }
 
   // 重置布局
   const resetLayout = async () => {
     localStorage.removeItem(`dashboard-layout-${currentFuncMode.value}`)
     await createDefaultLayout()
-    isEditDraggable.value = false
-    draggableLayout.value = false
-    resizableLayout.value = false
+    backupCurrentLayout()
   }
 
   // 保存布局
   const saveLayout = () => {
-    isEditDraggable.value = false
-    draggableLayout.value = false
-    resizableLayout.value = false
     saveCurrentLayout()
-    
     ElMessage({
       message: '布局已保存',
       type: 'success',
       duration: 1000
     })
+    backupCurrentLayout()
   }
 
-  // 编辑布局
+  // 编辑布局 - 保持为空，因为一直处于编辑状态
   const editLayout = () => {
-    isEditDraggable.value = true
-    draggableLayout.value = true
-    resizableLayout.value = true
+    // 无需操作，因为已经设置为始终可编辑
   }
 
   // 添加组件
@@ -337,6 +377,9 @@ export function useLayoutManager() {
     }
 
     layoutDraggableList.value.unshift(newItem)
+    // 添加组件后更新备份
+    backupCurrentLayout()
+    
     ElMessage({
       message: `已添加 ${newItem.titleName}`,
       type: 'success',
@@ -348,6 +391,7 @@ export function useLayoutManager() {
   const removeItem = (i: string) => {
     const index = layoutDraggableList.value.findIndex((item: LayoutItem) => item.i === i)
     if (index !== -1) {
+      backupCurrentLayout()
       layoutDraggableList.value.splice(index, 1)
     }
   }
@@ -360,6 +404,7 @@ export function useLayoutManager() {
 
     // 保存当前布局
     saveCurrentLayout()
+    emitter.emit('save')
     
     // 切换模式
     currentFuncMode.value = mode
@@ -379,10 +424,8 @@ export function useLayoutManager() {
   return {
     // 状态
     layoutDraggableList,
-    isEditDraggable,
-    draggableLayout,
-    resizableLayout,
     isCardVisible,
+    hasLayoutChanged,  // 导出布局更改状态
     
     // 方法
     initLayout,

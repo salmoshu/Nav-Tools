@@ -98,8 +98,8 @@
           v-model:layout="layoutDraggableList"
           :col-num="12"
           :row-height="60"
-          :is-draggable="draggableLayout"
-          :is-resizable="resizableLayout"
+          :is-draggable="true"
+          :is-resizable="true"
           :vertical-compact="true"
           :use-css-transforms="false" 
           :margin="[10, 10]"
@@ -137,7 +137,6 @@
                         <el-icon><Share /></el-icon>
                       </el-button>
                       <el-button 
-                        v-if="resizableLayout"
                         type="text" 
                         @click="removeItem(item.i)"
                         class="remove-btn"
@@ -172,9 +171,6 @@ import { appConfig, navMode } from '@/types/config'
 
 const {
   layoutDraggableList,
-  isEditDraggable,
-  draggableLayout,
-  resizableLayout,
   initLayout,
   saveLayout,
   autoLayout,
