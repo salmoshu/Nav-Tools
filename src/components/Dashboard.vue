@@ -101,12 +101,13 @@
           :is-draggable="true"
           :is-resizable="true"
           :vertical-compact="true"
-          :use-css-transforms="false" 
+          :use-css-transforms="false"
           :margin="[10, 10]"
           class="grid-layout"
         >
           <grid-item
             v-for="item in layoutDraggableList"
+            :drag-allow-from="'.card-header'"
             :key="item.i"
             :x="item.x"
             :y="item.y"
