@@ -2,6 +2,14 @@
   <div class="gnss-sky-container">
     <div class="control-panel">
       <div class="controls">
+        <el-select v-model="constellationFilter" @change="updateChart" size="medium" class="constellation-select">
+          <el-option label="所有星座" value="all" />
+          <el-option label="GPS" value="GPS" />
+          <el-option label="GLONASS" value="GLONASS" />
+          <el-option label="GALILEO" value="GALILEO" />
+          <el-option label="BeiDou" value="BEIDOU" />
+          <el-option label="QZSS" value="QZSS" />
+        </el-select>
         <div class="satellite-size-control">
           <span>卫星大小: {{ satelliteSize }}px</span>
           <el-slider
@@ -24,14 +32,6 @@
             size="small"
           />
         </div>
-        <el-select v-model="constellationFilter" @change="updateChart" size="medium" class="constellation-select">
-          <el-option label="所有星座" value="all" />
-          <el-option label="GPS" value="GPS" />
-          <el-option label="GLONASS" value="GLONASS" />
-          <el-option label="GALILEO" value="GALILEO" />
-          <el-option label="BeiDou" value="BEIDOU" />
-          <el-option label="QZSS" value="QZSS" />
-        </el-select>
       </div>
     </div>
     <div class="sky-chart" ref="chartRef"></div>
