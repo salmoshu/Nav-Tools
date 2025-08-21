@@ -110,16 +110,16 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+/* 修改后的浅色主题样式 */
 .gnss-console {
   display: flex;
   flex-direction: column;
   height: 500px;
   max-height: 100%;
-  border: 1px solid #ccc;
-  border-radius: 4px;
+  border: 1px solid #e0e0e0;
   overflow: hidden;
-  background-color: #1e1e1e;
-  color: #d4d4d4;
+  background-color: #ffffff;
+  color: #333333;
   box-sizing: border-box;
 }
 
@@ -128,8 +128,8 @@ onUnmounted(() => {
   justify-content: space-between;
   align-items: center;
   padding: 8px 12px;
-  background-color: #2d2d2d;
-  border-bottom: 1px solid #3d3d3d;
+  background-color: #f8f9fa;
+  border-bottom: 1px solid #e9ecef;
   height: 40px;
   box-sizing: border-box;
 }
@@ -140,17 +140,24 @@ onUnmounted(() => {
 }
 
 .control-btn {
-  padding: 4px 8px;
-  background-color: #3d3d3d;
-  color: #d4d4d4;
-  border: none;
+  padding: 6px 12px;
+  background-color: #f8f9fa;
+  color: #495057;
+  border: 1px solid #dee2e6;
   border-radius: 4px;
   cursor: pointer;
   font-size: 12px;
+  transition: all 0.2s ease;
 }
 
 .control-btn:hover {
-  background-color: #4d4d4d;
+  background-color: #e9ecef;
+  border-color: #adb5bd;
+}
+
+.control-btn:active {
+  background-color: #dee2e6;
+  transform: translateY(1px);
 }
 
 .console-content {
@@ -158,63 +165,77 @@ onUnmounted(() => {
   padding: 12px;
   overflow-y: auto;
   overflow-x: hidden;
-  font-family: 'Consolas', 'Monaco', monospace;
+  font-family: 'Consolas', 'Monaco', 'Menlo', monospace;
   font-size: 14px;
   line-height: 1.5;
   box-sizing: border-box;
+  background-color: #ffffff;
   /* 优化字体渲染 */
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
 }
 
-/* 简化滚动条样式 */
+/* 优化滚动条样式 */
 .console-content::-webkit-scrollbar {
-  width: 10px;
+  width: 8px;
 }
 
 .console-content::-webkit-scrollbar-track {
-  background: #2d2d2d;
+  background: #f8f9fa;
 }
 
 .console-content::-webkit-scrollbar-thumb {
-  background-color: #4d4d4d;
-  border-radius: 5px;
-  border: 2px solid #2d2d2d;
+  background-color: #dee2e6;
+  border-radius: 4px;
+  border: 2px solid #f8f9fa;
+}
+
+.console-content::-webkit-scrollbar-thumb:hover {
+  background-color: #adb5bd;
 }
 
 /* 确保消息行清晰 */
 .message-line {
-  margin-bottom: 5px;
-  padding-left: 4px;
+  margin-bottom: 4px;
+  padding: 2px 4px;
+  padding-left: 8px;
   border-left: 2px solid transparent;
-  white-space: pre-wrap; /* 修改为pre-wrap以保留换行符并允许自动换行 */
-  word-wrap: break-word; /* 确保长单词也能换行 */
-  overflow-wrap: break-word; /* 现代浏览器中的换行控制 */
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
   text-align: left;
+  border-radius: 2px;
+  transition: background-color 0.1s ease;
+}
+
+.message-line:hover {
+  background-color: #f8f9fa;
 }
 
 .timestamp {
-  color: #73c991;
+  color: #28a745;
   margin-right: 8px;
-  font-weight: bold;
+  font-weight: 600;
+  font-size: 13px;
 }
 
 .valid-message {
-  color: #e0e0e0;
-  border-left-color: #608b4e;
+  color: #212529;
+  border-left-color: #28a745;
 }
 
 .invalid-message {
-  color: #ff8a80;
-  border-left-color: #ff6b6b;
+  color: #dc3545;
+  border-left-color: #dc3545;
 }
 
 .console-footer {
   padding: 8px 12px;
-  background-color: #2d2d2d;
-  border-top: 1px solid #3d3d3d;
+  background-color: #f8f9fa;
+  border-top: 1px solid #e9ecef;
   font-size: 12px;
-  color: #999;
+  color: #6c757d;
+  font-weight: 500;
 }
 </style>

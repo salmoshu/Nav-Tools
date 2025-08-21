@@ -301,6 +301,21 @@ const contentStyle = computed(() => {
 // 事件处理函数
 const resizeEvent = (i: string, newH: number, newW: number, newHPx: number, newWPx: number) => {
   console.log('RESIZE i=' + i + ', H=' + newH + ', W=' + newW + ', H(px)=' + newHPx + ', W(px)=' + newWPx)
+  
+  // 强制触发重绘，确保内容区域正确计算高度
+  setTimeout(() => {
+    const gridItem = document.getElementById(`grid-item-${i}`)
+    if (gridItem) {
+      const cardBody = gridItem.querySelector('.el-card__body') as HTMLElement
+      if (cardBody) {
+        // 触发重排
+        cardBody.style.height = 'auto'
+        setTimeout(() => {
+          cardBody.style.height = `calc(100% - 40px)`
+        }, 0)
+      }
+    }
+  }, 0)
 }
 
 const movedEvent = (i: string, newX: number, newY: number) => {
@@ -396,7 +411,7 @@ onUnmounted(() => {
   height: 100%;
   transition: all 0.3s ease;
   position: relative;
-  overflow: auto;
+  overflow: hidden;
 }
 
 .dashboard-grid {
@@ -414,11 +429,61 @@ onUnmounted(() => {
   width: 100%;
 }
 
+/* 确保卡片内部布局正确 */
 .box-card {
   height: 100%;
+  display: flex;
+  flex-direction: column;
   border: 3px solid rgb(210, 210, 210);
   box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
-  overflow: auto;
+  overflow: hidden;
+}
+
+/* 确保 el-card 的内容区域正确计算高度 - 使用更精确的选择器 */
+.box-card :deep(.el-card__body) {
+  flex: 1;
+  min-height: 0; /* 防止flex子项溢出 */
+  padding: 0;
+  box-sizing: border-box;
+}
+
+/* 删除或替换原有的 .card-content 样式 */
+.card-content {
+  height: 100%;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* 确保 el-card 的内容区域正确计算高度 */
+:deep(.el-card__body) {
+  height: calc(100% - 40px); /* 减去header的40px高度 */
+  padding: 0;
+  box-sizing: border-box;
+}
+
+/* 确保卡片内部布局正确 */
+.box-card {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  border: 3px solid rgb(210, 210, 210);
+  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+}
+
+/* 确保 el-card 的内容区域正确计算高度 - 使用更精确的选择器 */
+.box-card :deep(.el-card__body) {
+  flex: 1;
+  min-height: 0; /* 防止flex子项溢出 */
+  padding: 0;
+  box-sizing: border-box;
+}
+
+/* 删除或替换原有的 .card-content 样式 */
+.card-content {
+  height: 100%;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 /* 提高优先级，确保覆盖 Element Plus 默认样式 */
