@@ -6,7 +6,7 @@
     @mousedown="startDrag"
   >
     <div class="statusbar-handle">
-      <span>状态视图</span>
+      <span>Status View</span>
     </div>
     <div class="statusbar-content">
       <div v-for="(statusValue, statusName) in getMonitorStatus()" :key="statusName" class="status-item">
@@ -269,13 +269,13 @@ onUnmounted(() => {
 <style scoped>
 .statusbar {
   position: fixed;
-  background: linear-gradient(180deg, #f8f9fa 0%, #f8f9fa 100%);
+  background-color: #ffffff;
   display: flex;
   flex-direction: column;
   align-items: center;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
   z-index: 999;
-  border: 1px solid #e9ecef;
+  border: 3px solid rgb(210, 210, 210);
+  border-top: 2px solid rgb(210, 210, 210);
   border-radius: 0;
   padding: 0;
   margin: 0;
@@ -306,16 +306,18 @@ onUnmounted(() => {
 }
 
 .statusbar-handle {
-  color: #000;
+  font-family: "Helvetica Neue", Arial, sans-serif;
+  font-size: 16px;
+  font-weight: 600;
+  color: #333;
   cursor: grab;
   padding: 12px 8px;
-  margin: 0 0 8px 0;
-  font-weight: bold;
-  font-size: 14px;
+  margin: 0 auto;
   text-align: center;
-  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  background-color: #f8f9fa;
   border-bottom: 2px solid #dee2e6;
   width: 100%;
+  height: 40px;
   box-sizing: border-box;
   border-radius: 0;
 }
@@ -356,7 +358,7 @@ onUnmounted(() => {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
   background: rgba(233, 236, 239, 0.8);
   transform: translateY(-2px);
-  border-radius: 6px;
+  /* border-radius: 6px; */
 }
 
 .status-label {
@@ -374,7 +376,7 @@ onUnmounted(() => {
   font-weight: 600;
   font-size: 14px;
   padding: 4px 8px;
-  border-radius: 6px;
+  /* border-radius: 6px; */
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
   box-sizing: border-box;
   text-align: right;
@@ -409,7 +411,7 @@ onUnmounted(() => {
   position: fixed;
   background: rgba(52, 152, 219, 0.2);
   border: 2px dashed #3498db;
-  border-radius: 8px;
+  /* border-radius: 8px; */
   display: flex;
   align-items: center;
   justify-content: center;

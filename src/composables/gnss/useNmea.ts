@@ -232,7 +232,20 @@ export function useNmea() {
       dgpsStation: parts[14].split('*')[0]
     }
 
-    gnssStore.status = data
+    gnssStore.status.utcTime = data.time
+    gnssStore.status.fixMode = '???'
+    gnssStore.status.TTFF = '???'
+    gnssStore.status.longitude = String(parseFloat(data.longitude) / 100)
+    gnssStore.status.latitude = String(parseFloat(data.latitude) / 100)
+    gnssStore.status.altitude = data.altitude
+    gnssStore.status.altitudeMsl = data.geoidHeight
+    gnssStore.status.velocity = '???'
+    gnssStore.status.threeDAcc = '???'
+    gnssStore.status.twoDAcc = '???'
+    gnssStore.status.PDOP = '???'
+    gnssStore.status.HDOP = data.hdop
+    gnssStore.status.satsUsed = data.satellites
+    gnssStore.status.satsVisible = '???'
     
     return {
       time: data.time,
