@@ -50,7 +50,7 @@ const { satelliteSnrData } = useNmea()
 const chartRef = ref(null)
 const chartInstance = ref(null)
 const constellationFilter = ref('all')
-const satelliteSize = ref(20)
+const satelliteSize = ref(25)
 const minSizeForLabel = 20
 // 添加仰角限制状态，默认15°
 const elevationLimit = ref(15)

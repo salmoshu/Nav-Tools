@@ -411,7 +411,7 @@ onUnmounted(() => {
   height: 100%;
   transition: all 0.3s ease;
   position: relative;
-  overflow: hidden;
+  overflow: auto;
 }
 
 .dashboard-grid {
