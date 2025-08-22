@@ -251,11 +251,11 @@ function initChart() {
   });
 
   const handleWheel = (e) => {
-    e.event.preventDefault();
-    e.event.stopPropagation();
+    e.preventDefault();
+    e.stopPropagation();
 
     const zoomRatio = 1.15;
-    const isZoomIn = e.event.deltaY < 0; // 使用 deltaY 判断滚动方向
+    const isZoomIn = e.deltaY < 0;
 
     const opt = chartInstance.value.getOption();
     const xStart = opt.dataZoom[0].startValue;
@@ -284,10 +284,22 @@ function initChart() {
       startValue: newYStart,
       endValue: newYEnd,
     });
+    return false;
   };
 
-  chartInstance.value.getZr().on('mousewheel', handleWheel);
-  chartInstance.value.getZr().on('wheel', handleWheel); // 添加 wheel 事件监听
+  // 直接在DOM元素上绑定事件监听器
+  const chartDom = chartInstance.value.getDom();
+  if (chartDom) {
+    // 'GnssDeviation: 滚轮事件监听器已直接绑定到DOM元素（捕获阶段）'
+    chartDom.addEventListener('mousewheel', handleWheel, { passive: false, capture: true });
+    chartDom.addEventListener('wheel', handleWheel, { passive: false, capture: true });
+  
+    // 在组件卸载时清理监听器
+    onUnmounted(() => {
+      chartDom.removeEventListener('mousewheel', handleWheel, { capture: true });
+      chartDom.removeEventListener('wheel', handleWheel, { capture: true });
+    });
+  }
 }
 
 function handleNmeaUpdate() {
@@ -520,16 +532,11 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
-  if (stopWatch) stopWatch();
-  if (handleSerialData && window.ipcRenderer) {
-    window.ipcRenderer.off('read', handleSerialData);
-  }
-  if (handleKeyDown) window.removeEventListener('keydown', handleKeyDown);
-  if (resizeObserver) {
-    resizeObserver.disconnect();
-  }
   if (chartInstance.value) {
     chartInstance.value.dispose();
+  }
+  if (resizeObserver) {
+    resizeObserver.disconnect();
   }
 });
 </script>
