@@ -255,22 +255,36 @@ function initChart() {
     e.stopPropagation();
 
     const zoomRatio = 1.15;
-    const isZoomIn = e.deltaY < 0;
+    const isZoomIn = e.deltaY < 0; // 滚轮滚动方向，true为放大，false为缩小
 
     const opt = chartInstance.value.getOption();
     const xStart = opt.dataZoom[0].startValue;
     const xEnd = opt.dataZoom[0].endValue;
     const yStart = opt.dataZoom[1].startValue;
     const yEnd = opt.dataZoom[1].endValue;
-
+    
+    const limit = 10000;
     const xSpan = (xEnd - xStart) * (isZoomIn ? 1 / zoomRatio : zoomRatio);
     const ySpan = (yEnd - yStart) * (isZoomIn ? 1 / zoomRatio : zoomRatio);
 
-    const limit = 10000;
-    const newXStart = Math.max(-limit, -xSpan / 2);
-    const newXEnd = Math.min(limit, xSpan / 2);
-    const newYStart = Math.max(-limit, -ySpan / 2);
-    const newYEnd = Math.min(limit, ySpan / 2);
+    let newXStart = xStart;
+    let newXEnd = xEnd;
+    let newYStart = yStart;
+    let newYEnd = yEnd;
+
+    if (isTracking.value) {
+      newXStart = Math.max(-limit, -xSpan / 2);
+      newXEnd = Math.min(limit, xSpan / 2);
+      newYStart = Math.max(-limit, -ySpan / 2);
+      newYEnd = Math.min(limit, ySpan / 2);
+    } else {
+      const xCenter = (xStart + xEnd) / 2;
+      const yCenter = (yStart + yEnd) / 2;
+      newXStart = Math.max(-limit, xCenter - xSpan / 2);
+      newXEnd = Math.min(limit, xCenter + xSpan / 2);
+      newYStart = Math.max(-limit, yCenter - ySpan / 2);
+      newYEnd = Math.min(limit, yCenter + ySpan / 2);
+    }
 
     chartInstance.value.dispatchAction({
       type: 'dataZoom',
@@ -290,7 +304,7 @@ function initChart() {
   // 直接在DOM元素上绑定事件监听器
   const chartDom = chartInstance.value.getDom();
   if (chartDom) {
-    // 'GnssDeviation: 滚轮事件监听器已直接绑定到DOM元素（捕获阶段）'
+    // GnssDeviation: 滚轮事件监听器已直接绑定到DOM元素（捕获阶段）
     chartDom.addEventListener('mousewheel', handleWheel, { passive: false, capture: true });
     chartDom.addEventListener('wheel', handleWheel, { passive: false, capture: true });
   
