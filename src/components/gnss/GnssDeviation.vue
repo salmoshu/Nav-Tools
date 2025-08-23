@@ -631,16 +631,12 @@ onUnmounted(() => {
   overscroll-behavior: none;
 }
 
-/* 全屏模式样式保持不变 */
 .control-panel-fullscreen {
   position: fixed;
-  top: 10px;
-  left: 10px;
-  right: 10px;
+  top: 0px;
+  left: 0px;
+  right: 0px;
   z-index: 1001;
-  background-color: rgba(255, 255, 255, 0.9);
-  border-radius: 8px;
-  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
   max-height: 180px;
 }
 
@@ -668,8 +664,8 @@ onUnmounted(() => {
 }
 
 .chart-container.full-screen {
-  top: 200px;
-  height: calc(100% - 200px);
+  top: 50px;
+  height: calc(100% - 50px);
 }
 
 .ruler {
