@@ -508,10 +508,16 @@ export function useNmea() {
     // 解析卫星数据（每颗卫星4个字段）
     for (let i = 4; i < parts.length - 1; i += 4) {
       if (i + 3 < parts.length) {
-        const prn = parts[i]
+        let prn:any
         const elevation = parts[i + 1]
         const azimuth = parts[i + 2]
         const snr = parts[i + 3]?.split('*')[0] || ''
+
+        if (constellation === 'GLONASS') {
+          prn = parseInt(parts[i]) - 64
+        } else {
+          prn = parseInt(parts[i])
+        }
         
         if (prn) {
           data.satellites.push({
