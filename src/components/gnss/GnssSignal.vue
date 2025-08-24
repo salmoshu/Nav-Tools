@@ -1,61 +1,126 @@
 <template>
   <div class="snr-container">
-    <div class="control-panel">
-      <div class="controls">
-        <el-button type="primary" size="small" @click="toggleAutoRefresh" class="refresh-btn">
-          <el-icon v-if="autoRefresh"><RefreshRight /></el-icon>
-          <el-icon v-else><VideoPause /></el-icon>
-          {{ autoRefresh ? '停止刷新' : '自动刷新' }}
-        </el-button>
-        <el-button type="default" size="small" @click="refreshData" class="refresh-btn">
-          <el-icon><Refresh /></el-icon>
-          手动刷新
-        </el-button>
-        <el-button type="default" size="small" @click="clearData" class="clear-btn">
-          <el-icon><Delete /></el-icon>
-          清除数据
-        </el-button>
-      </div>
-    </div>
-    
-    <div class="constellation-tabs">
-      <el-tabs v-model="activeConstellation" type="card" @tab-click="handleTabClick">
-        <el-tab-pane label="全部" name="all"></el-tab-pane>
-        <el-tab-pane label="GPS" name="GPS"></el-tab-pane>
-        <el-tab-pane label="GLONASS" name="GLONASS"></el-tab-pane>
-        <el-tab-pane label="BEIDOU" name="BEIDOU"></el-tab-pane>
-        <el-tab-pane label="GALILEO" name="GALILEO"></el-tab-pane>
-        <el-tab-pane label="其他" name="OTHER"></el-tab-pane>
-      </el-tabs>
-    </div>
-    
     <div class="snr-content">
-      <div class="snr-chart">
-        <div ref="chartRef" class="chart"></div>
+      <div class="snr-table-container">
+        <el-table
+          :data="filteredSatelliteData"
+          style="width: 100%"
+          height="100%"
+          stripe
+          border
+          :default-sort="{ prop: 'constellation', order: 'ascending' }"
+        >
+          <el-table-column
+            prop="constellation"
+            label="星座"
+            width="100"
+            sortable
+            :filters="constellationFilters"
+            :filter-method="filterConstellation"
+            filter-placement="bottom-end"
+          >
+            <template #default="{ row }">
+              <el-tag :type="getConstellationTagType(row.constellation)" size="small">
+                {{ row.constellation }}
+              </el-tag>
+            </template>
+          </el-table-column>
+          
+          <el-table-column
+            prop="prn"
+            label="PRN"
+            width="80"
+            sortable
+          />
+          
+          <el-table-column
+            prop="snr"
+            label="信号强度 (SNR)"
+            width="150"
+            sortable
+          >
+            <template #default="{ row }">
+              <div class="snr-cell">
+                <el-progress
+                  :percentage="Math.min(row.snr, 60) * (100/60)"
+                  :color="getSnrColor(row.snr)"
+                  :stroke-width="20"
+                  :show-text="false"
+                  style="width: 100px; margin-right: 10px"
+                />
+                <span :style="{ color: getSnrColor(row.snr) }" class="snr-value">
+                  {{ row.snr }} dB
+                </span>
+              </div>
+            </template>
+          </el-table-column>
+          
+          <el-table-column
+            prop="elevation"
+            label="仰角"
+            width="100"
+            sortable
+          >
+            <template #default="{ row }">
+              {{ row.elevation }}°
+            </template>
+          </el-table-column>
+          
+          <el-table-column
+            prop="azimuth"
+            label="方位角"
+            width="100"
+            sortable
+          >
+            <template #default="{ row }">
+              {{ row.azimuth }}°
+            </template>
+          </el-table-column>
+          
+          <el-table-column
+            prop="timestamp"
+            label="更新时间"
+            width="180"
+            sortable
+          >
+            <template #default="{ row }">
+              {{ formatTime(row.timestamp) }}
+            </template>
+          </el-table-column>
+          
+          <el-table-column
+            prop="status"
+            label="状态"
+            width="100"
+            fixed="right"
+          >
+            <template #default="{ row }">
+              <el-tag :type="getStatusTagType(row.snr)" size="small">
+                {{ getStatusText(row.snr) }}
+              </el-tag>
+            </template>
+          </el-table-column>
+        </el-table>
       </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import * as echarts from 'echarts';
-import { ref, onMounted, onUnmounted, computed, watch } from 'vue';
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { useNmea } from '../../composables/gnss/useNmea';
-import { Refresh, RefreshRight, VideoPause, Delete } from '@element-plus/icons-vue';
-import { BarChart, ScatterChart } from 'echarts/charts';
-import { GridComponent, LegendComponent } from 'echarts/components';
-import { CanvasRenderer } from 'echarts/renderers';
-
-echarts.use([BarChart, ScatterChart, GridComponent, LegendComponent, CanvasRenderer]);
 
 // 初始化NMEA解析器
 const { satelliteSnrData, processRawData, clearData: clearNmeaData } = useNmea();
 
-// 组件状态
-const chartRef = ref(null);
-const chartInstance = ref(null);
-const autoRefresh = ref(true);
-const activeConstellation = ref('all');
+// 星座过滤选项
+const constellationFilters = [
+  { text: 'GPS', value: 'GPS' },
+  { text: 'GLONASS', value: 'GLONASS' },
+  { text: 'BEIDOU', value: 'BEIDOU' },
+  { text: 'GALILEO', value: 'GALILEO' },
+  { text: 'OTHER', value: 'OTHER' }
+];
 
 // 获取最新的卫星数据（每个PRN只保留最新的一条）
 function getLatestSatelliteData() {
@@ -80,111 +145,21 @@ function getLatestSatelliteData() {
   });
 }
 
-// 初始化图表
-function initChart() {
-  if (!chartRef.value) return;
+// 过滤后的卫星数据（现在显示所有星座的数据）
+const filteredSatelliteData = computed(() => {
+  return getLatestSatelliteData();
+});
 
-  // 销毁已存在的图表实例
-  if (chartInstance.value) {
-    chartInstance.value.dispose();
-  }
-
-  chartInstance.value = echarts.init(chartRef.value);
-  updateChart();
-
-  // 监听窗口大小变化
-  window.addEventListener('resize', () => {
-    if (chartInstance.value) {
-      chartInstance.value.resize();
-    }
-  }, { passive: false });
-}
-
-// 更新图表
-function updateChart() {
-  if (!chartInstance.value) return;
-
-  const satellites = getLatestSatelliteData();
-  
-  // 按星座分组
-  const constellations = ['GPS', 'GLONASS', 'BEIDOU', 'GALILEO', 'OTHER'];
-  
-  // 获取所有卫星数据并按顺序排列
-  const allSatellites = satellites.sort((a, b) => {
-    // 按星座和PRN排序
-    if (a.constellation !== b.constellation) {
-      return constellations.indexOf(a.constellation) - constellations.indexOf(b.constellation);
-    }
-    return parseInt(a.prn) - parseInt(b.prn);
-  });
-  
-  // 创建x轴数据
-  const xAxisData = allSatellites.map(sat => `${sat.constellation}-${sat.prn}`);
-  
-  // 为每个星座创建series，并确保数据位置与x轴对齐
-  const series = constellations.map(constellation => {
-    const data = [];
-    
-    // 为每个x轴位置创建数据点，如果属于当前星座则显示SNR值，否则显示null
-    allSatellites.forEach((sat, index) => {
-      if (sat.constellation === constellation || 
-          (constellation === 'OTHER' && !['GPS', 'GLONASS', 'BEIDOU', 'GALILEO'].includes(sat.constellation))) {
-        data.push({
-          name: `${sat.constellation}-${sat.prn}`,
-          value: sat.snr,
-          itemStyle: {
-            color: getSnrColor(sat.snr)
-          }
-        });
-      } else {
-        data.push(null); // 不属于当前星座的位置留空
-      }
-    });
-    
-    return {
-      name: constellation,
-      type: 'bar',
-      data: data,
-      itemStyle: {
-        borderRadius: [4, 4, 0, 0]
-      }
-    };
-  }).filter(series => series.data.some(item => item !== null));
-
-  const option = {
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    legend: {
-      data: series.map(s => s.name),
-      top: 10
-    },
-    grid: {
-      left: '8%',
-      right: '4%',
-      bottom: '15%',
-      top: '15%',
-      containLabel: true
-    },
-    xAxis: {
-      type: 'category',
-      data: xAxisData,
-      axisLabel: {
-        rotate: 45,
-        interval: 0,
-        fontSize: 10
-      }
-    },
-    yAxis: {
-      type: 'value',
-      name: 'SNR (dB)',
-      nameLocation: 'middle',
-      nameGap: 30,
-      min: 0,
-      max: 60
-    },
-    series: series,
+// 获取星座标签类型
+function getConstellationTagType(constellation) {
+  const typeMap = {
+    'GPS': 'success',
+    'GLONASS': 'primary',
+    'BEIDOU': 'warning',
+    'GALILEO': 'info',
+    'OTHER': 'danger'
   };
-
-  chartInstance.value.setOption(option);
+  return typeMap[constellation] || 'info';
 }
 
 // 获取SNR颜色
@@ -195,38 +170,38 @@ function getSnrColor(snr) {
   return '#ff4d4f';
 }
 
-// 切换自动刷新
-function toggleAutoRefresh() {
-  autoRefresh.value = !autoRefresh.value;
+// 获取状态标签类型
+function getStatusTagType(snr) {
+  if (snr >= 45) return 'success';
+  if (snr >= 35) return 'primary';
+  if (snr >= 25) return 'warning';
+  return 'danger';
 }
 
-// 手动刷新数据
-function refreshData() {
-  updateChart();
+// 获取状态文本
+function getStatusText(snr) {
+  if (snr >= 45) return '优秀';
+  if (snr >= 35) return '良好';
+  if (snr >= 25) return '一般';
+  return '较差';
 }
 
-// 清除数据
-function clearData() {
-  clearNmeaData();
-  updateChart();
+// 格式化时间
+function formatTime(timestamp) {
+  const date = new Date(timestamp);
+  return date.toLocaleString('zh-CN', {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit'
+  });
 }
 
-// 处理标签页点击
-function handleTabClick() {
-  updateChart();
+// 星座过滤方法
+function filterConstellation(value, row) {
+  return row.constellation === value;
 }
-
-// 监听数据变化
-watch(satelliteSnrData, () => {
-  if (autoRefresh.value) {
-    updateChart();
-  }
-}, { deep: true });
-
-// 监听活动星座变化
-watch(activeConstellation, () => {
-  updateChart();
-});
 
 // 监听串口数据
 const handleSerialData = (event, data) => {
@@ -235,19 +210,12 @@ const handleSerialData = (event, data) => {
 
 // 组件挂载时初始化
 onMounted(() => {
-  setTimeout(() => {
-    initChart();
-  }, 100);
-
   // 监听串口数据
   window.ipcRenderer.on('read', handleSerialData);
 });
 
 // 清理函数
 onUnmounted(() => {
-  if (chartInstance.value) {
-    chartInstance.value.dispose();
-  }
   window.ipcRenderer.off('read', handleSerialData);
 });
 </script>
@@ -264,39 +232,37 @@ onUnmounted(() => {
   box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
 }
 
-.control-panel {
-  padding: 15px;
-  background-color: #fff;
-  border-bottom: 1px solid #eaeaea;
-}
-
-.controls {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.constellation-tabs {
-  background-color: #fff;
-  border-bottom: 1px solid #eaeaea;
-}
-
 .snr-content {
   flex: 1;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-}
-
-.snr-chart {
-  height: 300px;
   padding: 15px;
-  background-color: #fff;
-  border-bottom: 1px solid #eaeaea;
 }
 
-.chart {
-  width: 100%;
-  height: 100%;
+.snr-table-container {
+  flex: 1;
+  background-color: #fff;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.snr-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.snr-value {
+  font-weight: bold;
+  font-size: 14px;
+}
+
+:deep(.el-table__header-wrapper) {
+  background-color: #f8f9fa;
+}
+
+:deep(.el-table__row:hover) {
+  background-color: #f5f7fa;
 }
 </style>
