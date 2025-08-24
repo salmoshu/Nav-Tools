@@ -57,6 +57,7 @@ const elevationLimit = ref(15)
 
 // 用于存储需要在组件卸载时执行的清理函数
 const cleanupFunctions = []
+let resizeObserver = null
 
 // 星座标识映射
 const constellationPrefixes = {
@@ -76,6 +77,29 @@ const constellationColors = {
   BEIDOU: '#FF8A80',
   QZSS: '#AF52DE',
   UNKNOWN: '#757575'
+}
+
+// 设置ResizeObserver监听容器尺寸变化
+function setupResizeObserver() {
+  if (!chartRef.value) return
+  
+  // 清理之前的ResizeObserver
+  if (resizeObserver) {
+    resizeObserver.disconnect()
+  }
+  
+  resizeObserver = new ResizeObserver(() => {
+    nextTick(() => {
+      if (chartInstance.value) {
+        chartInstance.value.resize()
+      }
+    })
+  })
+  
+  const parentElement = chartRef.value.parentElement
+  if (parentElement) {
+    resizeObserver.observe(parentElement)
+  }
 }
 
 // 初始化图表
@@ -230,8 +254,11 @@ function initChart() {
 
       chartInstance.value.setOption(option)
       updateChart() // 初始化后立即更新数据
+      
+      // 设置ResizeObserver监听
+      setupResizeObserver()
 
-      // 添加窗口大小变化监听
+      // 添加窗口大小变化监听作为后备方案
       const resizeHandler = () => {
         if (chartInstance.value) {
           chartInstance.value.resize()
@@ -239,7 +266,7 @@ function initChart() {
       }
 
       window.addEventListener('resize', resizeHandler)
-
+      
       // 将清理函数添加到数组中
       cleanupFunctions.push(() => {
         window.removeEventListener('resize', resizeHandler)
@@ -316,8 +343,9 @@ watch(satelliteSnrData, () => {
 
 // 组件挂载时
 onMounted(() => {
-  // 确保图表被初始化
-  initChart()
+  setTimeout(() => {
+    initChart()
+  }, 100)
 })
 
 // 组件卸载时
@@ -325,6 +353,12 @@ onUnmounted(() => {
   // 执行所有清理函数
   cleanupFunctions.forEach(func => func())
   cleanupFunctions.length = 0 // 清空数组
+
+  // 清理ResizeObserver
+  if (resizeObserver) {
+    resizeObserver.disconnect()
+    resizeObserver = null
+  }
 
   if (chartInstance.value) {
     chartInstance.value.dispose()
