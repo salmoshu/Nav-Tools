@@ -9,7 +9,7 @@
         
         <!-- 添加轨迹点尺寸调节滑块 -->
         <div class="point-size-control">
-          <span class="size-label">点尺寸:</span>
+          <span class="size-label">轨迹尺寸:</span>
           <el-slider
             v-model="pointSize"
             :min="5"

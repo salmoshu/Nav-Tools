@@ -98,14 +98,34 @@ function initChart() {
           formatter: function(params) {
             const data = params.data
             const prefix = constellationPrefixes[data.constellation] || 'U'
+            const color = constellationColors[data.constellation] || '#757575'
             return `
-              <div style="font-size: 14px;">卫星信息</div>
-              <div>星座: ${data.constellation}</div>
-              <div>仰角: ${data.elevation}°</div>
-              <div>方位角: ${data.azimuth}°</div>
-              <div>SNR: ${data.snr} dB</div>
+              <div style="background-color: rgba(255, 255, 255, 0.95); border: 1px solid #e0e0e0; border-radius: 8px; padding: 12px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1); min-width: 100px; text-align: left;">
+                <div style="font-size: 16px; font-weight: bold; color: #333; margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px solid #f0f0f0;">
+                  <div style="display: flex; align-items: center; margin-bottom: 5px;">
+                    <div style="width: 10px; height: 10px; border-radius: 50%; background-color: ${color}; margin-right: 8px;"></div>
+                    <span style="color: #333;">${data.constellation}</span>
+                    <span style="color: #666;">(${prefix}${data.prn})</span>
+                  </div>
+                </div>
+                <div style="display: flex; margin-bottom: 5px;">
+                  <span style="font-weight: 500; width: 68px; color: #555;">仰角:</span>
+                  <span style="color: #333;">${data.elevation}°</span>
+                </div>
+                <div style="display: flex; margin-bottom: 5px;">
+                  <span style="font-weight: 500; width: 68px; color: #555;">方位角:</span>
+                  <span style="color: #333;">${data.azimuth}°</span>
+                </div>
+                <div style="display: flex;">
+                  <span style="font-weight: 500; width: 68px; color: #555;">SNR:</span>
+                  <span style="color: #333;">${data.snr} dB</span>
+                </div>
+              </div>
             `
-          }
+          },
+          backgroundColor: 'transparent',
+          borderWidth: 0,
+          padding: 0
         },
         legend: {
           data: [{
