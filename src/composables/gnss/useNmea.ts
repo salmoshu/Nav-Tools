@@ -1,6 +1,24 @@
 import { ref, computed } from 'vue'
 import { useGnssStore } from '@/stores/gnss'
 
+const MAX_NMEA_DATA = 3600
+const MAX_SNR_DATA = 1000
+
+// 使用环形缓冲区管理nmeaData
+let nmeaDataIndex = 0
+const nmeaDataBuffer = Array(MAX_NMEA_DATA).fill(null)
+const nmeaData = ref<NmeaData[]>([])
+const satelliteSnrData = ref<SatelliteSnrData[]>([])
+
+// 优化parseNmea函数中的数组操作
+function addNmeaData(data: NmeaData) {
+  nmeaDataBuffer[nmeaDataIndex] = data
+  nmeaDataIndex = (nmeaDataIndex + 1) % MAX_NMEA_DATA
+  
+  // 更新响应式数据
+  nmeaData.value = nmeaDataBuffer.filter(item => item !== null)
+}
+
 // NMEA数据接口定义
 interface NmeaData {
   timestamp: string
@@ -125,16 +143,17 @@ const currentData = ref<NmeaData>({
   raw: ''
 })
 
-// 将nmeaData移到模块顶层
-const nmeaData = ref<NmeaData[]>([])
-
 // 将latestPosition移到模块顶层
 const latestPosition = computed(() => {
-  const validData = nmeaData.value.filter(d => d.latitude !== null && d.longitude !== null)
-  return validData.length > 0 ? validData[validData.length - 1] : null
+  // 从后往前遍历，找到第一个有效位置
+  for (let i = nmeaData.value.length - 1; i >= 0; i--) {
+    const data = nmeaData.value[i]
+    if (data.latitude !== null && data.longitude !== null) {
+      return data
+    }
+  }
+  return null
 })
-
-const satelliteSnrData = ref<SatelliteSnrData[]>([])
 
 export function useNmea() {
   // 添加数据缓冲区
@@ -377,12 +396,13 @@ export function useNmea() {
     }
 
     currentData.value = newData
-    nmeaData.value.push(newData)
+    // nmeaData.value.push(newData)
+    addNmeaData(newData)
 
     // 限制历史数据数量
-    if (nmeaData.value.length > 1000) {
-      nmeaData.value.shift()
-    }
+    // if (nmeaData.value.length > 3600) {
+    //   nmeaData.value.shift()
+    // }
 
     return newData
   }
@@ -432,6 +452,11 @@ export function useNmea() {
   function processRawData(rawData: string): void {
     // 将新数据追加到缓冲区
     buffer.value += rawData;
+
+    // 限制缓冲区大小，防止内存泄漏
+    if (buffer.value.length > 50000) {
+      buffer.value = buffer.value.substring(buffer.value.length - 10000)
+    }
 
     // 查找第一个 $ 的位置
     const firstDollarIndex = buffer.value.indexOf('$');

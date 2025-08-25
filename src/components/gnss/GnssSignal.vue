@@ -9,6 +9,7 @@
           stripe
           border
           :default-sort="{ prop: 'constellation', order: 'ascending' }"
+          @sort-change="handleSortChange"
         >
           <el-table-column
             prop="constellation"
@@ -44,7 +45,7 @@
                 <el-progress
                   :percentage="Math.min(row.snr, 60) * (100/60)"
                   :color="getSnrColor(row.snr)"
-                  :stroke-width="20"
+                  :stroke-width="10"
                   :show-text="false"
                   style="width: 100px; margin-right: 10px"
                 />
@@ -107,11 +108,11 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
+import { computed, onMounted, onUnmounted } from 'vue';
 import { useNmea } from '../../composables/gnss/useNmea';
 
 // 初始化NMEA解析器
-const { satelliteSnrData, processRawData, clearData: clearNmeaData } = useNmea();
+const { satelliteSnrData, processRawData } = useNmea();
 
 // 星座过滤选项
 const constellationFilters = [
@@ -123,6 +124,7 @@ const constellationFilters = [
 ];
 
 // 获取最新的卫星数据（每个PRN只保留最新的一条）
+// 修改 getLatestSatelliteData 函数，确保数据按星座和PRN排序
 function getLatestSatelliteData() {
   const latestMap = new Map();
   
@@ -136,11 +138,13 @@ function getLatestSatelliteData() {
     latestMap.set(sat.prn, sat);
   });
   
+  // 返回按星座和PRN升序排序的数据
   return Array.from(latestMap.values()).sort((a, b) => {
-    // 按星座和PRN排序
+    // 首先按星座升序排序
     if (a.constellation !== b.constellation) {
       return a.constellation.localeCompare(b.constellation);
     }
+    // 然后按PRN数字升序排序
     return parseInt(a.prn) - parseInt(b.prn);
   });
 }
