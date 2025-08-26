@@ -6,6 +6,7 @@ const MAX_SNR_DATA = 1000
 
 // 使用环形缓冲区管理nmeaData
 let nmeaDataIndex = 0
+const nmeaRegex = /\$(?:[^*]*)\*[0-9A-F]{2}/gi;
 const nmeaDataBuffer = Array(MAX_NMEA_DATA).fill(null)
 const nmeaData = ref<NmeaData[]>([])
 const satelliteSnrData = ref<SatelliteSnrData[]>([])
@@ -19,6 +20,16 @@ function addNmeaData(data: NmeaData) {
   nmeaData.value = nmeaDataBuffer.filter(item => item !== null)
 }
 
+enum NmeaType {
+  GGA = 'GGA',
+  GLL = 'GLL',
+  GSA = 'GSA',
+  RMC = 'RMC',
+  VTG = 'VTG',
+  GSV = 'GSV',
+  UNKNOWN = 'UNKNOWN',
+}
+
 // NMEA数据接口定义
 interface NmeaData {
   timestamp: string
@@ -28,7 +39,10 @@ interface NmeaData {
   speed: number | null
   course: number | null
   satellites: number | null
+  selectedSatellites: string[] | null
+  pdop: number | null
   hdop: number | null
+  vdop: number | null
   status: 'A' | 'V' | null // A=有效, V=无效
   mode: string | null
   date: string | null
@@ -69,7 +83,7 @@ interface GllData {
 interface GsaData {
   mode: string
   fixType: string
-  satellites: string[]
+  selectedSatellites: string[]
   pdop: string
   hdop: string
   vdop: string
@@ -135,7 +149,10 @@ const currentData = ref<NmeaData>({
   speed: null,
   course: null,
   satellites: null,
+  selectedSatellites: null,
+  pdop: null,
   hdop: null,
+  vdop: null,
   status: null,
   mode: null,
   date: null,
@@ -268,12 +285,75 @@ export function useNmea() {
     
     return {
       time: data.time,
+      timestamp: new Date().toISOString(),
       latitude: parseCoordinate(data.latitude, data.nsIndicator),
       longitude: parseCoordinate(data.longitude, data.ewIndicator),
       altitude: parseFloat(data.altitude) || null,
       satellites: parseInt(data.satellites) || null,
       hdop: parseFloat(data.hdop) || null,
       status: data.quality === '0' ? 'V' : 'A',
+      raw: sentence
+    }
+  }
+
+  // 解析GSV语句
+  function parseGsv(sentence: string): Partial<NmeaData> {
+    const parts = sentence.split(',')
+    if (parts.length < 8) return {}
+    
+    const data: GsvData = {
+      totalMessages: parts[1],
+      messageNumber: parts[2],
+      satellitesInView: parts[3],
+      satellites: []
+    }
+    
+    // 从语句头部提取星座类型
+    const talkerId = sentence.substring(1, 3) // 获取GP, GL, GA, GB, GQ等
+    const constellation = getConstellationFromTalkerId(talkerId)
+    
+    // 解析卫星数据（每颗卫星4个字段）
+    for (let i = 4; i < parts.length - 1; i += 4) {
+      if (i + 3 < parts.length) {
+        let prn:any
+        const elevation = parts[i + 1]
+        const azimuth = parts[i + 2]
+        const snr = parts[i + 3]?.split('*')[0] || ''
+
+        if (constellation === 'GLONASS') {
+          prn = parseInt(parts[i]) - 64
+        } else {
+          prn = parseInt(parts[i])
+        }
+        
+        if (prn) {
+          data.satellites.push({
+            prn,
+            elevation,
+            azimuth,
+            snr
+          })
+          
+          // 添加到SNR数据存储
+          satelliteSnrData.value.push({
+            prn,
+            elevation: parseFloat(elevation) || 0,
+            azimuth: parseFloat(azimuth) || 0,
+            snr: parseFloat(snr) || 0,
+            constellation,
+            timestamp: new Date().toISOString()
+          })
+        }
+      }
+    }
+    
+    // 限制SNR数据数量
+    if (satelliteSnrData.value.length > MAX_SNR_DATA) {
+      satelliteSnrData.value.shift()
+    }
+    
+    return {
+      satellites: parseInt(data.satellitesInView) || null,
       raw: sentence
     }
   }
@@ -364,52 +444,77 @@ export function useNmea() {
     }
   }
 
+  function parseGsa(sentence: string): Partial<NmeaData> {
+    const parts = sentence.split(',')
+    if (parts.length < 14) return {}
+    const data: GsaData = {
+      mode: parts[1],
+      fixType: parts[2],
+      selectedSatellites: parts.slice(3, 14).filter(Boolean),
+      pdop: parts[15],
+      hdop: parts[16],
+      vdop: parts[17],
+    }
+    return {
+      mode: data.mode,
+      selectedSatellites: data.selectedSatellites,
+      pdop: parseFloat(data.pdop),
+      hdop: parseFloat(data.hdop),
+      vdop: parseFloat(data.vdop),
+      raw: sentence
+    }
+  }
+
   // 主解析函数
-  function parseNmea(sentence: string): NmeaData {
+  function parseNmea(sentence: string): NmeaType {
     if (!sentence || !sentence.startsWith('$')) {
-      return { ...currentData.value, raw: sentence }
+      // return { ...currentData.value, raw: sentence }
+      return NmeaType.UNKNOWN
     }
 
     if (!validateChecksum(sentence)) {
       console.warn('Invalid checksum:', sentence)
-      return { ...currentData.value, raw: sentence }
+      // return { ...currentData.value, raw: sentence }
+      return NmeaType.UNKNOWN
     }
 
     let parsedData: Partial<NmeaData> = {}
 
     if (sentence.includes('GGA')) {
       parsedData = parseGga(sentence)
+      const newData = {
+        ...currentData.value,
+        ...parsedData,
+        timestamp: new Date().toISOString()
+      }
+      currentData.value = newData
+      addNmeaData(newData)
+      return NmeaType.GGA
     } else if (sentence.includes('GLL')) {
       parsedData = parseGll(sentence)
+      return NmeaType.GLL
     } else if (sentence.includes('RMC')) {
       parsedData = parseRmc(sentence)
+      return NmeaType.RMC
     } else if (sentence.includes('VTG')) {
       parsedData = parseVtg(sentence)
+      return NmeaType.VTG
     } else if (sentence.includes('GSV')) {
       parsedData = parseGsv(sentence)
+      return NmeaType.GSV
+    } else if (sentence.includes('GSA')) {
+      parsedData = parseGsa(sentence)
+      return NmeaType.GSA
+    } else {
+      return NmeaType.UNKNOWN
     }
-
-    const newData = {
-      ...currentData.value,
-      ...parsedData,
-      timestamp: new Date().toISOString()
-    }
-
-    currentData.value = newData
-    // nmeaData.value.push(newData)
-    addNmeaData(newData)
-
-    // 限制历史数据数量
-    // if (nmeaData.value.length > 3600) {
-    //   nmeaData.value.shift()
-    // }
-
-    return newData
   }
 
   // 批量解析函数
   function parseNmeaBatch(sentences: string[]): NmeaData[] {
-    return sentences.map(sentence => parseNmea(sentence.trim()))
+    // return sentences.map(sentence => parseNmea(sentence.trim()))
+    console.warn('parseNmeaBatch not supported')
+    return new Array<NmeaData>()
   }
 
   // 获取统计数据
@@ -439,7 +544,10 @@ export function useNmea() {
       speed: null,
       course: null,
       satellites: null,
+      selectedSatellites: null,
+      pdop: null,
       hdop: null,
+      vdop: null,
       status: null,
       mode: null,
       date: null,
@@ -469,20 +577,12 @@ export function useNmea() {
       return;
     }
 
-    // 匹配 NMEA 语句的正则表达式：以 $ 开头，以 * 加两位十六进制数结尾
-    const nmeaRegex = /\$(?:[^*]*)\*[0-9A-F]{2}/gi;
-
-    let match;
     const completeSentences: string[] = [];
-
-    // 查找第一个匹配的NMEA语句，并将其之前的内容清空
-    if ((match = nmeaRegex.exec(buffer.value)) !== null) {
-      buffer.value = buffer.value.substring(match.index);
-    }
 
     // 提取所有完整的 NMEA 语句
     let lastMatchEnd = 0
-    while ((match = nmeaRegex.exec(buffer.value)) !== null) {
+    const matches = Array.from(buffer.value.matchAll(nmeaRegex));
+    for (const match of matches) {
       completeSentences.push(match[0]);
       lastMatchEnd = match.index + match[0].length;
     }
@@ -503,9 +603,12 @@ export function useNmea() {
       }
     }
 
-    // 处理所有完整的 NMEA 语句
     for (const sentence of completeSentences) {
-      parseNmea(sentence.trim());
+      const type = parseNmea(sentence.trim());
+      // 打印时间戳
+      // const now = new Date();
+      // const timestamp = now.toLocaleTimeString() + '.' + now.getMilliseconds().toString().padStart(3, '0');
+      // console.log(timestamp, type)
     }
   }
 
@@ -514,67 +617,7 @@ export function useNmea() {
     buffer.value = ''
   }
   
-  // 解析GSV语句
-  function parseGsv(sentence: string): Partial<NmeaData> {
-    const parts = sentence.split(',')
-    if (parts.length < 8) return {}
-    
-    const data: GsvData = {
-      totalMessages: parts[1],
-      messageNumber: parts[2],
-      satellitesInView: parts[3],
-      satellites: []
-    }
-    
-    // 从语句头部提取星座类型
-    const talkerId = sentence.substring(1, 3) // 获取GP, GL, GA, GB, GQ等
-    const constellation = getConstellationFromTalkerId(talkerId)
-    
-    // 解析卫星数据（每颗卫星4个字段）
-    for (let i = 4; i < parts.length - 1; i += 4) {
-      if (i + 3 < parts.length) {
-        let prn:any
-        const elevation = parts[i + 1]
-        const azimuth = parts[i + 2]
-        const snr = parts[i + 3]?.split('*')[0] || ''
-
-        if (constellation === 'GLONASS') {
-          prn = parseInt(parts[i]) - 64
-        } else {
-          prn = parseInt(parts[i])
-        }
-        
-        if (prn) {
-          data.satellites.push({
-            prn,
-            elevation,
-            azimuth,
-            snr
-          })
-          
-          // 添加到SNR数据存储
-          satelliteSnrData.value.push({
-            prn,
-            elevation: parseFloat(elevation) || 0,
-            azimuth: parseFloat(azimuth) || 0,
-            snr: parseFloat(snr) || 0,
-            constellation,
-            timestamp: new Date().toISOString()
-          })
-        }
-      }
-    }
-    
-    // 限制SNR数据数量
-    if (satelliteSnrData.value.length > 1000) {
-      satelliteSnrData.value.shift()
-    }
-    
-    return {
-      satellites: parseInt(data.satellitesInView) || null,
-      raw: sentence
-    }
-  }
+  
   
   // 根据Talker ID判断星座类型
   function getConstellationFromTalkerId(talkerId: string): string {

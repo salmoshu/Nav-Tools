@@ -8,11 +8,44 @@ const deviceList: any[] = []
 // 初始化NMEA解析器
 const { processRawData } = useNmea();
 
+// 创建全局事件管理器
+class IpcEventManager {
+  private static instance: IpcEventManager;
+  private listeners: Map<string, Function[]> = new Map();
+
+  static getInstance(): IpcEventManager {
+    if (!IpcEventManager.instance) {
+      IpcEventManager.instance = new IpcEventManager();
+    }
+    return IpcEventManager.instance;
+  }
+
+  on(channel: string, callback: Function) {
+    if (!this.listeners.has(channel)) {
+      this.listeners.set(channel, []);
+      window.ipcRenderer.on(channel, callback);
+    }
+    this.listeners.get(channel)!.push(callback);
+  }
+
+  removeAllListeners(channel: string) {
+    if (this.listeners.has(channel)) {
+      const callbacks = this.listeners.get(channel)!;
+      callbacks.forEach(callback => {
+        window.ipcRenderer.removeListener(channel, callback);
+      });
+      this.listeners.delete(channel);
+    }
+  }
+}
+
 /**
  * 设备管理组合式函数
  * 提供串口、网络和文件输入相关的状态和方法
  */
 export function useDevice() {
+  const ipcManager = IpcEventManager.getInstance();
+
   // 对话框状态
   const showInputDialog = ref(false);
   const activeTab = ref("serial");
@@ -131,9 +164,13 @@ export function useDevice() {
     return port;
   };
 
-  window.ipcRenderer.on('serial-data-to-renderer', (event, data) => {
+  ipcManager.on('serial-data-to-renderer', (event: any, data: string) => {
     processRawData(data);
-  })
+  });
+
+  // window.ipcRenderer.on('serial-data-to-renderer', (event, data) => {
+  //   processRawData(data);
+  // })
 
   /**
    * 处理网络配置提交
