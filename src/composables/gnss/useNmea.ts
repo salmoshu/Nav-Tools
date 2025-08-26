@@ -2,13 +2,15 @@ import { ref, computed } from 'vue'
 import { useGnssStore } from '@/stores/gnss'
 
 const MAX_NMEA_DATA = 3600
-const MAX_SNR_DATA = 1000
+const MAX_SNR_DATA = 50*3
 
 // 使用环形缓冲区管理nmeaData
 let nmeaDataIndex = 0
+let satelliteSnrIndex = 0
 const nmeaRegex = /\$(?:[^*]*)\*[0-9A-F]{2}/gi;
 const nmeaDataBuffer = Array(MAX_NMEA_DATA).fill(null)
 const nmeaData = ref<NmeaData[]>([])
+const satelliteSnrBuffer = Array(MAX_SNR_DATA).fill(null)
 const satelliteSnrData = ref<SatelliteSnrData[]>([])
 
 // 优化parseNmea函数中的数组操作
@@ -17,7 +19,25 @@ function addNmeaData(data: NmeaData) {
   nmeaDataIndex = (nmeaDataIndex + 1) % MAX_NMEA_DATA
   
   // 更新响应式数据
-  nmeaData.value = nmeaDataBuffer.filter(item => item !== null)
+  // nmeaData.value = nmeaDataBuffer.filter(item => item !== null)
+  nmeaData.value = nmeaDataBuffer.slice(0, nmeaDataIndex)
+}
+
+function addSatelliteSnrData(data: SatelliteSnrData) {
+  satelliteSnrBuffer[satelliteSnrIndex] = {
+    prn: data.prn,
+    elevation: parseFloat(String(data.elevation)) || 0,
+    azimuth: parseFloat(String(data.azimuth)) || 0,
+    snr: parseFloat(String(data.snr)) || 0,
+    constellation: data.constellation,
+    timestamp: new Date().toISOString()
+  }
+
+  // 通常不会超过50*3，为了进行异常处理，则覆盖前面的卫星信息
+  satelliteSnrIndex = (satelliteSnrIndex + 1) % MAX_SNR_DATA
+
+  // 更新响应式数据，保留最新3s内的数据
+  satelliteSnrData.value = satelliteSnrBuffer.filter(item => item !== null && item.timestamp > new Date(Date.now() - 3000).toISOString())
 }
 
 enum NmeaType {
@@ -334,8 +354,7 @@ export function useNmea() {
             snr
           })
           
-          // 添加到SNR数据存储
-          satelliteSnrData.value.push({
+          addSatelliteSnrData({
             prn,
             elevation: parseFloat(elevation) || 0,
             azimuth: parseFloat(azimuth) || 0,
@@ -616,8 +635,6 @@ export function useNmea() {
   function clearBuffer(): void {
     buffer.value = ''
   }
-  
-  
   
   // 根据Talker ID判断星座类型
   function getConstellationFromTalkerId(talkerId: string): string {
