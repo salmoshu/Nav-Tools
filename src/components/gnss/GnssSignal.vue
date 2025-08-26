@@ -9,7 +9,6 @@
           stripe
           border
           :default-sort="{ prop: 'constellation', order: 'ascending' }"
-          @sort-change="handleSortChange"
         >
           <el-table-column
             prop="constellation"

@@ -53,7 +53,7 @@
 <script setup>
 import * as echarts from 'echarts';
 import { ref, onMounted, onUnmounted, watch, nextTick } from 'vue';
-import { useNmea } from '../../composables/gnss/useNmea';
+import { useNmea, MAX_NMEA_DATA } from '../../composables/gnss/useNmea';
 import { Expand, FullScreen } from '@element-plus/icons-vue';
 import { ScatterChart } from 'echarts/charts';
 import { GridComponent } from 'echarts/components';
@@ -550,6 +550,12 @@ let handleSerialData = null;
 let handleKeyDown = null;
 
 onMounted(() => {
+  ElMessage({
+    message: `注意：当前仅存储${MAX_NMEA_DATA/60}分钟数据以规避系统崩溃的问题`,
+    type: 'warning',
+    duration: 5000,
+  })
+
   setTimeout(() => {
     initChart();
   }, 100);
