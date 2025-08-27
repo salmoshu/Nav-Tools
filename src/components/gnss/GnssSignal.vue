@@ -107,11 +107,11 @@
 </template>
 
 <script setup>
-import { computed, onMounted, onUnmounted } from 'vue';
+import { computed } from 'vue';
 import { useNmea } from '../../composables/gnss/useNmea';
 
 // 初始化NMEA解析器
-const { satelliteSnrData, processRawData } = useNmea();
+const { satelliteSnrData } = useNmea();
 
 // 星座过滤选项
 const constellationFilters = [
@@ -205,22 +205,6 @@ function formatTime(timestamp) {
 function filterConstellation(value, row) {
   return row.constellation === value;
 }
-
-// 监听串口数据
-const handleSerialData = (event, data) => {
-  processRawData(data);
-};
-
-// 组件挂载时初始化
-onMounted(() => {
-  // 监听串口数据
-  window.ipcRenderer.on('read', handleSerialData);
-});
-
-// 清理函数
-onUnmounted(() => {
-  window.ipcRenderer.off('read', handleSerialData);
-});
 </script>
 
 <style scoped>

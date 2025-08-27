@@ -4,10 +4,10 @@ import { defineStore } from "pinia"
 interface GnssState {
     fixMode: string
     TTFF: string
-    longitude: string
-    latitude: string
-    altitude: string
-    altitudeMsl: string
+    longitude: number
+    latitude: number
+    altitude: number
+    altitudeMsl: number
     velocity: string
     utcTime: string
     threeDAcc: string
@@ -23,10 +23,10 @@ export const useGnssStore = defineStore('gnss', () => {
         utcTime: '',
         fixMode: '',
         TTFF: '',
-        longitude: '',
-        latitude: '',
-        altitude: '',
-        altitudeMsl: '',
+        longitude: 0.0,
+        latitude: 0.0,
+        altitude: 0.0,
+        altitudeMsl: 0.0,
         velocity: '',
         threeDAcc: '',
         twoDAcc: '',

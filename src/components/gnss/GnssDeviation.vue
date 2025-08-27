@@ -62,7 +62,7 @@ import { ElMessage } from 'element-plus';
 
 echarts.use([ScatterChart, GridComponent, SVGRenderer]);
 
-const { latestPosition, clearData, processRawData } = useNmea();
+const { latestPosition, latestGgaPosition, clearData } = useNmea();
 
 const chartRef = ref(null);
 const chartInstance = ref(null);
@@ -336,7 +336,7 @@ function handleWheel(e) {
 };
 
 function handleNmeaUpdate() {
-  const latest = latestPosition.value;
+  const latest = latestGgaPosition.value;
   if (!latest || !latest.latitude || !latest.longitude) return;
 
   if (!firstPosition) {
@@ -399,8 +399,6 @@ function handleNmeaUpdate() {
 }
 
 function toggleTracking() {
-  console.log('切换跟踪模式，padding=', padding.value);
-
   userHasZoomed.value = false;
   // padding.value = minPadding;
 
@@ -552,7 +550,6 @@ function toggleFullScreenInfo() {
 }
 
 let stopWatch = null;
-let handleSerialData = null;
 let handleKeyDown = null;
 
 onMounted(() => {
@@ -575,14 +572,6 @@ onMounted(() => {
     },
     { immediate: true },
   );
-
-  handleSerialData = (event, data) => {
-    processRawData(data);
-  };
-
-  if (window.ipcRenderer) {
-    window.ipcRenderer.on('read', handleSerialData);
-  }
 
   handleKeyDown = (event) => {
     if (event.key === 'Escape' && isFullScreen.value) {

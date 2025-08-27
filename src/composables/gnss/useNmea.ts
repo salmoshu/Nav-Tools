@@ -1,7 +1,7 @@
 import { ref, computed } from 'vue'
 import { useGnssStore } from '@/stores/gnss'
 
-export const MAX_NMEA_DATA = 10*60     // 10min 先存储10分钟数据以规避系统崩溃的问题
+export const MAX_NMEA_DATA = 5*60     // 10min 先存储10分钟数据以规避系统崩溃的问题
 const MAX_SNR_DATA = 50*3
 
 // 使用环形缓冲区管理nmeaData
@@ -12,6 +12,7 @@ const nmeaDataBuffer = Array(MAX_NMEA_DATA).fill(null)
 const nmeaData = ref<NmeaData[]>([])
 const satelliteSnrBuffer = Array(MAX_SNR_DATA).fill(null)
 const satelliteSnrData = ref<SatelliteSnrData[]>([])
+const utcTime = [0, 0, 0, 0, 0, 0]
 
 // 优化parseNmea函数中的数组操作
 function addNmeaData(data: NmeaData) {
@@ -21,6 +22,20 @@ function addNmeaData(data: NmeaData) {
   // 更新响应式数据
   // nmeaData.value = nmeaDataBuffer.filter(item => item !== null)
   nmeaData.value = nmeaDataBuffer.slice(0, nmeaDataIndex)
+}
+
+let ggaDataIndex = 0
+const ggaData = ref<GgaData[]>([])
+const ggaDataBuffer = Array(MAX_NMEA_DATA).fill(null)
+function addGgaData(data: GgaData) {
+  ggaDataBuffer[ggaDataIndex] = data
+  ggaDataIndex = (ggaDataIndex + 1) % MAX_NMEA_DATA
+  ggaData.value = ggaDataBuffer.slice(0, ggaDataIndex)
+}
+
+function timeArrToString (time: any) {
+  // time = [0, 0, 0, 0, 0, 0]
+  return `20${time[0]}/${time[1]}/${time[2]} ${time[3]}:${time[4]}:${time[5]}`
 }
 
 function addSatelliteSnrData(data: SatelliteSnrData) {
@@ -52,7 +67,7 @@ enum NmeaType {
 
 // NMEA数据接口定义
 interface NmeaData {
-  timestamp: string
+  time: string | null
   latitude: number | null
   longitude: number | null
   altitude: number | null
@@ -66,16 +81,15 @@ interface NmeaData {
   status: 'A' | 'V' | null // A=有效, V=无效
   mode: string | null
   date: string | null
-  time: string | null
   raw: string
 }
 
 // GGA语句结构
-export interface GgaData {
+interface GgaData {
   time: string
-  latitude: string
+  latitude: number
   nsIndicator: string
-  longitude: string
+  longitude: number
   ewIndicator: string
   quality: string
   satellites: string
@@ -86,17 +100,6 @@ export interface GgaData {
   geoidUnit: string
   dgpsAge: string
   dgpsStation: string
-}
-
-// GLL语句结构
-interface GllData {
-  latitude: string
-  nsIndicator: string
-  longitude: string
-  ewIndicator: string
-  time: string
-  status: string
-  mode: string
 }
 
 // GSA语句结构
@@ -162,7 +165,6 @@ interface SatelliteSnrData {
 }
 
 const currentData = ref<NmeaData>({
-  timestamp: new Date().toISOString(),
   latitude: null,
   longitude: null,
   altitude: null,
@@ -180,6 +182,23 @@ const currentData = ref<NmeaData>({
   raw: ''
 })
 
+const currentGgaData = ref<GgaData>({
+  time: '',
+  latitude: 0,
+  nsIndicator: '',
+  longitude: 0,
+  ewIndicator: '',
+  quality: '',
+  satellites: '',
+  hdop: '',
+  altitude: '',
+  altitudeUnit: '',
+  geoidHeight: '',
+  geoidUnit: '',
+  dgpsAge: '',
+  dgpsStation: ''
+})
+
 // 将latestPosition移到模块顶层
 const latestPosition = computed(() => {
   // 从后往前遍历，找到第一个有效位置
@@ -191,6 +210,35 @@ const latestPosition = computed(() => {
   }
   return null
 })
+
+const latestGgaPosition = computed(() => {
+  // 从后往前遍历，找到第一个有效位置
+  for (let i = ggaData.value.length - 1; i >= 0; i--) {
+    const data = ggaData.value[i]
+    if (data.latitude !== null && data.longitude !== null) {
+      return data
+    }
+  }
+  return null
+})
+
+function numberToQuality (num: number) {
+  // 0：无效解；1：单点定位解；2：伪距差分；4：固定解；5：浮动解。
+  switch (num) {
+    case 0:
+      return 'Invalid'
+    case 1:
+      return 'Single'
+    case 2:
+      return 'DGNSS'
+    case 4:
+      return 'Fix'
+    case 5:
+      return 'Float'
+    default:
+      return 'Unknown'
+  }
+}
 
 export function useNmea() {
   // 添加数据缓冲区
@@ -208,17 +256,6 @@ export function useNmea() {
   const fixStatus = computed(() => {
     return currentData.value.status === 'A' ? '已定位' : '未定位'
   })
-
-  // 工具函数：解析度分格式为十进制度
-  function parseCoordinate(coord: string, direction: string): number {
-    if (!coord || !direction) return 0
-    
-    const degrees = parseFloat(coord.substring(0, 2))
-    const minutes = parseFloat(coord.substring(2))
-    const decimal = degrees + minutes / 60
-    
-    return direction === 'S' || direction === 'W' ? -decimal : decimal
-  }
 
   // 工具函数：计算校验和
   function calculateChecksum(sentence: string): string {
@@ -270,12 +307,29 @@ export function useNmea() {
 
     const parts = sentence.split(',')
     if (parts.length < 15) return {}
-    
+
+    let time = ''
+    const timeParts = parts[1]
+    utcTime[3] = parseInt(timeParts.substring(0, 2))
+    utcTime[4] = parseInt(timeParts.substring(2, 4))
+    utcTime[5] = parseFloat(timeParts.substring(4, 6))
+    if (utcTime[0] !== 0) {
+      time = timeArrToString(utcTime)
+    }
+
+    const latDeg = Math.floor(parseFloat(parts[2]) / 100)
+    const latMin = parseFloat(parts[2]) - latDeg * 100
+    const latRes = latDeg + latMin / 60
+
+    const lonDeg = Math.floor(parseFloat(parts[4]) / 100)
+    const lonMin = parseFloat(parts[4]) - lonDeg * 100
+    const lonRes = lonDeg + lonMin / 60
+
     const data: GgaData = {
-      time: parts[1],
-      latitude: parts[2],
+      time: time,
+      latitude: latRes,
       nsIndicator: parts[3],
-      longitude: parts[4],
+      longitude: lonRes,
       ewIndicator: parts[5],
       quality: parts[6],
       satellites: parts[7],
@@ -288,26 +342,27 @@ export function useNmea() {
       dgpsStation: parts[14].split('*')[0]
     }
 
+    addGgaData(data)
+
     gnssStore.status.utcTime = data.time
-    gnssStore.status.fixMode = '???'
-    gnssStore.status.TTFF = '???'
-    gnssStore.status.longitude = String(parseFloat(data.longitude) / 100)
-    gnssStore.status.latitude = String(parseFloat(data.latitude) / 100)
-    gnssStore.status.altitude = data.altitude
-    gnssStore.status.altitudeMsl = data.geoidHeight
-    gnssStore.status.velocity = '???'
-    gnssStore.status.threeDAcc = '???'
-    gnssStore.status.twoDAcc = '???'
-    gnssStore.status.PDOP = '???'
+    gnssStore.status.fixMode = numberToQuality(parseInt(data.quality))
+    gnssStore.status.TTFF = 'Invalid'
+    gnssStore.status.longitude = parseFloat(lonRes.toFixed(6))
+    gnssStore.status.latitude = parseFloat(latRes.toFixed(6))
+    gnssStore.status.altitude = parseFloat(data.altitude)
+    gnssStore.status.altitudeMsl = parseFloat((parseFloat(data.altitude) + parseFloat(data.geoidHeight)).toFixed(2))
+    gnssStore.status.velocity = 'Invalid'
+    gnssStore.status.threeDAcc = 'Invalid'
+    gnssStore.status.twoDAcc = 'Invalid'
+    gnssStore.status.PDOP = 'Invalid'
     gnssStore.status.HDOP = data.hdop
     gnssStore.status.satsUsed = data.satellites
-    gnssStore.status.satsVisible = '???'
+    gnssStore.status.satsVisible = 'Invalid'
     
     return {
       time: data.time,
-      timestamp: new Date().toISOString(),
-      latitude: parseCoordinate(data.latitude, data.nsIndicator),
-      longitude: parseCoordinate(data.longitude, data.ewIndicator),
+      latitude: latRes,
+      longitude: lonRes,
       altitude: parseFloat(data.altitude) || null,
       satellites: parseInt(data.satellites) || null,
       hdop: parseFloat(data.hdop) || null,
@@ -377,30 +432,6 @@ export function useNmea() {
     }
   }
 
-  // 解析GLL语句
-  function parseGll(sentence: string): Partial<NmeaData> {
-    const parts = sentence.split(',')
-    if (parts.length < 7) return {}
-    
-    const data: GllData = {
-      latitude: parts[1],
-      nsIndicator: parts[2],
-      longitude: parts[3],
-      ewIndicator: parts[4],
-      time: parts[5],
-      status: parts[6],
-      mode: parts[7]?.split('*')[0] || ''
-    }
-    
-    return {
-      time: data.time,
-      latitude: parseCoordinate(data.latitude, data.nsIndicator),
-      longitude: parseCoordinate(data.longitude, data.ewIndicator),
-      status: data.status as 'A' | 'V' | null,
-      raw: sentence
-    }
-  }
-
   // 解析RMC语句
   function parseRmc(sentence: string): Partial<NmeaData> {
     const parts = sentence.split(',')
@@ -424,12 +455,29 @@ export function useNmea() {
     // 计算速度（节转km/h）
     const speedKnots = parseFloat(data.speed) || 0
     const speedKmh = speedKnots * 1.852
-    
+
+    const timeParts = data.time // Hhmmss.ss
+    const dateParts = data.date // ddmmyy
+    utcTime[0] = parseInt(dateParts.substring(4, 6))
+    utcTime[1] = parseInt(dateParts.substring(2, 4))
+    utcTime[2] = parseInt(dateParts.substring(0, 2))
+    utcTime[3] = parseInt(timeParts.substring(0, 2))
+    utcTime[4] = parseInt(timeParts.substring(2, 4))
+    utcTime[5] = parseFloat(timeParts.substring(4, 6))
+
+    const latDeg = Math.floor(parseFloat(parts[3]) / 100)
+    const latMin = parseFloat(parts[3]) - latDeg * 100
+    const latRes = latDeg + latMin / 60
+
+    const lonDeg = Math.floor(parseFloat(parts[5]) / 100)
+    const lonMin = parseFloat(parts[5]) - lonDeg * 100
+    const lonRes = lonDeg + lonMin / 60
+
     return {
-      time: data.time,
+      time: timeArrToString(utcTime),
       date: data.date,
-      latitude: parseCoordinate(data.latitude, data.nsIndicator),
-      longitude: parseCoordinate(data.longitude, data.ewIndicator),
+      latitude: latRes,
+      longitude: lonRes,
       speed: speedKmh,
       course: parseFloat(data.course) || null,
       status: data.status as 'A' | 'V' | null,
@@ -464,6 +512,7 @@ export function useNmea() {
   }
 
   function parseGsa(sentence: string): Partial<NmeaData> {
+    const gnssStore = useGnssStore()
     const parts = sentence.split(',')
     if (parts.length < 14) return {}
     const data: GsaData = {
@@ -474,6 +523,8 @@ export function useNmea() {
       hdop: parts[16],
       vdop: parts[17],
     }
+    gnssStore.status.PDOP = data.pdop
+    gnssStore.status.HDOP = data.hdop
     return {
       mode: data.mode,
       selectedSatellites: data.selectedSatellites,
@@ -504,14 +555,10 @@ export function useNmea() {
       const newData = {
         ...currentData.value,
         ...parsedData,
-        timestamp: new Date().toISOString()
       }
       currentData.value = newData
       addNmeaData(newData)
       return NmeaType.GGA
-    } else if (sentence.includes('GLL')) {
-      parsedData = parseGll(sentence)
-      return NmeaType.GLL
     } else if (sentence.includes('RMC')) {
       parsedData = parseRmc(sentence)
       return NmeaType.RMC
@@ -547,16 +594,15 @@ export function useNmea() {
       validPositions: validPositions.length,
       avgSatellites: validPositions.reduce((sum, d) => sum + (d.satellites || 0), 0) / validPositions.length || 0,
       avgHdop: validPositions.reduce((sum, d) => sum + (d.hdop || 0), 0) / validPositions.length || 0,
-      lastUpdate: validPositions.length > 0 ? validPositions[validPositions.length - 1].timestamp : null
     }
   }
 
   // 清除数据
   function clearData() {
     nmeaData.value = []
+    ggaData.value = []
     satelliteSnrData.value = []  // 确保清除卫星数据
     currentData.value = {
-      timestamp: new Date().toISOString(),
       latitude: null,
       longitude: null,
       altitude: null,
@@ -572,6 +618,22 @@ export function useNmea() {
       date: null,
       time: null,
       raw: ''
+    }
+    currentGgaData.value = {
+      time: '',
+      latitude: 0,
+      nsIndicator: '',
+      longitude: 0,
+      ewIndicator: '',
+      quality: '',
+      satellites: '',
+      hdop: '',
+      altitude: '',
+      altitudeUnit: '',
+      geoidHeight: '',
+      geoidUnit: '',
+      dgpsAge: '',
+      dgpsStation: ''
     }
   }
 
@@ -672,7 +734,9 @@ export function useNmea() {
     return {
       nmeaData,
       currentData,
+      currentGgaData,
       latestPosition,
+      latestGgaPosition,
       satelliteSnrData, // 添加卫星SNR数据
       signalQuality,
       fixStatus,
