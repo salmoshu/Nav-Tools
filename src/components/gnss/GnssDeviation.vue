@@ -85,7 +85,18 @@ function setupResizeObserver() {
   if (!chartRef.value) return;
   resizeObserver = new ResizeObserver(() => {
     nextTick(() => {
-      if (chartInstance.value) {
+      if (chartInstance.value && chartInstance.value.getDom()) {
+        // 在resize前确保坐标系配置正确
+        const option = chartInstance.value.getOption();
+        if (option && option.series) {
+          // 确保series中没有错误的coordinateSystem配置
+          option.series = option.series.map(series => ({
+            ...series,
+            // 移除可能导致问题的coordinateSystem配置，让ECharts自动处理
+            coordinateSystem: "cartesian2d"
+          }));
+          chartInstance.value.setOption(option, false);
+        }
         chartInstance.value.resize();
       }
     });

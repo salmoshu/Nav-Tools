@@ -17,7 +17,6 @@
             :min="10"
             :max="40"
             :step="1"
-            @change="updateChart"
             size="small"
           />
         </div>
@@ -28,7 +27,6 @@
             :min="0"
             :max="30"
             :step="1"
-            @change="updateChart"
             size="small"
           />
         </div>
