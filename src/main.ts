@@ -6,7 +6,6 @@ import './hooks/useIpc'
 import ElementPlus from 'element-plus'
 import 'element-plus/dist/index.css'
 import * as ElementPlusIconsVue from '@element-plus/icons-vue'
-import 'default-passive-events'
 import { useDevice } from '@/hooks/useDevice'
 
 const app = createApp(App)
