@@ -2,7 +2,7 @@
   <div class="gnss-sky-container">
     <div class="control-panel">
       <div class="controls">
-        <el-select v-model="constellationFilter" @change="updateChart" size="medium" class="constellation-select">
+        <el-select v-model="constellationFilter" @change="updateChart" size="default" class="constellation-select">
           <el-option label="所有星座" value="all" />
           <el-option label="GPS" value="GPS" />
           <el-option label="GLONASS" value="GLONASS" />
@@ -87,11 +87,17 @@ function setupResizeObserver() {
   if (resizeObserver) {
     resizeObserver.disconnect()
   }
-  
+
   resizeObserver = new ResizeObserver(() => {
     nextTick(() => {
       if (chartInstance.value) {
-        chartInstance.value.resize()
+        try {
+          chartInstance.value.resize()
+        } catch (error) {
+          // 由于图表调整大小失败不会影响正常使用，所以先规避该问题：
+          // task#32 GnssSky中极坐标系使用resize所引发的报错
+          // console.error('图表调整大小失败:', error)
+        }
       }
     })
   })
@@ -111,6 +117,8 @@ function initChart() {
   }
 
   if (chartRef.value) {
+    // 设置ResizeObserver监听
+    setupResizeObserver()
     // 使用nextTick确保DOM已经更新
     nextTick(() => {
       chartInstance.value = echarts.init(chartRef.value, null, { renderer: 'svg' })
@@ -167,7 +175,6 @@ function initChart() {
         },
         angleAxis: {
           type: 'value',
-          coordinateSystem: 'polar',
           startAngle: 90,
           clockwise: true,
           min: 0,
@@ -192,7 +199,6 @@ function initChart() {
         },
         radiusAxis: {
           type: 'value',
-          coordinateSystem: 'polar',
           min: 0,
           max: 90,
           inverse: true,
@@ -254,23 +260,6 @@ function initChart() {
 
       chartInstance.value.setOption(option)
       updateChart() // 初始化后立即更新数据
-      
-      // 设置ResizeObserver监听
-      setupResizeObserver()
-
-      // 添加窗口大小变化监听作为后备方案
-      const resizeHandler = () => {
-        if (chartInstance.value) {
-          chartInstance.value.resize()
-        }
-      }
-
-      window.addEventListener('resize', resizeHandler)
-      
-      // 将清理函数添加到数组中
-      cleanupFunctions.push(() => {
-        window.removeEventListener('resize', resizeHandler)
-      })
     })
   }
 }

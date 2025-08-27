@@ -57,10 +57,10 @@ import { useNmea, MAX_NMEA_DATA } from '../../composables/gnss/useNmea';
 import { Expand, FullScreen } from '@element-plus/icons-vue';
 import { ScatterChart } from 'echarts/charts';
 import { GridComponent } from 'echarts/components';
-import { CanvasRenderer } from 'echarts/renderers';
+import { SVGRenderer } from 'echarts/renderers';
 import { ElMessage } from 'element-plus';
 
-echarts.use([ScatterChart, GridComponent, CanvasRenderer]);
+echarts.use([ScatterChart, GridComponent, SVGRenderer]);
 
 const { latestPosition, clearData, processRawData } = useNmea();
 
@@ -73,6 +73,7 @@ const deviation = ref('');
 const userHasZoomed = ref(false);
 const padding = ref(10000); // 默认正负10km
 const pointSize = ref(10); // 初始值与图表配置一致
+const chartDom = ref(null); // 添加chartDom引用
 
 let trackData = [];
 let firstPosition = null;
@@ -263,71 +264,65 @@ function initChart() {
     });
   });
 
-  const handleWheel = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-
-    const zoomRatio = 1.15;
-    const isZoomIn = e.deltaY < 0; // 滚轮滚动方向，true为放大，false为缩小
-
-    const opt = chartInstance.value.getOption();
-    const xStart = opt.dataZoom[0].startValue;
-    const xEnd = opt.dataZoom[0].endValue;
-    const yStart = opt.dataZoom[1].startValue;
-    const yEnd = opt.dataZoom[1].endValue;
-    
-    const limit = 10000;
-    const xSpan = (xEnd - xStart) * (isZoomIn ? 1 / zoomRatio : zoomRatio);
-    const ySpan = (yEnd - yStart) * (isZoomIn ? 1 / zoomRatio : zoomRatio);
-
-    let newXStart = xStart;
-    let newXEnd = xEnd;
-    let newYStart = yStart;
-    let newYEnd = yEnd;
-
-    if (isTracking.value) {
-      newXStart = Math.max(-limit, -xSpan / 2);
-      newXEnd = Math.min(limit, xSpan / 2);
-      newYStart = Math.max(-limit, -ySpan / 2);
-      newYEnd = Math.min(limit, ySpan / 2);
-    } else {
-      const xCenter = (xStart + xEnd) / 2;
-      const yCenter = (yStart + yEnd) / 2;
-      newXStart = Math.max(-limit, xCenter - xSpan / 2);
-      newXEnd = Math.min(limit, xCenter + xSpan / 2);
-      newYStart = Math.max(-limit, yCenter - ySpan / 2);
-      newYEnd = Math.min(limit, yCenter + ySpan / 2);
-    }
-
-    chartInstance.value.dispatchAction({
-      type: 'dataZoom',
-      xAxisIndex: [0],
-      startValue: newXStart,
-      endValue: newXEnd,
-    });
-    chartInstance.value.dispatchAction({
-      type: 'dataZoom',
-      yAxisIndex: [0],
-      startValue: newYStart,
-      endValue: newYEnd,
-    });
-    return false;
-  };
-
   // 直接在DOM元素上绑定事件监听器
-  const chartDom = chartInstance.value.getDom();
-  if (chartDom) {
+  chartDom.value = chartInstance.value.getDom();
+  if (chartDom.value) {
     // GnssDeviation: 滚轮事件监听器已直接绑定到DOM元素（捕获阶段）
-    chartDom.addEventListener('mousewheel', handleWheel, { passive: false, capture: true });
-    chartDom.addEventListener('wheel', handleWheel, { passive: false, capture: true });
-  
-    // 在组件卸载时清理监听器
-    onUnmounted(() => {
-      chartDom.removeEventListener('mousewheel', handleWheel, { capture: true });
-      chartDom.removeEventListener('wheel', handleWheel, { capture: true });
-    });
+    chartDom.value.addEventListener('mousewheel', handleWheel, { passive: false, capture: true });
+    chartDom.value.addEventListener('wheel', handleWheel, { passive: false, capture: true });
   }
 }
+
+function handleWheel(e) {
+  e.preventDefault();
+  e.stopPropagation();
+
+  const zoomRatio = 1.15;
+  const isZoomIn = e.deltaY < 0; // 滚轮滚动方向，true为放大，false为缩小
+
+  const opt = chartInstance.value.getOption();
+  const xStart = opt.dataZoom[0].startValue;
+  const xEnd = opt.dataZoom[0].endValue;
+  const yStart = opt.dataZoom[1].startValue;
+  const yEnd = opt.dataZoom[1].endValue;
+  
+  const limit = 10000;
+  const xSpan = (xEnd - xStart) * (isZoomIn ? 1 / zoomRatio : zoomRatio);
+  const ySpan = (yEnd - yStart) * (isZoomIn ? 1 / zoomRatio : zoomRatio);
+
+  let newXStart = xStart;
+  let newXEnd = xEnd;
+  let newYStart = yStart;
+  let newYEnd = yEnd;
+
+  if (isTracking.value) {
+    newXStart = Math.max(-limit, -xSpan / 2);
+    newXEnd = Math.min(limit, xSpan / 2);
+    newYStart = Math.max(-limit, -ySpan / 2);
+    newYEnd = Math.min(limit, ySpan / 2);
+  } else {
+    const xCenter = (xStart + xEnd) / 2;
+    const yCenter = (yStart + yEnd) / 2;
+    newXStart = Math.max(-limit, xCenter - xSpan / 2);
+    newXEnd = Math.min(limit, xCenter + xSpan / 2);
+    newYStart = Math.max(-limit, yCenter - ySpan / 2);
+    newYEnd = Math.min(limit, yCenter + ySpan / 2);
+  }
+
+  chartInstance.value.dispatchAction({
+    type: 'dataZoom',
+    xAxisIndex: [0],
+    startValue: newXStart,
+    endValue: newXEnd,
+  });
+  chartInstance.value.dispatchAction({
+    type: 'dataZoom',
+    yAxisIndex: [0],
+    startValue: newYStart,
+    endValue: newYEnd,
+  });
+  return false;
+};
 
 function handleNmeaUpdate() {
   const latest = latestPosition.value;
@@ -553,7 +548,7 @@ onMounted(() => {
   ElMessage({
     message: `注意：当前仅存储${MAX_NMEA_DATA/60}分钟数据以规避系统崩溃的问题`,
     type: 'warning',
-    duration: 5000,
+    duration: 3000,
   })
 
   setTimeout(() => {
@@ -593,6 +588,11 @@ onUnmounted(() => {
   }
   if (resizeObserver) {
     resizeObserver.disconnect();
+  }
+  // 清理滚轮事件监听器
+  if (chartDom.value) {
+    chartDom.value.removeEventListener('mousewheel', handleWheel, { capture: true });
+    chartDom.value.removeEventListener('wheel', handleWheel, { capture: true });
   }
 });
 </script>
