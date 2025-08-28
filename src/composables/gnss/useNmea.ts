@@ -1,7 +1,7 @@
 import { ref, computed } from 'vue'
 import { useGnssStore } from '@/stores/gnss'
 
-export const MAX_NMEA_DATA = 5*60     // 10min 先存储10分钟数据以规避系统崩溃的问题
+export const MAX_NMEA_DATA = 10*60     // 10min 先存储10分钟数据以规避系统崩溃的问题
 const MAX_SNR_DATA = 50*3
 
 // 使用环形缓冲区管理nmeaData
@@ -222,7 +222,7 @@ const latestGgaPosition = computed(() => {
   return null
 })
 
-function numberToQuality (num: number) {
+export function numberToQuality (num: number) {
   // 0：无效解；1：单点定位解；2：伪距差分；4：固定解；5：浮动解。
   switch (num) {
     case 0:
@@ -558,6 +558,8 @@ export function useNmea() {
       }
       currentData.value = newData
       addNmeaData(newData)
+      // console.log('nmeaData:', nmeaDataIndex);
+      // console.log('ggaData:', ggaDataIndex);
       return NmeaType.GGA
     } else if (sentence.includes('RMC')) {
       parsedData = parseRmc(sentence)

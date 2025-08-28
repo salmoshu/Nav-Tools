@@ -247,6 +247,7 @@ ipcMain.handle('open-card-window', async (_, serializedData) => {
       preload,
       nodeIntegration: false,
       contextIsolation: true,
+      backgroundThrottling: false
     },
   })
 

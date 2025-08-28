@@ -57,10 +57,10 @@ import { useNmea, MAX_NMEA_DATA } from '../../composables/gnss/useNmea';
 import { Expand, FullScreen } from '@element-plus/icons-vue';
 import { ScatterChart } from 'echarts/charts';
 import { GridComponent } from 'echarts/components';
-import { SVGRenderer } from 'echarts/renderers';
+import { CanvasRenderer } from 'echarts/renderers';
 import { ElMessage } from 'element-plus';
 
-echarts.use([ScatterChart, GridComponent, SVGRenderer]);
+echarts.use([ScatterChart, GridComponent, CanvasRenderer]);
 
 const { latestPosition, latestGgaPosition, clearData } = useNmea();
 
@@ -113,8 +113,8 @@ function initChart() {
     chartInstance.value.dispose();
   }
   chartInstance.value = echarts.init(chartRef.value, null, {
-    renderer: 'svg',
-    antialias: true,
+    renderer: 'canvas',
+    antialias: false,
   });
 
   const getDataZoomConfig = () => [
@@ -139,6 +139,8 @@ function initChart() {
   ];
 
   const option = {
+    animation: false,
+    hoverAnimation: false,
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
     tooltip: {
       trigger: 'axis',
@@ -146,9 +148,20 @@ function initChart() {
         const point = params[0].value;
         return `位置: (${point[0].toFixed(2)}, ${point[1].toFixed(2)}) m`;
       },
+      show: false,
     },
     legend: {
-      data: ['历史轨迹', '当前位置'],
+      data: [
+        {
+          name: '历史轨迹',
+          itemStyle: {
+            color: 'grey',
+          },
+        },
+        {
+          name: '当前位置',
+        },
+      ],
       right: 10,
       top: 10,
     },
@@ -216,6 +229,9 @@ function initChart() {
           color: '#4e6ef2',
           opacity: 0.6,
         },
+        sampling: 'lttb',
+        large: true,
+        largeThreshold: MAX_NMEA_DATA,
       },
       {
         name: '当前位置',
@@ -226,6 +242,9 @@ function initChart() {
         itemStyle: {
           color: '#ff4d4f',
         },
+        sampling: 'lttb',
+        large: true,
+        largeThreshold: MAX_NMEA_DATA,
       },
     ],
   };
@@ -335,6 +354,24 @@ function handleWheel(e) {
   return false;
 };
 
+function qualityToColor (num) {
+  // 0：无效解；1：单点定位解；2：伪距差分；4：固定解；5：浮动解。
+  switch (num) {
+    case 0:
+      return 'grey'
+    case 1:
+      return 'red'
+    case 2:
+      return 'blue'
+    case 4:
+      return 'green'
+    case 5:
+      return 'orange'
+    default:
+      return 'grey'
+  }
+}
+
 function handleNmeaUpdate() {
   const latest = latestGgaPosition.value;
   if (!latest || !latest.latitude || !latest.longitude) return;
@@ -352,7 +389,7 @@ function handleNmeaUpdate() {
   const roundedY = Math.round(y * 1000) / 1000;
 
   deviation.value = Math.sqrt(x * x + y * y).toFixed(2);
-  trackData.push([roundedX, roundedY]);
+  trackData.push([roundedX, roundedY, Number(latest.quality)]);
 
   if (trackData.length > maxTrackPoints) {
     trackData.shift();
@@ -375,11 +412,30 @@ function handleNmeaUpdate() {
         name: '历史轨迹',
         data: displayTrackData,
         symbolSize: pointSize.value,
+        itemStyle: {
+          color: function(params) {
+            // 获取原始trackData中的quality信息
+            // 当isTracking为true时，displayTrackData和trackData是一一对应的
+            // 直接使用params.dataIndex即可正确获取对应点的quality
+            const quality = trackData[params.dataIndex]?.[2] || 0;
+            return qualityToColor(quality);
+          }
+        },
       },
       {
         name: '当前位置',
         data: [currentDisplayPoint],
-        symbolSize: pointSize.value,
+        symbolSize: pointSize.value * 1.2,
+        itemStyle: {
+          color: qualityToColor(Number(latest.quality)), // 内部填充色
+          borderWidth: 2,   // 边框总宽度
+          borderColor: '#fff', // 外层边框颜色
+          borderType: 'solid',
+          shadowColor: '#222', // 内层边框颜色
+          shadowOffsetX: 0,
+          shadowOffsetY: 0,
+          shadowBlur: 2
+        },
       },
     ],
   });
