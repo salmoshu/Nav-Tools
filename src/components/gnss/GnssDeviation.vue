@@ -306,9 +306,13 @@ function initChart() {
 function handleWheel(e) {
   e.preventDefault();
   e.stopPropagation();
-
-  const zoomRatio = 1.15;
-  const isZoomIn = e.deltaY < 0; // 滚轮滚动方向，true为放大，false为缩小
+  
+  // RTKLIB的逻辑：
+  // ds=pow(2.0,-WheelDelta/1200.0)
+  // GraphT->GetScale(xs,ys);
+  // GraphT->SetScale(xs*ds,ys*ds);
+  const wheelDelta = -e.deltaY; // 转换为与RTKLIB相似的WheelDelta值
+  const zoomRatio = Math.pow(2.0, -wheelDelta / 1200.0);
 
   const opt = chartInstance.value.getOption();
   const xStart = opt.dataZoom[0].startValue;
@@ -317,8 +321,8 @@ function handleWheel(e) {
   const yEnd = opt.dataZoom[1].endValue;
   
   const limit = 10000;
-  const xSpan = (xEnd - xStart) * (isZoomIn ? 1 / zoomRatio : zoomRatio);
-  const ySpan = (yEnd - yStart) * (isZoomIn ? 1 / zoomRatio : zoomRatio);
+  const xSpan = (xEnd - xStart) * zoomRatio;
+  const ySpan = (yEnd - yStart) * zoomRatio;
 
   let newXStart = xStart;
   let newXEnd = xEnd;
@@ -341,13 +345,13 @@ function handleWheel(e) {
 
   chartInstance.value.dispatchAction({
     type: 'dataZoom',
-    xAxisIndex: [0],
+    dataZoomIndex: 0,
     startValue: newXStart,
     endValue: newXEnd,
   });
   chartInstance.value.dispatchAction({
     type: 'dataZoom',
-    yAxisIndex: [0],
+    dataZoomIndex: 1,
     startValue: newYStart,
     endValue: newYEnd,
   });

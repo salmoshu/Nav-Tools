@@ -1,7 +1,7 @@
 import { ref, computed } from 'vue'
 import { useGnssStore } from '@/stores/gnss'
 
-export const MAX_NMEA_DATA = 10*60     // 10min 先存储10分钟数据以规避系统崩溃的问题
+export const MAX_NMEA_DATA = 5*60    // 5min 先存储5分钟数据以规避系统崩溃的问题
 const MAX_SNR_DATA = 50*3
 
 // 使用环形缓冲区管理nmeaData
