@@ -77,7 +77,7 @@ const chartDom = ref(null); // 添加chartDom引用
 
 let trackData = [];
 let firstPosition = null;
-const maxTrackPoints = 5000;
+const maxTrackPoints = 3600*12;
 let resizeObserver = null;
 const minPadding = 10000; // 最小范围正负10km
 
@@ -400,14 +400,14 @@ function handleNmeaUpdate() {
   }
 
   let displayTrackData = [...trackData];
-  let currentDisplayPoint = [roundedX, roundedY];
+  let currentDisplayPoint = [roundedX, roundedY, Number(latest.quality)];
 
   if (isTracking.value && trackData.length > 0) {
     const latestPoint = trackData[trackData.length - 1];
     const offsetX = latestPoint[0];
     const offsetY = latestPoint[1];
-    displayTrackData = trackData.map(point => [point[0] - offsetX, point[1] - offsetY]);
-    currentDisplayPoint = [0, 0];
+    displayTrackData = trackData.map(point => [point[0] - offsetX, point[1] - offsetY, point[2]]);
+    currentDisplayPoint = [0, 0, Number(latest.quality)];
   }
 
   chartInstance.value.setOption({
@@ -418,10 +418,8 @@ function handleNmeaUpdate() {
         symbolSize: pointSize.value,
         itemStyle: {
           color: function(params) {
-            // 获取原始trackData中的quality信息
-            // 当isTracking为true时，displayTrackData和trackData是一一对应的
-            // 直接使用params.dataIndex即可正确获取对应点的quality
-            const quality = trackData[params.dataIndex]?.[2] || 0;
+            // 直接从当前数据点获取quality信息
+            const quality = params.data[2] || 0;
             return qualityToColor(quality);
           }
         },
@@ -460,34 +458,6 @@ function handleNmeaUpdate() {
 
 function toggleTracking() {
   userHasZoomed.value = false;
-  // padding.value = minPadding;
-
-  chartInstance.value.setOption({
-    dataZoom: [
-      {
-        type: 'inside',
-        xAxisIndex: 0,
-        zoomOnMouseWheel: true,
-        moveOnMouseWheel: !isTracking.value,
-        moveOnMouseMove: !isTracking.value,
-      },
-      {
-        type: 'inside',
-        yAxisIndex: 0,
-        zoomOnMouseWheel: true,
-        moveOnMouseWheel: !isTracking.value,
-        moveOnMouseMove: !isTracking.value,
-      },
-    ],
-    xAxis: {
-      min: -padding.value,
-      max: padding.value,
-    },
-    yAxis: {
-      min: -padding.value,
-      max: padding.value,
-    },
-  });
 
   if (isTracking.value && trackData.length > 0) {
     const latestPoint = trackData[trackData.length - 1];
