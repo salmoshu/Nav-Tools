@@ -460,7 +460,7 @@ function toggleTracking() {
     const latestPoint = trackData[trackData.length - 1];
     const offsetX = latestPoint[0];
     const offsetY = latestPoint[1];
-    const displayTrackData = trackData.map(point => [point[0] - offsetX, point[1] - offsetY]);
+    const displayTrackData = trackData.map(point => [point[0] - offsetX, point[1] - offsetY, point[2]]);
     const currentDisplayPoint = [0, 0];
 
     const opt = chartInstance.value.getOption();
