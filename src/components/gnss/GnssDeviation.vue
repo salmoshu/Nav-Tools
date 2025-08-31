@@ -107,17 +107,8 @@ function setupResizeObserver() {
   }
 }
 
-function initChart() {
-  if (!chartRef.value) return;
-  if (chartInstance.value) {
-    chartInstance.value.dispose();
-  }
-  chartInstance.value = echarts.init(chartRef.value, null, {
-    renderer: 'canvas',
-    antialias: false,
-  });
-
-  const getDataZoomConfig = () => [
+function getDataZoomConfig() {
+  return [
     {
       type: 'inside',
       xAxisIndex: 0,
@@ -137,6 +128,17 @@ function initChart() {
       endValue: 10,
     },
   ];
+}
+
+function initChart() {
+  if (!chartRef.value) return;
+  if (chartInstance.value) {
+    chartInstance.value.dispose();
+  }
+  chartInstance.value = echarts.init(chartRef.value, null, {
+    renderer: 'canvas',
+    antialias: false,
+  });
 
   const option = {
     animation: false,
@@ -477,6 +479,7 @@ function toggleTracking() {
           data: [currentDisplayPoint],
         },
       ],
+      dataZoom: getDataZoomConfig(),
     });
   } else if (trackData.length > 0) {
     const latestPoint = trackData[trackData.length - 1];
@@ -491,6 +494,7 @@ function toggleTracking() {
           data: [latestPoint],
         },
       ],
+      dataZoom: getDataZoomConfig(),
     });
 
     nextTick(() => {
