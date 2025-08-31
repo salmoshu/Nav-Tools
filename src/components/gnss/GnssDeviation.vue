@@ -70,7 +70,6 @@ const isTracking = ref(true);
 const isFullScreen = ref(false);
 const rulerText = ref('');
 const deviation = ref('');
-const userHasZoomed = ref(false);
 const padding = ref(10000); // 默认正负10km
 const pointSize = ref(10); // 初始值与图表配置一致
 const chartDom = ref(null); // 添加chartDom引用
@@ -107,27 +106,39 @@ function setupResizeObserver() {
   }
 }
 
-function getDataZoomConfig() {
-  return [
-    {
-      type: 'inside',
-      xAxisIndex: 0,
-      zoomOnMouseWheel: false,
-      moveOnMouseWheel: !isTracking.value,
-      moveOnMouseMove: !isTracking.value,
-      startValue: -10,
-      endValue: 10,
-    },
-    {
-      type: 'inside',
-      yAxisIndex: 0,
-      zoomOnMouseWheel: false,
-      moveOnMouseWheel: !isTracking.value,
-      moveOnMouseMove: !isTracking.value,
-      startValue: -10,
-      endValue: 10,
-    },
-  ];
+function getDataZoomConfig(xStart, xEnd, yStart, yEnd) {
+  const initXConfig = {
+    type: 'inside',
+    xAxisIndex: 0,
+    zoomOnMouseWheel: false,
+    moveOnMouseWheel: !isTracking.value,
+    moveOnMouseMove: !isTracking.value,
+  }
+
+  const initYConfig = {
+    type: 'inside',
+    yAxisIndex: 0,
+    zoomOnMouseWheel: false,
+    moveOnMouseWheel: !isTracking.value,
+    moveOnMouseMove: !isTracking.value,
+  }
+
+  if (xStart && xEnd && yStart && yEnd) {
+    return [
+      {
+        ...initXConfig,
+        startValue: xStart,
+        endValue: xEnd,
+      },
+      {
+        ...initYConfig,
+        startValue: yStart,
+        endValue: yEnd,
+      },
+    ];
+  } else {
+    return [initXConfig, initYConfig];
+  }
 }
 
 function initChart() {
@@ -174,7 +185,7 @@ function initChart() {
       top: '15%',
       containLabel: true,
     },
-    dataZoom: getDataZoomConfig(),
+    dataZoom: getDataZoomConfig(-10, 10, -10, 10),
     xAxis: {
       type: 'value',
       name: '',
@@ -255,7 +266,6 @@ function initChart() {
   setupResizeObserver();
 
   chartInstance.value.on('datazoom', () => {
-    userHasZoomed.value = true;
     nextTick(() => {
       const opt = chartInstance.value.getOption();
       let xMin = opt.xAxis[0].min;
@@ -443,30 +453,23 @@ function handleNmeaUpdate() {
       },
     ],
   });
-
-  if (!userHasZoomed.value) {
-    chartInstance.value.setOption({
-      xAxis: {
-        min: -padding.value,
-        max: padding.value,
-      },
-      yAxis: {
-        min: -padding.value,
-        max: padding.value,
-      },
-    });
-  }
 }
 
 function toggleTracking() {
-  userHasZoomed.value = false;
-
   if (isTracking.value && trackData.length > 0) {
     const latestPoint = trackData[trackData.length - 1];
     const offsetX = latestPoint[0];
     const offsetY = latestPoint[1];
     const displayTrackData = trackData.map(point => [point[0] - offsetX, point[1] - offsetY]);
     const currentDisplayPoint = [0, 0];
+
+    const opt = chartInstance.value.getOption();
+    const xStart = opt.dataZoom[0].startValue;
+    const xEnd = opt.dataZoom[0].endValue;
+    const yStart = opt.dataZoom[1].startValue;
+    const yEnd = opt.dataZoom[1].endValue;
+    const xSpan = (xEnd - xStart)/2;
+    const ySpan = (yEnd - yStart)/2;
 
     chartInstance.value.setOption({
       series: [
@@ -479,10 +482,21 @@ function toggleTracking() {
           data: [currentDisplayPoint],
         },
       ],
-      dataZoom: getDataZoomConfig(),
+      dataZoom: getDataZoomConfig(-xSpan, xSpan, -ySpan, ySpan),
     });
+    // handleWheel()
   } else if (trackData.length > 0) {
     const latestPoint = trackData[trackData.length - 1];
+
+    const offsetX = latestPoint[0];
+    const offsetY = latestPoint[1];
+
+    const opt = chartInstance.value.getOption();
+    const xStart = opt.dataZoom[0].startValue + offsetX;
+    const xEnd = opt.dataZoom[0].endValue + offsetX;
+    const yStart = opt.dataZoom[1].startValue + offsetY;
+    const yEnd = opt.dataZoom[1].endValue + offsetY;
+
     chartInstance.value.setOption({
       series: [
         {
@@ -494,42 +508,14 @@ function toggleTracking() {
           data: [latestPoint],
         },
       ],
-      dataZoom: getDataZoomConfig(),
+      dataZoom: getDataZoomConfig(xStart, xEnd, yStart, yEnd),
     });
-
-    nextTick(() => {
-      const opt = chartInstance.value.getOption();
-      let xMin = opt.xAxis[0].min;
-      let xMax = opt.xAxis[0].max;
-      let yMin = opt.yAxis[0].min;
-      let yMax = opt.yAxis[0].max;
-
-      const minSpan = minPadding * 2;
-
-      if (xMax - xMin < minSpan) {
-        const xCenter = (xMin + xMax) / 2;
-        xMin = xCenter - minPadding;
-        xMax = xCenter + minPadding;
-        padding.value = minPadding;
-      }
-      if (yMax - yMin < minSpan) {
-        const yCenter = (yMin + yMax) / 2;
-        yMin = yCenter - minPadding;
-        yMax = yCenter + minPadding;
-        padding.value = minPadding;
-      }
-
-      chartInstance.value.setOption({
-        xAxis: { min: xMin, max: xMax },
-        yAxis: { min: yMin, max: yMax },
-      });
-    });
+    // handleWheel()
   }
 }
 
 function resetZoom() {
   if (!chartInstance.value) return;
-  userHasZoomed.value = false;
   initChart();
 }
 
