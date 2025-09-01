@@ -2,6 +2,14 @@ import { reactive } from 'vue'
 import { toolBarIcon } from './icons'
 
 const appConfig: any = {
+  perc: {
+    ultrasonic: createModuleItem({
+      title: 'Ultrasonic',
+      icon: toolBarIcon.ultrasonic,
+      action: ['draw'],
+      props: {}
+    }),
+  },
   pos: {
     gnss: createModuleItem({
       title: 'Gnss',

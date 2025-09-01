@@ -119,9 +119,8 @@ const showSaveButton = ref(false)
 import { useDevice, deviceConnected } from '@/hooks/useDevice'
 
 const handleDeviceConnected = () => {
-  const { closeAllDevice } = useDevice()
   if (deviceConnected.value) {
-    closeAllDevice()
+    useDevice().closeAllDevice()
   }
 }
 
@@ -145,6 +144,8 @@ watch(() => navMode.funcMode, (oldMode, newMode) => {
     } else {
       handleList.splice(0, handleList.length)
     }
+
+    useDevice().closeAllDevice()
   }
 })
 

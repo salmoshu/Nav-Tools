@@ -1,12 +1,10 @@
-import { ref } from "vue";
-import { ElMessage } from "element-plus";
-import { useNmea } from '../composables/gnss/useNmea';
+import { ref } from "vue"
+import { ElMessage } from "element-plus"
+import { navMode } from "@/settings/config"
+import { useNmea } from '@/composables/gnss/useNmea'
 
 export const deviceConnected = ref(false);
 const deviceList: any[] = []
-
-// 初始化NMEA解析器
-const { processRawData } = useNmea();
 
 // 创建全局事件管理器
 class IpcEventManager {
@@ -164,14 +162,6 @@ export function useDevice() {
     return port;
   };
 
-  ipcManager.on('serial-data-to-renderer', (event: any, data: string) => {
-    processRawData(data);
-  });
-
-  // window.ipcRenderer.on('serial-data-to-renderer', (event, data) => {
-  //   processRawData(data);
-  // })
-
   /**
    * 处理网络配置提交
    * @returns 网络命令字符串
@@ -198,7 +188,14 @@ export function useDevice() {
 
     console.log("文件路径:", filePath);
 
-    // 可以在这里添加更多文件相关的逻辑
+    window.ipcRenderer
+      .invoke('read-file-event', filePath)
+      .then((data) => {
+        console.log('文件内容:', data);
+      })
+      .catch((error) => {
+        console.error('读取文件失败:', error);
+      });
 
     return filePath;
   };
@@ -274,6 +271,30 @@ export function useDevice() {
       });
     }
   };
+
+  ipcManager.on('serial-data-to-renderer', (event: any, data: string) => {
+    switch (navMode.funcMode) {
+      case 'gnss':
+        useNmea().processRawData(data);
+        break;
+      default:
+        break;
+    }
+  });
+
+  ipcManager.on('read-file-success', (event: any, data: string) => {
+    switch (navMode.funcMode) {
+      default:
+        break;
+    }
+  })
+
+  ipcManager.on('read-file-error', (event: any, error: string) => {
+    switch (navMode.funcMode) {
+      default:
+        break;
+    }
+  })
 
   // 暴露需要使用的状态和方法
   return {

@@ -74,7 +74,7 @@
         <el-tab-pane label="文件输入" name="file">
           <div class="input-group">
             <span class="input-label">文件路径:</span>
-            <el-input v-model="fileInput" placeholder="请输入文件路径" style="flex: 1;" />
+            <el-input v-model="fileInput" placeholder="推荐使用浏览器端的FileReader" style="flex: 1;" />
             <el-button type="primary" @click="openFileDialog" style="margin-left: 10px;">
               ...
             </el-button>
