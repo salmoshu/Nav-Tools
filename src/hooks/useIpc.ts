@@ -1,5 +1,5 @@
 import emitter from './useMitt'
-import { navMode, AppMode, FuncMode, appConfig } from '@/types/config'
+import { navMode, AppMode, FuncMode, appConfig } from '@/settings/config'
 
 // 自动从AppMap生成所有映射
 const appModeMap = Object.fromEntries(

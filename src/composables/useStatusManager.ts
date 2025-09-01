@@ -1,7 +1,7 @@
 import { ref } from "vue";
 import { useGnssStore } from "@/stores/gnss";
 import { useFollowStore } from "@/stores/follow";
-import { FuncMode, navMode } from "@/types/config";
+import { FuncMode, navMode } from "@/settings/config";
 import { useDemo1Store } from "@/stores/demo1";
 
 function getMonitorStatus() {

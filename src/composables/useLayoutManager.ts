@@ -1,5 +1,5 @@
 import { ref, watch, computed, markRaw, defineAsyncComponent } from 'vue'
-import { FuncMode, appConfig } from '@/types/config'
+import { FuncMode, appConfig } from '@/settings/config'
 import { ElMessage } from 'element-plus'
 import emitter from '@/hooks/useMitt'
 

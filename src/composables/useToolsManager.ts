@@ -1,5 +1,5 @@
-import { NavMode, appConfig, ButtonItem } from '@/types/config'
-import { toolBarIcon } from '@/types/icon'
+import { NavMode, appConfig, ButtonItem } from '@/settings/config'
+import { toolBarIcon } from '@/settings/icons'
 import emitter from '@/hooks/useMitt'
 import { ElMessage } from 'element-plus'
 

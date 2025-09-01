@@ -1,5 +1,5 @@
 import { reactive } from 'vue'
-import { toolBarIcon } from './icon'
+import { toolBarIcon } from './icons'
 
 // enum key: AppMode[AppMode.Pnc]
 enum AppMode {

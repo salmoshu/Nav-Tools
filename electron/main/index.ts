@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import os from 'node:os'
 // 导入AppMap配置
-import { appConfig } from '../../src/types/config'
+import { appConfig } from '../../src/settings/config'
 import { eventsMap } from './events'
 
 // const require = createRequire(import.meta.url)

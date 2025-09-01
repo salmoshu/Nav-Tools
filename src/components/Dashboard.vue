@@ -169,7 +169,7 @@ import { Close, Share } from '@element-plus/icons-vue'
 import emitter from '@/hooks/useMitt'
 import { useLayoutManager } from '@/composables/useLayoutManager'
 import { useDevice } from '@/hooks/useDevice'
-import { appConfig, navMode } from '@/types/config'
+import { appConfig, navMode } from '@/settings/config'
 
 const {
   layoutDraggableList,

@@ -106,8 +106,8 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, onUnmounted, watch, inject, type Ref } from 'vue'
-import { navMode, AppMode, FuncMode, ButtonItem } from '@/types/config'
-import { toolBarIcon } from '@/types/icon'
+import { navMode, AppMode, FuncMode, ButtonItem } from '@/settings/config'
+import { toolBarIcon } from '@/settings/icons'
 import { getButtonList, upAndDown, getButtonText, getLayoutList, getIoList, handleIo } from '@/composables/useToolsManager'
 
 import emitter from '@/hooks/useMitt'

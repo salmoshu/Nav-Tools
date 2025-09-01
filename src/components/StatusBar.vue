@@ -29,7 +29,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, inject, watch, type Ref } from 'vue'
 import { getMonitorStatus } from '@/composables/useStatusManager'
-import { navMode } from '@/types/config'
+import { navMode } from '@/settings/config'
 
 const commonStyle = {
   trueStyle: 'color: #00b894; background: rgba(0, 184, 148, 0.1); font-weight: 700;',
