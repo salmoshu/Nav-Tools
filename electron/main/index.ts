@@ -167,7 +167,7 @@ function createMenu() {
     // click: () => {
     //   win?.webContents.send(`open-${key}-view`)
     // },
-    submenu: Object.entries((config as any).module).map(([moduleKey, moduleConfig]) => ({
+    submenu: Object.entries((config as any)).map(([moduleKey, moduleConfig]) => ({
       label: (moduleConfig as any).title,
       click: () => {
         win?.webContents.send(`open-${moduleKey}-view`)

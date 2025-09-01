@@ -1,5 +1,5 @@
 import { ref, watch, computed, markRaw, defineAsyncComponent } from 'vue'
-import { FuncMode, appConfig } from '@/settings/config'
+import { appConfig } from '@/settings/config'
 import { ElMessage } from 'element-plus'
 import emitter from '@/hooks/useMitt'
 
@@ -45,24 +45,24 @@ const loadComponent = (componentPath: string) => {
 }
 
 // 根据FuncMode获取对应的AppMap配置 - 自适应版本
-const getAppMapConfig = (mode: FuncMode) => {
+const getAppMapConfig = (mode: string) => {
   // 自动匹配FuncMode到对应的AppMap模块
   for (const [_, config] of Object.entries(appConfig)) {
-    const modules = (config as any).module as Record<string, any>
+    const modules = (config as any) as Record<string, any>
     for (const [_, moduleConfig] of Object.entries(modules)) {
       if (moduleConfig.funcMode === mode) {
         return modules
       }
     }
   }
-  return appConfig.example.module
+  return appConfig.example
 }
 
 // 获取当前模式的模块名称 - 自适应版本
-const getModuleName = (mode: FuncMode): string => {
+const getModuleName = (mode: string): string => {
   // 自动从AppMap中查找匹配的模块名
   for (const [_, config] of Object.entries(appConfig)) {
-    const modules = (config as any).module as Record<string, any>
+    const modules = (config as any) as Record<string, any>
     for (const [moduleName, moduleConfig] of Object.entries(modules)) {
       if (moduleConfig.funcMode === mode) {
         return moduleName
@@ -73,7 +73,7 @@ const getModuleName = (mode: FuncMode): string => {
 }
 
 // 动态获取组件映射
-const getDynamicComponentMap = (mode: FuncMode) => {
+const getDynamicComponentMap = (mode: string) => {
   const moduleName = getModuleName(mode)
   const appMapConfig = getAppMapConfig(mode)
   
@@ -104,7 +104,7 @@ const getDynamicComponentMap = (mode: FuncMode) => {
 }
 
 // 动态获取默认布局配置
-const getDynamicDefaultLayoutConfig = async (mode: FuncMode) => {
+const getDynamicDefaultLayoutConfig = async (mode: string) => {
   const moduleName = getModuleName(mode)
   const appMapConfig = getAppMapConfig(mode)
   
@@ -137,7 +137,7 @@ const getDynamicDefaultLayoutConfig = async (mode: FuncMode) => {
 }
 
 // 根据功能模式动态获取组件列表
-const getDynamicComponentsByMode = (mode: FuncMode): string[] => {
+const getDynamicComponentsByMode = (mode: string): string[] => {
   const moduleName = getModuleName(mode)
   const appMapConfig = getAppMapConfig(mode)
   
@@ -153,9 +153,12 @@ export function useLayoutManager() {
   const appKeys = Object.keys(appConfig) as Array<keyof typeof appConfig>
   const firstAppKey = appKeys[0]
   const firstApp = appConfig[firstAppKey]
+  const moudleKeys = Object.keys(firstApp) as Array<keyof typeof firstApp>
+  const firstModuleKey = moudleKeys[0]
+  const firstModule = firstApp[firstModuleKey]
+  const currentFuncMode = ref(firstModule.funcMode)
 
   const layoutDraggableList = ref<LayoutItem[]>([])
-  const currentFuncMode = ref(firstApp.currMode)
 
   // 动态组件映射
   const dynamicComponentMap = ref<Record<string, any>>({})
@@ -187,7 +190,7 @@ export function useLayoutManager() {
   })
 
   // 更新动态组件映射
-  const updateDynamicComponentMap = (mode: FuncMode) => {
+  const updateDynamicComponentMap = (mode: string) => {
     const componentMap = getDynamicComponentMap(mode)
     dynamicComponentMap.value = Object.fromEntries(
       Object.entries(componentMap).map(([key, value]) => [
@@ -397,7 +400,7 @@ export function useLayoutManager() {
   }
 
   // 处理功能模式切换
-  const handleFuncModeChange = async (mode: FuncMode) => {
+  const handleFuncModeChange = async (mode: string) => {
     if (currentFuncMode.value === mode) {
       return
     }
@@ -413,7 +416,7 @@ export function useLayoutManager() {
     await initLayout()
     
     ElMessage({
-      message: `已切换到 ${FuncMode[mode].toUpperCase()} 组件`,
+      message: `已切换到 ${mode.toUpperCase()} 组件`,
       type: 'success',
       duration: 1000
     })

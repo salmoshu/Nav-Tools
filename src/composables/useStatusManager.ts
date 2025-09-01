@@ -1,35 +1,35 @@
 import { ref } from "vue";
 import { useGnssStore } from "@/stores/gnss";
 import { useFollowStore } from "@/stores/follow";
-import { FuncMode, navMode } from "@/settings/config";
+import { navMode } from "@/settings/config";
 import { useDemo1Store } from "@/stores/demo1";
 
 function getMonitorStatus() {
   const funcMode = navMode.funcMode
   const result = ref<Record<string, any>>({})
   switch (funcMode) {
-    case FuncMode.Follow:
+    case 'follow':
       const followStore = useFollowStore();
       result.value = followStore.status
       break;
-    case FuncMode.Tree:
+    case 'tree':
       result.value = {}
       break;
-    case FuncMode.Gnss:
+    case 'gnss':
       const gnssStore = useGnssStore()
       result.value = gnssStore.status
       break;
-    case FuncMode.Imu:
+    case 'imu':
       result.value = {}
       break;
-    case FuncMode.Vision:
+    case 'vision':
       result.value = {}
       break;
-    case FuncMode.Demo1:
+    case 'demo1':
       const demo1Store = useDemo1Store();
       result.value = demo1Store.status
       break;
-    case FuncMode.Demo2:
+    case 'demo2':
       result.value = {}
       break;
     default:

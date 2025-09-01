@@ -1,18 +1,14 @@
 import emitter from './useMitt'
-import { navMode, AppMode, FuncMode, appConfig } from '@/settings/config'
+import { navMode, appConfig } from '@/settings/config'
 
-// 自动从AppMap生成所有映射
-const appModeMap = Object.fromEntries(
-  Object.entries(AppMode)
-    .filter(([key, value]) => isNaN(Number(key)))
-    .map(([key, value]) => [key.toLowerCase(), value])
-)
-
+// 自动从appConfig生成所有映射
+const appModeArr = Object.keys(appConfig) as Array<keyof typeof appConfig>
+const appModeMap = Object.fromEntries(appModeArr.map(appKey => [appKey, appKey]))
 function openModuleView(appKey: string, moduleKey: string) {
   const funcModeMap = Object.fromEntries(
-    Object.keys(appConfig[appKey as keyof typeof appConfig]?.module).map(moduleKey => {
-      const module = appConfig[appKey as keyof typeof appConfig]?.module[moduleKey]
-      return [moduleKey, module?.funcMode || FuncMode.None]
+    Object.keys(appConfig[appKey as keyof typeof appConfig]).map(moduleKey => {
+      const module = appConfig[appKey as keyof typeof appConfig][moduleKey]
+      return [moduleKey, module?.funcMode || 'none']
     })
   )
 
@@ -27,7 +23,7 @@ if (window.ipcRenderer) {
 
   // 动态注册所有Module的事件监听
   Object.keys(appConfig).forEach(appKey => {
-    const modules = appConfig[appKey as keyof typeof appConfig]?.module || {}
+    const modules = appConfig[appKey as keyof typeof appConfig] || {}
     Object.keys(modules).forEach(moduleKey => {
       const eventName = `open-${moduleKey}-view`
       window.ipcRenderer.on(eventName, () => {

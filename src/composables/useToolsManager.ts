@@ -9,7 +9,7 @@ function createButtonList(appName: string, funcModeName: string) {
   const appCfg = appConfig[appName as AppName]
   if (!appCfg) return []
 
-  const moduleCfg = (appCfg.module as any)[funcModeName]
+  const moduleCfg = (appCfg as any)[funcModeName]
   if (!moduleCfg) return []
 
   // 直接使用AppMap中的actionButtons
@@ -17,7 +17,7 @@ function createButtonList(appName: string, funcModeName: string) {
 }
 
 const getButtonList = (navMode: NavMode) => {
-  return createButtonList(navMode.appModeStr, navMode.funcModeStr)
+  return createButtonList(navMode.appMode, navMode.funcMode)
 }
 
 function upAndDown(position: string): boolean {

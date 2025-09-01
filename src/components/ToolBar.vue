@@ -106,7 +106,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, onUnmounted, watch, inject, type Ref } from 'vue'
-import { navMode, AppMode, FuncMode, ButtonItem } from '@/settings/config'
+import { navMode, ButtonItem } from '@/settings/config'
 import { toolBarIcon } from '@/settings/icons'
 import { getButtonList, upAndDown, getButtonText, getLayoutList, getIoList, handleIo } from '@/composables/useToolsManager'
 
@@ -138,7 +138,7 @@ watch(() => navMode.funcMode, (oldMode, newMode) => {
     showSaveButton.value = false
     const buttonList = getButtonList(navMode)
   
-    ipcRenderer.send('console-to-node', ['watch:funcMode', AppMode[navMode.appMode], FuncMode[navMode.funcMode]])
+    ipcRenderer.send('console-to-node', ['watch:funcMode', navMode.appMode, navMode.funcMode])
   
     if (buttonList) {
       handleList.splice(0, handleList.length, ...buttonList)
@@ -147,22 +147,6 @@ watch(() => navMode.funcMode, (oldMode, newMode) => {
     }
   }
 })
-
-// const currentButtonList = computed(() => {
-//   const appKey = navMode.appModeStr
-//   if (!appKey || !appConfig[appKey as keyof typeof appConfig]) {
-//     return []
-//   }
-  
-//   const app = appConfig[appKey as keyof typeof appConfig]
-//   return Object.values(app.module).map(module => ({
-//     title: (module as any).title,
-//     msg: (module as any).title.toLowerCase(),
-//     template: '',
-//     icon: (module as any).icon,
-//     text: getButtonText((module as any).title, position.value)
-//   } as ButtonItem))
-// })
 
 // 扩展事件定义
 const emit = defineEmits<{
@@ -347,21 +331,6 @@ const handleDrag = (event: MouseEvent) => {
   activeDockZone.value = nearestZone
   // 注意：这里不再调用emit('positionChange')和实时更新position
 }
-
-// const handleModule = (action: string) => {
-//   emitter.emit(action)
-
-//   // 根据AppMap自动匹配模块对应的FuncMode
-//   const appKey = navMode.appModeStr
-//   if (!appKey || !appConfig[appKey as keyof typeof appConfig]) return
-  
-//   const app = appConfig[appKey as keyof typeof appConfig]
-//   const module = Object.values(app.module).find(m => (m as any).title.toLowerCase() === action)
-  
-//   if (module) {
-//     navMode.funcMode = (module as any).funcMode
-//   }
-// }
 
 const handleAction = (action: string) => {
   emitter.emit(action)

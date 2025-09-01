@@ -1,95 +1,67 @@
 import { reactive } from 'vue'
 import { toolBarIcon } from './icons'
 
-// enum key: AppMode[AppMode.Pnc]
-enum AppMode {
-  None = 0,
-  Example = 1,
-  Pnc  = 2,
-  Pos  = 3,
-}
-
-enum FuncMode {
-  None         =  0,
-  // 示例模块
-  Demo1        = 10,
-  Demo2        = 11,
-  // 导航模块
-  Follow       = 20,
-  Tree         = 21,
-  // 定位模块
-  Gnss         = 30,
-  Imu          = 31,
-  Vision       = 32,
-}
-
 const appConfig: any = {
-  pos: createAppItem({
-    module: {
-      gnss: createModuleItem({
-        title: 'Gnss',
-        icon: toolBarIcon.gnss,
-        action: ['console', 'deviation', 'signal', 'sky'],
-        props: {}
-      }),
-      imu: createModuleItem({
-        title: 'Imu',
-        icon: toolBarIcon.imu,
-        action: ['draw', 'data', 'config'],
-        props: {}
-      }),
-      vision: createModuleItem({
-        title: 'Vision',
-        icon: toolBarIcon.vision,
-        action: ['draw', 'data', 'config'],
-        props: {}
-      }),
-    }
-  }),
-  pnc: createAppItem({
-    module: {
-      follow: createModuleItem({
-        title: 'Follow',
-        icon: toolBarIcon.follow,
-        action: ['simulation', 'motion', 'config'],
-        props: {}
-      }),
-      tree: createModuleItem({
-        title: 'Tree',
-        icon: toolBarIcon.tree,
-        action: ['draw', 'data', 'config'],
-        props: {}
-      }),
-    },
-  }),
-  example: createAppItem({
-    module: {
-      demo1: createModuleItem({
-        title: 'Demo1',
-        icon: toolBarIcon.default,
-        action: ['draw', 'data', 'config'],
-        props: {
-          status: {
-            str: 'Nav-Tools',
-            num: 2,
-          },
-          config: {
-            'Shirt': 5,
-            'Wool Sweater': 20,
-            'Pants': 10,
-            'High Hells': 10,
-            'Socks': 20,
-          },
-        }
-      }),
-      demo2: createModuleItem({
-        title: 'Demo2',
-        icon: toolBarIcon.default,
-        action: ['draw', 'data', 'config'],
-        props: {}
-      }),
-    }
-  }),
+  pos: {
+    gnss: createModuleItem({
+      title: 'Gnss',
+      icon: toolBarIcon.gnss,
+      action: ['console', 'deviation', 'signal', 'sky'],
+      props: {}
+    }),
+    imu: createModuleItem({
+      title: 'Imu',
+      icon: toolBarIcon.imu,
+      action: ['draw', 'data', 'config'],
+      props: {}
+    }),
+    vision: createModuleItem({
+      title: 'Vision',
+      icon: toolBarIcon.vision,
+      action: ['draw', 'data', 'config'],
+      props: {}
+    }),
+  },
+  pnc: {
+    follow: createModuleItem({
+      title: 'Follow',
+      icon: toolBarIcon.follow,
+      action: ['simulation', 'motion', 'config'],
+      props: {}
+    }),
+    tree: createModuleItem({
+      title: 'Tree',
+      icon: toolBarIcon.tree,
+      action: ['draw', 'data', 'config'],
+      props: {}
+    }),
+  },
+  example: {
+    demo1: createModuleItem({
+      title: 'Demo1',
+      icon: toolBarIcon.default,
+      action: ['draw', 'data', 'config'],
+      props: {
+        status: {
+          str: 'Nav-Tools',
+          num: 2,
+        },
+        config: {
+          'Shirt': 5,
+          'Wool Sweater': 20,
+          'Pants': 10,
+          'High Hells': 10,
+          'Socks': 20,
+        },
+      }
+    }),
+    demo2: createModuleItem({
+      title: 'Demo2',
+      icon: toolBarIcon.default,
+      action: ['draw', 'data', 'config'],
+      props: {}
+    }),
+  },
 } as const
 
 interface ModuleItem {
@@ -97,7 +69,7 @@ interface ModuleItem {
   icon: string
   action: readonly string[]
   props: Record<string, any> // status or config
-  readonly funcMode: FuncMode
+  readonly funcMode: string
   readonly template: string[]
   readonly templateNames: string[]
   readonly actionButtons: ButtonItem[]
@@ -112,17 +84,12 @@ interface ButtonItem {
   [key: string]: any
 }
 
-type AppMapType = typeof appConfig
-type AppName    = keyof AppMapType
-type ModuleMap<K extends AppName> = AppMapType[K]['module']
-type ModuleKey<K extends AppName> = keyof ModuleMap<K>
-
 // 创建模块的工厂函数
 function createModuleItem(config: Omit<ModuleItem, 'funcMode' | 'template' | 'templateNames' | 'actionButtons'>): ModuleItem {
   return {
     ...config,
     get funcMode() {
-      return FuncMode[config.title as keyof typeof FuncMode]
+      return config.title.toLowerCase()
     },
     get template() {
       return getTemplatePaths(this.title, [...this.action])
@@ -133,14 +100,6 @@ function createModuleItem(config: Omit<ModuleItem, 'funcMode' | 'template' | 'te
     get actionButtons() {
       return getActionButtons(this.title, [...this.action])
     },
-  }
-}
-
-function createAppItem(config: Omit<AppMapType[AppName], 'currMode'>) {
-  return {
-    ...config,
-    // 设置currMode 为第一个，不然为None
-    currMode: Object.values(config.module as Record<string, ModuleItem>)[0]?.funcMode || FuncMode.None,
   }
 }
 
@@ -196,44 +155,35 @@ function getActionButtons (title: string, actions: string[]) {
   return buttonList
 }
 
-// 在AppMap定义之后，NavMode类之前添加自动初始化逻辑
-// 自动获取第一个app的第一个module
+// 自动初始化逻辑，自动获取第一个app的第一个module
 function getInitialModeFromAppMap() {
   const appKeys = Object.keys(appConfig) as Array<keyof typeof appConfig>
   if (appKeys.length === 0) {
     console.error('Current appConfig is empty; an error occurred while Electron was loading the application!!!');
-    // 仍然返回默认的初始模式
     return {
-      appMode: AppMode.None,
-      appModeStr: 'none',
-      funcMode: FuncMode.None,
-      funcModeStr: 'none',
+      appMode: 'none',
+      funcMode: 'none',
     }
   }
 
   const firstAppKey = appKeys[0]
   const firstApp = appConfig[firstAppKey]
   
-  const moduleKeys = Object.keys(firstApp.module) as Array<keyof typeof firstApp.module>
+  const moduleKeys = Object.keys(firstApp) as Array<keyof typeof firstApp>
   if (moduleKeys.length === 0) {
-    // 如果没有module，使用app的currMode
-    const funcMode = firstApp.currMode
+    console.error('Current appConfig is empty; an error occurred while Electron was loading the application!!!');
     return {
-      appMode: AppMode[firstAppKey.toString().charAt(0).toUpperCase() + firstAppKey.toString().slice(1) as keyof typeof AppMode],
-      appModeStr: String(firstAppKey).toLowerCase(),
-      funcMode: funcMode,
-      funcModeStr: FuncMode[funcMode].charAt(0).toLowerCase() + FuncMode[funcMode].slice(1),
+      appMode: String(firstAppKey).toLowerCase(),
+      funcMode: 'none',
     }
   }
 
   const firstModuleKey = moduleKeys[0]
-  const firstModule = firstApp.module[firstModuleKey]
+  const firstModule = firstApp[firstModuleKey]
   
   return {
-    appMode: AppMode[String(firstAppKey).charAt(0).toUpperCase() + String(firstAppKey).slice(1) as keyof typeof AppMode],
-    appModeStr: String(firstAppKey).toLowerCase(),
-    funcMode: firstModule ? (firstModule as any).funcMode : firstApp.currMode,
-    funcModeStr: String(firstModuleKey).toLowerCase(),
+    appMode: String(firstAppKey).toLowerCase(),
+    funcMode: (firstModule as any).funcMode,
   }
 }
 
@@ -244,38 +194,23 @@ class NavMode {
   get appMode()  { 
     return this.currMode.appMode 
   }
-  get appModeStr() { 
-    return this.currMode.appModeStr
-  }
-  set appMode(m: AppMode)  { 
+  set appMode(m: string)  { 
     this.currMode.appMode = m
-    this.currMode.appModeStr = AppMode[m].charAt(0).toLocaleLowerCase() + AppMode[m].slice(1)
   }
-
   get funcMode() { 
     return this.currMode.funcMode
   }
-  get funcModeStr() { 
-    return this.currMode.funcModeStr
-  }
-  set funcMode(m: FuncMode) { 
+  set funcMode(m: string) { 
     this.currMode.funcMode = m
-    this.currMode.funcModeStr = FuncMode[m].charAt(0).toLocaleLowerCase() + FuncMode[m].slice(1)
   }
-
   get currentMode() { 
     return this.currMode 
   }
 }
 
-export type AppModeType  = AppMode
-export type FuncModeType = FuncMode
 export const navMode = new NavMode()
 export { 
-  NavMode,
-  AppMode,
-  FuncMode,
   type ButtonItem,
-
+  NavMode,
   appConfig,
 }

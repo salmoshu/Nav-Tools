@@ -368,7 +368,7 @@ onMounted(() => {
 
   // module mode
   for (const [_, appCfg] of Object.entries(appConfig)) {
-    for (const [_, moduleCfg] of Object.entries((appCfg as any).module)) {
+    for (const [_, moduleCfg] of Object.entries((appCfg as any))) {
       const moduleMsg = (moduleCfg as any).title.toLocaleLowerCase()
       emitter.on(moduleMsg, () => {
         if (navMode.funcMode !== (moduleCfg as any).funcMode) {
@@ -380,7 +380,7 @@ onMounted(() => {
 
   // module action
   for (const [_, appCfg] of Object.entries(appConfig)) {
-    for (const [_, moduleCfg] of Object.entries((appCfg as any).module)) {
+    for (const [_, moduleCfg] of Object.entries((appCfg as any))) {
       const actionNames = (moduleCfg as any).templateNames
       const actionButtons = (moduleCfg as any).actionButtons
       for (const [name, button] of Array.from({ length: Math.min(actionNames.length, actionButtons.length) }, (_, i) => [actionNames[i], actionButtons[i]])) {
