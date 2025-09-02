@@ -2,6 +2,21 @@
 const dTh = 1000    // 阈值设为1000mm
 const deltaTh = 200 // 差值阈值设为200mm
 
+// 单个数据点中值滤波处理
+function medianFilter(
+  dataHistory: number[], 
+  newDataPoint: number, 
+  windowSize: number = 5
+): number {
+  const updatedHistory = [...dataHistory, newDataPoint]
+  const recentHistory = updatedHistory.slice(-windowSize)
+  const sortedHistory = [...recentHistory].sort((a, b) => a - b)
+  
+  // 取中值
+  const medianIndex = Math.floor(sortedHistory.length / 2)
+  return sortedHistory[medianIndex]
+}
+
 // 中值滤波函数 - 5帧
 function medianFilterBatch(data: number[], windowSize: number = 5): number[] {
   const filteredData = [...data]
@@ -25,26 +40,6 @@ function medianFilterBatch(data: number[], windowSize: number = 5): number[] {
   }
   
   return filteredData
-}
-
-// 单个数据点中值滤波处理
-function medianFilter(
-  dataHistory: number[], 
-  newDataPoint: number, 
-  windowSize: number = 5
-): number {
-  // 添加新数据点到历史记录
-  const updatedHistory = [...dataHistory, newDataPoint]
-  
-  // 确保历史记录不超过窗口大小
-  const recentHistory = updatedHistory.slice(-windowSize)
-  
-  // 对最近的窗口数据进行排序
-  const sortedHistory = [...recentHistory].sort((a, b) => a - b)
-  
-  // 取中值
-  const medianIndex = Math.floor(sortedHistory.length / 2)
-  return sortedHistory[medianIndex]
 }
 
 // 障碍物检测函数

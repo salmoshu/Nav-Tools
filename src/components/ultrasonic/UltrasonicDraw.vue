@@ -25,8 +25,8 @@ import { useDevice } from '@/hooks/useDevice'
 import { useObstacleDetect } from '@/composables/ultrasonic/useObstacleDetect'
 
 // 初始化超声波数据处理
-const { ultrasonicData, newUltrasonicData, newUltrasonicDataLen, processRawData, clearRawData } = useUltrasonic()
-const { detectObstacleBatch, medianFilterBatch } = useObstacleDetect()
+const { ultrasonicData, filteredData, newUltrasonicData, newUltrasonicDataLen, processRawData, clearRawData } = useUltrasonic()
+const { detectObstacle, detectObstacleBatch, medianFilterBatch } = useObstacleDetect()
 
 const fileInput = ref<HTMLInputElement>()
 const chartRef = ref<HTMLDivElement>()
@@ -87,7 +87,7 @@ function createChartOption() {
         bottom: '15%', // 增加底部空间给dataZoom
         containLabel: true
       },
-      xAxis: { type: 'category', name: '时间(s)', data: [] },
+      xAxis: { type: 'time', name: '时间(s)', data: [] },
       yAxis: { type: 'value', name: '距离(mm)' },
       series: [],
       dataZoom: [
@@ -105,11 +105,15 @@ function createChartOption() {
     }
   }
   
-  const times = data.map(point => point[0].toFixed(2))
+  const times = data.map(point => point[0])
   const distances = data.map(point => point[1])
   const filteredDistances = medianFilterBatch(distances, 5)
   const obstacleData = detectObstacleBatch(filteredDistances)
-  
+
+  const rawSeries = data.map((p, i) => [times[i], p[1]])
+  const filterSeries = filteredDistances.map((p, i) => [times[i], p])
+  const obstacleSeries = obstacleData.map((p, i) => [times[i], p===null ? null : p])
+
   return {
     title: { 
       text: '超声波避障',
@@ -119,10 +123,10 @@ function createChartOption() {
     tooltip: { 
       trigger: 'axis',
       formatter: (params: any) => {
-        let result = `时间: ${params[0].name}s<br/>`
+        let result = `时间: ${params[0].data[0].toFixed(2)}s<br/>`
         params.forEach((param: any) => {
           if (param.value !== null) {
-            result += `${param.marker}${param.seriesName}: ${param.value}<br/>`
+            result += `${param.marker}${param.seriesName}: ${param.data[1]}<br/>`
           }
         })
         return result
@@ -152,9 +156,13 @@ function createChartOption() {
       containLabel: true
     },
     xAxis: { 
-      type: 'category',
-      data: times,
-      name: '时间(s)'
+      type: 'time',
+      name: '时间(s)',
+      axisLabel: {
+        formatter: function(value) {
+          return value.toFixed(2) + 's';
+        }
+      }
     },
     yAxis: { 
       type: 'value',
@@ -192,7 +200,7 @@ function createChartOption() {
       { 
         name: '原始距离',
         type: 'line',
-        data: distances,
+        data: rawSeries,
         smooth: true,
         itemStyle: { color: '#409EFF' },
         lineStyle: { width: 2 },
@@ -201,7 +209,7 @@ function createChartOption() {
       { 
         name: '5帧中值滤波',
         type: 'line',
-        data: filteredDistances,
+        data: filterSeries,
         smooth: true,
         itemStyle: { color: '#67C23A' },
         lineStyle: { width: 2 },
@@ -210,7 +218,7 @@ function createChartOption() {
       { 
         name: '障碍物检测',
         type: 'line',
-        data: obstacleData,
+        data: obstacleSeries,
         smooth: false, // 障碍物检测不使用平滑
         itemStyle: { color: '#F56C6C' },
         lineStyle: { 
@@ -218,7 +226,7 @@ function createChartOption() {
           type: 'solid' // 使用实线突出显示障碍物
         },
         symbol: 'circle', // 显示点标记
-        symbolSize: 6, // 点标记大小
+        symbolSize: 3, // 点标记大小
         emphasis: { 
           itemStyle: { 
             shadowBlur: 10,
@@ -262,13 +270,17 @@ function initChart() {
 
 // 添加增量更新函数
 function appendNewData(newDataPoint: [number, number]) {
-  console.log(newDataPoint)
+  console.log('appendNewData', newDataPoint)
   if (!chart) return;
   
-  const time = newDataPoint[0].toFixed(2);
-  const distance = newDataPoint[1];
-  const filteredDistance = medianFilterBatch([distance], 5)[0]; // 假设只对新数据滤波
-  const obstacle = detectObstacleBatch([filteredDistance])[0];
+  const time = newDataPoint[0].toFixed(2)
+  const distance = newDataPoint[1]
+  // const { isObstacle, filteredValue } = detectObstacle(ultrasonicData.value.map(item => item[1]), filteredData.value.map(item => item[1]), newDataPoint[1])
+
+  // 先不进行预处理
+  const { isObstacle, filteredValue } = detectObstacle(ultrasonicData.value.map(item => item[1]), ultrasonicData.value.map(item => item[1]), newDataPoint[1])
+
+  console.log(time, isObstacle, filteredValue)
   
   // 增量更新数据
   chart.appendData({
@@ -278,12 +290,13 @@ function appendNewData(newDataPoint: [number, number]) {
   
   chart.appendData({
     seriesIndex: 1,
-    data: [[time, filteredDistance]]
+    data: [[time, filteredValue]]
   });
   
   chart.appendData({
     seriesIndex: 2,
-    data: [[time, obstacle]]
+    // 先使用filteredValue来调试代码
+    data: [[time, filteredValue]]
   });
 }
 
@@ -298,7 +311,14 @@ function updateChart() {
   if (!chart) return
   
   try {
-    chart.setOption(createChartOption(), { notMerge: false }) // 使用合并模式以保持交互状态
+    const data = ultrasonicData.value
+    if (data.length === 0) {
+      // 当数据为空时，使用notMerge: true强制替换所有配置
+      chart.setOption(createChartOption(), { notMerge: true })
+    } else {
+      // 当有数据时，仍使用合并模式以保持交互状态
+      chart.setOption(createChartOption(), { notMerge: false })
+    }
     
     // 延迟调整尺寸
     setTimeout(() => {
@@ -325,8 +345,9 @@ function dispose() {
 }
 
 // 监听数据变化更新图表
-watch([newUltrasonicDataLen], () => {
-  // TODO: 处理新数据
+watch(newUltrasonicData, () => {
+  // TODO: 处理实时数据
+  // updateChart()
   // handleNewData(newUltrasonicData.value.slice(0, newUltrasonicDataLen.value).filter((item): item is [number, number] => item.length === 2))
 }, { immediate: true, deep: true })
 
