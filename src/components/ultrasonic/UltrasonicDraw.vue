@@ -3,10 +3,10 @@
     <div class="controls">
       <div class="file-controls">
         <input type="file" ref="fileInput" @change="handleFileUpload" accept=".txt,.csv" style="display: none">
-        <el-button type="primary" size="small" @click="$refs.fileInput.click()" class="upload-btn">
-          上传数据文件
+        <el-button type="primary" size="small" @click="$refs.fileInput.click()" class="upload-btn" :disabled="deviceBusy">
+          载入数据
         </el-button>
-        <el-button type="default" size="small" @click="clearData" class="clear-btn">
+        <el-button type="default" size="small" @click="clearPlotData" class="clear-btn">
           清除数据
         </el-button>
       </div>
@@ -19,82 +19,25 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, watch } from 'vue'
 import * as echarts from 'echarts'
-import { useUltrasonicFile } from '@/composables/ultrasonic/useUltrasonicFile'
+import { useUltrasonic } from '@/composables/ultrasonic/useUltrasonic'
 import { ElMessage } from 'element-plus'
+import { useDevice } from '@/hooks/useDevice'
+import { useObstacleDetect } from '@/composables/ultrasonic/useObstacleDetect'
 
 // 初始化超声波数据处理
-const { ultrasonicData, processRawData } = useUltrasonicFile()
+const { ultrasonicData, newUltrasonicData, newUltrasonicDataLen, processRawData, clearRawData } = useUltrasonic()
+const { detectObstacleBatch, medianFilterBatch } = useObstacleDetect()
+
 const fileInput = ref<HTMLInputElement>()
 const chartRef = ref<HTMLDivElement>()
 let chart: echarts.ECharts | null = null
 let resizeObserver: ResizeObserver | null = null
 
-// 中值滤波函数 - 5帧
-function medianFilter(data: number[], windowSize: number = 5): number[] {
-  const filteredData = [...data]
-  const halfWindow = Math.floor(windowSize / 2)
-  
-  for (let i = 0; i < data.length; i++) {
-    // 确定窗口范围
-    const start = Math.max(0, i - halfWindow)
-    const end = Math.min(data.length - 1, i + halfWindow)
-    
-    // 提取窗口内的数据
-    const windowData: number[] = []
-    for (let j = start; j <= end; j++) {
-      windowData.push(data[j])
-    }
-    
-    // 排序并取中值
-    windowData.sort((a, b) => a - b)
-    const medianIndex = Math.floor(windowData.length / 2)
-    filteredData[i] = windowData[medianIndex]
-  }
-  
-  return filteredData
-}
-
-// 障碍物检测函数
-function detectObstacles(data: number[]): number[] {
-  const obstacleData: any[] = []
-  const dTh = 1000    // 阈值设为1000mm
-  const deltaTh = 200 // 差值阈值设为200mm
-  
-  // 第一步：标记连续3帧都小于阈值的点
-  const continuousBelowThreshold: boolean[] = new Array(data.length).fill(false)
-  
-  for (let i = 2; i < data.length; i++) {
-    if (data[i - 2] < dTh && data[i - 1] < dTh && data[i] < dTh) {
-      continuousBelowThreshold[i] = true
-    }
-  }
-  
-  // 第二步：识别误检点
-  const isFalseDetection: boolean[] = new Array(data.length).fill(false)
-  
-  for (let i = 1; i < data.length - 1; i++) {
-    const deltaPrev = Math.abs(data[i] - data[i - 1])
-    const deltaNext = Math.abs(data[i + 1] - data[i])
-    
-    // 检测单次跳变（仅出现一次的大幅差值）
-    if (deltaPrev > deltaTh && deltaNext <= deltaTh && 
-        data[i - 1] >= dTh && data[i] < dTh && data[i + 1] >= dTh) {
-      isFalseDetection[i] = true
-    }
-  }
-  
-  // 第三步：生成障碍物数据
-  for (let i = 0; i < data.length; i++) {
-    // 障碍物点显示为实际距离值，非障碍物点设为null不显示
-    obstacleData.push(continuousBelowThreshold[i] && !isFalseDetection[i] ? data[i] : null)
-  }
-  
-  return obstacleData
-}
+const deviceBusy = ref(useDevice().deviceBusy)
 
 // 处理文件上传
 function handleFileUpload(event: Event) {
-  clearData()
+  clearPlotData()
   const target = event.target as HTMLInputElement
   const file = target.files?.[0]
   
@@ -105,6 +48,7 @@ function handleFileUpload(event: Event) {
     const content = e.target?.result as string
     try {
       processRawData(content, 0)
+      updateChart()
     } catch (error) {
       ElMessage.error('文件数据处理失败')
       console.error('文件处理错误:', error)
@@ -120,8 +64,8 @@ function handleFileUpload(event: Event) {
 }
 
 // 清除数据
-function clearData() {
-  ultrasonicData.value = []
+function clearPlotData() {
+  clearRawData()
   updateChart()
 }
 
@@ -133,7 +77,7 @@ function createChartOption() {
   if (data.length === 0) {
     return {
       title: { 
-        text: '超声波距离测量',
+        text: '超声波避障',
         left: 'center',
         textStyle: { fontSize: 14 } 
       },
@@ -143,24 +87,32 @@ function createChartOption() {
         bottom: '15%', // 增加底部空间给dataZoom
         containLabel: true
       },
-      xAxis: { type: 'category', data: [] },
-      yAxis: { type: 'value', name: '距离值' },
-      series: []
+      xAxis: { type: 'category', name: '时间(s)', data: [] },
+      yAxis: { type: 'value', name: '距离(mm)' },
+      series: [],
+      dataZoom: [
+        {
+          type: 'slider',
+          show: false,
+          xAxisIndex: 0
+        },
+        {
+          type: 'inside',
+          show: false,
+          xAxisIndex: 0
+        }
+      ],
     }
   }
   
   const times = data.map(point => point[0].toFixed(2))
   const distances = data.map(point => point[1])
-  
-  // 计算5帧中值滤波后的数据
-  const filteredDistances = medianFilter(distances, 5)
-  
-  // 计算障碍物检测数据
-  const obstacleData = detectObstacles(filteredDistances)
+  const filteredDistances = medianFilterBatch(distances, 5)
+  const obstacleData = detectObstacleBatch(filteredDistances)
   
   return {
     title: { 
-      text: '超声波距离测量',
+      text: '超声波避障',
       left: 'center',
       textStyle: { fontSize: 14 } 
     },
@@ -177,7 +129,15 @@ function createChartOption() {
       },
       textStyle: {
         fontSize: 12
-      }
+      },
+      backgroundColor: 'rgba(255, 255, 255, 0.7)',
+      borderColor: '#eee',
+      borderWidth: 1,
+      borderRadius: 4,
+      shadowBlur: 5,
+      shadowColor: 'rgba(0, 0, 0, 0.1)',
+      maxWidth: 250,
+      showDelay: 50
     },
     legend: { 
       data: ['原始距离', '5帧中值滤波', '障碍物检测'],
@@ -198,7 +158,7 @@ function createChartOption() {
     },
     yAxis: { 
       type: 'value',
-      name: '距离值',
+      name: '距离(mm)',
       axisLabel: { formatter: '{value}' }
     },
     // 添加dataZoom组件实现滚动条和鼠标滚轮缩放
@@ -300,6 +260,39 @@ function initChart() {
   }
 }
 
+// 添加增量更新函数
+function appendNewData(newDataPoint: [number, number]) {
+  console.log(newDataPoint)
+  if (!chart) return;
+  
+  const time = newDataPoint[0].toFixed(2);
+  const distance = newDataPoint[1];
+  const filteredDistance = medianFilterBatch([distance], 5)[0]; // 假设只对新数据滤波
+  const obstacle = detectObstacleBatch([filteredDistance])[0];
+  
+  // 增量更新数据
+  chart.appendData({
+    seriesIndex: 0,
+    data: [[time, distance]]
+  });
+  
+  chart.appendData({
+    seriesIndex: 1,
+    data: [[time, filteredDistance]]
+  });
+  
+  chart.appendData({
+    seriesIndex: 2,
+    data: [[time, obstacle]]
+  });
+}
+
+// 修改数据处理逻辑
+function handleNewData(data: [number, number][]) {
+  // 处理批量新数据
+  data.forEach(point => appendNewData(point));
+}
+
 // 更新图表
 function updateChart() {
   if (!chart) return
@@ -332,8 +325,9 @@ function dispose() {
 }
 
 // 监听数据变化更新图表
-watch([ultrasonicData], () => {
-  updateChart()
+watch([newUltrasonicDataLen], () => {
+  // TODO: 处理新数据
+  // handleNewData(newUltrasonicData.value.slice(0, newUltrasonicDataLen.value).filter((item): item is [number, number] => item.length === 2))
 }, { immediate: true, deep: true })
 
 // 组件挂载时初始化

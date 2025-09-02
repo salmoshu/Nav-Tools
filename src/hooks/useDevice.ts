@@ -1,10 +1,14 @@
-import { ref } from "vue"
+import { computed, ref } from "vue"
 import { ElMessage } from "element-plus"
 import { navMode } from "@/settings/config"
 import { useNmea } from '@/composables/gnss/useNmea'
+import { useUltrasonic } from '@/composables/ultrasonic/useUltrasonic'
 
 export const deviceConnected = ref(false);
-const deviceList: any[] = []
+const deviceList = ref<any[]>([])
+
+const { processRawData } = useNmea()
+const { addRawData } = useUltrasonic()
 
 // 创建全局事件管理器
 class IpcEventManager {
@@ -83,6 +87,10 @@ export function useDevice() {
     { label: "偶校验", value: "even" },
   ];
 
+  const deviceBusy = computed(() => {
+    return deviceList.value.length > 0
+  })
+
   /**
    * 打开输入对话框
    */
@@ -138,7 +146,7 @@ export function useDevice() {
       .then(() => {
         deviceConnected.value = true;
         
-        deviceList.push({
+        deviceList.value.push({
           type: 'serial',
           path: port,
           baudRate: Number(baudRate),
@@ -222,7 +230,7 @@ export function useDevice() {
   };
 
   const closeAllDevice = () => {
-    deviceList.forEach((item) => {
+    deviceList.value.forEach((item) => {
       if (item.type === 'serial') {
         window.ipcRenderer.invoke('close-serial-port', {
           path: item.path,
@@ -231,11 +239,11 @@ export function useDevice() {
           stopBits: item.stopBits,
           parity: item.parity,
         }).then(() => {
-          const index = deviceList.indexOf(item)
+          const index = deviceList.value.indexOf(item)
           if (index !== -1) {
-            deviceList.splice(index, 1)
+            deviceList.value.splice(index, 1)
           }
-          if (deviceList.length === 0) {
+          if (deviceList.value.length === 0) {
             deviceConnected.value = false
           }
         })
@@ -275,7 +283,10 @@ export function useDevice() {
   ipcManager.on('serial-data-to-renderer', (event: any, data: string) => {
     switch (navMode.funcMode) {
       case 'gnss':
-        useNmea().processRawData(data);
+        processRawData(data);
+        break;
+      case 'ultrasonic':
+        addRawData(data)
         break;
       default:
         break;
@@ -314,6 +325,7 @@ export function useDevice() {
     dataBits,
     stopBits,
     parities,
+    deviceBusy,
     handleInputSubmit,
     inputDialog,
     openFileDialog,
