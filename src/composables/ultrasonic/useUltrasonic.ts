@@ -1,53 +1,63 @@
 import { ref } from "vue"
+import { useObstacleDetect } from "./useObstacleDetect"
 
 const dt = 1/20
 const timestamp = ref(0)
-const ultrasonicData = ref([] as number[][])
-const filteredData = ref([] as number[][])
-const newUltrasonicData = ref(Array.from({ length: 100 }, () => [0, 0]) as number[][])
-const newUltrasonicDataLen = ref(0)
+const timestamps = ref([] as number[])
+const rawData = ref([] as number[])
+const filteredData = ref([] as number[])
+const obstacleData = ref([] as any[])
+
+const { detectObstacle, detectObstacleBatch } = useObstacleDetect()
 
 export function useUltrasonic() {
-  const processRawData = (data: string, startTime: number) => {
+  const initRawData = (data: string, startTime: number=0) => {
     timestamp.value = startTime
     const lines = data.split("\n");
     for (const line of lines) {
       if (line.trim() !== "") {
         const data = line.split(',')[0]
         if (data && Number(data)) {
-          ultrasonicData.value.push([timestamp.value, Number(data)]);
+          timestamps.value.push(timestamp.value)
+          rawData.value.push(Number(data))
           timestamp.value += dt
         }
       }
     }
+    detectObstacleBatch(rawData.value, filteredData.value, obstacleData.value)
   }
+
   const addRawData = (data: string) => {
     const lines = data.split("\n");
-    newUltrasonicDataLen.value = 0
     for (const line of lines) {
       if (line.trim() !== "") {
         const data = line.split(',')[0]
         if (data && Number(data)) {
-          ultrasonicData.value.push([timestamp.value, Number(data)]);
-          newUltrasonicData.value[newUltrasonicDataLen.value][0] = timestamp.value
-          newUltrasonicData.value[newUltrasonicDataLen.value][1] = Number(data)
+          const histroyRawData = rawData.value
+          const histroyFilteredData = filteredData.value
+          const {isObstacle, filteredValue} = detectObstacle(histroyRawData, histroyFilteredData, Number(data))
+
+          rawData.value.push(Number(data))
+          filteredData.value.push(filteredValue)
+          obstacleData.value.push(isObstacle ? filteredValue : null)
+          timestamps.value.push(timestamp.value)
           timestamp.value += dt
-          newUltrasonicDataLen.value++
         }
       }
     }
   }
+  
   const clearRawData = () => {
     timestamp.value = 0
-    ultrasonicData.value = []
+    rawData.value = []
   }
   return {
-    ultrasonicData,
+    timestamps,
+    rawData,
     filteredData,
-    newUltrasonicData,
-    newUltrasonicDataLen,
-    processRawData,
+    obstacleData,
     addRawData,
+    initRawData,
     clearRawData,
   }
 }

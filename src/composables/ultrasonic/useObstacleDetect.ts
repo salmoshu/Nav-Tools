@@ -18,8 +18,7 @@ function medianFilter(
 }
 
 // 中值滤波函数 - 5帧
-function medianFilterBatch(data: number[], windowSize: number = 5): number[] {
-  const filteredData = [...data]
+function medianFilterBatch(data: number[], filteredData: number[], windowSize: number = 5) {
   const halfWindow = Math.floor(windowSize / 2)
   
   for (let i = 0; i < data.length; i++) {
@@ -38,44 +37,40 @@ function medianFilterBatch(data: number[], windowSize: number = 5): number[] {
     const medianIndex = Math.floor(windowData.length / 2)
     filteredData[i] = windowData[medianIndex]
   }
-  
-  return filteredData
 }
 
-// 障碍物检测函数
-function detectObstacleBatch(data: number[]): number[] {
-  const obstacleData: any[] = []
+function detectObstacleBatch(rawData: number[], filteredData: number[], obstacleData: any[]) {
+  // 第一步：利用中值滤波进行预处理
+  medianFilterBatch(rawData, filteredData, 5)
   
-  // 第一步：标记连续3帧都小于阈值的点
-  const continuousBelowThreshold: boolean[] = Array.from({ length: data.length }).fill(false) as boolean[]
+  // 第二步：标记连续3帧都小于阈值的点
+  const continuousBelowThreshold: boolean[] = Array.from({ length: filteredData.length }).fill(false) as boolean[]
   
-  for (let i = 2; i < data.length; i++) {
-    if (data[i - 2] < dTh && data[i - 1] < dTh && data[i] < dTh) {
+  for (let i = 2; i < filteredData.length; i++) {
+    if (filteredData[i - 2] < dTh && filteredData[i - 1] < dTh && filteredData[i] < dTh) {
       continuousBelowThreshold[i] = true
     }
   }
+
+  // 第三步：识别误检点
+  const isFalseDetection: boolean[] = Array.from({ length: filteredData.length }).fill(false) as boolean[]
   
-  // 第二步：识别误检点
-  const isFalseDetection: boolean[] = Array.from({ length: data.length }).fill(false) as boolean[]
-  
-  for (let i = 1; i < data.length - 1; i++) {
-    const deltaPrev = Math.abs(data[i] - data[i - 1])
-    const deltaNext = Math.abs(data[i + 1] - data[i])
+  for (let i = 1; i < filteredData.length - 1; i++) {
+    const deltaPrev = Math.abs(filteredData[i] - filteredData[i - 1])
+    const deltaNext = Math.abs(filteredData[i + 1] - filteredData[i])
     
     // 检测单次跳变（仅出现一次的大幅差值）
     if (deltaPrev > deltaTh && deltaNext <= deltaTh && 
-        data[i - 1] >= dTh && data[i] < dTh && data[i + 1] >= dTh) {
+        filteredData[i - 1] >= dTh && filteredData[i] < dTh && filteredData[i + 1] >= dTh) {
       isFalseDetection[i] = true
     }
   }
-  
-  // 第三步：生成障碍物数据
-  for (let i = 0; i < data.length; i++) {
+
+  // 第四步：生成障碍物数据
+  for (let i = 0; i < filteredData.length; i++) {
     // 障碍物点显示为实际距离值，非障碍物点设为null不显示
-    obstacleData.push(continuousBelowThreshold[i] && !isFalseDetection[i] ? data[i] : null)
+    obstacleData.push(continuousBelowThreshold[i] && !isFalseDetection[i] ? filteredData[i] : null)
   }
-  
-  return obstacleData
 }
 
 // 单个数据点障碍物检测处理
@@ -120,9 +115,7 @@ function detectObstacle(
 // 导出函数
 export function useObstacleDetect() {
   return {
-    medianFilter,
     detectObstacle,
-    medianFilterBatch,
     detectObstacleBatch,
   }
 }

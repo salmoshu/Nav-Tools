@@ -25,56 +25,30 @@ import { useDevice } from '@/hooks/useDevice'
 import { useObstacleDetect } from '@/composables/ultrasonic/useObstacleDetect'
 
 // 初始化超声波数据处理
-const { ultrasonicData, filteredData, newUltrasonicData, newUltrasonicDataLen, processRawData, clearRawData } = useUltrasonic()
-const { detectObstacle, detectObstacleBatch, medianFilterBatch } = useObstacleDetect()
+const { timestamps, rawData, filteredData, obstacleData, initRawData, clearRawData } = useUltrasonic()
+const { detectObstacle, detectObstacleBatch } = useObstacleDetect()
 
 const fileInput = ref<HTMLInputElement>()
 const chartRef = ref<HTMLDivElement>()
 let chart: echarts.ECharts | null = null
 let resizeObserver: ResizeObserver | null = null
-
 const deviceBusy = ref(useDevice().deviceBusy)
-
-// 处理文件上传
-function handleFileUpload(event: Event) {
-  clearPlotData()
-  const target = event.target as HTMLInputElement
-  const file = target.files?.[0]
-  
-  if (!file) return
-  
-  const reader = new FileReader()
-  reader.onload = (e) => {
-    const content = e.target?.result as string
-    try {
-      processRawData(content, 0)
-      updateChart()
-    } catch (error) {
-      ElMessage.error('文件数据处理失败')
-      console.error('文件处理错误:', error)
-    }
-  }
-  reader.onerror = () => {
-    ElMessage.error('文件读取失败')
-  }
-  reader.readAsText(file)
-  
-  // 重置文件输入，以便可以重复上传同一个文件
-  target.value = ''
-}
 
 // 清除数据
 function clearPlotData() {
   clearRawData()
-  updateChart()
+  updateChartBatch()
 }
 
 // 创建自定义图表配置
 function createChartOption() {
-  // 始终使用完整数据，通过dataZoom控制显示范围
-  const data = ultrasonicData.value
+  // 由于x、y轴都是value类型，因此需要处理为二维数组的形式
+  // item, index
+  const rawDataSeries = rawData.value.map((item, index: number) => [timestamps.value[index], item])
+  const filteredDataSeries = filteredData.value.map((item, index: number) => [timestamps.value[index], item])
+  const obstacleDataSeries = obstacleData.value.map((item, index: number) => [timestamps.value[index], item])
   
-  if (data.length === 0) {
+  if (rawDataSeries.length === 0) {
     return {
       title: { 
         text: '超声波避障',
@@ -87,9 +61,13 @@ function createChartOption() {
         bottom: '15%', // 增加底部空间给dataZoom
         containLabel: true
       },
-      xAxis: { type: 'time', name: '时间(s)', data: [] },
+      xAxis: { type: 'value', name: '时间(s)', data: [] },
       yAxis: { type: 'value', name: '距离(mm)' },
-      series: [],
+      series: [
+        { name: '原始距离',   type: 'line', data: [] },
+        { name: '5帧中值滤波', type: 'line', data: [] },
+        { name: '障碍物检测', type: 'line', data: [] }
+      ],
       dataZoom: [
         {
           type: 'slider',
@@ -104,15 +82,6 @@ function createChartOption() {
       ],
     }
   }
-  
-  const times = data.map(point => point[0])
-  const distances = data.map(point => point[1])
-  const filteredDistances = medianFilterBatch(distances, 5)
-  const obstacleData = detectObstacleBatch(filteredDistances)
-
-  const rawSeries = data.map((p, i) => [times[i], p[1]])
-  const filterSeries = filteredDistances.map((p, i) => [times[i], p])
-  const obstacleSeries = obstacleData.map((p, i) => [times[i], p===null ? null : p])
 
   return {
     title: { 
@@ -126,7 +95,7 @@ function createChartOption() {
         let result = `时间: ${params[0].data[0].toFixed(2)}s<br/>`
         params.forEach((param: any) => {
           if (param.value !== null) {
-            result += `${param.marker}${param.seriesName}: ${param.data[1]}<br/>`
+            result += `${param.marker}${param.seriesName}: ${param.data[1]} mm<br/>`
           }
         })
         return result
@@ -141,7 +110,6 @@ function createChartOption() {
       shadowBlur: 5,
       shadowColor: 'rgba(0, 0, 0, 0.1)',
       maxWidth: 250,
-      showDelay: 50
     },
     legend: { 
       data: ['原始距离', '5帧中值滤波', '障碍物检测'],
@@ -156,7 +124,7 @@ function createChartOption() {
       containLabel: true
     },
     xAxis: { 
-      type: 'time',
+      type: 'value',
       name: '时间(s)',
       axisLabel: {
         formatter: function(value) {
@@ -182,7 +150,9 @@ function createChartOption() {
         borderColor: '#ddd',
         fillerColor: 'rgba(64, 158, 255, 0.1)',
         handleStyle: { color: '#409EFF' },
-        textStyle: { color: '#666', fontSize: 12 }
+        textStyle: { color: '#666', fontSize: 12 },
+        minSpan: 1.0,
+        rangeMode: 'value',
       },
       // 添加inside类型的dataZoom以支持鼠标滚轮缩放
       { 
@@ -190,17 +160,19 @@ function createChartOption() {
         xAxisIndex: 0,
         start: 0,
         end: 100,
+        minSpan: 1.0,
+        rangeMode: 'value',
         zoomOnMouseWheel: true, // 启用鼠标滚轮缩放
         moveOnMouseMove: true, // 启用鼠标拖动平移
         moveOnMouseWheel: true, // 鼠标滚轮移动视图
-        preventDefaultMouseMove: true // 阻止默认的鼠标移动事件
+        preventDefaultMouseMove: true, // 阻止默认的鼠标移动事件
       }
     ],
     series: [
       { 
         name: '原始距离',
         type: 'line',
-        data: rawSeries,
+        data: rawDataSeries,
         smooth: true,
         itemStyle: { color: '#409EFF' },
         lineStyle: { width: 2 },
@@ -209,7 +181,7 @@ function createChartOption() {
       { 
         name: '5帧中值滤波',
         type: 'line',
-        data: filterSeries,
+        data: filteredDataSeries,
         smooth: true,
         itemStyle: { color: '#67C23A' },
         lineStyle: { width: 2 },
@@ -218,7 +190,7 @@ function createChartOption() {
       { 
         name: '障碍物检测',
         type: 'line',
-        data: obstacleSeries,
+        data: obstacleDataSeries,
         smooth: false, // 障碍物检测不使用平滑
         itemStyle: { color: '#F56C6C' },
         lineStyle: { 
@@ -242,10 +214,11 @@ function createChartOption() {
 // 初始化图表
 function initChart() {
   if (!chartRef.value || chart) return
-  
+
   try {
     chart = echarts.init(chartRef.value)
-    chart.setOption(createChartOption())
+    const options = createChartOption()
+    chart.setOption(options)
     
     // 延迟调整尺寸
     setTimeout(() => {
@@ -270,34 +243,38 @@ function initChart() {
 
 // 添加增量更新函数
 function appendNewData(newDataPoint: [number, number]) {
-  console.log('appendNewData', newDataPoint)
   if (!chart) return;
   
-  const time = newDataPoint[0].toFixed(2)
+  const time = newDataPoint[0]
   const distance = newDataPoint[1]
-  // const { isObstacle, filteredValue } = detectObstacle(ultrasonicData.value.map(item => item[1]), filteredData.value.map(item => item[1]), newDataPoint[1])
 
-  // 先不进行预处理
-  const { isObstacle, filteredValue } = detectObstacle(ultrasonicData.value.map(item => item[1]), ultrasonicData.value.map(item => item[1]), newDataPoint[1])
+  // const { isObstacle, filteredValue } = detectObstacle(rawData.value.map(item => item[1]), filteredData.value.map(item => item[1]), newDataPoint[1])
 
-  console.log(time, isObstacle, filteredValue)
+  // // 增量更新数据
+  // chart.appendData({
+  //   seriesIndex: 0,
+  //   data: [[time, distance]]
+  // })
   
-  // 增量更新数据
-  chart.appendData({
-    seriesIndex: 0,
-    data: [[time, distance]]
-  });
+  // chart.appendData({
+  //   seriesIndex: 1,
+  //   data: [[time, filteredValue]]
+  // })
   
-  chart.appendData({
-    seriesIndex: 1,
-    data: [[time, filteredValue]]
-  });
-  
-  chart.appendData({
-    seriesIndex: 2,
-    // 先使用filteredValue来调试代码
-    data: [[time, filteredValue]]
-  });
+  // chart.appendData({
+  //   seriesIndex: 2,
+  //   // 先使用filteredValue来调试代码
+  //   data: [[time, isObstacle?filteredValue:null]]
+  // })
+
+  chart.setOption(
+    { series: [
+      { data: [] },
+      { data: [] },
+      { data: [] }
+    ] }, 
+    { notMerge: false, lazyUpdate: true }
+  )
 }
 
 // 修改数据处理逻辑
@@ -307,17 +284,17 @@ function handleNewData(data: [number, number][]) {
 }
 
 // 更新图表
-function updateChart() {
+function updateChartBatch() {
   if (!chart) return
   
   try {
-    const data = ultrasonicData.value
-    if (data.length === 0) {
+    const options = createChartOption()
+    if (rawData.value.length === 0) {
       // 当数据为空时，使用notMerge: true强制替换所有配置
-      chart.setOption(createChartOption(), { notMerge: true })
+      chart.setOption(options, { notMerge: true })
     } else {
       // 当有数据时，仍使用合并模式以保持交互状态
-      chart.setOption(createChartOption(), { notMerge: false })
+      chart.setOption(options, { notMerge: false })
     }
     
     // 延迟调整尺寸
@@ -344,10 +321,38 @@ function dispose() {
   }
 }
 
+// 处理文件上传
+function handleFileUpload(event: Event) {
+  clearPlotData()
+  const target = event.target as HTMLInputElement
+  const file = target.files?.[0]
+  
+  if (!file) return
+  
+  const reader = new FileReader()
+  reader.onload = (e) => {
+    const content = e.target?.result as string
+    try {
+      initRawData(content, 0)
+      updateChartBatch()
+    } catch (error) {
+      ElMessage.error('文件数据处理失败')
+      console.error('文件处理错误:', error)
+    }
+  }
+  reader.onerror = () => {
+    ElMessage.error('文件读取失败')
+  }
+  reader.readAsText(file)
+  
+  // 重置文件输入，以便可以重复上传同一个文件
+  target.value = ''
+}
+
 // 监听数据变化更新图表
-watch(newUltrasonicData, () => {
+watch(rawData, () => {
   // TODO: 处理实时数据
-  // updateChart()
+  // updateChartBatch()
   // handleNewData(newUltrasonicData.value.slice(0, newUltrasonicDataLen.value).filter((item): item is [number, number] => item.length === 2))
 }, { immediate: true, deep: true })
 
