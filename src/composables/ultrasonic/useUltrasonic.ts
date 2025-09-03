@@ -50,6 +50,9 @@ export function useUltrasonic() {
   const clearRawData = () => {
     timestamp.value = 0
     rawData.value = []
+    filteredData.value = []
+    obstacleData.value = []
+    timestamps.value = []
   }
   return {
     timestamps,

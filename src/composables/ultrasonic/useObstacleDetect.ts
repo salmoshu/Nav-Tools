@@ -1,6 +1,7 @@
 // 障碍物检测阈值常量
 const dTh = 1000    // 阈值设为1000mm
 const deltaTh = 200 // 差值阈值设为200mm
+const slidWindowSize = 5
 
 // 单个数据点中值滤波处理
 function medianFilter(
@@ -41,7 +42,7 @@ function medianFilterBatch(data: number[], filteredData: number[], windowSize: n
 
 function detectObstacleBatch(rawData: number[], filteredData: number[], obstacleData: any[]) {
   // 第一步：利用中值滤波进行预处理
-  medianFilterBatch(rawData, filteredData, 5)
+  medianFilterBatch(rawData, filteredData, slidWindowSize)
   
   // 第二步：标记连续3帧都小于阈值的点
   const continuousBelowThreshold: boolean[] = Array.from({ length: filteredData.length }).fill(false) as boolean[]
@@ -80,10 +81,11 @@ function detectObstacle(
   newDataPoint: number
 ): { isObstacle: boolean, filteredValue: number } {
   // 首先对新数据点进行中值滤波
-  const filteredValue = medianFilter(filteredHistory, newDataPoint)
+  if (dataHistory.length < slidWindowSize) {
+    return { isObstacle: false, filteredValue: newDataPoint }
+  }
+  const filteredValue = medianFilter(dataHistory, newDataPoint, slidWindowSize)
   
-  // 更新历史记录
-  const updatedDataHistory = [...dataHistory, newDataPoint].slice(-3)  // 只保留最近3个原始数据
   const updatedFilteredHistory = [...filteredHistory, filteredValue].slice(-3)  // 只保留最近3个滤波后数据
   
   // 检查是否满足障碍物条件（连续3个滤波后数据都小于阈值）

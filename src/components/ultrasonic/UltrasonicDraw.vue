@@ -1,6 +1,16 @@
 <template>
   <div class="ultrasonic-container">
     <div class="controls">
+      <div class="time-range-control">
+        <span>时间范围/帧：</span>
+        <el-select v-model="timeRange" placeholder="选择时间范围" size="small" @change="updateChart">
+          <el-option label="100" :value="100"></el-option>
+          <el-option label="200" :value="200"></el-option>
+          <el-option label="500" :value="500"></el-option>
+          <el-option label="全部" :value="0"></el-option>
+        </el-select>
+      </div>
+      
       <div class="file-controls">
         <input type="file" ref="fileInput" @change="handleFileUpload" accept=".txt,.csv" style="display: none">
         <el-button type="primary" size="small" @click="$refs.fileInput.click()" class="upload-btn" :disabled="deviceBusy">
@@ -22,22 +32,22 @@ import * as echarts from 'echarts'
 import { useUltrasonic } from '@/composables/ultrasonic/useUltrasonic'
 import { ElMessage } from 'element-plus'
 import { useDevice } from '@/hooks/useDevice'
-import { useObstacleDetect } from '@/composables/ultrasonic/useObstacleDetect'
 
 // 初始化超声波数据处理
 const { timestamps, rawData, filteredData, obstacleData, initRawData, clearRawData } = useUltrasonic()
-const { detectObstacle, detectObstacleBatch } = useObstacleDetect()
 
 const fileInput = ref<HTMLInputElement>()
 const chartRef = ref<HTMLDivElement>()
 let chart: echarts.ECharts | null = null
 let resizeObserver: ResizeObserver | null = null
 const deviceBusy = ref(useDevice().deviceBusy)
+// 将timeRange改为响应式变量
+const timeRange = ref<number>(100)
 
 // 清除数据
 function clearPlotData() {
   clearRawData()
-  updateChartBatch()
+  updateChart()
 }
 
 // 创建自定义图表配置
@@ -47,6 +57,13 @@ function createChartOption() {
   const rawDataSeries = rawData.value.map((item, index: number) => [timestamps.value[index], item])
   const filteredDataSeries = filteredData.value.map((item, index: number) => [timestamps.value[index], item])
   const obstacleDataSeries = obstacleData.value.map((item, index: number) => [timestamps.value[index], item])
+
+  // 使用响应式的timeRange变量
+  // 处理timeRange为0时显示全部数据
+  let xAxisStart = 0
+  if (timeRange.value > 0 && rawDataSeries.length > timeRange.value) {
+    xAxisStart = (1 - timeRange.value / rawDataSeries.length) * 100
+  }
   
   if (rawDataSeries.length === 0) {
     return {
@@ -64,9 +81,42 @@ function createChartOption() {
       xAxis: { type: 'value', name: '时间(s)', data: [] },
       yAxis: { type: 'value', name: '距离(mm)' },
       series: [
-        { name: '原始距离',   type: 'line', data: [] },
-        { name: '5帧中值滤波', type: 'line', data: [] },
-        { name: '障碍物检测', type: 'line', data: [] }
+        {
+          name: '原始距离',
+          symbolSize: 4,
+          type: 'line',
+          data: [],
+          sampling: 'lttb',
+          large: true,
+          largeThreshold: 10000,
+          progressive: 5000,
+          progressiveThreshold: 10000,
+          animation: false,
+        },
+        {
+          name: '5帧中值滤波',
+          symbolSize: 4,
+          type: 'line',
+          data: [],
+          sampling: 'lttb',
+          large: true,
+          largeThreshold: 10000,
+          progressive: 5000,
+          progressiveThreshold: 10000,
+          animation: false,
+        },
+        {
+          name: '障碍物检测',
+          symbolSize: 4,
+          type: 'line',
+          data: [],
+          sampling: 'lttb',
+          large: true,
+          largeThreshold: 10000,
+          progressive: 5000,
+          progressiveThreshold: 10000,
+          animation: false,
+        }
       ],
       dataZoom: [
         {
@@ -127,7 +177,7 @@ function createChartOption() {
       type: 'value',
       name: '时间(s)',
       axisLabel: {
-        formatter: function(value) {
+        formatter: function(value: number) {
           return value.toFixed(2) + 's';
         }
       }
@@ -139,11 +189,11 @@ function createChartOption() {
     },
     // 添加dataZoom组件实现滚动条和鼠标滚轮缩放
     dataZoom: [
-      { 
+      {
         type: 'slider',
         show: true,
         xAxisIndex: 0,
-        start: 0,
+        start: xAxisStart,
         end: 100,
         bottom: 5,
         height: 20,
@@ -158,7 +208,7 @@ function createChartOption() {
       { 
         type: 'inside',
         xAxisIndex: 0,
-        start: 0,
+        start: xAxisStart,
         end: 100,
         minSpan: 1.0,
         rangeMode: 'value',
@@ -241,50 +291,8 @@ function initChart() {
   }
 }
 
-// 添加增量更新函数
-function appendNewData(newDataPoint: [number, number]) {
-  if (!chart) return;
-  
-  const time = newDataPoint[0]
-  const distance = newDataPoint[1]
-
-  // const { isObstacle, filteredValue } = detectObstacle(rawData.value.map(item => item[1]), filteredData.value.map(item => item[1]), newDataPoint[1])
-
-  // // 增量更新数据
-  // chart.appendData({
-  //   seriesIndex: 0,
-  //   data: [[time, distance]]
-  // })
-  
-  // chart.appendData({
-  //   seriesIndex: 1,
-  //   data: [[time, filteredValue]]
-  // })
-  
-  // chart.appendData({
-  //   seriesIndex: 2,
-  //   // 先使用filteredValue来调试代码
-  //   data: [[time, isObstacle?filteredValue:null]]
-  // })
-
-  chart.setOption(
-    { series: [
-      { data: [] },
-      { data: [] },
-      { data: [] }
-    ] }, 
-    { notMerge: false, lazyUpdate: true }
-  )
-}
-
-// 修改数据处理逻辑
-function handleNewData(data: [number, number][]) {
-  // 处理批量新数据
-  data.forEach(point => appendNewData(point));
-}
-
 // 更新图表
-function updateChartBatch() {
+function updateChart() {
   if (!chart) return
   
   try {
@@ -294,7 +302,7 @@ function updateChartBatch() {
       chart.setOption(options, { notMerge: true })
     } else {
       // 当有数据时，仍使用合并模式以保持交互状态
-      chart.setOption(options, { notMerge: false })
+      chart.setOption(options, { notMerge: false, lazyUpdate: true })
     }
     
     // 延迟调整尺寸
@@ -334,7 +342,6 @@ function handleFileUpload(event: Event) {
     const content = e.target?.result as string
     try {
       initRawData(content, 0)
-      updateChartBatch()
     } catch (error) {
       ElMessage.error('文件数据处理失败')
       console.error('文件处理错误:', error)
@@ -351,9 +358,7 @@ function handleFileUpload(event: Event) {
 
 // 监听数据变化更新图表
 watch(rawData, () => {
-  // TODO: 处理实时数据
-  // updateChartBatch()
-  // handleNewData(newUltrasonicData.value.slice(0, newUltrasonicDataLen.value).filter((item): item is [number, number] => item.length === 2))
+  updateChart()
 }, { immediate: true, deep: true })
 
 // 组件挂载时初始化
@@ -380,11 +385,18 @@ onUnmounted(() => {
 
 .controls {
   display: flex;
-  justify-content: flex-end;
+  justify-content: space-between;
   align-items: center;
   margin-bottom: 10px;
   flex-wrap: wrap;
   gap: 10px;
+}
+
+.time-range-control {
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  padding: 4px 12px;
 }
 
 .file-controls {
@@ -409,5 +421,14 @@ onUnmounted(() => {
 :deep(.clear-btn) {
   font-size: 12px;
   padding: 4px 12px;
+}
+
+/* Element Plus 下拉框样式调整 */
+:deep(.el-select) {
+  width: 120px;
+}
+
+:deep(.el-select .el-input__inner) {
+  font-size: 12px;
 }
 </style>
