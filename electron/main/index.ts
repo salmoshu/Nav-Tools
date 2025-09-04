@@ -1,4 +1,4 @@
-import { app, BrowserWindow, shell, ipcMain, Menu } from 'electron'
+import { app, BrowserWindow, shell, ipcMain, Menu, powerSaveBlocker } from 'electron'
 // import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
@@ -125,6 +125,12 @@ function createMenu() {
 app.whenReady().then(() => {
   createWindow()
   createMenu()
+  // 阻止系统因空闲而挂起 GPU/CPU
+  powerSaveBlocker.start('prevent-app-suspension')
+  app.commandLine.appendSwitch('disable-renderer-backgrounding')
+  app.commandLine.appendSwitch('disable-background-timer-throttling')
+  app.commandLine.appendSwitch('disable-backgrounding-occluded-windows')
+  app.commandLine.appendSwitch('disable-features', 'CalculateNativeWinOcclusion')
 })
 
 app.on('window-all-closed', () => {
