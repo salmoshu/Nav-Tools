@@ -84,36 +84,18 @@ function createChartOption() {
           symbolSize: 4,
           type: 'line',
           data: [],
-          sampling: 'lttb',
-          large: true,
-          largeThreshold: 5000,
-          progressive: 5000,
-          progressiveThreshold: 10000,
-          animation: false,
         },
         {
           name: '5帧中值滤波',
           symbolSize: 4,
           type: 'line',
           data: [],
-          sampling: 'lttb',
-          large: true,
-          largeThreshold: 5000,
-          progressive: 5000,
-          progressiveThreshold: 10000,
-          animation: false,
         },
         {
           name: '障碍物检测',
           symbolSize: 4,
           type: 'line',
           data: [],
-          sampling: 'lttb',
-          large: true,
-          largeThreshold: 5000,
-          progressive: 5000,
-          progressiveThreshold: 10000,
-          animation: false,
         }
       ],
       dataZoom: [
@@ -224,7 +206,13 @@ function createChartOption() {
         smooth: true,
         itemStyle: { color: '#409EFF' },
         lineStyle: { width: 2 },
-        showSymbol: false // 不显示原始数据的点标记，减少视觉干扰
+        showSymbol: false,
+        sampling: 'lttb',
+        large: true,
+        largeThreshold: 5000,
+        progressive: 5000,
+        progressiveThreshold: 10000,
+        animation: false,
       },
       { 
         name: '5帧中值滤波',
@@ -233,7 +221,13 @@ function createChartOption() {
         smooth: true,
         itemStyle: { color: '#67C23A' },
         lineStyle: { width: 2 },
-        showSymbol: false // 不显示滤波数据的点标记
+        showSymbol: false,
+        sampling: 'lttb',
+        large: true,
+        largeThreshold: 5000,
+        progressive: 5000,
+        progressiveThreshold: 10000,
+        animation: false,
       },
       { 
         name: '障碍物检测',
@@ -253,7 +247,13 @@ function createChartOption() {
             shadowColor: 'rgba(245, 108, 108, 0.5)'
           }
         },
-        connectNulls: false // 不连接null值，只显示连续的障碍物点
+        connectNulls: false,
+        sampling: 'lttb',
+        large: true,
+        largeThreshold: 5000,
+        progressive: 5000,
+        progressiveThreshold: 10000,
+        animation: false,
       }
     ]
   }
