@@ -207,12 +207,12 @@ function createChartOption() {
         itemStyle: { color: '#409EFF' },
         lineStyle: { width: 2 },
         showSymbol: false,
-        sampling: 'lttb',
         large: true,
         largeThreshold: 5000,
         progressive: 5000,
         progressiveThreshold: 10000,
         animation: false,
+        ...(rawDataSeries.length > 5000 && { sampling: 'lttb' })
       },
       { 
         name: '5帧中值滤波',
@@ -222,12 +222,12 @@ function createChartOption() {
         itemStyle: { color: '#67C23A' },
         lineStyle: { width: 2 },
         showSymbol: false,
-        sampling: 'lttb',
         large: true,
         largeThreshold: 5000,
         progressive: 5000,
         progressiveThreshold: 10000,
         animation: false,
+        ...(filteredDataSeries.length > 5000 && { sampling: 'lttb' })
       },
       { 
         name: '障碍物检测',
@@ -248,12 +248,12 @@ function createChartOption() {
           }
         },
         connectNulls: false,
-        sampling: 'lttb',
         large: true,
         largeThreshold: 5000,
         progressive: 5000,
         progressiveThreshold: 10000,
         animation: false,
+        ...(obstacleDataSeries.length > 5000 && { sampling: 'lttb' })
       }
     ]
   }
