@@ -1,6 +1,5 @@
 import { ref } from "vue"
 import { useObstacleDetect } from "./useObstacleDetect"
-import { ElMessage } from "element-plus"
 
 const dt = 1/20
 const timestamp = ref(0)
@@ -31,7 +30,6 @@ export function useUltrasonic() {
           const json = JSON.parse(line)
           const data = json.ultrasonic
           if (data && Number(data)) {
-            // console.log(json.time, Number(json.time), json.time && Number(json.time))
             if (typeof json.time === 'number') {
               if (timestamp.value == 0) {
                 // 增加一个极小量 0.0005，以处理为0的情况
@@ -44,10 +42,6 @@ export function useUltrasonic() {
               timestamp.value += dt
             }
             rawData.value.push(Number(data))
-            console.log(
-              timestamps.value[timestamps.value.length - 1],
-              rawData.value[rawData.value.length - 1]
-            )
           }
         } catch (error) {
           console.log('json解析失败', error)
@@ -97,8 +91,6 @@ export function useUltrasonic() {
   }
   
   const saveData = () => {
-    ElMessage.error('该功能还存在一些BUG!')
-    return
     // 创建符合要求的格式数据
     const formattedData = rawData.value.map((ultrasonic, index) => {
       return {

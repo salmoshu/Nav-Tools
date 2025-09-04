@@ -20,30 +20,21 @@ function medianFilter(
 
 // 中值滤波函数 - 5帧
 function medianFilterBatch(data: number[], filteredData: number[], windowSize: number = 5) {
-  const halfWindow = Math.floor(windowSize / 2)
-  
-  for (let i = 0; i < data.length; i++) {
-    // 确定窗口范围
-    const start = Math.max(0, i - halfWindow)
-    const end = Math.min(data.length - 1, i + halfWindow)
-    
-    // 提取窗口内的数据
-    const windowData: number[] = []
-    for (let j = start; j <= end; j++) {
-      windowData.push(data[j])
-    }
-    
-    // 排序并取中值
-    windowData.sort((a, b) => a - b)
-    const medianIndex = Math.floor(windowData.length / 2)
-    filteredData[i] = windowData[medianIndex]
+  for (let i = 0; i < windowSize-1; i++) {
+    filteredData[i] = data[i]
+  }
+  for (let i = windowSize-1; i < data.length; i++) {
+    // 构建当前点的历史数据（包含当前点之前的点，但不包含之后的点）
+    const historyData = data.slice(Math.max(0, i - windowSize + 1), i);
+    // 使用 medianFilter 处理当前点
+    filteredData[i] = medianFilter(historyData, data[i], windowSize);
   }
 }
 
 function detectObstacleBatch(rawData: number[], filteredData: number[], obstacleData: any[]) {
   // 第一步：利用中值滤波进行预处理
   medianFilterBatch(rawData, filteredData, slidWindowSize)
-  
+
   // 第二步：标记连续3帧都小于阈值的点
   const continuousBelowThreshold: boolean[] = Array.from({ length: filteredData.length }).fill(false) as boolean[]
   
@@ -81,7 +72,7 @@ function detectObstacle(
   newDataPoint: number
 ): { isObstacle: boolean, filteredValue: number } {
   // 首先对新数据点进行中值滤波
-  if (dataHistory.length < slidWindowSize) {
+  if (dataHistory.length < slidWindowSize-1) {
     return { isObstacle: false, filteredValue: newDataPoint }
   }
   const filteredValue = medianFilter(dataHistory, newDataPoint, slidWindowSize)
