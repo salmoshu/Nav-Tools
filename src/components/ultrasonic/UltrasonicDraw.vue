@@ -3,7 +3,7 @@
     <div class="controls">
       <div class="time-range-control">
         <span>时间范围/帧：</span>
-        <el-select v-model="timeRange" placeholder="选择时间范围" size="small" @change="updateChart">
+        <el-select v-model="timeRange" placeholder="选择时间范围" size="small" @change="updateChart" :disabled="!deviceBusy">
           <el-option label="100" :value="100"></el-option>
           <el-option label="200" :value="200"></el-option>
           <el-option label="500" :value="500"></el-option>
@@ -58,8 +58,6 @@ function createChartOption() {
   const filteredDataSeries = filteredData.value.map((item, index: number) => [timestamps.value[index], item])
   const obstacleDataSeries = obstacleData.value.map((item, index: number) => [timestamps.value[index], item])
 
-  // 使用响应式的timeRange变量
-  // 处理timeRange为0时显示全部数据
   let xAxisStart = 0
   if (timeRange.value > 0 && rawDataSeries.length > timeRange.value) {
     xAxisStart = (1 - timeRange.value / rawDataSeries.length) * 100
@@ -341,7 +339,9 @@ function handleFileUpload(event: Event) {
   reader.onload = (e) => {
     const content = e.target?.result as string
     try {
+      timeRange.value = 0
       initRawData(content, 0)
+      updateChart()
     } catch (error) {
       ElMessage.error('文件数据处理失败')
       console.error('文件处理错误:', error)
@@ -358,7 +358,9 @@ function handleFileUpload(event: Event) {
 
 // 监听数据变化更新图表
 watch(rawData, () => {
-  updateChart()
+  if (deviceBusy.value) {
+    updateChart()
+  }
 }, { immediate: true, deep: true })
 
 // 组件挂载时初始化
