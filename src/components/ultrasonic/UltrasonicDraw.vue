@@ -16,6 +16,9 @@
         <el-button type="primary" size="small" @click="$refs.fileInput.click()" class="upload-btn" :disabled="deviceBusy">
           载入数据
         </el-button>
+        <el-button type="primary" size="small" @click="saveData" class="save-btn" :disabled="rawData.length===0 || deviceBusy">
+          保存数据
+        </el-button>
         <el-button type="default" size="small" @click="clearPlotData" class="clear-btn">
           清除数据
         </el-button>
@@ -34,7 +37,7 @@ import { ElMessage } from 'element-plus'
 import { useDevice } from '@/hooks/useDevice'
 
 // 初始化超声波数据处理
-const { timestamps, rawData, filteredData, obstacleData, initRawData, clearRawData } = useUltrasonic()
+const { timestamps, rawData, filteredData, obstacleData, initRawData, clearRawData, saveData } = useUltrasonic()
 
 const fileInput = ref<HTMLInputElement>()
 const chartRef = ref<HTMLDivElement>()
@@ -77,7 +80,7 @@ function createChartOption() {
         containLabel: true
       },
       xAxis: { type: 'value', name: '时间(s)', data: [] },
-      yAxis: { type: 'value', name: '距离(mm)' },
+      yAxis: { type: 'value', name: '距离(m)' },
       series: [
         {
           name: '原始距离',
@@ -125,7 +128,7 @@ function createChartOption() {
         let result = `时间: ${params[0].data[0].toFixed(2)}s<br/>`
         params.forEach((param: any) => {
           if (param.value !== null) {
-            result += `${param.marker}${param.seriesName}: ${param.data[1]} mm<br/>`
+            result += `${param.marker}${param.seriesName}: ${param.data[1]} m<br/>`
           }
         })
         return result
@@ -164,7 +167,7 @@ function createChartOption() {
     },
     yAxis: { 
       type: 'value',
-      name: '距离(mm)',
+      name: '距离(m)',
       axisLabel: { formatter: '{value}' }
     },
     // 添加dataZoom组件实现滚动条和鼠标滚轮缩放

@@ -1,6 +1,6 @@
 // 障碍物检测阈值常量
-const dTh = 1000    // 阈值设为1000mm
-const deltaTh = 200 // 差值阈值设为200mm
+const dTh = 1       // 阈值设为 1m
+const deltaTh = 0.2 // 差值阈值设为 0.2m
 const slidWindowSize = 5
 
 // 单个数据点中值滤波处理
