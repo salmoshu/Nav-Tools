@@ -2,11 +2,19 @@ import { reactive } from 'vue'
 import { toolBarIcon } from './icons'
 
 const appConfig: any = {
+  robot: {
+    follow: createModuleItem({
+      title: 'Follow',
+      icon: toolBarIcon.follow,
+      action: ['data',],
+      props: {}
+    }),
+  },
   perc: {
     ultrasonic: createModuleItem({
       title: 'Ultrasonic',
       icon: toolBarIcon.ultrasonic,
-      action: ['draw'],
+      action: ['data'],
       props: {}
     }),
   },
@@ -31,10 +39,10 @@ const appConfig: any = {
     }),
   },
   pnc: {
-    follow: createModuleItem({
-      title: 'Follow',
+    followsim: createModuleItem({
+      title: 'FollowSim',
       icon: toolBarIcon.follow,
-      action: ['simulation', 'motion', 'config'],
+      action: ['dashboard', 'motion', 'config'],
       props: {}
     }),
     tree: createModuleItem({

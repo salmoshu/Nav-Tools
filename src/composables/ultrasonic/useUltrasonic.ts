@@ -116,7 +116,7 @@ export function useUltrasonic() {
       String(now.getUTCHours()).padStart(2, '0') + '-' +
       String(now.getUTCMinutes()).padStart(2, '0') + '-' +
       String(now.getUTCSeconds()).padStart(2, '0') + 'Z';
-    a.download = `Nav-Tools_${timestamp}.csv`;
+    a.download = `Nav-Tools_${timestamp}.txt`;
     a.click();
     URL.revokeObjectURL(a.href);
   }

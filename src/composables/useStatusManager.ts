@@ -8,7 +8,7 @@ function getMonitorStatus() {
   const funcMode = navMode.funcMode
   const result = ref<Record<string, any>>({})
   switch (funcMode) {
-    case 'follow':
+    case 'followsim':
       const followStore = useFollowStore();
       result.value = followStore.status
       break;
