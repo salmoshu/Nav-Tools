@@ -1,0 +1,168 @@
+import { ref } from "vue"
+
+const dt = 1/10
+const timestamp = ref(0)
+const timestamps = ref([] as number[])
+const cameraDistance = ref([] as any[])
+const cameraAngle = ref([] as any[])
+const motorLeftSpeed = ref([] as any[])
+const motorRightSpeed = ref([] as any[])
+const isBatchData = ref(false)
+
+export function useFollow() {
+  const clearRawData = () => {
+    timestamp.value = 0
+    timestamps.value = []
+    cameraDistance.value = []
+    cameraAngle.value = []
+    motorLeftSpeed.value = []
+    motorRightSpeed.value = []
+  }
+
+  const initRawData = (data: string, startTime: number=0) => {
+    isBatchData.value = true
+    timestamp.value = startTime
+    const lines = data.split("\n")
+    for (const line of lines) {
+      if (line.trim() !== "") {
+        try {
+          const json = JSON.parse(line)
+          const camera_distance = json.camera_distance
+          const camera_angle = json.camera_angle
+          const motor_left_speed = json.motor_left_speed
+          const motor_right_speed = json.motor_right_speed
+          if (typeof json.time === 'number') {
+            if (timestamp.value == 0) {
+              // 增加一个极小量 0.0005，以处理为0的情况
+              timestamp.value = Number(json.time) - 0.0005
+            }
+            timestamps.value.push(Number(json.time) - timestamp.value)
+          } else {
+            // 如果没有time属性，则假设数据为20Hz
+            timestamps.value.push(timestamp.value)
+            timestamp.value += dt
+          }
+          if (camera_distance && camera_angle && motor_left_speed && motor_right_speed && Number(camera_distance) && Number(camera_angle) && Number(motor_left_speed) && Number(motor_right_speed)) {
+            cameraDistance.value.push(Number(camera_distance))
+            cameraAngle.value.push(Number(camera_angle))
+            motorLeftSpeed.value.push(Number(motor_left_speed))
+            motorRightSpeed.value.push(Number(motor_right_speed))
+          } else {
+            cameraDistance.value.push(null)
+            cameraAngle.value.push(null)
+            motorLeftSpeed.value.push(null)
+            motorRightSpeed.value.push(null)
+          }
+        } catch (error) {
+          console.log('json解析失败', error)
+        }
+      }
+    }
+  }
+
+  const addNullData = () => {
+    // 数据间隔超过1s则存储null作为分隔
+    const now = Date.now() / 1000
+    timestamps.value.push(now - timestamp.value - 0.5)
+    cameraDistance.value.push(null)
+    cameraAngle.value.push(null)
+    motorLeftSpeed.value.push(null)
+    motorRightSpeed.value.push(null)
+  }
+
+  let rawString = ''
+  const addRawData = (data: string) => {
+    if (isBatchData.value) {
+      clearRawData()
+      isBatchData.value = false
+    }
+    rawString += data
+
+    if (rawString.indexOf('\n') == -1) {
+      return
+    }
+    const lines = rawString.split("\n")
+    rawString = lines[lines.length - 1]
+
+    for (const line of lines) {
+      if (line.trim() !== "") {
+        try {
+          const json = JSON.parse(line)
+          const camera_distance = json.camera_distance
+          const camera_angle = json.camera_angle
+          const motor_left_speed = json.motor_left_speed
+          const motor_right_speed = json.motor_right_speed
+          if (camera_distance && camera_angle && motor_left_speed && motor_right_speed && Number(camera_distance) && Number(camera_angle) && Number(motor_left_speed) && Number(motor_right_speed)) {
+            if (typeof json.time === 'number') {
+              if (timestamp.value == 0) {
+                // 增加一个极小量 0.0005，以处理为0的情况
+                timestamp.value = Number(json.time) - 0.0005
+              }
+              timestamps.value.push(Number(json.time) - timestamp.value)
+            } else {
+              const now = Date.now() / 1000
+              if (timestamp.value == 0) {
+                timestamp.value = now
+              }
+              const lastTimestamp = timestamp.value + timestamps.value[timestamps.value.length - 1]
+              if (lastTimestamp && now - lastTimestamp > 1) {
+                addNullData()
+              }
+              timestamps.value.push(now - timestamp.value)
+            }
+            cameraDistance.value.push(Number(camera_distance))
+            cameraAngle.value.push(Number(camera_angle))
+            motorLeftSpeed.value.push(Number(motor_left_speed))
+            motorRightSpeed.value.push(Number(motor_right_speed))
+          }
+        } catch (error) {
+          console.log('json解析失败', error)
+        }
+      }
+    }
+  }
+  
+  const saveData = () => {
+    // 创建符合要求的格式数据
+    const formattedData = cameraDistance.value.map((_, index) => {
+      return {
+        time: timestamps.value[index], // 使用已有的时间戳或计算时间
+        camera_distance: cameraDistance.value[index],
+        camera_angle: cameraAngle.value[index],
+        motor_left_speed: motorLeftSpeed.value[index],
+        motor_right_speed: motorRightSpeed.value[index],
+      };
+    });
+    
+    // 生成每行一个JSON对象的文件内容
+    const fileContent = formattedData.map(item => JSON.stringify(item)).join('\n');
+    
+    // 创建Blob并下载文件
+    const blob = new Blob([fileContent], { type: 'text/csv;charset=utf-8;' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    const now = new Date();
+    // 格式化为：YYYY-MM-DDTHH-mm-ssZ，不含毫秒
+    const timestamp = now.getUTCFullYear() + '-' +
+      String(now.getUTCMonth() + 1).padStart(2, '0') + '-' +
+      String(now.getUTCDate()).padStart(2, '0') + 'T' +
+      String(now.getUTCHours()).padStart(2, '0') + '-' +
+      String(now.getUTCMinutes()).padStart(2, '0') + '-' +
+      String(now.getUTCSeconds()).padStart(2, '0') + 'Z';
+    a.download = `Nav-Tools_${timestamp}.txt`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+  
+  return {
+    timestamps,
+    cameraDistance,
+    cameraAngle,
+    motorLeftSpeed,
+    motorRightSpeed,
+    addRawData,
+    initRawData,
+    clearRawData,
+    saveData,
+  }
+}

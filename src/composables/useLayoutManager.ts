@@ -130,7 +130,7 @@ const getDynamicDefaultLayoutConfig = async (mode: string) => {
       componentName: templateName,
       minW: 4,
       minH: 5,
-      maxW: 8,
+      maxW: 12,
       maxH: 10,
     }
   })
@@ -375,7 +375,7 @@ export function useLayoutManager() {
       component: markRaw(dynamicComponentMap.value[componentName]?.component || null),
       minW: 4,
       minH: 5,
-      maxW: 8,
+      maxW: 12,
       maxH: 10,
     }
 

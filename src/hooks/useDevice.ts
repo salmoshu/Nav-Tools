@@ -3,12 +3,14 @@ import { ElMessage } from "element-plus"
 import { navMode } from "@/settings/config"
 import { useNmea } from '@/composables/gnss/useNmea'
 import { useUltrasonic } from '@/composables/ultrasonic/useUltrasonic'
+import { useFollow } from '@/composables/follow/useFollow'
 
 export const deviceConnected = ref(false);
 const deviceList = ref<any[]>([])
 
 const { processRawData } = useNmea()
-const { addRawData } = useUltrasonic()
+const { addRawData: addUltrasonicRawData } = useUltrasonic()
+const { addRawData: addFollowRawData } = useFollow()
 
 // 创建全局事件管理器
 class IpcEventManager {
@@ -286,7 +288,10 @@ export function useDevice() {
         processRawData(data);
         break;
       case 'ultrasonic':
-        addRawData(data)
+        addUltrasonicRawData(data)
+        break;
+      case 'follow':
+        addFollowRawData(data)
         break;
       default:
         break;

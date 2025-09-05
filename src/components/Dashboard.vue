@@ -116,7 +116,7 @@
             :i="item.i"
             :minW="item.minW || 4"
             :minH="item.minH || 5"
-            :maxW="item.maxW || 8"
+            :maxW="item.maxW || 12"
             :maxH="item.maxH || 10"
             @resize="resizeEvent"
             @moved="movedEvent"
