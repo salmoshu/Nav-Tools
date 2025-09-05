@@ -10,7 +10,7 @@ import { useDevice } from '@/hooks/useDevice'
 
 const app = createApp(App)
 const pinia = createPinia()
-const { closeAllDevice } = useDevice()
+const { removeAllDevice } = useDevice()
 
 // 使用Pinia
 app.use(pinia)
@@ -26,5 +26,5 @@ app.mount('#app').$nextTick(() => {
 })
 
 window.addEventListener('beforeunload', () => {
-  closeAllDevice()
+  removeAllDevice()
 })

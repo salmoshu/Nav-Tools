@@ -61,7 +61,7 @@
             <el-checkbox v-model="serialAdvanced" ></el-checkbox>
           </div>
         </el-tab-pane>
-        <el-tab-pane label="网络连接" name="network">
+        <el-tab-pane label="网络连接" name="network" :disabled="true">
           <div class="input-group">
             <span class="input-label">网络地址:</span>
             <el-input v-model="networkIp" placeholder="请输入网络连接指令" />
@@ -69,15 +69,6 @@
           <div class="input-group">
             <span class="input-label">网络端口:</span>
             <el-input v-model="networkPort" placeholder="请输入网络端口" />
-          </div>
-        </el-tab-pane>
-        <el-tab-pane label="文件输入" name="file">
-          <div class="input-group">
-            <span class="input-label">文件路径:</span>
-            <el-input v-model="fileInput" placeholder="推荐使用浏览器端的FileReader" style="flex: 1;" />
-            <el-button type="primary" @click="openFileDialog" style="margin-left: 10px;">
-              ...
-            </el-button>
           </div>
         </el-tab-pane>
       </el-tabs>
@@ -194,7 +185,6 @@ const {
   serialAdvanced,
   networkIp,
   networkPort,
-  fileInput,
   serialPorts,
   baudRates,
   dataBits,
@@ -203,7 +193,6 @@ const {
   searchSerialPorts,
   handleInputSubmit,
   inputDialog,
-  openFileDialog  // 引入新增的方法
 } = useDevice()
 
 // 工具栏和状态栏位置状态

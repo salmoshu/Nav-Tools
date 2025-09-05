@@ -12,36 +12,20 @@
     </div>
     <div class="toolbar-content">
       <!-- Modules: Follow/Tree/GNSS... -->
-      <!-- <button 
-        v-for="item in currentButtonList" 
-        :key="item.msg"
-        class="toolbar-btn" 
-        @click="handleModule(item.msg)" 
-        :title="item.title"
-        v-html="item.icon+getButtonText(item.title, position)"
-      >
-      </button>
-
-      <span v-if="upAndDown(position)" class="divider">|</span>
-      <span v-else class="divider">一</span> -->
 
       <!-- IO: Input/Output -->
-      <button
-        v-if="deviceConnected"
-        v-html="toolBarIcon.connected+getButtonText('Disconnect', position)"
-        type="button"
-        @click="handleDeviceConnected"
-        class="toolbar-btn"
-      >
-      </button>
-      <button
-        v-else
-        v-html="toolBarIcon.disconnected+getButtonText('No Device', position)" 
-        @click="handleDeviceConnected"
-        type="button" 
-        class="toolbar-btn"
-      >
-      </button>
+      <div class="toggle-switch-container">
+        <div 
+          class="toggle-switch" 
+          :class="{ 'toggle-on': deviceConnected }"
+          @click="handleDeviceConnected"
+          :title="deviceConnected ? '断开连接' : '连接设备'"
+        >
+          <div class="toggle-slider">
+            <span class="slider-icon" v-html="deviceConnected ? toolBarIcon.connected : toolBarIcon.disconnected"></span>
+          </div>
+        </div>
+      </div>
       <button 
         v-for="item in ioList" 
         :key="item.msg"
@@ -120,7 +104,7 @@ import { useDevice, deviceConnected } from '@/hooks/useDevice'
 
 const handleDeviceConnected = () => {
   if (deviceConnected.value) {
-    useDevice().closeAllDevice()
+    useDevice().removeAllDevice()
   }
 }
 
@@ -145,7 +129,7 @@ watch(() => navMode.funcMode, (oldMode, newMode) => {
       handleList.splice(0, handleList.length)
     }
 
-    useDevice().closeAllDevice()
+    useDevice().removeAllDevice()
   }
 })
 
@@ -577,5 +561,74 @@ onUnmounted(() => {
 
 .dock-zone:hover {
   background: rgba(52, 152, 219, 0.4);
+}
+/* 更新滑块容器样式 */
+.toggle-switch-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px; /* 减少内边距 */
+}
+
+/* 更新水平滑轨样式 */
+.toggle-switch {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+  padding: 2px;
+  width: 60px; /* 从70px减小到60px */
+  height: 24px; /* 从28px减小到24px */
+  border-radius: 12px; /* 从14px减小到12px */
+  background-color: #4a6572;
+  transition: background-color 0.3s;
+}
+
+/* 更新滑块样式 */
+.toggle-slider {
+  position: absolute;
+  width: 20px; /* 从24px减小到20px */
+  height: 20px; /* 从24px减小到20px */
+  /* border-radius: 50%; */
+  /* background-color: white; */
+  left: 4px;
+  top: 4px;
+  transition: transform 0.3s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* 更新滑块激活状态的移动距离 */
+.toggle-switch.toggle-on .toggle-slider {
+  transform: translateX(36px); /* 从42px调整为36px (60-24) */
+}
+
+/* 更新滑块图标大小 */
+.slider-icon {
+  font-size: 12px; /* 从14px减小到12px */
+  line-height: 1;
+}
+
+/* 更新垂直工具栏的滑轨样式 */
+.toolbar-left .toggle-switch, .toolbar-right .toggle-switch {
+  flex-direction: column;
+  width: 24px; /* 从28px减小到24px */
+  height: 60px; /* 从70px减小到60px */
+  border-radius: 12px; /* 从14px减小到12px */
+}
+
+/* 更新垂直工具栏的滑块激活状态移动距离 */
+.toolbar-left .toggle-switch.toggle-on .toggle-slider, .toolbar-right .toggle-switch.toggle-on .toggle-slider {
+  transform: translateY(36px); /* 从42px调整为36px (60-24) */
+}
+
+.toolbar-left .toggle-content, .toolbar-right .toggle-content {
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 </style>

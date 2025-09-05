@@ -66,9 +66,6 @@ export function useDevice() {
   const networkIp = ref("");
   const networkPort = ref("");
 
-  // 文件配置
-  const fileInput = ref("");
-
   // 下拉框选项数据
   const serialPorts = ref([]); // 示例端口
   const baudRates = [
@@ -155,6 +152,7 @@ export function useDevice() {
           dataBits: Number(dataBits),
           stopBits: Number(stopBits),
           parity: parity,
+          connected: true
         })
 
         ElMessage({
@@ -178,8 +176,11 @@ export function useDevice() {
    */
   const handleNetworkSubmit = (): string => {
     const networkCmd = networkIp.value + ":" + networkPort.value;
-    if (!networkIp.value) return "";
-    if (!networkPort.value) return "";
+    ElMessage.info('网络功能暂未实现')
+
+    // // 输入验证
+    // if (!networkIp.value) return "";
+    // if (!networkPort.value) return "";
 
     console.log("网络配置:", networkCmd);
 
@@ -188,50 +189,7 @@ export function useDevice() {
     return networkCmd;
   };
 
-  /**
-   * 处理文件配置提交
-   * @returns 文件命令字符串
-   */
-  const handleFileSubmit = (): string => {
-    const filePath = fileInput.value;
-    if (!filePath) return "";
-
-    console.log("文件路径:", filePath);
-
-    window.ipcRenderer
-      .invoke('read-file-event', filePath)
-      .then((data) => {
-        console.log('文件内容:', data);
-      })
-      .catch((error) => {
-        console.error('读取文件失败:', error);
-      });
-
-    return filePath;
-  };
-
-  /**
-   * 打开文件选择对话框
-   */
-  const openFileDialog = () => {
-    window.ipcRenderer
-      .invoke("open-file-dialog")
-      .then((result) => {
-        if (result.canceled) return;
-        if (result.filePaths && result.filePaths.length > 0) {
-          fileInput.value = result.filePaths[0];
-        }
-      })
-      .catch((error) => {
-        console.error("打开文件对话框失败:", error);
-        ElMessage({
-          message: "打开文件对话框失败",
-          type: "error",
-        });
-      });
-  };
-
-  const closeAllDevice = () => {
+  const removeAllDevice = () => {
     deviceList.value.forEach((item) => {
       if (item.type === 'serial') {
         window.ipcRenderer.invoke('close-serial-port', {
@@ -253,6 +211,23 @@ export function useDevice() {
     })
   }
 
+  const closeAllDevice = () => {
+    deviceList.value.forEach((item) => {
+      if (item.type === 'serial') {
+        window.ipcRenderer.invoke('close-serial-port', {
+          path: item.path,
+          baudRate: item.baudRate,
+          dataBits: item.dataBits,
+          stopBits: item.stopBits,
+          parity: item.parity,
+        }).then(() => {
+          item.connected = false
+        })
+      }
+    })
+    deviceConnected.value = false
+  }
+
   /**
    * 提交输入表单
    */
@@ -265,9 +240,6 @@ export function useDevice() {
         break;
       case "network":
         command = handleNetworkSubmit();
-        break;
-      case "file":
-        command = handleFileSubmit();
         break;
     }
 
@@ -324,7 +296,6 @@ export function useDevice() {
     serialAdvanced,
     networkIp,
     networkPort,
-    fileInput,
     serialPorts,
     baudRates,
     dataBits,
@@ -333,8 +304,8 @@ export function useDevice() {
     deviceBusy,
     handleInputSubmit,
     inputDialog,
-    openFileDialog,
     closeAllDevice,
+    removeAllDevice,
     searchSerialPorts,
   };
 }
