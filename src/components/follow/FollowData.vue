@@ -3,7 +3,7 @@
     <div class="controls">
       <div class="time-range-control">
         <span>时间范围/帧：</span>
-        <el-select v-model="timeRange" placeholder="选择时间范围" size="small" @change="updateChart" :disabled="!deviceBusy">
+        <el-select v-model="timeRange" placeholder="选择时间范围" size="small" @change="updateChart" :disabled="!deviceConnected">
           <el-option label="100" :value="100"></el-option>
           <el-option label="200" :value="200"></el-option>
           <el-option label="500" :value="500"></el-option>
@@ -13,10 +13,10 @@
       
       <div class="file-controls">
         <input type="file" ref="fileInput" @change="handleFileUpload" accept=".txt,.csv" style="display: none">
-        <el-button type="primary" size="small" @click="$refs.fileInput.click()" class="upload-btn" :disabled="deviceBusy">
+        <el-button type="primary" size="small" @click="$refs.fileInput.click()" class="upload-btn" :disabled="deviceConnected">
           载入数据
         </el-button>
-        <el-button type="primary" size="small" @click="saveData" class="save-btn" :disabled="cameraDistance.length===0 || deviceBusy">
+        <el-button type="primary" size="small" @click="saveData" class="save-btn" :disabled="cameraDistance.length===0 || deviceConnected">
           保存数据
         </el-button>
         <el-button type="default" size="small" @click="clearPlotData" class="clear-btn">
@@ -43,7 +43,7 @@ const fileInput = ref<HTMLInputElement>()
 const chartRef = ref<HTMLDivElement>()
 let chart: echarts.ECharts | null = null
 let resizeObserver: ResizeObserver | null = null
-const deviceBusy = ref(useDevice().deviceBusy)
+const deviceConnected = ref(useDevice().deviceConnected)
 // 将timeRange改为响应式变量
 const timeRange = ref<number>(100)
 
@@ -490,7 +490,7 @@ function handleFileUpload(event: Event) {
 
 // 监听数据变化更新图表
 watch(cameraDistance, () => {
-  if (deviceBusy.value) {
+  if (deviceConnected.value) {
     updateChart()
   }
 }, { immediate: true, deep: true })

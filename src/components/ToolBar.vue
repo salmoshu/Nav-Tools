@@ -100,11 +100,22 @@ const ipcRenderer = window.ipcRenderer
 const position = ref<'top' | 'right' | 'bottom' | 'left'>('bottom')
 const showSaveButton = ref(false)
 
-import { useDevice, deviceConnected } from '@/hooks/useDevice'
+import { useDevice } from '@/hooks/useDevice'
+import { ElMessage } from 'element-plus'
+const deviceConnected = useDevice().deviceConnected
 
 const handleDeviceConnected = () => {
-  if (deviceConnected.value) {
-    useDevice().removeAllDevice()
+  if (deviceConnected.value === true) {
+    useDevice().closeCurrDevice()
+  } else {
+    if (useDevice().globalDevice.value.connected === null) {
+      ElMessage({
+        message: '请配置设备信息',
+        type: 'warning',
+      })
+    } else {
+      useDevice().openCurrDevice()
+    }
   }
 }
 
@@ -129,7 +140,7 @@ watch(() => navMode.funcMode, (oldMode, newMode) => {
       handleList.splice(0, handleList.length)
     }
 
-    useDevice().removeAllDevice()
+    useDevice().removeCurrDevice()
   }
 })
 

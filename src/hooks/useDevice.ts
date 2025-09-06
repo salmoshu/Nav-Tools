@@ -5,12 +5,36 @@ import { useNmea } from '@/composables/gnss/useNmea'
 import { useUltrasonic } from '@/composables/ultrasonic/useUltrasonic'
 import { useFollow } from '@/composables/follow/useFollow'
 
-export const deviceConnected = ref(false);
-const deviceList = ref<any[]>([])
-
-const { processRawData } = useNmea()
+const { processRawData: processNmeaRawData } = useNmea()
 const { addRawData: addUltrasonicRawData } = useUltrasonic()
 const { addRawData: addFollowRawData } = useFollow()
+
+// 串口配置
+const serialPort = ref("");
+const serialBaudRate = ref("115200");
+const serialDataBits = ref("8");
+const serialStopBits = ref("1");
+const serialParity = ref("none");
+const serialAdvanced = ref(false);
+
+// 网络配置
+const networkIp = ref("");
+const networkPort = ref("");
+
+// 创建全局设备变量，connected值：null(无设备)、true(有设备已连接)、false(有设备未连接)
+const globalDevice = ref<{
+  type?: 'serial' | 'network',
+  path?: string,
+  baudRate?: number,
+  dataBits?: number,
+  stopBits?: number,
+  parity?: string,
+  connected: null | boolean
+}>({ connected: null })
+
+const deviceConnected = computed(() => {
+  return globalDevice.value.connected === true
+})
 
 // 创建全局事件管理器
 class IpcEventManager {
@@ -54,18 +78,6 @@ export function useDevice() {
   const showInputDialog = ref(false);
   const activeTab = ref("serial");
 
-  // 串口配置
-  const serialPort = ref("");
-  const serialBaudRate = ref("115200");
-  const serialDataBits = ref("8");
-  const serialStopBits = ref("1");
-  const serialParity = ref("none");
-  const serialAdvanced = ref(false);
-
-  // 网络配置
-  const networkIp = ref("");
-  const networkPort = ref("");
-
   // 下拉框选项数据
   const serialPorts = ref([]); // 示例端口
   const baudRates = [
@@ -85,10 +97,6 @@ export function useDevice() {
     { label: "奇校验", value: "odd" },
     { label: "偶校验", value: "even" },
   ];
-
-  const deviceBusy = computed(() => {
-    return deviceList.value.length > 0
-  })
 
   /**
    * 打开输入对话框
@@ -125,51 +133,32 @@ export function useDevice() {
     const dataBits = serialDataBits.value;
     const stopBits = serialStopBits.value;
     const parity = serialParity.value;
-
+  
     if (!friendlyName || !baudRate || !dataBits || !stopBits || !parity)
       return "";
-
+  
     const match = friendlyName.match(
       /\b([A-Z]+\d+(?:[A-Z]*\d*)*)\b(?=->|$|\))/i
     );
     const port = match ? match[1] : "";
-
-    window.ipcRenderer
-      .invoke("open-serial-port", {
-        path: port,
-        baudRate: Number(baudRate),
-        dataBits: Number(dataBits),
-        stopBits: Number(stopBits),
-        parity: parity,
-      })
-      .then(() => {
-        deviceConnected.value = true;
-        
-        deviceList.value.push({
-          type: 'serial',
-          path: port,
-          baudRate: Number(baudRate),
-          dataBits: Number(dataBits),
-          stopBits: Number(stopBits),
-          parity: parity,
-          connected: true
-        })
-
-        ElMessage({
-          message: `串口${port}打开成功`,
-          type: "success",
-        });
-      })
-      .catch((error) => {
-        ElMessage({
-          message: `${error.message}`,
-          type: "error",
-        });
-      });
-
+  
+    // 设置全局设备信息
+    globalDevice.value = {
+      type: 'serial',
+      path: port,
+      baudRate: Number(baudRate),
+      dataBits: Number(dataBits),
+      stopBits: Number(stopBits),
+      parity: parity,
+      connected: false
+    };
+  
+    // 调用 openCurrDevice 函数打开设备
+    openCurrDevice();
+  
     return port;
   };
-
+  
   /**
    * 处理网络配置提交
    * @returns 网络命令字符串
@@ -177,55 +166,85 @@ export function useDevice() {
   const handleNetworkSubmit = (): string => {
     const networkCmd = networkIp.value + ":" + networkPort.value;
     ElMessage.info('网络功能暂未实现')
-
-    // // 输入验证
-    // if (!networkIp.value) return "";
-    // if (!networkPort.value) return "";
-
+  
     console.log("网络配置:", networkCmd);
-
-    // 可以在这里添加更多网络相关的逻辑
-
+  
     return networkCmd;
-  };
-
-  const removeAllDevice = () => {
-    deviceList.value.forEach((item) => {
-      if (item.type === 'serial') {
-        window.ipcRenderer.invoke('close-serial-port', {
-          path: item.path,
-          baudRate: item.baudRate,
-          dataBits: item.dataBits,
-          stopBits: item.stopBits,
-          parity: item.parity,
-        }).then(() => {
-          const index = deviceList.value.indexOf(item)
-          if (index !== -1) {
-            deviceList.value.splice(index, 1)
-          }
-          if (deviceList.value.length === 0) {
-            deviceConnected.value = false
-          }
-        })
+  }
+  
+  const openCurrDevice = () => {
+    if (globalDevice.value.connected === false) {
+      if (globalDevice.value.type === 'serial') {
+        window.ipcRenderer
+          .invoke("open-serial-port", {
+            path: globalDevice.value.path,
+            baudRate: globalDevice.value.baudRate,
+            dataBits: globalDevice.value.dataBits,
+            stopBits: globalDevice.value.stopBits,
+            parity: globalDevice.value.parity,
+          })
+          .then(() => {
+            globalDevice.value.connected = true;
+  
+            ElMessage({
+              message: `串口${globalDevice.value.path}打开成功`,
+              type: "success",
+            });
+          })
+          .catch((error) => {
+            ElMessage({
+              message: `${error.message}`,
+              type: "error",
+            });
+          });
+      } else if (globalDevice.value.type === 'network') {
+        // 网络设备连接逻辑
       }
-    })
+    }
   }
 
-  const closeAllDevice = () => {
-    deviceList.value.forEach((item) => {
-      if (item.type === 'serial') {
+  const removeCurrDevice = () => {
+    if (globalDevice.value.connected !== null) {
+      if (globalDevice.value.type === 'serial') {
         window.ipcRenderer.invoke('close-serial-port', {
-          path: item.path,
-          baudRate: item.baudRate,
-          dataBits: item.dataBits,
-          stopBits: item.stopBits,
-          parity: item.parity,
+          path: globalDevice.value.path,
+          baudRate: globalDevice.value.baudRate,
+          dataBits: globalDevice.value.dataBits,
+          stopBits: globalDevice.value.stopBits,
+          parity: globalDevice.value.parity,
         }).then(() => {
-          item.connected = false
+          globalDevice.value = { connected: null }
+          serialPort.value = ""
+          serialBaudRate.value = "115200"
+          serialDataBits.value = "8"
+          serialStopBits.value = "1"
+          serialParity.value = "none"
+          serialAdvanced.value = false
         })
+      } else if (globalDevice.value.type === 'network') {
+        globalDevice.value = { connected: null }
       }
-    })
-    deviceConnected.value = false
+    }
+  }
+
+  const closeCurrDevice = () => {
+    if (globalDevice.value.connected !== null) {
+      if (globalDevice.value.type === 'serial') {
+        window.ipcRenderer.invoke('close-serial-port', {
+          path: globalDevice.value.path,
+          baudRate: globalDevice.value.baudRate,
+          dataBits: globalDevice.value.dataBits,
+          stopBits: globalDevice.value.stopBits,
+          parity: globalDevice.value.parity,
+        }).then(() => {
+          if (globalDevice.value.type) {
+            globalDevice.value.connected = false
+          }
+        })
+      } else if (globalDevice.value.type === 'network') {
+        // globalDevice.value.connected = false
+      }
+    }
   }
 
   /**
@@ -257,7 +276,7 @@ export function useDevice() {
   ipcManager.on('serial-data-to-renderer', (event: any, data: string) => {
     switch (navMode.funcMode) {
       case 'gnss':
-        processRawData(data);
+        processNmeaRawData(data);
         break;
       case 'ultrasonic':
         addUltrasonicRawData(data)
@@ -269,20 +288,6 @@ export function useDevice() {
         break;
     }
   });
-
-  ipcManager.on('read-file-success', (event: any, data: string) => {
-    switch (navMode.funcMode) {
-      default:
-        break;
-    }
-  })
-
-  ipcManager.on('read-file-error', (event: any, error: string) => {
-    switch (navMode.funcMode) {
-      default:
-        break;
-    }
-  })
 
   // 暴露需要使用的状态和方法
   return {
@@ -301,11 +306,13 @@ export function useDevice() {
     dataBits,
     stopBits,
     parities,
-    deviceBusy,
+    deviceConnected,
+    globalDevice,
     handleInputSubmit,
     inputDialog,
-    closeAllDevice,
-    removeAllDevice,
+    openCurrDevice,
+    closeCurrDevice,
+    removeCurrDevice,
     searchSerialPorts,
   };
 }

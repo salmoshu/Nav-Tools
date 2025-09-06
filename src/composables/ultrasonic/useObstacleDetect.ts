@@ -5,10 +5,10 @@ const slidWindowSize = 5
 
 // 单个数据点中值滤波处理
 function medianFilter(
-  dataHistory: number[], 
-  newDataPoint: number, 
+  dataHistory: any[], 
+  newDataPoint: any, 
   windowSize: number = 5
-): number {
+): any {
   const updatedHistory = [...dataHistory, newDataPoint]
   const recentHistory = updatedHistory.slice(-windowSize)
   const sortedHistory = [...recentHistory].sort((a, b) => a - b)
@@ -19,7 +19,7 @@ function medianFilter(
 }
 
 // 中值滤波函数 - 5帧
-function medianFilterBatch(data: number[], filteredData: number[], windowSize: number = 5) {
+function medianFilterBatch(data: any[], filteredData: any[], windowSize: number = 5) {
   for (let i = 0; i < windowSize-1; i++) {
     filteredData[i] = data[i]
   }
@@ -27,11 +27,15 @@ function medianFilterBatch(data: number[], filteredData: number[], windowSize: n
     // 构建当前点的历史数据（包含当前点之前的点，但不包含之后的点）
     const historyData = data.slice(Math.max(0, i - windowSize + 1), i);
     // 使用 medianFilter 处理当前点
-    filteredData[i] = medianFilter(historyData, data[i], windowSize);
+    if (data[i] !== null) {
+      filteredData[i] = medianFilter(historyData, data[i], windowSize);
+    } else {
+      filteredData[i] = null
+    }
   }
 }
 
-function detectObstacleBatch(rawData: number[], filteredData: number[], obstacleData: any[]) {
+function detectObstacleBatch(rawData: any[], filteredData: any[], obstacleData: any[]) {
   // 第一步：利用中值滤波进行预处理
   medianFilterBatch(rawData, filteredData, slidWindowSize)
 
@@ -67,10 +71,10 @@ function detectObstacleBatch(rawData: number[], filteredData: number[], obstacle
 
 // 单个数据点障碍物检测处理
 function detectObstacle(
-  dataHistory: number[], 
-  filteredHistory: number[], 
-  newDataPoint: number
-): { isObstacle: boolean, filteredValue: number } {
+  dataHistory: any[], 
+  filteredHistory: any[], 
+  newDataPoint: any
+): { isObstacle: boolean, filteredValue: any } {
   // 首先对新数据点进行中值滤波
   if (dataHistory.length < slidWindowSize-1) {
     return { isObstacle: false, filteredValue: newDataPoint }

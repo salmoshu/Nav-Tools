@@ -3,9 +3,9 @@ import { useObstacleDetect } from "./useObstacleDetect"
 
 const dt = 1/20
 const timestamp = ref(0)
-const timestamps = ref([] as number[])
-const rawData = ref([] as number[])
-const filteredData = ref([] as number[])
+const timestamps = ref([] as any[])
+const rawData = ref([] as any[])
+const filteredData = ref([] as any[])
 const obstacleData = ref([] as any[])
 const isBatchData = ref(false)
 
@@ -29,26 +29,32 @@ export function useUltrasonic() {
         try {
           const json = JSON.parse(line)
           const data = json.ultrasonic
-          if (data && Number(data)) {
-            if (typeof json.time === 'number') {
-              if (timestamp.value == 0) {
-                // 增加一个极小量 0.0005，以处理为0的情况
-                timestamp.value = Number(json.time) - 0.0005
-              }
-              timestamps.value.push(Number(json.time) - timestamp.value)
-            } else {
-              // 如果没有time属性，则假设数据为20Hz
-              timestamps.value.push(timestamp.value)
-              timestamp.value += dt
+          if (typeof json.time === 'number') {
+            if (timestamp.value == 0) {
+              // 增加一个极小量 0.0005，以处理为0的情况
+              timestamp.value = Number(json.time) - 0.0005
             }
-            rawData.value.push(Number(data))
+            timestamps.value.push(Number(json.time) - timestamp.value)
+          } else {
+            // 如果没有time属性，则假设数据为20Hz
+            timestamps.value.push(timestamp.value)
+            timestamp.value += dt
           }
+          rawData.value.push(data)
         } catch (error) {
           console.log('json解析失败', error)
         }
       }
     }
     detectObstacleBatch(rawData.value, filteredData.value, obstacleData.value)
+  }
+
+  const addNullData = () => {
+    const now = Date.now() / 1000
+    timestamps.value.push(now - timestamp.value - 0.5)
+    rawData.value.push(null)
+    filteredData.value.push(null)
+    obstacleData.value.push(null)
   }
 
   const addRawData = (data: string) => {
@@ -67,9 +73,6 @@ export function useUltrasonic() {
             const histroyFilteredData = filteredData.value
             const {isObstacle, filteredValue} = detectObstacle(histroyRawData, histroyFilteredData, Number(data))
 
-            rawData.value.push(Number(data))
-            filteredData.value.push(filteredValue)
-            obstacleData.value.push(isObstacle ? filteredValue : null)
             if (typeof json.time === 'number') {
               if (timestamp.value == 0) {
                 // 增加一个极小量 0.0005，以处理为0的情况
@@ -77,10 +80,25 @@ export function useUltrasonic() {
               }
               timestamps.value.push(Number(json.time) - timestamp.value)
             } else {
+              const now = Date.now() / 1000
               if (timestamp.value == 0) {
-                timestamp.value = Date.now() / 1000
+                timestamp.value = now
               }
-              timestamps.value.push(Date.now() / 1000 - timestamp.value)
+              const lastTimestamp = timestamp.value + timestamps.value[timestamps.value.length - 1]
+              if (lastTimestamp && now - lastTimestamp > 1) {
+                addNullData()
+              }
+
+              timestamps.value.push(now - timestamp.value)
+              if (data && Number(data)) {
+                rawData.value.push(Number(data))
+                filteredData.value.push(filteredValue)
+                obstacleData.value.push(isObstacle ? filteredValue : null)
+              } else {
+                rawData.value.push(null)
+                filteredData.value.push(null)
+                obstacleData.value.push(null)
+              }
             }
           }
         } catch (error) {
@@ -96,8 +114,6 @@ export function useUltrasonic() {
       return {
         time: timestamps.value[index], // 使用已有的时间戳或计算时间
         ultrasonic: ultrasonic,
-        camera_distance: 0, // 目前未提供摄像头距离数据，设为默认值0
-        camera_angle: 0 // 目前未提供摄像头角度数据，设为默认值0
       };
     });
     
