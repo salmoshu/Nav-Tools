@@ -30,7 +30,7 @@
         v-for="item in ioList" 
         :key="item.msg"
         class="toolbar-btn" 
-        @click="handleIo(item.msg)" 
+        @click="handleIo(item.msg); $event.currentTarget.blur()" 
         :title="item.title"
         v-html="item.icon+getButtonText(item.title, position)"
       >
@@ -44,7 +44,7 @@
         v-for="item in handleList" 
         :key="item.msg"
         class="toolbar-btn" 
-        @click="handleAction(item.msg)" 
+        @click="handleAction(item.msg); $event.currentTarget.blur()" 
         :title="item.title"
         v-html="item.icon+getButtonText(item.title, position)"
       >
@@ -57,21 +57,21 @@
       <button
         v-if="showSaveButton"
         class="toolbar-btn"
-        @click="handleLayout('save')"
+        @click="handleLayout('save'); $event.currentTarget.blur()"
         :title="layoutList[1].title"
         v-html="layoutList[1].icon+getButtonText(layoutList[1].title, position)"
       >
       </button>
       <button
         class="toolbar-btn"
-        @click="handleLayout('auto')"
+        @click="handleLayout('auto'); $event.currentTarget.blur()"
         :title="layoutList[2].title"
         v-html="layoutList[2].icon+getButtonText(layoutList[2].title, position)"
       >
       </button>
       <button
         class="toolbar-btn"
-        @click="handleLayout('reset')"
+        @click="handleLayout('reset'); $event.currentTarget.blur()"
         :title="layoutList[3].title"
         v-html="layoutList[3].icon+getButtonText(layoutList[3].title, position)"
       >
