@@ -30,9 +30,65 @@ function consoleToNode(event: IpcMainEvent, message: string) {
 async function searchSerialPorts(_: IpcMainEvent) {
   const ports = await SerialPort.list();
   const result = [];
-  ports.forEach((port) => {
-    result.push(port.friendlyName);
-  });
+
+  // // 用于存储临时打开的端口实例
+  // const tempPorts: SerialPort[] = [];
+
+  // // 尝试打开每个端口以检查是否被占用
+  // for (const port of ports) {
+  //   const portInfo = {
+  //     path: port.path,
+  //     friendlyName: port.friendlyName,
+  //     isOccupied: true, // 默认为被占用
+  //     manufacturer: port.manufacturer,
+  //     serialNumber: port.serialNumber
+  //   };
+
+  //   try {
+  //     // 尝试使用默认参数打开端口
+  //     const tempPort = new SerialPort({
+  //       path: port.path,
+  //       baudRate: 9600,
+  //       autoOpen: false
+  //     });
+
+  //     tempPorts.push(tempPort);
+
+  //     await new Promise<void>((resolve, reject) => {
+  //       tempPort.open((err) => {
+  //         if (err) {
+  //           reject(err);
+  //         } else {
+  //           portInfo.isOccupied = false;
+  //           result.push(portInfo.friendlyName);
+  //           resolve();
+  //         }
+  //       });
+  //     });
+  //   } catch (error) {
+  //     // 打开失败，端口被占用
+  //     console.log(`端口 ${port.path} 被占用:`, error);
+  //     portInfo.isOccupied = true;
+  //   }
+  // }
+
+  // // 关闭所有临时打开的端口
+  // tempPorts.forEach(port => {
+  //   if (port.isOpen) {
+  //     port.close((err) => {
+  //       if (err) {
+  //         console.error(`关闭临时端口失败:`, err);
+  //       }
+  //     });
+  //   }
+  // });
+
+  for (const port of ports) {
+    if (port.friendlyName) {
+      result.push(port.friendlyName);
+    }
+  }
+  
   return result;
 }
 

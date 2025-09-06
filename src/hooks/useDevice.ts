@@ -103,6 +103,7 @@ export function useDevice() {
    */
   const inputDialog = () => {
     showInputDialog.value = true;
+    searchSerialPorts();
   };
 
   /**
@@ -141,6 +142,14 @@ export function useDevice() {
       /\b([A-Z]+\d+(?:[A-Z]*\d*)*)\b(?=->|$|\))/i
     );
     const port = match ? match[1] : "";
+
+    if (globalDevice.value.connected === true) {
+      if (globalDevice.value.path === port) {
+        return port;
+      } else {
+        closeCurrDevice();
+      }
+    }
   
     // 设置全局设备信息
     globalDevice.value = {
