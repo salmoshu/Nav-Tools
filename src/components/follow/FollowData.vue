@@ -95,7 +95,7 @@ function createChartOption() {
       yAxis: [
         { type: 'value', name: '距离(m)', gridIndex: 0 },
         { type: 'value', name: '角度(°)', gridIndex: 0 },
-        { type: 'value', name: '速度', gridIndex: 1 }
+        { type: 'value', name: '速度(m/s)', gridIndex: 1 }
       ],
       series: [
         {
@@ -220,7 +220,7 @@ function createChartOption() {
         name: '时间(s)',
         axisLabel: {
           formatter: function(value: number) {
-            return value.toFixed(2) + 's';
+            return value.toFixed(2);
           }
         },
         gridIndex: 0,
@@ -231,7 +231,7 @@ function createChartOption() {
         name: '时间(s)',
         axisLabel: {
           formatter: function(value: number) {
-            return value.toFixed(2) + 's';
+            return value.toFixed(2);
           }
         },
         gridIndex: 1
@@ -243,7 +243,7 @@ function createChartOption() {
         name: '距离(m)',
         axisLabel: {
           formatter: function(value: any) {
-            return value?value.toFixed(2) + 'm':null;
+            return value ? value.toFixed(2) : null;
           }
         },
         gridIndex: 0
@@ -253,7 +253,7 @@ function createChartOption() {
         name: '角度(°)',
         axisLabel: {
           formatter: function(value: any) {
-            return value?value.toFixed(1) + '°':null;
+            return value ? value.toFixed(1) : null;
           }
         },
         gridIndex: 0
@@ -263,7 +263,7 @@ function createChartOption() {
         name: '速度(m/s)',
         axisLabel: {
           formatter: function(value: any) {
-            return value?value.toFixed(2) + 'm/s':null;
+            return value ? value.toFixed(2) : null;
           }
         },
         gridIndex: 1
