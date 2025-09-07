@@ -13,7 +13,7 @@
       
       <div class="file-controls">
         <input type="file" ref="fileInput" @change="handleFileUpload" accept=".txt,.csv" style="display: none">
-        <el-button type="primary" size="small" @click="$refs.fileInput.click()" class="upload-btn" :disabled="deviceConnected">
+        <el-button type="primary" size="small" @click="fileInput?.click()" class="upload-btn" :disabled="deviceConnected">
           载入数据
         </el-button>
         <el-button type="primary" size="small" @click="saveData" class="save-btn" :disabled="cameraDistance.length===0 || deviceConnected">

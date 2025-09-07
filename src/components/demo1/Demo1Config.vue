@@ -9,7 +9,7 @@
       <el-input
         v-model="demo1Store.config[key]"
         :placeholder="`请输入${key}`"
-        @change="handleChange(key, $event)"
+        @change="handleChange(String(key), $event)"
       />
     </div>
   </div>

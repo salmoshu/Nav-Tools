@@ -1,4 +1,5 @@
 import { ref, watch, computed, markRaw, defineAsyncComponent } from 'vue'
+import type { DefineComponent } from 'vue'
 import { appConfig } from '@/settings/config'
 import { ElMessage } from 'element-plus'
 import emitter from '@/hooks/useMitt'
@@ -31,22 +32,33 @@ const convertPath = (path: string): string => {
   return path
 }
 
-// 动态加载组件
+// 问题：
+// 在 开发时，../components/... 是存在的，
+// 但在 构建后，路径被打包成了哈希文件名
+//
+// 解决：
+// Vite 提供了 import.meta.glob 来预扫描并打包动态路径
+// 这样 Vite 会在构建时把所有匹配的 .vue 文件打包进去，
+// 并生成一个 modules 映射表，运行时通过路径查找即可，从而避免了路径问题
+const modules = import.meta.glob<DefineComponent>('../components/**/*.vue')
 const loadComponent = (componentPath: string) => {
+  // 把 @/components/xxx.vue 转成 ../components/xxx.vue
   const resolvedPath = convertPath(componentPath)
-  
-  if (componentCache.has(resolvedPath)) {
-    return componentCache.get(resolvedPath)
+
+  if (componentCache.has(resolvedPath)) return componentCache.get(resolvedPath)
+
+  const loader = modules[resolvedPath]
+  if (!loader) {
+    console.error(`[loadComponent] 未找到组件: ${resolvedPath}`)
+    return null
   }
-  
-  const component = markRaw(defineAsyncComponent(() => import(/* @vite-ignore */ resolvedPath)))
+
+  const component = markRaw(defineAsyncComponent(loader))
   componentCache.set(resolvedPath, component)
   return component
 }
 
-// 根据FuncMode获取对应的AppMap配置 - 自适应版本
 const getAppMapConfig = (mode: string) => {
-  // 自动匹配FuncMode到对应的AppMap模块
   for (const [_, config] of Object.entries(appConfig)) {
     const modules = (config as any) as Record<string, any>
     for (const [_, moduleConfig] of Object.entries(modules)) {
@@ -58,7 +70,6 @@ const getAppMapConfig = (mode: string) => {
   return appConfig.example
 }
 
-// 获取当前模式的模块名称 - 自适应版本
 const getModuleName = (mode: string): string => {
   // 自动从AppMap中查找匹配的模块名
   for (const [_, config] of Object.entries(appConfig)) {
@@ -72,7 +83,6 @@ const getModuleName = (mode: string): string => {
   return 'example'
 }
 
-// 动态获取组件映射
 const getDynamicComponentMap = (mode: string) => {
   const moduleName = getModuleName(mode)
   const appMapConfig = getAppMapConfig(mode)
@@ -414,12 +424,6 @@ export function useLayoutManager() {
     
     // 重新初始化布局
     await initLayout()
-    
-    ElMessage({
-      message: `已切换到 ${mode.toUpperCase()} 组件`,
-      type: 'success',
-      duration: 1000
-    })
   }
 
   const isCardVisible = true // to be defined

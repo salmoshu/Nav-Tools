@@ -51,7 +51,7 @@ class IpcEventManager {
   on(channel: string, callback: Function) {
     if (!this.listeners.has(channel)) {
       this.listeners.set(channel, []);
-      window.ipcRenderer.on(channel, callback);
+      window.ipcRenderer.on(channel, callback as (event: import('electron').IpcRendererEvent, ...args: any[]) => void);
     }
     this.listeners.get(channel)!.push(callback);
   }
@@ -60,7 +60,7 @@ class IpcEventManager {
     if (this.listeners.has(channel)) {
       const callbacks = this.listeners.get(channel)!;
       callbacks.forEach(callback => {
-        window.ipcRenderer.removeListener(channel, callback);
+        window.ipcRenderer.removeListener(channel, callback as (event: import('electron').IpcRendererEvent, ...args: any[]) => void);
       });
       this.listeners.delete(channel);
     }

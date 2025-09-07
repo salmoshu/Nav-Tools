@@ -119,7 +119,8 @@ function createModuleItem(config: Omit<ModuleItem, 'funcMode' | 'template' | 'te
   }
 }
 
-function getTemplateNames (name: string, actions: string[]) {
+function getTemplateNames (title: string, actions: string[]) {
+  const name = title.toLowerCase()
   const templateList: string[] = []
 
   for (let i = 0; i < actions.length; i++) {
@@ -132,7 +133,8 @@ function getTemplateNames (name: string, actions: string[]) {
   return templateList
 }
 
-function getTemplatePaths (name: string, actions: string[]) {
+function getTemplatePaths (title: string, actions: string[]) {
+  const name = title.toLowerCase()
   const templateList: string[] = []
   for (let i = 0; i < actions.length; i++) {
     const action = actions[i]
