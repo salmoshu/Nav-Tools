@@ -18,7 +18,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch } from 'vue'
+import { onMounted, onUnmounted, watch } from 'vue'
 import { useEcharts } from '@/hooks/useEcharts'
 import { useFollowStore } from '@/stores/follow'
 import { useSpeedRecorder } from '@/composables/followsim/useSpeedRecorder'

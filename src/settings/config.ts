@@ -6,6 +6,7 @@ const appConfig: any = {
     follow: createModuleItem({
       title: 'Follow',
       icon: toolBarIcon.follow,
+      // follow/FollowData.vue
       action: ['data',],
       props: {}
     }),
@@ -14,7 +15,8 @@ const appConfig: any = {
     ultrasonic: createModuleItem({
       title: 'Ultrasonic',
       icon: toolBarIcon.ultrasonic,
-      action: ['data'],
+      // ultrasonic/UltrasonicData.vue
+      action: ['data',],
       props: {}
     }),
   },
@@ -22,18 +24,28 @@ const appConfig: any = {
     gnss: createModuleItem({
       title: 'Gnss',
       icon: toolBarIcon.gnss,
+      // gnss/GnssConsole.vue
+      // gnss/GnssDeviation.vue
+      // gnss/GnssSignal.vue
+      // gnss/GnssSky.vue
       action: ['console', 'deviation', 'signal', 'sky'],
       props: {}
     }),
     imu: createModuleItem({
       title: 'Imu',
       icon: toolBarIcon.imu,
+      // imu/ImuDraw.vue
+      // imu/ImuData.vue
+      // imu/ImuConfig.vue
       action: ['draw', 'data', 'config'],
       props: {}
     }),
     vision: createModuleItem({
       title: 'Vision',
       icon: toolBarIcon.vision,
+      // vision/VisionDraw.vue
+      // vision/VisionData.vue
+      // vision/VisionConfig.vue
       action: ['draw', 'data', 'config'],
       props: {}
     }),
@@ -42,12 +54,18 @@ const appConfig: any = {
     followsim: createModuleItem({
       title: 'FollowSim',
       icon: toolBarIcon.follow,
+      // followsim/FollowSimDashboard.vue
+      // followsim/FollowSimMotion.vue
+      // followsim/FollowSimConfig.vue
       action: ['dashboard', 'motion', 'config'],
       props: {}
     }),
     tree: createModuleItem({
       title: 'Tree',
       icon: toolBarIcon.tree,
+      // tree/TreeDraw.vue
+      // tree/TreeData.vue
+      // tree/TreeConfig.vue
       action: ['draw', 'data', 'config'],
       props: {}
     }),
@@ -56,6 +74,9 @@ const appConfig: any = {
     demo1: createModuleItem({
       title: 'Demo1',
       icon: toolBarIcon.default,
+      // demo1/Demo1Draw.vue
+      // demo1/Demo1Data.vue
+      // demo1/Demo1Config.vue
       action: ['draw', 'data', 'config'],
       props: {
         status: {
@@ -74,6 +95,9 @@ const appConfig: any = {
     demo2: createModuleItem({
       title: 'Demo2',
       icon: toolBarIcon.default,
+      // demo2/Demo2Draw.vue
+      // demo2/Demo2Data.vue
+      // demo2/Demo2Config.vue
       action: ['draw', 'data', 'config'],
       props: {}
     }),
@@ -120,7 +144,7 @@ function createModuleItem(config: Omit<ModuleItem, 'funcMode' | 'template' | 'te
 }
 
 function getTemplateNames (title: string, actions: string[]) {
-  const name = title.toLowerCase()
+  const name = title
   const templateList: string[] = []
 
   for (let i = 0; i < actions.length; i++) {
@@ -134,14 +158,14 @@ function getTemplateNames (title: string, actions: string[]) {
 }
 
 function getTemplatePaths (title: string, actions: string[]) {
-  const name = title.toLowerCase()
+  const name = title
   const templateList: string[] = []
   for (let i = 0; i < actions.length; i++) {
     const action = actions[i]
     templateList.push(
       '@/components/' +
-      name.charAt(0).toLocaleLowerCase() + name.slice(1) + '/' +
-      name.charAt(0).toUpperCase() + name.slice(1) +
+      name.toLowerCase() + '/' +
+      name +
       action.charAt(0).toUpperCase() + action.slice(1) +
       '.vue'
     )
