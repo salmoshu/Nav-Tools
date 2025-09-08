@@ -15,12 +15,17 @@
       <el-tabs v-model="activeTab">
         <el-tab-pane label="串口连接" name="serial">
           <div class="input-group">
-            <span class="input-label">端口:</span>
+            <span class="input-label">
+              <el-button @click="searchSerialPorts" class="icon-only-refresh">
+                <el-icon><Refresh /></el-icon>
+              </el-button>
+              端口:
+            </span>
             <el-select
               v-model="serialPort"
               placeholder="请选择串口"
               style="flex: 1;"
-              @change="searchSerialPorts"
+              @click="searchSerialPorts"
             >
               <el-option v-for="port in serialPorts" :key="port" :label="port" :value="port" />
             </el-select>
@@ -559,5 +564,27 @@ onUnmounted(() => {
   padding: 0;
   margin: 0;
   border: none;
+}
+
+.icon-only-refresh {
+  background: transparent !important;
+  border: none !important;
+  padding: 4px !important;
+  min-width: auto !important;
+  width: 32px !important;
+  height: 32px !important;
+  display: inline-block !important;
+  align-items: center !important;
+  justify-content: center !important;
+  color: #606266 !important;
+}
+
+.icon-only-refresh:hover {
+  background: rgba(0, 0, 0, 0.05) !important;
+  color: #4096ff !important;
+}
+
+.icon-only-refresh .el-icon {
+  font-size: 16px !important;
 }
 </style>
