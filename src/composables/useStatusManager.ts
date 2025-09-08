@@ -4,6 +4,8 @@ import { useFollowStore } from "@/stores/follow";
 import { navMode } from "@/settings/config";
 import { useDemo1Store } from "@/stores/demo1";
 
+const showStatusBar = ref(true)
+
 function getMonitorStatus() {
   const funcMode = navMode.funcMode
   const result = ref<Record<string, any>>({})
@@ -39,4 +41,7 @@ function getMonitorStatus() {
   return result.value
 }
 
-export { getMonitorStatus };
+export { 
+  showStatusBar,
+  getMonitorStatus 
+};

@@ -6,7 +6,15 @@
     @mousedown="startDrag"
   >
     <div class="statusbar-handle">
-      <span>Status View</span>
+      <span class="statusbar-title">Status View</span>
+      <el-button
+        type="text" 
+        @click="showStatusBar = false"
+        class="remove-btn"
+        title="移除卡片"
+      >
+        <el-icon><Close /></el-icon>
+      </el-button>
     </div>
     <div class="statusbar-content">
       <div v-for="(statusValue, statusName) in getMonitorStatus()" :key="statusName" class="status-item">
@@ -28,7 +36,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, inject, watch, type Ref } from 'vue'
-import { getMonitorStatus } from '@/composables/useStatusManager'
+import { getMonitorStatus, showStatusBar } from '@/composables/useStatusManager'
 
 const commonStyle = {
   trueStyle: 'color: #00b894; background: rgba(0, 184, 148, 0.1); font-weight: 700;',
@@ -305,7 +313,7 @@ onUnmounted(() => {
   font-weight: 600;
   color: #333;
   cursor: grab;
-  padding: 12px 8px;
+  padding: 0 8px;  /* 修改内边距 */
   margin: 0 auto;
   text-align: center;
   background-color: #f8f9fa;
@@ -314,6 +322,9 @@ onUnmounted(() => {
   height: 40px;
   box-sizing: border-box;
   border-radius: 0;
+  display: flex;  /* 添加Flex布局 */
+  justify-content: space-between;  /* 文字和按钮分别位于两端 */
+  align-items: center;  /* 垂直居中对齐 */
 }
 
 .statusbar-content {
@@ -419,5 +430,13 @@ onUnmounted(() => {
 
 .dock-zone:hover {
   background: rgba(52, 152, 219, 0.4);
+}
+
+.statusbar-title {
+  margin: 0 auto;
+}
+
+.remove-btn {
+  color: #6c757d;
 }
 </style>

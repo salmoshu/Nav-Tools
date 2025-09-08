@@ -40,6 +40,13 @@
       <span v-else class="divider">一</span>
       
       <!-- Actions: Draw/Data/Config... -->
+      <button
+        class="toolbar-btn"
+        @click="handleStatus(); ($event.currentTarget as HTMLElement)?.blur()"
+        :title="statusBtn.title"
+        v-html="statusBtn.icon+getButtonText(statusBtn.title, position)"
+      >
+      </button>
       <button 
         v-for="item in handleList" 
         :key="item.msg"
@@ -93,6 +100,7 @@ import { ref, reactive, computed, onMounted, onUnmounted, watch, inject, type Re
 import { navMode, ButtonItem } from '@/settings/config'
 import { toolBarIcon } from '@/settings/icons'
 import { getButtonList, upAndDown, getButtonText, getLayoutList, getIoList, handleIo } from '@/composables/useToolsManager'
+import { showStatusBar } from '@/composables/useStatusManager'
 
 import emitter from '@/hooks/useMitt'
 
@@ -119,6 +127,18 @@ const handleDeviceConnected = () => {
       deviceInstance.openCurrDevice()
     }
   }
+}
+
+const handleStatus = () => {
+  showStatusBar.value = !showStatusBar.value
+}
+
+const statusBtn: ButtonItem = {
+  msg: 'status',
+  title: 'Status',
+  icon: toolBarIcon.status,
+  template: '', // 补充 template 属性
+  text: '',     // 补充 text 属性
 }
 
 const handleList: ButtonItem[] = reactive(

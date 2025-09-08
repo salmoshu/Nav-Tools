@@ -5,7 +5,7 @@
       @funcModeChange="handleFuncModeChange"
     />
 
-    <StatusBar @positionChange="handleStatusbarPositionChange" />
+    <StatusBar @positionChange="handleStatusbarPositionChange" v-if="showStatusBar" />
 
     <el-dialog
       title="输入"
@@ -158,12 +158,13 @@
 <script setup lang="ts">
 import ToolBar from './ToolBar.vue'
 import StatusBar from './StatusBar.vue'
-import { ref, computed, onMounted, onUnmounted, provide, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, provide } from 'vue'
 import { GridLayout, GridItem } from 'grid-layout-plus'
 import { ElButton, ElCard, ElDialog, ElIcon } from 'element-plus'
 import { Close, Share } from '@element-plus/icons-vue'
 import emitter from '@/hooks/useMitt'
 import { useLayoutManager } from '@/composables/useLayoutManager'
+import { showStatusBar } from '@/composables/useStatusManager'
 import { useDevice } from '@/hooks/useDevice'
 import { appConfig, navMode } from '@/settings/config'
 
@@ -241,13 +242,16 @@ const contentStyle = computed(() => {
   let marginRight = 0
 
   // 先计算状态栏的位置（只在左右两侧）
-  switch (statusbarPosition.value) {
-    case 'left':
-      marginLeft += statusbarSize.value.width
-      break
-    case 'right':
-      marginRight += statusbarSize.value.width
-      break
+  // 只有当showStatusBar为true时才计算状态栏的占位
+  if (showStatusBar.value) {
+    switch (statusbarPosition.value) {
+      case 'left':
+        marginLeft += statusbarSize.value.width
+        break
+      case 'right':
+        marginRight += statusbarSize.value.width
+        break
+    }
   }
 
   // 处理工具栏的位置，考虑与状态栏的边缘限制
@@ -262,7 +266,7 @@ const contentStyle = computed(() => {
       break
     case 'left':
       // 当ToolBar在左边时，限制ToolBar右边缘在StatusBar左边缘
-      if (statusbarPosition.value === 'left') {
+      if (showStatusBar.value && statusbarPosition.value === 'left') {
         // 如果状态栏在左边，工具栏在状态栏右侧
         marginLeft = statusbarSize.value.width + toolbarSize.value.width
       } else {
@@ -272,7 +276,7 @@ const contentStyle = computed(() => {
       break
     case 'right':
       // 当ToolBar在右边时，限制ToolBar左边缘在StatusBar右边缘
-      if (statusbarPosition.value === 'right') {
+      if (showStatusBar.value && statusbarPosition.value === 'right') {
         // 如果状态栏在右边，工具栏在状态栏左侧
         marginRight = statusbarSize.value.width + toolbarSize.value.width
       } else {
