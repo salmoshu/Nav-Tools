@@ -298,6 +298,21 @@ export function useDevice() {
     }
   });
 
+  ipcManager.on('serial-disconnected', (event: any, data: { path: string }) => {
+    // 检查断开的是否是当前连接的串口
+    if (globalDevice.value.path === data.path) {
+      // 更新全局设备状态
+      globalDevice.value.connected = false;
+      searchSerialPorts();
+      
+      // 显示断开连接的消息
+      ElMessage({
+        message: `串口${data.path}已断开连接`,
+        type: "warning",
+      });
+    }
+  });
+
   // 暴露需要使用的状态和方法
   return {
     showInputDialog,

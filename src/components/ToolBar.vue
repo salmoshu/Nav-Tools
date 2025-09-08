@@ -102,19 +102,21 @@ const showSaveButton = ref(false)
 
 import { useDevice } from '@/hooks/useDevice'
 import { ElMessage } from 'element-plus'
-const deviceConnected = useDevice().deviceConnected
+
+const deviceInstance = useDevice()
+const deviceConnected = deviceInstance.deviceConnected
 
 const handleDeviceConnected = () => {
   if (deviceConnected.value === true) {
-    useDevice().closeCurrDevice()
+    deviceInstance.closeCurrDevice()
   } else {
-    if (useDevice().globalDevice.value.connected === null) {
+    if (deviceInstance.globalDevice.value.connected === null) {
       ElMessage({
         message: '请配置设备信息',
         type: 'warning',
       })
     } else {
-      useDevice().openCurrDevice()
+      deviceInstance.openCurrDevice()
     }
   }
 }
@@ -140,7 +142,7 @@ watch(() => navMode.funcMode, (oldMode, newMode) => {
       handleList.splice(0, handleList.length)
     }
 
-    useDevice().removeCurrDevice()
+    deviceInstance.removeCurrDevice()
   }
 })
 

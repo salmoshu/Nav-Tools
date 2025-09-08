@@ -156,6 +156,16 @@ function openSerialPort(
       reject(err); // 拒绝 Promise，传递错误
     });
 
+    // 监听关闭事件
+    currentPort.on("close", () => {
+      console.log(`串口${serial.path}已关闭`);
+      if (currentPort?.path === serial.path) {
+        currentPort = null;
+        // 发送断开连接事件到渲染进程
+        event.sender.send("serial-disconnected", { path: serial.path });
+      }
+    });
+
     currentPort.on("data", (data) => {
       serialDataToRenderer(event, data.toString());
     });

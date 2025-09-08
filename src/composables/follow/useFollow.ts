@@ -42,9 +42,9 @@ export function useFollow() {
             timestamps.value.push(timestamp.value)
             timestamp.value += dt
           }
-          if (camera_distance && camera_angle && motor_left_speed && motor_right_speed && Number(camera_distance) && Number(camera_angle) && Number(motor_left_speed) && Number(motor_right_speed)) {
-            cameraDistance.value.push(Number(camera_distance))
-            cameraAngle.value.push(Number(camera_angle))
+          if (motor_left_speed !== null && motor_right_speed !== null) {
+            cameraDistance.value.push(camera_distance) // null || number
+            cameraAngle.value.push(camera_angle) // null || number
             motorLeftSpeed.value.push(Number(motor_left_speed))
             motorRightSpeed.value.push(Number(motor_right_speed))
           } else {
@@ -92,7 +92,7 @@ export function useFollow() {
           const camera_angle = json.camera_angle
           const motor_left_speed = json.motor_left_speed
           const motor_right_speed = json.motor_right_speed
-          if (camera_distance && camera_angle && motor_left_speed && motor_right_speed && Number(camera_distance) && Number(camera_angle) && Number(motor_left_speed) && Number(motor_right_speed)) {
+          if (motor_left_speed !== null && motor_right_speed !== null) {
             if (typeof json.time === 'number') {
               if (timestamp.value == 0) {
                 // 增加一个极小量 0.0005，以处理为0的情况
@@ -110,8 +110,8 @@ export function useFollow() {
               }
               timestamps.value.push(now - timestamp.value)
             }
-            cameraDistance.value.push(Number(camera_distance))
-            cameraAngle.value.push(Number(camera_angle))
+            cameraDistance.value.push(camera_distance) // null || number
+            cameraAngle.value.push(camera_angle) // null || number
             motorLeftSpeed.value.push(Number(motor_left_speed))
             motorRightSpeed.value.push(Number(motor_right_speed))
           }
