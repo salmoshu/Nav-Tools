@@ -165,19 +165,28 @@ function createChartOption() {
     tooltip: { 
       trigger: 'axis',
       formatter: (params: any) => {
-        let result = `时间: ${params[0].data[0].toFixed(2)}s<br/>`
-        if (params[0] && params[0].data[1] !== null) {
-          result += `${params[0].marker}相机距离: ${params[0].data[1].toFixed(2)}m<br/>`
-        }
-        if (params[1] && params[1].data[1] !== null) {
-          result += `${params[1].marker}相机角度: ${params[1].data[1].toFixed(1)}°<br/>`
-        }
-        if (params[2] && params[2].data[1] !== null) {
-          result += `${params[2].marker}左轮速度: ${params[2].data[1].toFixed(2)}m/s<br/>`
-        }
-        if (params[3] && params[3].data[1] !== null) {
-          result += `${params[3].marker}右轮速度: ${params[3].data[1].toFixed(2)}m/s<br/>`
-        }
+        if (params.length === 0) return '';
+        let result = `时间: ${params[0].data[0].toFixed(2)}s<br/>`;
+        
+        // 根据seriesName匹配显示对应的标签
+        params.forEach((param: any) => {
+          if (param.data[1] !== null) {
+            switch (param.seriesName) {
+              case '相机距离':
+                result += `${param.marker}相机距离: ${param.data[1].toFixed(2)}m<br/>`;
+                break;
+              case '相机角度':
+                result += `${param.marker}相机角度: ${param.data[1].toFixed(1)}°<br/>`;
+                break;
+              case '左轮速度':
+                result += `${param.marker}左轮速度: ${param.data[1].toFixed(2)}m/s<br/>`;
+                break;
+              case '右轮速度':
+                result += `${param.marker}右轮速度: ${param.data[1].toFixed(2)}m/s<br/>`;
+                break;
+            }
+          }
+        });
         return result;
       },
       textStyle: {
