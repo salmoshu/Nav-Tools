@@ -166,27 +166,95 @@ function createChartOption() {
       trigger: 'axis',
       formatter: (params: any) => {
         if (params.length === 0) return '';
-        let result = `时间: ${params[0].data[0].toFixed(2)}s<br/>`;
         
-        // 根据seriesName匹配显示对应的标签
+        // 获取当前时间点
+        const currentTime = params[0].data[0];
+        
+        // 创建一个映射来存储所有系列的数据
+        const seriesData: Record<string, any> = {};
         params.forEach((param: any) => {
-          if (param.data[1] !== null) {
-            switch (param.seriesName) {
+          seriesData[param.seriesName] = param;
+        });
+        
+        // 获取所有系列配置
+        const allSeries = chart?.getOption().series || [];
+        
+        // 查找其他图表中相同时间点的数据
+        (Array.isArray(allSeries) ? allSeries : []).forEach((series: any) => {
+          if (!seriesData[series.name]) {
+            // 查找当前时间点的数据
+            const dataPoint = series.data.find((item: any) => 
+              Math.abs(item[0] - currentTime) < 0.001 // 考虑浮点数精度问题
+            );
+            
+            if (dataPoint) {
+              // 构建缺失的数据项
+              seriesData[series.name] = {
+                seriesName: series.name,
+                data: dataPoint,
+                marker: `<span style="display:inline-block;margin-right:5px;border-radius:10px;width:10px;height:10px;background-color:${series.itemStyle?.color || '#ccc'};"></span>`
+              };
+            }
+          }
+        });
+        
+        let result = `时间: ${currentTime.toFixed(2)}s<br/>`;
+        let targetTrend = null;
+        let motorLeft = null;
+        let motorRight = null;
+        let motorTrend = null;
+
+        // 按顺序显示所有系列的数据
+        ['相机距离', '相机角度', '左轮速度', '右轮速度'].forEach(name => {
+          const param = seriesData[name];
+          if (param && param.data[1] !== null) {
+            switch (name) {
               case '相机距离':
                 result += `${param.marker}相机距离: ${param.data[1].toFixed(2)}m<br/>`;
                 break;
               case '相机角度':
                 result += `${param.marker}相机角度: ${param.data[1].toFixed(1)}°<br/>`;
+                if (param.data[1] > 0) {
+                  targetTrend = '目标趋势: 目标靠右';
+                } else if (param.data[1] < 0) {
+                  targetTrend = '目标趋势: 目标靠左';
+                } else {
+                  targetTrend = '目标趋势: 目标直行';
+                }
                 break;
               case '左轮速度':
                 result += `${param.marker}左轮速度: ${param.data[1].toFixed(2)}m/s<br/>`;
+                motorLeft = param.data[1];
                 break;
               case '右轮速度':
                 result += `${param.marker}右轮速度: ${param.data[1].toFixed(2)}m/s<br/>`;
+                motorRight = param.data[1];
                 break;
             }
+          } else if (name === '相机角度') {
+            targetTrend = '目标趋势: 目标丢失';
           }
         });
+
+        if (motorLeft !== null && motorRight !== null) {
+          if (motorLeft > motorRight) {
+            motorTrend = '小车趋势: 小车右转';
+          } else if (motorLeft < motorRight) {
+            motorTrend = '小车趋势: 小车左转';
+          } else {
+            if (motorLeft === 0 && motorRight === 0) {
+              motorTrend = '小车趋势: 小车静止';
+            } else {
+              motorTrend = '小车趋势: 小车直行';
+            }
+          }
+          result += `${motorTrend}<br/>`;
+        }
+
+        if (targetTrend !== null) {
+          result += `${targetTrend}`;
+        }
+
         return result;
       },
       textStyle: {
