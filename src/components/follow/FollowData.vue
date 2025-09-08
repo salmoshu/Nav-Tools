@@ -37,7 +37,7 @@ import { ElMessage } from 'element-plus'
 import { useDevice } from '@/hooks/useDevice'
 
 // 初始化超声波数据处理
-const { timestamps, cameraDistance, cameraAngle, motorLeftSpeed, motorRightSpeed, initRawData, clearRawData, saveData } = useFollow()
+const { timestamps, cameraDistance, cameraAngle, pidLeftSpeed, pidRightSpeed, initRawData, clearRawData, saveData } = useFollow()
 
 const fileInput = ref<HTMLInputElement>()
 const chartRef = ref<HTMLDivElement>()
@@ -59,8 +59,8 @@ function createChartOption() {
   // item, index
   const cameraDistanceSeries = cameraDistance.value.map((item, index: number) => [timestamps.value[index], item])
   const cameraAngleSeries = cameraAngle.value.map((item, index: number) => [timestamps.value[index], item])
-  const motorLeftSpeedSeries = motorLeftSpeed.value.map((item, index: number) => [timestamps.value[index], item])
-  const motorRightSpeedSeries = motorRightSpeed.value.map((item, index: number) => [timestamps.value[index], item])
+  const pidLeftSpeedSeries = pidLeftSpeed.value.map((item, index: number) => [timestamps.value[index], item])
+  const pidRightSpeedSeries = pidRightSpeed.value.map((item, index: number) => [timestamps.value[index], item])
 
   let xAxisStart = 0
   if (timeRange.value > 0 && cameraDistanceSeries.length > timeRange.value) {
@@ -431,7 +431,7 @@ function createChartOption() {
       {
         name: '左轮速度',
         type: 'line',
-        data: motorLeftSpeedSeries,
+        data: pidLeftSpeedSeries,
         smooth: true,
         itemStyle: { color: '#20C997' },
         lineStyle: { width: 2 },
@@ -444,12 +444,12 @@ function createChartOption() {
         yAxisIndex: 2,
         xAxisIndex: 1,
         connectNulls: false,
-        ...(motorLeftSpeedSeries.length > 5000 && { sampling: 'lttb' })
+        ...(pidLeftSpeedSeries.length > 5000 && { sampling: 'lttb' })
       },
       {
         name: '右轮速度',
         type: 'line',
-        data: motorRightSpeedSeries,
+        data: pidRightSpeedSeries,
         smooth: true,
         itemStyle: { color: '#F7BA1E' },
         lineStyle: { width: 2 },
@@ -462,7 +462,7 @@ function createChartOption() {
         yAxisIndex: 2,
         xAxisIndex: 1,
         connectNulls: false,
-        ...(motorRightSpeedSeries.length > 5000 && { sampling: 'lttb' })
+        ...(pidRightSpeedSeries.length > 5000 && { sampling: 'lttb' })
       }
     ]
   }
