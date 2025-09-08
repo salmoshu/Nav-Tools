@@ -365,6 +365,7 @@ const handleLayout = (action: string) => {
       emitter.emit('auto')
       break
     case 'reset':
+      showStatusBar.value = true
       emitter.emit('reset')
       break
   }
