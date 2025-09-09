@@ -37,7 +37,7 @@ import { ElMessage } from 'element-plus'
 import { useDevice } from '@/hooks/useDevice'
 
 // 初始化超声波数据处理
-const { timestamps, cameraDistance, cameraAngle, pidLeftSpeed, pidRightSpeed, initRawData, clearRawData, saveData } = useFollow()
+const { timestamps, cameraDistance, cameraAngle, pidLeftSpeed, pidRightSpeed, motorLeftSpeed, motorRightSpeed, initRawData, clearRawData, saveData } = useFollow()
 
 const fileInput = ref<HTMLInputElement>()
 const chartRef = ref<HTMLDivElement>()
@@ -61,6 +61,8 @@ function createChartOption() {
   const cameraAngleSeries = cameraAngle.value.map((item, index: number) => [timestamps.value[index], item])
   const pidLeftSpeedSeries = pidLeftSpeed.value.map((item, index: number) => [timestamps.value[index], item])
   const pidRightSpeedSeries = pidRightSpeed.value.map((item, index: number) => [timestamps.value[index], item])
+  const motorLeftSpeedSeries = motorLeftSpeed.value.map((item, index: number) => [timestamps.value[index], item])
+  const motorRightSpeedSeries = motorRightSpeed.value.map((item, index: number) => [timestamps.value[index], item])
 
   let xAxisStart = 0
   if (timeRange.value > 0 && cameraDistanceSeries.length > timeRange.value) {
@@ -115,7 +117,7 @@ function createChartOption() {
           xAxisIndex: 0
         },
         {
-          name: '左轮速度',
+          name: '左轮PID速度',
           symbolSize: 4,
           type: 'line',
           data: [],
@@ -123,13 +125,29 @@ function createChartOption() {
           xAxisIndex: 1
         },
         {
-          name: '右轮速度',
+          name: '右轮PID速度',
           symbolSize: 4,
           type: 'line',
           data: [],
           yAxisIndex: 2,
           xAxisIndex: 1
-        }
+        },
+        {
+          name: '左轮电机速度',
+          symbolSize: 4,
+          type: 'line',
+          data: [],
+          yAxisIndex: 2,
+          xAxisIndex: 1
+        },
+        {
+          name: '右轮电机速度',
+          symbolSize: 4,
+          type: 'line',
+          data: [],
+          yAxisIndex: 2,
+          xAxisIndex: 1
+        },
       ],
       dataZoom: [
         {
@@ -205,7 +223,7 @@ function createChartOption() {
         let motorTrend = null;
 
         // 按顺序显示所有系列的数据
-        ['相机距离', '相机角度', '左轮速度', '右轮速度'].forEach(name => {
+        ['相机距离', '相机角度', '左轮PID速度', '右轮PID速度', '左轮电机速度', '右轮电机速度'].forEach(name => {
           const param = seriesData[name];
           if (param && param.data[1] !== null) {
             switch (name) {
@@ -222,13 +240,19 @@ function createChartOption() {
                   targetTrend = '目标趋势: 目标直行';
                 }
                 break;
-              case '左轮速度':
-                result += `${param.marker}左轮速度: ${param.data[1].toFixed(2)}m/s<br/>`;
+              case '左轮PID速度':
+                result += `${param.marker}左轮PID速度: ${param.data[1].toFixed(2)}m/s<br/>`;
                 motorLeft = param.data[1];
                 break;
-              case '右轮速度':
-                result += `${param.marker}右轮速度: ${param.data[1].toFixed(2)}m/s<br/>`;
+              case '右轮PID速度':
+                result += `${param.marker}右轮PID速度: ${param.data[1].toFixed(2)}m/s<br/>`;
                 motorRight = param.data[1];
+                break;
+              case '左轮电机速度':
+                result += `${param.marker}左轮电机速度: ${param.data[1].toFixed(2)}m/s<br/>`;
+                break;
+              case '右轮电机速度':
+                result += `${param.marker}右轮电机速度: ${param.data[1].toFixed(2)}m/s<br/>`;
                 break;
             }
           } else if (name === '相机角度') {
@@ -269,7 +293,7 @@ function createChartOption() {
       maxWidth: 250,
     },
     legend: { 
-      data: ['相机距离', '相机角度', '左轮速度', '右轮速度'],
+      data: ['相机距离', '相机角度', '左轮PID速度', '右轮PID速度', '左轮电机速度', '右轮电机速度'],
       top: 50,
       left: 'right'
     },
@@ -429,7 +453,7 @@ function createChartOption() {
         ...(cameraAngleSeries.length > 5000 && { sampling: 'lttb' })
       },
       {
-        name: '左轮速度',
+        name: '左轮PID速度',
         type: 'line',
         data: pidLeftSpeedSeries,
         smooth: true,
@@ -447,7 +471,7 @@ function createChartOption() {
         ...(pidLeftSpeedSeries.length > 5000 && { sampling: 'lttb' })
       },
       {
-        name: '右轮速度',
+        name: '右轮PID速度',
         type: 'line',
         data: pidRightSpeedSeries,
         smooth: true,
@@ -463,7 +487,43 @@ function createChartOption() {
         xAxisIndex: 1,
         connectNulls: false,
         ...(pidRightSpeedSeries.length > 5000 && { sampling: 'lttb' })
-      }
+      },
+      {
+        name: '左轮电机速度',
+        type: 'line',
+        data: motorLeftSpeedSeries,
+        smooth: true,
+        // itemStyle: { color: '#20C997' },
+        lineStyle: { width: 2 },
+        showSymbol: false,
+        large: true,
+        largeThreshold: 5000,
+        progressive: 5000,
+        progressiveThreshold: 10000,
+        animation: false,
+        yAxisIndex: 2,
+        xAxisIndex: 1,
+        connectNulls: false,
+        ...(motorLeftSpeedSeries.length > 5000 && { sampling: 'lttb' })
+      },
+      {
+        name: '右轮电机速度',
+        type: 'line',
+        data: motorRightSpeedSeries,
+        smooth: true,
+        // itemStyle: { color: '#F7BA1E' },
+        lineStyle: { width: 2 },
+        showSymbol: false,
+        large: true,
+        largeThreshold: 5000,
+        progressive: 5000,
+        progressiveThreshold: 10000,
+        animation: false,
+        yAxisIndex: 2,
+        xAxisIndex: 1,
+        connectNulls: false,
+        ...(motorRightSpeedSeries.length > 5000 && { sampling: 'lttb' })
+      },
     ]
   }
 }

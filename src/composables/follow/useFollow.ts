@@ -7,6 +7,8 @@ const cameraDistance = ref([] as any[])
 const cameraAngle = ref([] as any[])
 const pidLeftSpeed = ref([] as any[])
 const pidRightSpeed = ref([] as any[])
+const motorLeftSpeed = ref([] as any[])
+const motorRightSpeed = ref([] as any[])
 const isBatchData = ref(false)
 
 export function useFollow() {
@@ -17,6 +19,8 @@ export function useFollow() {
     cameraAngle.value = []
     pidLeftSpeed.value = []
     pidRightSpeed.value = []
+    motorLeftSpeed.value = []
+    motorRightSpeed.value = []
   }
 
   const initRawData = (data: string, startTime: number=0) => {
@@ -47,11 +51,15 @@ export function useFollow() {
             cameraAngle.value.push(camera_angle) // null || number
             pidLeftSpeed.value.push(Number(pid_left_speed))
             pidRightSpeed.value.push(Number(pid_right_speed))
+            motorLeftSpeed.value.push(json.motor_left_speed)
+            motorRightSpeed.value.push(json.motor_right_speed)
           } else {
             cameraDistance.value.push(null)
             cameraAngle.value.push(null)
             pidLeftSpeed.value.push(null)
             pidRightSpeed.value.push(null)
+            motorLeftSpeed.value.push(null)
+            motorRightSpeed.value.push(null)
           }
         } catch (error) {
           console.log('json解析失败', error)
@@ -68,6 +76,8 @@ export function useFollow() {
     cameraAngle.value.push(null)
     pidLeftSpeed.value.push(null)
     pidRightSpeed.value.push(null)
+    motorLeftSpeed.value.push(null)
+    motorRightSpeed.value.push(null)
   }
 
   let rawString = ''
@@ -92,6 +102,8 @@ export function useFollow() {
           const camera_angle = json.camera_angle
           const pid_left_speed = json.pid_left_speed
           const pid_right_speed = json.pid_right_speed
+          const motor_left_speed = json.motor_left_speed
+          const motor_right_speed = json.motor_right_speed
           if (pid_left_speed !== null && pid_right_speed !== null) {
             if (typeof json.time === 'number') {
               if (timestamp.value == 0) {
@@ -114,6 +126,8 @@ export function useFollow() {
             cameraAngle.value.push(camera_angle) // null || number
             pidLeftSpeed.value.push(Number(pid_left_speed))
             pidRightSpeed.value.push(Number(pid_right_speed))
+            motorLeftSpeed.value.push(motor_left_speed)
+            motorRightSpeed.value.push(motor_right_speed)
           }
         } catch (error) {
           console.log('json解析失败', error)
@@ -131,6 +145,8 @@ export function useFollow() {
         camera_angle: cameraAngle.value[index],
         pid_left_speed: pidLeftSpeed.value[index],
         pid_right_speed: pidRightSpeed.value[index],
+        motor_left_speed: motorLeftSpeed.value[index],
+        motor_right_speed: motorRightSpeed.value[index],
       };
     });
     
@@ -160,6 +176,8 @@ export function useFollow() {
     cameraAngle,
     pidLeftSpeed,
     pidRightSpeed,
+    motorLeftSpeed,
+    motorRightSpeed,
     addRawData,
     initRawData,
     clearRawData,
