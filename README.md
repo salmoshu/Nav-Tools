@@ -1,6 +1,6 @@
 # Nav-Tools
 
-🥳 Really simple `Electron` + `Vue` + `Vite` boilerplate.
+🥳 Nav-Tools is a desktop-grade visualization workbench built with Electron & Vue3, tailored for roboticists.
 
 <!-- [![awesome-vite](https://awesome.re/mentioned-badge.svg)](https://github.com/vitejs/awesome-vite) -->
 <!-- [![Netlify Status](https://api.netlify.com/api/v1/badges/ae3863e3-1aec-4eb1-8f9f-1890af56929d/deploy-status)](https://app.netlify.com/sites/electron-vite/deploys) -->
@@ -8,8 +8,8 @@
 <!-- [![GitHub stars](https://img.shields.io/github/stars/caoxiemeihao/electron-vite-vue?color=fa6470)](https://github.com/electron-vite/electron-vite-vue) -->
 <!-- [![GitHub forks](https://img.shields.io/github/forks/caoxiemeihao/electron-vite-vue)](https://github.com/electron-vite/electron-vite-vue) -->
 
-[![GitHub Build](https://github.com/electron-vite/electron-vite-vue/actions/workflows/build.yml/badge.svg)](https://github.com/electron-vite/electron-vite-vue/actions/workflows/build.yml)
-[![GitHub Discord](https://img.shields.io/badge/chat-discord-blue?logo=discord)](https://discord.gg/sRqjYpEAUK)
+<!-- [![GitHub Build](https://github.com/electron-vite/electron-vite-vue/actions/workflows/build.yml/badge.svg)](https://github.com/electron-vite/electron-vite-vue/actions/workflows/build.yml)
+[![GitHub Discord](https://img.shields.io/badge/chat-discord-blue?logo=discord)](https://discord.gg/sRqjYpEAUK) -->
 
 ## Features
 
@@ -22,13 +22,14 @@
 
 ## Applications
 
-1. PNC
-   - Follow
-   - BehaviorTree
-2. POS
-   - GNSS
-   - IMU
-   - Vision
+1. ROBOT
+   - Follow: 跟随机器人
+2. PNC
+   - Ultrasonic: 超声波传感器
+3. PNC
+   - FollowSim: PID跟随仿真
+4. POS
+   - GNSS:  GNSS定位
 
 ## Quick Setup
 
@@ -57,41 +58,22 @@ pnpm run dev
    ```typescript
       example:                                  // example 为新 App 名称，会加载在 Electron 窗口上
       {
-         module: {
-            demo1: createModuleItem({
-               title: 'Demo1',                  // 模块名称（与 module 的键名相同，采用 PascalCase 命名规范）
-               icon: toolBarIcon.default,       // 模块图标
-               action: ['draw', 'data', 'config'], // 模块包含的子模块（draw、data、config）
-            }),
-            demo2: createModuleItem({
-               title: 'Demo2',
-               icon: toolBarIcon.default,
-               action: ['draw', 'data', 'config'],
-            }),
-            ...
-         }
+         demo1: createModuleItem({
+            title: 'Demo1',                  // 模块名称（与 module 的键名相同，采用 PascalCase 命名规范）
+            icon: toolBarIcon.default,       // 模块图标
+            action: ['draw', 'data', 'config'], // 模块包含的子模块（draw、data、config）
+         }),
+         demo2: createModuleItem({
+            title: 'Demo2',
+            icon: toolBarIcon.default,
+            action: ['draw', 'data', 'config'],
+         }),
+         ...
       },
 
    ```
 
-2. 在 AppMode 和 FuncMode 中增加相应的枚举
-
-   ```typescript
-   export enum AppMode {
-      Example = 'Example',
-      ...
-   }
-   ```
-
-   ```typescript
-   export enum FuncMode {
-      Demo1 = 10,
-      Demo2 = 11,
-      ...
-   }
-   ```
-
-3. 在 `src\components` 和 `src\composables` 目录下增加相应的组件和钩子
+2. 在 `src\components` 和 `src\composables` 目录下增加相应的组件和钩子
 
    ```text
    # 组件和钩子采用扁平化文件结构
@@ -114,7 +96,7 @@ pnpm run dev
    │   └── ...
    ```
 
-4. 在 `src\stores` 目录下增加相应的组件间状态管理文件（这里使用了 Pinia）
+3. 在 `src\stores` 目录下增加相应的组件间状态管理文件（这里使用了 Pinia）
 
    ```text
    src
@@ -124,10 +106,15 @@ pnpm run dev
    │   └── ...
    ```
 
-5. 模块运行状态
+4. 模块运行状态
    - 在 `src\stores\demo1.ts` 中增加相应的状态字段 `status`
    - 在 `src\composables\useStatusManager.ts` 中应用 Pinia 定义好的状态
    - 在 `src\components\StatusBar.vue` 中应用状态
+
+## Externel Tools
+
+1. Echarts
+2. Element-Plus
 
 ## Debug
 
@@ -180,3 +167,7 @@ export default {
 
 - [C/C++ addons, Node.js modules - Pre-Bundling](https://github.com/electron-vite/vite-plugin-electron-renderer#dependency-pre-bundling)
 - [dependencies vs devDependencies](https://github.com/electron-vite/vite-plugin-electron-renderer#dependencies-vs-devdependencies)
+
+## Release
+
+0.1.0: 初始版本

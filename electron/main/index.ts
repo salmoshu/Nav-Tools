@@ -1,12 +1,12 @@
-import { app, BrowserWindow, shell, ipcMain, Menu } from 'electron'
-import { createRequire } from 'node:module'
+import { app, BrowserWindow, shell, ipcMain, Menu, powerSaveBlocker } from 'electron'
+// import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import os from 'node:os'
-// 导入AppMap配置
-import { appConfig } from '../../src/types/config'
+import { appConfig } from '../../src/settings/config'
+import { eventsMap } from './events'
 
-const require = createRequire(import.meta.url)
+// const require = createRequire(import.meta.url)
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 // The built directory structure
@@ -46,6 +46,8 @@ const indexHtml = path.join(RENDERER_DIST, 'index.html')
 
 async function createWindow() {
   win = new BrowserWindow({
+    width: 1200,
+    height: 800,
     title: 'Nav-Tools',
     icon: path.join(process.env.VITE_PUBLIC, 'favicon.ico'),
     webPreferences: {
@@ -80,40 +82,11 @@ async function createWindow() {
   // win.webContents.on('will-navigate', (event, url) => { }) #344
 }
 
-
-
 function createMenu() {
   // 基础菜单模板
   const template = [
     {
-      label: '文件',
-      submenu: [
-        {
-          label: '新建',
-          accelerator: 'CmdOrCtrl+N',
-          click: () => {
-            console.log('新建文件')
-          }
-        },
-        {
-          label: '打开',
-          accelerator: 'CmdOrCtrl+O',
-          click: () => {
-            console.log('打开文件')
-          }
-        },
-        { type: 'separator' },
-        {
-          label: '退出',
-          accelerator: process.platform === 'darwin' ? 'Cmd+Q' : 'Ctrl+Q',
-          click: () => {
-            app.quit()
-          }
-        }
-      ]
-    },
-    {
-      label: '视图',
+      label: 'SETTING',
       submenu: [
         { role: 'reload', label: '重新加载' },
         { role: 'forceReload', label: '强制重新加载' },
@@ -126,50 +99,24 @@ function createMenu() {
         { role: 'togglefullscreen', label: '全屏' }
       ]
     },
-    {
-      label: '窗口',
-      submenu: [
-        { role: 'minimize', label: '最小化' },
-        { role: 'close', label: '关闭' }
-      ]
-    },
-    {
-      label: '工具',
-    },
-    {
-      label: '帮助',
-      submenu: [
-        {
-          label: '关于',
-          click: () => {
-            console.log('关于应用')
-          }
-        },
-        {
-          label: '访问官网',
-          click: () => {
-            shell.openExternal('https://github.com/salmoshu/Nav-Tools')
-          }
-        }
-      ]
-    },
-    {
-      label: '|',
-      enabled: false,
-      visible: true
-    },
   ]
 
   // 根据AppMap第一层内容自动生成菜单项
   const appMenuItems = Object.entries(appConfig).map(([key, config]) => ({
     label: key.toUpperCase(),
-    click: () => {
-      win?.webContents.send(`open-${key}-view`)
-    }
+    // click: () => {
+    //   win?.webContents.send(`open-${key}-view`)
+    // },
+    submenu: Object.entries((config as any)).map(([moduleKey, moduleConfig]) => ({
+      label: (moduleConfig as any).title,
+      click: () => {
+        win?.webContents.send(`open-${moduleKey}-view`)
+      }
+    }))
   }))
 
   // 合并基础模板和动态生成的App菜单
-  const finalTemplate = [...template, ...appMenuItems]
+  const finalTemplate = [...appMenuItems, ...template,]
 
   const menu = Menu.buildFromTemplate(finalTemplate as any)
   Menu.setApplicationMenu(menu)
@@ -178,6 +125,12 @@ function createMenu() {
 app.whenReady().then(() => {
   createWindow()
   createMenu()
+  // 阻止系统因空闲而挂起 GPU/CPU
+  powerSaveBlocker.start('prevent-app-suspension')
+  app.commandLine.appendSwitch('disable-renderer-backgrounding')
+  app.commandLine.appendSwitch('disable-background-timer-throttling')
+  app.commandLine.appendSwitch('disable-backgrounding-occluded-windows')
+  app.commandLine.appendSwitch('disable-features', 'CalculateNativeWinOcclusion')
 })
 
 app.on('window-all-closed', () => {
@@ -240,6 +193,7 @@ ipcMain.handle('open-card-window', async (_, serializedData) => {
       preload,
       nodeIntegration: false,
       contextIsolation: true,
+      backgroundThrottling: false
     },
   })
 
@@ -269,6 +223,9 @@ ipcMain.on('update-follow-config', (event, newConfig) => {
   })
 })
 
-ipcMain.on('console-to-node', (event, message) => {
-  // console.log('From Renderer:', message)
-})
+ipcMain.on('console-to-node', eventsMap['console-to-node'])
+ipcMain.handle('open-file-dialog', eventsMap['open-file-dialog'])
+ipcMain.handle('search-serial-ports', eventsMap['search-serial-ports'])
+ipcMain.handle('open-serial-port', eventsMap['open-serial-port'])
+ipcMain.handle('close-serial-port', eventsMap['close-serial-port'])
+ipcMain.handle('read-file-event', eventsMap['read-file-event'])

@@ -1,26 +1,23 @@
 import { ref } from "vue"
+import { useObstacleDetect } from "./useObstacleDetect"
 
-const dt = 1/10
+const dt = 1/20
 const timestamp = ref(0)
-const timestamps = ref([] as number[])
-const cameraDistance = ref([] as any[])
-const cameraAngle = ref([] as any[])
-const pidLeftSpeed = ref([] as any[])
-const pidRightSpeed = ref([] as any[])
-const motorLeftSpeed = ref([] as any[])
-const motorRightSpeed = ref([] as any[])
+const timestamps = ref([] as any[])
+const rawData = ref([] as any[])
+const filteredData = ref([] as any[])
+const obstacleData = ref([] as any[])
 const isBatchData = ref(false)
 
-export function useFollow() {
+const { detectObstacle, detectObstacleBatch } = useObstacleDetect()
+
+export function useUltrasonic() {
   const clearRawData = () => {
     timestamp.value = 0
+    rawData.value = []
+    filteredData.value = []
+    obstacleData.value = []
     timestamps.value = []
-    cameraDistance.value = []
-    cameraAngle.value = []
-    pidLeftSpeed.value = []
-    pidRightSpeed.value = []
-    motorLeftSpeed.value = []
-    motorRightSpeed.value = []
   }
 
   const initRawData = (data: string, startTime: number=0) => {
@@ -31,10 +28,7 @@ export function useFollow() {
       if (line.trim() !== "") {
         try {
           const json = JSON.parse(line)
-          const camera_distance = json.camera_distance
-          const camera_angle = json.camera_angle
-          const pid_left_speed = json.pid_left_speed
-          const pid_right_speed = json.pid_right_speed
+          const data = json.ultrasonic
           if (typeof json.time === 'number') {
             if (timestamp.value == 0) {
               // 增加一个极小量 0.0005，以处理为0的情况
@@ -46,65 +40,39 @@ export function useFollow() {
             timestamps.value.push(timestamp.value)
             timestamp.value += dt
           }
-          if (pid_left_speed !== null && pid_right_speed !== null) {
-            cameraDistance.value.push(camera_distance) // null || number
-            cameraAngle.value.push(camera_angle) // null || number
-            pidLeftSpeed.value.push(Number(pid_left_speed))
-            pidRightSpeed.value.push(Number(pid_right_speed))
-            motorLeftSpeed.value.push(json.motor_left_speed)
-            motorRightSpeed.value.push(json.motor_right_speed)
-          } else {
-            cameraDistance.value.push(null)
-            cameraAngle.value.push(null)
-            pidLeftSpeed.value.push(null)
-            pidRightSpeed.value.push(null)
-            motorLeftSpeed.value.push(null)
-            motorRightSpeed.value.push(null)
-          }
+          rawData.value.push(data)
         } catch (error) {
           console.log('json解析失败', error)
         }
       }
     }
+    detectObstacleBatch(rawData.value, filteredData.value, obstacleData.value)
   }
 
   const addNullData = () => {
-    // 数据间隔超过1s则存储null作为分隔
     const now = Date.now() / 1000
     timestamps.value.push(now - timestamp.value - 0.5)
-    cameraDistance.value.push(null)
-    cameraAngle.value.push(null)
-    pidLeftSpeed.value.push(null)
-    pidRightSpeed.value.push(null)
-    motorLeftSpeed.value.push(null)
-    motorRightSpeed.value.push(null)
+    rawData.value.push(null)
+    filteredData.value.push(null)
+    obstacleData.value.push(null)
   }
 
-  let rawString = ''
   const addRawData = (data: string) => {
     if (isBatchData.value) {
       clearRawData()
       isBatchData.value = false
     }
-    rawString += data
-
-    if (rawString.indexOf('\n') == -1) {
-      return
-    }
-    const lines = rawString.split("\n")
-    rawString = lines[lines.length - 1]
-
+    const lines = data.split("\n")
     for (const line of lines) {
       if (line.trim() !== "") {
         try {
           const json = JSON.parse(line)
-          const camera_distance = json.camera_distance
-          const camera_angle = json.camera_angle
-          const pid_left_speed = json.pid_left_speed
-          const pid_right_speed = json.pid_right_speed
-          const motor_left_speed = json.motor_left_speed
-          const motor_right_speed = json.motor_right_speed
-          if (pid_left_speed !== null && pid_right_speed !== null) {
+          const data = json.ultrasonic
+          if (data && Number(data)) {
+            const histroyRawData = rawData.value
+            const histroyFilteredData = filteredData.value
+            const {isObstacle, filteredValue} = detectObstacle(histroyRawData, histroyFilteredData, Number(data))
+
             if (typeof json.time === 'number') {
               if (timestamp.value == 0) {
                 // 增加一个极小量 0.0005，以处理为0的情况
@@ -120,14 +88,18 @@ export function useFollow() {
               if (lastTimestamp && now - lastTimestamp > 1) {
                 addNullData()
               }
+
               timestamps.value.push(now - timestamp.value)
+              if (data && Number(data)) {
+                rawData.value.push(Number(data))
+                filteredData.value.push(filteredValue)
+                obstacleData.value.push(isObstacle ? filteredValue : null)
+              } else {
+                rawData.value.push(null)
+                filteredData.value.push(null)
+                obstacleData.value.push(null)
+              }
             }
-            cameraDistance.value.push(camera_distance) // null || number
-            cameraAngle.value.push(camera_angle) // null || number
-            pidLeftSpeed.value.push(Number(pid_left_speed))
-            pidRightSpeed.value.push(Number(pid_right_speed))
-            motorLeftSpeed.value.push(motor_left_speed)
-            motorRightSpeed.value.push(motor_right_speed)
           }
         } catch (error) {
           console.log('json解析失败', error)
@@ -138,15 +110,10 @@ export function useFollow() {
   
   const saveData = () => {
     // 创建符合要求的格式数据
-    const formattedData = cameraDistance.value.map((_, index) => {
+    const formattedData = rawData.value.map((ultrasonic, index) => {
       return {
         time: timestamps.value[index], // 使用已有的时间戳或计算时间
-        camera_distance: cameraDistance.value[index],
-        camera_angle: cameraAngle.value[index],
-        pid_left_speed: pidLeftSpeed.value[index],
-        pid_right_speed: pidRightSpeed.value[index],
-        motor_left_speed: motorLeftSpeed.value[index],
-        motor_right_speed: motorRightSpeed.value[index],
+        ultrasonic: ultrasonic,
       };
     });
     
@@ -172,12 +139,9 @@ export function useFollow() {
   
   return {
     timestamps,
-    cameraDistance,
-    cameraAngle,
-    pidLeftSpeed,
-    pidRightSpeed,
-    motorLeftSpeed,
-    motorRightSpeed,
+    rawData,
+    filteredData,
+    obstacleData,
     addRawData,
     initRawData,
     clearRawData,

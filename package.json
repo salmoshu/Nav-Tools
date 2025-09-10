@@ -1,6 +1,6 @@
 {
-  "name": "electron-vue-vite",
-  "version": "28.1.0",
+  "name": "nav-tools",
+  "version": "0.1.0",
   "main": "dist-electron/main/index.js",
   "description": "Really simple Electron + Vue + Vite boilerplate.",
   "author": "草鞋没号 <308487730@qq.com>",
@@ -41,11 +41,12 @@
   },
   "dependencies": {
     "@element-plus/icons-vue": "^2.3.2",
-    "default-passive-events": "^4.0.0",
     "echarts": "^6.0.0",
-    "element-plus": "^2.10.5",
+    "element-plus": "^2.11.1",
+    "element-resize-detector": "^1.2.4",
     "grid-layout-plus": "^1.1.0",
     "mitt": "^3.0.1",
-    "pinia": "^3.0.3"
+    "pinia": "^3.0.3",
+    "serialport": "^13.0.0"
   }
 }

@@ -12,11 +12,25 @@
     </div>
     <div class="toolbar-content">
       <!-- Modules: Follow/Tree/GNSS... -->
+
+      <!-- IO: Input/Output -->
+      <div class="toggle-switch-container">
+        <div 
+          class="toggle-switch" 
+          :class="{ 'toggle-on': deviceConnected }"
+          @click="handleDeviceConnected"
+          :title="deviceConnected ? '断开连接' : '连接设备'"
+        >
+          <div class="toggle-slider">
+            <span class="slider-icon" v-html="deviceConnected ? toolBarIcon.connected : toolBarIcon.disconnected"></span>
+          </div>
+        </div>
+      </div>
       <button 
-        v-for="item in currentButtonList" 
+        v-for="item in ioList" 
         :key="item.msg"
         class="toolbar-btn" 
-        @click="handleModule(item.msg)" 
+        @click="handleIo(item.msg); ($event.currentTarget as HTMLElement)?.blur()"
         :title="item.title"
         v-html="item.icon+getButtonText(item.title, position)"
       >
@@ -25,12 +39,19 @@
       <span v-if="upAndDown(position)" class="divider">|</span>
       <span v-else class="divider">一</span>
       
-      <!-- Actions:Draw/Data/Config... -->
+      <!-- Actions: Draw/Data/Config... -->
+      <button
+        class="toolbar-btn"
+        @click="handleStatus(); ($event.currentTarget as HTMLElement)?.blur()"
+        :title="statusBtn.title"
+        v-html="statusBtn.icon+getButtonText(statusBtn.title, position)"
+      >
+      </button>
       <button 
         v-for="item in handleList" 
         :key="item.msg"
         class="toolbar-btn" 
-        @click="handleAction(item.msg)" 
+        @click="handleAction(item.msg); ($event.currentTarget as HTMLElement)?.blur()" 
         :title="item.title"
         v-html="item.icon+getButtonText(item.title, position)"
       >
@@ -40,32 +61,24 @@
       <span v-else class="divider">一</span>
 
       <!-- Layout: Edit/Save/Reset -->
-      <button 
-        v-if="!isEditing"
-        class="toolbar-btn"
-        @click="handleLayout('edit')"
-        :title="layoutList[0].title"
-        v-html="layoutList[0].icon+getButtonText(layoutList[0].title, position)"
-      >
-      </button>
       <button
-        v-else
+        v-if="showSaveButton"
         class="toolbar-btn"
-        @click="handleLayout('save')"
+        @click="handleLayout('save'); ($event.currentTarget as HTMLElement)?.blur()"
         :title="layoutList[1].title"
         v-html="layoutList[1].icon+getButtonText(layoutList[1].title, position)"
       >
       </button>
       <button
         class="toolbar-btn"
-        @click="handleLayout('auto')"
+        @click="handleLayout('auto'); ($event.currentTarget as HTMLElement)?.blur()"
         :title="layoutList[2].title"
         v-html="layoutList[2].icon+getButtonText(layoutList[2].title, position)"
       >
       </button>
       <button
         class="toolbar-btn"
-        @click="handleLayout('reset')"
+        @click="handleLayout('reset'); ($event.currentTarget as HTMLElement)?.blur()"
         :title="layoutList[3].title"
         v-html="layoutList[3].icon+getButtonText(layoutList[3].title, position)"
       >
@@ -84,13 +97,49 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, onUnmounted, watch, inject, type Ref } from 'vue'
-import { navMode, AppMode, FuncMode, ButtonItem, appConfig } from '@/types/config'
-import { getButtonList, upAndDown, getButtonText, getLayoutList } from '@/composables/useToolsManager'
+import { navMode, ButtonItem } from '@/settings/config'
+import { toolBarIcon } from '@/settings/icons'
+import { getButtonList, upAndDown, getButtonText, getLayoutList, getIoList, handleIo } from '@/composables/useToolsManager'
+import { showStatusBar } from '@/composables/useStatusManager'
+
 import emitter from '@/hooks/useMitt'
 
 const ipcRenderer = window.ipcRenderer
 const position = ref<'top' | 'right' | 'bottom' | 'left'>('bottom')
-const isEditing = ref(false)
+const showSaveButton = ref(false)
+
+import { useDevice } from '@/hooks/useDevice'
+import { ElMessage } from 'element-plus'
+
+const deviceInstance = useDevice()
+const deviceConnected = deviceInstance.deviceConnected
+
+const handleDeviceConnected = () => {
+  if (deviceConnected.value === true) {
+    deviceInstance.closeCurrDevice()
+  } else {
+    if (deviceInstance.globalDevice.value.connected === null) {
+      ElMessage({
+        message: '请配置设备信息',
+        type: 'warning',
+      })
+    } else {
+      deviceInstance.openCurrDevice()
+    }
+  }
+}
+
+const handleStatus = () => {
+  showStatusBar.value = !showStatusBar.value
+}
+
+const statusBtn: ButtonItem = {
+  msg: 'status',
+  title: 'Status',
+  icon: toolBarIcon.status,
+  template: '', // 补充 template 属性
+  text: '',     // 补充 text 属性
+}
 
 const handleList: ButtonItem[] = reactive(
   getButtonList(navMode) || []
@@ -98,33 +147,23 @@ const handleList: ButtonItem[] = reactive(
 
 // 使用computed属性替代原来的reactive数组
 const layoutList = computed(() => getLayoutList(position.value))
+const ioList = computed(() => getIoList(position.value))
 
-watch(() => navMode.funcMode, () => {
-  const buttonList = getButtonList(navMode)
-
-  ipcRenderer.send('console-to-node', ['watch:funcMode', AppMode[navMode.appMode], FuncMode[navMode.funcMode]])
-
-  if (buttonList) {
-    handleList.splice(0, handleList.length, ...buttonList)
-  } else {
-    handleList.splice(0, handleList.length)
-  }
-})
-
-const currentButtonList = computed(() => {
-  const appKey = navMode.appModeStr
-  if (!appKey || !appConfig[appKey as keyof typeof appConfig]) {
-    return []
-  }
+watch(() => navMode.funcMode, (oldMode, newMode) => {
+  if (oldMode !== newMode) {
+    showSaveButton.value = false
+    const buttonList = getButtonList(navMode)
   
-  const app = appConfig[appKey as keyof typeof appConfig]
-  return Object.values(app.module).map(module => ({
-    title: (module as any).title,
-    msg: (module as any).title.toLowerCase(),
-    template: '',
-    icon: (module as any).icon,
-    text: getButtonText((module as any).title, position.value)
-  } as ButtonItem))
+    ipcRenderer.send('console-to-node', ['watch:funcMode', navMode.appMode, navMode.funcMode])
+  
+    if (buttonList) {
+      handleList.splice(0, handleList.length, ...buttonList)
+    } else {
+      handleList.splice(0, handleList.length)
+    }
+
+    deviceInstance.removeCurrDevice()
+  }
 })
 
 // 扩展事件定义
@@ -163,10 +202,11 @@ const getDockZoneStyle = (zone: 'top' | 'right' | 'bottom' | 'left') => {
       }
     case 'right':
       // 当statusbar在右边时，dock-zone应该避开statusbar
-      const rightOffset = statusbarPosition?.value === 'right' ? statusbarWidth : 0
+      // const rightOffset = statusbarPosition?.value === 'right' ? statusbarWidth : 0
       return {
         top: '0px',
-        left: `${windowWidth - dockWidth - rightOffset}px`,
+        // left: `${windowWidth - dockWidth - rightOffset}px`,
+        left: `${windowWidth - dockWidth}px`,
         width: `${dockWidth}px`,
         height: `${windowHeight}px`
       }
@@ -179,10 +219,11 @@ const getDockZoneStyle = (zone: 'top' | 'right' | 'bottom' | 'left') => {
       }
     case 'left':
       // 当statusbar在左边时，dock-zone应该避开statusbar
-      const leftOffset = statusbarPosition?.value === 'left' ? statusbarWidth : 0
+      // const leftOffset = statusbarPosition?.value === 'left' ? statusbarWidth : 0
       return {
         top: '0px',
-        left: `${leftOffset}px`,
+        // left: `${leftOffset}px`,
+        left: `0px`,
         width: `${dockWidth}px`,
         height: `${windowHeight}px`
       }
@@ -203,7 +244,6 @@ const startDrag = (event: MouseEvent) => {
   const handle = (event.target as HTMLElement).closest('.toolbar-handle')
   if (!handle) return
 
-  // event.preventDefault()
   isDragging.value = true
   activeDockZone.value = null
 
@@ -278,7 +318,6 @@ const stopDrag = () => {
 const handleDrag = (event: MouseEvent) => {
   if (!isDragging.value) return
 
-  // event.preventDefault()
   const x = event.clientX - dragOffset.value.x
   const y = event.clientY - dragOffset.value.y
 
@@ -311,39 +350,22 @@ const handleDrag = (event: MouseEvent) => {
   // 注意：这里不再调用emit('positionChange')和实时更新position
 }
 
-const handleModule = (action: string) => {
-  emitter.emit(action)
-
-  // 根据AppMap自动匹配模块对应的FuncMode
-  const appKey = navMode.appModeStr
-  if (!appKey || !appConfig[appKey as keyof typeof appConfig]) return
-  
-  const app = appConfig[appKey as keyof typeof appConfig]
-  const module = Object.values(app.module).find(m => (m as any).title.toLowerCase() === action)
-  
-  if (module) {
-    navMode.funcMode = (module as any).funcMode
-  }
-}
-
 const handleAction = (action: string) => {
   emitter.emit(action)
 }
 
+// 修改handleLayout函数
 const handleLayout = (action: string) => {
   switch (action) {
-    case 'edit':
-      isEditing.value = true
-      emitter.emit('edit')
-      break
     case 'save':
-      isEditing.value = false
+      showSaveButton.value = false
       emitter.emit('save')
       break
     case 'auto':
       emitter.emit('auto')
       break
     case 'reset':
+      showStatusBar.value = true
       emitter.emit('reset')
       break
   }
@@ -386,12 +408,20 @@ onMounted(() => {
   watch([statusbarPosition, statusbarSize], () => {
     snapToEdge()
   }, { immediate: true })
+  
+  // 添加布局更改监听
+  emitter.on('layout-changed', () => {
+    showSaveButton.value = true
+  })
 })
 
 onUnmounted(() => {
   document.removeEventListener('mousemove', handleDrag)
   document.removeEventListener('mouseup', stopDrag)
   window.removeEventListener('resize', snapToEdge)
+  
+  // 移除布局更改监听
+  emitter.off('layout-changed')
 })
 </script>
 
@@ -504,6 +534,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
+  overflow: hidden;
 }
 
 .divider {
@@ -564,5 +595,74 @@ onUnmounted(() => {
 
 .dock-zone:hover {
   background: rgba(52, 152, 219, 0.4);
+}
+/* 更新滑块容器样式 */
+.toggle-switch-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px; /* 减少内边距 */
+}
+
+/* 更新水平滑轨样式 */
+.toggle-switch {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+  padding: 2px;
+  width: 60px; /* 从70px减小到60px */
+  height: 24px; /* 从28px减小到24px */
+  border-radius: 12px; /* 从14px减小到12px */
+  background-color: #4a6572;
+  transition: background-color 0.3s;
+}
+
+/* 更新滑块样式 */
+.toggle-slider {
+  position: absolute;
+  width: 20px; /* 从24px减小到20px */
+  height: 20px; /* 从24px减小到20px */
+  /* border-radius: 50%; */
+  /* background-color: white; */
+  left: 4px;
+  top: 4px;
+  transition: transform 0.3s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* 更新滑块激活状态的移动距离 */
+.toggle-switch.toggle-on .toggle-slider {
+  transform: translateX(36px); /* 从42px调整为36px (60-24) */
+}
+
+/* 更新滑块图标大小 */
+.slider-icon {
+  font-size: 12px; /* 从14px减小到12px */
+  line-height: 1;
+}
+
+/* 更新垂直工具栏的滑轨样式 */
+.toolbar-left .toggle-switch, .toolbar-right .toggle-switch {
+  flex-direction: column;
+  width: 24px; /* 从28px减小到24px */
+  height: 60px; /* 从70px减小到60px */
+  border-radius: 12px; /* 从14px减小到12px */
+}
+
+/* 更新垂直工具栏的滑块激活状态移动距离 */
+.toolbar-left .toggle-switch.toggle-on .toggle-slider, .toolbar-right .toggle-switch.toggle-on .toggle-slider {
+  transform: translateY(36px); /* 从42px调整为36px (60-24) */
+}
+
+.toolbar-left .toggle-content, .toolbar-right .toggle-content {
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 </style>

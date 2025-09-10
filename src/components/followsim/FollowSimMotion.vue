@@ -18,10 +18,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch } from 'vue'
+import { onMounted, onUnmounted, watch } from 'vue'
 import { useEcharts } from '@/hooks/useEcharts'
 import { useFollowStore } from '@/stores/follow'
-import { useSpeedRecorder } from '@/composables/follow/useSpeedRecorder'
+import { useSpeedRecorder } from '@/composables/followsim/useSpeedRecorder'
 
 // 初始化存储和图表
 const { checkMotionStatus, chartData, setTimeRange, currentTimeRange } = useSpeedRecorder()

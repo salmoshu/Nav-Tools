@@ -1,6 +1,8 @@
-import { ref, markRaw, defineAsyncComponent } from 'vue'
-import { FuncMode, appConfig } from '@/types/config'
+import { ref, watch, computed, markRaw, defineAsyncComponent } from 'vue'
+import type { DefineComponent } from 'vue'
+import { appConfig } from '@/settings/config'
 import { ElMessage } from 'element-plus'
+import emitter from '@/hooks/useMitt'
 
 export interface LayoutItem {
   titleName: string
@@ -30,38 +32,48 @@ const convertPath = (path: string): string => {
   return path
 }
 
-// 动态加载组件
+// 问题：
+// 在 开发时，../components/... 是存在的，
+// 但在 构建后，路径被打包成了哈希文件名
+//
+// 解决：
+// Vite 提供了 import.meta.glob 来预扫描并打包动态路径
+// 这样 Vite 会在构建时把所有匹配的 .vue 文件打包进去，
+// 并生成一个 modules 映射表，运行时通过路径查找即可，从而避免了路径问题
+const modules = import.meta.glob<DefineComponent>('../components/**/*.vue')
 const loadComponent = (componentPath: string) => {
+  // 把 @/components/xxx.vue 转成 ../components/xxx.vue
   const resolvedPath = convertPath(componentPath)
-  
-  if (componentCache.has(resolvedPath)) {
-    return componentCache.get(resolvedPath)
+
+  if (componentCache.has(resolvedPath)) return componentCache.get(resolvedPath)
+
+  const loader = modules[resolvedPath]
+  if (!loader) {
+    console.error(`[loadComponent] 未找到组件: ${resolvedPath}`)
+    return null
   }
-  
-  const component = markRaw(defineAsyncComponent(() => import(/* @vite-ignore */ resolvedPath)))
+
+  const component = markRaw(defineAsyncComponent(loader))
   componentCache.set(resolvedPath, component)
   return component
 }
 
-// 根据FuncMode获取对应的AppMap配置 - 自适应版本
-const getAppMapConfig = (mode: FuncMode) => {
-  // 自动匹配FuncMode到对应的AppMap模块
+const getAppMapConfig = (mode: string) => {
   for (const [_, config] of Object.entries(appConfig)) {
-    const modules = (config as any).module as Record<string, any>
+    const modules = (config as any) as Record<string, any>
     for (const [_, moduleConfig] of Object.entries(modules)) {
       if (moduleConfig.funcMode === mode) {
         return modules
       }
     }
   }
-  return appConfig.example.module
+  return appConfig.example
 }
 
-// 获取当前模式的模块名称 - 自适应版本
-const getModuleName = (mode: FuncMode): string => {
+const getModuleName = (mode: string): string => {
   // 自动从AppMap中查找匹配的模块名
   for (const [_, config] of Object.entries(appConfig)) {
-    const modules = (config as any).module as Record<string, any>
+    const modules = (config as any) as Record<string, any>
     for (const [moduleName, moduleConfig] of Object.entries(modules)) {
       if (moduleConfig.funcMode === mode) {
         return moduleName
@@ -71,8 +83,7 @@ const getModuleName = (mode: FuncMode): string => {
   return 'example'
 }
 
-// 动态获取组件映射
-const getDynamicComponentMap = (mode: FuncMode) => {
+const getDynamicComponentMap = (mode: string) => {
   const moduleName = getModuleName(mode)
   const appMapConfig = getAppMapConfig(mode)
   
@@ -103,7 +114,7 @@ const getDynamicComponentMap = (mode: FuncMode) => {
 }
 
 // 动态获取默认布局配置
-const getDynamicDefaultLayoutConfig = async (mode: FuncMode) => {
+const getDynamicDefaultLayoutConfig = async (mode: string) => {
   const moduleName = getModuleName(mode)
   const appMapConfig = getAppMapConfig(mode)
   
@@ -123,20 +134,20 @@ const getDynamicDefaultLayoutConfig = async (mode: FuncMode) => {
       x: (index % 2) * 6,
       y: Math.floor(index / 2) * 4,
       w: 6,
-      h: 5,
+      h: 6,
       i: `${moduleName}-${baseName}-${index + 1}`,
       titleName: `${moduleConfig.title} ${actionName.charAt(0).toUpperCase() + actionName.slice(1)}`,
       componentName: templateName,
-      minW: 3,
-      minH: 3,
-      maxW: 8,
+      minW: 4,
+      minH: 5,
+      maxW: 12,
       maxH: 10,
     }
   })
 }
 
 // 根据功能模式动态获取组件列表
-const getDynamicComponentsByMode = (mode: FuncMode): string[] => {
+const getDynamicComponentsByMode = (mode: string): string[] => {
   const moduleName = getModuleName(mode)
   const appMapConfig = getAppMapConfig(mode)
   
@@ -149,17 +160,47 @@ const getDynamicComponentsByMode = (mode: FuncMode): string[] => {
 
 // 布局管理组合式函数
 export function useLayoutManager() {
+  const appKeys = Object.keys(appConfig) as Array<keyof typeof appConfig>
+  const firstAppKey = appKeys[0]
+  const firstApp = appConfig[firstAppKey]
+  const moudleKeys = Object.keys(firstApp) as Array<keyof typeof firstApp>
+  const firstModuleKey = moudleKeys[0]
+  const firstModule = firstApp[firstModuleKey]
+  const currentFuncMode = ref(firstModule.funcMode)
+
   const layoutDraggableList = ref<LayoutItem[]>([])
-  const currentFuncMode = ref(FuncMode.Follow)
-  const isEditDraggable = ref(false)
-  const draggableLayout = ref(false)
-  const resizableLayout = ref(false)
 
   // 动态组件映射
   const dynamicComponentMap = ref<Record<string, any>>({})
 
+  // 添加原始布局备份，用于检测更改
+  const originalLayout = ref<LayoutItem[]>([])
+  
+  // 检测布局是否有更改
+  const hasLayoutChanged = computed(() => {
+    if (layoutDraggableList.value.length !== originalLayout.value.length) {
+      return true
+    }
+    
+    return layoutDraggableList.value.some((item, index) => {
+      const original = originalLayout.value[index]
+      return !original || 
+        item.x !== original.x || 
+        item.y !== original.y || 
+        item.w !== original.w || 
+        item.h !== original.h
+    })
+  })
+  
+  // 监听布局更改
+  watch(hasLayoutChanged, (changed) => {
+    if (changed) {
+      emitter.emit('layout-changed')
+    }
+  })
+
   // 更新动态组件映射
-  const updateDynamicComponentMap = (mode: FuncMode) => {
+  const updateDynamicComponentMap = (mode: string) => {
     const componentMap = getDynamicComponentMap(mode)
     dynamicComponentMap.value = Object.fromEntries(
       Object.entries(componentMap).map(([key, value]) => [
@@ -167,6 +208,23 @@ export function useLayoutManager() {
         { ...value, component: markRaw(value.component) }
       ])
     )
+  }
+
+  const backupCurrentLayout = () => {
+    originalLayout.value = layoutDraggableList.value.map(item => ({
+      x: item.x,
+      y: item.y,
+      w: item.w,
+      h: item.h,
+      i: item.i,
+      titleName: item.titleName,
+      component: item.component,
+      componentName: item.componentName,
+      minW: item.minW,
+      minH: item.minH,
+      maxW: item.maxW,
+      maxH: item.maxH,
+    }))
   }
 
   // 从配置加载布局
@@ -178,6 +236,8 @@ export function useLayoutManager() {
         component: markRaw(componentConfig?.component || null),
       }
     })
+    // 加载完成后备份布局
+    backupCurrentLayout()
   }
 
   // 保存当前布局
@@ -212,7 +272,7 @@ export function useLayoutManager() {
     }
 
     const cellWidth = 12 / columnCount
-    const cellHeight = 4 // 每个单元格的高度
+    const cellHeight = 6 // 每个单元格的高度
 
     layoutDraggableList.value = layoutDraggableList.value.map((item, index) => ({
       ...item,
@@ -221,6 +281,8 @@ export function useLayoutManager() {
       w: cellWidth,
       h: cellHeight,
     }))
+    // 更新备份
+    backupCurrentLayout()
   }
 
   // 创建默认布局
@@ -232,6 +294,8 @@ export function useLayoutManager() {
         ...item,
         component: markRaw(dynamicComponentMap.value[item.componentName]?.component || null),
       }))
+      // 更新备份
+      backupCurrentLayout()
     } catch (error) {
       console.error('Failed to create default layout:', error)
     }
@@ -254,45 +318,38 @@ export function useLayoutManager() {
     } else {
       await createDefaultLayout()
     }
+    // 初始化时备份布局
+    backupCurrentLayout()
   }
 
   // 自适应布局
   const autoLayout = async () => {
     localStorage.removeItem(`dashboard-layout-${currentFuncMode.value}`)
     await createBestLayout()
-    isEditDraggable.value = false
-    draggableLayout.value = false
-    resizableLayout.value = false
+    backupCurrentLayout()
   }
 
   // 重置布局
   const resetLayout = async () => {
     localStorage.removeItem(`dashboard-layout-${currentFuncMode.value}`)
     await createDefaultLayout()
-    isEditDraggable.value = false
-    draggableLayout.value = false
-    resizableLayout.value = false
+    backupCurrentLayout()
   }
 
   // 保存布局
   const saveLayout = () => {
-    isEditDraggable.value = false
-    draggableLayout.value = false
-    resizableLayout.value = false
     saveCurrentLayout()
-    
     ElMessage({
       message: '布局已保存',
       type: 'success',
       duration: 1000
     })
+    backupCurrentLayout()
   }
 
-  // 编辑布局
+  // 编辑布局 - 保持为空，因为一直处于编辑状态
   const editLayout = () => {
-    isEditDraggable.value = true
-    draggableLayout.value = true
-    resizableLayout.value = true
+    // 无需操作，因为已经设置为始终可编辑
   }
 
   // 添加组件
@@ -321,18 +378,21 @@ export function useLayoutManager() {
       x: 0,
       y: 0,
       w: 6,
-      h: 5,
+      h: 6,
       i: `${componentName}-${Date.now()}`,
       titleName: dynamicComponentMap.value[componentName]?.title,
       componentName,
       component: markRaw(dynamicComponentMap.value[componentName]?.component || null),
-      minW: 3,
-      minH: 3,
-      maxW: 8,
+      minW: 4,
+      minH: 5,
+      maxW: 12,
       maxH: 10,
     }
 
     layoutDraggableList.value.unshift(newItem)
+    // 添加组件后更新备份
+    backupCurrentLayout()
+    
     ElMessage({
       message: `已添加 ${newItem.titleName}`,
       type: 'success',
@@ -344,30 +404,26 @@ export function useLayoutManager() {
   const removeItem = (i: string) => {
     const index = layoutDraggableList.value.findIndex((item: LayoutItem) => item.i === i)
     if (index !== -1) {
+      backupCurrentLayout()
       layoutDraggableList.value.splice(index, 1)
     }
   }
 
   // 处理功能模式切换
-  const handleFuncModeChange = async (mode: FuncMode) => {
+  const handleFuncModeChange = async (mode: string) => {
     if (currentFuncMode.value === mode) {
       return
     }
 
     // 保存当前布局
     saveCurrentLayout()
+    emitter.emit('save')
     
     // 切换模式
     currentFuncMode.value = mode
     
     // 重新初始化布局
     await initLayout()
-    
-    ElMessage({
-      message: `已切换到 ${FuncMode[mode].toUpperCase()} 组件`,
-      type: 'success',
-      duration: 1000
-    })
   }
 
   const isCardVisible = true // to be defined
@@ -375,10 +431,8 @@ export function useLayoutManager() {
   return {
     // 状态
     layoutDraggableList,
-    isEditDraggable,
-    draggableLayout,
-    resizableLayout,
     isCardVisible,
+    hasLayoutChanged,  // 导出布局更改状态
     
     // 方法
     initLayout,

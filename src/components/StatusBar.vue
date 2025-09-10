@@ -6,7 +6,15 @@
     @mousedown="startDrag"
   >
     <div class="statusbar-handle">
-      <span>状态视图</span>
+      <span class="statusbar-title">Status View</span>
+      <el-button
+        type="text" 
+        @click="showStatusBar = false"
+        class="remove-btn"
+        title="移除卡片"
+      >
+        <el-icon><Close /></el-icon>
+      </el-button>
     </div>
     <div class="statusbar-content">
       <div v-for="(statusValue, statusName) in getMonitorStatus()" :key="statusName" class="status-item">
@@ -28,8 +36,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, inject, watch, type Ref } from 'vue'
-import { getMonitorStatus } from '@/composables/useStatusManager'
-import { navMode } from '@/types/config'
+import { getMonitorStatus, showStatusBar } from '@/composables/useStatusManager'
 
 const commonStyle = {
   trueStyle: 'color: #00b894; background: rgba(0, 184, 148, 0.1); font-weight: 700;',
@@ -110,7 +117,6 @@ const startDrag = (event: MouseEvent) => {
   const handle = (event.target as HTMLElement).closest('.statusbar-handle')
   if (!handle) return
 
-  // event.preventDefault()
   isDragging.value = true
   activeDockZone.value = null
 
@@ -178,7 +184,6 @@ const stopDrag = () => {
 const handleDrag = (event: MouseEvent) => {
   if (!isDragging.value) return
 
-  // event.preventDefault()
   const x = event.clientX - dragOffset.value.x
   const y = event.clientY - dragOffset.value.y
 
@@ -249,11 +254,6 @@ const snapToEdge = () => {
 onMounted(() => {
   snapToEdge()
   window.addEventListener('resize', snapToEdge)
-  // updateStatus(navMode.funcMode)
-
-  watch(() => navMode.funcMode, () => {
-    // updateStatus(navMode.funcMode)
-  })
   
   // 监听工具栏位置变化
   watch([toolbarPosition, toolbarSize], () => {
@@ -271,13 +271,13 @@ onUnmounted(() => {
 <style scoped>
 .statusbar {
   position: fixed;
-  background: linear-gradient(180deg, #f8f9fa 0%, #f8f9fa 100%);
+  background-color: #ffffff;
   display: flex;
   flex-direction: column;
   align-items: center;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
   z-index: 999;
-  border: 1px solid #e9ecef;
+  border: 3px solid rgb(210, 210, 210);
+  border-top: 2px solid rgb(210, 210, 210);
   border-radius: 0;
   padding: 0;
   margin: 0;
@@ -308,18 +308,23 @@ onUnmounted(() => {
 }
 
 .statusbar-handle {
-  color: #000;
+  font-family: "Helvetica Neue", Arial, sans-serif;
+  font-size: 16px;
+  font-weight: 600;
+  color: #333;
   cursor: grab;
-  padding: 12px 8px;
-  margin: 0 0 8px 0;
-  font-weight: bold;
-  font-size: 14px;
+  padding: 0 8px;  /* 修改内边距 */
+  margin: 0 auto;
   text-align: center;
-  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  background-color: #f8f9fa;
   border-bottom: 2px solid #dee2e6;
   width: 100%;
+  height: 40px;
   box-sizing: border-box;
   border-radius: 0;
+  display: flex;  /* 添加Flex布局 */
+  justify-content: space-between;  /* 文字和按钮分别位于两端 */
+  align-items: center;  /* 垂直居中对齐 */
 }
 
 .statusbar-content {
@@ -358,7 +363,7 @@ onUnmounted(() => {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
   background: rgba(233, 236, 239, 0.8);
   transform: translateY(-2px);
-  border-radius: 6px;
+  /* border-radius: 6px; */
 }
 
 .status-label {
@@ -376,7 +381,7 @@ onUnmounted(() => {
   font-weight: 600;
   font-size: 14px;
   padding: 4px 8px;
-  border-radius: 6px;
+  /* border-radius: 6px; */
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
   box-sizing: border-box;
   text-align: right;
@@ -411,7 +416,7 @@ onUnmounted(() => {
   position: fixed;
   background: rgba(52, 152, 219, 0.2);
   border: 2px dashed #3498db;
-  border-radius: 8px;
+  /* border-radius: 8px; */
   display: flex;
   align-items: center;
   justify-content: center;
@@ -425,5 +430,13 @@ onUnmounted(() => {
 
 .dock-zone:hover {
   background: rgba(52, 152, 219, 0.4);
+}
+
+.statusbar-title {
+  margin: 0 auto;
+}
+
+.remove-btn {
+  color: #6c757d;
 }
 </style>

@@ -85,6 +85,7 @@ onUnmounted(() => {
   padding: 15px;
   flex: 1;
   overflow-y: auto;
+  max-height: 100%;
 }
 
 .control-group {

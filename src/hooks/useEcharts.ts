@@ -12,7 +12,7 @@ const { chartRef, updateChart } = useEcharts(
 )
 */
 
-import { ref, onMounted, onUnmounted, watch } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import * as echarts from 'echarts'
 
 export function useEcharts(
