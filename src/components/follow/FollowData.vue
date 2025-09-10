@@ -10,7 +10,7 @@
           <el-option label="500" :value="500"></el-option>
           <el-option label="全部" :value="0"></el-option>
         </el-select>
-        <el-button type="default" size="small" @click="showMessageFormat" class="upload-btn" :disabled="deviceConnected">
+        <el-button type="default" size="small" @click="showMessageFormat" class="message-btn">
           消息格式
         </el-button>
       </div>
@@ -777,6 +777,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   padding: 4px 12px;
+  gap: 10px;
 }
 
 .file-controls {
@@ -814,7 +815,7 @@ onUnmounted(() => {
 
 .dialog-content {
   font-size: 12px;
-  line-height: 1.6;
+  line-height: 1.5;
   text-align: left;
 }
 
