@@ -4,7 +4,7 @@ import { useFollowStore } from "@/stores/follow";
 import { navMode } from "@/settings/config";
 import { useDemo1Store } from "@/stores/demo1";
 
-const showStatusBar = ref(true)
+const showStatusBar = ref(false)
 
 function getMonitorStatus() {
   const funcMode = navMode.funcMode

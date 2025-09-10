@@ -4,11 +4,15 @@
       <div class="time-range-control">
         <span>时间范围/帧：</span>
         <el-select v-model="timeRange" placeholder="选择时间范围" size="small" @change="updateChart" :disabled="!deviceConnected">
+          <el-option label="50" :value="50"></el-option>
           <el-option label="100" :value="100"></el-option>
           <el-option label="200" :value="200"></el-option>
           <el-option label="500" :value="500"></el-option>
           <el-option label="全部" :value="0"></el-option>
         </el-select>
+        <el-button type="default" size="small" @click="showMessageFormat" class="upload-btn" :disabled="deviceConnected">
+          消息格式
+        </el-button>
       </div>
       
       <div class="file-controls">
@@ -26,6 +30,41 @@
     </div>
     <!-- 使用从useEcharts返回的chartRef -->
     <div ref="chartRef" class="chart-container"></div>
+    
+    <el-dialog
+      v-model="messageDialogVisible"
+      width="600px"
+    >
+      <div class="dialog-content">
+        <p><strong>数据说明：</strong></p>
+        <p>数据主要采用JSON格式，并以换行符分隔。每行一个JSON对象，每个JSON对象包含以下字段：</p>
+        <ul style="list-style-type: disc; padding-left: 20px;">
+          <li style="display: flex; align-items: center; margin-bottom: 5px;"><code style="min-width: 120px; display: inline-block;">time</code>: 时间戳 (s)</li>
+          <li style="display: flex; align-items: center; margin-bottom: 5px;"><code style="min-width: 120px; display: inline-block;">camera_distance</code>: 相机距离 (m)</li>
+          <li style="display: flex; align-items: center; margin-bottom: 5px;"><code style="min-width: 120px; display: inline-block;">camera_angle</code>: 相机角度 (°)</li>
+          <li style="display: flex; align-items: center; margin-bottom: 5px;"><code style="min-width: 120px; display: inline-block;">pid_left_speed</code>: PID左轮速度 (m/s)</li>
+          <li style="display: flex; align-items: center; margin-bottom: 5px;"><code style="min-width: 120px; display: inline-block;">pid_right_speed</code>: PID右轮速度 (m/s)</li>
+          <li style="display: flex; align-items: center; margin-bottom: 5px;"><code style="min-width: 120px; display: inline-block;">motor_left_speed</code>: 电机左轮速度 (m/s)</li>
+          <li style="display: flex; align-items: center; margin-bottom: 5px;"><code style="min-width: 120px; display: inline-block;">motor_right_speed</code>: 电机右轮速度 (m/s)</li>
+        </ul>
+        <el-divider></el-divider>
+        <p><strong>示例数据：</strong></p>
+        <pre class="example-code">
+{"time": 0.00, "camera_distance": 1.20, "camera_angle": 0.5, "pid_left_speed": 0.30, "pid_right_speed": 0.30, "motor_left_speed": 0.28, "motor_right_speed": 0.28}
+{"time": 0.05, "camera_distance": 1.18, "camera_angle": 0.4, "pid_left_speed": 0.30, "pid_right_speed": 0.30, "motor_left_speed": 0.29, "motor_right_speed": 0.29}
+{"time": 0.10, "camera_distance": 1.15, "camera_angle": 0.3, "pid_left_speed": 0.31, "pid_right_speed": 0.30, "motor_left_speed": 0.30, "motor_right_speed": 0.29}
+        </pre>
+        <el-divider></el-divider>
+        <p><strong>注意事项：</strong></p>
+        <ul style="list-style-type: disc; padding-left: 20px;">
+          <li>数值型空数据请使用null</li>
+          <li>时间戳非必须选项，若不包含则默认从0开始递增</li>
+        </ul>
+      </div>
+      <template #footer>
+        <el-button @click="messageDialogVisible = false">关闭</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -46,11 +85,17 @@ let resizeObserver: ResizeObserver | null = null
 const deviceConnected = ref(useDevice().deviceConnected)
 // 将timeRange改为响应式变量
 const timeRange = ref<number>(100)
+const messageDialogVisible = ref(false)
 
 // 清除数据
 function clearPlotData() {
   clearRawData()
   updateChart()
+}
+
+// 显示消息格式
+function showMessageFormat() {
+  messageDialogVisible.value = true
 }
 
 // 创建自定义图表配置
@@ -72,7 +117,7 @@ function createChartOption() {
   if (cameraDistanceSeries.length === 0) {
     return {
       title: { 
-        text: 'FollowFit 感知与控制',
+        // text: 'FollowFit 感知与控制',
         left: 'center',
         textStyle: { fontSize: 14 } 
       },
@@ -174,9 +219,29 @@ function createChartOption() {
     }
   }
 
+  const pidPieces: Array<{gt: number, lt: number, color: string}> = [];
+  const motorPieces: Array<{gt: number, lt: number, color: string}> = [];
+  timestamps.value.forEach((_, index) => {
+    if (index == 0) return;
+    if (pidLeftSpeed.value[index-1] > pidRightSpeed.value[index-1] && pidLeftSpeed.value[index] > pidRightSpeed.value[index]) {
+      pidPieces.push({
+        gt: timestamps.value[index-1],
+        lt: timestamps.value[index],
+        color: 'rgb(32, 201, 151, 0.5)'
+      })
+    }
+    if (motorLeftSpeed.value[index-1] > motorRightSpeed.value[index-1] && motorLeftSpeed.value[index] > motorRightSpeed.value[index]) {
+      motorPieces.push({
+        gt: timestamps.value[index-1],
+        lt: timestamps.value[index],
+        color: 'rgba(0, 0, 180, 0.3)'
+      })
+    }
+  })
+
   return {
     title: { 
-      text: 'FollowFit 感知与控制',
+      // text: 'FollowFit 感知与控制',
       left: 'center',
       textStyle: { fontSize: 14 } 
     },
@@ -218,6 +283,9 @@ function createChartOption() {
         
         let result = `时间: ${currentTime.toFixed(2)}s<br/>`;
         let targetTrend = null;
+        let pidLeft = null;
+        let pidRight = null;
+        let pidTrend = null;
         let motorLeft = null;
         let motorRight = null;
         let motorTrend = null;
@@ -242,17 +310,19 @@ function createChartOption() {
                 break;
               case '左轮PID速度':
                 result += `${param.marker}左轮PID速度: ${param.data[1].toFixed(2)}m/s<br/>`;
-                motorLeft = param.data[1];
+                pidLeft = param.data[1];
                 break;
               case '右轮PID速度':
                 result += `${param.marker}右轮PID速度: ${param.data[1].toFixed(2)}m/s<br/>`;
-                motorRight = param.data[1];
+                pidRight = param.data[1];
                 break;
               case '左轮电机速度':
                 result += `${param.marker}左轮电机速度: ${param.data[1].toFixed(2)}m/s<br/>`;
+                motorLeft = param.data[1];
                 break;
               case '右轮电机速度':
                 result += `${param.marker}右轮电机速度: ${param.data[1].toFixed(2)}m/s<br/>`;
+                motorRight = param.data[1];
                 break;
             }
           } else if (name === '相机角度') {
@@ -260,23 +330,38 @@ function createChartOption() {
           }
         });
 
-        if (motorLeft !== null && motorRight !== null) {
-          if (motorLeft > motorRight) {
-            motorTrend = '小车趋势: 小车右转';
-          } else if (motorLeft < motorRight) {
-            motorTrend = '小车趋势: 小车左转';
-          } else {
-            if (motorLeft === 0 && motorRight === 0) {
-              motorTrend = '小车趋势: 小车静止';
-            } else {
-              motorTrend = '小车趋势: 小车直行';
-            }
-          }
-          result += `${motorTrend}<br/>`;
+        if (targetTrend !== null) {
+          result += `${targetTrend} (绿色靠右，红色靠左)<br/>`;
         }
 
-        if (targetTrend !== null) {
-          result += `${targetTrend}`;
+        if (pidLeft !== null && pidRight !== null) {
+          if (pidLeft > pidRight) {
+            pidTrend = 'PID趋势: 小车右转';
+          } else if (pidLeft < pidRight) {
+            pidTrend = 'PID趋势: 小车左转';
+          } else {
+            if (pidLeft === 0 && pidRight === 0) {
+              pidTrend = 'PID趋势: 小车静止';
+            } else {
+              pidTrend = 'PID趋势: 小车直行';
+            }
+          }
+          result += `${pidTrend}  (涂色区域为右转)<br/>`;
+        }
+
+        if (motorLeft !== null && motorRight !== null) {
+          if (motorLeft > motorRight) {
+            motorTrend = '电机趋势: 小车右转';
+          } else if (motorLeft < motorRight) {
+            motorTrend = '电机趋势: 小车左转';
+          } else {
+            if (motorLeft === 0 && motorRight === 0) {
+              motorTrend = '电机趋势: 小车静止';
+            } else {
+              motorTrend = '电机趋势: 小车直行';
+            }
+          }
+          result += `${motorTrend} (涂色区域为右转)<br/>`;
         }
 
         return result;
@@ -400,14 +485,30 @@ function createChartOption() {
         preventDefaultMouseMove: true,
       }
     ],
+    visualMap: [
+      {
+        type: 'piecewise',
+        show: false,
+        dimension: 0,
+        seriesIndex: 2,
+        pieces: pidPieces,
+      },
+      {
+        type: 'piecewise',
+        show: false,
+        dimension: 0,
+        seriesIndex: 4,
+        pieces: motorPieces,
+      },
+    ],
     series: [
       {
-        name: '相机距离',
+        name: '相机距离', // index: 0
         type: 'line',
         data: cameraDistanceSeries,
         smooth: true,
+        lineStyle: { color: '#409EFF', width: 2 },
         itemStyle: { color: '#409EFF' },
-        lineStyle: { width: 2 },
         showSymbol: false,
         large: true,
         largeThreshold: 5000,
@@ -420,12 +521,12 @@ function createChartOption() {
         ...(cameraDistanceSeries.length > 5000 && { sampling: 'lttb' })
       },
       {
-        name: '相机角度',
+        name: '相机角度', // index: 1
         type: 'line',
         data: cameraAngleSeries,
         smooth: true,
+        lineStyle: { color: '#FF4040', width: 2 },
         itemStyle: { color: '#FF4040' },
-        lineStyle: { width: 2 },
         showSymbol: false,
         large: true,
         largeThreshold: 5000,
@@ -450,15 +551,22 @@ function createChartOption() {
           },
         },
         connectNulls: false,
+        areaStyle: {
+          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+            { offset: 0, color: 'rgba(32, 201, 151, 0.6)' },
+            { offset: 1, color: 'rgba(255, 64, 64, 0.6)' }
+          ])
+        },
         ...(cameraAngleSeries.length > 5000 && { sampling: 'lttb' })
       },
       {
-        name: '左轮PID速度',
+        name: '左轮PID速度', // index: 2
         type: 'line',
         data: pidLeftSpeedSeries,
         smooth: true,
+        lineStyle: { color: '#20C997', width: 2 },
         itemStyle: { color: '#20C997' },
-        lineStyle: { width: 2 },
+        areaStyle: {},
         showSymbol: false,
         large: true,
         largeThreshold: 5000,
@@ -471,12 +579,12 @@ function createChartOption() {
         ...(pidLeftSpeedSeries.length > 5000 && { sampling: 'lttb' })
       },
       {
-        name: '右轮PID速度',
+        name: '右轮PID速度', // index: 3
         type: 'line',
         data: pidRightSpeedSeries,
         smooth: true,
-        itemStyle: { color: '#F7BA1E' },
-        lineStyle: { width: 2 },
+        lineStyle: { color: '#409EFF', width: 2 },
+        itemStyle: { color: '#409EFF' },
         showSymbol: false,
         large: true,
         largeThreshold: 5000,
@@ -489,12 +597,13 @@ function createChartOption() {
         ...(pidRightSpeedSeries.length > 5000 && { sampling: 'lttb' })
       },
       {
-        name: '左轮电机速度',
+        name: '左轮电机速度', // index: 4
         type: 'line',
         data: motorLeftSpeedSeries,
         smooth: true,
-        // itemStyle: { color: '#20C997' },
-        lineStyle: { width: 2 },
+        lineStyle: { color: 'rgba(0, 0, 180, 0.3)', width: 2 },
+        itemStyle: { color: 'rgba(0, 0, 180, 0.3)' },
+        areaStyle: {}, // 淡紫色
         showSymbol: false,
         large: true,
         largeThreshold: 5000,
@@ -507,12 +616,12 @@ function createChartOption() {
         ...(motorLeftSpeedSeries.length > 5000 && { sampling: 'lttb' })
       },
       {
-        name: '右轮电机速度',
+        name: '右轮电机速度', // index: 5
         type: 'line',
         data: motorRightSpeedSeries,
         smooth: true,
-        // itemStyle: { color: '#F7BA1E' },
-        lineStyle: { width: 2 },
+        lineStyle: { color: '#F7BA1E', width: 2 },
+        itemStyle: { color: '#F7BA1E' },
         showSymbol: false,
         large: true,
         largeThreshold: 5000,
@@ -700,6 +809,21 @@ onUnmounted(() => {
 }
 
 :deep(.el-select .el-input__inner) {
+  font-size: 12px;
+}
+
+.dialog-content {
+  font-size: 12px;
+  line-height: 1.6;
+  text-align: left;
+}
+
+.example-code {
+  background-color: #f5f5f5;
+  padding: 10px;
+  border-radius: 4px;
+  overflow-x: auto;
+  font-family: monospace;
   font-size: 12px;
 }
 </style>
