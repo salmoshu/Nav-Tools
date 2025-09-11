@@ -614,7 +614,7 @@ onUnmounted(() => {
   width: 60px; /* 从70px减小到60px */
   height: 24px; /* 从28px减小到24px */
   border-radius: 12px; /* 从14px减小到12px */
-  background-color: #4a6572;
+  background-color: #3b4c5f;
   transition: background-color 0.3s;
 }
 
