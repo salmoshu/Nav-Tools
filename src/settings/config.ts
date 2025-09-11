@@ -10,13 +10,13 @@ const appConfig: any = {
       action: ['data',],
       props: {}
     }),
-    // flow: createModuleItem({
-    //   title: 'Flow',
-    //   icon: toolBarIcon.default,
-    //   // flow/FlowData.vue
-    //   action: ['data',],
-    //   props: {}
-    // }),
+    flow: createModuleItem({
+      title: 'Flow',
+      icon: toolBarIcon.default,
+      // flow/FlowData.vue
+      action: ['data',],
+      props: {}
+    }),
   },
   perc: {
     ultrasonic: createModuleItem({
