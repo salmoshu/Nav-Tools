@@ -111,6 +111,9 @@ pnpm run dev
    - 在 `src\composables\useStatusManager.ts` 中应用 Pinia 定义好的状态
    - 在 `src\components\StatusBar.vue` 中应用状态
 
+5. 实时数据流
+   - 在 `src\hooks\useDevice.ts` 中定义实时数据处理逻辑
+
 ## Externel Tools
 
 1. Echarts
@@ -170,4 +173,5 @@ export default {
 
 ## Release
 
-0.1.0: 初始版本
+- 0.2.0: 新增 Flow 模块及FlowData 组件灵活加载数据源
+- 0.1.0: 初始版本

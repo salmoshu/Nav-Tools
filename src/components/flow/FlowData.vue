@@ -2,22 +2,29 @@
   <div class="flow-container">
     <div class="controls">
       <div class="file-controls">
-        <input type="file" ref="fileInput" @change="handleFileUpload" accept=".txt,.csv" style="display: none">
-        <el-button type="primary" size="small" @click="fileInput?.click()" class="upload-btn">
-          载入数据
-        </el-button>
-        <el-button type="primary" size="small" @click="saveData" class="save-btn" :disabled="!hasData">
-          保存数据
-        </el-button>
-        <el-button type="default" size="small" @click="clearPlotData" class="clear-btn">
-          清除数据
-        </el-button>
-        <el-button type="default" size="small" @click="showMessageFormat" class="message-btn">
-          消息格式
-        </el-button>
-        <el-button type="primary" size="small" @click="showViewConfig" class="layout-btn">
-          视图配置
-        </el-button>
+        <!-- 左侧按钮 -->
+        <div class="left-buttons">
+          <el-button type="primary" size="small" @click="showViewConfig" class="layout-btn">
+            视图配置
+          </el-button>
+          <el-button type="default" size="small" @click="showMessageFormat" class="message-btn">
+            消息格式
+          </el-button>
+        </div>
+        
+        <!-- 右侧按钮 -->
+        <div class="right-buttons">
+          <input type="file" ref="fileInput" @change="handleFileUpload" accept=".txt,.csv" style="display: none">
+          <el-button type="primary" size="small" @click="fileInput?.click()" class="upload-btn">
+            载入数据
+          </el-button>
+          <el-button type="primary" size="small" @click="saveData" class="save-btn" :disabled="!hasData">
+            保存数据
+          </el-button>
+          <el-button type="default" size="small" @click="clearPlotData" class="clear-btn">
+            清除数据
+          </el-button>
+        </div>
       </div>
     </div>
     
@@ -30,18 +37,9 @@
     v-model="messageDialogVisible"
     width="600px"
   >
-    <div class="dialog-content">
+    <div class="dialog-content, message-content">
       <p><strong>数据说明：</strong></p>
       <p>数据主要采用JSON格式，并以换行符分隔。每行一个JSON对象，每个JSON对象包含以下字段：</p>
-      <ul style="list-style-type: disc; padding-left: 20px;">
-        <li style="display: flex; align-items: center; margin-bottom: 5px;"><code style="min-width: 120px; display: inline-block;">time</code>: 时间戳 (s)</li>
-        <li style="display: flex; align-items: center; margin-bottom: 5px;"><code style="min-width: 120px; display: inline-block;">camera_distance</code>: 相机距离 (m)</li>
-        <li style="display: flex; align-items: center; margin-bottom: 5px;"><code style="min-width: 120px; display: inline-block;">camera_angle</code>: 相机角度 (°)</li>
-        <li style="display: flex; align-items: center; margin-bottom: 5px;"><code style="min-width: 120px; display: inline-block;">pid_left_speed</code>: PID左轮速度 (m/s)</li>
-        <li style="display: flex; align-items: center; margin-bottom: 5px;"><code style="min-width: 120px; display: inline-block;">pid_right_speed</code>: PID右轮速度 (m/s)</li>
-        <li style="display: flex; align-items: center; margin-bottom: 5px;"><code style="min-width: 120px; display: inline-block;">motor_left_speed</code>: 电机左轮速度 (m/s)</li>
-        <li style="display: flex; align-items: center; margin-bottom: 5px;"><code style="min-width: 120px; display: inline-block;">motor_right_speed</code>: 电机右轮速度 (m/s)</li>
-      </ul>
       <el-divider></el-divider>
       <p><strong>示例数据：</strong></p>
       <pre class="example-code">
@@ -64,7 +62,7 @@
   <!-- 视图配置对话框 -->
   <el-dialog
     v-model="viewConfigDialogVisible"
-    width="450px"
+    width="480px"
     destroy-on-close
   >
     <div class="dialog-content">
@@ -79,123 +77,240 @@
       <div style="margin-bottom: 20px;">
         <span style="display: inline-block; width: 100px;">Y轴配置：</span>
         <el-radio-group v-model="yAxisConfig" @change="onYAxisChange">
-          <el-radio-button class="config-btn" label="single">单Y轴</el-radio-button>
-          <el-radio-button class="config-btn" label="double">双Y轴</el-radio-button>
+          <el-radio-button label="single">单Y轴</el-radio-button>
+          <el-radio-button label="double">双Y轴</el-radio-button>
         </el-radio-group>
-      </div>
-      
-      <!-- 单图模式下的数据源选择 -->
-      <div v-if="viewLayout === 'single'" style="margin-bottom: 20px;">
-        <div v-if="yAxisConfig === 'single'" style="margin-bottom: 15px;">
-          <h4 style="margin-bottom: 10px;">数据源选择（最多4个）：</h4>
-          <div class="source-selectors">
-            <el-select v-model="singleChartSource1" placeholder="选择数据源" style="width: 100%; margin-bottom: 8px;">
-              <el-option label="" value=""></el-option>
-              <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
-            </el-select>
-            <el-select v-model="singleChartSource2" placeholder="选择数据源" style="width: 100%; margin-bottom: 8px;">
-              <el-option label="" value=""></el-option>
-              <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
-            </el-select>
-            <el-select v-model="singleChartSource3" placeholder="选择数据源" style="width: 100%; margin-bottom: 8px;">
-              <el-option label="" value=""></el-option>
-              <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
-            </el-select>
-            <el-select v-model="singleChartSource4" placeholder="选择数据源" style="width: 100%;">
-              <el-option label="" value=""></el-option>
-              <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
-            </el-select>
-          </div>
-        </div>
-        
-        <div v-if="yAxisConfig === 'double'" style="margin-bottom: 15px;">
-          <h4 style="margin-bottom: 10px;">左侧Y轴数据源（最多2个）：</h4>
-          <div class="source-selectors">
-            <el-select v-model="singleChartLeftSource1" placeholder="选择数据源" style="width: 100%; margin-bottom: 8px;">
-              <el-option label="" value=""></el-option>
-              <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
-            </el-select>
-            <el-select v-model="singleChartLeftSource2" placeholder="选择数据源" style="width: 100%;">
-              <el-option label="" value=""></el-option>
-              <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
-            </el-select>
-          </div>
-          
-          <h4 style="margin-bottom: 10px; margin-top: 15px;">右侧Y轴数据源（最多2个）：</h4>
-          <div class="source-selectors">
-            <el-select v-model="singleChartRightSource1" placeholder="选择数据源" style="width: 100%; margin-bottom: 8px;">
-              <el-option label="" value=""></el-option>
-              <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
-            </el-select>
-            <el-select v-model="singleChartRightSource2" placeholder="选择数据源" style="width: 100%;">
-              <el-option label="" value=""></el-option>
-              <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
-            </el-select>
-          </div>
-        </div>
       </div>
       
       <!-- 双图模式下的数据源选择 -->
       <div v-if="viewLayout === 'double'" style="margin-bottom: 20px;">
-        <div style="margin-bottom: 15px;">
-          <h4 style="margin-bottom: 10px;">上图表数据源（最多4个）：</h4>
-          <div class="source-selectors">
-            <el-select v-model="upperChartSource1" placeholder="选择数据源" style="width: 100%; margin-bottom: 8px;">
-              <el-option label="" value=""></el-option>
-              <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
-            </el-select>
-            <el-select v-model="upperChartSource2" placeholder="选择数据源" style="width: 100%; margin-bottom: 8px;">
-              <el-option label="" value=""></el-option>
-              <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
-            </el-select>
-            <el-select v-model="upperChartSource3" placeholder="选择数据源" style="width: 100%; margin-bottom: 8px;">
-              <el-option label="" value=""></el-option>
-              <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
-            </el-select>
-            <el-select v-model="upperChartSource4" placeholder="选择数据源" style="width: 100%;">
-              <el-option label="" value=""></el-option>
-              <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
-            </el-select>
+        <!-- 双图单Y轴模式 -->
+        <div v-if="yAxisConfig === 'single'" class="chart-config-grid">
+          <div class="chart-config-section">
+            <h4 style="margin-bottom: 10px;">上图表数据源（最多4个）：</h4>
+            <div class="source-selectors">
+              <el-select v-model="upperChartSource1" placeholder="选择数据" style="width: 100%; margin-bottom: 8px;">
+                <el-option label="" value=""></el-option>
+                <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
+              </el-select>
+              <el-select v-model="upperChartSource2" placeholder="选择数据" style="width: 100%; margin-bottom: 8px;">
+                <el-option label="" value=""></el-option>
+                <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
+              </el-select>
+              <el-select v-model="upperChartSource3" placeholder="选择数据" style="width: 100%; margin-bottom: 8px;">
+                <el-option label="" value=""></el-option>
+                <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
+              </el-select>
+              <el-select v-model="upperChartSource4" placeholder="选择数据" style="width: 100%;">
+                <el-option label="" value=""></el-option>
+                <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
+              </el-select>
+            </div>
+          </div>
+          <div class="chart-config-section">
+            <h4 style="margin-bottom: 10px;">下图表数据源（最多4个）：</h4>
+            <div class="source-selectors">
+              <el-select v-model="lowerChartSource1" placeholder="选择数据" style="width: 100%; margin-bottom: 8px;">
+                <el-option label="" value=""></el-option>
+                <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
+              </el-select>
+              <el-select v-model="lowerChartSource2" placeholder="选择数据" style="width: 100%; margin-bottom: 8px;">
+                <el-option label="" value=""></el-option>
+                <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
+              </el-select>
+              <el-select v-model="lowerChartSource3" placeholder="选择数据" style="width: 100%; margin-bottom: 8px;">
+                <el-option label="" value=""></el-option>
+                <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
+              </el-select>
+              <el-select v-model="lowerChartSource4" placeholder="选择数据" style="width: 100%;">
+                <el-option label="" value=""></el-option>
+                <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
+              </el-select>
+            </div>
           </div>
         </div>
-        <div>
-          <h4 style="margin-bottom: 10px;">下图表数据源（最多4个）：</h4>
-          <div class="source-selectors">
-            <el-select v-model="lowerChartSource1" placeholder="选择数据源" style="width: 100%; margin-bottom: 8px;">
-              <el-option label="" value=""></el-option>
-              <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
-            </el-select>
-            <el-select v-model="lowerChartSource2" placeholder="选择数据源" style="width: 100%; margin-bottom: 8px;">
-              <el-option label="" value=""></el-option>
-              <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
-            </el-select>
-            <el-select v-model="lowerChartSource3" placeholder="选择数据源" style="width: 100%; margin-bottom: 8px;">
-              <el-option label="" value=""></el-option>
-              <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
-            </el-select>
-            <el-select v-model="lowerChartSource4" placeholder="选择数据源" style="width: 100%;">
-              <el-option label="" value=""></el-option>
-              <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
-            </el-select>
+        
+        <!-- 双图双Y轴模式 -->
+        <div v-else-if="yAxisConfig === 'double'" class="chart-config-grid">
+          <div class="chart-config-section">
+            <h4 style="margin-bottom: 10px;">上图左Y轴数据（最多2个）：</h4>
+            <div class="source-selectors">
+              <el-select v-model="upperChartLeftSource1" placeholder="选择数据" style="width: 100%; margin-bottom: 8px;">
+                <el-option label="" value=""></el-option>
+                <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
+              </el-select>
+              <el-select v-model="upperChartLeftSource2" placeholder="选择数据" style="width: 100%;">
+                <el-option label="" value=""></el-option>
+                <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
+              </el-select>
+            </div>
+          </div>
+          <div class="chart-config-section">
+            <h4 style="margin-bottom: 10px;">上图右Y轴数据（最多2个）：</h4>
+            <div class="source-selectors">
+              <el-select v-model="upperChartRightSource1" placeholder="选择数据" style="width: 100%; margin-bottom: 8px;">
+                <el-option label="" value=""></el-option>
+                <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
+              </el-select>
+              <el-select v-model="upperChartRightSource2" placeholder="选择数据" style="width: 100%;">
+                <el-option label="" value=""></el-option>
+                <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
+              </el-select>
+            </div>
+          </div>
+          <div class="chart-config-section">
+            <h4 style="margin-bottom: 10px;">下图左Y轴数据（最多2个）：</h4>
+            <div class="source-selectors">
+              <el-select v-model="lowerChartLeftSource1" placeholder="选择数据" style="width: 100%; margin-bottom: 8px;">
+                <el-option label="" value=""></el-option>
+                <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
+              </el-select>
+              <el-select v-model="lowerChartLeftSource2" placeholder="选择数据" style="width: 100%;">
+                <el-option label="" value=""></el-option>
+                <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
+              </el-select>
+            </div>
+          </div>
+          <div class="chart-config-section">
+            <h4 style="margin-bottom: 10px;">下图右Y轴数据（最多2个）：</h4>
+            <div class="source-selectors">
+              <el-select v-model="lowerChartRightSource1" placeholder="选择数据" style="width: 100%; margin-bottom: 8px;">
+                <el-option label="" value=""></el-option>
+                <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
+              </el-select>
+              <el-select v-model="lowerChartRightSource2" placeholder="选择数据" style="width: 100%;">
+                <el-option label="" value=""></el-option>
+                <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
+              </el-select>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- 单图模式下的数据源选择 -->
+      <div v-if="viewLayout === 'single'" style="margin-bottom: 20px;">
+        <!-- 单图单Y轴模式 -->
+        <div v-if="yAxisConfig === 'single'" class="chart-config-grid">
+          <div class="chart-config-section">
+            <h4 style="margin-bottom: 10px;">单图表数据源（最多4个）：</h4>
+            <div class="source-selectors">
+              <el-select v-model="singleChartSource1" placeholder="选择数据" style="width: 100%; margin-bottom: 8px;">
+                <el-option label="" value=""></el-option>
+                <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
+              </el-select>
+              <el-select v-model="singleChartSource2" placeholder="选择数据" style="width: 100%; margin-bottom: 8px;">
+                <el-option label="" value=""></el-option>
+                <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
+              </el-select>
+              <el-select v-model="singleChartSource3" placeholder="选择数据" style="width: 100%; margin-bottom: 8px;">
+                <el-option label="" value=""></el-option>
+                <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
+              </el-select>
+              <el-select v-model="singleChartSource4" placeholder="选择数据" style="width: 100%;">
+                <el-option label="" value=""></el-option>
+                <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
+              </el-select>
+            </div>
+          </div>
+        </div>
+        
+        <!-- 单图双Y轴模式 -->
+        <div v-else-if="yAxisConfig === 'double'" class="chart-config-grid">
+          <div class="chart-config-section">
+            <h4 style="margin-bottom: 10px;">左Y轴数据（最多2个）：</h4>
+            <div class="source-selectors">
+              <el-select v-model="singleChartLeftSource1" placeholder="选择数据" style="width: 100%; margin-bottom: 8px;">
+                <el-option label="" value=""></el-option>
+                <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
+              </el-select>
+              <el-select v-model="singleChartLeftSource2" placeholder="选择数据" style="width: 100%;">
+                <el-option label="" value=""></el-option>
+                <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
+              </el-select>
+            </div>
+          </div>
+          <div class="chart-config-section">
+            <h4 style="margin-bottom: 10px;">右Y轴数据（最多2个）：</h4>
+            <div class="source-selectors">
+              <el-select v-model="singleChartRightSource1" placeholder="选择数据" style="width: 100%; margin-bottom: 8px;">
+                <el-option label="" value=""></el-option>
+                <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
+              </el-select>
+              <el-select v-model="singleChartRightSource2" placeholder="选择数据" style="width: 100%;">
+                <el-option label="" value=""></el-option>
+                <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
+              </el-select>
+            </div>
           </div>
         </div>
       </div>
     </div>
     <template #footer>
       <el-button @click="viewConfigDialogVisible = false">取消</el-button>
-      <el-button type="primary" @click="applyViewConfig">确定</el-button>
+      <el-button type="primary" @click="applyViewConfig(createChart)">确定</el-button>
     </template>
   </el-dialog>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch, computed } from 'vue'
+import { ref, onMounted, onUnmounted, watch } from 'vue'
 import * as echarts from 'echarts'
 import { useFlow } from '@/composables/flow/useFlow'
+import { useDataConfig } from '@/composables/flow/useDataConfig'
 import { ElMessage } from 'element-plus'
 
 // 初始化数据流处理
 const { flowData, initRawData, clearRawData, saveData } = useFlow()
+
+// 初始化视图配置处理
+const {
+  // 状态变量
+  viewConfigDialogVisible,
+  viewLayout,
+  yAxisConfig,
+  // 数据源选择相关
+  singleChartSource1,
+  singleChartSource2,
+  singleChartSource3,
+  singleChartSource4,
+  singleChartLeftSource1,
+  singleChartLeftSource2,
+  singleChartRightSource1,
+  singleChartRightSource2,
+  upperChartSource1,
+  upperChartSource2,
+  upperChartSource3,
+  upperChartSource4,
+  lowerChartSource1,
+  lowerChartSource2,
+  lowerChartSource3,
+  lowerChartSource4,
+  upperChartLeftSource1,
+  upperChartLeftSource2,
+  upperChartRightSource1,
+  upperChartRightSource2,
+  lowerChartLeftSource1,
+  lowerChartLeftSource2,
+  lowerChartRightSource1,
+  lowerChartRightSource2,
+  // 计算属性
+  upperChartSources,
+  lowerChartSources,
+  upperChartLeftSources,
+  upperChartRightSources,
+  lowerChartLeftSources,
+  lowerChartRightSources,
+  singleChartSources,
+  singleChartLeftSources,
+  singleChartRightSources,
+  hasData,
+  availableSources,
+  // 方法
+  showViewConfig,
+  onYAxisChange,
+  onLayoutChange,
+  applyViewConfig
+} = useDataConfig(flowData)
 
 const fileInput = ref<HTMLInputElement>()
 const chartRef = ref<HTMLDivElement>()
@@ -209,153 +324,6 @@ const messageDialogVisible = ref(false)
 function showMessageFormat() {
   messageDialogVisible.value = true
 }
-
-// 视图配置相关
-const viewConfigDialogVisible = ref(false)
-const viewLayout = ref<'single' | 'double'>('single')
-const yAxisConfig = ref<'single' | 'double'>('single')
-
-// 单图模式下的数据源选择
-const singleChartSource1 = ref<string>('')
-const singleChartSource2 = ref<string>('')
-const singleChartSource3 = ref<string>('')
-const singleChartSource4 = ref<string>('')
-
-// 单图双Y轴模式下的数据源选择
-const singleChartLeftSource1 = ref<string>('')
-const singleChartLeftSource2 = ref<string>('')
-const singleChartRightSource1 = ref<string>('')
-const singleChartRightSource2 = ref<string>('')
-
-// 双图模式下的数据源选择
-const upperChartSource1 = ref<string>('')
-const upperChartSource2 = ref<string>('')
-const upperChartSource3 = ref<string>('')
-const upperChartSource4 = ref<string>('')
-const lowerChartSource1 = ref<string>('')
-const lowerChartSource2 = ref<string>('')
-const lowerChartSource3 = ref<string>('')
-const lowerChartSource4 = ref<string>('')
-
-// 添加以下计算属性
-// 上图表数据源（双图模式）
-const upperChartSources = computed(() => {
-  return [
-    upperChartSource1.value,
-    upperChartSource2.value,
-    upperChartSource3.value,
-    upperChartSource4.value
-  ].filter(source => source !== '')
-})
-
-// 下图表数据源（双图模式）
-const lowerChartSources = computed(() => {
-  return [
-    lowerChartSource1.value,
-    lowerChartSource2.value,
-    lowerChartSource3.value,
-    lowerChartSource4.value
-  ].filter(source => source !== '')
-})
-
-// 单图表数据源（单Y轴模式）
-const singleChartSources = computed(() => {
-  return [
-    singleChartSource1.value,
-    singleChartSource2.value,
-    singleChartSource3.value,
-    singleChartSource4.value
-  ].filter(source => source !== '')
-})
-
-// 单图表左Y轴数据源（双Y轴模式）
-const singleChartLeftSources = computed(() => {
-  return [
-    singleChartLeftSource1.value,
-    singleChartLeftSource2.value
-  ].filter(source => source !== '')
-})
-
-// 单图表右Y轴数据源（双Y轴模式）
-const singleChartRightSources = computed(() => {
-  return [
-    singleChartRightSource1.value,
-    singleChartRightSource2.value
-  ].filter(source => source !== '')
-})
-
-// 显示视图配置对话框
-function showViewConfig() {
-  // 移除清空操作，保留用户之前的选择
-  viewConfigDialogVisible.value = true
-}
-
-// 布局变化处理
-function onLayoutChange() {
-  // 布局变更时只清空相关模式的选择，保留其他模式的选择
-  if (viewLayout.value === 'single') {
-    // 切换到单图模式，清空双图模式的选择
-    upperChartSource1.value = ''
-    upperChartSource2.value = ''
-    upperChartSource3.value = ''
-    upperChartSource4.value = ''
-    lowerChartSource1.value = ''
-    lowerChartSource2.value = ''
-    lowerChartSource3.value = ''
-    lowerChartSource4.value = ''
-  } else {
-    // 切换到双图模式，清空单图模式的选择
-    singleChartSource1.value = ''
-    singleChartSource2.value = ''
-    singleChartSource3.value = ''
-    singleChartSource4.value = ''
-    singleChartLeftSource1.value = ''
-    singleChartLeftSource2.value = ''
-    singleChartRightSource1.value = ''
-    singleChartRightSource2.value = ''
-  }
-}
-
-// Y轴配置变化处理
-function onYAxisChange() {
-  // Y轴配置变更时只清空相关配置的选择
-  if (yAxisConfig.value === 'single') {
-    // 切换到单Y轴模式，清空双Y轴模式的选择
-    singleChartLeftSource1.value = ''
-    singleChartLeftSource2.value = ''
-    singleChartRightSource1.value = ''
-    singleChartRightSource2.value = ''
-  } else {
-    // 切换到双Y轴模式，清空单Y轴模式的选择
-    singleChartSource1.value = ''
-    singleChartSource2.value = ''
-    singleChartSource3.value = ''
-    singleChartSource4.value = ''
-  }
-}
-
-// 应用视图配置
-function applyViewConfig() {
-  updateChart()
-  viewConfigDialogVisible.value = false
-  ElMessage.success('视图配置已应用')
-}
-
-// 检查是否有数据
-const hasData = computed(() => {
-  return flowData.value.timestamps && flowData.value.timestamps.length > 0
-})
-
-// 获取所有可用的数据源字段（排除元数据字段）
-const availableSources = computed(() => {
-  return Object.keys(flowData.value).filter(key => 
-    key !== 'timestamps' && 
-    key !== 'timestamp' && 
-    key !== 'isBatchData' && 
-    key !== 'rawString' && 
-    Array.isArray(flowData.value[key])
-  )
-})
 
 // 处理文件上传
 const handleFileUpload = (event: Event) => {
@@ -375,6 +343,7 @@ const handleFileUpload = (event: Event) => {
         console.error('数据加载失败:', error)
       }
     }
+    
     reader.readAsText(file)
     
     // 清空input以允许重复选择同一文件
@@ -385,7 +354,7 @@ const handleFileUpload = (event: Event) => {
 // 清除数据
 function clearPlotData() {
   clearRawData()
-  updateChart()
+  createChart()
   ElMessage.success('数据已清除')
 }
 
@@ -407,11 +376,28 @@ function updateChart() {
   if (!chart || !hasData.value) {
     // 如果没有数据，显示空图表
     chart?.setOption({
-      title: {
-        left: 'center',
-        textStyle: { fontSize: 14 }
+      // 移除双图模式下的标题
+      title: { show: false },
+      tooltip: {
+        trigger: 'axis',
+        formatter: (params: any) => {
+          if (params.length === 0) return ''
+          
+          let result = `时间: ${params[0].data[0].toFixed(2)}s<br/>`
+          params.forEach((param: any) => {
+            if (param.data[1] !== null) {
+              result += `${param.marker}${param.seriesName}: ${param.data[1].toFixed(2)}<br/>`
+            }
+          })
+          return result
+        }
       },
-      tooltip: { trigger: 'axis' },
+      grid: {
+        left: '3%',
+        right: '8%',
+        bottom: '15%',
+        containLabel: true
+      },
       xAxis: { type: 'value', name: '时间(s)' },
       yAxis: { type: 'value' },
       series: []
@@ -506,13 +492,13 @@ function createChartOption() {
       },
       grid: {
         left: '3%',
-        right: '4%',
-        bottom: '3%',
+        right: '8%',
+        bottom: '15%', // 从3%增加到15%，为dataZoom留出空间
         containLabel: true
       },
       xAxis: {
         type: 'value',
-        name: '时间(s)',
+        name: '    时间(s)',
         axisLabel: {
           formatter: function(value: number) {
             return value.toFixed(2)
@@ -531,40 +517,130 @@ function createChartOption() {
     }
   } else {
     // 双图模式
-    // 处理上图表数据
-    const upperSeries = upperChartSources.value.map((source, index) => {
-      const seriesData = (flowData.value[source] as any[]).map((value: any, idx: number) => [
-        flowData.value.timestamps![idx], value
-      ])
-      
-      return {
-        name: source, // 不再替换下划线
-        type: 'line',
-        data: seriesData,
-        symbolSize: 4,
-        smooth: true,
-        yAxisIndex: yAxisConfig.value === 'double' && upperChartSources.value.indexOf(source) % 2 === 1 ? 1 : 0
-      }
-    })
+    let upperSeries = []
+    let lowerSeries = []
     
-    // 处理下图表数据
-    const lowerSeries = lowerChartSources.value.map((source, index) => {
-      const seriesData = (flowData.value[source] as any[]).map((value: any, idx: number) => [
-        flowData.value.timestamps![idx], value
-      ])
+    if (yAxisConfig.value === 'double') {
+      // 双图双Y轴模式 - 使用特定的左右Y轴数据
+      // 上图表左侧Y轴数据
+      upperSeries = upperChartLeftSources.value.map(source => {
+        const seriesData = (flowData.value[source] as any[]).map((value: any, idx: number) => [
+          flowData.value.timestamps![idx], value
+        ])
+        
+        return {
+          name: source,
+          type: 'line',
+          data: seriesData,
+          symbolSize: 4,
+          smooth: true,
+          yAxisIndex: 0  // 上图表左侧Y轴
+        }
+      })
       
-      return {
-        name: source, // 不再替换下划线
-        type: 'line',
-        data: seriesData,
-        symbolSize: 4,
-        smooth: true,
-        yAxisIndex: yAxisConfig.value === 'double' && lowerChartSources.value.indexOf(source) % 2 === 1 ? 1 : 0
-      }
-    })
+      // 上图表右侧Y轴数据
+      upperSeries.push(...upperChartRightSources.value.map(source => {
+        const seriesData = (flowData.value[source] as any[]).map((value: any, idx: number) => [
+          flowData.value.timestamps![idx], value
+        ])
+        
+        return {
+          name: source,
+          type: 'line',
+          data: seriesData,
+          symbolSize: 4,
+          smooth: true,
+          yAxisIndex: 1  // 上图表右侧Y轴
+        }
+      }))
+      
+      // 下图表左侧Y轴数据
+      lowerSeries = lowerChartLeftSources.value.map(source => {
+        const seriesData = (flowData.value[source] as any[]).map((value: any, idx: number) => [
+          flowData.value.timestamps![idx], value
+        ])
+        
+        return {
+          name: source,
+          type: 'line',
+          data: seriesData,
+          symbolSize: 4,
+          smooth: true,
+          yAxisIndex: 2  // 下图表左侧Y轴
+        }
+      })
+      
+      // 下图表右侧Y轴数据
+      lowerSeries.push(...lowerChartRightSources.value.map(source => {
+        const seriesData = (flowData.value[source] as any[]).map((value: any, idx: number) => [
+          flowData.value.timestamps![idx], value
+        ])
+        
+        return {
+          name: source,
+          type: 'line',
+          data: seriesData,
+          symbolSize: 4,
+          smooth: true,
+          yAxisIndex: 3  // 下图表右侧Y轴
+        }
+      }))
+    } else {
+      // 双图单Y轴模式
+      upperSeries = upperChartSources.value.map((source) => {
+        const seriesData = (flowData.value[source] as any[]).map((value: any, idx: number) => [
+          flowData.value.timestamps![idx], value
+        ])
+        
+        return {
+          name: source,
+          type: 'line',
+          data: seriesData,
+          symbolSize: 4,
+          smooth: true,
+          yAxisIndex: 0
+        }
+      })
+      
+      lowerSeries = lowerChartSources.value.map((source) => {
+        const seriesData = (flowData.value[source] as any[]).map((value: any, idx: number) => [
+          flowData.value.timestamps![idx], value
+        ])
+        
+        return {
+          name: source,
+          type: 'line',
+          data: seriesData,
+          symbolSize: 4,
+          smooth: true,
+          yAxisIndex: 1
+        }
+      })
+    }
+    
+    // 修复双图双Y轴模式下的yAxis配置
+    const yAxisConfigArray = []
+    if (yAxisConfig.value === 'double') {
+      // 双图双Y轴模式，每个图表都有左右两个Y轴
+      yAxisConfigArray.push(
+        { type: 'value', gridIndex: 0 },
+        { type: 'value', gridIndex: 0, show: true },
+        { type: 'value', gridIndex: 1 },
+        { type: 'value', gridIndex: 1, show: true }
+      )
+    } else {
+      // 双图单Y轴模式
+      yAxisConfigArray.push(
+        { type: 'value', gridIndex: 0 },
+        { type: 'value', gridIndex: 1 }
+      )
+    }
+    
+    // 合并所有系列数据，用于图例显示
+    const allSeries = [...upperSeries, ...lowerSeries]
     
     return {
-      title: { text: '数据流可视化', left: 'center', textStyle: { fontSize: 14 } },
+      title: { left: 'center', textStyle: { fontSize: 14 } },
       tooltip: {
         trigger: 'axis',
         formatter: (params: any) => {
@@ -580,54 +656,36 @@ function createChartOption() {
         }
       },
       legend: {
-        data: [...new Set([...upperChartSources.value, ...lowerChartSources.value])], // 直接使用原始名称
+        data: allSeries.map(item => item.name),
         top: 30
       },
       grid: [
-        { left: '3%', right: '4%', top: '15%', bottom: '55%', containLabel: true },
-        { left: '3%', right: '4%', top: '55%', bottom: '3%', containLabel: true }
+        { left: '3%', right: '8%', top: '15%', bottom: '55%', containLabel: true },
+        { left: '3%', right: '8%', top: '55%', bottom: '15%', containLabel: true } // 从3%增加到15%
       ],
       xAxis: [
         { type: 'value', name: '时间(s)', gridIndex: 0, axisLabel: { formatter: (value: number) => value.toFixed(2) } },
         { type: 'value', name: '时间(s)', gridIndex: 1, axisLabel: { formatter: (value: number) => value.toFixed(2) } }
       ],
-      yAxis: [
-        { type: 'value', gridIndex: 0 },
-        { type: 'value', gridIndex: 1 }
-      ],
+      yAxis: yAxisConfigArray,
       dataZoom: [
         { type: 'slider', show: true, xAxisIndex: [0, 1] },
         { type: 'inside', xAxisIndex: [0, 1] }
       ],
-      series: [...upperChartSources.value.map((source, index) => {
-        const seriesData = (flowData.value[source] as any[]).map((value: any, idx: number) => [
-          flowData.value.timestamps![idx], value
-        ])
-        
-        return {
-          name: source,
-          type: 'line',
-          data: seriesData,
-          symbolSize: 4,
-          smooth: true,
-          xAxisIndex: 0,
-          yAxisIndex: 0
-        }
-      }), ...lowerChartSources.value.map((source, index) => {
-        const seriesData = (flowData.value[source] as any[]).map((value: any, idx: number) => [
-          flowData.value.timestamps![idx], value
-        ])
-        
-        return {
-          name: source,
-          type: 'line',
-          data: seriesData,
-          symbolSize: 4,
-          smooth: true,
-          xAxisIndex: 1,
-          yAxisIndex: 1
-        }
-      })]
+      series: [
+        // 上图表系列 - 添加gridIndex和xAxisIndex
+        ...upperSeries.map(series => ({
+          ...series,
+          gridIndex: 0,
+          xAxisIndex: 0
+        })),
+        // 下图表系列 - 添加gridIndex和xAxisIndex
+        ...lowerSeries.map(series => ({
+          ...series,
+          gridIndex: 1,
+          xAxisIndex: 1
+        }))
+      ]
     }
   }
 }
@@ -677,7 +735,7 @@ watch(
 
 .controls {
   display: flex;
-  gap: 10px;
+  justify-content: space-between;
   margin-bottom: 10px;
 }
 
@@ -689,13 +747,31 @@ watch(
 /* 按钮样式 */
 .file-controls {
   display: flex;
-  gap: 8px;
+  width: 100%;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.left-buttons {
+  display: flex;
+  gap: 5px;
+}
+
+.right-buttons {
+  display: flex;
+  gap: 5px;
 }
 
 .el-button {
   font-size: 12px;
 }
 
+/* 移除原来的margin-left样式 */
+.layout-btn {
+  margin-left: 0;
+}
+
+/* 其他样式保持不变 */
 /* 示例代码样式 */
 .example-code {
   background-color: #f5f5f5;
@@ -707,6 +783,10 @@ watch(
 }
 
 /* 对话框内容样式 */
+.message-content {
+  text-align: left; /* 添加这一行，使所有内容左对齐 */
+}
+
 .dialog-content > div {
   display: flex;
   align-items: center;
@@ -722,15 +802,32 @@ watch(
   margin-left: 8px;
 }
 
-/* 配置按钮样式 */
-.config-btn {
-  margin-right: 8px;
+/* 图表配置区域样式 */
+.chart-config-section {
+  margin-bottom: 15px;
+  padding: 10px;
+  background-color: #f9f9f9;
+  border-radius: 4px;
 }
 
-/* 数据源选择器样式 */
 .source-selectors {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+/* 新增加的网格布局样式 */
+.chart-config-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 15px;
+  margin-bottom: 15px;
+}
+
+/* 针对不同屏幕尺寸的响应式调整 */
+@media (max-width: 768px) {
+  .chart-config-grid {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

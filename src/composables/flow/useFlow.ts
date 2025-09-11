@@ -109,7 +109,7 @@ export function useFlow() {
     
     const lines = flowData.value.rawString!.split('\n')
     flowData.value.rawString = lines[lines.length - 1]
-    
+
     for (const line of lines) {
       if (line.trim() !== "") {
         try {
@@ -134,7 +134,7 @@ export function useFlow() {
             if (flowData.value.timestamp === 0) {
               flowData.value.timestamp = now
             }
-            const lastTimestamp = flowData.value.timestamp + flowData.value.timestamps![flowData.value.timestamps!.length - 1]
+            const lastTimestamp = (flowData.value.timestamp ?? 0) + (flowData.value.timestamps?.[flowData.value.timestamps.length - 1] ?? 0)
             if (lastTimestamp && now - lastTimestamp > 1) {
               addNullData()
             }

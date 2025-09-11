@@ -4,10 +4,12 @@ import { navMode } from "@/settings/config"
 import { useNmea } from '@/composables/gnss/useNmea'
 import { useUltrasonic } from '@/composables/ultrasonic/useUltrasonic'
 import { useFollow } from '@/composables/follow/useFollow'
+import { useFlow } from '@/composables/flow/useFlow'
 
 const { processRawData: processNmeaRawData } = useNmea()
 const { addRawData: addUltrasonicRawData } = useUltrasonic()
 const { addRawData: addFollowRawData } = useFollow()
+const { addRawData: addFlowRawData } = useFlow()
 
 // 串口配置
 const serialPort = ref("");
@@ -292,6 +294,9 @@ export function useDevice() {
         break;
       case 'follow':
         addFollowRawData(data)
+        break;
+      case 'flow':
+        addFlowRawData(data)
         break;
       default:
         break;
