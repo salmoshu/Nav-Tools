@@ -39,7 +39,7 @@
   >
     <div class="dialog-content, message-content">
       <p><strong>数据说明：</strong></p>
-      <p>数据主要采用JSON格式，并以换行符分隔。每行一个JSON对象，每个JSON对象包含以下字段：</p>
+      <p>数据主要采用JSON格式，并以换行符分隔。每行一个JSON对象，每个JSON对象可以灵活配置字段。</p>
       <el-divider></el-divider>
       <p><strong>示例数据：</strong></p>
       <pre class="example-code">
