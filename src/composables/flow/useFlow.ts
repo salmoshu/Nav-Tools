@@ -58,7 +58,7 @@ export function useFlow() {
             }
             flowData.value.timestamps!.push(Number(json.time) - flowData.value.timestamp!)
           } else {
-            // 如果没有time属性，则假设数据为20Hz
+            // 如果没有time属性，则假设数据为1/dt Hz
             flowData.value.timestamps!.push(flowData.value.timestamp!)
             flowData.value.timestamp! += dt
           }

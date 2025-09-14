@@ -1,6 +1,6 @@
 // src/composables/follow/useFOV.ts
 import { computed } from 'vue'
-import type { CarState, PersonState } from '@/stores/follow'
+import type { CarState, PersonState } from '@/stores/followsim'
 
 const FOV_ANGLE = 80 * Math.PI / 180
 

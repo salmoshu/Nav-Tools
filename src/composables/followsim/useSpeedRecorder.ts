@@ -1,6 +1,6 @@
 // src/composables/follow/useSpeedRecorder.ts
 import { ref, computed, onUnmounted } from 'vue'
-import { useFollowStore } from '@/stores/follow'
+import { useFollowStore } from '@/stores/followsim'
 
 // 定义数据点接口
 interface SpeedDataPoint {

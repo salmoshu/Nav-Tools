@@ -429,7 +429,13 @@ function createChartOption() {
           data: seriesData,
           symbolSize: 4,
           smooth: true,
-          yAxisIndex: 0
+          yAxisIndex: 0,
+          showSymbol: false,
+          large: true,
+          largeThreshold: 5000,
+          progressive: 5000,
+          progressiveThreshold: 10000,
+          animation: false,
         }
       })
     } else {
@@ -445,7 +451,13 @@ function createChartOption() {
           data: seriesData,
           symbolSize: 4,
           smooth: true,
-          yAxisIndex: 0
+          yAxisIndex: 0,
+          showSymbol: false,
+          large: true,
+          largeThreshold: 5000,
+          progressive: 5000,
+          progressiveThreshold: 10000,
+          animation: false,
         }
       })
       
@@ -460,7 +472,13 @@ function createChartOption() {
           data: seriesData,
           symbolSize: 4,
           smooth: true,
-          yAxisIndex: 1
+          yAxisIndex: 1,
+          showSymbol: false,
+          large: true,
+          largeThreshold: 5000,
+          progressive: 5000,
+          progressiveThreshold: 10000,
+          animation: false,
         }
       })
       
@@ -534,7 +552,13 @@ function createChartOption() {
           data: seriesData,
           symbolSize: 4,
           smooth: true,
-          yAxisIndex: 0  // 上图表左侧Y轴
+          yAxisIndex: 0,
+          showSymbol: false,
+          large: true,
+          largeThreshold: 5000,
+          progressive: 5000,
+          progressiveThreshold: 10000,
+          animation: false,
         }
       })
       
@@ -550,7 +574,13 @@ function createChartOption() {
           data: seriesData,
           symbolSize: 4,
           smooth: true,
-          yAxisIndex: 1  // 上图表右侧Y轴
+          yAxisIndex: 1,
+          showSymbol: false,
+          large: true,
+          largeThreshold: 5000,
+          progressive: 5000,
+          progressiveThreshold: 10000,
+          animation: false,
         }
       }))
       
@@ -566,7 +596,13 @@ function createChartOption() {
           data: seriesData,
           symbolSize: 4,
           smooth: true,
-          yAxisIndex: 2  // 下图表左侧Y轴
+          yAxisIndex: 2,
+          showSymbol: false,
+          large: true,
+          largeThreshold: 5000,
+          progressive: 5000,
+          progressiveThreshold: 10000,
+          animation: false,
         }
       })
       
@@ -582,7 +618,13 @@ function createChartOption() {
           data: seriesData,
           symbolSize: 4,
           smooth: true,
-          yAxisIndex: 3  // 下图表右侧Y轴
+          yAxisIndex: 3,
+          showSymbol: false,
+          large: true,
+          largeThreshold: 5000,
+          progressive: 5000,
+          progressiveThreshold: 10000,
+          animation: false,
         }
       }))
     } else {
@@ -598,7 +640,13 @@ function createChartOption() {
           data: seriesData,
           symbolSize: 4,
           smooth: true,
-          yAxisIndex: 0
+          yAxisIndex: 0,
+          showSymbol: false,
+          large: true,
+          largeThreshold: 5000,
+          progressive: 5000,
+          progressiveThreshold: 10000,
+          animation: false,
         }
       })
       
@@ -613,7 +661,13 @@ function createChartOption() {
           data: seriesData,
           symbolSize: 4,
           smooth: true,
-          yAxisIndex: 1
+          yAxisIndex: 1,
+          showSymbol: false,
+          large: true,
+          largeThreshold: 5000,
+          progressive: 5000,
+          progressiveThreshold: 10000,
+          animation: false,
         }
       })
     }
@@ -677,13 +731,25 @@ function createChartOption() {
         ...upperSeries.map(series => ({
           ...series,
           gridIndex: 0,
-          xAxisIndex: 0
+          xAxisIndex: 0,
+          showSymbol: false,
+          large: true,
+          largeThreshold: 5000,
+          progressive: 5000,
+          progressiveThreshold: 10000,
+          animation: false,
         })),
         // 下图表系列 - 添加gridIndex和xAxisIndex
         ...lowerSeries.map(series => ({
           ...series,
           gridIndex: 1,
-          xAxisIndex: 1
+          xAxisIndex: 1,
+          showSymbol: false,
+          large: true,
+          largeThreshold: 5000,
+          progressive: 5000,
+          progressiveThreshold: 10000,
+          animation: false,
         }))
       ]
     }

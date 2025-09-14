@@ -1,10 +1,10 @@
 // src/composables/follow/useFollowSimulation.ts
-import { useFollowStore } from '@/stores/follow'
+import { useFollowStore } from '@/stores/followsim'
 import { usePIDController } from './usePIDController'
 import { useUserControl } from './useUserControl'
 import { useFOV } from './useFOV'
 import { computed, watch } from 'vue'
-import type { CarState, PersonState, SimulationConfig } from '@/stores/follow'
+import type { CarState, PersonState, SimulationConfig } from '@/stores/followsim'
 
 // 从useCarSimulation.ts合并的代码
 const normalizeAngle = (angle: number): number => {

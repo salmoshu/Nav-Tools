@@ -8,7 +8,7 @@
     <div class="statusbar-handle">
       <span class="statusbar-title">Status View</span>
       <el-button
-        type="text" 
+        type="text"
         @click="showStatusBar = false"
         class="remove-btn"
         title="移除卡片"
@@ -23,20 +23,102 @@
           <span class="status-indicator" :style="getStatusStyle(statusValue)">{{ getStatusValue(statusValue) }}</span>
         </div>
       </div>
+      <!-- 暂时屏蔽计算属性功能 -->
+      <div v-if="false && showComputedStatus">
+        <div class="computed-section">
+          <span>计算属性</span>
+          <el-button type="primary" size="small" @click="showAddDialog = true" class="add-btn">
+            <el-icon><Plus /></el-icon>
+          </el-button>
+        </div>
+      </div>
     </div>
     <div class="statusbar-dock-zones" v-if="isDragging && activeDockZone">
       <div 
-        :class="['dock-zone', `dock-zone-${activeDockZone}`]" 
+        :class="['dock-zone', `dock-zone-${activeDockZone}`]"
         :style="getDockZoneStyle(activeDockZone)"
       >
       </div>
     </div>
   </div>
+
+  <!-- 添加新状态的对话框 -->
+  <el-dialog
+    v-model="showAddDialog"
+    title="添加新状态属性"
+    width="600px"
+    @close="resetDialog"
+  >
+    <div class="dialog-content">
+      <div class="available-fields">
+        <h4>可用数据字段</h4>
+        <div class="fields-list">
+          <div 
+            v-for="field in availableFields" 
+            :key="field"
+            class="field-item"
+            @click="selectField(field)"
+          >
+            {{ field }}
+          </div>
+        </div>
+      </div>
+      
+      <div class="config-section">
+        <h4>属性配置</h4>
+        <el-form :model="newStatusConfig" label-width="80px">
+          <el-form-item label="字段名">
+            <el-input v-model="newStatusConfig.fieldName" placeholder="选择或输入字段名"></el-input>
+          </el-form-item>
+          <el-form-item label="显示名称">
+            <el-input v-model="newStatusConfig.displayName" placeholder="设置显示名称"></el-input>
+          </el-form-item>
+          <el-form-item label="小数位数">
+            <el-input-number v-model="newStatusConfig.decimalPlaces" :min="0" :max="10" :step="1"></el-input-number>
+          </el-form-item>
+          <el-form-item label="颜色">
+            <el-color-picker v-model="newStatusConfig.color" show-alpha></el-color-picker>
+          </el-form-item>
+        </el-form>
+      </div>
+      
+      <div class="code-section">
+        <h4>高级代码定义（可选）</h4>
+        <div class="code-editor">
+          <el-input
+            type="textarea"
+            v-model="newStatusConfig.code"
+            placeholder="输入JavaScript代码定义新属性值，例如：
+    'flowData.' + fieldName + '[flowData.' + fieldName + '.length - 1] * 2'
+    或复杂计算：'Math.sqrt(flowData.x[flowData.x.length - 1] * flowData.x[flowData.x.length - 1] + flowData.y[flowData.y.length - 1] * flowData.y[flowData.y.length - 1])'"
+            :rows="4"
+          ></el-input>
+          <p class="code-hint">提示：使用'flowData'访问所有可用数据，'fieldName'为当前选择的字段名</p>
+        </div>
+      </div>
+    </div>
+    
+    <template #footer>
+      <span class="dialog-footer">
+        <el-button @click="showAddDialog = false">取消</el-button>
+        <el-button type="primary" @click="addNewStatus">确定</el-button>
+      </span>
+    </template>
+  </el-dialog>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, inject, watch, type Ref } from 'vue'
 import { getMonitorStatus, showStatusBar } from '@/composables/useStatusManager'
+import { navMode } from '@/settings/config'
+import { useFlow } from '@/composables/flow/useFlow'
+import { useFlowStore } from '@/stores/flow'
+import { Plus, Close } from '@element-plus/icons-vue'
+import { ElDialog, ElButton, ElInput, ElForm, ElFormItem, ElColorPicker, ElInputNumber } from 'element-plus'
+
+const showComputedStatus = computed(() => {
+  return navMode.funcMode === 'flow'
+})
 
 const commonStyle = {
   trueStyle: 'color: #00b894; background: rgba(0, 184, 148, 0.1); font-weight: 700;',
@@ -60,7 +142,78 @@ const getStatusValue = (status: any) => {
   return status
 }
 
-const dockWidth = 150
+// Flow相关
+const { flowData } = useFlow()
+const flowStore = useFlowStore()
+
+// 对话框相关
+const showAddDialog = ref(false)
+const availableFields = computed(() => {
+  // 获取flowData中除了元数据外的所有数组字段
+  const fields: string[] = []
+  Object.keys(flowData.value).forEach(key => {
+    if (key !== 'timestamps' && 
+        key !== 'timestamp' && 
+        key !== 'isBatchData' && 
+        key !== 'rawString' && 
+        Array.isArray(flowData.value[key])) {
+      fields.push(key)
+    }
+  })
+  console.log(fields)
+  return fields
+})
+
+const newStatusConfig = ref({
+  fieldName: '',
+  displayName: '',
+  decimalPlaces: 2,
+  color: '#2c3e50',
+  code: ''
+})
+
+const selectField = (field: string) => {
+  newStatusConfig.value.fieldName = field
+  // 默认使用字段名作为显示名称，用户可以修改
+  if (!newStatusConfig.value.displayName) {
+    newStatusConfig.value.displayName = field
+  }
+}
+
+const addNewStatus = () => {
+  if (!newStatusConfig.value.displayName) {
+    // 至少需要设置显示名称
+    return
+  }
+  
+  // 创建配置对象
+  const config = {
+    ...newStatusConfig.value,
+    // 如果有代码定义，则标记为代码类型
+    isCodeDefinition: !!newStatusConfig.value.code
+  }
+  
+  // 调用flowStore的方法添加新状态
+  if (flowStore.addCustomStatus) {
+    flowStore.addCustomStatus(config)
+  }
+  
+  // 关闭对话框并重置
+  showAddDialog.value = false
+  resetDialog()
+}
+
+const resetDialog = () => {
+  newStatusConfig.value = {
+    fieldName: '',
+    displayName: '',
+    decimalPlaces: 2,
+    color: '#2c3e50',
+    code: ''
+  }
+}
+
+const dockWidth = 200
 const position = ref<'left' | 'right'>('right')
 const isDragging = ref(false)
 const dragOffset = ref({ x: 0, y: 0 })
@@ -168,9 +321,9 @@ const stopDrag = () => {
     emit('positionChange', finalPosition)
     snapToEdge()
   } else {
-    statusbarRect.value = { 
-      x: originalState.value.x, 
-      y: originalState.value.y 
+    statusbarRect.value = {
+      x: originalState.value.x,
+      y: originalState.value.y
     }
     position.value = originalState.value.position
     emit('positionChange', originalState.value.position)
@@ -281,7 +434,7 @@ onUnmounted(() => {
   border-radius: 0;
   padding: 0;
   margin: 0;
-  width: 150px;
+  width: 200px;
   height: 100vh;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   overflow: auto;
@@ -313,7 +466,7 @@ onUnmounted(() => {
   font-weight: 600;
   color: #333;
   cursor: grab;
-  padding: 0 8px;  /* 修改内边距 */
+  padding: 0 8px;
   margin: 0 auto;
   text-align: center;
   background-color: #f8f9fa;
@@ -322,9 +475,9 @@ onUnmounted(() => {
   height: 40px;
   box-sizing: border-box;
   border-radius: 0;
-  display: flex;  /* 添加Flex布局 */
-  justify-content: space-between;  /* 文字和按钮分别位于两端 */
-  align-items: center;  /* 垂直居中对齐 */
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 
 .statusbar-content {
@@ -351,10 +504,6 @@ onUnmounted(() => {
   flex-direction: column;
   align-items: center;
   padding: 4px;
-  /* background: #fbfcfc; */
-  /* border: 1px solid #e9ecef; */
-  /* border-radius: 8px; */
-  /* box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1); */
   transition: all 0.3s ease;
   margin: 4px 0;
 }
@@ -363,7 +512,6 @@ onUnmounted(() => {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
   background: rgba(233, 236, 239, 0.8);
   transform: translateY(-2px);
-  /* border-radius: 6px; */
 }
 
 .status-label {
@@ -373,7 +521,7 @@ onUnmounted(() => {
   line-height: 1.5;
   box-sizing: border-box;
   text-align: left;
-  min-width: 60px; /* 确保标签有足够宽度 */
+  min-width: 60px;
 }
 
 .status-indicator {
@@ -381,11 +529,10 @@ onUnmounted(() => {
   font-weight: 600;
   font-size: 14px;
   padding: 4px 8px;
-  /* border-radius: 6px; */
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
   box-sizing: border-box;
   text-align: right;
-  flex-grow: 1; /* 让指示器占据剩余空间 */
+  flex-grow: 1;
 }
 
 .statusbar-dock-zones {
@@ -416,7 +563,6 @@ onUnmounted(() => {
   position: fixed;
   background: rgba(52, 152, 219, 0.2);
   border: 2px dashed #3498db;
-  /* border-radius: 8px; */
   display: flex;
   align-items: center;
   justify-content: center;
@@ -438,5 +584,89 @@ onUnmounted(() => {
 
 .remove-btn {
   color: #6c757d;
+}
+
+/* 计算属性区域样式 */
+.computed-section {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px;
+  background-color: #f8f9fa;
+  border-radius: 4px;
+  margin-top: 8px;
+}
+
+.add-btn {
+  height: 24px;
+  padding: 0 8px;
+  font-size: 12px;
+}
+
+/* 对话框内容样式 */
+.dialog-content {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.available-fields h4,
+.config-section h4 {
+  margin: 0 0 10px 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.fields-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  max-height: 200px;
+  overflow-y: auto;
+  padding: 8px;
+  background-color: #f8f9fa;
+  border-radius: 4px;
+}
+
+.field-item {
+  padding: 6px 12px;
+  background-color: #fff;
+  border: 1px solid #dee2e6;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-size: 12px;
+}
+
+.field-item:hover {
+  background-color: #e3f2fd;
+  border-color: #3498db;
+}
+
+.config-section {
+  margin-top: 10px;
+}
+
+.code-section {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid #e4e7ed;
+}
+
+.code-editor {
+  margin-top: 10px;
+}
+
+.code-editor textarea {
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.code-hint {
+  margin-top: 5px;
+  font-size: 12px;
+  color: #909399;
+  font-style: italic;
 }
 </style>

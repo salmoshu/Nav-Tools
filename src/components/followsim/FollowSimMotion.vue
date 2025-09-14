@@ -20,7 +20,7 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, watch } from 'vue'
 import { useEcharts } from '@/hooks/useEcharts'
-import { useFollowStore } from '@/stores/follow'
+import { useFollowStore } from '@/stores/followsim'
 import { useSpeedRecorder } from '@/composables/followsim/useSpeedRecorder'
 
 // 初始化存储和图表

@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import { computed, onMounted, onUnmounted } from 'vue'
-import { useFollowStore } from '@/stores/follow'
-import { useFollowSimulation } from '@/composables/followsim/useFollow'
+import { useFollowStore } from '@/stores/followsim'
+import { useFollowSimulation } from '@/composables/followsim/useFollowSim'
 
 const store = useFollowStore()
 const { update, handleMouseDown, isDraggingPerson } = useFollowSimulation()

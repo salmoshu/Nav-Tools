@@ -1,15 +1,20 @@
 import { ref } from "vue";
 import { useGnssStore } from "@/stores/gnss";
-import { useFollowStore } from "@/stores/follow";
+import { useFollowStore } from "@/stores/followsim";
 import { navMode } from "@/settings/config";
 import { useDemo1Store } from "@/stores/demo1";
+import { useFlowStore } from "@/stores/flow";
 
-const showStatusBar = ref(false)
+const showStatusBar = ref(true)
 
 function getMonitorStatus() {
   const funcMode = navMode.funcMode
   const result = ref<Record<string, any>>({})
   switch (funcMode) {
+    case 'flow':
+      const flowStore = useFlowStore();
+      result.value = flowStore.status
+      break;
     case 'followsim':
       const followStore = useFollowStore();
       result.value = followStore.status
