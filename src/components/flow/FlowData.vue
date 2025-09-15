@@ -253,7 +253,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch } from 'vue'
+import { ref, onMounted, onUnmounted, watch, computed } from 'vue'
 import * as echarts from 'echarts'
 import { useFlow } from '@/composables/flow/useFlow'
 import { useDataConfig } from '@/composables/flow/useDataConfig'
@@ -317,14 +317,20 @@ const chartRef = ref<HTMLDivElement>()
 let chart: echarts.ECharts | null = null
 let resizeObserver: ResizeObserver | null = null
 
-const largeDataOptions = {
-  showSymbol: false,
-  large: true,
-  largeThreshold: 5000,
-  progressive: 5000,
-  progressiveThreshold: 10000,
-  animation: false,
-}
+const largeDataOptions = computed(() => {
+  if (flowData.value.timestamps && flowData.value.timestamps.length > 500) {
+    return {
+      showSymbol: false,
+      large: true,
+      largeThreshold: 5000,
+      progressive: 5000,
+      progressiveThreshold: 10000,
+      animation: false,
+    }
+  } else {
+    return {}
+  }
+})
 
 // 消息格式对话框相关
 const messageDialogVisible = ref(false)
@@ -469,7 +475,7 @@ function createChartOption() {
           symbolSize: 4,
           smooth: true,
           yAxisIndex: 0,
-          ...largeDataOptions,
+          ...largeDataOptions.value,
         }
       })
     } else {
@@ -486,7 +492,7 @@ function createChartOption() {
           symbolSize: 4,
           smooth: true,
           yAxisIndex: 0,
-          ...largeDataOptions,
+          ...largeDataOptions.value,
         }
       })
       
@@ -502,7 +508,7 @@ function createChartOption() {
           symbolSize: 4,
           smooth: true,
           yAxisIndex: 1,
-          ...largeDataOptions,
+          ...largeDataOptions.value,
         }
       })
       
@@ -577,7 +583,7 @@ function createChartOption() {
           symbolSize: 4,
           smooth: true,
           yAxisIndex: 0,
-          ...largeDataOptions,
+          ...largeDataOptions.value,
         }
       })
       
@@ -594,7 +600,7 @@ function createChartOption() {
           symbolSize: 4,
           smooth: true,
           yAxisIndex: 1,
-          ...largeDataOptions,
+          ...largeDataOptions.value,
         }
       }))
       
@@ -611,7 +617,7 @@ function createChartOption() {
           symbolSize: 4,
           smooth: true,
           yAxisIndex: 2,
-          ...largeDataOptions,
+          ...largeDataOptions.value,
         }
       })
       
@@ -628,7 +634,7 @@ function createChartOption() {
           symbolSize: 4,
           smooth: true,
           yAxisIndex: 3,
-          ...largeDataOptions,
+          ...largeDataOptions.value,
         }
       }))
     } else {
@@ -651,7 +657,7 @@ function createChartOption() {
           symbolSize: 4,
           smooth: true,
           yAxisIndex: 0,
-          ...largeDataOptions,
+          ...largeDataOptions.value,
         }
       })
       
@@ -670,7 +676,7 @@ function createChartOption() {
         symbolSize: 4,
         smooth: true,
         yAxisIndex: 1,
-        ...largeDataOptions,
+        ...largeDataOptions.value,
         }
       })
     }
@@ -754,14 +760,14 @@ function createChartOption() {
           ...series,
           gridIndex: 0,
           xAxisIndex: 0,
-          ...largeDataOptions,
+          ...largeDataOptions.value,
         })),
         // 下图表系列 - 添加gridIndex和xAxisIndex
         ...lowerSeries.map(series => ({
           ...series,
           gridIndex: 1,
           xAxisIndex: 1,
-          ...largeDataOptions,
+          ...largeDataOptions.value,
         }))
       ]
     }
