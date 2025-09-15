@@ -263,7 +263,7 @@ import { ElMessage } from 'element-plus'
 const { flowData, initRawData, clearRawData, saveData } = useFlow()
 
 // 初始化视图配置处理
-const {
+const { 
   // 状态变量
   viewConfigDialogVisible,
   viewLayout,
@@ -351,10 +351,21 @@ const handleFileUpload = (event: Event) => {
   }
 }
 
-// 清除数据
+// 首先在导入部分添加clearAllCustomStatus
+import { useFlowStore } from '@/stores/flow'
+
+// 在script setup中初始化store
+const flowStore = useFlowStore()
+
+// 修改clearPlotData函数
 function clearPlotData() {
+  // 清除所有自定义属性
+  flowStore.clearAllCustomStatus()
+  // 清除原始数据
   clearRawData()
+  // 重新创建图表
   createChart()
+  // 显示成功消息
   ElMessage.success('数据已清除')
 }
 
@@ -383,10 +394,29 @@ function updateChart() {
         formatter: (params: any) => {
           if (params.length === 0) return ''
           
-          let result = `时间: ${params[0].data[0].toFixed(2)}s<br/>`
+          // 安全处理时间戳
+          let result = `时间: `
+          if (params[0] && params[0].data && params[0].data[0] !== null) {
+            if (typeof params[0].data[0] === 'number') {
+              result += `${params[0].data[0].toFixed(2)}s`
+            } else {
+              result += `${params[0].data[0]}s`
+            }
+          } else {
+            result += `0.00s`
+          }
+          result += `<br/>`
+          
+          // 安全处理每个参数值
           params.forEach((param: any) => {
-            if (param.data[1] !== null) {
-              result += `${param.marker}${param.seriesName}: ${param.data[1].toFixed(2)}<br/>`
+            if (param && param.data && param.data[1] !== null) {
+              result += `${param.marker}${param.seriesName}: `
+              if (typeof param.data[1] === 'number') {
+                result += `${param.data[1].toFixed(2)}`
+              } else {
+                result += `${param.data[1]}`
+              }
+              result += `<br/>`
             }
           })
           return result
@@ -629,10 +659,16 @@ function createChartOption() {
       }))
     } else {
       // 双图单Y轴模式
+      // 在FlowData.vue文件中找到并修改所有类似以下的代码段
+      // 以下是一个示例修改，需要对所有使用map的地方都进行类似处理
+      
+      // 双图单Y轴模式 - 上图表
       upperSeries = upperChartSources.value.map((source) => {
-        const seriesData = (flowData.value[source] as any[]).map((value: any, idx: number) => [
-          flowData.value.timestamps![idx], value
-        ])
+        // 添加安全检查
+        const sourceData = flowData.value[source];
+        const seriesData = Array.isArray(sourceData) 
+        ? sourceData.map((value: any, idx: number) => [flowData.value.timestamps![idx], value])
+        : [];
         
         return {
           name: source,
@@ -650,25 +686,28 @@ function createChartOption() {
         }
       })
       
+      // 双图单Y轴模式 - 下图表
       lowerSeries = lowerChartSources.value.map((source) => {
-        const seriesData = (flowData.value[source] as any[]).map((value: any, idx: number) => [
-          flowData.value.timestamps![idx], value
-        ])
-        
-        return {
-          name: source,
-          type: 'line',
-          data: seriesData,
-          symbolSize: 4,
-          smooth: true,
-          yAxisIndex: 1,
-          showSymbol: false,
-          large: true,
-          largeThreshold: 5000,
-          progressive: 5000,
-          progressiveThreshold: 10000,
-          animation: false,
-        }
+      // 添加安全检查
+      const sourceData = flowData.value[source];
+      const seriesData = Array.isArray(sourceData) 
+      ? sourceData.map((value: any, idx: number) => [flowData.value.timestamps![idx], value])
+      : [];
+      
+      return {
+      name: source,
+      type: 'line',
+      data: seriesData,
+      symbolSize: 4,
+      smooth: true,
+      yAxisIndex: 1,
+      showSymbol: false,
+      large: true,
+      largeThreshold: 5000,
+      progressive: 5000,
+      progressiveThreshold: 10000,
+      animation: false,
+      }
       })
     }
     
@@ -700,10 +739,29 @@ function createChartOption() {
         formatter: (params: any) => {
           if (params.length === 0) return ''
           
-          let result = `时间: ${params[0].data[0].toFixed(2)}s<br/>`
+          // 安全处理时间戳
+          let result = `时间: `
+          if (params[0] && params[0].data && params[0].data[0] !== null) {
+            if (typeof params[0].data[0] === 'number') {
+              result += `${params[0].data[0].toFixed(2)}s`
+            } else {
+              result += `${params[0].data[0]}s`
+            }
+          } else {
+            result += `0.00s`
+          }
+          result += `<br/>`
+          
+          // 安全处理每个参数值
           params.forEach((param: any) => {
-            if (param.data[1] !== null) {
-              result += `${param.marker}${param.seriesName}: ${param.data[1].toFixed(2)}<br/>`
+            if (param && param.data && param.data[1] !== null) {
+              result += `${param.marker}${param.seriesName}: `
+              if (typeof param.data[1] === 'number') {
+                result += `${param.data[1].toFixed(2)}`
+              } else {
+                result += `${param.data[1]}`
+              }
+              result += `<br/>`
             }
           })
           return result

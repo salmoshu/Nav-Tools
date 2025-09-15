@@ -129,15 +129,22 @@ export function useDataConfig(flowData: any) {
   })
 
   // 计算属性 - 获取所有可用的数据源字段（排除元数据字段）
+  // 修改 availableSources 计算属性，确保它能正确反映 flowData 的变化
   const availableSources = computed(() => {
-    return Object.keys(flowData.value).filter(key => 
-      key !== 'timestamps' && 
-      key !== 'timestamp' && 
-      key !== 'isBatchData' && 
-      key !== 'rawString' && 
-      Array.isArray(flowData.value[key])
-    )
-  })
+  // 确保 flowData.value 存在
+  if (!flowData.value) {
+    return []
+  }
+  
+  return Object.keys(flowData.value).filter(key => 
+    key !== 'timestamps' && 
+    key !== 'timestamp' && 
+    key !== 'isBatchData' && 
+    key !== 'rawString' && 
+    key !== 'rawDataKeys' && 
+    Array.isArray(flowData.value[key])
+  )
+})
 
   // 函数 - 显示视图配置对话框
   function showViewConfig() {

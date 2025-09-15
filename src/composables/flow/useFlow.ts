@@ -9,12 +9,14 @@ const flowData = ref<{
   timestamp?: number
   isBatchData?: boolean
   rawString?: string
+  rawDataKeys?: string[]
   [key: string]: any[] | number | string | boolean | undefined
 }>({
   timestamps: [],
   timestamp: 0,
   isBatchData: false,
-  rawString: ''
+  rawString: '',
+  rawDataKeys: []
 })
 
 export function useFlow() {
@@ -24,7 +26,8 @@ export function useFlow() {
       timestamps: [],
       timestamp: 0,
       isBatchData: false,
-      rawString: ''
+      rawString: '',
+      rawDataKeys: []
     }
   }
 
@@ -47,6 +50,7 @@ export function useFlow() {
           Object.keys(json).forEach(key => {
             if (!(key in flowData.value) && key !== 'time') {
               flowData.value[key] = []
+              flowData.value.rawDataKeys!.push(key)
             }
           })
           
@@ -66,12 +70,7 @@ export function useFlow() {
           // 存储数据
           Object.keys(json).forEach(key => {
             if (key !== 'time' && Array.isArray(flowData.value[key])) {
-              // 对特定字段进行类型转换
-              if (key === 'pid_left_speed' || key === 'pid_right_speed') {
-                (flowData.value[key] as any[]).push(Number(json[key]))
-              } else {
-                (flowData.value[key] as any[]).push(json[key])
-              }
+              (flowData.value[key] as any[]).push(json[key])
             }
           })
         } catch (error) {
@@ -166,6 +165,7 @@ export function useFlow() {
       key !== 'timestamp' && 
       key !== 'isBatchData' && 
       key !== 'rawString' && 
+      key !== 'rawDataKeys' && 
       Array.isArray(flowData.value[key])
     )
     
@@ -183,6 +183,7 @@ export function useFlow() {
             key !== 'timestamp' && 
             key !== 'isBatchData' && 
             key !== 'rawString' && 
+            key !== 'rawDataKeys' && 
             Array.isArray(flowData.value[key])) {
           item[key] = flowData.value[key]![index]
         }

@@ -19,14 +19,38 @@
     <div class="statusbar-content">
       <div v-for="(statusValue, statusName) in getMonitorStatus()" :key="statusName" class="status-item">
         <div class="status-item-row">
-          <span class="status-label">{{ statusName }}</span>
-          <span class="status-indicator" :style="getStatusStyle(statusValue)">{{ getStatusValue(statusValue) }}</span>
+          <!-- 为字段名添加点击进入编辑模式的功能 -->
+          <span 
+            class="status-label"
+            @click="showComputedStatus && flowStore.customStatusConfigs.some(config => config.fieldName === statusName) && (!flowData.value || typeof flowData.value !== 'object' || !('rawDataKeys' in flowData.value) || !Array.isArray(flowData.value.rawDataKeys) || !flowData.value.rawDataKeys.includes(statusName)) ? editCustomStatus(statusName) : undefined"
+          >{{ statusName }}</span>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <!-- 为值添加点击进入编辑模式的功能 -->
+            <span 
+              class="status-indicator" 
+              :style="getStatusStyle(statusValue)"
+              @click="showComputedStatus && flowStore.customStatusConfigs.some(config => config.fieldName === statusName) && (!flowData.value || typeof flowData.value !== 'object' || !('rawDataKeys' in flowData.value) || !Array.isArray(flowData.value.rawDataKeys) || !flowData.value.rawDataKeys.includes(statusName)) ? editCustomStatus(statusName) : undefined"
+            >{{ getStatusValue(statusValue) }}</span>
+            <!-- 只为自定义属性显示删除按钮 -->
+            <template v-if="showComputedStatus && 
+                          flowStore.customStatusConfigs.some(config => config.fieldName === statusName) &&
+                          (!flowData.value || typeof flowData.value !== 'object' || !('rawDataKeys' in flowData.value) || !Array.isArray(flowData.value.rawDataKeys) || !flowData.value.rawDataKeys.includes(statusName))">
+              <el-button 
+                type="text" 
+                size="small" 
+                @click="deleteCustomStatus(statusName)"
+                title="删除"
+                style="color: #f56c6c; padding: 0; min-width: 20px;"
+              >
+                <el-icon><Delete /></el-icon>
+              </el-button>
+            </template>
+          </div>
         </div>
       </div>
-      <!-- 暂时屏蔽计算属性功能 -->
-      <div v-if="false && showComputedStatus">
+      <div v-if="showComputedStatus">
         <div class="computed-section">
-          <span>计算属性</span>
+          <span class="status-label">Add new value</span>
           <el-button type="primary" size="small" @click="showAddDialog = true" class="add-btn">
             <el-icon><Plus /></el-icon>
           </el-button>
@@ -42,20 +66,20 @@
     </div>
   </div>
 
-  <!-- 添加新状态的对话框 -->
   <el-dialog
     v-model="showAddDialog"
-    title="添加新状态属性"
     width="600px"
     @close="resetDialog"
+    :title="isEditMode ? '编辑自定义属性' : '添加自定义属性'"
   >
+    <!-- 可用字段列表 -->
     <div class="dialog-content">
       <div class="available-fields">
-        <h4>可用数据字段</h4>
+        <h4>可用字段</h4>
         <div class="fields-list">
           <div 
             v-for="field in availableFields" 
-            :key="field"
+            :key="field" 
             class="field-item"
             @click="selectField(field)"
           >
@@ -64,44 +88,100 @@
         </div>
       </div>
       
+      <!-- 配置区域 -->
       <div class="config-section">
-        <h4>属性配置</h4>
-        <el-form :model="newStatusConfig" label-width="80px">
-          <el-form-item label="字段名">
-            <el-input v-model="newStatusConfig.fieldName" placeholder="选择或输入字段名"></el-input>
+        <!-- 表单内容保持不变，但根据编辑模式使用不同的数据 -->
+        <el-form :model="isEditMode ? editStatusConfig : newStatusConfig" label-width="80px">
+          <el-form-item label="字段名" prop="fieldName" :disabled="isEditMode">
+            <!-- 编辑模式 -->
+            <el-input 
+              v-if="isEditMode" 
+              v-model="editStatusConfig.fieldName" 
+              placeholder="选择或输入字段名" 
+              required
+              :disabled="isEditMode"
+            ></el-input>
+            <!-- 新增模式 -->
+            <el-input 
+              v-else 
+              v-model="newStatusConfig.fieldName" 
+              placeholder="选择或输入字段名" 
+              required
+            ></el-input>
           </el-form-item>
-          <el-form-item label="显示名称">
-            <el-input v-model="newStatusConfig.displayName" placeholder="设置显示名称"></el-input>
+
+                    <!-- 计算公式表单项 -->
+          <el-form-item label="计算公式" prop="code">
+            <!-- 编辑模式 -->
+            <el-input 
+              v-if="isEditMode" 
+              v-model="editStatusConfig.code" 
+              type="textarea" 
+              placeholder="fieldName * 2" 
+              :rows="4"
+              required
+            ></el-input>
+            <!-- 新增模式 -->
+            <el-input 
+              v-else 
+              v-model="newStatusConfig.code" 
+              type="textarea" 
+              placeholder="sqrt(x * x + y * y) 或 abs(camera_angle)" 
+              :rows="4"
+              required
+            ></el-input>
+            <div class="code-hint">
+              提示：直接使用字段名访问数据（如camera_angle），支持常用数学函数或常量（如abs、sqrt、pow、sin、cos、tan、round、floor、ceil、max、min、PI、E）
+            </div>
           </el-form-item>
-          <el-form-item label="小数位数">
-            <el-input-number v-model="newStatusConfig.decimalPlaces" :min="0" :max="10" :step="1"></el-input-number>
+          
+          <!-- 小数位数表单项 -->
+          <el-form-item label="小数位数" prop="decimalPlaces">
+            <!-- 编辑模式 -->
+            <el-input-number 
+              v-if="isEditMode" 
+              v-model="editStatusConfig.decimalPlaces" 
+              :min="0" 
+              :max="10" 
+              :step="1"
+            ></el-input-number>
+            <!-- 新增模式 -->
+            <el-input-number 
+              v-else 
+              v-model="newStatusConfig.decimalPlaces" 
+              :min="0" 
+              :max="10" 
+              :step="1"
+            ></el-input-number>
           </el-form-item>
-          <el-form-item label="颜色">
-            <el-color-picker v-model="newStatusConfig.color" show-alpha></el-color-picker>
+
+          <!-- 颜色选择表单项 -->
+           <!-- 颜色选择功能以后再增加 -->
+          <el-form-item v-if="false" label="颜色" prop="color">
+            <!-- 编辑模式 -->
+            <el-color-picker 
+              v-if="isEditMode" 
+              v-model="editStatusConfig.color" 
+              show-alpha
+              :predefine="['#ff4500', '#ff8c00', '#ffd700', '#90ee90', '#00ced1', '#1e90ff', '#c71585', '#2c3e50']"
+            ></el-color-picker>
+            <!-- 新增模式 -->
+            <el-color-picker 
+              v-else 
+              v-model="newStatusConfig.color" 
+              show-alpha
+              :predefine="['#ff4500', '#ff8c00', '#ffd700', '#90ee90', '#00ced1', '#1e90ff', '#c71585', '#2c3e50']"
+            ></el-color-picker>
           </el-form-item>
         </el-form>
       </div>
-      
-      <div class="code-section">
-        <h4>高级代码定义（可选）</h4>
-        <div class="code-editor">
-          <el-input
-            type="textarea"
-            v-model="newStatusConfig.code"
-            placeholder="输入JavaScript代码定义新属性值，例如：
-    'flowData.' + fieldName + '[flowData.' + fieldName + '.length - 1] * 2'
-    或复杂计算：'Math.sqrt(flowData.x[flowData.x.length - 1] * flowData.x[flowData.x.length - 1] + flowData.y[flowData.y.length - 1] * flowData.y[flowData.y.length - 1])'"
-            :rows="4"
-          ></el-input>
-          <p class="code-hint">提示：使用'flowData'访问所有可用数据，'fieldName'为当前选择的字段名</p>
-        </div>
-      </div>
     </div>
     
+    <!-- 对话框底部的操作按钮 -->
     <template #footer>
       <span class="dialog-footer">
-        <el-button @click="showAddDialog = false">取消</el-button>
-        <el-button type="primary" @click="addNewStatus">确定</el-button>
+        <el-button @click="resetDialog">取消</el-button>
+        <el-button type="primary" @click="addNewStatus">确认</el-button>
       </span>
     </template>
   </el-dialog>
@@ -113,8 +193,24 @@ import { getMonitorStatus, showStatusBar } from '@/composables/useStatusManager'
 import { navMode } from '@/settings/config'
 import { useFlow } from '@/composables/flow/useFlow'
 import { useFlowStore } from '@/stores/flow'
-import { Plus, Close } from '@element-plus/icons-vue'
-import { ElDialog, ElButton, ElInput, ElForm, ElFormItem, ElColorPicker, ElInputNumber } from 'element-plus'
+// 4. 导入需要的图标
+import { Plus, Close, Edit, Delete } from '@element-plus/icons-vue'
+import { ElMessage, ElDialog, ElButton, ElInput, ElForm, ElFormItem, ElColorPicker, ElInputNumber, ElMessageBox } from 'element-plus'
+
+const editStatusConfig = ref<any>(null)
+const isEditMode = ref(false)
+
+// 添加编辑自定义状态的方法
+const editCustomStatus = (fieldName: string) => {
+  // 查找对应的自定义配置
+  const config = flowStore.customStatusConfigs.find(c => c.fieldName === fieldName)
+  if (config) {
+    // 复制配置到编辑对象
+    editStatusConfig.value = { ...config }
+    isEditMode.value = true
+    showAddDialog.value = true
+  }
+}
 
 const showComputedStatus = computed(() => {
   return navMode.funcMode === 'flow'
@@ -156,61 +252,113 @@ const availableFields = computed(() => {
         key !== 'timestamp' && 
         key !== 'isBatchData' && 
         key !== 'rawString' && 
+        key !== 'rawDataKeys' &&
         Array.isArray(flowData.value[key])) {
       fields.push(key)
     }
   })
-  console.log(fields)
   return fields
 })
 
+// 1. 修改 newStatusConfig 定义
 const newStatusConfig = ref({
   fieldName: '',
-  displayName: '',
   decimalPlaces: 2,
   color: '#2c3e50',
   code: ''
 })
 
+// 2. 修改 selectField 函数
 const selectField = (field: string) => {
   newStatusConfig.value.fieldName = field
-  // 默认使用字段名作为显示名称，用户可以修改
-  if (!newStatusConfig.value.displayName) {
-    newStatusConfig.value.displayName = field
-  }
 }
 
+// 3. 修改 addNewStatus 函数
 const addNewStatus = () => {
-  if (!newStatusConfig.value.displayName) {
-    // 至少需要设置显示名称
-    return
+  let config
+  if (isEditMode.value && editStatusConfig.value) {
+    // 编辑模式
+    config = editStatusConfig.value
+  } else {
+    // 新增模式
+    // 检查字段名是否为空
+    if (!newStatusConfig.value.fieldName) {
+      ElMessage.error('请输入字段名')
+      return
+    }
+
+    // 检查代码是否为空（设为必填项）
+    if (!newStatusConfig.value.code) {
+      ElMessage.error('请输入自定义计算代码')
+      return
+    }
+
+    if (flowData.value && flowData.value.rawDataKeys && flowData.value.rawDataKeys.includes(newStatusConfig.value.fieldName)) {
+      ElMessage.error('自定义字段名称与原始字段名重复')
+      return
+    }
+
+    config = {
+      fieldName: newStatusConfig.value.fieldName,
+      decimalPlaces: newStatusConfig.value.decimalPlaces,
+      color: newStatusConfig.value.color,
+      isCodeDefinition: true,
+      code: newStatusConfig.value.code
+    }
   }
-  
-  // 创建配置对象
-  const config = {
-    ...newStatusConfig.value,
-    // 如果有代码定义，则标记为代码类型
-    isCodeDefinition: !!newStatusConfig.value.code
-  }
-  
-  // 调用flowStore的方法添加新状态
-  if (flowStore.addCustomStatus) {
-    flowStore.addCustomStatus(config)
-  }
+
+  // 调用store的方法添加或更新配置
+  flowStore.addNewStatus({
+    fieldName: config.fieldName,
+    decimalPlaces: config.decimalPlaces,
+    color: config.color,
+    isCodeDefinition: config.isCodeDefinition !== false,
+    code: config.code
+  })
+
+  // 显示成功消息
+  ElMessage.success('状态' + (isEditMode.value ? '更新' : '添加') + '成功')
   
   // 关闭对话框并重置
   showAddDialog.value = false
   resetDialog()
 }
 
+// 4. 修改 resetDialog 函数
 const resetDialog = () => {
-  newStatusConfig.value = {
-    fieldName: '',
-    displayName: '',
-    decimalPlaces: 2,
-    color: '#2c3e50',
-    code: ''
+  if (isEditMode.value) {
+    editStatusConfig.value = null
+    isEditMode.value = false
+  } else {
+    newStatusConfig.value = {
+      fieldName: '',
+      decimalPlaces: 2,
+      color: '#2c3e50',
+      code: ''
+    }
   }
+  showAddDialog.value = false
+}
+
+const deleteCustomStatus = (fieldName: string) => {
+  // 弹出确认对话框
+  ElMessageBox.confirm(
+    `确定要删除自定义属性 "${fieldName}" 吗？`,
+    '确认删除',
+    {
+      confirmButtonText: '确定',
+      cancelButtonText: '取消',
+      type: 'warning'
+    }
+  ).then(() => {
+    // 调用store的方法删除配置
+    flowStore.removeCustomStatus(fieldName)
+    // 显示成功消息
+    ElMessage.success('自定义属性删除成功')
+  }).catch(() => {
+    // 用户取消删除
+    ElMessage.info('已取消删除')
+  })
 }
 
 const dockWidth = 200
@@ -647,12 +795,6 @@ onUnmounted(() => {
   margin-top: 10px;
 }
 
-.code-section {
-  margin-top: 20px;
-  padding-top: 20px;
-  border-top: 1px solid #e4e7ed;
-}
-
 .code-editor {
   margin-top: 10px;
 }
@@ -668,5 +810,6 @@ onUnmounted(() => {
   font-size: 12px;
   color: #909399;
   font-style: italic;
+  text-align: left;
 }
 </style>
