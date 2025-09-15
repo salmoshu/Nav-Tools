@@ -126,12 +126,12 @@
               v-else 
               v-model="newStatusConfig.code" 
               type="textarea" 
-              placeholder="sqrt(x * x + y * y) 或 abs(camera_angle)" 
+              placeholder="如 sqrt(x * x + y * y)、 abs(camera_angle)" 
               :rows="4"
               required
             ></el-input>
             <div class="code-hint">
-              提示：直接使用字段名访问数据（如camera_angle），支持常用数学函数或常量（如abs、sqrt、pow、sin、cos、tan、round、floor、ceil、max、min、PI、E）
+              说明：直接使用字段名访问数据（如camera_angle），支持常用数学函数或常量（如abs、sqrt、pow、sin、cos、tan、round、floor、ceil、max、min、PI、E）
             </div>
           </el-form-item>
           

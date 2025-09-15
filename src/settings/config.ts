@@ -3,16 +3,16 @@ import { toolBarIcon } from './icons'
 
 const appConfig: any = {
   robot: {
-    follow: createModuleItem({
-      title: 'Follow',
-      icon: toolBarIcon.follow,
-      action: ['data',],
-      props: {}
-    }),
     flow: createModuleItem({
       title: 'Flow',
       icon: toolBarIcon.default,
       action: ['data', 'console'],
+      props: {}
+    }),
+    follow: createModuleItem({
+      title: 'Follow',
+      icon: toolBarIcon.follow,
+      action: ['data',],
       props: {}
     }),
   },
