@@ -317,6 +317,15 @@ const chartRef = ref<HTMLDivElement>()
 let chart: echarts.ECharts | null = null
 let resizeObserver: ResizeObserver | null = null
 
+const largeDataOptions = {
+  showSymbol: false,
+  large: true,
+  largeThreshold: 5000,
+  progressive: 5000,
+  progressiveThreshold: 10000,
+  animation: false,
+}
+
 // 消息格式对话框相关
 const messageDialogVisible = ref(false)
 
@@ -460,12 +469,7 @@ function createChartOption() {
           symbolSize: 4,
           smooth: true,
           yAxisIndex: 0,
-          showSymbol: false,
-          large: true,
-          largeThreshold: 5000,
-          progressive: 5000,
-          progressiveThreshold: 10000,
-          animation: false,
+          ...largeDataOptions,
         }
       })
     } else {
@@ -482,12 +486,7 @@ function createChartOption() {
           symbolSize: 4,
           smooth: true,
           yAxisIndex: 0,
-          showSymbol: false,
-          large: true,
-          largeThreshold: 5000,
-          progressive: 5000,
-          progressiveThreshold: 10000,
-          animation: false,
+          ...largeDataOptions,
         }
       })
       
@@ -503,12 +502,7 @@ function createChartOption() {
           symbolSize: 4,
           smooth: true,
           yAxisIndex: 1,
-          showSymbol: false,
-          large: true,
-          largeThreshold: 5000,
-          progressive: 5000,
-          progressiveThreshold: 10000,
-          animation: false,
+          ...largeDataOptions,
         }
       })
       
@@ -583,12 +577,7 @@ function createChartOption() {
           symbolSize: 4,
           smooth: true,
           yAxisIndex: 0,
-          showSymbol: false,
-          large: true,
-          largeThreshold: 5000,
-          progressive: 5000,
-          progressiveThreshold: 10000,
-          animation: false,
+          ...largeDataOptions,
         }
       })
       
@@ -605,12 +594,7 @@ function createChartOption() {
           symbolSize: 4,
           smooth: true,
           yAxisIndex: 1,
-          showSymbol: false,
-          large: true,
-          largeThreshold: 5000,
-          progressive: 5000,
-          progressiveThreshold: 10000,
-          animation: false,
+          ...largeDataOptions,
         }
       }))
       
@@ -627,12 +611,7 @@ function createChartOption() {
           symbolSize: 4,
           smooth: true,
           yAxisIndex: 2,
-          showSymbol: false,
-          large: true,
-          largeThreshold: 5000,
-          progressive: 5000,
-          progressiveThreshold: 10000,
-          animation: false,
+          ...largeDataOptions,
         }
       })
       
@@ -649,12 +628,7 @@ function createChartOption() {
           symbolSize: 4,
           smooth: true,
           yAxisIndex: 3,
-          showSymbol: false,
-          large: true,
-          largeThreshold: 5000,
-          progressive: 5000,
-          progressiveThreshold: 10000,
-          animation: false,
+          ...largeDataOptions,
         }
       }))
     } else {
@@ -677,12 +651,7 @@ function createChartOption() {
           symbolSize: 4,
           smooth: true,
           yAxisIndex: 0,
-          showSymbol: false,
-          large: true,
-          largeThreshold: 5000,
-          progressive: 5000,
-          progressiveThreshold: 10000,
-          animation: false,
+          ...largeDataOptions,
         }
       })
       
@@ -695,19 +664,14 @@ function createChartOption() {
       : [];
       
       return {
-      name: source,
-      type: 'line',
-      data: seriesData,
-      symbolSize: 4,
-      smooth: true,
-      yAxisIndex: 1,
-      showSymbol: false,
-      large: true,
-      largeThreshold: 5000,
-      progressive: 5000,
-      progressiveThreshold: 10000,
-      animation: false,
-      }
+        name: source,
+        type: 'line',
+        data: seriesData,
+        symbolSize: 4,
+        smooth: true,
+        yAxisIndex: 1,
+        ...largeDataOptions,
+        }
       })
     }
     
@@ -790,24 +754,14 @@ function createChartOption() {
           ...series,
           gridIndex: 0,
           xAxisIndex: 0,
-          showSymbol: false,
-          large: true,
-          largeThreshold: 5000,
-          progressive: 5000,
-          progressiveThreshold: 10000,
-          animation: false,
+          ...largeDataOptions,
         })),
         // 下图表系列 - 添加gridIndex和xAxisIndex
         ...lowerSeries.map(series => ({
           ...series,
           gridIndex: 1,
           xAxisIndex: 1,
-          showSymbol: false,
-          large: true,
-          largeThreshold: 5000,
-          progressive: 5000,
-          progressiveThreshold: 10000,
-          animation: false,
+          ...largeDataOptions,
         }))
       ]
     }

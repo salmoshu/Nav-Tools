@@ -97,6 +97,9 @@ export function useFollow() {
     for (const line of lines) {
       if (line.trim() !== "") {
         try {
+          if (line.indexOf('{') === -1 || line.indexOf('}') === -1) {
+            continue
+          }
           const json = JSON.parse(line)
           const camera_distance = json.camera_distance
           const camera_angle = json.camera_angle
@@ -130,7 +133,7 @@ export function useFollow() {
             motorRightSpeed.value.push(motor_right_speed)
           }
         } catch (error) {
-          console.log('json解析失败', error)
+          // console.log('json解析失败', error)
         }
       }
     }

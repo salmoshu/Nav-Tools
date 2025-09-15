@@ -84,10 +84,10 @@ export function useFlow() {
     // 数据间隔超过1s则存储null作为分隔
     const now = Date.now() / 1000
     flowData.value.timestamps!.push(now - flowData.value.timestamp! - 0.5)
-    
+
     // 为所有数据字段添加null
     Object.keys(flowData.value).forEach(key => {
-      if (Array.isArray(flowData.value[key]) && key !== 'timestamps') {
+      if (Array.isArray(flowData.value[key]) && key !== 'timestamps' && key !== 'rawDataKeys') {
         (flowData.value[key] as any[]).push(null)
       }
     })
@@ -112,6 +112,9 @@ export function useFlow() {
     for (const line of lines) {
       if (line.trim() !== "") {
         try {
+          if (line.indexOf('{') === -1 || line.indexOf('}') === -1) {
+            continue
+          }
           const json = JSON.parse(line)
           
           // 自适应添加新的数据源字段
@@ -134,6 +137,7 @@ export function useFlow() {
               flowData.value.timestamp = now
             }
             const lastTimestamp = (flowData.value.timestamp ?? 0) + (flowData.value.timestamps?.[flowData.value.timestamps.length - 1] ?? 0)
+
             if (lastTimestamp && now - lastTimestamp > 1) {
               addNullData()
             }
@@ -143,12 +147,7 @@ export function useFlow() {
           // 存储数据
           Object.keys(json).forEach(key => {
             if (key !== 'time' && Array.isArray(flowData.value[key])) {
-              // 对特定字段进行类型转换
-              if (key === 'pid_left_speed' || key === 'pid_right_speed') {
-                (flowData.value[key] as any[]).push(Number(json[key]))
-              } else {
-                (flowData.value[key] as any[]).push(json[key])
-              }
+              (flowData.value[key] as any[]).push(json[key])
             }
           })
         } catch (error) {
