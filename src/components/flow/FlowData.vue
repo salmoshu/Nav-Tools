@@ -39,7 +39,7 @@
   >
     <div class="dialog-content, message-content">
       <p><strong>数据说明：</strong></p>
-      <p>数据主要采用JSON格式，并以换行符分隔。每行一个JSON对象，每个JSON对象包含以下字段：</p>
+      <p>数据主要采用JSON格式，并以换行符分隔。每行一个JSON对象，每个JSON对象可以灵活配置字段。</p>
       <el-divider></el-divider>
       <p><strong>示例数据：</strong></p>
       <pre class="example-code">
@@ -253,7 +253,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch } from 'vue'
+import { ref, onMounted, onUnmounted, watch, computed } from 'vue'
 import * as echarts from 'echarts'
 import { useFlow } from '@/composables/flow/useFlow'
 import { useDataConfig } from '@/composables/flow/useDataConfig'
@@ -263,7 +263,7 @@ import { ElMessage } from 'element-plus'
 const { flowData, initRawData, clearRawData, saveData } = useFlow()
 
 // 初始化视图配置处理
-const {
+const { 
   // 状态变量
   viewConfigDialogVisible,
   viewLayout,
@@ -317,6 +317,21 @@ const chartRef = ref<HTMLDivElement>()
 let chart: echarts.ECharts | null = null
 let resizeObserver: ResizeObserver | null = null
 
+const largeDataOptions = computed(() => {
+  if (flowData.value.timestamps && flowData.value.timestamps.length > 500) {
+    return {
+      showSymbol: false,
+      large: true,
+      largeThreshold: 5000,
+      progressive: 5000,
+      progressiveThreshold: 10000,
+      animation: false,
+    }
+  } else {
+    return {}
+  }
+})
+
 // 消息格式对话框相关
 const messageDialogVisible = ref(false)
 
@@ -351,10 +366,21 @@ const handleFileUpload = (event: Event) => {
   }
 }
 
-// 清除数据
+// 首先在导入部分添加clearAllCustomStatus
+import { useFlowStore } from '@/stores/flow'
+
+// 在script setup中初始化store
+const flowStore = useFlowStore()
+
+// 修改clearPlotData函数
 function clearPlotData() {
+  // 清除所有自定义属性
+  flowStore.clearAllCustomStatus()
+  // 清除原始数据
   clearRawData()
+  // 重新创建图表
   createChart()
+  // 显示成功消息
   ElMessage.success('数据已清除')
 }
 
@@ -383,10 +409,29 @@ function updateChart() {
         formatter: (params: any) => {
           if (params.length === 0) return ''
           
-          let result = `时间: ${params[0].data[0].toFixed(2)}s<br/>`
+          // 安全处理时间戳
+          let result = `时间: `
+          if (params[0] && params[0].data && params[0].data[0] !== null) {
+            if (typeof params[0].data[0] === 'number') {
+              result += `${params[0].data[0].toFixed(2)}s`
+            } else {
+              result += `${params[0].data[0]}s`
+            }
+          } else {
+            result += `0.00s`
+          }
+          result += `<br/>`
+          
+          // 安全处理每个参数值
           params.forEach((param: any) => {
-            if (param.data[1] !== null) {
-              result += `${param.marker}${param.seriesName}: ${param.data[1].toFixed(2)}<br/>`
+            if (param && param.data && param.data[1] !== null) {
+              result += `${param.marker}${param.seriesName}: `
+              if (typeof param.data[1] === 'number') {
+                result += `${param.data[1].toFixed(2)}`
+              } else {
+                result += `${param.data[1]}`
+              }
+              result += `<br/>`
             }
           })
           return result
@@ -429,7 +474,8 @@ function createChartOption() {
           data: seriesData,
           symbolSize: 4,
           smooth: true,
-          yAxisIndex: 0
+          yAxisIndex: 0,
+          ...largeDataOptions.value,
         }
       })
     } else {
@@ -445,7 +491,8 @@ function createChartOption() {
           data: seriesData,
           symbolSize: 4,
           smooth: true,
-          yAxisIndex: 0
+          yAxisIndex: 0,
+          ...largeDataOptions.value,
         }
       })
       
@@ -460,7 +507,8 @@ function createChartOption() {
           data: seriesData,
           symbolSize: 4,
           smooth: true,
-          yAxisIndex: 1
+          yAxisIndex: 1,
+          ...largeDataOptions.value,
         }
       })
       
@@ -534,7 +582,8 @@ function createChartOption() {
           data: seriesData,
           symbolSize: 4,
           smooth: true,
-          yAxisIndex: 0  // 上图表左侧Y轴
+          yAxisIndex: 0,
+          ...largeDataOptions.value,
         }
       })
       
@@ -550,7 +599,8 @@ function createChartOption() {
           data: seriesData,
           symbolSize: 4,
           smooth: true,
-          yAxisIndex: 1  // 上图表右侧Y轴
+          yAxisIndex: 1,
+          ...largeDataOptions.value,
         }
       }))
       
@@ -566,7 +616,8 @@ function createChartOption() {
           data: seriesData,
           symbolSize: 4,
           smooth: true,
-          yAxisIndex: 2  // 下图表左侧Y轴
+          yAxisIndex: 2,
+          ...largeDataOptions.value,
         }
       })
       
@@ -582,15 +633,22 @@ function createChartOption() {
           data: seriesData,
           symbolSize: 4,
           smooth: true,
-          yAxisIndex: 3  // 下图表右侧Y轴
+          yAxisIndex: 3,
+          ...largeDataOptions.value,
         }
       }))
     } else {
       // 双图单Y轴模式
+      // 在FlowData.vue文件中找到并修改所有类似以下的代码段
+      // 以下是一个示例修改，需要对所有使用map的地方都进行类似处理
+      
+      // 双图单Y轴模式 - 上图表
       upperSeries = upperChartSources.value.map((source) => {
-        const seriesData = (flowData.value[source] as any[]).map((value: any, idx: number) => [
-          flowData.value.timestamps![idx], value
-        ])
+        // 添加安全检查
+        const sourceData = flowData.value[source];
+        const seriesData = Array.isArray(sourceData) 
+        ? sourceData.map((value: any, idx: number) => [flowData.value.timestamps![idx], value])
+        : [];
         
         return {
           name: source,
@@ -598,22 +656,27 @@ function createChartOption() {
           data: seriesData,
           symbolSize: 4,
           smooth: true,
-          yAxisIndex: 0
+          yAxisIndex: 0,
+          ...largeDataOptions.value,
         }
       })
       
+      // 双图单Y轴模式 - 下图表
       lowerSeries = lowerChartSources.value.map((source) => {
-        const seriesData = (flowData.value[source] as any[]).map((value: any, idx: number) => [
-          flowData.value.timestamps![idx], value
-        ])
-        
-        return {
-          name: source,
-          type: 'line',
-          data: seriesData,
-          symbolSize: 4,
-          smooth: true,
-          yAxisIndex: 1
+      // 添加安全检查
+      const sourceData = flowData.value[source];
+      const seriesData = Array.isArray(sourceData) 
+      ? sourceData.map((value: any, idx: number) => [flowData.value.timestamps![idx], value])
+      : [];
+      
+      return {
+        name: source,
+        type: 'line',
+        data: seriesData,
+        symbolSize: 4,
+        smooth: true,
+        yAxisIndex: 1,
+        ...largeDataOptions.value,
         }
       })
     }
@@ -646,10 +709,29 @@ function createChartOption() {
         formatter: (params: any) => {
           if (params.length === 0) return ''
           
-          let result = `时间: ${params[0].data[0].toFixed(2)}s<br/>`
+          // 安全处理时间戳
+          let result = `时间: `
+          if (params[0] && params[0].data && params[0].data[0] !== null) {
+            if (typeof params[0].data[0] === 'number') {
+              result += `${params[0].data[0].toFixed(2)}s`
+            } else {
+              result += `${params[0].data[0]}s`
+            }
+          } else {
+            result += `0.00s`
+          }
+          result += `<br/>`
+          
+          // 安全处理每个参数值
           params.forEach((param: any) => {
-            if (param.data[1] !== null) {
-              result += `${param.marker}${param.seriesName}: ${param.data[1].toFixed(2)}<br/>`
+            if (param && param.data && param.data[1] !== null) {
+              result += `${param.marker}${param.seriesName}: `
+              if (typeof param.data[1] === 'number') {
+                result += `${param.data[1].toFixed(2)}`
+              } else {
+                result += `${param.data[1]}`
+              }
+              result += `<br/>`
             }
           })
           return result
@@ -677,13 +759,15 @@ function createChartOption() {
         ...upperSeries.map(series => ({
           ...series,
           gridIndex: 0,
-          xAxisIndex: 0
+          xAxisIndex: 0,
+          ...largeDataOptions.value,
         })),
         // 下图表系列 - 添加gridIndex和xAxisIndex
         ...lowerSeries.map(series => ({
           ...series,
           gridIndex: 1,
-          xAxisIndex: 1
+          xAxisIndex: 1,
+          ...largeDataOptions.value,
         }))
       ]
     }

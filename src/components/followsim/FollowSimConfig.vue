@@ -55,7 +55,7 @@
 <script lang="ts" setup>
 import { watch, onMounted, onUnmounted, toRaw } from 'vue'
 import { storeToRefs } from 'pinia'
-import { useFollowStore } from '@/stores/follow'
+import { useFollowStore } from '@/stores/followsim'
 
 const followStore = useFollowStore()
 const { config } = storeToRefs(followStore)

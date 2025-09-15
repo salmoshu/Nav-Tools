@@ -3,17 +3,15 @@ import { toolBarIcon } from './icons'
 
 const appConfig: any = {
   robot: {
-    follow: createModuleItem({
-      title: 'Follow',
-      icon: toolBarIcon.follow,
-      // follow/FollowData.vue
-      action: ['data',],
-      props: {}
-    }),
     flow: createModuleItem({
       title: 'Flow',
       icon: toolBarIcon.default,
-      // flow/FlowData.vue
+      action: ['data', 'console'],
+      props: {}
+    }),
+    follow: createModuleItem({
+      title: 'Follow',
+      icon: toolBarIcon.follow,
       action: ['data',],
       props: {}
     }),
@@ -22,7 +20,6 @@ const appConfig: any = {
     ultrasonic: createModuleItem({
       title: 'Ultrasonic',
       icon: toolBarIcon.ultrasonic,
-      // ultrasonic/UltrasonicData.vue
       action: ['data',],
       props: {}
     }),
@@ -31,28 +28,18 @@ const appConfig: any = {
     gnss: createModuleItem({
       title: 'Gnss',
       icon: toolBarIcon.gnss,
-      // gnss/GnssConsole.vue
-      // gnss/GnssDeviation.vue
-      // gnss/GnssSignal.vue
-      // gnss/GnssSky.vue
       action: ['console', 'deviation', 'signal', 'sky'],
       props: {}
     }),
     imu: createModuleItem({
       title: 'Imu',
       icon: toolBarIcon.imu,
-      // imu/ImuDraw.vue
-      // imu/ImuData.vue
-      // imu/ImuConfig.vue
       action: ['draw', 'data', 'config'],
       props: {}
     }),
     vision: createModuleItem({
       title: 'Vision',
       icon: toolBarIcon.vision,
-      // vision/VisionDraw.vue
-      // vision/VisionData.vue
-      // vision/VisionConfig.vue
       action: ['draw', 'data', 'config'],
       props: {}
     }),
@@ -61,18 +48,12 @@ const appConfig: any = {
     followsim: createModuleItem({
       title: 'FollowSim',
       icon: toolBarIcon.follow,
-      // followsim/FollowSimDashboard.vue
-      // followsim/FollowSimMotion.vue
-      // followsim/FollowSimConfig.vue
       action: ['dashboard', 'motion', 'config'],
       props: {}
     }),
     tree: createModuleItem({
       title: 'Tree',
       icon: toolBarIcon.tree,
-      // tree/TreeDraw.vue
-      // tree/TreeData.vue
-      // tree/TreeConfig.vue
       action: ['draw', 'data', 'config'],
       props: {}
     }),

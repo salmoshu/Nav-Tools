@@ -1,4 +1,3 @@
-// src/stores/follow.ts
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 
@@ -42,7 +41,7 @@ export interface SystemStatus {
 }
 
 // 最基础的store定义
-export const useFollowStore = defineStore('follow', () => {
+export const useFollowStore = defineStore('followsim', () => {
   // 状态数据（最基础的数据存储）
   const status = ref<SystemStatus>({
     isRunning: true,

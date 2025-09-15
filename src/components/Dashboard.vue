@@ -205,7 +205,7 @@ const {
 const toolbarPosition = ref<'top' | 'right' | 'bottom' | 'left'>('top')
 const statusbarPosition = ref<'left' | 'right'>('right')
 const toolbarSize = ref({ width: 40, height: 40 })
-const statusbarSize = ref({ width: 150, height: 60 })
+const statusbarSize = ref({ width: 200, height: 60 })
 
 // 提供工具栏和状态栏位置的响应式引用
 provide('toolbarPosition', toolbarPosition)

@@ -9,12 +9,14 @@ const flowData = ref<{
   timestamp?: number
   isBatchData?: boolean
   rawString?: string
+  rawDataKeys?: string[]
   [key: string]: any[] | number | string | boolean | undefined
 }>({
   timestamps: [],
   timestamp: 0,
   isBatchData: false,
-  rawString: ''
+  rawString: '',
+  rawDataKeys: []
 })
 
 export function useFlow() {
@@ -24,7 +26,8 @@ export function useFlow() {
       timestamps: [],
       timestamp: 0,
       isBatchData: false,
-      rawString: ''
+      rawString: '',
+      rawDataKeys: []
     }
   }
 
@@ -47,6 +50,7 @@ export function useFlow() {
           Object.keys(json).forEach(key => {
             if (!(key in flowData.value) && key !== 'time') {
               flowData.value[key] = []
+              flowData.value.rawDataKeys!.push(key)
             }
           })
           
@@ -58,7 +62,7 @@ export function useFlow() {
             }
             flowData.value.timestamps!.push(Number(json.time) - flowData.value.timestamp!)
           } else {
-            // 如果没有time属性，则假设数据为20Hz
+            // 如果没有time属性，则假设数据为1/dt Hz
             flowData.value.timestamps!.push(flowData.value.timestamp!)
             flowData.value.timestamp! += dt
           }
@@ -66,12 +70,7 @@ export function useFlow() {
           // 存储数据
           Object.keys(json).forEach(key => {
             if (key !== 'time' && Array.isArray(flowData.value[key])) {
-              // 对特定字段进行类型转换
-              if (key === 'pid_left_speed' || key === 'pid_right_speed') {
-                (flowData.value[key] as any[]).push(Number(json[key]))
-              } else {
-                (flowData.value[key] as any[]).push(json[key])
-              }
+              (flowData.value[key] as any[]).push(json[key])
             }
           })
         } catch (error) {
@@ -85,10 +84,10 @@ export function useFlow() {
     // 数据间隔超过1s则存储null作为分隔
     const now = Date.now() / 1000
     flowData.value.timestamps!.push(now - flowData.value.timestamp! - 0.5)
-    
+
     // 为所有数据字段添加null
     Object.keys(flowData.value).forEach(key => {
-      if (Array.isArray(flowData.value[key]) && key !== 'timestamps') {
+      if (Array.isArray(flowData.value[key]) && key !== 'timestamps' && key !== 'rawDataKeys') {
         (flowData.value[key] as any[]).push(null)
       }
     })
@@ -113,6 +112,9 @@ export function useFlow() {
     for (const line of lines) {
       if (line.trim() !== "") {
         try {
+          if (line.indexOf('{') === -1 || line.indexOf('}') === -1) {
+            continue
+          }
           const json = JSON.parse(line)
           
           // 自适应添加新的数据源字段
@@ -135,6 +137,7 @@ export function useFlow() {
               flowData.value.timestamp = now
             }
             const lastTimestamp = (flowData.value.timestamp ?? 0) + (flowData.value.timestamps?.[flowData.value.timestamps.length - 1] ?? 0)
+
             if (lastTimestamp && now - lastTimestamp > 1) {
               addNullData()
             }
@@ -144,16 +147,11 @@ export function useFlow() {
           // 存储数据
           Object.keys(json).forEach(key => {
             if (key !== 'time' && Array.isArray(flowData.value[key])) {
-              // 对特定字段进行类型转换
-              if (key === 'pid_left_speed' || key === 'pid_right_speed') {
-                (flowData.value[key] as any[]).push(Number(json[key]))
-              } else {
-                (flowData.value[key] as any[]).push(json[key])
-              }
+              (flowData.value[key] as any[]).push(json[key])
             }
           })
         } catch (error) {
-          console.log('json解析失败', error)
+          // console.log('json解析失败', error)
         }
       }
     }
@@ -166,6 +164,7 @@ export function useFlow() {
       key !== 'timestamp' && 
       key !== 'isBatchData' && 
       key !== 'rawString' && 
+      key !== 'rawDataKeys' && 
       Array.isArray(flowData.value[key])
     )
     
@@ -183,6 +182,7 @@ export function useFlow() {
             key !== 'timestamp' && 
             key !== 'isBatchData' && 
             key !== 'rawString' && 
+            key !== 'rawDataKeys' && 
             Array.isArray(flowData.value[key])) {
           item[key] = flowData.value[key]![index]
         }
