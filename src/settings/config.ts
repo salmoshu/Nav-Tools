@@ -58,38 +58,38 @@ const appConfig: any = {
     //   props: {}
     // }),
   },
-  // example: {
-  //   demo1: createModuleItem({
-  //     title: 'Demo1',
-  //     icon: toolBarIcon.default,
-  //     // demo1/Demo1Draw.vue
-  //     // demo1/Demo1Data.vue
-  //     // demo1/Demo1Config.vue
-  //     action: ['draw', 'data', 'config'],
-  //     props: {
-  //       status: {
-  //         str: 'Nav-Tools',
-  //         num: 2,
-  //       },
-  //       config: {
-  //         'Shirt': 5,
-  //         'Wool Sweater': 20,
-  //         'Pants': 10,
-  //         'High Hells': 10,
-  //         'Socks': 20,
-  //       },
-  //     }
-  //   }),
-  //   demo2: createModuleItem({
-  //     title: 'Demo2',
-  //     icon: toolBarIcon.default,
-  //     // demo2/Demo2Draw.vue
-  //     // demo2/Demo2Data.vue
-  //     // demo2/Demo2Config.vue
-  //     action: ['draw', 'data', 'config'],
-  //     props: {}
-  //   }),
-  // },
+  example: {
+    demo1: createModuleItem({
+      title: 'Demo1',
+      icon: toolBarIcon.default,
+      // demo1/Demo1Draw.vue
+      // demo1/Demo1Data.vue
+      // demo1/Demo1Config.vue
+      action: ['draw', 'data', 'config'],
+      props: {
+        status: {
+          str: 'Nav-Tools',
+          num: 2,
+        },
+        config: {
+          'Shirt': 5,
+          'Wool Sweater': 20,
+          'Pants': 10,
+          'High Hells': 10,
+          'Socks': 20,
+        },
+      }
+    }),
+    // demo2: createModuleItem({
+    //   title: 'Demo2',
+    //   icon: toolBarIcon.default,
+    //   // demo2/Demo2Draw.vue
+    //   // demo2/Demo2Data.vue
+    //   // demo2/Demo2Config.vue
+    //   action: ['draw', 'data', 'config'],
+    //   props: {}
+    // }),
+  },
 } as const
 
 interface ModuleItem {
