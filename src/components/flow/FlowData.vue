@@ -5,7 +5,7 @@
         <!-- 左侧按钮 -->
         <div class="left-buttons">
           <el-button type="primary" size="small" @click="showViewConfig" class="layout-btn">
-            视图配置
+            数据配置
           </el-button>
           <el-button type="default" size="small" @click="showMessageFormat" class="message-btn">
             消息格式

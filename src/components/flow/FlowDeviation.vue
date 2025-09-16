@@ -3,13 +3,16 @@
     <div class="control-panel" :class="{ 'control-panel-fullscreen': isFullScreen }">
       <div class="controls">
         <el-switch v-model="isTracking" @change="toggleTracking" class="tracking-switch" />
-        <span class="switch-label">实时追踪</span>
-        <el-button type="primary" size="small" @click="resetZoom" class="control-btn zoom-btn">重置</el-button>
-        <el-button type="primary" size="small" @click="clearTrack" class="control-btn clear-btn">清除轨迹</el-button>
+        <span class="switch-label">追踪</span>
+
+        <!-- 添加视图配置按钮 -->
+        <el-button type="primary" size="small" @click="showViewConfig" class="control-btn config-btn">
+          数据配置
+        </el-button>
         
         <!-- 添加轨迹点尺寸调节滑块 -->
         <div class="point-size-control">
-          <span class="size-label">轨迹尺寸:</span>
+          <span class="size-label">尺寸:</span>
           <el-slider
             v-model="pointSize"
             :min="5"
@@ -21,38 +24,56 @@
           <span class="size-value">{{ pointSize }}</span>
         </div>
         
-        <el-button type="default" size="small" @click="toggleFullScreen" class="fullscreen-btn">
-          <el-icon @click="toggleFullScreenInfo" v-if="!isFullScreen"><Expand /></el-icon>
-          <el-icon v-else><FullScreen /></el-icon>
-        </el-button>
+        <!-- 将重置、清除和全屏按钮放在右侧 -->
+        <div class="right-buttons">
+          <el-button type="default" size="small" @click="resetZoom" class="zoom-btn">重置</el-button>
+          <el-button type="default" size="small" @click="clearTrack" class="clear-btn">清除</el-button>
+          <el-button type="default" size="small" @click="toggleFullScreen" class="fullscreen-btn">
+            <el-icon @click="toggleFullScreenInfo" v-if="!isFullScreen"><Expand /></el-icon>
+            <el-icon v-else><FullScreen /></el-icon>
+          </el-button>
+        </div>
       </div>
     </div>
-    <div class="chart-container" :class="{ 'full-screen': isFullScreen }">
+    <div class="chart-container" :class="{ 'full-screen': isFullScreen }" ref="chartContainerRef">
+      <!-- 移除正方形包装器，让图表直接填充容器 -->
       <div ref="chartRef" class="chart"></div>
-      <div class="ruler">
-        <span>{{ rulerText }}</span>
-        <svg
-          t="1678949672043"
-          class="ruler-icon"
-          viewBox="0 0 2024 1024"
-          version="1.1"
-          xmlns="http://www.w3.org/2000/svg"
-          width="40"
-          height="20"
-        >
-          <path
-            d="m1976.42566,586.88647l-1927.29435,0l0,-148.94546l107.75434,0l0,97.22828l1711.78564,0l0,-97.33171l107.75436,0l0,149.04889zm0,0"
-            fill="#324558"
-          ></path>
-        </svg>
-      </div>
     </div>
   </div>
+
+  <!-- 视图配置对话框 -->
+  <el-dialog
+    v-model="viewConfigDialogVisible"
+    width="400px"
+    destroy-on-close
+  >
+    <div class="dialog-content">
+      <div style="margin-bottom: 20px;">
+        <span style="display: inline-block; width: 100px;">X轴字段：</span>
+        <el-select v-model="selectedXField" placeholder="选择X轴字段" style="width: 200px;">
+          <el-option label="" value=""></el-option>
+          <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
+        </el-select>
+      </div>
+      
+      <div style="margin-bottom: 20px;">
+        <span style="display: inline-block; width: 100px;">Y轴字段：</span>
+        <el-select v-model="selectedYField" placeholder="选择Y轴字段" style="width: 200px;">
+          <el-option label="" value=""></el-option>
+          <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
+        </el-select>
+      </div>
+    </div>
+    <template #footer>
+      <el-button @click="viewConfigDialogVisible = false">取消</el-button>
+      <el-button type="primary" @click="applyViewConfig">确定</el-button>
+    </template>
+  </el-dialog>
 </template>
 
 <script setup>
 import * as echarts from 'echarts';
-import { ref, onMounted, onUnmounted, watch, nextTick } from 'vue';
+import { ref, onMounted, onUnmounted, watch, nextTick, computed } from 'vue';
 import { useFlow } from '../../composables/flow/useFlow';
 import { Expand, FullScreen } from '@element-plus/icons-vue';
 import { ScatterChart } from 'echarts/charts';
@@ -68,12 +89,25 @@ echarts.use([ScatterChart, GridComponent, CanvasRenderer]);
 // DOM引用和响应式变量
 const chartRef = ref(null);
 const chartInstance = ref(null);
+const chartContainerRef = ref(null); // 添加容器引用
 const isTracking = ref(true);
 const isFullScreen = ref(false);
 const rulerText = ref('');
 const padding = ref(10000); // 默认正负10km
 const pointSize = ref(10); // 初始值与图表配置一致
 const chartDom = ref(null); // 添加chartDom引用
+// 移除squareSize变量
+
+// 视图配置相关变量
+const viewConfigDialogVisible = ref(false);
+const selectedXField = ref('');
+const selectedYField = ref('');
+
+// 计算可用数据源
+const availableSources = computed(() => {
+  if (!flowData.value || !flowData.value.timestamps) return [];
+  return Object.keys(flowData.value).filter(key => key !== 'timestamps' && key !== 'timestamp' && flowData.value[key].length > 0);
+});
 
 // 数据存储变量
 let trackData = [];
@@ -82,13 +116,50 @@ const maxTrackPoints = 3600 * 12;
 let resizeObserver = null;
 const minPadding = 10000; // 最小范围正负10km
 
-// 生成随机数据的函数
-function generateRandomData() {
-  // 使用简单的正弦曲线加上随机扰动作为假数据
-  const now = Date.now() / 1000;
-  const x = Math.sin(now * 0.2) * 100 + (Math.random() - 0.5) * 100;
-  const y = Math.cos(now * 0.2) * 100 + (Math.random() - 0.5) * 100;
-  return [x, y];
+// 显示视图配置对话框
+function showViewConfig() {
+  viewConfigDialogVisible.value = true;
+}
+
+// 应用视图配置
+function applyViewConfig() {
+  if (!selectedXField.value || !selectedYField.value) {
+    ElMessage.warning('请选择X轴和Y轴字段');
+    return;
+  }
+  
+  // 清除现有轨迹数据
+  trackData = [];
+  
+  // 更新图表
+  if (chartInstance.value) {
+    chartInstance.value.setOption({
+      xAxis: {
+        name: selectedXField.value
+      },
+      yAxis: {
+        name: selectedYField.value
+      }
+    });
+  }
+  
+  viewConfigDialogVisible.value = false;
+  ElMessage.success('视图配置已应用');
+}
+
+// 计算正方形尺寸
+function calculateSquareSize() {
+  if (!chartContainerRef.value) return;
+  
+  // 获取容器可用尺寸
+  const containerWidth = chartContainerRef.value.clientWidth;
+  const containerHeight = chartContainerRef.value.clientHeight;
+  
+  // 计算最大可能的正方形尺寸，取宽和高中的较小值
+  const size = Math.min(containerWidth, containerHeight);
+  
+  // 设置正方形尺寸
+  // squareSize.value = size;
 }
 
 // 设置调整大小观察器
@@ -103,11 +174,14 @@ function setupResizeObserver() {
           // 确保series中没有错误的coordinateSystem配置
           option.series = option.series.map(series => ({
             ...series,
-            // 移除可能导致问题的coordinateSystem配置，让ECharts自动处理
             coordinateSystem: "cartesian2d"
           }));
           chartInstance.value.setOption(option, false);
         }
+        
+        // 计算并设置等宽坐标轴
+        maintainEqualAxisScale();
+        
         chartInstance.value.resize();
       }
     });
@@ -115,6 +189,10 @@ function setupResizeObserver() {
   const parentElement = chartRef.value.parentElement;
   if (parentElement) {
     resizeObserver.observe(parentElement);
+  }
+  // 同时观察容器元素
+  if (chartContainerRef.value) {
+    resizeObserver.observe(chartContainerRef.value);
   }
 }
 
@@ -173,9 +251,11 @@ function initChart() {
       trigger: 'axis',
       formatter: function(params) {
         const point = params[0].value;
-        return `位置: (${point[0].toFixed(2)}, ${point[1].toFixed(2)}) m`;
+        const xField = selectedXField.value || 'X';
+        const yField = selectedYField.value || 'Y';
+        return `${xField}: ${point[0].toFixed(2)}<br/>${yField}: ${point[1].toFixed(2)}`;
       },
-      show: false,
+      show: true,
     },
     legend: {
       data: [
@@ -202,12 +282,12 @@ function initChart() {
     dataZoom: getDataZoomConfig(-10, 10, -10, 10),
     xAxis: {
       type: 'value',
-      name: '',
+      name: selectedXField.value || '',
       nameLocation: 'middle',
       nameGap: 30,
       axisLabel: {
         formatter: function(value) {
-          return value.toFixed(2) + ' m';
+          return value.toFixed(2);
         },
       },
       splitLine: {
@@ -224,12 +304,12 @@ function initChart() {
     },
     yAxis: {
       type: 'value',
-      name: '',
+      name: selectedYField.value || '',
       nameLocation: 'middle',
       nameGap: 40,
       axisLabel: {
         formatter: function(value) {
-          return value.toFixed(2) + ' m';
+          return value.toFixed(2);
         },
       },
       splitLine: {
@@ -276,47 +356,6 @@ function initChart() {
 
   chartInstance.value.setOption(option);
   setupResizeObserver();
-
-  chartInstance.value.on('datazoom', () => {
-    nextTick(() => {
-      const opt = chartInstance.value.getOption();
-      let xMin = opt.xAxis[0].min;
-      let xMax = opt.xAxis[0].max;
-      let yMin = opt.yAxis[0].min;
-      let yMax = opt.yAxis[0].max;
-
-      // 计算并更新 padding
-      const xRange = xMax - xMin;
-      const yRange = yMax - yMin;
-      padding.value = Math.max(minPadding, (xRange + yRange) / 4); // 取平均范围的一半
-
-      // 强制居中
-      const xCenter = (xMin + xMax) / 2;
-      const xShift = xCenter - 0;
-      xMin -= xShift;
-      xMax -= xShift;
-
-      const yCenter = (yMin + yMax) / 2;
-      const yShift = yCenter - 0;
-      yMin -= yShift;
-      yMax -= yShift;
-
-      // 确保最小范围
-      if (xMax - xMin < minPadding * 2) {
-        xMin = -padding.value;
-        xMax = padding.value;
-      }
-      if (yMax - yMin < minPadding * 2) {
-        yMin = -padding.value;
-        yMax = padding.value;
-      }
-
-      chartInstance.value.setOption({
-        xAxis: { min: xMin, max: xMax },
-        yAxis: { min: yMin, max: yMax },
-      });
-    });
-  });
 
   // 直接在DOM元素上绑定事件监听器
   chartDom.value = chartInstance.value.getDom();
@@ -379,30 +418,33 @@ function handleWheel(e) {
   return false;
 };
 
-// 更新数据点
+// 更新数据点 - 使用真实数据而不是随机数据
 function updateFlowData() {
-  const [x, y] = generateRandomData();
+  // 只有在选择了X轴和Y轴字段后才处理数据
+  if (!selectedXField.value || !selectedYField.value) {
+    return;
+  }
+  
+  // 从flowData中获取最新数据
+  const xData = flowData.value[selectedXField.value];
+  const yData = flowData.value[selectedYField.value];
+  
+  if (!xData || !yData || xData.length === 0 || yData.length === 0) {
+    return;
+  }
+  
+  // 获取最新的数据点
+  const latestIndex = Math.min(xData.length - 1, yData.length - 1);
+  const x = xData[latestIndex];
+  const y = yData[latestIndex];
+  
+  // 确保数据是有效的数字
+  if (typeof x !== 'number' || typeof y !== 'number' || isNaN(x) || isNaN(y)) {
+    return;
+  }
+  
   const roundedX = Math.round(x * 1000) / 1000;
   const roundedY = Math.round(y * 1000) / 1000;
-
-  // 存储到flowData中
-//   if (!flowData.value.x) {
-//     flowData.value.x = [];
-//   }
-//   if (!flowData.value.y) {
-//     flowData.value.y = [];
-//   }
-//   if (!flowData.value.timestamps) {
-//     flowData.value.timestamps = [];
-//   }
-  
-//   const now = Date.now() / 1000;
-//   if (flowData.value.timestamp === 0) {
-//     flowData.value.timestamp = now - 0.0005;
-//   }
-//   flowData.value.timestamps.push(now - flowData.value.timestamp);
-//   flowData.value.x.push(roundedX);
-//   flowData.value.y.push(roundedY);
 
   // 添加到轨迹数据
   trackData.push([roundedX, roundedY]);
@@ -418,6 +460,8 @@ function updateFlowData() {
 
 // 更新图表显示
 function updateChartDisplay() {
+  if (!chartInstance.value) return;
+  
   let displayTrackData = [...trackData];
   let currentDisplayPoint = trackData.length > 0 ? [...trackData[trackData.length - 1]] : [];
 
@@ -429,41 +473,57 @@ function updateChartDisplay() {
     currentDisplayPoint = [0, 0];
   }
 
-  if (chartInstance.value) {
-    chartInstance.value.setOption({
-      series: [
-        {
-          name: '历史轨迹',
-          data: displayTrackData,
-          symbolSize: pointSize.value,
-          itemStyle: {
-            color: '#4e6ef2',
-            opacity: 0.6,
-          },
+  chartInstance.value.setOption({
+    series: [
+      {
+        name: '历史轨迹',
+        data: displayTrackData,
+        symbolSize: pointSize.value,
+        itemStyle: {
+          color: '#4e6ef2',
+          opacity: 0.6,
         },
-        {
-          name: '当前位置',
-          data: currentDisplayPoint.length > 0 ? [currentDisplayPoint] : [],
-          symbolSize: pointSize.value * 1.2,
-          itemStyle: {
-            color: '#ff4d4f', // 内部填充色
-            borderWidth: 2,   // 边框总宽度
-            borderColor: '#fff', // 外层边框颜色
-            borderType: 'solid',
-            shadowColor: '#222', // 内层边框颜色
-            shadowOffsetX: 0,
-            shadowOffsetY: 0,
-            shadowBlur: 2
-          },
+      },
+      {
+        name: '当前位置',
+        data: currentDisplayPoint.length > 0 ? [currentDisplayPoint] : [],
+        symbolSize: pointSize.value * 1.2,
+        itemStyle: {
+          color: '#ff4d4f', // 内部填充色
+          borderWidth: 2,   // 边框总宽度
+          borderColor: '#fff', // 外层边框颜色
+          borderType: 'solid',
+          shadowColor: '#222', // 内层边框颜色
+          shadowOffsetX: 0,
+          shadowOffsetY: 0,
+          shadowBlur: 2
         },
-      ],
-    });
-  }
+      },
+    ],
+  });
 }
 
 // 切换追踪模式
 function toggleTracking() {
   updateChartDisplay();
+  
+  // 更新数据缩放配置以响应跟踪模式的变化
+  if (chartInstance.value) {
+    chartInstance.value.setOption({
+      dataZoom: [
+        {
+          xAxisIndex: 0,
+          moveOnMouseWheel: !isTracking.value,
+          moveOnMouseMove: !isTracking.value
+        },
+        {
+          yAxisIndex: 0,
+          moveOnMouseWheel: !isTracking.value,
+          moveOnMouseMove: !isTracking.value
+        }
+      ]
+    });
+  }
 }
 
 // 重置缩放
@@ -476,7 +536,7 @@ function resetZoom() {
 function clearTrack() {
   trackData = [];
   firstPosition = null;
-  clearRawData();
+  // clearRawData();
 
   if (chartInstance.value) {
     chartInstance.value.setOption({
@@ -508,11 +568,66 @@ function updatePointSize() {
   }
 }
 
+// 新增：保持坐标轴等宽的函数
+function maintainEqualAxisScale() {
+  if (!chartInstance.value || !chartContainerRef.value) return;
+  
+  const chartOption = chartInstance.value.getOption();
+  const containerWidth = chartContainerRef.value.clientWidth;
+  const containerHeight = chartContainerRef.value.clientHeight;
+  
+  // 考虑图表内边距，获取实际绘图区域的宽高
+  const grid = chartOption.grid[0];
+  const gridLeft = typeof grid.left === 'string' ? parseInt(grid.left) : grid.left;
+  const gridRight = typeof grid.right === 'string' ? parseInt(grid.right) : grid.right;
+  const gridTop = typeof grid.top === 'string' ? parseInt(grid.top) : grid.top;
+  const gridBottom = typeof grid.bottom === 'string' ? parseInt(grid.bottom) : grid.bottom;
+  
+  const plotWidth = containerWidth - gridLeft - gridRight;
+  const plotHeight = containerHeight - gridTop - gridBottom;
+  
+  // 获取当前坐标轴范围
+  const xMin = chartOption.xAxis[0].min || -padding.value;
+  const xMax = chartOption.xAxis[0].max || padding.value;
+  const yMin = chartOption.yAxis[0].min || -padding.value;
+  const yMax = chartOption.yAxis[0].max || padding.value;
+  
+  const xRange = xMax - xMin;
+  const yRange = yMax - yMin;
+  
+  // 计算每单位数据对应的像素数
+  const xPixelPerUnit = plotWidth / xRange;
+  const yPixelPerUnit = plotHeight / yRange;
+  
+  // 找出较小的值，确保等宽
+  const minPixelPerUnit = Math.min(xPixelPerUnit, yPixelPerUnit);
+  
+  // 计算新的范围，保持中心点不变
+  const xCenter = (xMin + xMax) / 2;
+  const yCenter = (yMin + yMax) / 2;
+  
+  const newXRange = plotWidth / minPixelPerUnit;
+  const newYRange = plotHeight / minPixelPerUnit;
+  
+  const newXMin = xCenter - newXRange / 2;
+  const newXMax = xCenter + newXRange / 2;
+  const newYMin = yCenter - newYRange / 2;
+  const newYMax = yCenter + newYRange / 2;
+  
+  // 应用新的范围设置
+  chartInstance.value.setOption({
+    xAxis: { min: newXMin, max: newXMax },
+    yAxis: { min: newYMin, max: newYMax }
+  });
+}
+
 // 切换全屏
 function toggleFullScreen() {
   isFullScreen.value = !isFullScreen.value;
   nextTick(() => {
     if (chartInstance.value) {
+      // 切换全屏后重新计算等宽坐标轴
+      maintainEqualAxisScale();
       chartInstance.value.resize();
     }
   });
@@ -533,15 +648,20 @@ let dataUpdateInterval = null;
 
 // 组件挂载时初始化
 onMounted(() => {
-  ElMessage({
-    message: 'Flow偏差可视化已启动，正在生成模拟数据...',
-    type: 'info',
-    duration: 3000,
-  })
-
-  setTimeout(() => {
-    initChart();
-  }, 100);
+  // 修复：使用nextTick确保DOM完全渲染后再初始化图表
+  nextTick(() => {
+    // 确保chartRef.value存在且有尺寸后再初始化图表
+    if (chartRef.value && chartRef.value.clientWidth > 0 && chartRef.value.clientHeight > 0) {
+      initChart();
+    } else {
+      // 如果DOM还没有尺寸，添加一个小延迟再次尝试
+      setTimeout(() => {
+        if (chartRef.value) {
+          initChart();
+        }
+      }, 300);
+    }
+  });
 
   // 每100ms更新一次数据
   dataUpdateInterval = setInterval(() => {
@@ -583,7 +703,7 @@ onUnmounted(() => {
   flex-direction: column;
   height: 100%;
   width: 100%;
-  background-color: #f5f7fa;
+  /* background-color: #f5f7fa; */
   border-radius: 8px;
   overflow: hidden;
   box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
@@ -607,12 +727,6 @@ onUnmounted(() => {
   position: relative;
 }
 
-.fullscreen-btn {
-  position: absolute;
-  right: 0;
-  margin-left: auto;
-}
-
 .tracking-switch {
   margin-right: 8px;
 }
@@ -625,10 +739,10 @@ onUnmounted(() => {
 }
 
 .control-btn {
-  padding: 6px 12px;
-  background-color: #f8f9fa;
-  color: #495057;
-  border: 1px solid #dee2e6;
+  padding: 6px 5px;
+  /* background-color: #f8f9fa; */
+  /* color: #495057; */
+  /* border: 1px solid #dee2e6; */
   border-radius: 4px;
   cursor: pointer;
   font-size: 12px;
@@ -643,55 +757,18 @@ onUnmounted(() => {
   position: relative;
   overflow: hidden;
   min-height: 0;
+  /* 移除居中显示，让图表自然填充 */
+  display: block;
 }
 
 .chart {
   width: 100%;
   height: 100%;
-  min-height: 0;
   touch-action: none;
   overscroll-behavior: none;
-}
-
-.control-panel-fullscreen {
-  position: fixed;
-  top: 0px;
-  left: 0px;
-  right: 0px;
-  z-index: 1001;
-  max-height: 180px;
-}
-
-.full-screen {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  z-index: 1000;
-  background-color: #fff;
-}
-
-.chart-container.full-screen {
-  top: 50px;
-  height: calc(100% - 50px);
-}
-
-.ruler {
-  position: absolute;
-  bottom: 10px;
-  left: 10px;
-  display: flex;
-  align-items: center;
-  background-color: rgba(255, 255, 255, 0.8);
-  padding: 3px 8px;
-  border-radius: 4px;
-  font-size: 12px;
-  color: #324558;
-}
-
-.ruler-icon {
-  margin-left: 5px;
+  /* 添加最小尺寸确保图表始终有大小 */
+  min-width: 200px;
+  min-height: 200px;
 }
 
 .point-size-control {
@@ -752,4 +829,39 @@ onUnmounted(() => {
 :deep(.el-slider__button:active) {
   transform: scale(0.95);
 }
+
+/* 新增右侧按钮容器样式 */
+.right-buttons {
+  display: flex;
+  align-items: center;
+  margin-left: auto; /* 自动占据剩余空间，将按钮推到右侧 */
+  gap: 5px;
+}
+
+/* 添加全屏模式相关样式 */
+.control-panel-fullscreen {
+  position: fixed;
+  top: 0px;
+  left: 0px;
+  right: 0px;
+  z-index: 1001;
+  max-height: 180px;
+}
+
+.full-screen {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1000;
+  background-color: #fff;
+}
+
+.chart-container.full-screen {
+  top: 50px;
+  height: calc(100% - 50px);
+}
+
+/* 其他样式保持不变 */
 </style>
