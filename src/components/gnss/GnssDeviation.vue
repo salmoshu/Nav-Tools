@@ -27,7 +27,7 @@
         </el-button>
       </div>
     </div>
-    <div class="chart-container" :class="{ 'full-screen': isFullScreen }">
+    <div class="chart-container" :class="{ 'full-screen': isFullScreen }" ref="chartContainerRef">
       <div ref="chartRef" class="chart"></div>
       <div class="ruler">
         <span>{{ rulerText }}</span>
@@ -73,6 +73,7 @@ const deviation = ref('');
 const padding = ref(10000); // 默认正负10km
 const pointSize = ref(10); // 初始值与图表配置一致
 const chartDom = ref(null); // 添加chartDom引用
+const chartContainerRef = ref(null); // 添加容器引用
 
 let trackData = [];
 let firstPosition = null;
@@ -96,6 +97,9 @@ function setupResizeObserver() {
           }));
           chartInstance.value.setOption(option, false);
         }
+        
+        // 计算并设置等宽坐标轴
+        maintainEqualAxisScale();
         chartInstance.value.resize();
       }
     });
@@ -103,6 +107,10 @@ function setupResizeObserver() {
   const parentElement = chartRef.value.parentElement;
   if (parentElement) {
     resizeObserver.observe(parentElement);
+  }
+  // 同时观察容器元素
+  if (chartContainerRef.value) {
+    resizeObserver.observe(chartContainerRef.value);
   }
 }
 
@@ -552,10 +560,65 @@ function updatePointSize() {
   }
 }
 
+// 新增：保持坐标轴等宽的函数
+function maintainEqualAxisScale() {
+  if (!chartInstance.value || !chartContainerRef.value) return;
+  
+  const chartOption = chartInstance.value.getOption();
+  const containerWidth = chartContainerRef.value.clientWidth;
+  const containerHeight = chartContainerRef.value.clientHeight;
+  
+  // 考虑图表内边距，获取实际绘图区域的宽高
+  const grid = chartOption.grid[0];
+  const gridLeft = typeof grid.left === 'string' ? parseInt(grid.left) : grid.left;
+  const gridRight = typeof grid.right === 'string' ? parseInt(grid.right) : grid.right;
+  const gridTop = typeof grid.top === 'string' ? parseInt(grid.top) : grid.top;
+  const gridBottom = typeof grid.bottom === 'string' ? parseInt(grid.bottom) : grid.bottom;
+  
+  const plotWidth = containerWidth - gridLeft - gridRight;
+  const plotHeight = containerHeight - gridTop - gridBottom;
+  
+  // 获取当前坐标轴范围
+  const xMin = chartOption.xAxis[0].min || -padding.value;
+  const xMax = chartOption.xAxis[0].max || padding.value;
+  const yMin = chartOption.yAxis[0].min || -padding.value;
+  const yMax = chartOption.yAxis[0].max || padding.value;
+  
+  const xRange = xMax - xMin;
+  const yRange = yMax - yMin;
+  
+  // 计算每单位数据对应的像素数
+  const xPixelPerUnit = plotWidth / xRange;
+  const yPixelPerUnit = plotHeight / yRange;
+  
+  // 找出较小的值，确保等宽
+  const minPixelPerUnit = Math.min(xPixelPerUnit, yPixelPerUnit);
+  
+  // 计算新的范围，保持中心点不变
+  const xCenter = (xMin + xMax) / 2;
+  const yCenter = (yMin + yMax) / 2;
+  
+  const newXRange = plotWidth / minPixelPerUnit;
+  const newYRange = plotHeight / minPixelPerUnit;
+  
+  const newXMin = xCenter - newXRange / 2;
+  const newXMax = xCenter + newXRange / 2;
+  const newYMin = yCenter - newYRange / 2;
+  const newYMax = yCenter + newYRange / 2;
+  
+  // 应用新的范围设置
+  chartInstance.value.setOption({
+    xAxis: { min: newXMin, max: newXMax },
+    yAxis: { min: newYMin, max: newYMax }
+  });
+}
+
 function toggleFullScreen() {
   isFullScreen.value = !isFullScreen.value;
   nextTick(() => {
     if (chartInstance.value) {
+      // 切换全屏后重新计算等宽坐标轴
+      maintainEqualAxisScale();
       chartInstance.value.resize();
     }
   });
