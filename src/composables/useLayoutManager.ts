@@ -141,7 +141,7 @@ const getDynamicDefaultLayoutConfig = async (mode: string) => {
       minW: 4,
       minH: 5,
       maxW: 12,
-      maxH: 10,
+      maxH: 12,
     }
   })
 }
@@ -386,7 +386,7 @@ export function useLayoutManager() {
       minW: 4,
       minH: 5,
       maxW: 12,
-      maxH: 10,
+      maxH: 12,
     }
 
     layoutDraggableList.value.unshift(newItem)

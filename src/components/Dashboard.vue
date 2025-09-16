@@ -113,7 +113,7 @@
             :minW="item.minW || 4"
             :minH="item.minH || 5"
             :maxW="item.maxW || 12"
-            :maxH="item.maxH || 10"
+            :maxH="item.maxH || 12"
             @resize="resizeEvent"
             @moved="movedEvent"
           >
@@ -298,8 +298,6 @@ const contentStyle = computed(() => {
 
 // 事件处理函数
 const resizeEvent = (i: string, newH: number, newW: number, newHPx: number, newWPx: number) => {
-  console.log('RESIZE i=' + i + ', H=' + newH + ', W=' + newW + ', H(px)=' + newHPx + ', W(px)=' + newWPx)
-  
   // 强制触发重绘，确保内容区域正确计算高度
   setTimeout(() => {
     const gridItem = document.getElementById(`grid-item-${i}`)
@@ -317,7 +315,7 @@ const resizeEvent = (i: string, newH: number, newW: number, newHPx: number, newW
 }
 
 const movedEvent = (i: string, newX: number, newY: number) => {
-  console.log('MOVED i=' + i + ', X=' + newX + ', Y=' + newY)
+  // console.log('MOVED i=' + i + ', X=' + newX + ', Y=' + newY)
 }
 
 // 分离卡片到独立窗口

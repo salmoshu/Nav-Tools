@@ -5,7 +5,7 @@
         <!-- 左侧按钮 -->
         <div class="left-buttons">
           <el-button type="primary" size="small" @click="showViewConfig" class="layout-btn">
-            视图配置
+            数据配置
           </el-button>
           <el-button type="default" size="small" @click="showMessageFormat" class="message-btn">
             消息格式
@@ -256,7 +256,7 @@
 import { ref, onMounted, onUnmounted, watch, computed } from 'vue'
 import * as echarts from 'echarts'
 import { useFlow } from '@/composables/flow/useFlow'
-import { useDataConfig } from '@/composables/flow/useDataConfig'
+import { useFlowData } from '@/composables/flow/useFlowData'
 import { ElMessage } from 'element-plus'
 
 // 初始化数据流处理
@@ -310,7 +310,7 @@ const {
   onYAxisChange,
   onLayoutChange,
   applyViewConfig
-} = useDataConfig(flowData)
+} = useFlowData(flowData)
 
 const fileInput = ref<HTMLInputElement>()
 const chartRef = ref<HTMLDivElement>()
