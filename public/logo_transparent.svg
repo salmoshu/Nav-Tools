@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg">
+  <!-- 移除所有背景元素和CSS变量 -->
+  
+  <!-- N：左侧竖 + 斜杠 -->
+  <path d="M18 18 v92 M18 18 C40 40, 80 80, 110 110"
+        fill="none" stroke="#4A90E2" stroke-width="30"
+        stroke-linecap="butt" stroke-linejoin="round"/>
+
+  <!-- T：倒下的 T（波浪横线 + 右侧竖线） -->
+  <path d="M18 64 C30 60, 80 68, 110 64 M110 18 v92"
+        fill="none" stroke="#50E3C2" stroke-width="30"
+        stroke-linecap="round"/>
+</svg>

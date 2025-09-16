@@ -11,6 +11,7 @@
     "dist",
     "dist-electron"
   ],
+  "icon": "public/logo_transparent",
   "mac": {
     "target": [
       "dmg"
@@ -26,13 +27,16 @@
         ]
       }
     ],
-    "artifactName": "${productName}-Windows-${version}-Setup.${ext}"
+    "artifactName": "${productName}-Windows-${version}-Setup.${ext}",
+    "icon": "public/logo_transparent.png"
   },
   "nsis": {
     "oneClick": false,
     "perMachine": false,
     "allowToChangeInstallationDirectory": true,
-    "deleteAppDataOnUninstall": false
+    "deleteAppDataOnUninstall": false,
+    "installerIcon": "public/favicon.ico",
+    "uninstallerIcon": "public/favicon.ico"
   },
   "linux": {
     "target": [
