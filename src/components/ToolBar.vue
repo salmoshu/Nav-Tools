@@ -93,6 +93,90 @@
       </div>
     </div>
   </div>
+  <el-dialog
+    title="输入"
+    v-model="showInputDialog"
+    width="30%"
+  >
+    <el-tabs v-model="activeTab">
+      <el-tab-pane label="串口连接" name="serial">
+        <div class="input-group">
+          <span class="input-label">
+            <el-button @click="searchSerialPorts" class="icon-only-refresh">
+              <el-icon><Refresh /></el-icon>
+            </el-button>
+            端口:
+          </span>
+          <el-select
+            v-model="serialPort"
+            placeholder="请选择串口"
+            style="flex: 1;"
+            @click="searchSerialPorts"
+          >
+            <el-option v-for="port in serialPorts" :key="port" :label="port" :value="port" />
+          </el-select>
+        </div>
+        <div class="input-group">
+          <span class="input-label">波特率:</span>
+          <el-select
+            v-model="serialBaudRate"
+            placeholder="请选择或输入波特率"
+            filterable
+            allow-create
+            style="flex: 1;"
+          >
+            <el-option v-for="rate in baudRates" :key="rate" :label="rate" :value="rate" />
+          </el-select>
+        </div>
+        <div class="input-group" v-if="serialAdvanced">
+          <span class="input-label">数据位:</span>
+          <el-select v-model="serialDataBits" placeholder="请选择数据位" style="flex: 1;">
+            <!-- 默认为8 -->
+            <el-option v-for="bit in dataBits" :key="bit" :label="bit" :value="bit" />
+          </el-select>
+        </div>
+        <div class="input-group" v-if="serialAdvanced">
+          <span class="input-label">停止位:</span>
+          <el-select v-model="serialStopBits" placeholder="请选择停止位" style="flex: 1;">
+            <el-option v-for="bit in stopBits" :key="bit" :label="bit" :value="bit" />
+          </el-select>
+        </div>
+        <div class="input-group" v-if="serialAdvanced">
+          <span class="input-label">校验位:</span>
+          <el-select v-model="serialParity" placeholder="请选择校验位" style="flex: 1;">
+            <el-option v-for="parity in parities" :key="parity.value" :label="parity.label" :value="parity.value" />
+          </el-select>
+        </div>
+        <div class="input-group">
+          <span class="input-label">高级选项:</span>
+          <el-checkbox v-model="serialAdvanced" ></el-checkbox>
+        </div>
+      </el-tab-pane>
+
+      <el-tab-pane label="文件输入" name="file">
+        <div class="input-group">
+          <span class="input-label">文件路径:</span>
+          <el-input v-model="filePath" placeholder="请输入文件路径" />
+          <el-button type="default" @click="triggerFileSelection">选择文件</el-button>
+        </div>
+      </el-tab-pane>
+
+      <el-tab-pane label="网络连接" name="network" v-if="false" :disabled="true">
+        <div class="input-group">
+          <span class="input-label">网络地址:</span>
+          <el-input v-model="networkIp" placeholder="请输入网络连接指令" />
+        </div>
+        <div class="input-group">
+          <span class="input-label">网络端口:</span>
+          <el-input v-model="networkPort" placeholder="请输入网络端口" />
+        </div>
+      </el-tab-pane>
+      
+    </el-tabs>
+    <template #footer>
+      <el-button type="primary" @click="handleInputSubmit">确定</el-button>
+    </template>
+  </el-dialog>
 </template>
 
 <script setup lang="ts">
@@ -103,26 +187,55 @@ import { getButtonList, upAndDown, getButtonText, getLayoutList, getIoList, hand
 import { showStatusBar } from '@/composables/useStatusManager'
 
 import emitter from '@/hooks/useMitt'
+import { ElDialog, ElTabs, ElTabPane, ElButton, ElSelect, ElOption, ElInput, ElCheckbox, ElIcon } from 'element-plus'
+import { Refresh } from '@element-plus/icons-vue'
 
 const ipcRenderer = window.ipcRenderer
 const position = ref<'top' | 'right' | 'bottom' | 'left'>('bottom')
 const showSaveButton = ref(false)
 
 import { useDevice } from '@/hooks/useDevice'
-import { ElMessage } from 'element-plus'
 
 const deviceInstance = useDevice()
 const deviceConnected = deviceInstance.deviceConnected
+
+// 从useDevice获取对话框相关状态和方法
+const {
+  showInputDialog,
+  activeTab,
+  serialPort,
+  serialBaudRate,
+  serialDataBits,
+  serialStopBits,
+  serialParity,
+  serialAdvanced,
+  selectTargetFile,
+  filePath,
+  networkIp,
+  networkPort,
+  serialPorts,
+  baudRates,
+  dataBits,
+  stopBits,
+  parities,
+  inputDialog,
+  searchSerialPorts,
+  handleInputSubmit
+} = useDevice()
+
+// 添加triggerFileSelection函数，注意这里是const而不是sconst
+const triggerFileSelection = () => {
+  selectTargetFile()
+}
 
 const handleDeviceConnected = () => {
   if (deviceConnected.value === true) {
     deviceInstance.closeCurrDevice()
   } else {
     if (deviceInstance.globalDevice.value.connected === null) {
-      ElMessage({
-        message: '请配置设备信息',
-        type: 'warning',
-      })
+      // 如果没有设备配置，打开输入对话框
+      showInputDialog.value = true
+      searchSerialPorts()
     } else {
       deviceInstance.openCurrDevice()
     }
@@ -170,6 +283,7 @@ watch(() => navMode.funcMode, (oldMode, newMode) => {
 const emit = defineEmits<{
   action: [action: string]
   positionChange: [position: 'top' | 'right' | 'bottom' | 'left']
+  funcModeChange: [mode: string] // 添加funcModeChange事件声明
 }>()
 
 const isDragging = ref(false)
@@ -401,6 +515,9 @@ const snapToEdge = () => {
 }
 
 onMounted(() => {
+  searchSerialPorts()
+  emitter.on('input-event', inputDialog)
+
   snapToEdge()
   window.addEventListener('resize', snapToEdge)
   
@@ -664,5 +781,61 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
+}
+/* 输入对话框样式 */
+.input-group {
+  display: flex;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.input-label {
+  min-width: 80px;
+  text-align: right;
+  margin-right: 12px;
+  font-size: 14px;
+  color: #606266;
+}
+
+/* 添加输入框和按钮之间的间距 */
+.input-group .el-input {
+  flex: 1;
+  margin-right: 8px; /* 在输入框右侧添加间距 */
+}
+
+/* 优化文件选择按钮的样式 */
+.input-group .el-button {
+  white-space: nowrap; /* 确保按钮文字不换行 */
+}
+
+/* 保留原有的.el-input样式 */
+.el-input {
+  flex: 1;
+}
+
+.dialog-footer {
+  text-align: right;
+}
+
+.icon-only-refresh {
+  background: transparent !important;
+  border: none !important;
+  padding: 4px !important;
+  min-width: auto !important;
+  width: 32px !important;
+  height: 32px !important;
+  display: inline-block !important;
+  align-items: center !important;
+  justify-content: center !important;
+  color: #606266 !important;
+}
+
+.icon-only-refresh:hover {
+  background: rgba(0, 0, 0, 0.05) !important;
+  color: #4096ff !important;
+}
+
+.icon-only-refresh .el-icon {
+  font-size: 16px !important;
 }
 </style>

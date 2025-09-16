@@ -45,13 +45,14 @@ const getIoList = (position: string) => {
       icon: toolBarIcon.input,
       text: upAndDown(position) ? '&nbsp;Input' : '',
     },
-    {
-      title: 'Log',
-      msg: 'log',
-      template: '',
-      icon: toolBarIcon.log,
-      text: upAndDown(position) ? '&nbsp;Log' : '',
-    }
+    // 未来添加Log功能
+    // {
+    //   title: 'Log',
+    //   msg: 'log',
+    //   template: '',
+    //   icon: toolBarIcon.log,
+    //   text: upAndDown(position) ? '&nbsp;Log' : '',
+    // }
   ]
 }
 

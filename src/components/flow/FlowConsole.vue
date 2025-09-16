@@ -2,10 +2,18 @@
   <div class="flow-console">
     <div class="console-header">
       <div class="console-controls">
-        <button @click="toggleAutoScroll" class="control-btn">{{ autoScroll ? '禁用自动滚动' : '启用自动滚动' }}</button>
-        <button @click="toggleAddTimestamp" class="control-btn">{{ addTimestamp ? '禁用时间戳' : '启用时间戳' }}</button>
-        <button @click="toggleDataFilter" class="control-btn">{{ dataFilter ? '禁用数据过滤' : '启用数据过滤' }}</button>
-        <button @click="clearConsole" class="control-btn">清除接收</button>
+        <!-- 左侧按钮组 -->
+        <div class="left-controls">
+          <button @click="toggleAutoScroll" class="control-btn">{{ autoScroll ? '禁用滚动' : '启用滚动' }}</button>
+          <button @click="toggleAddTimestamp" class="control-btn">{{ addTimestamp ? '禁用时间' : '启用时间' }}</button>
+          <button @click="toggleDataFilter" class="control-btn">{{ dataFilter ? '禁用过滤' : '启用过滤' }}</button>
+        </div>
+        
+        <!-- 右侧按钮组 -->
+        <div class="right-controls">
+          <button @click="saveConsoleData" class="control-btn" :disabled="rawMessages.length === 0">保存数据</button>
+          <button @click="clearConsole" class="control-btn">清除数据</button>
+        </div>
       </div>
     </div>
     <div ref="consoleContent" class="console-content">
@@ -24,6 +32,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, nextTick } from 'vue';
+import { ElMessage } from 'element-plus';
 
 // 控制台相关状态
 const consoleContent = ref<HTMLDivElement | null>(null);
@@ -74,7 +83,7 @@ const handleRawData = (rawData: string) => {
     }
 
     // 限制消息数量
-    if (rawMessages.value.length > 1000) {
+    if (rawMessages.value.length > 100000) {
       rawMessages.value.shift();
     }
 
@@ -87,6 +96,38 @@ const handleRawData = (rawData: string) => {
       });
     }
   }
+};
+
+const saveConsoleData = () => {
+  if (rawMessages.value.length === 0) {
+    ElMessage.warning('没有可保存的数据');
+    return;
+  }
+
+  // 生成文件内容，根据是否显示时间戳决定输出格式
+  const fileContent = rawMessages.value
+    .map(message => addTimestamp.value 
+      ? `${message.timestamp}: ${message.raw}` 
+      : message.raw)
+    .join('\n');
+
+  // 创建Blob并下载文件
+  const blob = new Blob([fileContent], { type: 'text/plain;charset=utf-8;' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  
+  // 生成带时间戳的文件名
+  const now = new Date();
+  const timestamp = now.getUTCFullYear() + '-' +
+    String(now.getUTCMonth() + 1).padStart(2, '0') + '-' +
+    String(now.getUTCDate()).padStart(2, '0') + 'T' +
+    String(now.getUTCHours()).padStart(2, '0') + '-' +
+    String(now.getUTCMinutes()).padStart(2, '0') + '-' +
+    String(now.getUTCSeconds()).padStart(2, '0') + 'Z';
+  
+  a.download = `Nav-Tools_${timestamp}.log`;
+  a.click();
+  URL.revokeObjectURL(a.href);
 };
 
 // 清除控制台
@@ -123,7 +164,6 @@ onMounted(() => {
     // console.log("src/hooks/useDevice.ts 收到串口数据:", data);
     handleRawData(data);
   });
-  console.log('FlowConsole组件已挂载，开始监听Flow数据');
 });
 
 // 清理监听
@@ -261,5 +301,27 @@ onUnmounted(() => {
   font-size: 12px;
   color: #6c757d;
   font-weight: 500;
+}
+
+.control-btn[disabled] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.console-controls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+}
+
+.left-controls {
+  display: flex;
+  gap: 8px;
+}
+
+.right-controls {
+  display: flex;
+  gap: 8px;
 }
 </style>

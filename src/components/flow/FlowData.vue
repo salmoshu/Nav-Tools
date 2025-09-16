@@ -14,10 +14,7 @@
         
         <!-- 右侧按钮 -->
         <div class="right-buttons">
-          <input type="file" ref="fileInput" @change="handleFileUpload" accept=".txt,.csv" style="display: none">
-          <el-button type="primary" size="small" @click="fileInput?.click()" class="upload-btn">
-            载入数据
-          </el-button>
+          <!-- 移除文件上传按钮 -->
           <el-button type="primary" size="small" @click="saveData" class="save-btn" :disabled="!hasData">
             保存数据
           </el-button>

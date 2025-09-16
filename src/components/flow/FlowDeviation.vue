@@ -106,7 +106,12 @@ const selectedYField = ref('');
 // 计算可用数据源
 const availableSources = computed(() => {
   if (!flowData.value || !flowData.value.timestamps) return [];
-  return Object.keys(flowData.value).filter(key => key !== 'timestamps' && key !== 'timestamp' && flowData.value[key].length > 0);
+  return Object.keys(flowData.value).filter(
+    key => key !== 'timestamps' && 
+    key !== 'timestamp' && 
+    key !== 'rawDataKeys' &&
+    flowData.value[key].length > 0
+  );
 });
 
 // 数据存储变量
@@ -425,7 +430,7 @@ function updateFlowData() {
     return;
   }
   
-  // 从flowData中获取最新数据
+  // 从flowData中获取所有数据
   const xData = flowData.value[selectedXField.value];
   const yData = flowData.value[selectedYField.value];
   
@@ -433,25 +438,44 @@ function updateFlowData() {
     return;
   }
   
-  // 获取最新的数据点
-  const latestIndex = Math.min(xData.length - 1, yData.length - 1);
-  const x = xData[latestIndex];
-  const y = yData[latestIndex];
-  
-  // 确保数据是有效的数字
-  if (typeof x !== 'number' || typeof y !== 'number' || isNaN(x) || isNaN(y)) {
-    return;
-  }
-  
-  const roundedX = Math.round(x * 1000) / 1000;
-  const roundedY = Math.round(y * 1000) / 1000;
+  // 检查是否为批量数据模式（例如文件载入）
+  if (flowData.value.isBatchData) {
+    // 批量数据模式：加载所有历史数据
+    trackData = [];
+    const dataLength = Math.min(xData.length, yData.length);
+    
+    for (let i = 0; i < dataLength; i++) {
+      const x = xData[i];
+      const y = yData[i];
+      
+      // 确保数据是有效的数字
+      if (typeof x === 'number' && typeof y === 'number' && !isNaN(x) && !isNaN(y)) {
+        const roundedX = Math.round(x * 1000) / 1000;
+        const roundedY = Math.round(y * 1000) / 1000;
+        trackData.push([roundedX, roundedY]);
+      }
+    }
+  } else {
+    // 实时数据模式：添加最新的数据点
+    const latestIndex = Math.min(xData.length - 1, yData.length - 1);
+    const x = xData[latestIndex];
+    const y = yData[latestIndex];
+    
+    // 确保数据是有效的数字
+    if (typeof x !== 'number' || typeof y !== 'number' || isNaN(x) || isNaN(y)) {
+      return;
+    }
+    
+    const roundedX = Math.round(x * 1000) / 1000;
+    const roundedY = Math.round(y * 1000) / 1000;
 
-  // 添加到轨迹数据
-  trackData.push([roundedX, roundedY]);
+    // 添加到轨迹数据
+    trackData.push([roundedX, roundedY]);
 
-  // 限制最大数据点数量
-  if (trackData.length > maxTrackPoints) {
-    trackData.shift();
+    // 限制最大数据点数量
+    if (trackData.length > maxTrackPoints) {
+      trackData.shift();
+    }
   }
 
   // 更新图表显示

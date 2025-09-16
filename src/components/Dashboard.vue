@@ -7,81 +7,6 @@
 
     <StatusBar @positionChange="handleStatusbarPositionChange" v-if="showStatusBar" />
 
-    <el-dialog
-      title="输入"
-      v-model="showInputDialog"
-      width="30%"
-    >
-      <el-tabs v-model="activeTab">
-        <el-tab-pane label="串口连接" name="serial">
-          <div class="input-group">
-            <span class="input-label">
-              <el-button @click="searchSerialPorts" class="icon-only-refresh">
-                <el-icon><Refresh /></el-icon>
-              </el-button>
-              端口:
-            </span>
-            <el-select
-              v-model="serialPort"
-              placeholder="请选择串口"
-              style="flex: 1;"
-              @click="searchSerialPorts"
-            >
-              <el-option v-for="port in serialPorts" :key="port" :label="port" :value="port" />
-            </el-select>
-          </div>
-          <div class="input-group">
-            <span class="input-label">波特率:</span>
-            <el-select
-              v-model="serialBaudRate"
-              placeholder="请选择或输入波特率"
-              filterable
-              allow-create
-              style="flex: 1;"
-            >
-              <el-option v-for="rate in baudRates" :key="rate" :label="rate" :value="rate" />
-            </el-select>
-          </div>
-          <div class="input-group" v-if="serialAdvanced">
-            <span class="input-label">数据位:</span>
-            <el-select v-model="serialDataBits" placeholder="请选择数据位" style="flex: 1;">
-              <!-- 默认为8 -->
-              <el-option v-for="bit in dataBits" :key="bit" :label="bit" :value="bit" />
-            </el-select>
-          </div>
-          <div class="input-group" v-if="serialAdvanced">
-            <span class="input-label">停止位:</span>
-            <el-select v-model="serialStopBits" placeholder="请选择停止位" style="flex: 1;">
-              <el-option v-for="bit in stopBits" :key="bit" :label="bit" :value="bit" />
-            </el-select>
-          </div>
-          <div class="input-group" v-if="serialAdvanced">
-            <span class="input-label">校验位:</span>
-            <el-select v-model="serialParity" placeholder="请选择校验位" style="flex: 1;">
-              <el-option v-for="parity in parities" :key="parity.value" :label="parity.label" :value="parity.value" />
-            </el-select>
-          </div>
-          <div class="input-group">
-            <span class="input-label">高级选项:</span>
-            <el-checkbox v-model="serialAdvanced" ></el-checkbox>
-          </div>
-        </el-tab-pane>
-        <el-tab-pane label="网络连接" name="network" :disabled="true">
-          <div class="input-group">
-            <span class="input-label">网络地址:</span>
-            <el-input v-model="networkIp" placeholder="请输入网络连接指令" />
-          </div>
-          <div class="input-group">
-            <span class="input-label">网络端口:</span>
-            <el-input v-model="networkPort" placeholder="请输入网络端口" />
-          </div>
-        </el-tab-pane>
-      </el-tabs>
-      <template #footer>
-        <el-button type="primary" @click="handleInputSubmit">确定</el-button>
-      </template>
-    </el-dialog>
-    
     <div 
       class="dashboard-content" 
       :class="contentClasses"
@@ -160,46 +85,24 @@ import ToolBar from './ToolBar.vue'
 import StatusBar from './StatusBar.vue'
 import { ref, computed, onMounted, onUnmounted, provide } from 'vue'
 import { GridLayout, GridItem } from 'grid-layout-plus'
-import { ElButton, ElCard, ElDialog, ElIcon } from 'element-plus'
+import { ElButton, ElCard, ElIcon } from 'element-plus' // 移除了ElDialog的导入
 import { Close, Share } from '@element-plus/icons-vue'
 import emitter from '@/hooks/useMitt'
 import { useLayoutManager } from '@/composables/useLayoutManager'
 import { showStatusBar } from '@/composables/useStatusManager'
-import { useDevice } from '@/hooks/useDevice'
 import { appConfig, navMode } from '@/settings/config'
 
-const {
-  layoutDraggableList,
-  initLayout,
-  saveLayout,
-  autoLayout,
-  resetLayout,
-  editLayout,
-  addItem,
-  removeItem,
-  handleFuncModeChange
+const { 
+  layoutDraggableList, 
+  initLayout, 
+  saveLayout, 
+  autoLayout, 
+  resetLayout, 
+  editLayout, 
+  addItem, 
+  removeItem, 
+  handleFuncModeChange 
 } = useLayoutManager()
-
-const {
-  showInputDialog,
-  activeTab,
-  serialPort,
-  serialBaudRate,
-  serialDataBits,
-  serialStopBits,
-  serialParity,
-  serialAdvanced,
-  networkIp,
-  networkPort,
-  serialPorts,
-  baudRates,
-  dataBits,
-  stopBits,
-  parities,
-  searchSerialPorts,
-  handleInputSubmit,
-  inputDialog,
-} = useDevice()
 
 // 工具栏和状态栏位置状态
 const toolbarPosition = ref<'top' | 'right' | 'bottom' | 'left'>('top')
@@ -354,13 +257,12 @@ const detachItem = (item: any) => {
 // 生命周期
 onMounted(() => {
   initLayout()
-  searchSerialPorts()
   
   emitter.on('edit', editLayout)
   emitter.on('save', saveLayout)
   emitter.on('auto', autoLayout)
   emitter.on('reset', resetLayout)
-  emitter.on('input-event', inputDialog)
+  
 
   // module mode
   for (const [_, appCfg] of Object.entries(appConfig)) {
@@ -526,28 +428,6 @@ onUnmounted(() => {
   color: #F56C6C;
 }
 
-.input-group {
-  display: flex;
-  align-items: center;
-  margin-bottom: 16px;
-}
-
-.input-label {
-  min-width: 80px;
-  text-align: right;
-  margin-right: 12px;
-  font-size: 14px;
-  color: #606266;
-}
-
-.el-input {
-  flex: 1;
-}
-
-.dialog-footer {
-  text-align: right;
-}
-
 /* 调整 resizer 位置 */
 :deep(.vgl-item__resizer) {
   position: absolute;
@@ -566,27 +446,5 @@ onUnmounted(() => {
   padding: 0;
   margin: 0;
   border: none;
-}
-
-.icon-only-refresh {
-  background: transparent !important;
-  border: none !important;
-  padding: 4px !important;
-  min-width: auto !important;
-  width: 32px !important;
-  height: 32px !important;
-  display: inline-block !important;
-  align-items: center !important;
-  justify-content: center !important;
-  color: #606266 !important;
-}
-
-.icon-only-refresh:hover {
-  background: rgba(0, 0, 0, 0.05) !important;
-  color: #4096ff !important;
-}
-
-.icon-only-refresh .el-icon {
-  font-size: 16px !important;
 }
 </style>

@@ -9,7 +9,7 @@ import { useFlow } from '@/composables/flow/useFlow'
 const { processRawData: processNmeaRawData } = useNmea()
 const { addRawData: addUltrasonicRawData } = useUltrasonic()
 const { addRawData: addFollowRawData } = useFollow()
-const { addRawData: addFlowRawData } = useFlow()
+const { addRawData: addFlowRawData, initRawData } = useFlow() // 添加initRawData导入
 
 // 串口配置
 const serialPort = ref("");
@@ -23,9 +23,13 @@ const serialAdvanced = ref(false);
 const networkIp = ref("");
 const networkPort = ref("");
 
+// 文件配置
+const filePath = ref("");
+const fileContent = ref("");
+
 // 创建全局设备变量，connected值：null(无设备)、true(有设备已连接)、false(有设备未连接)
 const globalDevice = ref<{
-  type?: 'serial' | 'network',
+  type?: 'serial' | 'network' | 'file',
   path?: string,
   baudRate?: number,
   dataBits?: number,
@@ -182,6 +186,93 @@ export function useDevice() {
   
     return networkCmd;
   }
+
+  // 重构selectTargetFile函数，只负责选择文件并设置filePath
+  const selectTargetFile = () => {
+    // 创建一个隐藏的文件输入元素
+    const fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.accept = '.txt,.csv';
+    fileInput.style.display = 'none';
+    
+    // 添加到文档中
+    document.body.appendChild(fileInput);
+    
+    // 设置文件选择后的回调
+    fileInput.onchange = (event) => {
+      const target = event.target as HTMLInputElement;
+      const file = target.files?.[0];
+      if (file) {
+        // 尝试使用完整路径，如果不能则使用文件名
+        filePath.value = file.path || file.name;
+        
+        // 在Electron环境中，可以考虑存储文件对象引用，以便后续读取
+        if (file instanceof File) {
+          // 存储文件对象引用
+          selectedFile.value = file;
+        }
+      }
+      
+      // 移除临时元素
+      document.body.removeChild(fileInput);
+    };
+    
+    // 触发文件选择对话框
+    fileInput.click();
+  };
+  
+  // 添加一个响应式变量来存储选择的文件对象
+  const selectedFile = ref<File | null>(null);
+  
+  // 重构handleFileSubmit函数，负责读取文件内容并初始化数据
+  const handleFileSubmit = (): string => {
+    const fileCmd = filePath.value;
+    
+    // 设置全局设备信息
+    globalDevice.value = {
+      type: 'file',
+      path: fileCmd,
+      connected: false // 仅实时数据能修改globalDevice为true
+    };
+    
+    if (!selectedFile.value && !fileCmd) {
+      ElMessage.error('请先选择文件');
+      return '';
+    }
+    
+    // 如果有文件对象引用，直接使用它读取内容
+    if (selectedFile.value) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const content = e.target?.result as string;
+        try {
+          switch (navMode.funcMode) {
+            case 'flow':
+              initRawData(content);
+              ElMessage.success('数据加载成功');
+              break;
+            default:
+              ElMessage.error('未定义的文件处理模式');
+              break;
+          }
+        } catch (error) {
+          ElMessage.error('数据加载失败');
+          console.error('数据加载失败:', error);
+        }
+      };
+      
+      reader.onerror = () => {
+        ElMessage.error('文件读取失败');
+      };
+      
+      reader.readAsText(selectedFile.value);
+    } else {
+      // 如果没有文件对象，显示提示信息
+      ElMessage.warning('请重新选择文件以加载数据');
+    }
+    
+    return fileCmd;
+  };
   
   const openCurrDevice = () => {
     if (globalDevice.value.connected === false) {
@@ -263,7 +354,7 @@ export function useDevice() {
    */
   const handleInputSubmit = () => {
     let command = "";
-
+  
     switch (activeTab.value) {
       case "serial":
         command = handleSerialSubmit();
@@ -271,10 +362,17 @@ export function useDevice() {
       case "network":
         command = handleNetworkSubmit();
         break;
+      case "file":
+        command = handleFileSubmit();
+        break;
     }
-
-    if (command) {
-      console.log("输入的指令:", command);
+  
+    if (command || activeTab.value === 'file') {
+      // 对于文件类型，即使没有返回command也关闭对话框
+      // 因为文件选择是通过新的对话框进行的
+      if (activeTab.value !== 'file') {
+        console.log("输入的指令:", command);
+      }
       showInputDialog.value = false;
     } else {
       ElMessage({
@@ -328,6 +426,7 @@ export function useDevice() {
     serialStopBits,
     serialParity,
     serialAdvanced,
+    filePath,
     networkIp,
     networkPort,
     serialPorts,
@@ -337,6 +436,7 @@ export function useDevice() {
     parities,
     deviceConnected,
     globalDevice,
+    selectTargetFile,
     handleInputSubmit,
     inputDialog,
     openCurrDevice,
