@@ -8,8 +8,8 @@ import { useFlow } from '@/composables/flow/useFlow'
 
 const { processRawData: processNmeaRawData } = useNmea()
 const { addRawData: addUltrasonicRawData } = useUltrasonic()
-const { addRawData: addFollowRawData } = useFollow()
-const { addRawData: addFlowRawData, initRawData } = useFlow() // 添加initRawData导入
+const { addRawData: addFollowRawData, initRawData: initFollowRawData } = useFollow()
+const { addRawData: addFlowRawData, initRawData: initFlowRawData } = useFlow()
 
 // 串口配置
 const serialPort = ref("");
@@ -248,7 +248,11 @@ export function useDevice() {
         try {
           switch (navMode.funcMode) {
             case 'flow':
-              initRawData(content);
+              initFlowRawData(content);
+              ElMessage.success('数据加载成功');
+              break;
+            case 'follow':
+              initFollowRawData(content);
               ElMessage.success('数据加载成功');
               break;
             default:

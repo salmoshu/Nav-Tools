@@ -16,10 +16,6 @@
       </div>
       
       <div class="file-controls">
-        <input type="file" ref="fileInput" @change="handleFileUpload" accept=".txt,.csv" style="display: none">
-        <el-button type="primary" size="small" @click="fileInput?.click()" class="upload-btn" :disabled="deviceConnected">
-          载入数据
-        </el-button>
         <el-button type="primary" size="small" @click="saveData" class="save-btn" :disabled="cameraDistance.length===0 || deviceConnected">
           保存数据
         </el-button>
@@ -705,40 +701,9 @@ function dispose() {
   }
 }
 
-// 处理文件上传
-function handleFileUpload(event: Event) {
-  clearPlotData()
-  const target = event.target as HTMLInputElement
-  const file = target.files?.[0]
-  
-  if (!file) return
-  
-  const reader = new FileReader()
-  reader.onload = (e) => {
-    const content = e.target?.result as string
-    try {
-      timeRange.value = 0
-      initRawData(content, 0)
-      updateChart()
-    } catch (error) {
-      ElMessage.error('文件数据处理失败')
-      console.error('文件处理错误:', error)
-    }
-  }
-  reader.onerror = () => {
-    ElMessage.error('文件读取失败')
-  }
-  reader.readAsText(file)
-  
-  // 重置文件输入，以便可以重复上传同一个文件
-  target.value = ''
-}
-
 // 监听数据变化更新图表
 watch(cameraDistance, () => {
-  if (deviceConnected.value) {
-    updateChart()
-  }
+  updateChart()
 }, { immediate: true, deep: true })
 
 // 组件挂载时初始化
