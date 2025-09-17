@@ -16,11 +16,11 @@
       </div>
       
       <div class="file-controls">
-        <el-button type="primary" size="small" @click="saveData" class="save-btn" :disabled="cameraDistance.length===0 || deviceConnected">
-          保存数据
+        <el-button type="default" size="small" @click="saveData" class="save-btn" :disabled="cameraDistance.length===0 || deviceConnected">
+          保存
         </el-button>
         <el-button type="default" size="small" @click="clearPlotData" class="clear-btn">
-          清除数据
+          清除
         </el-button>
       </div>
     </div>
@@ -723,7 +723,6 @@ onUnmounted(() => {
   height: 100%;
   display: flex;
   flex-direction: column;
-  padding: 10px;
   box-sizing: border-box;
 }
 
@@ -731,9 +730,11 @@ onUnmounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 10px;
-  flex-wrap: wrap;
-  gap: 10px;
+  padding: 8px 12px;
+  background-color: #f8f9fa;
+  border-bottom: 1px solid #e9ecef;
+  height: 50px;
+  box-sizing: border-box;
 }
 
 .time-range-control {
@@ -746,7 +747,6 @@ onUnmounted(() => {
 
 .file-controls {
   display: flex;
-  gap: 5px;
 }
 
 .chart-container {
@@ -755,6 +755,7 @@ onUnmounted(() => {
   /* 确保容器有明确的尺寸 */
   width: 100%;
   height: 400px;
+  padding: 10px;
 }
 
 /* Element Plus 按钮样式调整 */

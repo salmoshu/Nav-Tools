@@ -2,13 +2,11 @@
   <div class="deviation-container">
     <div class="control-panel" :class="{ 'control-panel-fullscreen': isFullScreen }">
       <div class="controls">
-        <el-switch v-model="isTracking" @change="toggleTracking" class="tracking-switch" />
-        <span class="switch-label">追踪</span>
+        
 
-        <!-- 添加视图配置按钮 -->
-        <el-button type="default" size="small" @click="showViewConfig" class="control-btn config-btn">
-          数据配置
-        </el-button>
+        <!-- 添加轨迹点尺寸调节滑块 -->
+        <span class="switch-label">追踪:</span>
+        <el-switch v-model="isTracking" @change="toggleTracking" class="tracking-switch" />
         
         <!-- 添加轨迹点尺寸调节滑块 -->
         <div class="point-size-control">
@@ -26,6 +24,10 @@
         
         <!-- 将重置、清除和全屏按钮放在右侧 -->
         <div class="right-buttons">
+          <!-- 添加视图配置按钮 -->
+          <el-button type="default" size="small" @click="showViewConfig" class="control-btn config-btn">
+            配置
+          </el-button>
           <el-button type="default" size="small" @click="resetZoom" class="zoom-btn">重置</el-button>
           <el-button type="default" size="small" @click="clearTrack" class="clear-btn">清除</el-button>
           <el-button type="default" size="small" @click="toggleFullScreen" class="fullscreen-btn">
@@ -740,13 +742,14 @@ onUnmounted(() => {
 }
 
 .control-panel {
-  padding: 0px 12px;
-  height: 50px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
   background-color: #f8f9fa;
   border-bottom: 1px solid #e9ecef;
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
+  height: 50px;
+  box-sizing: border-box;
 }
 
 .controls {
@@ -764,15 +767,11 @@ onUnmounted(() => {
 .switch-label {
   font-size: 12px;
   color: #6b7280;
-  margin-right: 15px;
+  margin-right: 5px;
   line-height: 1;
 }
 
 .control-btn {
-  padding: 6px 5px;
-  /* background-color: #f8f9fa; */
-  /* color: #495057; */
-  /* border: 1px solid #dee2e6; */
   border-radius: 4px;
   cursor: pointer;
   font-size: 12px;
@@ -810,10 +809,12 @@ onUnmounted(() => {
 .size-label {
   margin-right: 5px;
   font-size: 12px;
+  color: #6b7280;
+  line-height: 1;
 }
 
 .point-slider {
-  width: 60px;
+  width: 50px;
   margin: 0 5px;
 }
 
@@ -865,7 +866,6 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   margin-left: auto; /* 自动占据剩余空间，将按钮推到右侧 */
-  gap: 5px;
 }
 
 /* 添加全屏模式相关样式 */

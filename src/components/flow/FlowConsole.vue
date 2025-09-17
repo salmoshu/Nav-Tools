@@ -4,19 +4,25 @@
       <div class="console-controls">
         <!-- 左侧按钮组 -->
         <div class="left-controls">
-          <select v-model="dataFormat" class="format-select">
-            <option value="json">JSON</option>
-            <option value="nmea">NMEA</option>
-          </select>
-          <button @click="toggleDataFilter" class="control-btn">{{ dataFilter ? '关闭过滤' : `过滤${dataFormat.toUpperCase()}` }}</button>
-          <button @click="toggleAutoScroll" class="control-btn">{{ autoScroll ? '禁止滚动' : '启用滚动' }}</button>
-          <button @click="toggleAddTimestamp" class="control-btn">{{ addTimestamp ? '关闭时间' : '启用时间' }}</button>
+          <el-select class="custom-select" v-model="dataFormat" placeholder="选择格式" size="small" style="width: 72px;">
+            <el-option label="JSON" value="json"></el-option>
+            <el-option label="NMEA" value="nmea"></el-option>
+          </el-select>
+          <el-button @click="toggleDataFilter" type="default" size="small">
+            <span :style="{ textDecoration: dataFilter ? 'line-through' : 'none' }">{{ dataFilter ? `过滤${dataFormat.toUpperCase()}` : `过滤${dataFormat.toUpperCase()}` }}</span>
+          </el-button>
+          <el-button @click="toggleAddTimestamp" type="default" size="small">
+            <span :style="{ textDecoration: addTimestamp ? 'line-through' : 'none' }">时间</span>
+          </el-button>
+          <el-button @click="toggleAutoScroll" type="default" size="small">
+            <span :style="{ textDecoration: autoScroll ? 'line-through' : 'none' }">滚动</span>
+          </el-button>
         </div>
         
         <!-- 右侧按钮组 -->
         <div class="right-controls">
-          <button @click="saveConsoleData" class="control-btn" :disabled="rawMessages.length === 0">保存数据</button>
-          <button @click="clearConsole" class="control-btn">清除数据</button>
+          <el-button @click="saveConsoleData" type="default" size="small" :disabled="rawMessages.length === 0">保存</el-button>
+          <el-button @click="clearConsole" type="default" size="small">清除</el-button>
         </div>
       </div>
     </div>
@@ -38,7 +44,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, nextTick } from 'vue';
-import { ElMessage } from 'element-plus';
+import { ElMessage, ElButton, ElSelect, ElOption } from 'element-plus';
 import { navMode } from '@/settings/config';
 
 // 控制台相关状态
@@ -281,24 +287,6 @@ const getMessageKey = (message: { raw: string; timestamp: string }) => {
   box-sizing: border-box;
 }
 
-.format-select {
-  padding: 6px 2px;
-  border: 1px solid #dcdfe6;
-  border-radius: 4px;
-  background-color: #f8f9fa;
-  color: #606266;
-  font-size: 12px;
-  outline: none;
-}
-
-.format-select:hover {
-  border-color: #c0c4cc;
-}
-
-.format-select:focus {
-  border-color: #409eff;
-}
-
 .console-header {
   display: flex;
   justify-content: space-between;
@@ -308,32 +296,6 @@ const getMessageKey = (message: { raw: string; timestamp: string }) => {
   border-bottom: 1px solid #e9ecef;
   height: 50px;
   box-sizing: border-box;
-}
-
-.console-controls {
-  display: flex;
-  gap: 8px;
-}
-
-.control-btn {
-  padding: 6px 12px;
-  background-color: #f8f9fa;
-  color: #495057;
-  border: 1px solid #dee2e6;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 12px;
-  transition: all 0.2s ease;
-}
-
-.control-btn:hover {
-  background-color: #e9ecef;
-  border-color: #adb5bd;
-}
-
-.control-btn:active {
-  background-color: #dee2e6;
-  transform: translateY(1px);
 }
 
 .console-content {
@@ -415,11 +377,6 @@ const getMessageKey = (message: { raw: string; timestamp: string }) => {
   font-weight: 500;
 }
 
-.control-btn[disabled] {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
 .console-controls {
   display: flex;
   justify-content: space-between;
@@ -427,13 +384,11 @@ const getMessageKey = (message: { raw: string; timestamp: string }) => {
   width: 100%;
 }
 
-.left-controls {
+.left-controls, .right-controls {
   display: flex;
-  gap: 8px;
 }
 
-.right-controls {
-  display: flex;
-  gap: 8px;
+:deep(.custom-select) {
+  margin-right: 10px;
 }
 </style>

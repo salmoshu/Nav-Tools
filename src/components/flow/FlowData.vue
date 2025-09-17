@@ -26,10 +26,10 @@
         <div class="right-buttons">
           <!-- 移除文件上传按钮 -->
           <el-button type="default" size="small" @click="saveData" class="save-btn" :disabled="!hasData">
-            保存数据
+            保存
           </el-button>
           <el-button type="default" size="small" @click="clearPlotData" class="clear-btn">
-            清除数据
+            清除
           </el-button>
         </div>
       </div>
@@ -255,7 +255,7 @@
     <template #footer>
       <el-button type="primary" @click="exportConfigFile">导出</el-button>
       <el-button type="primary" @click="applyViewConfig(createChart)">确定</el-button>
-      <el-button @click="viewConfigDialogVisible = false">取消</el-button>
+      <el-button type="default" @click="viewConfigDialogVisible = false">取消</el-button>
     </template>
   </el-dialog>
 </template>
@@ -1037,18 +1037,23 @@ watch(
   display: flex;
   flex-direction: column;
   height: 100%;
-  padding: 10px;
 }
 
 .controls {
   display: flex;
   justify-content: space-between;
-  margin-bottom: 10px;
+  align-items: center;
+  padding: 8px 12px;
+  background-color: #f8f9fa;
+  border-bottom: 1px solid #e9ecef;
+  height: 50px;
+  box-sizing: border-box;
 }
 
 .chart-container {
   flex: 1;
   min-height: 300px;
+  padding: 10px;
 }
 
 /* 按钮样式 */
@@ -1061,12 +1066,10 @@ watch(
 
 .left-buttons {
   display: flex;
-  gap: 5px;
 }
 
 .right-buttons {
   display: flex;
-  gap: 5px;
 }
 
 .el-button {
