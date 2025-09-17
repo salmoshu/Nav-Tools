@@ -309,7 +309,6 @@ const {
   applyViewConfig
 } = useFlowData(flowData)
 
-const fileInput = ref<HTMLInputElement>()
 const chartRef = ref<HTMLDivElement>()
 let chart: echarts.ECharts | null = null
 let resizeObserver: ResizeObserver | null = null
@@ -822,7 +821,7 @@ watch(
 
 .chart-container {
   flex: 1;
-  min-height: 400px;
+  min-height: 300px;
 }
 
 /* 按钮样式 */
