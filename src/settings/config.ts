@@ -12,7 +12,7 @@ const appConfig: any = {
     follow: createModuleItem({
       title: 'Follow',
       icon: toolBarIcon.follow,
-      action: ['data',],
+      action: ['data', 'console'],
       props: {}
     }),
   },

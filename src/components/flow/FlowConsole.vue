@@ -4,9 +4,13 @@
       <div class="console-controls">
         <!-- 左侧按钮组 -->
         <div class="left-controls">
-          <button @click="toggleAutoScroll" class="control-btn">{{ autoScroll ? '禁用滚动' : '启用滚动' }}</button>
-          <button @click="toggleAddTimestamp" class="control-btn">{{ addTimestamp ? '禁用时间' : '启用时间' }}</button>
-          <button @click="toggleDataFilter" class="control-btn">{{ dataFilter ? '禁用过滤' : '启用过滤' }}</button>
+          <select v-model="dataFormat" class="format-select">
+            <option value="json">JSON</option>
+            <option value="nmea">NMEA</option>
+          </select>
+          <button @click="toggleDataFilter" class="control-btn">{{ dataFilter ? '关闭过滤' : `过滤${dataFormat.toUpperCase()}` }}</button>
+          <button @click="toggleAutoScroll" class="control-btn">{{ autoScroll ? '禁止滚动' : '启用滚动' }}</button>
+          <button @click="toggleAddTimestamp" class="control-btn">{{ addTimestamp ? '关闭时间' : '启用时间' }}</button>
         </div>
         
         <!-- 右侧按钮组 -->
@@ -17,15 +21,17 @@
       </div>
     </div>
     <div ref="consoleContent" class="console-content">
-      <div v-for="(message, index) in rawMessages" :key="index" class="message-line">
-        <span v-if="addTimestamp" class="timestamp">{{ message.timestamp }}: </span>
-        <span :class="{'valid-message': message.isValid, 'invalid-message': !message.isValid}">
-          {{ message.raw }}
-        </span>
+      <div v-for="message in rawMessages" :key="getMessageKey(message)" class="message-line">
+        <div v-if="!dataFilter || (message.dataType === dataFormat && message.isValid)">
+          <span v-if="addTimestamp" class="timestamp">{{ message.timestamp }}: </span>
+          <span :class="{'valid-message': message.isValid, 'invalid-message': !message.isValid}">
+            {{ message.raw }}
+          </span>
+        </div>
       </div>
     </div>
     <div class="console-footer">
-      <p>共 {{ rawMessages.length }} 条消息 | 累计数目: {{ msgCount }}</p>
+      <p>共 {{ rawMessages.length }} 条消息 | 有效数目: {{ msgCount }}</p>
     </div>
   </div>
 </template>
@@ -33,53 +39,127 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, nextTick } from 'vue';
 import { ElMessage } from 'element-plus';
+import { navMode } from '@/settings/config';
 
 // 控制台相关状态
 const consoleContent = ref<HTMLDivElement | null>(null);
-const rawMessages = ref<{ timestamp: string; raw: string; isValid: boolean }[]>([]);
+const rawMessages = ref<{ 
+  timestamp: string;
+  raw: string;
+  dataType: 'nmea' | 'json';
+  isValid: boolean
+}[]>([]);
 const autoScroll = ref(true);
 const msgCount = ref(0);
+const msgNmeaCount = ref(0);
+const msgJsonCount = ref(0);
+const dataFormat = ref<'json' | 'nmea'>('json');
+
+const calculateNmeaChecksum = (sentence: string): string => {
+  let checksum = 0;
+  for (let i = 0; i < sentence.length; i++) {
+    checksum ^= sentence.charCodeAt(i);
+  }
+  // 转换为2位十六进制字符串
+  return checksum.toString(16).toUpperCase().padStart(2, '0');
+}
+
+const isValidNmea = (str: string) => {
+  // 基本格式检查
+  if (!str.startsWith('$')) {
+    return false;
+  }
+  
+  // 移除结尾的换行符以便处理
+  const cleanStr = str.trimEnd();
+  
+  // 检查是否包含星号(校验和分隔符)
+  const asteriskIndex = cleanStr.indexOf('*');
+  if (asteriskIndex === -1 || asteriskIndex < 6) { // 至少需要$xxxx,格式
+    return false;
+  }
+  
+  // 检查校验和是否为2位十六进制字符
+  const checksumPart = cleanStr.substring(asteriskIndex + 1);
+  if (!/^[0-9A-Fa-f]{2}$/.test(checksumPart)) {
+    return false;
+  }
+  
+  // 可选：验证校验和
+  const dataPart = cleanStr.substring(1, asteriskIndex); // 不包含$和校验和部分
+  const calculatedChecksum = calculateNmeaChecksum(dataPart);
+  return calculatedChecksum === checksumPart.toUpperCase();
+}
+
+const isValidJson = (str: string) => {
+  if (str.endsWith('\n')) {
+    str = str.slice(0, -1);
+  }
+  if (str.endsWith('\r')) {
+    str = str.slice(0, -1);
+  }
+  // 目前仅考虑大括号起始的JSON格式
+  if (!str.startsWith('{') || !str.endsWith('}')) {
+    return false;
+  }
+  try {
+    JSON.parse(str, (_, value) => {
+      // 需要以大括号起始
+       return value
+    })
+    return true;
+  } catch (error) {
+    return false;
+  }
+}
 
 // 处理接收到的Flow数据
 let totalString = ''
 const handleRawData = (rawData: string) => {
   totalString += rawData;
-  
+
   if (totalString.includes('\n')) {
-    try {
-      const now = new Date();
-      const timestamp = now.toLocaleTimeString() + '.' + now.getMilliseconds().toString().padStart(3, '0');
-      const lines = totalString.split('\n');
-      
-      // 保留最后一行，因为它可能是不完整的
-      totalString = lines[lines.length - 1];
+    const now = new Date();
+    const timestamp = now.toLocaleTimeString() + '.' + now.getMilliseconds().toString().padStart(3, '0');
+    const lines = totalString.split('\n');
+    
+    // 保留最后一行，因为它可能是不完整的
+    totalString = lines[lines.length - 1];
 
-      // 处理所有完整的行（除了最后一行）
-      for (let i = 0; i < lines.length - 1; i++) {
-        const line = lines[i];
-        if (line.trim() !== '') {
-          // 检测是否为JSON格式
-          let isValid = true;
-          try {
-            JSON.parse(line);
-          } catch (error) {
-            isValid = false;
-          }
+    // 处理所有完整的行（除了最后一行）
+    for (let i = 0; i < lines.length - 1; i++) {
+      const line = lines[i];
+      // 
+      if (line.trim() !== '') {
+        // 检测是否为JSON格式
+        let isValid = true;
 
-          if (dataFilter.value && !isValid) {
-            continue;
+        if (dataFormat.value === 'nmea') {
+          isValid = isValidNmea(line);
+          if (isValid) {
+            msgNmeaCount.value++;
           }
-          
           rawMessages.value.push({
             timestamp,
             raw: line,
+            dataType: 'nmea',
             isValid
           });
-          msgCount.value++;
+          msgCount.value = msgNmeaCount.value;
+        } else {
+          isValid = isValidJson(line);
+          if (isValid) {
+            msgJsonCount.value++;
+          }
+          rawMessages.value.push({
+            timestamp,
+            raw: line,
+            dataType: 'json',
+            isValid
+          });
+          msgCount.value = msgJsonCount.value;
         }
       }
-    } catch (error) {
-      // console.error('处理数据时出错:', error);
     }
 
     // 限制消息数量
@@ -158,19 +238,28 @@ const toggleDataFilter = () => {
   dataFilter.value = !dataFilter.value;
 }
 
-// 监听Flow数据事件
+// 定义命名的回调函数
+const handleSerialData = (_: unknown, data: string) => {
+  handleRawData(data);
+};
+
 onMounted(() => {
-  window.ipcRenderer.on("serial-data-to-renderer", (_, data: string) => {
-    // console.log("src/hooks/useDevice.ts 收到串口数据:", data);
-    handleRawData(data);
-  });
+  if (navMode.funcMode === 'gnss') {
+    dataFormat.value = 'nmea';
+  } else {
+    dataFormat.value = 'json';
+  }
+  window.ipcRenderer.on("serial-data-to-renderer", handleSerialData);
 });
 
-// 清理监听
 onUnmounted(() => {
-  // 注意：这里需要根据实际的ipc实现来移除监听
-  console.log('FlowConsole组件已卸载，停止监听Flow数据');
+  window.ipcRenderer.off('serial-data-to-renderer', handleSerialData);
 });
+// 在script部分添加获取消息唯一key的函数
+const getMessageKey = (message: { raw: string; timestamp: string }) => {
+  // 结合原始内容和时间戳生成唯一标识
+  return `${message.timestamp}_${message.raw}`;
+};
 </script>
 
 <style scoped>
@@ -185,6 +274,24 @@ onUnmounted(() => {
   background-color: #ffffff;
   color: #333333;
   box-sizing: border-box;
+}
+
+.format-select {
+  padding: 6px 2px;
+  border: 1px solid #dcdfe6;
+  border-radius: 4px;
+  background-color: #f8f9fa;
+  color: #606266;
+  font-size: 12px;
+  outline: none;
+}
+
+.format-select:hover {
+  border-color: #c0c4cc;
+}
+
+.format-select:focus {
+  border-color: #409eff;
 }
 
 .console-header {
