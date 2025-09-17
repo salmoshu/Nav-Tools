@@ -4,8 +4,18 @@
       <div class="file-controls">
         <!-- 左侧按钮 -->
         <div class="left-buttons">
-          <el-button type="primary" size="small" @click="showViewConfig" class="layout-btn">
-            数据配置
+          <el-button type="default" size="small" @click="importConfigFile" class="layout-btn">
+            配置文件
+          </el-button>
+          <input
+            ref="configFileInput"
+            type="file"
+            accept=".json"
+            style="display: none"
+            @change="handleConfigFileUpload"
+          />
+          <el-button type="default" size="small" @click="showViewConfig" class="layout-btn">
+            手动配置
           </el-button>
           <el-button type="default" size="small" @click="showMessageFormat" class="message-btn">
             消息格式
@@ -15,7 +25,7 @@
         <!-- 右侧按钮 -->
         <div class="right-buttons">
           <!-- 移除文件上传按钮 -->
-          <el-button type="primary" size="small" @click="saveData" class="save-btn" :disabled="!hasData">
+          <el-button type="default" size="small" @click="saveData" class="save-btn" :disabled="!hasData">
             保存数据
           </el-button>
           <el-button type="default" size="small" @click="clearPlotData" class="clear-btn">
@@ -243,8 +253,9 @@
       </div>
     </div>
     <template #footer>
-      <el-button @click="viewConfigDialogVisible = false">取消</el-button>
+      <el-button type="primary" @click="exportConfigFile">导出</el-button>
       <el-button type="primary" @click="applyViewConfig(createChart)">确定</el-button>
+      <el-button @click="viewConfigDialogVisible = false">取消</el-button>
     </template>
   </el-dialog>
 </template>
@@ -328,8 +339,200 @@ const largeDataOptions = computed(() => {
   }
 })
 
+// 导入配置文件
+function importConfigFile() {
+  configFileInput.value?.click()
+}
+
+// 处理配置文件上传
+function handleConfigFileUpload(event: Event) {
+  const target = event.target as HTMLInputElement
+  const file = target.files?.[0]
+  
+  if (file) {
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      const content = e.target?.result as string
+      try {
+        // 解析JSON配置
+        const config = JSON.parse(content)
+        
+        // 验证配置格式
+        validateAndApplyConfig(config)
+        
+        ElMessage.success('配置导入成功')
+      } catch (error) {
+        ElMessage.error('配置文件解析失败，请检查格式是否正确')
+        console.error('配置文件解析失败:', error)
+      }
+    }
+    
+    reader.readAsText(file)
+    
+    // 清空input以允许重复选择同一文件
+    target.value = ''
+  }
+}
+
+// 验证并应用配置
+function validateAndApplyConfig(config: any) {
+  // 验证必要字段
+  if (!config.viewLayout && !config.yAxisConfig) {
+    throw new Error('配置文件缺少必要的布局配置')
+  }
+  
+  // 应用布局配置
+  if (config.viewLayout) {
+    if (['single', 'double'].includes(config.viewLayout)) {
+      viewLayout.value = config.viewLayout
+    } else {
+      console.warn('无效的viewLayout值，使用默认值')
+    }
+  }
+  
+  // 应用Y轴配置
+  if (config.yAxisConfig) {
+    if (['single', 'double'].includes(config.yAxisConfig)) {
+      yAxisConfig.value = config.yAxisConfig
+    } else {
+      console.warn('无效的yAxisConfig值，使用默认值')
+    }
+  }
+  
+  // 应用数据源配置（如果有）
+  applyDataSourceConfig(config)
+  
+  // 应用配置并更新图表
+  applyViewConfig(() => {
+    createChart()
+  })
+}
+
+// 应用数据源配置
+function applyDataSourceConfig(config: any) {
+  // 单图模式下的数据源配置
+  if (config.viewLayout === 'single' && config.sources) {
+    if (config.yAxisConfig === 'single') {
+      // 单图单Y轴模式
+      singleChartSource1.value = config.sources.source1 || ''
+      singleChartSource2.value = config.sources.source2 || ''
+      singleChartSource3.value = config.sources.source3 || ''
+      singleChartSource4.value = config.sources.source4 || ''
+    } else if (config.yAxisConfig === 'double') {
+      // 单图双Y轴模式
+      singleChartLeftSource1.value = config.sources.left1 || ''
+      singleChartLeftSource2.value = config.sources.left2 || ''
+      singleChartRightSource1.value = config.sources.right1 || ''
+      singleChartRightSource2.value = config.sources.right2 || ''
+    }
+  }
+  
+  // 双图模式下的数据源配置
+  if (config.viewLayout === 'double') {
+    // 上图数据源
+    if (config.upperSources) {
+      if (config.yAxisConfig === 'single') {
+        upperChartSource1.value = config.upperSources.source1 || ''
+        upperChartSource2.value = config.upperSources.source2 || ''
+        upperChartSource3.value = config.upperSources.source3 || ''
+        upperChartSource4.value = config.upperSources.source4 || ''
+      } else if (config.yAxisConfig === 'double') {
+        upperChartLeftSource1.value = config.upperSources.left1 || ''
+        upperChartLeftSource2.value = config.upperSources.left2 || ''
+        upperChartRightSource1.value = config.upperSources.right1 || ''
+        upperChartRightSource2.value = config.upperSources.right2 || ''
+      }
+    }
+    
+    // 下图数据源
+    if (config.lowerSources) {
+      if (config.yAxisConfig === 'single') {
+        lowerChartSource1.value = config.lowerSources.source1 || ''
+        lowerChartSource2.value = config.lowerSources.source2 || ''
+        lowerChartSource3.value = config.lowerSources.source3 || ''
+        lowerChartSource4.value = config.lowerSources.source4 || ''
+      } else if (config.yAxisConfig === 'double') {
+        lowerChartLeftSource1.value = config.lowerSources.left1 || ''
+        lowerChartLeftSource2.value = config.lowerSources.left2 || ''
+        lowerChartRightSource1.value = config.lowerSources.right1 || ''
+        lowerChartRightSource2.value = config.lowerSources.right2 || ''
+      }
+    }
+  }
+}
+
+// 同时，为了方便用户，我们可以添加一个导出配置的功能
+function exportConfigFile() {
+  let config: any = {
+    viewLayout: viewLayout.value,
+    yAxisConfig: yAxisConfig.value
+  }
+  
+  // 根据当前布局和Y轴配置收集数据源配置
+  if (viewLayout.value === 'single') {
+    if (yAxisConfig.value === 'single') {
+      config.sources = {
+        source1: singleChartSource1.value,
+        source2: singleChartSource2.value,
+        source3: singleChartSource3.value,
+        source4: singleChartSource4.value
+      }
+    } else {
+      config.sources = {
+        left1: singleChartLeftSource1.value,
+        left2: singleChartLeftSource2.value,
+        right1: singleChartRightSource1.value,
+        right2: singleChartRightSource2.value
+      }
+    }
+  } else {
+    config.upperSources = {},
+    config.lowerSources = {}
+    
+    if (yAxisConfig.value === 'single') {
+      config.upperSources = {
+        source1: upperChartSource1.value,
+        source2: upperChartSource2.value,
+        source3: upperChartSource3.value,
+        source4: upperChartSource4.value
+      }
+      config.lowerSources = {
+        source1: lowerChartSource1.value,
+        source2: lowerChartSource2.value,
+        source3: lowerChartSource3.value,
+        source4: lowerChartSource4.value
+      }
+    } else {
+      config.upperSources = {
+        left1: upperChartLeftSource1.value,
+        left2: upperChartLeftSource2.value,
+        right1: upperChartRightSource1.value,
+        right2: upperChartRightSource2.value
+      }
+      config.lowerSources = {
+        left1: lowerChartLeftSource1.value,
+        left2: lowerChartLeftSource2.value,
+        right1: lowerChartRightSource1.value,
+        right2: lowerChartRightSource2.value
+      }
+    }
+  }
+  
+  // 创建下载链接
+  const dataStr = JSON.stringify(config, null, 2)
+  const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr)
+  
+  const exportFileDefaultName = `flow_chart_config_${new Date().toISOString().slice(0,10)}.json`
+  
+  const linkElement = document.createElement('a')
+  linkElement.setAttribute('href', dataUri)
+  linkElement.setAttribute('download', exportFileDefaultName)
+  linkElement.click()
+}
+
 // 消息格式对话框相关
 const messageDialogVisible = ref(false)
+const configFileInput = ref<HTMLInputElement>()
 
 // 显示消息格式对话框
 function showMessageFormat() {

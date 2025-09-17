@@ -6,7 +6,7 @@
         <span class="switch-label">追踪</span>
 
         <!-- 添加视图配置按钮 -->
-        <el-button type="primary" size="small" @click="showViewConfig" class="control-btn config-btn">
+        <el-button type="default" size="small" @click="showViewConfig" class="control-btn config-btn">
           数据配置
         </el-button>
         
