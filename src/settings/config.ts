@@ -12,7 +12,7 @@ const appConfig: any = {
     follow: createModuleItem({
       title: 'Follow',
       icon: toolBarIcon.follow,
-      action: ['data',],
+      action: ['data', 'console'],
       props: {}
     }),
   },
@@ -20,7 +20,7 @@ const appConfig: any = {
     ultrasonic: createModuleItem({
       title: 'Ultrasonic',
       icon: toolBarIcon.ultrasonic,
-      action: ['data',],
+      action: ['data', 'console'],
       props: {}
     }),
   },

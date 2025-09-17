@@ -206,7 +206,7 @@ export function useFlow() {
       String(now.getUTCHours()).padStart(2, '0') + '-' +
       String(now.getUTCMinutes()).padStart(2, '0') + '-' +
       String(now.getUTCSeconds()).padStart(2, '0') + 'Z';
-    a.download = `Nav-Tools_${timestamp}.txt`;
+    a.download = `Nav-Tools_${timestamp}.jsonx`;
     a.click();
     URL.revokeObjectURL(a.href);
   }
