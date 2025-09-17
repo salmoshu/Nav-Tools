@@ -363,16 +363,19 @@ export function useLayoutManager() {
       return
     }
 
-    const exists = layoutDraggableList.value.some(item => item.componentName === componentName)
+    /**
+     * 如果只希望添加唯一一个组件，则启用以下代码
+     */
+    // const exists = layoutDraggableList.value.some(item => item.componentName === componentName)
     
-    if (exists) {
-      ElMessage({
-        message: `${componentName} 已存在`,
-        type: 'warning',
-        duration: 1000
-      })
-      return
-    }
+    // if (exists) {
+    //   ElMessage({
+    //     message: `${componentName} 已存在`,
+    //     type: 'warning',
+    //     duration: 1000
+    //   })
+    //   return
+    // }
 
     const newItem: LayoutItem = {
       x: 0,
