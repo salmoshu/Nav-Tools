@@ -1,5 +1,4 @@
 import { ref, computed } from 'vue'
-import { ElMessage } from 'element-plus'
 
 // 定义视图布局类型
 export type ViewLayout = 'single' | 'double'
@@ -216,7 +215,6 @@ export function useFlowData(flowData: any) {
     // 在更新图表前先销毁并重新创建图表，确保清除所有残留数据
     createChart()
     viewConfigDialogVisible.value = false
-    ElMessage.success('视图配置已应用')
   }
 
   // 返回所有需要暴露的状态和方法

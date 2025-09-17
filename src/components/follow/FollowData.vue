@@ -68,7 +68,6 @@
 import { ref, onMounted, onUnmounted, watch } from 'vue'
 import * as echarts from 'echarts'
 import { useFollow } from '@/composables/follow/useFollow'
-import { ElMessage } from 'element-plus'
 import { useDevice } from '@/hooks/useDevice'
 
 // 初始化超声波数据处理

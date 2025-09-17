@@ -342,7 +342,9 @@ export function useLayoutManager() {
     ElMessage({
       message: '布局已保存',
       type: 'success',
-      duration: 1000
+      duration: 1000,
+      placement: 'bottom-right',
+      offset: 50,
     })
     backupCurrentLayout()
   }
@@ -358,7 +360,9 @@ export function useLayoutManager() {
       ElMessage({
         message: `组件 ${componentName} 不存在`,
         type: 'warning',
-        duration: 1000
+        duration: 1000,
+        placement: 'bottom-right',
+        offset: 50,
       })
       return
     }
@@ -372,7 +376,9 @@ export function useLayoutManager() {
     //   ElMessage({
     //     message: `${componentName} 已存在`,
     //     type: 'warning',
-    //     duration: 1000
+    //     duration: 1000,
+    //     placement: 'bottom-right',
+    //     offset: 50,
     //   })
     //   return
     // }
@@ -399,7 +405,9 @@ export function useLayoutManager() {
     ElMessage({
       message: `已添加 ${newItem.titleName}`,
       type: 'success',
-      duration: 1000
+      duration: 1000,
+      placement: 'bottom-right',
+      offset: 50,
     })
   }
 

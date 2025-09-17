@@ -129,7 +129,12 @@ function showViewConfig() {
 // 应用视图配置
 function applyViewConfig() {
   if (!selectedXField.value || !selectedYField.value) {
-    ElMessage.warning('请选择X轴和Y轴字段');
+    ElMessage({
+      message: `请选择X轴和Y轴字段`,
+      type: 'warning',
+      placement: 'bottom-right',
+      offset: 50,
+    });
     return;
   }
   
@@ -149,7 +154,6 @@ function applyViewConfig() {
   }
   
   viewConfigDialogVisible.value = false;
-  ElMessage.success('视图配置已应用');
 }
 
 // 计算正方形尺寸
@@ -663,6 +667,8 @@ function toggleFullScreenInfo() {
     message: '按Esc键或点击按钮退出全屏',
     type: 'success',
     duration: 3000,
+    placement: 'bottom-right',
+    offset: 50,
   })
 }
 

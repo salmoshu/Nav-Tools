@@ -348,12 +348,22 @@ function handleFileUpload(event: Event) {
       initRawData(content, 0)
       updateChart()
     } catch (error) {
-      ElMessage.error('文件数据处理失败')
+      ElMessage({
+        message: `文件数据处理失败`,
+        type: 'error',
+        placement: 'bottom-right',
+        offset: 50,
+      })
       console.error('文件处理错误:', error)
     }
   }
   reader.onerror = () => {
-    ElMessage.error('文件读取失败')
+    ElMessage({
+      message: `文件读取失败`,
+      type: 'error',
+      placement: 'bottom-right',
+      offset: 50,
+    })
   }
   reader.readAsText(file)
   

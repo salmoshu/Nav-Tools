@@ -98,6 +98,8 @@ const handleIo = (action: string) => {
     ElMessage({
       message: 'Log功能暂未实现',
       type: 'info',
+      placement: 'bottom-right',
+      offset: 50,
     })
   }
 }

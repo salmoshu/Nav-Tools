@@ -180,7 +180,12 @@ const handleRawData = (rawData: string) => {
 
 const saveConsoleData = () => {
   if (rawMessages.value.length === 0) {
-    ElMessage.warning('没有可保存的数据');
+    ElMessage({
+      message: `没有可保存的数据`,
+      type: 'warning',
+      placement: 'bottom-right',
+      offset: 50,
+    });
     return;
   }
 

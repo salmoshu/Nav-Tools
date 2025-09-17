@@ -360,10 +360,19 @@ function handleConfigFileUpload(event: Event) {
         // 验证配置格式
         validateAndApplyConfig(config)
         
-        ElMessage.success('配置导入成功')
+        ElMessage({
+          message: `配置导入成功`,
+          type: 'success',
+          placement: 'bottom-right',
+          offset: 50,
+        })
       } catch (error) {
-        ElMessage.error('配置文件解析失败，请检查格式是否正确')
-        console.error('配置文件解析失败:', error)
+        ElMessage({
+          message: `配置文件解析失败，请检查格式是否正确`,
+          type: 'error',
+          placement: 'bottom-right',
+          offset: 50,
+        })
       }
     }
     
@@ -551,9 +560,19 @@ const handleFileUpload = (event: Event) => {
       try {
         initRawData(content)
         updateChart()
-        ElMessage.success('数据加载成功')
+        ElMessage({
+          message: `数据加载成功`,
+          type: 'success',
+          placement: 'bottom-right',
+          offset: 50,
+        })
       } catch (error) {
-        ElMessage.error('数据加载失败')
+        ElMessage({
+          message: `数据加载失败`,
+          type: 'error',
+          placement: 'bottom-right',
+          offset: 50,
+        })
         console.error('数据加载失败:', error)
       }
     }
@@ -580,7 +599,12 @@ function clearPlotData() {
   // 重新创建图表
   createChart()
   // 显示成功消息
-  ElMessage.success('数据已清除')
+  ElMessage({
+    message: `数据已清除`,
+    type: 'success',
+    placement: 'bottom-right',
+    offset: 50,
+  })
 }
 
 // 创建图表

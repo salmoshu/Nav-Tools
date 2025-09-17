@@ -629,6 +629,8 @@ function toggleFullScreenInfo() {
     message: '按Esc键或点击按钮退出全屏',
     type: 'success',
     duration: 3000,
+    placement: 'bottom-right',
+    offset: 50,
   })
 }
 

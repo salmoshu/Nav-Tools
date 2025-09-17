@@ -126,6 +126,8 @@ export function useDevice() {
         ElMessage({
           message: "自动检索串口设备失败",
           type: "error",
+          placement: 'bottom-right',
+          offset: 50,
         });
       });
   };
@@ -180,7 +182,12 @@ export function useDevice() {
    */
   const handleNetworkSubmit = (): string => {
     const networkCmd = networkIp.value + ":" + networkPort.value;
-    ElMessage.info('网络功能暂未实现')
+    ElMessage({
+      message: `网络功能暂未实现`,
+      type: 'info',
+      placement: 'bottom-right',
+      offset: 50,
+    })
   
     console.log("网络配置:", networkCmd);
   
@@ -236,7 +243,12 @@ export function useDevice() {
     };
     
     if (!selectedFile.value && !fileCmd) {
-      ElMessage.error('请先选择文件');
+      ElMessage({
+        message: `请先选择文件`,
+        type: 'error',
+        placement: 'bottom-right',
+        offset: 50,
+      });
       return '';
     }
     
@@ -249,30 +261,60 @@ export function useDevice() {
           switch (navMode.funcMode) {
             case 'flow':
               initFlowRawData(content);
-              ElMessage.success('数据加载成功');
+              ElMessage({
+                message: `数据加载成功`,
+                type: 'success',
+                placement: 'bottom-right',
+                offset: 50,
+              });
               break;
             case 'follow':
               initFollowRawData(content);
-              ElMessage.success('数据加载成功');
+              ElMessage({
+                message: `数据加载成功`,
+                type: 'success',
+                placement: 'bottom-right',
+                offset: 50,
+              });
               break;
             default:
-              ElMessage.error('未定义的文件处理模式');
+              ElMessage({
+                message: `未定义的文件处理模式`,
+                type: 'error',
+                placement: 'bottom-right',
+                offset: 50,
+              });
               break;
           }
         } catch (error) {
-          ElMessage.error('数据加载失败');
+          ElMessage({
+            message: `数据加载失败`,
+            type: 'error',
+            placement: 'bottom-right',
+            offset: 50,
+          });
           console.error('数据加载失败:', error);
         }
       };
       
       reader.onerror = () => {
-        ElMessage.error('文件读取失败');
+        ElMessage({
+          message: `文件读取失败`,
+          type: 'error',
+          placement: 'bottom-right',
+          offset: 50,
+        });
       };
       
       reader.readAsText(selectedFile.value);
     } else {
       // 如果没有文件对象，显示提示信息
-      ElMessage.warning('请重新选择文件以加载数据');
+      ElMessage({
+        message: `请重新选择文件以加载数据`,
+        type: 'warning',
+        placement: 'bottom-right',
+        offset: 50,
+      });
     }
     
     return fileCmd;
@@ -295,12 +337,16 @@ export function useDevice() {
             ElMessage({
               message: `串口${globalDevice.value.path}打开成功`,
               type: "success",
+              placement: 'bottom-right',
+              offset: 50,
             });
           })
           .catch((error) => {
             ElMessage({
               message: `${error.message}`,
               type: "error",
+              placement: 'bottom-right',
+              offset: 50,
             });
           });
       } else if (globalDevice.value.type === 'network') {
@@ -382,6 +428,8 @@ export function useDevice() {
       ElMessage({
         message: "请输入指令",
         type: "warning",
+        placement: 'bottom-right',
+        offset: 50,
       });
     }
   };
@@ -416,6 +464,8 @@ export function useDevice() {
       ElMessage({
         message: `串口${data.path}已断开连接`,
         type: "warning",
+        placement: 'bottom-right',
+        offset: 50,
       });
     }
   });

@@ -283,18 +283,33 @@ const addNewStatus = () => {
     // 新增模式
     // 检查字段名是否为空
     if (!newStatusConfig.value.fieldName) {
-      ElMessage.error('请输入字段名')
+      ElMessage({
+        message: `请输入字段名`,
+        type: 'error',
+        placement: 'bottom-right',
+        offset: 50,
+      })
       return
     }
 
     // 检查代码是否为空（设为必填项）
     if (!newStatusConfig.value.code) {
-      ElMessage.error('请输入自定义计算代码')
+      ElMessage({
+        message: `请输入自定义计算代码`,
+        type: 'error',
+        placement: 'bottom-right',
+        offset: 50,
+      })
       return
     }
 
     if (flowData.value && flowData.value.rawDataKeys && flowData.value.rawDataKeys.includes(newStatusConfig.value.fieldName)) {
-      ElMessage.error('自定义字段名称与原始字段名重复')
+      ElMessage({
+        message: `自定义字段名称与原始字段名重复`,
+        type: 'error',
+        placement: 'bottom-right',
+        offset: 50,
+      })
       return
     }
 
@@ -317,7 +332,12 @@ const addNewStatus = () => {
   })
 
   // 显示成功消息
-  ElMessage.success('状态' + (isEditMode.value ? '更新' : '添加') + '成功')
+  ElMessage({
+    message: `状态${isEditMode.value ? '更新' : '添加'}成功`,
+    type: 'success',
+    placement: 'bottom-right',
+    offset: 50,
+  })
   
   // 关闭对话框并重置
   showAddDialog.value = false
@@ -354,10 +374,20 @@ const deleteCustomStatus = (fieldName: string) => {
     // 调用store的方法删除配置
     flowStore.removeCustomStatus(fieldName)
     // 显示成功消息
-    ElMessage.success('自定义属性删除成功')
+    ElMessage({
+      message: `自定义属性删除成功`,
+      type: 'success',
+      placement: 'bottom-right',
+      offset: 50,
+    })
   }).catch(() => {
     // 用户取消删除
-    ElMessage.info('已取消删除')
+    ElMessage({
+      message: `已取消删除`,
+      type: 'info',
+      placement: 'bottom-right',
+      offset: 50,
+    })
   })
 }
 
