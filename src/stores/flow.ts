@@ -1,7 +1,6 @@
 import { ref, computed } from 'vue'
 import { useFlow } from '@/composables/flow/useFlow'
 import { defineStore } from 'pinia'
-import { ElMessage } from 'element-plus'
 
 // 元数据属性列表 - 这些属性不应被添加到status中
 const META_PROPERTIES = ['timestamps', 'timestamp', 'isBatchData', 'rawString', 'rawDataKeys']

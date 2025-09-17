@@ -1,8 +1,9 @@
 import { ref } from "vue";
 import { useGnssStore } from "@/stores/gnss";
-import { useFollowStore } from "@/stores/followsim";
+import { useFollowStore as useFollowsimStore } from "@/stores/followsim";
+import { useFollowStore } from "@/stores/follow";
 import { navMode } from "@/settings/config";
-import { useDemo1Store } from "@/stores/demo1";
+// import { useDemo1Store } from "@/stores/demo1";
 import { useFlowStore } from "@/stores/flow";
 
 const showStatusBar = ref(true)
@@ -15,30 +16,22 @@ function getMonitorStatus() {
       const flowStore = useFlowStore();
       result.value = flowStore.status
       break;
-    case 'followsim':
+    case 'follow':
       const followStore = useFollowStore();
       result.value = followStore.status
       break;
-    case 'tree':
-      result.value = {}
+    case 'followsim':
+      const followsimStore = useFollowsimStore();
+      result.value = followsimStore.status
       break;
     case 'gnss':
       const gnssStore = useGnssStore()
       result.value = gnssStore.status
       break;
-    case 'imu':
-      result.value = {}
-      break;
-    case 'vision':
-      result.value = {}
-      break;
-    case 'demo1':
-      const demo1Store = useDemo1Store();
-      result.value = demo1Store.status
-      break;
-    case 'demo2':
-      result.value = {}
-      break;
+    // case 'demo1':
+    //   const demo1Store = useDemo1Store();
+    //   result.value = demo1Store.status
+    //   break;
     default:
       result.value = {}
       break;

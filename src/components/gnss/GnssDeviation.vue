@@ -636,12 +636,6 @@ let stopWatch = null;
 let handleKeyDown = null;
 
 onMounted(() => {
-  ElMessage({
-    message: `注意：当前仅存储${MAX_NMEA_DATA/60}分钟数据以规避系统崩溃的问题`,
-    type: 'warning',
-    duration: 3000,
-  })
-
   setTimeout(() => {
     initChart();
   }, 100);

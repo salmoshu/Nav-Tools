@@ -1,15 +1,31 @@
-import { ref } from "vue"
+import { ref } from "vue";
+import { useFollowStore } from '@/stores/follow';
 
-const dt = 1/10
-const timestamp = ref(0)
-const timestamps = ref([] as number[])
-const cameraDistance = ref([] as any[])
-const cameraAngle = ref([] as any[])
-const pidLeftSpeed = ref([] as any[])
-const pidRightSpeed = ref([] as any[])
-const motorLeftSpeed = ref([] as any[])
-const motorRightSpeed = ref([] as any[])
-const isBatchData = ref(false)
+const dt = 1/10;
+const timestamp = ref(0);
+const timestamps = ref([] as number[]);
+const cameraDistance = ref([] as any[]);
+const cameraAngle = ref([] as any[]);
+const pidLeftSpeed = ref([] as any[]);
+const pidRightSpeed = ref([] as any[]);
+const motorLeftSpeed = ref([] as any[]);
+const motorRightSpeed = ref([] as any[]);
+const isBatchData = ref(false);
+
+const updateFollowStatus = () => {
+  const followStore = useFollowStore()
+  
+  // 获取各个数组的最后一个元素作为status内容
+  followStore.status = {
+    timestamp: timestamps.value.length > 0 ? timestamps.value[timestamps.value.length - 1] : null,
+    cameraDistance: cameraDistance.value.length > 0 ? cameraDistance.value[cameraDistance.value.length - 1] : null,
+    cameraAngle: cameraAngle.value.length > 0 ? cameraAngle.value[cameraAngle.value.length - 1] : null,
+    pidLeftSpeed: pidLeftSpeed.value.length > 0 ? pidLeftSpeed.value[pidLeftSpeed.value.length - 1] : null,
+    pidRightSpeed: pidRightSpeed.value.length > 0 ? pidRightSpeed.value[pidRightSpeed.value.length - 1] : null,
+    motorLeftSpeed: motorLeftSpeed.value.length > 0 ? motorLeftSpeed.value[motorLeftSpeed.value.length - 1] : null,
+    motorRightSpeed: motorRightSpeed.value.length > 0 ? motorRightSpeed.value[motorRightSpeed.value.length - 1] : null
+  }
+}
 
 export function useFollow() {
   const clearRawData = () => {
@@ -66,6 +82,7 @@ export function useFollow() {
         }
       }
     }
+    updateFollowStatus()
   }
 
   const addNullData = () => {
@@ -137,6 +154,7 @@ export function useFollow() {
         }
       }
     }
+    updateFollowStatus()
   }
   
   const saveData = () => {
