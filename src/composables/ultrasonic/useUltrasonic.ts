@@ -1,5 +1,6 @@
 import { ref } from "vue"
 import { useObstacleDetect } from "./useObstacleDetect"
+import { useUltrasonicStore } from '@/stores/ultrasonic'
 
 const dt = 1/20
 const timestamp = ref(0)
@@ -10,6 +11,19 @@ const obstacleData = ref([] as any[])
 const isBatchData = ref(false)
 
 const { detectObstacle, detectObstacleBatch } = useObstacleDetect()
+
+// 创建更新ultrasonic状态的函数
+const updateUltrasonicStatus = () => {
+  const ultrasonicStore = useUltrasonicStore()
+  
+  // 获取各个数组的最后一个元素作为status内容
+  ultrasonicStore.status = {
+    timestamp: timestamps.value.length > 0 ? timestamps.value[timestamps.value.length - 1] : null,
+    rawDistance: rawData.value.length > 0 ? rawData.value[rawData.value.length - 1] : null,
+    filteredDistance: filteredData.value.length > 0 ? filteredData.value[filteredData.value.length - 1] : null,
+    isObstacle: obstacleData.value.length > 0 ? obstacleData.value[obstacleData.value.length - 1] !== null : false
+  }
+}
 
 export function useUltrasonic() {
   const clearRawData = () => {
@@ -47,8 +61,10 @@ export function useUltrasonic() {
       }
     }
     detectObstacleBatch(rawData.value, filteredData.value, obstacleData.value)
+    // 在批量数据初始化完成后更新状态
+    updateUltrasonicStatus()
   }
-
+  
   const addNullData = () => {
     const now = Date.now() / 1000
     timestamps.value.push(now - timestamp.value - 0.5)
@@ -106,6 +122,8 @@ export function useUltrasonic() {
         }
       }
     }
+    // 在添加新数据后更新状态
+    updateUltrasonicStatus()
   }
   
   const saveData = () => {
@@ -146,5 +164,6 @@ export function useUltrasonic() {
     initRawData,
     clearRawData,
     saveData,
+    updateUltrasonicStatus // 可选：导出更新函数，以便外部手动触发更新
   }
 }
