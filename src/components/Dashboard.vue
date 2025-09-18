@@ -399,6 +399,10 @@ onUnmounted(() => {
   margin: 0;
   padding: 0 20px; /* 水平内边距，垂直内边距为 0 */
   box-sizing: border-box;
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
 }
 
 .title {
