@@ -302,50 +302,35 @@ export const useFlowStore = defineStore('flow', () => {
           const dataArray = flowData.value[config.fieldName] as any[]
           const timestampsLength = flowData.value.timestamp?.length || 0
           
-          // 如果是批量数据，为每个时间点生成计算值
-          if (flowData.value.isBatchData && flowData.value.camera_angle && Array.isArray(flowData.value.camera_angle)) {
-            // 只在数据不足时重新计算所有值
-            if (dataArray.length < timestampsLength) {
-              // 清空数组，重新计算所有值
-              dataArray.length = 0
-              
-              // 为每个时间点计算值
-              for (let i = 0; i < flowData.value.camera_angle.length; i++) {
-                try {
-                  // 创建包含当前时间点数据的上下文
-                  const timePointContext = {
-                    flowData: {
-                      ...flowData.value,
-                      // 临时修改camera_angle为当前时间点的值
-                      camera_angle: [flowData.value.camera_angle[i]]
-                    },
-                    fieldName: config.fieldName
-                  }
-                  
-                  // 计算当前时间点的值
-                  let timePointValue = safeEvaluateExpression(config.code, timePointContext)
-                  
-                  // 格式化数值
-                  if (typeof timePointValue === 'number') {
-                    timePointValue = Number(timePointValue.toFixed(config.decimalPlaces))
-                  }
-                  
-                  dataArray.push(timePointValue)
-                } catch (e) {
-                  dataArray.push(null)
+          // 只在数据不足时重新计算所有值
+          if (dataArray.length < timestampsLength) {
+            // 清空数组，重新计算所有值
+            dataArray.length = 0
+            
+            // 为每个时间点计算值
+            for (let i = 0; i < timestampsLength; i++) {
+              try {
+                // 创建包含当前时间点数据的上下文
+                const timePointContext = {
+                  flowData: {
+                    ...flowData.value,
+                  },
+                  fieldName: config.fieldName
                 }
+                
+                // 计算当前时间点的值
+                let timePointValue = safeEvaluateExpression(config.code, timePointContext)
+                
+                // 格式化数值
+                if (typeof timePointValue === 'number') {
+                  timePointValue = Number(timePointValue.toFixed(config.decimalPlaces))
+                }
+                
+                dataArray.push(timePointValue)
+              } catch (e) {
+                dataArray.push(null)
               }
             }
-          } else if (dataArray.length < timestampsLength) {
-            // 非批量数据，补充null值
-            while (dataArray.length < timestampsLength - 1) {
-              dataArray.push(null)
-            }
-            // 添加最新的计算值
-            dataArray.push(value)
-          } else if (dataArray.length > 0) {
-            // 更新最后一个值
-            dataArray[dataArray.length - 1] = value
           }
         } catch (error) {
           console.error('Error executing custom status code:', error)
