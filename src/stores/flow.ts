@@ -418,9 +418,10 @@ export const useFlowStore = defineStore('flow', () => {
     
     // 从flowData中删除对应的字段
     if (fieldName in flowData.value) {
-      // 注意：我们不能直接删除flowData中的属性，因为它是响应式对象
+      // 注意：可能不能直接删除flowData中的属性，因为它是响应式对象
       // 可以将其设置为空数组来清理数据
-      flowData.value[fieldName] = []
+      // flowData.value[fieldName] = []
+      delete flowData.value[fieldName]
     }
   }
     
