@@ -1,5 +1,19 @@
 <template>
-  <div class="dashboard">
+  <div 
+    class="dashboard" 
+    @dragover="device.handleDragOver"
+    @dragenter="device.handleDragEnter"
+    @dragleave="device.handleDragLeave"
+    @drop="device.handleDrop"
+  >
+    <!-- 拖拽提示遮罩层 -->
+    <div 
+      v-if="device.isDragOver.value"
+      class="drag-overlay"
+    >
+    </div>
+    
+    <!-- 原有内容 -->
     <ToolBar 
       @positionChange="handleToolbarPositionChange"
       @funcModeChange="handleFuncModeChange"
@@ -85,12 +99,16 @@ import ToolBar from './ToolBar.vue'
 import StatusBar from './StatusBar.vue'
 import { ref, computed, onMounted, onUnmounted, provide } from 'vue'
 import { GridLayout, GridItem } from 'grid-layout-plus'
-import { ElButton, ElCard, ElIcon } from 'element-plus' // 移除了ElDialog的导入
-import { Close, Share } from '@element-plus/icons-vue'
+import { ElButton, ElCard, ElIcon, ElMessage } from 'element-plus'
+import { Close, Share, Upload } from '@element-plus/icons-vue'
 import emitter from '@/hooks/useMitt'
 import { useLayoutManager } from '@/composables/useLayoutManager'
 import { showStatusBar } from '@/composables/useStatusManager'
 import { appConfig, navMode } from '@/settings/config'
+import { useDevice } from '@/hooks/useDevice'
+
+// 初始化设备管理和文件拖放功能 - 移到这里！
+const device = useDevice()
 
 const { 
   layoutDraggableList, 
@@ -257,7 +275,7 @@ const detachItem = (item: any) => {
 // 生命周期
 onMounted(() => {
   initLayout()
-  
+
   emitter.on('edit', editLayout)
   emitter.on('save', saveLayout)
   emitter.on('auto', autoLayout)
@@ -450,5 +468,21 @@ onUnmounted(() => {
   padding: 0;
   margin: 0;
   border: none;
+}
+
+/* 拖拽相关样式 */
+.drag-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(64, 158, 255, 0.3);
+  border: 2px dashed #409EFF;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  pointer-events: none;
 }
 </style>

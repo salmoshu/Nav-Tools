@@ -5,6 +5,7 @@ import { useNmea } from '@/composables/gnss/useNmea'
 import { useUltrasonic } from '@/composables/ultrasonic/useUltrasonic'
 import { useFollow } from '@/composables/follow/useFollow'
 import { useFlow } from '@/composables/flow/useFlow'
+import emitter from '@/hooks/useMitt'
 
 const { processRawData: processNmeaRawData } = useNmea()
 const { addRawData: addUltrasonicRawData } = useUltrasonic()
@@ -80,6 +81,8 @@ class IpcEventManager {
 export function useDevice() {
   const ipcManager = IpcEventManager.getInstance();
 
+  const isDragOver = ref(false)
+
   // 对话框状态
   const showInputDialog = ref(false);
   const activeTab = ref("serial");
@@ -103,6 +106,111 @@ export function useDevice() {
     { label: "奇校验", value: "odd" },
     { label: "偶校验", value: "even" },
   ];
+
+  // 拖拽事件处理函数
+  const handleDragOver = (event: DragEvent) => {
+    event.preventDefault() // 允许放置
+    event.stopPropagation()
+  }
+  
+  const handleDragEnter = (event: DragEvent) => {
+    event.preventDefault()
+    event.stopPropagation()
+    isDragOver.value = true
+  }
+  
+  const handleDragLeave = (event: DragEvent) => {
+    event.preventDefault()
+    event.stopPropagation()
+    // 检查是否完全离开容器
+    const relatedTarget = event.relatedTarget as HTMLElement
+    if (!relatedTarget || !event.currentTarget || 
+        !(event.currentTarget as HTMLElement).contains(relatedTarget)) {
+      isDragOver.value = false
+    }
+  }
+  
+  const handleDrop = async (event: DragEvent) => {
+    event.preventDefault()
+    event.stopPropagation()
+    isDragOver.value = false
+    
+    if (event.dataTransfer && event.dataTransfer.files && event.dataTransfer.files.length > 0) {
+      const files = Array.from(event.dataTransfer.files)
+      
+      for (const file of files) {
+        try {
+          // 根据文件类型进行不同处理
+          if (file.type.includes('log') || file.name.endsWith('.log') || file.type.includes('text') || file.name.endsWith('.txt')) {
+            // 处理文本文件
+            await handleTextFile(file)
+          } else {
+            // 其他文件类型
+            ElMessage({
+              message: `不支持的文件类型: ${file.name}`,
+              type: 'warning',
+              placement: 'bottom-right',
+              offset: 50,
+            })
+          }
+        } catch (error) {
+          ElMessage({
+            message: `处理文件 ${file.name} 失败`,
+            type: 'error',
+            placement: 'bottom-right',
+            offset: 50,
+          })
+        }
+      }
+    }
+  }
+  
+  // 处理文本文件
+  const handleTextFile = (file: File): Promise<void> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      
+      reader.onload = (e) => {
+        try {
+          const content = e.target?.result as string
+          
+          
+          // 根据当前模式处理数据
+          switch (navMode.funcMode) {
+            case 'flow':
+              ElMessage({
+                message: `成功导入文件: ${file.name}`,
+                type: 'success',
+                placement: 'bottom-right',
+                offset: 50,
+              })
+              initFlowRawData(content)
+              break
+            case 'follow':
+              initFollowRawData(content)
+              break
+            default:
+              // 其他模式下发送通用事件
+              emitter.emit('file-imported', { type: 'text', data: content, filename: file.name })
+              break
+          }
+          
+          resolve()
+        } catch (error) {
+          ElMessage({
+            message: `读取文本文件失败: ${file.name}`,
+            type: 'error',
+            placement: 'bottom-right',
+            offset: 50,
+          })
+          reject(error)
+        }
+      }
+      
+      reader.onerror = () => reject(new Error('读取文件失败'))
+      reader.readAsText(file)
+    })
+  }
 
   /**
    * 打开输入对话框
@@ -293,7 +401,6 @@ export function useDevice() {
             placement: 'bottom-right',
             offset: 50,
           });
-          console.error('数据加载失败:', error);
         }
       };
       
@@ -490,6 +597,11 @@ export function useDevice() {
     parities,
     deviceConnected,
     globalDevice,
+    isDragOver,
+    handleDragOver,
+    handleDragEnter,
+    handleDragLeave,
+    handleDrop,
     selectTargetFile,
     handleInputSubmit,
     inputDialog,
