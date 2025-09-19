@@ -1055,7 +1055,11 @@ onUnmounted(() => {
 watch(
   () => flowData.value.plotTime?.length,
   () => {
-    updateChart()
+    if (flowData.value.plotTime?.length) {
+      updateChart()
+    } else {
+      createChart()
+    }
   }
 )
 </script>
