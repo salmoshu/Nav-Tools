@@ -3,7 +3,7 @@ import { useFlow } from '@/composables/flow/useFlow'
 import { defineStore } from 'pinia'
 
 // 元数据属性列表 - 这些属性不应被添加到status中
-const META_PROPERTIES = ['timestamps', 'timestamp', 'isBatchData', 'rawString', 'rawDataKeys']
+const META_PROPERTIES = ['plotTime', 'timestamp', 'isBatchData', 'rawString', 'rawDataKeys']
 
 // 安全执行简单表达式的函数 - 完全不使用eval或Function
 function safeEvaluateExpression(expr: string, context: Record<string, any>): any {
@@ -300,7 +300,7 @@ export const useFlowStore = defineStore('flow', () => {
           
           // 确保计算属性与原始数据长度一致
           const dataArray = flowData.value[config.fieldName] as any[]
-          const timestampsLength = flowData.value.timestamps?.length || 0
+          const timestampsLength = flowData.value.timestamp?.length || 0
           
           // 如果是批量数据，为每个时间点生成计算值
           if (flowData.value.isBatchData && flowData.value.camera_angle && Array.isArray(flowData.value.camera_angle)) {
@@ -397,7 +397,7 @@ export const useFlowStore = defineStore('flow', () => {
       flowData.value[config.fieldName] = []
       
       // 如果已有数据，为新字段填充null值以保持长度一致
-      const timestampsLength = flowData.value.timestamps?.length || 0
+      const timestampsLength = flowData.value.timestamp?.length || 0
       if (timestampsLength > 0) {
         const dataArray = flowData.value[config.fieldName] as any[]
         for (let i = 0; i < timestampsLength - 1; i++) {

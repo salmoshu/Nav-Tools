@@ -110,7 +110,7 @@
             ></el-input>
           </el-form-item>
 
-                    <!-- 计算公式表单项 -->
+          <!-- 计算公式表单项 -->
           <el-form-item label="计算公式" prop="code">
             <!-- 编辑模式 -->
             <el-input 
@@ -248,7 +248,7 @@ const availableFields = computed(() => {
   // 获取flowData中除了元数据外的所有数组字段
   const fields: string[] = []
   Object.keys(flowData.value).forEach(key => {
-    if (key !== 'timestamps' && 
+    if (key !== 'plotTime' && 
         key !== 'timestamp' && 
         key !== 'isBatchData' && 
         key !== 'rawString' && 

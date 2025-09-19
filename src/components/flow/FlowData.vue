@@ -264,7 +264,7 @@
 import { ref, onMounted, onUnmounted, watch, computed } from 'vue'
 import * as echarts from 'echarts'
 import { useFlow } from '@/composables/flow/useFlow'
-import { useFlowData } from '@/composables/flow/useFlowData'
+import { useDataConfig } from '@/composables/flow/useDataConfig'
 import { ElMessage } from 'element-plus'
 
 // 初始化数据流处理
@@ -318,7 +318,7 @@ const {
   onYAxisChange,
   onLayoutChange,
   applyViewConfig
-} = useFlowData(flowData)
+} = useDataConfig(flowData)
 
 const chartRef = ref<HTMLDivElement>()
 let chart: echarts.ECharts | null = null

@@ -6,7 +6,7 @@ export type ViewLayout = 'single' | 'double'
 export type YAxisConfig = 'single' | 'double'
 
 // 创建并导出useFlowData钩子
-export function useFlowData(flowData: any) {
+export function useDataConfig(flowData: any) {
   // 视图配置相关
   const viewConfigDialogVisible = ref(false)
   const viewLayout = ref<ViewLayout>('single')

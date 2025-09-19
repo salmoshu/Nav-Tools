@@ -396,7 +396,7 @@ export function useDevice() {
           }
         } catch (error) {
           ElMessage({
-            message: `数据加载失败`,
+            message: `数据加载失败: ${error}`,
             type: 'error',
             placement: 'bottom-right',
             offset: 50,

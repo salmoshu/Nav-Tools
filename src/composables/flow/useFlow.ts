@@ -1,3 +1,4 @@
+import { ElMessage } from "element-plus"
 import { ref } from "vue"
 
 // 主数据存储对象，只包含时间相关的已知选项
@@ -53,7 +54,6 @@ export function useFlow() {
           if (typeof json.time === 'number') {
             if (flowData.value.plotTime?.length == 0) {
               flowData.value.startTime = Number(json.time)
-              console.log('startTime', flowData.value.startTime)
             }
             flowData.value.plotTime!.push(Number(json.time) - flowData.value.startTime!)
             flowData.value.timestamp!.push(Number(json.time))
@@ -77,7 +77,12 @@ export function useFlow() {
             }
           })
         } catch (error) {
-          console.log('json解析失败', error)
+          ElMessage({
+            message: `json解析失败: ${error}`,
+            type: 'error',
+            placement: 'bottom-right',
+            offset: 50,
+          })
         }
       }
     }
@@ -155,7 +160,12 @@ export function useFlow() {
             }
           })
         } catch (error) {
-          // console.log('json解析失败', error)
+          ElMessage({
+            message: `json解析失败: ${error}`,
+            type: 'error',
+            placement: 'bottom-right',
+            offset: 50,
+          })
         }
       }
     }
