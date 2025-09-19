@@ -141,7 +141,13 @@ export function useDevice() {
       for (const file of files) {
         try {
           // 根据文件类型进行不同处理
-          if (file.type.includes('log') || file.name.endsWith('.log') || file.type.includes('text') || file.name.endsWith('.txt')) {
+          // 不区分大小写的文件类型检查
+          if (file.type.toLowerCase().includes('log') || 
+              file.name.toLowerCase().endsWith('.log') || 
+              file.type.toLowerCase().includes('text') || 
+              file.name.toLowerCase().endsWith('.txt') || 
+              file.type.toLowerCase().includes('dat') || 
+              file.name.toLowerCase().endsWith('.dat')) {
             // 处理文本文件
             await handleTextFile(file)
           } else {
@@ -155,7 +161,7 @@ export function useDevice() {
           }
         } catch (error) {
           ElMessage({
-            message: `处理文件 ${file.name} 失败`,
+            message: `处理文件 ${file.name} 失败: ${error}`,
             type: 'error',
             placement: 'bottom-right',
             offset: 50,
@@ -173,7 +179,6 @@ export function useDevice() {
       reader.onload = (e) => {
         try {
           const content = e.target?.result as string
-          
           
           // 根据当前模式处理数据
           switch (navMode.funcMode) {
@@ -194,11 +199,10 @@ export function useDevice() {
               emitter.emit('file-imported', { type: 'text', data: content, filename: file.name })
               break
           }
-          
           resolve()
         } catch (error) {
           ElMessage({
-            message: `读取文本文件失败: ${file.name}`,
+            message: `读取文本文件失败: ${file.name}: ${error}`,
             type: 'error',
             placement: 'bottom-right',
             offset: 50,
@@ -307,7 +311,7 @@ export function useDevice() {
     // 创建一个隐藏的文件输入元素
     const fileInput = document.createElement('input');
     fileInput.type = 'file';
-    fileInput.accept = '.txt,.csv';
+    fileInput.accept = '.txt,.csv,.dat,.log';
     fileInput.style.display = 'none';
     
     // 添加到文档中

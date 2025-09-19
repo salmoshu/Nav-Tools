@@ -1,4 +1,3 @@
-import { ElMessage } from "element-plus"
 import { ref } from "vue"
 
 // 主数据存储对象，只包含时间相关的已知选项
@@ -77,12 +76,7 @@ export function useFlow() {
             }
           })
         } catch (error) {
-          ElMessage({
-            message: `json解析失败: ${error}`,
-            type: 'error',
-            placement: 'bottom-right',
-            offset: 50,
-          })
+          // console.log(`json解析失败: ${error}`)
         }
       }
     }
@@ -160,12 +154,7 @@ export function useFlow() {
             }
           })
         } catch (error) {
-          ElMessage({
-            message: `json解析失败: ${error}`,
-            type: 'error',
-            placement: 'bottom-right',
-            offset: 50,
-          })
+          // console.log(`json解析失败: ${error}`)
         }
       }
     }
