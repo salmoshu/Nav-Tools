@@ -5,7 +5,7 @@
         <!-- 左侧按钮 -->
         <div class="left-buttons">
           <el-button type="default" size="small" @click="importConfigFile" class="layout-btn">
-            配置文件
+            载入配置
           </el-button>
           <input
             ref="configFileInput"
@@ -325,7 +325,7 @@ let chart: echarts.ECharts | null = null
 let resizeObserver: ResizeObserver | null = null
 
 const largeDataOptions = computed(() => {
-  if (flowData.value.timestamps && flowData.value.timestamps.length > 500) {
+  if (flowData.value.plotTime && flowData.value.plotTime.length > 500) {
     return {
       showSymbol: false,
       large: true,
@@ -633,7 +633,7 @@ function updateChart() {
           if (params.length === 0) return ''
           
           // 安全处理时间戳
-          let result = `时间: `
+          let result = `显示时间: `
           if (params[0] && params[0].data && params[0].data[0] !== null) {
             if (typeof params[0].data[0] === 'number') {
               result += `${params[0].data[0].toFixed(2)}s`
@@ -644,6 +644,15 @@ function updateChart() {
             result += `0.00s`
           }
           result += `<br/>`
+
+          const timeMarker = `<div style="line-height:16px;display:inline-block;vertical-align:middle;margin-right:4px;">
+            <svg width="12" height="12" viewBox="0 0 24 24"
+                fill="none" stroke="grey" stroke-width="2">
+              <circle cx="12" cy="12" r="9"/>
+              <path d="M12 7v5l3 3"/>
+            </svg>
+          </div>`
+          result += `${timeMarker}time: ${(params[0].data[0]+flowData.value.startTime).toFixed(2)}<br/>`
           
           // 安全处理每个参数值
           params.forEach((param: any) => {
@@ -666,7 +675,7 @@ function updateChart() {
         bottom: '15%',
         containLabel: true
       },
-      xAxis: { type: 'value', name: '时间(s)' },
+      xAxis: { type: 'value', name: '  time' },
       yAxis: { type: 'value' },
       series: []
     })
@@ -688,7 +697,7 @@ function createChartOption() {
       // 单图单Y轴模式
       series = singleChartSources.value.map((source) => {
         const seriesData = (flowData.value[source] as any[]).map((value: any, idx: number) => [
-          flowData.value.timestamps![idx], value
+          flowData.value.plotTime![idx], value
         ])
         
         return {
@@ -705,7 +714,7 @@ function createChartOption() {
       // 单图双Y轴模式 - 同样不再替换下划线
       const leftSeries = singleChartLeftSources.value.map(source => {
         const seriesData = (flowData.value[source] as any[]).map((value: any, idx: number) => [
-          flowData.value.timestamps![idx], value
+          flowData.value.plotTime![idx], value
         ])
         
         return {
@@ -721,7 +730,7 @@ function createChartOption() {
       
       const rightSeries = singleChartRightSources.value.map(source => {
         const seriesData = (flowData.value[source] as any[]).map((value: any, idx: number) => [
-          flowData.value.timestamps![idx], value
+          flowData.value.plotTime![idx], value
         ])
         
         return {
@@ -748,7 +757,17 @@ function createChartOption() {
         formatter: (params: any) => {
           if (params.length === 0) return ''
           
-          let result = `时间: ${params[0].data[0].toFixed(2)}s<br/>`
+          let result = `显示时间: ${params[0].data[0].toFixed(2)}s<br/>`
+
+          const timeMarker = `<div style="line-height:16px;display:inline-block;vertical-align:middle;margin-right:4px;">
+            <svg width="12" height="12" viewBox="0 0 24 24"
+                fill="none" stroke="grey" stroke-width="2">
+              <circle cx="12" cy="12" r="9"/>
+              <path d="M12 7v5l3 3"/>
+            </svg>
+          </div>`
+          result += `${timeMarker}time: ${(params[0].data[0]+flowData.value.startTime).toFixed(2)}<br/>`
+
           params.forEach((param: any) => {
             if (param.data[1] !== null) {
               result += `${param.marker}${param.seriesName}: ${param.data[1].toFixed(2)}<br/>`
@@ -769,7 +788,7 @@ function createChartOption() {
       },
       xAxis: {
         type: 'value',
-        name: '    时间(s)',
+        name: '  time',
         axisLabel: {
           formatter: function(value: number) {
             return value.toFixed(2)
@@ -796,7 +815,7 @@ function createChartOption() {
       // 上图表左侧Y轴数据
       upperSeries = upperChartLeftSources.value.map(source => {
         const seriesData = (flowData.value[source] as any[]).map((value: any, idx: number) => [
-          flowData.value.timestamps![idx], value
+          flowData.value.plotTime![idx], value
         ])
         
         return {
@@ -813,7 +832,7 @@ function createChartOption() {
       // 上图表右侧Y轴数据
       upperSeries.push(...upperChartRightSources.value.map(source => {
         const seriesData = (flowData.value[source] as any[]).map((value: any, idx: number) => [
-          flowData.value.timestamps![idx], value
+          flowData.value.plotTime![idx], value
         ])
         
         return {
@@ -830,7 +849,7 @@ function createChartOption() {
       // 下图表左侧Y轴数据
       lowerSeries = lowerChartLeftSources.value.map(source => {
         const seriesData = (flowData.value[source] as any[]).map((value: any, idx: number) => [
-          flowData.value.timestamps![idx], value
+          flowData.value.plotTime![idx], value
         ])
         
         return {
@@ -847,7 +866,7 @@ function createChartOption() {
       // 下图表右侧Y轴数据
       lowerSeries.push(...lowerChartRightSources.value.map(source => {
         const seriesData = (flowData.value[source] as any[]).map((value: any, idx: number) => [
-          flowData.value.timestamps![idx], value
+          flowData.value.plotTime![idx], value
         ])
         
         return {
@@ -870,7 +889,7 @@ function createChartOption() {
         // 添加安全检查
         const sourceData = flowData.value[source];
         const seriesData = Array.isArray(sourceData) 
-        ? sourceData.map((value: any, idx: number) => [flowData.value.timestamps![idx], value])
+        ? sourceData.map((value: any, idx: number) => [flowData.value.plotTime![idx], value])
         : [];
         
         return {
@@ -889,7 +908,7 @@ function createChartOption() {
       // 添加安全检查
       const sourceData = flowData.value[source];
       const seriesData = Array.isArray(sourceData) 
-      ? sourceData.map((value: any, idx: number) => [flowData.value.timestamps![idx], value])
+      ? sourceData.map((value: any, idx: number) => [flowData.value.plotTime![idx], value])
       : [];
       
       return {
@@ -933,7 +952,7 @@ function createChartOption() {
           if (params.length === 0) return ''
           
           // 安全处理时间戳
-          let result = `时间: `
+          let result = `显示时间: `
           if (params[0] && params[0].data && params[0].data[0] !== null) {
             if (typeof params[0].data[0] === 'number') {
               result += `${params[0].data[0].toFixed(2)}s`
@@ -944,6 +963,15 @@ function createChartOption() {
             result += `0.00s`
           }
           result += `<br/>`
+
+          const timeMarker = `<div style="line-height:16px;display:inline-block;vertical-align:middle;margin-right:4px;">
+            <svg width="12" height="12" viewBox="0 0 24 24"
+                fill="none" stroke="grey" stroke-width="2">
+              <circle cx="12" cy="12" r="9"/>
+              <path d="M12 7v5l3 3"/>
+            </svg>
+          </div>`
+          result += `${timeMarker}time: ${(params[0].data[0]+flowData.value.startTime).toFixed(2)}<br/>`
           
           // 安全处理每个参数值
           params.forEach((param: any) => {
@@ -969,8 +997,8 @@ function createChartOption() {
         { left: '3%', right: '8%', top: '55%', bottom: '15%', containLabel: true } // 从3%增加到15%
       ],
       xAxis: [
-        { type: 'value', name: '时间(s)', gridIndex: 0, axisLabel: { formatter: (value: number) => value.toFixed(2) } },
-        { type: 'value', name: '时间(s)', gridIndex: 1, axisLabel: { formatter: (value: number) => value.toFixed(2) } }
+        { type: 'value', name: '  time', gridIndex: 0, axisLabel: { formatter: (value: number) => value.toFixed(2) } },
+        { type: 'value', name: '  time', gridIndex: 1, axisLabel: { formatter: (value: number) => value.toFixed(2) } }
       ],
       yAxis: yAxisConfigArray,
       dataZoom: [
@@ -1025,7 +1053,7 @@ onUnmounted(() => {
 
 // 监听flowData变化，更新图表
 watch(
-  () => flowData.value.timestamps?.length,
+  () => flowData.value.plotTime?.length,
   () => {
     updateChart()
   }

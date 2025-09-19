@@ -1,19 +1,18 @@
 import { ref } from "vue"
 
-// 时间间隔常量
-const dt = 1/10
-
 // 主数据存储对象，只包含时间相关的已知选项
 const flowData = ref<{
-  timestamps?: number[]
-  timestamp?: number
+  plotTime?: number[]
+  timestamp?: number[]
+  startTime?: number
   isBatchData?: boolean
   rawString?: string
   rawDataKeys?: string[]
   [key: string]: any[] | number | string | boolean | undefined
 }>({
-  timestamps: [],
-  timestamp: 0,
+  plotTime: [],
+  timestamp: [],
+  startTime: 0,
   isBatchData: false,
   rawString: '',
   rawDataKeys: []
@@ -23,23 +22,19 @@ export function useFlow() {
   const clearRawData = () => {
     // 重置所有数据
     flowData.value = {
-      timestamps: [],
-      timestamp: 0,
+      plotTime: [],
+      timestamp: [],
+      startTime: 0,
       isBatchData: false,
       rawString: '',
       rawDataKeys: []
     }
   }
 
-  const initRawData = (data: string, startTime: number=0) => {
-    flowData.value.isBatchData = true
-    flowData.value.timestamp = startTime
-    const lines = data.split("\n")
-    
-    // 清除之前的所有数据
+  const initRawData = (data: string) => {
     clearRawData()
+    const lines = data.split("\n")
     flowData.value.isBatchData = true
-    flowData.value.timestamp = startTime
     
     for (const line of lines) {
       if (line.trim() !== "") {
@@ -56,15 +51,23 @@ export function useFlow() {
           
           // 处理时间戳
           if (typeof json.time === 'number') {
-            if (flowData.value.timestamp === 0) {
-              // 增加一个极小量 0.0005，以处理为0的情况
-              flowData.value.timestamp = Number(json.time) - 0.0005
+            if (flowData.value.plotTime?.length == 0) {
+              flowData.value.startTime = Number(json.time)
+              console.log('startTime', flowData.value.startTime)
             }
-            flowData.value.timestamps!.push(Number(json.time) - flowData.value.timestamp!)
+            flowData.value.plotTime!.push(Number(json.time) - flowData.value.startTime!)
+            flowData.value.timestamp!.push(Number(json.time))
           } else {
-            // 如果没有time属性，则假设数据为1/dt Hz
-            flowData.value.timestamps!.push(flowData.value.timestamp!)
-            flowData.value.timestamp! += dt
+            // 如果没有time属性，则按照样本逐一展示
+            if (flowData.value.plotTime?.length == 0) {
+              flowData.value.startTime = 0
+              flowData.value.plotTime!.push(0)
+              flowData.value.timestamp!.push(0)
+            } else {
+              const lastTimestamp = flowData.value.timestamp![flowData.value.timestamp!.length - 1]
+              flowData.value.plotTime!.push(lastTimestamp + 1)
+              flowData.value.timestamp!.push(lastTimestamp + 1)
+            }
           }
           
           // 存储数据
@@ -80,14 +83,14 @@ export function useFlow() {
     }
   }
 
-  const addNullData = () => {
+  const addNullData = (now: number) => {
     // 数据间隔超过1s则存储null作为分隔
-    const now = Date.now() / 1000
-    flowData.value.timestamps!.push(now - flowData.value.timestamp! - 0.5)
+    flowData.value.plotTime!.push(now - flowData.value.startTime! - 0.5)
+    flowData.value.timestamp!.push(now - 0.5)
 
     // 为所有数据字段添加null
     Object.keys(flowData.value).forEach(key => {
-      if (Array.isArray(flowData.value[key]) && key !== 'timestamps' && key !== 'rawDataKeys') {
+      if (Array.isArray(flowData.value[key]) && key !== 'plotTime' && key !== 'timestamp' && key !== 'rawDataKeys') {
         (flowData.value[key] as any[]).push(null)
       }
     })
@@ -123,25 +126,26 @@ export function useFlow() {
               flowData.value[key] = []
             }
           })
-          
-          // 处理时间戳
+
           if (typeof json.time === 'number') {
-            if (flowData.value.timestamp === 0) {
-              // 增加一个极小量 0.0005，以处理为0的情况
-              flowData.value.timestamp = Number(json.time) - 0.0005
+            // 处理数据流包含time字段的情形
+            if (flowData.value.plotTime?.length == 0) {
+              flowData.value.startTime = Number(json.time)
             }
-            flowData.value.timestamps!.push(Number(json.time) - flowData.value.timestamp!)
+            flowData.value.plotTime!.push(Number(json.time) - flowData.value.startTime!)
+            flowData.value.timestamp!.push(Number(json.time))
           } else {
             const now = Date.now() / 1000
-            if (flowData.value.timestamp === 0) {
-              flowData.value.timestamp = now
+            if (flowData.value.startTime === 0) {
+              flowData.value.startTime = now
             }
-            const lastTimestamp = (flowData.value.timestamp ?? 0) + (flowData.value.timestamps?.[flowData.value.timestamps.length - 1] ?? 0)
+            const lastTimestamp = (flowData.value.startTime ?? 0) + (flowData.value.plotTime?.[flowData.value.plotTime.length - 1] ?? 0)
 
             if (lastTimestamp && now - lastTimestamp > 1) {
-              addNullData()
+              addNullData(now)
             }
-            flowData.value.timestamps!.push(now - flowData.value.timestamp!)
+            flowData.value.plotTime!.push(now - flowData.value.startTime!)
+            flowData.value.timestamp!.push(now)
           }
           
           // 存储数据
@@ -160,8 +164,9 @@ export function useFlow() {
   const saveData = () => {
     // 获取第一个数据字段的长度作为基准
     const firstField = Object.keys(flowData.value).find(key => 
-      key !== 'timestamps' && 
+      key !== 'plotTime' && 
       key !== 'timestamp' && 
+      key !== 'startTime' && 
       key !== 'isBatchData' && 
       key !== 'rawString' && 
       key !== 'rawDataKeys' && 
@@ -173,13 +178,14 @@ export function useFlow() {
     // 创建符合要求的格式数据
     const formattedData = Array.from({ length: dataLength }).map((_, index) => {
       const item: {[key: string]: any} = {
-        time: flowData.value.timestamps![index] // 使用已有的时间戳
+        time: flowData.value.timestamp![index], // 使用已有的时间戳
       }
       
       // 添加所有非元数据字段
       Object.keys(flowData.value).forEach(key => {
-        if (key !== 'timestamps' && 
+        if (key !== 'plotTime' && 
             key !== 'timestamp' && 
+            key !== 'startTime' && 
             key !== 'isBatchData' && 
             key !== 'rawString' && 
             key !== 'rawDataKeys' && 
@@ -200,13 +206,13 @@ export function useFlow() {
     a.href = URL.createObjectURL(blob);
     const now = new Date();
     // 格式化为：YYYY-MM-DDTHH-mm-ssZ，不含毫秒
-    const timestamp = now.getUTCFullYear() + '-' +
+    const currentTime = now.getUTCFullYear() + '-' +
       String(now.getUTCMonth() + 1).padStart(2, '0') + '-' +
       String(now.getUTCDate()).padStart(2, '0') + 'T' +
       String(now.getUTCHours()).padStart(2, '0') + '-' +
       String(now.getUTCMinutes()).padStart(2, '0') + '-' +
       String(now.getUTCSeconds()).padStart(2, '0') + 'Z';
-    a.download = `Nav-Tools_${timestamp}.jsonx`;
+    a.download = `Nav-Tools_${currentTime}.jsonx`;
     a.click();
     URL.revokeObjectURL(a.href);
   }

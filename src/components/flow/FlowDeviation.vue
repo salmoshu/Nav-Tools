@@ -107,10 +107,11 @@ const selectedYField = ref('');
 
 // 计算可用数据源
 const availableSources = computed(() => {
-  if (!flowData.value || !flowData.value.timestamps) return [];
+  if (!flowData.value || !flowData.value.plotTime) return [];
   return Object.keys(flowData.value).filter(
-    key => key !== 'timestamps' && 
+    key => key !== 'plotTime' && 
     key !== 'timestamp' && 
+    key !== 'startTime' && 
     key !== 'rawDataKeys' &&
     flowData.value[key].length > 0
   );

@@ -124,7 +124,7 @@ export function useFlowData(flowData: any) {
 
   // 计算属性 - 检查是否有数据
   const hasData = computed(() => {
-    return flowData.value.timestamps && flowData.value.timestamps.length > 0
+    return flowData.value.plotTime && flowData.value.plotTime.length > 0
   })
 
   // 计算属性 - 获取所有可用的数据源字段（排除元数据字段）
@@ -136,8 +136,9 @@ export function useFlowData(flowData: any) {
   }
   
   return Object.keys(flowData.value).filter(key => 
-    key !== 'timestamps' && 
+    key !== 'plotTime' && 
     key !== 'timestamp' && 
+    key !== 'startTime' && 
     key !== 'isBatchData' && 
     key !== 'rawString' && 
     key !== 'rawDataKeys' && 
