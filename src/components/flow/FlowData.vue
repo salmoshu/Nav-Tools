@@ -97,19 +97,19 @@
             <h4 style="margin-bottom: 10px;">上图表数据源（最多4个）：</h4>
             <div class="source-selectors">
               <el-select v-model="upperChartSource1" placeholder="选择数据" style="width: 100%; margin-bottom: 8px;">
-                <el-option label="" value=""></el-option>
+                <el-option label="<None>" value=""></el-option>
                 <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
               </el-select>
               <el-select v-model="upperChartSource2" placeholder="选择数据" style="width: 100%; margin-bottom: 8px;">
-                <el-option label="" value=""></el-option>
+                <el-option label="<None>" value=""></el-option>
                 <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
               </el-select>
               <el-select v-model="upperChartSource3" placeholder="选择数据" style="width: 100%; margin-bottom: 8px;">
-                <el-option label="" value=""></el-option>
+                <el-option label="<None>" value=""></el-option>
                 <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
               </el-select>
               <el-select v-model="upperChartSource4" placeholder="选择数据" style="width: 100%;">
-                <el-option label="" value=""></el-option>
+                <el-option label="<None>" value=""></el-option>
                 <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
               </el-select>
             </div>
@@ -118,19 +118,19 @@
             <h4 style="margin-bottom: 10px;">下图表数据源（最多4个）：</h4>
             <div class="source-selectors">
               <el-select v-model="lowerChartSource1" placeholder="选择数据" style="width: 100%; margin-bottom: 8px;">
-                <el-option label="" value=""></el-option>
+                <el-option label="<None>" value=""></el-option>
                 <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
               </el-select>
               <el-select v-model="lowerChartSource2" placeholder="选择数据" style="width: 100%; margin-bottom: 8px;">
-                <el-option label="" value=""></el-option>
+                <el-option label="<None>" value=""></el-option>
                 <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
               </el-select>
               <el-select v-model="lowerChartSource3" placeholder="选择数据" style="width: 100%; margin-bottom: 8px;">
-                <el-option label="" value=""></el-option>
+                <el-option label="<None>" value=""></el-option>
                 <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
               </el-select>
               <el-select v-model="lowerChartSource4" placeholder="选择数据" style="width: 100%;">
-                <el-option label="" value=""></el-option>
+                <el-option label="<None>" value=""></el-option>
                 <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
               </el-select>
             </div>
@@ -143,11 +143,11 @@
             <h4 style="margin-bottom: 10px;">上图左Y轴数据（最多2个）：</h4>
             <div class="source-selectors">
               <el-select v-model="upperChartLeftSource1" placeholder="选择数据" style="width: 100%; margin-bottom: 8px;">
-                <el-option label="" value=""></el-option>
+                <el-option label="<None>" value=""></el-option>
                 <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
               </el-select>
               <el-select v-model="upperChartLeftSource2" placeholder="选择数据" style="width: 100%;">
-                <el-option label="" value=""></el-option>
+                <el-option label="<None>" value=""></el-option>
                 <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
               </el-select>
             </div>
@@ -156,11 +156,11 @@
             <h4 style="margin-bottom: 10px;">上图右Y轴数据（最多2个）：</h4>
             <div class="source-selectors">
               <el-select v-model="upperChartRightSource1" placeholder="选择数据" style="width: 100%; margin-bottom: 8px;">
-                <el-option label="" value=""></el-option>
+                <el-option label="<None>" value=""></el-option>
                 <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
               </el-select>
               <el-select v-model="upperChartRightSource2" placeholder="选择数据" style="width: 100%;">
-                <el-option label="" value=""></el-option>
+                <el-option label="<None>" value=""></el-option>
                 <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
               </el-select>
             </div>
@@ -169,11 +169,11 @@
             <h4 style="margin-bottom: 10px;">下图左Y轴数据（最多2个）：</h4>
             <div class="source-selectors">
               <el-select v-model="lowerChartLeftSource1" placeholder="选择数据" style="width: 100%; margin-bottom: 8px;">
-                <el-option label="" value=""></el-option>
+                <el-option label="<None>" value=""></el-option>
                 <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
               </el-select>
               <el-select v-model="lowerChartLeftSource2" placeholder="选择数据" style="width: 100%;">
-                <el-option label="" value=""></el-option>
+                <el-option label="<None>" value=""></el-option>
                 <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
               </el-select>
             </div>
@@ -182,11 +182,11 @@
             <h4 style="margin-bottom: 10px;">下图右Y轴数据（最多2个）：</h4>
             <div class="source-selectors">
               <el-select v-model="lowerChartRightSource1" placeholder="选择数据" style="width: 100%; margin-bottom: 8px;">
-                <el-option label="" value=""></el-option>
+                <el-option label="<None>" value=""></el-option>
                 <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
               </el-select>
               <el-select v-model="lowerChartRightSource2" placeholder="选择数据" style="width: 100%;">
-                <el-option label="" value=""></el-option>
+                <el-option label="<None>" value=""></el-option>
                 <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
               </el-select>
             </div>
@@ -202,19 +202,19 @@
             <h4 style="margin-bottom: 10px;">单图表数据源（最多4个）：</h4>
             <div class="source-selectors">
               <el-select v-model="singleChartSource1" placeholder="选择数据" style="width: 100%; margin-bottom: 8px;">
-                <el-option label="" value=""></el-option>
+                <el-option label="<None>" value=""></el-option>
                 <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
               </el-select>
               <el-select v-model="singleChartSource2" placeholder="选择数据" style="width: 100%; margin-bottom: 8px;">
-                <el-option label="" value=""></el-option>
+                <el-option label="<None>" value=""></el-option>
                 <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
               </el-select>
               <el-select v-model="singleChartSource3" placeholder="选择数据" style="width: 100%; margin-bottom: 8px;">
-                <el-option label="" value=""></el-option>
+                <el-option label="<None>" value=""></el-option>
                 <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
               </el-select>
               <el-select v-model="singleChartSource4" placeholder="选择数据" style="width: 100%;">
-                <el-option label="" value=""></el-option>
+                <el-option label="<None>" value=""></el-option>
                 <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
               </el-select>
             </div>
@@ -227,11 +227,11 @@
             <h4 style="margin-bottom: 10px;">左Y轴数据（最多2个）：</h4>
             <div class="source-selectors">
               <el-select v-model="singleChartLeftSource1" placeholder="选择数据" style="width: 100%; margin-bottom: 8px;">
-                <el-option label="" value=""></el-option>
+                <el-option label="<None>" value=""></el-option>
                 <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
               </el-select>
               <el-select v-model="singleChartLeftSource2" placeholder="选择数据" style="width: 100%;">
-                <el-option label="" value=""></el-option>
+                <el-option label="<None>" value=""></el-option>
                 <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
               </el-select>
             </div>
@@ -240,11 +240,11 @@
             <h4 style="margin-bottom: 10px;">右Y轴数据（最多2个）：</h4>
             <div class="source-selectors">
               <el-select v-model="singleChartRightSource1" placeholder="选择数据" style="width: 100%; margin-bottom: 8px;">
-                <el-option label="" value=""></el-option>
+                <el-option label="<None>" value=""></el-option>
                 <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
               </el-select>
               <el-select v-model="singleChartRightSource2" placeholder="选择数据" style="width: 100%;">
-                <el-option label="" value=""></el-option>
+                <el-option label="<None>" value=""></el-option>
                 <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
               </el-select>
             </div>
@@ -263,6 +263,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, watch, computed } from 'vue'
 import * as echarts from 'echarts'
+import type { LineSeriesOption } from 'echarts'; 
 import { useFlow } from '@/composables/flow/useFlow'
 import { useDataConfig } from '@/composables/flow/useDataConfig'
 import { ElMessage } from 'element-plus'
@@ -607,6 +608,78 @@ function clearPlotData() {
   })
 }
 
+// 注意alignTicks: true与自定义的 min 和 max 值两者不要同时设定，当这两个设置同时使用时，ECharts无法找到合适的刻度间隔，导致刻度可能会非常密集，影响可读性。
+function maintainScale(allData: LineSeriesOption[]) {
+  let result = {} as { [key: number]: { max: number; min: number } };
+  allData.forEach(item => {
+    const yAxisIndex = (item as LineSeriesOption).yAxisIndex || 0;
+    const values = (item as LineSeriesOption).data?.map((value: any) => {
+      // 确保值是数字并且不为null
+      if (value[1] === null || value[1] === undefined || typeof value[1] !== 'number') {
+        return 0;
+      }
+      return value[1];
+    }).filter((val: number) => !isNaN(val)); // 过滤掉NaN值
+
+    if (values?.length === 0) return; // 跳过没有有效数据的系列
+
+    if (!result[yAxisIndex]) {
+      result[yAxisIndex] = {
+        max: values ? Math.max(...values) : 0,
+        min: values ? Math.min(...values) : 0
+      };
+    } else {
+      result[yAxisIndex].max = Math.max(result[yAxisIndex].max, ...(values || []));
+      result[yAxisIndex].min = Math.min(result[yAxisIndex].min, ...(values || []));
+    }
+  });
+
+  // 检查是否有两个Y轴的数据
+  if (Object.keys(result).length !== 2 || !result[0] || !result[1]) {
+    return false;
+  }
+
+  const max1 = result[0].max || 1;
+  const min1 = result[0].min || 0;
+  const max2 = result[1].max || 1;
+  const min2 = result[1].min || 0;
+
+  // 如果最小值不小于零，不需要特殊处理
+  if (min1 >= 0 || min2 >= 0) {
+    return false;
+  }
+
+  // 计算比例
+  const ratio = (max1 - min1) / (max2 - min2);
+  let minMax = {} as { y1Min: number; y1Max: number; y2Min: number; y2Max: number };
+
+  // 调整最大值
+  if (max1 < max2 * ratio) {
+    minMax.y1Max = max2 * ratio;
+    minMax.y2Max = max2;
+  } else {
+    minMax.y1Max = max1;
+    minMax.y2Max = max1 / ratio;
+  }
+
+  // 调整最小值
+  if (min1 < min2 * ratio) {
+    minMax.y1Min = min1;
+    minMax.y2Min = min1 / ratio;
+  } else {
+    minMax.y1Min = min2 * ratio;
+    minMax.y2Min = min2;
+  }
+
+  // 扩大范围，增加一些边距
+  minMax.y1Min = Number((Number(minMax.y1Min) * 1.2).toFixed(2));
+  minMax.y2Min = Number((Number(minMax.y2Min) * 1.2).toFixed(2));
+  minMax.y1Max = Number((Number(minMax.y1Max) * 1.2).toFixed(2));
+  minMax.y2Max = Number((Number(minMax.y2Max) * 1.2).toFixed(2));
+
+  return minMax;
+}
+
 // 创建图表
 function createChart() {
   if (!chartRef.value) return
@@ -675,7 +748,7 @@ function updateChart() {
         bottom: '15%',
         containLabel: true
       },
-      xAxis: { type: 'value', name: '  time' },
+      xAxis: { type: 'value', name: 'time' },
       yAxis: { type: 'value' },
       series: []
     })
@@ -691,14 +764,15 @@ function updateChart() {
 function createChartOption() {
   if (viewLayout.value === 'single') {
     // 单图模式
-    let series = []
+    let series: LineSeriesOption[] = [];
+    let minMax: { y1Min: number; y1Max: number; y2Min: number; y2Max: number } | false = false;
     
     if (yAxisConfig.value === 'single') {
       // 单图单Y轴模式
       series = singleChartSources.value.map((source) => {
         const seriesData = (flowData.value[source] as any[]).map((value: any, idx: number) => [
           flowData.value.plotTime![idx], value
-        ])
+        ]);
         
         return {
           name: source, // 不再替换下划线
@@ -709,13 +783,13 @@ function createChartOption() {
           yAxisIndex: 0,
           ...largeDataOptions.value,
         }
-      })
+      });
     } else {
       // 单图双Y轴模式 - 同样不再替换下划线
-      const leftSeries = singleChartLeftSources.value.map(source => {
+      const leftSeries: LineSeriesOption[] = singleChartLeftSources.value.map(source => {
         const seriesData = (flowData.value[source] as any[]).map((value: any, idx: number) => [
           flowData.value.plotTime![idx], value
-        ])
+        ]);
         
         return {
           name: source, // 不再替换下划线
@@ -726,12 +800,12 @@ function createChartOption() {
           yAxisIndex: 0,
           ...largeDataOptions.value,
         }
-      })
+      });
       
-      const rightSeries = singleChartRightSources.value.map(source => {
+      const rightSeries: LineSeriesOption[] = singleChartRightSources.value.map(source => {
         const seriesData = (flowData.value[source] as any[]).map((value: any, idx: number) => [
           flowData.value.plotTime![idx], value
-        ])
+        ]);
         
         return {
           name: source, // 不再替换下划线
@@ -742,9 +816,12 @@ function createChartOption() {
           yAxisIndex: 1,
           ...largeDataOptions.value,
         }
-      })
+      });
       
-      series = [...leftSeries, ...rightSeries]
+      series = [...leftSeries, ...rightSeries];
+      
+      // 计算双Y轴对齐范围
+      minMax = maintainScale(series);
     }
     
     return {
@@ -755,7 +832,7 @@ function createChartOption() {
       tooltip: {
         trigger: 'axis',
         formatter: (params: any) => {
-          if (params.length === 0) return ''
+          if (params.length === 0) return '';
           
           let result = `显示时间: ${params[0].data[0].toFixed(2)}s<br/>`
 
@@ -788,27 +865,53 @@ function createChartOption() {
       },
       xAxis: {
         type: 'value',
-        name: '  time',
+        name: '      time',
         axisLabel: {
           formatter: function(value: number) {
             return value.toFixed(2)
           }
-        }
+        },
       },
       yAxis: yAxisConfig.value === 'double' ? [
-        { type: 'value' },
-        { type: 'value', show: true }
+        {
+          type: 'value',
+          // alignTicks: true,
+          max: minMax ? minMax.y1Max : undefined,
+          min: minMax ? minMax.y1Min : undefined,
+          axisLabel: {
+            formatter: function(value: number) {
+              return value.toFixed(2)
+            }
+          }
+        },
+        {
+          type: 'value',
+          // alignTicks: true,
+          show: true,
+          max: minMax ? minMax.y2Max : undefined,
+          min: minMax ? minMax.y2Min : undefined,
+          axisLabel: {
+            formatter: function(value: number) {
+              return value.toFixed(2)
+            }
+          }
+        }
       ] : { type: 'value' },
       dataZoom: [
         { type: 'slider', show: true, xAxisIndex: 0 },
-        { type: 'inside', xAxisIndex: 0 }
+        { type: 'inside', xAxisIndex: 0 },
+        // 添加Y轴滚轮缩放支持
+        { type: 'inside', yAxisIndex: 0, zoomOnMouseWheel: 'alt' },
+        { type: 'inside', yAxisIndex: 1, zoomOnMouseWheel: 'alt' }
       ],
       series
     }
   } else {
     // 双图模式
-    let upperSeries = []
-    let lowerSeries = []
+    let upperSeries = [];
+    let lowerSeries = [];
+    let upperMinMax: { y1Min: number; y1Max: number; y2Min: number; y2Max: number } | false = false;
+    let lowerMinMax: { y1Min: number; y1Max: number; y2Min: number; y2Max: number } | false = false;
     
     if (yAxisConfig.value === 'double') {
       // 双图双Y轴模式 - 使用特定的左右Y轴数据
@@ -816,7 +919,7 @@ function createChartOption() {
       upperSeries = upperChartLeftSources.value.map(source => {
         const seriesData = (flowData.value[source] as any[]).map((value: any, idx: number) => [
           flowData.value.plotTime![idx], value
-        ])
+        ]);
         
         return {
           name: source,
@@ -827,13 +930,13 @@ function createChartOption() {
           yAxisIndex: 0,
           ...largeDataOptions.value,
         }
-      })
+      });
       
       // 上图表右侧Y轴数据
       upperSeries.push(...upperChartRightSources.value.map(source => {
         const seriesData = (flowData.value[source] as any[]).map((value: any, idx: number) => [
           flowData.value.plotTime![idx], value
-        ])
+        ]);
         
         return {
           name: source,
@@ -844,13 +947,13 @@ function createChartOption() {
           yAxisIndex: 1,
           ...largeDataOptions.value,
         }
-      }))
+      }));
       
       // 下图表左侧Y轴数据
       lowerSeries = lowerChartLeftSources.value.map(source => {
         const seriesData = (flowData.value[source] as any[]).map((value: any, idx: number) => [
           flowData.value.plotTime![idx], value
-        ])
+        ]);
         
         return {
           name: source,
@@ -861,13 +964,13 @@ function createChartOption() {
           yAxisIndex: 2,
           ...largeDataOptions.value,
         }
-      })
+      });
       
       // 下图表右侧Y轴数据
       lowerSeries.push(...lowerChartRightSources.value.map(source => {
         const seriesData = (flowData.value[source] as any[]).map((value: any, idx: number) => [
           flowData.value.plotTime![idx], value
-        ])
+        ]);
         
         return {
           name: source,
@@ -878,12 +981,21 @@ function createChartOption() {
           yAxisIndex: 3,
           ...largeDataOptions.value,
         }
-      }))
-    } else {
-      // 双图单Y轴模式
-      // 在FlowData.vue文件中找到并修改所有类似以下的代码段
-      // 以下是一个示例修改，需要对所有使用map的地方都进行类似处理
+      }));
       
+      // 计算每个图表的Y轴对齐范围
+      if (upperSeries.length > 0) {
+        // 只提取上图表的Y轴0和1的数据进行计算
+        const upperChartData = upperSeries.filter(s => s.yAxisIndex === 0 || s.yAxisIndex === 1) as LineSeriesOption[];
+        upperMinMax = maintainScale(upperChartData);
+      }
+      
+      if (lowerSeries.length > 0) {
+        // 只提取下图表的Y轴2和3的数据进行计算，并将索引调整为0和1
+        const lowerChartData = lowerSeries.filter(s => s.yAxisIndex === 2 || s.yAxisIndex === 3) as LineSeriesOption[];
+        lowerMinMax = maintainScale(lowerChartData);
+      }
+    } else {
       // 双图单Y轴模式 - 上图表
       upperSeries = upperChartSources.value.map((source) => {
         // 添加安全检查
@@ -901,55 +1013,101 @@ function createChartOption() {
           yAxisIndex: 0,
           ...largeDataOptions.value,
         }
-      })
+      });
       
       // 双图单Y轴模式 - 下图表
       lowerSeries = lowerChartSources.value.map((source) => {
-      // 添加安全检查
-      const sourceData = flowData.value[source];
-      const seriesData = Array.isArray(sourceData) 
-      ? sourceData.map((value: any, idx: number) => [flowData.value.plotTime![idx], value])
-      : [];
-      
-      return {
-        name: source,
-        type: 'line',
-        data: seriesData,
-        symbolSize: 4,
-        smooth: true,
-        yAxisIndex: 1,
-        ...largeDataOptions.value,
+        // 添加安全检查
+        const sourceData = flowData.value[source];
+        const seriesData = Array.isArray(sourceData) 
+        ? sourceData.map((value: any, idx: number) => [flowData.value.plotTime![idx], value])
+        : [];
+        
+        return {
+          name: source,
+          type: 'line',
+          data: seriesData,
+          symbolSize: 4,
+          smooth: true,
+          yAxisIndex: 1,
+          ...largeDataOptions.value,
         }
-      })
+      });
     }
     
     // 修复双图双Y轴模式下的yAxis配置
-    const yAxisConfigArray = []
+    const yAxisConfigArray = [];
     if (yAxisConfig.value === 'double') {
       // 双图双Y轴模式，每个图表都有左右两个Y轴
       yAxisConfigArray.push(
-        { type: 'value', gridIndex: 0 },
-        { type: 'value', gridIndex: 0, show: true },
-        { type: 'value', gridIndex: 1 },
-        { type: 'value', gridIndex: 1, show: true }
-      )
+        {
+          type: 'value', 
+          // alignTicks: true, 
+          gridIndex: 0,
+          max: upperMinMax ? upperMinMax.y1Max : undefined,
+          min: upperMinMax ? upperMinMax.y1Min : undefined,
+          axisLabel: {
+            formatter: function(value: number) {
+              return value.toFixed(2)
+            }
+          }
+        },
+        {
+          type: 'value', 
+          // alignTicks: true, 
+          gridIndex: 0, 
+          show: true,
+          max: upperMinMax ? upperMinMax.y2Max : undefined,
+          min: upperMinMax ? upperMinMax.y2Min : undefined,
+          axisLabel: {
+            formatter: function(value: number) {
+              return value.toFixed(2)
+            }
+          }
+        },
+        {
+          type: 'value', 
+          // alignTicks: true, 
+          gridIndex: 1,
+          max: lowerMinMax ? lowerMinMax.y1Max : undefined,
+          min: lowerMinMax ? lowerMinMax.y1Min : undefined,
+          axisLabel: {
+            formatter: function(value: number) {
+              return value.toFixed(2)
+            }
+          }
+        },
+        {
+          type: 'value', 
+          // alignTicks: true, 
+          gridIndex: 1, 
+          show: true,
+          max: lowerMinMax ? lowerMinMax.y2Max : undefined,
+          min: lowerMinMax ? lowerMinMax.y2Min : undefined,
+          axisLabel: {
+            formatter: function(value: number) {
+              return value.toFixed(2)
+            }
+          }
+        }
+      );
     } else {
       // 双图单Y轴模式
       yAxisConfigArray.push(
         { type: 'value', gridIndex: 0 },
         { type: 'value', gridIndex: 1 }
-      )
+      );
     }
     
     // 合并所有系列数据，用于图例显示
-    const allSeries = [...upperSeries, ...lowerSeries]
+    const allSeries = [...upperSeries, ...lowerSeries];
     
     return {
       title: { left: 'center', textStyle: { fontSize: 14 } },
       tooltip: {
         trigger: 'axis',
         formatter: (params: any) => {
-          if (params.length === 0) return ''
+          if (params.length === 0) return '';
           
           // 安全处理时间戳
           let result = `显示时间: `
@@ -997,13 +1155,18 @@ function createChartOption() {
         { left: '3%', right: '8%', top: '55%', bottom: '15%', containLabel: true } // 从3%增加到15%
       ],
       xAxis: [
-        { type: 'value', name: '  time', gridIndex: 0, axisLabel: { formatter: (value: number) => value.toFixed(2) } },
-        { type: 'value', name: '  time', gridIndex: 1, axisLabel: { formatter: (value: number) => value.toFixed(2) } }
+        { type: 'value', name: '      time', gridIndex: 0, axisLabel: { formatter: (value: number) => value.toFixed(2) } },
+        { type: 'value', name: '      time', gridIndex: 1, axisLabel: { formatter: (value: number) => value.toFixed(2) } }
       ],
       yAxis: yAxisConfigArray,
       dataZoom: [
         { type: 'slider', show: true, xAxisIndex: [0, 1] },
-        { type: 'inside', xAxisIndex: [0, 1] }
+        { type: 'inside', xAxisIndex: [0, 1] },
+        // 添加Y轴滚轮缩放支持
+        { type: 'inside', yAxisIndex: 0, zoomOnMouseWheel: 'alt' },
+        { type: 'inside', yAxisIndex: 1, zoomOnMouseWheel: 'alt' },
+        { type: 'inside', yAxisIndex: 2, zoomOnMouseWheel: 'alt' },
+        { type: 'inside', yAxisIndex: 3, zoomOnMouseWheel: 'alt' }
       ],
       series: [
         // 上图表系列 - 添加gridIndex和xAxisIndex
