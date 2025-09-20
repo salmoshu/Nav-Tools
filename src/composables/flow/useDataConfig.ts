@@ -21,8 +21,12 @@ export function useDataConfig(flowData: any) {
   // 单图双Y轴模式下的数据源选择
   const singleChartLeftSource1 = ref<string>('')
   const singleChartLeftSource2 = ref<string>('')
+  const singleChartLeftSource3 = ref<string>('')
+  const singleChartLeftSource4 = ref<string>('')
   const singleChartRightSource1 = ref<string>('')
   const singleChartRightSource2 = ref<string>('')
+  const singleChartRightSource3 = ref<string>('')
+  const singleChartRightSource4 = ref<string>('')
 
   // 双图模式下的数据源选择
   const upperChartSource1 = ref<string>('')
@@ -37,12 +41,20 @@ export function useDataConfig(flowData: any) {
   // 双图双Y轴模式下的数据源选择
   const upperChartLeftSource1 = ref<string>('')
   const upperChartLeftSource2 = ref<string>('')
+  const upperChartLeftSource3 = ref<string>('')
+  const upperChartLeftSource4 = ref<string>('')
   const upperChartRightSource1 = ref<string>('')
   const upperChartRightSource2 = ref<string>('')
+  const upperChartRightSource3 = ref<string>('')
+  const upperChartRightSource4 = ref<string>('')
   const lowerChartLeftSource1 = ref<string>('')
   const lowerChartLeftSource2 = ref<string>('')
+  const lowerChartLeftSource3 = ref<string>('')
+  const lowerChartLeftSource4 = ref<string>('')
   const lowerChartRightSource1 = ref<string>('')
   const lowerChartRightSource2 = ref<string>('')
+  const lowerChartRightSource3 = ref<string>('')
+  const lowerChartRightSource4 = ref<string>('')
 
   // 计算属性 - 上图表数据源（双图模式）
   const upperChartSources = computed(() => {
@@ -68,7 +80,9 @@ export function useDataConfig(flowData: any) {
   const upperChartLeftSources = computed(() => {
     return [
       upperChartLeftSource1.value,
-      upperChartLeftSource2.value
+      upperChartLeftSource2.value,
+      upperChartLeftSource3.value,
+      upperChartLeftSource4.value
     ].filter(source => source !== '')
   })
 
@@ -76,7 +90,9 @@ export function useDataConfig(flowData: any) {
   const upperChartRightSources = computed(() => {
     return [
       upperChartRightSource1.value,
-      upperChartRightSource2.value
+      upperChartRightSource2.value,
+      upperChartRightSource3.value,
+      upperChartRightSource4.value
     ].filter(source => source !== '')
   })
 
@@ -84,7 +100,9 @@ export function useDataConfig(flowData: any) {
   const lowerChartLeftSources = computed(() => {
     return [
       lowerChartLeftSource1.value,
-      lowerChartLeftSource2.value
+      lowerChartLeftSource2.value,
+      lowerChartLeftSource3.value,
+      lowerChartLeftSource4.value
     ].filter(source => source !== '')
   })
 
@@ -92,7 +110,9 @@ export function useDataConfig(flowData: any) {
   const lowerChartRightSources = computed(() => {
     return [
       lowerChartRightSource1.value,
-      lowerChartRightSource2.value
+      lowerChartRightSource2.value,
+      lowerChartRightSource3.value,
+      lowerChartRightSource4.value
     ].filter(source => source !== '')
   })
 
@@ -110,7 +130,9 @@ export function useDataConfig(flowData: any) {
   const singleChartLeftSources = computed(() => {
     return [
       singleChartLeftSource1.value,
-      singleChartLeftSource2.value
+      singleChartLeftSource2.value,
+      singleChartLeftSource3.value,
+      singleChartLeftSource4.value
     ].filter(source => source !== '')
   })
 
@@ -118,7 +140,9 @@ export function useDataConfig(flowData: any) {
   const singleChartRightSources = computed(() => {
     return [
       singleChartRightSource1.value,
-      singleChartRightSource2.value
+      singleChartRightSource2.value,
+      singleChartRightSource3.value,
+      singleChartRightSource4.value
     ].filter(source => source !== '')
   })
 
@@ -158,16 +182,28 @@ export function useDataConfig(flowData: any) {
       // 切换到单Y轴模式，清空双Y轴模式的选择
       singleChartLeftSource1.value = ''
       singleChartLeftSource2.value = ''
+      singleChartLeftSource3.value = ''
+      singleChartLeftSource4.value = ''
       singleChartRightSource1.value = ''
       singleChartRightSource2.value = ''
+      singleChartRightSource3.value = ''
+      singleChartRightSource4.value = ''
       upperChartLeftSource1.value = ''
       upperChartLeftSource2.value = ''
+      upperChartLeftSource3.value = ''
+      upperChartLeftSource4.value = ''
       upperChartRightSource1.value = ''
       upperChartRightSource2.value = ''
+      upperChartRightSource3.value = ''
+      upperChartRightSource4.value = ''
       lowerChartLeftSource1.value = ''
       lowerChartLeftSource2.value = ''
+      lowerChartLeftSource3.value = ''
+      lowerChartLeftSource4.value = ''
       lowerChartRightSource1.value = ''
       lowerChartRightSource2.value = ''
+      lowerChartRightSource3.value = ''
+      lowerChartRightSource4.value = ''
     } else {
       // 切换到双Y轴模式，清空单Y轴模式的选择
       singleChartSource1.value = ''
@@ -231,8 +267,12 @@ export function useDataConfig(flowData: any) {
     singleChartSource4,
     singleChartLeftSource1,
     singleChartLeftSource2,
+    singleChartLeftSource3,
+    singleChartLeftSource4,
     singleChartRightSource1,
     singleChartRightSource2,
+    singleChartRightSource3,
+    singleChartRightSource4,
     upperChartSource1,
     upperChartSource2,
     upperChartSource3,
@@ -243,12 +283,20 @@ export function useDataConfig(flowData: any) {
     lowerChartSource4,
     upperChartLeftSource1,
     upperChartLeftSource2,
+    upperChartLeftSource3,
+    upperChartLeftSource4,
     upperChartRightSource1,
     upperChartRightSource2,
+    upperChartRightSource3,
+    upperChartRightSource4,
     lowerChartLeftSource1,
     lowerChartLeftSource2,
+    lowerChartLeftSource3,
+    lowerChartLeftSource4,
     lowerChartRightSource1,
     lowerChartRightSource2,
+    lowerChartRightSource3,
+    lowerChartRightSource4,
     // 计算属性
     upperChartSources,
     lowerChartSources,
