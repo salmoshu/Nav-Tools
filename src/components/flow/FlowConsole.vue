@@ -17,6 +17,9 @@
           <el-button @click="toggleAutoScroll" type="default" size="small">
             <span :style="{ textDecoration: autoScroll ? 'line-through' : 'none' }">滚动</span>
           </el-button>
+          <el-button @click="toggleSearch" type="default" size="small">
+            搜索
+          </el-button>
         </div>
         
         <!-- 右侧按钮组 -->
@@ -26,12 +29,45 @@
         </div>
       </div>
     </div>
-    <div ref="consoleContent" class="console-content">
+    
+    <!-- 悬浮搜索框 - 移到console-header下方 -->
+    <div v-show="showSearch" class="search-overlay">
+      <div class="search-container">
+        <el-input
+          ref="searchInput"
+          v-model="searchQuery"
+          size="small"
+          placeholder="搜索... (按ESC关闭)"
+          style="width: 200px; margin-right: 5px;"
+          @input="performSearch"
+          @keyup.enter="findNext"
+          @keyup.esc="toggleSearch"
+        >
+          <template #suffix>
+            <i class="el-icon-search"></i>
+          </template>
+        </el-input>
+        <el-button @click="findPrev" type="text" size="small" style="color: #606266; margin-right: -10px;">↑</el-button>
+        <el-button @click="findNext" type="text" size="small" style="color: #606266; margin-right: 5px;">↓</el-button>
+        <span class="search-info-text" v-if="searchQuery">
+          找到 {{ searchResults.length }} 个匹配项，当前是第 {{ currentResultIndex + 1 }} 项
+        </span>
+        <el-button @click="clearSearch" type="text" size="small" style="color: #909399; margin-left: 10px;">清除</el-button>
+      </div>
+    </div>
+    
+    <div ref="consoleContent" class="console-content" @keydown.ctrl.f.prevent="toggleSearch">
       <div v-for="message in rawMessages" :key="getMessageKey(message)" class="message-line">
         <div v-if="!dataFilter || (message.dataType === dataFormat && message.isValid)">
           <span v-if="addTimestamp" class="timestamp">{{ message.timestamp }}: </span>
-          <span :class="{'valid-message': message.isValid, 'invalid-message': !message.isValid}">
-            {{ message.raw }}
+          <span 
+            :class="{ 
+              'valid-message': message.isValid, 
+              'invalid-message': !message.isValid, 
+              'search-match': searchQuery && isMatch(message.raw, searchQuery) 
+            }"
+            v-html="highlightSearch(message.raw, searchQuery)"
+          >
           </span>
         </div>
       </div>
@@ -43,8 +79,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, nextTick } from 'vue';
-import { ElMessage, ElButton, ElSelect, ElOption } from 'element-plus';
+import { ref, onMounted, onUnmounted, nextTick, watch } from 'vue';
+import { ElMessage, ElButton, ElSelect, ElOption, ElInput } from 'element-plus';
 import { navMode } from '@/settings/config';
 
 // 控制台相关状态
@@ -60,6 +96,13 @@ const msgCount = ref(0);
 const msgNmeaCount = ref(0);
 const msgJsonCount = ref(0);
 const dataFormat = ref<'json' | 'nmea'>('json');
+
+// 搜索相关状态
+const showSearch = ref(false);
+const searchQuery = ref('');
+const searchInput = ref<InstanceType<typeof ElInput> | null>(null);
+const searchResults = ref<{index: number, element: HTMLElement | null}[]>([]);
+const currentResultIndex = ref(-1);
 
 const calculateNmeaChecksum = (sentence: string): string => {
   let checksum = 0;
@@ -225,6 +268,7 @@ const saveConsoleData = () => {
 const clearConsole = () => {
   rawMessages.value = [];
   msgCount.value = 0;
+  clearSearch();
 };
 
 // 切换自动滚动
@@ -247,11 +291,117 @@ const toggleAddTimestamp = () => {
 const dataFilter = ref(false);
 const toggleDataFilter = () => {
   dataFilter.value = !dataFilter.value;
-}
+};
 
 // 定义命名的回调函数
 const handleSerialData = (_: unknown, data: string) => {
   handleRawData(data);
+};
+
+// 搜索功能实现
+const toggleSearch = () => {
+  showSearch.value = !showSearch.value;
+  if (showSearch.value) {
+    nextTick(() => {
+      if (searchInput.value) {
+        searchInput.value.focus();
+      }
+    });
+  } else {
+    clearSearch();
+  }
+};
+
+const clearSearch = () => {
+  searchQuery.value = '';
+  searchResults.value = [];
+  currentResultIndex.value = -1;
+  
+  // 强制重新渲染以清除所有高亮样式
+  nextTick(() => {
+    const allMessageElements = document.querySelectorAll('.message-line');
+    allMessageElements.forEach(element => {
+      element.classList.remove('current-search-result');
+    });
+  });
+};
+
+const isMatch = (text: string, query: string): boolean => {
+  return text.toLowerCase().includes(query.toLowerCase());
+};
+
+const highlightSearch = (text: string, query: string): string => {
+  if (!query) return text;
+  const regex = new RegExp(`(${query})`, 'gi');
+  return text.replace(regex, '<mark>$1</mark>');
+};
+
+const performSearch = () => {
+  if (!searchQuery.value) {
+    clearSearch();
+    return;
+  }
+  
+  searchResults.value = [];
+  currentResultIndex.value = -1;
+  
+  nextTick(() => {
+    const messageElements = document.querySelectorAll('.message-line');
+    messageElements.forEach((element, index) => {
+      const rawText = rawMessages.value[index]?.raw || '';
+      if (isMatch(rawText, searchQuery.value)) {
+        searchResults.value.push({ index, element: element as HTMLElement });
+      }
+    });
+    
+    if (searchResults.value.length > 0) {
+      currentResultIndex.value = 0;
+      scrollToResult(0);
+    }
+  });
+};
+
+const scrollToResult = (index: number) => {
+  if (searchResults.value[index]?.element) {
+    searchResults.value[index].element.scrollIntoView({
+      behavior: 'smooth',
+      block: 'center',
+      inline: 'nearest'
+    });
+    
+    // 高亮当前结果
+    searchResults.value.forEach((result, i) => {
+      if (result.element) {
+        if (i === index) {
+          result.element.classList.add('current-search-result');
+        } else {
+          result.element.classList.remove('current-search-result');
+        }
+      }
+    });
+  }
+};
+
+const findNext = () => {
+  if (searchResults.value.length === 0) return;
+  
+  currentResultIndex.value = 
+    (currentResultIndex.value + 1) % searchResults.value.length;
+  scrollToResult(currentResultIndex.value);
+};
+
+const findPrev = () => {
+  if (searchResults.value.length === 0) return;
+  
+  currentResultIndex.value = 
+    (currentResultIndex.value - 1 + searchResults.value.length) % searchResults.value.length;
+  scrollToResult(currentResultIndex.value);
+};
+
+// 获取消息唯一key的函数
+const getMessageKey = (message: { raw: string; timestamp: string }) => {
+  // 结合原始内容和时间戳生成唯一标识
+  return `${message.timestamp}_${message.raw}`;
 };
 
 onMounted(() => {
@@ -266,11 +416,6 @@ onMounted(() => {
 onUnmounted(() => {
   window.ipcRenderer.off('serial-data-to-renderer', handleSerialData);
 });
-// 在script部分添加获取消息唯一key的函数
-const getMessageKey = (message: { raw: string; timestamp: string }) => {
-  // 结合原始内容和时间戳生成唯一标识
-  return `${message.timestamp}_${message.raw}`;
-};
 </script>
 
 <style scoped>
@@ -285,6 +430,7 @@ const getMessageKey = (message: { raw: string; timestamp: string }) => {
   background-color: #ffffff;
   color: #333333;
   box-sizing: border-box;
+  position: relative;
 }
 
 .console-header {
@@ -296,6 +442,33 @@ const getMessageKey = (message: { raw: string; timestamp: string }) => {
   border-bottom: 1px solid #e9ecef;
   height: 50px;
   box-sizing: border-box;
+  z-index: 10;
+}
+
+/* 悬浮搜索框样式 */
+.search-overlay {
+  position: absolute;
+  top: 50px;
+  left: 0;
+  right: 0;
+  background-color: rgba(240, 249, 255, 0.95);
+  border-bottom: 1px solid #d9ecff;
+  padding: 8px 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  z-index: 20;
+  backdrop-filter: blur(2px);
+}
+
+.search-container {
+  display: flex;
+  align-items: center;
+  justify-content: left;
+}
+
+.search-info-text {
+  color: #096dd9;
+  font-size: 12px;
+  margin-right: 10px;
 }
 
 .console-content {
@@ -312,6 +485,31 @@ const getMessageKey = (message: { raw: string; timestamp: string }) => {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
+  margin-top: 0;
+  /* 添加过渡效果，当搜索框出现时内容区域平滑下移 */
+  transition: margin-top 0.2s ease;
+}
+
+/* 当搜索框显示时，给内容区域添加上边距 */
+:deep(.search-overlay[style*="display: block"]) ~ .console-content {
+  margin-top: 45px;
+}
+
+/* 搜索结果样式 */
+.search-match {
+  border-left-color: #409eff;
+}
+
+.current-search-result {
+  background-color: #e6f4ff !important;
+  border-left-color: #409eff;
+  font-weight: bold;
+}
+
+.message-line mark {
+  background-color: #ffecb3;
+  padding: 0 2px;
+  border-radius: 2px;
 }
 
 /* 优化滚动条样式 */
@@ -351,6 +549,23 @@ const getMessageKey = (message: { raw: string; timestamp: string }) => {
   background-color: #f8f9fa;
 }
 
+/* 搜索结果样式 */
+.search-match {
+  border-left-color: #409eff;
+}
+
+.current-search-result {
+  background-color: #e6f4ff !important;
+  border-left-color: #409eff;
+  font-weight: bold;
+}
+
+.message-line mark {
+  background-color: #ffecb3;
+  padding: 0 2px;
+  border-radius: 2px;
+}
+
 .timestamp {
   color: #28a745;
   margin-right: 8px;
@@ -386,6 +601,31 @@ const getMessageKey = (message: { raw: string; timestamp: string }) => {
 
 .left-controls, .right-controls {
   display: flex;
+  align-items: center;
+}
+
+/* 搜索相关样式 */
+.search-container {
+  display: flex;
+  align-items: center;
+  margin-right: 10px;
+}
+
+.search-info {
+  position: sticky;
+  top: 0;
+  background-color: #f0f9ff;
+  color: #096dd9;
+  padding: 4px 8px;
+  font-size: 12px;
+  border-radius: 4px;
+  margin-bottom: 8px;
+  z-index: 10;
+}
+
+.search-info.no-results {
+  background-color: #fff2f0;
+  color: #ff4d4f;
 }
 
 :deep(.custom-select) {
