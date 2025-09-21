@@ -823,7 +823,7 @@ function updateChart() {
       grid: {
         left: '3%',
         right: '8%',
-        bottom: '15%',
+        bottom: '20%',
         containLabel: true
       },
       xAxis: { type: 'value', name: 't' },
@@ -938,12 +938,12 @@ function createChartOption() {
       grid: {
         left: '3%',
         right: '8%',
-        bottom: '15%', // 从3%增加到15%，为dataZoom留出空间
+        bottom: '20%', // 从3%增加到15%，为dataZoom留出空间
         containLabel: true
       },
       xAxis: {
         type: 'value',
-        name: series.length < 2 ? 't' : '      t',
+        name: series.length < 2 ? 't' : '        t',
         axisLabel: {
           formatter: function(value: number) {
             return value.toFixed(2)
@@ -1229,12 +1229,12 @@ function createChartOption() {
         top: 30
       },
       grid: [
-        { left: '3%', right: '8%', top: '15%', bottom: '55%', containLabel: true },
-        { left: '3%', right: '8%', top: '55%', bottom: '15%', containLabel: true } // 从3%增加到15%
+        { left: '3%', right: '8%', top: '18%', bottom: '52%', containLabel: true },
+        { left: '3%', right: '8%', top: '50%', bottom: '20%', containLabel: true } // 从3%增加到15%
       ],
       xAxis: [
-        { type: 'value', name: upperSeries.length < 2 ? 't' : '      t', gridIndex: 0, axisLabel: { formatter: (value: number) => value.toFixed(2) } },
-        { type: 'value', name: lowerSeries.length < 2 ? 't' : '      t', gridIndex: 1, axisLabel: { formatter: (value: number) => value.toFixed(2) } }
+        { type: 'value', name: upperSeries.length < 2 ? 't' : '        t', gridIndex: 0, axisLabel: { formatter: (value: number) => value.toFixed(2) } },
+        { type: 'value', name: lowerSeries.length < 2 ? 't' : '        t', gridIndex: 1, axisLabel: { formatter: (value: number) => value.toFixed(2) } }
       ],
       yAxis: yAxisConfigArray,
       dataZoom: [
