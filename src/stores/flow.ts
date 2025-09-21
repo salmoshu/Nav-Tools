@@ -231,7 +231,6 @@ export const useFlowStore = defineStore('flow', () => {
   const { flowData } = useFlow()
   
   // 存储自定义状态配置
-  // 1. 修改 customStatusConfigs 的类型定义
   const customStatusConfigs = ref<Array<{
     fieldName: string
     decimalPlaces: number
@@ -240,7 +239,7 @@ export const useFlowStore = defineStore('flow', () => {
     code?: string
   }>>([])
   
-  // 2. 修改 status 计算属性，为批量数据生成完整的计算值
+  // 2. 修改 status 计算属性
   const status = computed(() => {
     const result: Record<string, any> = {} 
     // 检查flowData是否有数据
@@ -292,23 +291,17 @@ export const useFlowStore = defineStore('flow', () => {
           
           // 使用字段名作为键
           result[config.fieldName] = value
-          
-          // 确保计算属性存在于flowData中且为数组
-          if (!(config.fieldName in flowData.value) || !Array.isArray(flowData.value[config.fieldName])) {
-            flowData.value[config.fieldName] = []
-          }
-          
-          // 确保计算属性与原始数据长度一致
+
           const dataArray = flowData.value[config.fieldName] as any[]
           const timestampsLength = flowData.value.timestamp?.length || 0
-          
+
           // 只在数据不足时重新计算所有值
           if (dataArray.length < timestampsLength) {
             // 清空数组，重新计算所有值
-            dataArray.length = 0
+            const beginIndex = dataArray.length-1;
             
             // 为每个时间点计算值
-            for (let i = 0; i < timestampsLength; i++) {
+            for (let i = beginIndex; i < timestampsLength; i++) {
               try {
                 // 创建包含当前时间点数据的上下文
                 const timePointContext = {
@@ -356,6 +349,66 @@ export const useFlowStore = defineStore('flow', () => {
     return result
   })
 
+  const initCustomStatus = (config: {
+    fieldName: string
+    decimalPlaces: number
+    color: string
+    isCodeDefinition?: boolean
+    code?: string
+  }) => {
+    const timestampsLength = flowData.value.timestamp?.length || 0
+    if (timestampsLength === 0 || !config.isCodeDefinition || !config.code) {
+      return
+    }
+
+    if (!(config.fieldName in flowData.value)) {
+      flowData.value[config.fieldName] = []
+    }
+
+    const dataArray = flowData.value[config.fieldName] as any[]
+
+    for (let i = 0; i < timestampsLength; i++) {
+      try {
+        // 创建包含当前时间点数据的上下文
+        const timePointContext = {
+          flowData: {
+            ...flowData.value,
+          },
+          fieldName: config.fieldName
+        }
+        
+        // 计算当前时间点的值
+        let timePointValue = safeEvaluateExpression(config.code, timePointContext)
+        
+        // 格式化数值
+        if (typeof timePointValue === 'number') {
+          timePointValue = Number(timePointValue.toFixed(config.decimalPlaces))
+        }
+
+        if (dataArray.length !== timestampsLength) {
+          dataArray.push(timePointValue)
+        } else {
+          dataArray[i] = timePointValue
+        }
+      } catch (error) {
+        if (dataArray.length !== timestampsLength) {
+          dataArray.push(null)
+        } else {
+          dataArray[i] = null
+        }
+      }
+    }
+
+    // 等效变化plotTime从而触发更新
+    const lastPlotTime = flowData.value.plotTime?.[flowData.value.plotTime.length - 1]
+    if (lastPlotTime !== undefined) {
+      flowData.value.plotTime?.push(lastPlotTime)
+    }
+    setTimeout(() => {
+      flowData.value.plotTime?.pop()
+    }, 2)
+  }
+
   // 3. 修改 addNewStatus 函数
   const addNewStatus = (config: {
     fieldName: string
@@ -376,37 +429,9 @@ export const useFlowStore = defineStore('flow', () => {
       // 更新现有配置
       customStatusConfigs.value[existingIndex] = config
     }
-    
-    // 初始化flowData中的自定义字段为数组，确保只包含数字或null
-    if (!(config.fieldName in flowData.value) || !Array.isArray(flowData.value[config.fieldName])) {
-      flowData.value[config.fieldName] = []
-      
-      // 如果已有数据，为新字段填充null值以保持长度一致
-      const timestampsLength = flowData.value.timestamp?.length || 0
-      if (timestampsLength > 0) {
-        const dataArray = flowData.value[config.fieldName] as any[]
-        for (let i = 0; i < timestampsLength - 1; i++) {
-          dataArray.push(null)
-        }
-      }
-    } else {
-      // 清理现有数据，确保只包含数字或null
-      const dataArray = flowData.value[config.fieldName] as any[]
-      for (let i = 0; i < dataArray.length; i++) {
-        const value = dataArray[i]
-        if (value === null || value === undefined) {
-          // 保留null值
-          continue
-        }
-        
-        const numValue = Number(value)
-        if (!isNaN(numValue)) {
-          dataArray[i] = numValue
-        } else {
-          dataArray[i] = null
-        }
-      }
-    }
+
+    // 初始化新配置
+    initCustomStatus(config)
   }
 
   // 4. 修改 removeCustomStatus 函数
