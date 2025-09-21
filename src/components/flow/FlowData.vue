@@ -826,7 +826,7 @@ function updateChart() {
         bottom: '15%',
         containLabel: true
       },
-      xAxis: { type: 'value', name: 'time' },
+      xAxis: { type: 'value', name: 't' },
       yAxis: { type: 'value' },
       series: []
     })
@@ -943,7 +943,7 @@ function createChartOption() {
       },
       xAxis: {
         type: 'value',
-        name: '      time',
+        name: series.length < 2 ? 't' : '      t',
         axisLabel: {
           formatter: function(value: number) {
             return value.toFixed(2)
@@ -1233,8 +1233,8 @@ function createChartOption() {
         { left: '3%', right: '8%', top: '55%', bottom: '15%', containLabel: true } // 从3%增加到15%
       ],
       xAxis: [
-        { type: 'value', name: '      time', gridIndex: 0, axisLabel: { formatter: (value: number) => value.toFixed(2) } },
-        { type: 'value', name: '      time', gridIndex: 1, axisLabel: { formatter: (value: number) => value.toFixed(2) } }
+        { type: 'value', name: upperSeries.length < 2 ? 't' : '      t', gridIndex: 0, axisLabel: { formatter: (value: number) => value.toFixed(2) } },
+        { type: 'value', name: lowerSeries.length < 2 ? 't' : '      t', gridIndex: 1, axisLabel: { formatter: (value: number) => value.toFixed(2) } }
       ],
       yAxis: yAxisConfigArray,
       dataZoom: [
