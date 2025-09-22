@@ -1,6 +1,6 @@
 <template>
   <div class="deviation-container">
-    <div class="control-panel" :class="{ 'control-panel-fullscreen': isFullScreen }">
+    <div class="control-panel">
       <div class="controls">
         <el-switch v-model="isTracking" @change="toggleTracking" class="tracking-switch" />
         <span class="switch-label">实时追踪</span>
@@ -20,32 +20,10 @@
           />
           <span class="size-value">{{ pointSize }}</span>
         </div>
-        
-        <el-button type="default" size="small" @click="toggleFullScreen" class="fullscreen-btn">
-          <el-icon @click="toggleFullScreenInfo" v-if="!isFullScreen"><Expand /></el-icon>
-          <el-icon v-else><FullScreen /></el-icon>
-        </el-button>
       </div>
     </div>
-    <div class="chart-container" :class="{ 'full-screen': isFullScreen }" ref="chartContainerRef">
+    <div class="chart-container" ref="chartContainerRef">
       <div ref="chartRef" class="chart"></div>
-      <div class="ruler">
-        <span>{{ rulerText }}</span>
-        <svg
-          t="1678949672043"
-          class="ruler-icon"
-          viewBox="0 0 2024 1024"
-          version="1.1"
-          xmlns="http://www.w3.org/2000/svg "
-          width="40"
-          height="20"
-        >
-          <path
-            d="m1976.42566,586.88647l-1927.29435,0l0,-148.94546l107.75434,0l0,97.22828l1711.78564,0l0,-97.33171l107.75436,0l0,149.04889zm0,0"
-            fill="#324558"
-          ></path>
-        </svg>
-      </div>
     </div>
   </div>
 </template>
@@ -54,11 +32,9 @@
 import * as echarts from 'echarts';
 import { ref, onMounted, onUnmounted, watch, nextTick } from 'vue';
 import { useNmea, MAX_NMEA_DATA } from '../../composables/gnss/useNmea';
-import { Expand, FullScreen } from '@element-plus/icons-vue';
 import { ScatterChart } from 'echarts/charts';
 import { GridComponent } from 'echarts/components';
 import { CanvasRenderer } from 'echarts/renderers';
-import { ElMessage } from 'element-plus';
 
 echarts.use([ScatterChart, GridComponent, CanvasRenderer]);
 
@@ -67,8 +43,6 @@ const { latestPosition, latestGgaPosition, clearData } = useNmea();
 const chartRef = ref(null);
 const chartInstance = ref(null);
 const isTracking = ref(true);
-const isFullScreen = ref(false);
-const rulerText = ref('');
 const deviation = ref('');
 const padding = ref(10000); // 默认正负10km
 const pointSize = ref(10); // 初始值与图表配置一致
@@ -613,27 +587,6 @@ function maintainEqualAxisScale() {
   });
 }
 
-function toggleFullScreen() {
-  isFullScreen.value = !isFullScreen.value;
-  nextTick(() => {
-    if (chartInstance.value) {
-      // 切换全屏后重新计算等宽坐标轴
-      maintainEqualAxisScale();
-      chartInstance.value.resize();
-    }
-  });
-}
-
-function toggleFullScreenInfo() {
-  ElMessage({
-    message: '按Esc键或点击按钮退出全屏',
-    type: 'success',
-    duration: 3000,
-    placement: 'bottom-right',
-    offset: 50,
-  })
-}
-
 let stopWatch = null;
 let handleKeyDown = null;
 
@@ -651,12 +604,6 @@ onMounted(() => {
     },
     { immediate: true },
   );
-
-  handleKeyDown = (event) => {
-    if (event.key === 'Escape' && isFullScreen.value) {
-      toggleFullScreen();
-    }
-  };
 
   window.addEventListener('keydown', handleKeyDown);
 });
@@ -706,12 +653,6 @@ onUnmounted(() => {
   position: relative; /* 为绝对定位的子元素提供参考 */
 }
 
-.fullscreen-btn {
-  position: absolute; /* 绝对定位 */
-  right: 0; /* 右对齐 */
-  margin-left: auto; /* 自动左边距，确保在最右侧 */
-}
-
 .tracking-switch {
   margin-right: 8px;
 }
@@ -752,46 +693,6 @@ onUnmounted(() => {
   overscroll-behavior: none;
 }
 
-.control-panel-fullscreen {
-  position: fixed;
-  top: 0px;
-  left: 0px;
-  right: 0px;
-  z-index: 1001;
-  max-height: 180px;
-}
-
-.full-screen {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  z-index: 1000;
-  background-color: #fff;
-}
-
-.chart-container.full-screen {
-  top: 50px;
-  height: calc(100% - 50px);
-}
-
-.ruler {
-  position: absolute;
-  bottom: 10px;
-  left: 10px;
-  display: flex;
-  align-items: center;
-  background-color: rgba(255, 255, 255, 0.8);
-  padding: 3px 8px;
-  border-radius: 4px;
-  font-size: 12px;
-  color: #324558;
-}
-
-.ruler-icon {
-  margin-left: 5px;
-}
 .point-size-control {
   display: flex;
   align-items: center;

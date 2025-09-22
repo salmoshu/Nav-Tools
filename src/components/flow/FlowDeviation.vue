@@ -1,8 +1,7 @@
 <template>
   <div class="deviation-container">
-    <div class="control-panel" :class="{ 'control-panel-fullscreen': isFullScreen }">
+    <div class="control-panel">
       <div class="controls">
-        
 
         <!-- 添加轨迹点尺寸调节滑块 -->
         <span class="switch-label">追踪:</span>
@@ -22,7 +21,7 @@
           <span class="size-value">{{ pointSize }}</span>
         </div>
         
-        <!-- 将重置、清除和全屏按钮放在右侧 -->
+        <!-- 将重置、清除按钮放在右侧 -->
         <div class="right-buttons">
           <!-- 添加视图配置按钮 -->
           <el-button type="default" size="small" @click="showViewConfig" class="control-btn config-btn">
@@ -30,14 +29,10 @@
           </el-button>
           <el-button type="default" size="small" @click="resetZoom" class="zoom-btn">重置</el-button>
           <el-button type="default" size="small" @click="clearTrack" class="clear-btn">清除</el-button>
-          <el-button type="default" size="small" @click="toggleFullScreen" class="fullscreen-btn">
-            <el-icon @click="toggleFullScreenInfo" v-if="!isFullScreen"><Expand /></el-icon>
-            <el-icon v-else><FullScreen /></el-icon>
-          </el-button>
         </div>
       </div>
     </div>
-    <div class="chart-container" :class="{ 'full-screen': isFullScreen }" ref="chartContainerRef">
+    <div class="chart-container" ref="chartContainerRef">
       <!-- 移除正方形包装器，让图表直接填充容器 -->
       <div ref="chartRef" class="chart"></div>
     </div>
@@ -77,7 +72,6 @@
 import * as echarts from 'echarts';
 import { ref, onMounted, onUnmounted, watch, nextTick, computed } from 'vue';
 import { useFlow } from '../../composables/flow/useFlow';
-import { Expand, FullScreen } from '@element-plus/icons-vue';
 import { ScatterChart } from 'echarts/charts';
 import { GridComponent } from 'echarts/components';
 import { CanvasRenderer } from 'echarts/renderers';
@@ -93,8 +87,6 @@ const chartRef = ref(null);
 const chartInstance = ref(null);
 const chartContainerRef = ref(null); // 添加容器引用
 const isTracking = ref(true);
-const isFullScreen = ref(false);
-const rulerText = ref('');
 const padding = ref(10000); // 默认正负10km
 const pointSize = ref(10); // 初始值与图表配置一致
 const chartDom = ref(null); // 添加chartDom引用
@@ -652,30 +644,6 @@ function maintainEqualAxisScale() {
   });
 }
 
-// 切换全屏
-function toggleFullScreen() {
-  isFullScreen.value = !isFullScreen.value;
-  nextTick(() => {
-    if (chartInstance.value) {
-      // 切换全屏后重新计算等宽坐标轴
-      maintainEqualAxisScale();
-      chartInstance.value.resize();
-    }
-  });
-}
-
-// 显示全屏提示
-function toggleFullScreenInfo() {
-  ElMessage({
-    message: '按Esc键或点击按钮退出全屏',
-    type: 'success',
-    duration: 3000,
-    placement: 'bottom-right',
-    offset: 50,
-  })
-}
-
-let stopWatch = null;
 let handleKeyDown = null;
 let dataUpdateInterval = null;
 
@@ -700,12 +668,6 @@ onMounted(() => {
   dataUpdateInterval = setInterval(() => {
     updateFlowData();
   }, 100);
-
-  handleKeyDown = (event) => {
-    if (event.key === 'Escape' && isFullScreen.value) {
-      toggleFullScreen();
-    }
-  };
 
   window.addEventListener('keydown', handleKeyDown);
 });
@@ -868,31 +830,4 @@ onUnmounted(() => {
   align-items: center;
   margin-left: auto; /* 自动占据剩余空间，将按钮推到右侧 */
 }
-
-/* 添加全屏模式相关样式 */
-.control-panel-fullscreen {
-  position: fixed;
-  top: 0px;
-  left: 0px;
-  right: 0px;
-  z-index: 1001;
-  max-height: 180px;
-}
-
-.full-screen {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  z-index: 1000;
-  background-color: #fff;
-}
-
-.chart-container.full-screen {
-  top: 50px;
-  height: calc(100% - 50px);
-}
-
-/* 其他样式保持不变 */
 </style>

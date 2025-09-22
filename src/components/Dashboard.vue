@@ -19,7 +19,7 @@
       @funcModeChange="handleFuncModeChange"
     />
 
-    <StatusBar @positionChange="handleStatusbarPositionChange" v-if="showStatusBar" />
+    <StatusBar @positionChange="handleStatusbarPositionChange" v-if="showStatusBar && !fullScreenItem" />
 
     <div 
       class="dashboard-content" 
@@ -57,19 +57,27 @@
             @moved="movedEvent"
           >
             <div class="layout-component" :id="`grid-item-${item.i}`">
-              <el-card class="box-card" shadow="always">
+              <el-card class="box-card" shadow="always" :class="{ 'full-screen-card': fullScreenItem === item.i }">
                 <template #header>
-                  <div class="card-header">
+                  <div class="card-header" v-if="fullScreenItem !== item.i">
                     <span class="title">{{ item.titleName }}</span>
                     <div class="card-actions">
                       <el-button 
                         type="text" 
                         v-if="item.componentName.indexOf('Config') !== -1"
-                        @click="console.log('detachItem(item)')"
+                        @click=""
                         class="detach-btn"
                         title="分离到独立窗口"
                       >
                         <el-icon><Share /></el-icon>
+                      </el-button>
+                      <el-button 
+                        type="text" 
+                        @click="toggleCardFullScreen(item.i)"
+                        class="fullscreen-btn"
+                        title="全屏展示"
+                      >
+                        <el-icon><Expand /></el-icon>
                       </el-button>
                       <el-button 
                         type="text" 
@@ -80,6 +88,17 @@
                         <el-icon><Close /></el-icon>
                       </el-button>
                     </div>
+                  </div>
+                  <div v-else class="full-screen-header">
+                    <span class="full-screen-title">{{ item.titleName }}</span>
+                    <el-button 
+                      type="text" 
+                      @click="toggleCardFullScreen(null)"
+                      class="exit-fullscreen-btn"
+                      title="退出全屏"
+                    >
+                      <el-icon><FullScreen /></el-icon>
+                    </el-button>
                   </div>
                 </template>
                 <div class="card-content">
@@ -100,7 +119,7 @@ import StatusBar from './StatusBar.vue'
 import { ref, computed, onMounted, onUnmounted, provide } from 'vue'
 import { GridLayout, GridItem } from 'grid-layout-plus'
 import { ElButton, ElCard, ElIcon, ElMessage } from 'element-plus'
-import { Close, Share, Upload } from '@element-plus/icons-vue'
+import { Close, Share, Expand, FullScreen } from '@element-plus/icons-vue'
 import emitter from '@/hooks/useMitt'
 import { useLayoutManager } from '@/composables/useLayoutManager'
 import { showStatusBar } from '@/composables/useStatusManager'
@@ -128,6 +147,9 @@ const statusbarPosition = ref<'left' | 'right'>('right')
 const toolbarSize = ref({ width: 40, height: 40 })
 const statusbarSize = ref({ width: 200, height: 60 })
 
+// 全屏相关状态
+const fullScreenItem = ref<string | null>(null)
+
 // 提供工具栏和状态栏位置的响应式引用
 provide('toolbarPosition', toolbarPosition)
 provide('statusbarPosition', statusbarPosition)
@@ -141,6 +163,31 @@ const handleToolbarPositionChange = (position: 'top' | 'right' | 'bottom' | 'lef
 
 const handleStatusbarPositionChange = (position: 'left' | 'right') => {
   statusbarPosition.value = position
+}
+
+// 切换卡片全屏状态
+const toggleCardFullScreen = (itemId: string | null) => {
+  if (fullScreenItem.value === itemId) {
+    // 退出全屏
+    fullScreenItem.value = null
+  } else {
+    // 进入全屏
+    fullScreenItem.value = itemId
+    ElMessage({
+      message: '按Esc键或点击按钮退出全屏',
+      type: 'success',
+      duration: 1000,
+      placement: 'bottom-right',
+      offset: 50,
+    })
+  }
+}
+
+// 处理键盘事件
+const handleKeyDown = (event: KeyboardEvent) => {
+  if (event.key === 'Escape' && fullScreenItem.value !== null) {
+    toggleCardFullScreen(null)
+  }
 }
 
 // 计算内容区域的类
@@ -164,7 +211,7 @@ const contentStyle = computed(() => {
 
   // 先计算状态栏的位置（只在左右两侧）
   // 只有当showStatusBar为true时才计算状态栏的占位
-  if (showStatusBar.value) {
+  if (showStatusBar.value && !fullScreenItem.value) {
     switch (statusbarPosition.value) {
       case 'left':
         marginLeft += statusbarSize.value.width
@@ -176,35 +223,37 @@ const contentStyle = computed(() => {
   }
 
   // 处理工具栏的位置，考虑与状态栏的边缘限制
-  switch (toolbarPosition.value) {
-    case 'top':
-      // 当ToolBar在上边时，限制ToolBar下边缘在StatusBar上边缘
-      marginTop += toolbarSize.value.height
-      break
-    case 'bottom':
-      // 当ToolBar在下边时，限制ToolBar上边缘在StatusBar下边缘
-      marginBottom += toolbarSize.value.height
-      break
-    case 'left':
-      // 当ToolBar在左边时，限制ToolBar右边缘在StatusBar左边缘
-      if (showStatusBar.value && statusbarPosition.value === 'left') {
-        // 如果状态栏在左边，工具栏在状态栏右侧
-        marginLeft = statusbarSize.value.width + toolbarSize.value.width
-      } else {
-        // 如果状态栏在右边或不存在，工具栏在左侧
-        marginLeft += toolbarSize.value.width
-      }
-      break
-    case 'right':
-      // 当ToolBar在右边时，限制ToolBar左边缘在StatusBar右边缘
-      if (showStatusBar.value && statusbarPosition.value === 'right') {
-        // 如果状态栏在右边，工具栏在状态栏左侧
-        marginRight = statusbarSize.value.width + toolbarSize.value.width
-      } else {
-        // 如果状态栏在左边或不存在，工具栏在右侧
-        marginRight += toolbarSize.value.width
-      }
-      break
+  if (!fullScreenItem.value) {
+    switch (toolbarPosition.value) {
+      case 'top':
+        // 当ToolBar在上边时，限制ToolBar下边缘在StatusBar上边缘
+        marginTop += toolbarSize.value.height
+        break
+      case 'bottom':
+        // 当ToolBar在下边时，限制ToolBar上边缘在StatusBar下边缘
+        marginBottom += toolbarSize.value.height
+        break
+      case 'left':
+        // 当ToolBar在左边时，限制ToolBar右边缘在StatusBar左边缘
+        if (showStatusBar.value && statusbarPosition.value === 'left') {
+          // 如果状态栏在左边，工具栏在状态栏右侧
+          marginLeft = statusbarSize.value.width + toolbarSize.value.width
+        } else {
+          // 如果状态栏在右边或不存在，工具栏在左侧
+          marginLeft += toolbarSize.value.width
+        }
+        break
+      case 'right':
+        // 当ToolBar在右边时，限制ToolBar左边缘在StatusBar右边缘
+        if (showStatusBar.value && statusbarPosition.value === 'right') {
+          // 如果状态栏在右边，工具栏在状态栏左侧
+          marginRight = statusbarSize.value.width + toolbarSize.value.width
+        } else {
+          // 如果状态栏在左边或不存在，工具栏在右侧
+          marginRight += toolbarSize.value.width
+        }
+        break
+    }
   }
 
   return {
@@ -281,7 +330,9 @@ onMounted(() => {
   emitter.on('auto', autoLayout)
   emitter.on('reset', resetLayout)
   
-
+  // 添加键盘事件监听
+  window.addEventListener('keydown', handleKeyDown)
+  
   // module mode
   for (const [_, appCfg] of Object.entries(appConfig)) {
     for (const [_, moduleCfg] of Object.entries((appCfg as any))) {
@@ -310,6 +361,8 @@ onMounted(() => {
 
 onUnmounted(() => {
   emitter.all.clear()
+  // 移除键盘事件监听
+  window.removeEventListener('keydown', handleKeyDown)
 })
 </script>
 
@@ -353,6 +406,96 @@ onUnmounted(() => {
   border: 3px solid rgb(210, 210, 210);
   box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
   overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+/* 全屏卡片样式增强 */
+.full-screen-card {
+  position: fixed;
+  z-index: 999; /* 降低z-index，使其低于Toolbar的1000 */
+  margin: 0;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  /* 确保全屏卡片不受父元素影响 */
+  opacity: 1 !important;
+  visibility: visible !important;
+  pointer-events: auto !important;
+  background-color: #ffffff;
+  overflow: hidden;
+}
+
+/* 全屏模式下，根据Toolbar位置调整全屏卡片的位置和大小 */
+.toolbar-top .full-screen-card {
+  top: 40px; /* Toolbar的高度 */
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: calc(100vh - 40px);
+}
+
+.toolbar-bottom .full-screen-card {
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 40px; /* Toolbar的高度 */
+  height: calc(100vh - 40px);
+}
+
+.toolbar-left .full-screen-card {
+  top: 0;
+  left: 40px; /* Toolbar的宽度 */
+  right: 0;
+  bottom: 0;
+  width: calc(100vw - 40px);
+}
+
+.toolbar-right .full-screen-card {
+  top: 0;
+  left: 0;
+  right: 40px; /* Toolbar的宽度 */
+  bottom: 0;
+  width: calc(100vw - 40px);
+}
+
+/* 全屏模式下，同时有上下或左右Toolbar的情况 */
+.toolbar-top.toolbar-bottom .full-screen-card {
+  top: 40px;
+  bottom: 40px;
+  height: calc(100vh - 80px);
+}
+
+.toolbar-left.toolbar-right .full-screen-card {
+  left: 40px;
+  right: 40px;
+  width: calc(100vw - 80px);
+}
+
+/* 全屏头部样式 */
+.full-screen-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background-color: #409EFF;
+  color: white;
+  height: 60px;
+  padding: 0 20px;
+  box-sizing: border-box;
+  user-select: none;
+}
+
+.full-screen-title {
+  font-family: "Helvetica Neue", Arial, sans-serif;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.exit-fullscreen-btn {
+  color: white;
+}
+
+.exit-fullscreen-btn:hover {
+  color: #f0f0f0;
 }
 
 /* 确保 el-card 的内容区域正确计算高度 - 使用更精确的选择器 */
@@ -363,7 +506,13 @@ onUnmounted(() => {
   box-sizing: border-box;
 }
 
-/* 删除或替换原有的 .card-content 样式 */
+/* 全屏模式下的内容区域 */
+.full-screen-card :deep(.el-card__body) {
+  height: calc(100% - 60px);
+  overflow: auto;
+}
+
+/* 确保其他样式保持不变 */
 .card-content {
   height: 100%;
   width: 100%;
@@ -374,31 +523,6 @@ onUnmounted(() => {
 :deep(.el-card__body) {
   height: calc(100% - 40px); /* 减去header的40px高度 */
   padding: 0;
-  box-sizing: border-box;
-}
-
-/* 确保卡片内部布局正确 */
-.box-card {
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  border: 3px solid rgb(210, 210, 210);
-  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
-  overflow: hidden;
-}
-
-/* 确保 el-card 的内容区域正确计算高度 - 使用更精确的选择器 */
-.box-card :deep(.el-card__body) {
-  flex: 1;
-  min-height: 0; /* 防止flex子项溢出 */
-  padding: 0;
-  box-sizing: border-box;
-}
-
-/* 删除或替换原有的 .card-content 样式 */
-.card-content {
-  height: 100%;
-  width: 100%;
   box-sizing: border-box;
 }
 
@@ -437,7 +561,8 @@ onUnmounted(() => {
 }
 
 .detach-btn,
-.remove-btn {
+.remove-btn,
+.fullscreen-btn {
   padding: 0;
   color: #909399;
 }
@@ -448,6 +573,10 @@ onUnmounted(() => {
 
 .remove-btn:hover {
   color: #F56C6C;
+}
+
+.fullscreen-btn:hover {
+  color: #67C23A;
 }
 
 /* 调整 resizer 位置 */
