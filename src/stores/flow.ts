@@ -1,12 +1,15 @@
 import { ref, computed } from 'vue'
 import { useFlow } from '@/composables/flow/useFlow'
 import { defineStore } from 'pinia'
+import { create, all } from 'mathjs';
+
+const math = create(all);
 
 // 元数据属性列表 - 这些属性不应被添加到status中
 const META_PROPERTIES = ['plotTime', 'timestamp', 'isBatchData', 'rawString', 'rawDataKeys']
 
 // 安全执行简单表达式的函数 - 完全不使用eval或Function
-function safeEvaluateExpression(expr: string, context: Record<string, any>): any {
+function evaluateExpression(expr: string, context: Record<string, any>): any {
   try {
     // 移除所有空白字符，便于解析
     const trimmedExpr = expr.replace(/\s+/g, '')
@@ -30,200 +33,22 @@ function safeEvaluateExpression(expr: string, context: Record<string, any>): any
       }
     }
     
-    // 简单表达式解析器 - 支持基本的数学运算和flowData访问
-    // 这个版本会将表达式解析为tokens，然后手动计算结果
-    
-    // 1. 先替换所有的flowData访问为实际值
-    let processedExpr = expr
-    
-    // 处理 flowData.fieldName 格式
-    const dotAccessRegex = /flowData\.([a-zA-Z_$][a-zA-Z0-9_$]*)/g
-    let match: RegExpExecArray | null
-    
-    while ((match = dotAccessRegex.exec(processedExpr)) !== null) {
-      const [fullMatch, field] = match
-      if (context.flowData && Array.isArray(context.flowData[field]) && context.flowData[field].length > 0) {
-        const value = context.flowData[field][context.flowData[field].length - 1]
-        // 替换为实际值，确保数字周围有空格以便后续解析
-        processedExpr = processedExpr.replace(fullMatch, String(value))
-      } else {
-        processedExpr = processedExpr.replace(fullMatch, '0')
-      }
-    }
-    
-    // 处理 flowData["fieldName"] 格式
-    const bracketAccessRegex = /flowData\[(?:"([^"]+)"|'([^']+)')\]/g
-    while ((match = bracketAccessRegex.exec(processedExpr)) !== null) {
-      const [fullMatch, quotedKey1, quotedKey2] = match
-      const key = quotedKey1 || quotedKey2
-      if (key && context.flowData && Array.isArray(context.flowData[key]) && context.flowData[key].length > 0) {
-        const value = context.flowData[key][context.flowData[key].length - 1]
-        processedExpr = processedExpr.replace(fullMatch, String(value))
-      } else {
-        processedExpr = processedExpr.replace(fullMatch, '0')
-      }
-    }
-    
-    // 新增：处理直接引用的字段名 (如 camera_angle)
-    const directFieldRegex = /\b([a-zA-Z_$][a-zA-Z0-9_$]*)\b(?![.\(])/g
-    // 首先收集所有可能的匹配项
-    const matches = [...processedExpr.matchAll(directFieldRegex)]
-    // 按长度降序排序，确保较长的字段名优先匹配
-    matches.sort((a, b) => b[0].length - a[0].length)
-    
-    for (const match of matches) {
-      const field = match[0]
-      // 跳过数字、Math函数名和已经处理过的关键词
-      if (!isNaN(Number(field)) || 
-          ['abs', 'sqrt', 'pow', 'sin', 'cos', 'tan', 'round', 'floor', 'ceil', 'max', 'min', 'PI', 'E'].includes(field) ||
-          dangerousKeywords.includes(field)) {
-        continue
-      }
-      
-      if (context.flowData && Array.isArray(context.flowData[field]) && context.flowData[field].length > 0) {
-        const value = context.flowData[field][context.flowData[field].length - 1]
-        // 使用正则表达式替换所有匹配项
-        const regex = new RegExp(`\\b${field}\\b(?![.\\(])`, 'g')
-        processedExpr = processedExpr.replace(regex, String(value))
-      }
-    }
-    
-    // 2. 替换常见的Math函数调用
-    const mathFunctionRegex = /([a-zA-Z]+)\(([^)]*)\)/g
-    while ((match = mathFunctionRegex.exec(processedExpr)) !== null) {
-      const [fullMatch, funcName, args] = match
-      const mathFunctions: Record<string, any> = {
-        abs: Math.abs,
-        sqrt: Math.sqrt,
-        pow: Math.pow,
-        sin: Math.sin,
-        cos: Math.cos,
-        tan: Math.tan,
-        round: Math.round,
-        floor: Math.floor,
-        ceil: Math.ceil,
-        max: Math.max,
-        min: Math.min,
-        PI: Math.PI,
-        E: Math.E
-      }
-      
-      if (mathFunctions[funcName]) {
-        try {
-          // 这里我们需要计算参数值，然后应用Math函数
-          // 对于简单参数，我们可以使用eval的安全替代方案
-          const argsValue = args.split(',').map(arg => {
-            // 尝试将参数解析为数字
-            const num = parseFloat(arg.trim())
-            return isNaN(num) ? arg.trim() : num
-          })
-          
-          // 应用Math函数
-          const result = (mathFunctions[funcName] as Function).apply(null, argsValue)
-          processedExpr = processedExpr.replace(fullMatch, String(result))
-        } catch (e) {
-          throw new Error('Math函数执行错误: ' + funcName)
+    // 先替换所有的flowData访问为实际值
+    let processedExpr = trimmedExpr
+    for (const key of context.flowData.rawDataKeys) {
+      if (trimmedExpr.includes(key)) {
+        if (context.flowData[key][context.index]) {
+          processedExpr = processedExpr.replace(new RegExp(key, 'g'), context.flowData[key][context.index])
+        } else {
+          return null
         }
       }
     }
-    
-    // 3. 处理简单的数学表达式 - 这是一个简化版的计算器
-    // 注意：这个简单计算器只支持基本的四则运算和括号
-    // 对于更复杂的表达式，我们需要更复杂的解析器
-    const result = calculateSimpleExpression(processedExpr)
-    
-    // 确保返回值要么是数字要么是null
-    if (result === null || result === undefined) {
-      return null
-    }
-    
-    // 尝试将结果转换为数字
-    const numResult = Number(result)
-    if (!isNaN(numResult)) {
-      return numResult
-    }
-    
-    // 如果转换失败，返回null而不是原始值
-    return null
+
+    return math.evaluate(processedExpr)
   } catch (error) {
     console.error('表达式执行错误:', error)
-    // 出错时返回null而不是抛出异常
     return null
-  }
-}
-
-// 简单表达式计算器 - 不使用eval或Function
-function calculateSimpleExpression(expression: string): any {
-  // 这个函数实现了一个简单的表达式计算器
-  // 它支持基本的四则运算和括号
-  
-  // 首先检查表达式是否只包含数字和运算符
-  const numRegex = /^[0-9.+\-*/()\s]+$/;
-  if (!numRegex.test(expression)) {
-    // 如果表达式包含非数字和运算符的内容，直接返回该内容
-    return expression
-  }
-  
-  try {
-    // 使用一个非常有限的白名单方法来计算表达式
-    // 1. 替换所有的括号表达式
-    const evaluateParentheses = (expr: string): string => {
-      const parenthesisRegex = /\(([^()]+)\)/
-      let result = expr
-      let match: RegExpExecArray | null
-      
-      while ((match = parenthesisRegex.exec(result)) !== null) {
-        const [fullMatch, innerExpr] = match
-        const innerResult = evaluateSimple(innerExpr)
-        result = result.replace(fullMatch, String(innerResult))
-      }
-      
-      return result
-    }
-    
-    // 2. 计算没有括号的简单表达式
-    const evaluateSimple = (expr: string): number => {
-      // 处理乘法和除法
-      const multDivRegex = /(-?\d+\.?\d*)\s*([*\/])\s*(-?\d+\.?\d*)/
-      let result = expr
-      let match: RegExpExecArray | null
-      
-      while ((match = multDivRegex.exec(result)) !== null) {
-        const [fullMatch, left, operator, right] = match
-        let calculated = 0
-        
-        if (operator === '*') {
-          calculated = parseFloat(left) * parseFloat(right)
-        } else if (operator === '/') {
-          calculated = parseFloat(left) / parseFloat(right)
-        }
-        
-        result = result.replace(fullMatch, String(calculated))
-      }
-      
-      // 处理加法和减法
-      const addSubRegex = /(-?\d+\.?\d*)\s*([+-])\s*(-?\d+\.?\d*)/
-      while ((match = addSubRegex.exec(result)) !== null) {
-        const [fullMatch, left, operator, right] = match
-        let calculated = 0
-        
-        if (operator === '+') {
-          calculated = parseFloat(left) + parseFloat(right)
-        } else if (operator === '-') {
-          calculated = parseFloat(left) - parseFloat(right)
-        }
-        
-        result = result.replace(fullMatch, String(calculated))
-      }
-      
-      return parseFloat(result)
-    }
-    
-    // 先处理括号，再计算简单表达式
-    const withoutParentheses = evaluateParentheses(expression)
-    return evaluateSimple(withoutParentheses)
-  } catch (error) {
-    throw new Error('表达式计算错误: ' + (error as Error).message)
   }
 }
 
@@ -278,11 +103,12 @@ export const useFlowStore = defineStore('flow', () => {
           // 创建上下文对象
           const context = {
             flowData: flowData.value,
-            fieldName: config.fieldName
+            fieldName: config.fieldName,
+            index: flowData.value.timestamp ? (flowData.value.timestamp.length - 1) : 0,
           }
           
           // 使用安全的表达式执行函数
-          let value = safeEvaluateExpression(config.code, context)
+          let value = evaluateExpression(config.code, context)
           
           // 如果是数字，按照指定的小数位数格式化
           if (typeof value === 'number') {
@@ -308,11 +134,12 @@ export const useFlowStore = defineStore('flow', () => {
                   flowData: {
                     ...flowData.value,
                   },
-                  fieldName: config.fieldName
+                  fieldName: config.fieldName,
+                  index: i
                 }
                 
                 // 计算当前时间点的值
-                let timePointValue = safeEvaluateExpression(config.code, timePointContext)
+                let timePointValue = evaluateExpression(config.code, timePointContext)
                 
                 // 格式化数值
                 if (typeof timePointValue === 'number') {
@@ -374,11 +201,12 @@ export const useFlowStore = defineStore('flow', () => {
           flowData: {
             ...flowData.value,
           },
-          fieldName: config.fieldName
+          fieldName: config.fieldName,
+          index: i
         }
         
         // 计算当前时间点的值
-        let timePointValue = safeEvaluateExpression(config.code, timePointContext)
+        let timePointValue = evaluateExpression(config.code, timePointContext)
         
         // 格式化数值
         if (typeof timePointValue === 'number') {
@@ -450,8 +278,8 @@ export const useFlowStore = defineStore('flow', () => {
     }
   }
     
-    // 清除所有自定义状态属性
-    const clearAllCustomStatus = () => {
+  // 清除所有自定义状态属性
+  const clearAllCustomStatus = () => {
     // 保存所有自定义属性的名称
     const customFieldNames = customStatusConfigs.value.map(config => config.fieldName)
     

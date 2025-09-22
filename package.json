@@ -1,6 +1,6 @@
 {
   "name": "nav-tools",
-  "version": "v0.2.4-20250921",
+  "version": "v0.2.5-20250924",
   "main": "dist-electron/main/index.js",
   "description": "Nav-Tools is a desktop-grade visualization workbench built with Electron & Vue3, tailored for roboticists.",
   "author": "Winchell.Hu <winchell.hu@outlook.com>",
@@ -45,6 +45,7 @@
     "element-plus": "^2.11.2",
     "element-resize-detector": "^1.2.4",
     "grid-layout-plus": "^1.1.0",
+    "mathjs": "^14.7.0",
     "mitt": "^3.0.1",
     "pinia": "^3.0.3",
     "serialport": "^13.0.0"
