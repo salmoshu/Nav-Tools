@@ -106,6 +106,7 @@
               v-else 
               v-model="newStatusConfig.fieldName" 
               placeholder="选择或输入字段名" 
+              :disabled="availableFields.length === 0"
               required
             ></el-input>
           </el-form-item>
@@ -128,6 +129,7 @@
               type="textarea" 
               placeholder="如 sqrt(x * x + y * y)、 abs(camera_angle)" 
               :rows="4"
+              :disabled="availableFields.length === 0"
               required
             ></el-input>
             <div class="code-hint">
@@ -152,6 +154,7 @@
               :min="0" 
               :max="10" 
               :step="1"
+              :disabled="availableFields.length === 0"
             ></el-input-number>
           </el-form-item>
 

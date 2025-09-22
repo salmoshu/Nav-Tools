@@ -1,5 +1,5 @@
 <template>
-  <div class="flow-console">
+  <div class="flow-console" @keyup.esc="toggleSearch">
     <div class="console-header">
       <div class="console-controls">
         <!-- 左侧按钮组 -->
@@ -18,7 +18,7 @@
             <span :style="{ textDecoration: autoScroll ? 'line-through' : 'none' }">滚动</span>
           </el-button>
           <el-button @click="toggleSearch" type="default" size="small">
-            搜索
+            <el-icon><Search /></el-icon>
           </el-button>
         </div>
         
@@ -41,7 +41,6 @@
           style="width: 200px; margin-right: 5px;"
           @input="performSearch"
           @keyup.enter="findNext"
-          @keyup.esc="toggleSearch"
         >
           <template #suffix>
             <i class="el-icon-search"></i>
@@ -79,7 +78,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, nextTick, watch } from 'vue';
+import { ref, onMounted, onUnmounted, nextTick } from 'vue';
 import { ElMessage, ElButton, ElSelect, ElOption, ElInput } from 'element-plus';
 import { navMode } from '@/settings/config';
 
@@ -431,6 +430,7 @@ onUnmounted(() => {
   color: #333333;
   box-sizing: border-box;
   position: relative;
+  z-index: 1;
 }
 
 .console-header {
@@ -442,7 +442,6 @@ onUnmounted(() => {
   border-bottom: 1px solid #e9ecef;
   height: 50px;
   box-sizing: border-box;
-  z-index: 10;
 }
 
 /* 悬浮搜索框样式 */
@@ -455,7 +454,7 @@ onUnmounted(() => {
   border-bottom: 1px solid #d9ecff;
   padding: 8px 12px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  z-index: 20;
+  z-index: 10;
   backdrop-filter: blur(2px);
 }
 

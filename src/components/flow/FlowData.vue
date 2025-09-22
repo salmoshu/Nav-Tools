@@ -24,10 +24,6 @@
         
         <!-- 右侧按钮 -->
         <div class="right-buttons">
-          <!-- 移除文件上传按钮 -->
-          <el-button type="default" size="small" @click="saveData" class="save-btn" :disabled="!hasData">
-            保存
-          </el-button>
           <el-button type="default" size="small" @click="clearPlotData" class="clear-btn">
             清除
           </el-button>
@@ -320,7 +316,7 @@ import { useDataConfig } from '@/composables/flow/useDataConfig'
 import { ElMessage } from 'element-plus'
 
 // 初始化数据流处理
-const { flowData, initRawData, clearRawData, saveData } = useFlow()
+const { flowData, initRawData, clearRawData } = useFlow()
 
 // 初始化视图配置处理
 const { 
@@ -974,8 +970,8 @@ function createChartOption() {
         { type: 'slider', show: true, xAxisIndex: 0 },
         { type: 'inside', xAxisIndex: 0 },
         // 添加Y轴滚轮缩放支持
-        { type: 'inside', yAxisIndex: 0, zoomOnMouseWheel: 'alt' },
-        { type: 'inside', yAxisIndex: 1, zoomOnMouseWheel: 'alt' }
+        { type: 'inside', yAxisIndex: 0, zoomOnMouseWheel: 'ctrl' },
+        { type: 'inside', yAxisIndex: 1, zoomOnMouseWheel: 'ctrl' }
       ],
       series
     }
@@ -1236,10 +1232,10 @@ function createChartOption() {
         { type: 'slider', show: true, xAxisIndex: [0, 1] },
         { type: 'inside', xAxisIndex: [0, 1] },
         // 添加Y轴滚轮缩放支持
-        { type: 'inside', yAxisIndex: 0, zoomOnMouseWheel: 'alt' },
-        { type: 'inside', yAxisIndex: 1, zoomOnMouseWheel: 'alt' },
-        { type: 'inside', yAxisIndex: 2, zoomOnMouseWheel: 'alt' },
-        { type: 'inside', yAxisIndex: 3, zoomOnMouseWheel: 'alt' }
+        { type: 'inside', yAxisIndex: 0, zoomOnMouseWheel: 'ctrl' },
+        { type: 'inside', yAxisIndex: 1, zoomOnMouseWheel: 'ctrl' },
+        { type: 'inside', yAxisIndex: 2, zoomOnMouseWheel: 'ctrl' },
+        { type: 'inside', yAxisIndex: 3, zoomOnMouseWheel: 'ctrl' }
       ],
       series: [
         // 上图表系列 - 添加gridIndex和xAxisIndex
