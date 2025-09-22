@@ -722,11 +722,6 @@ function maintainScale(allData: LineSeriesOption[]) {
   const max2 = result[1].max || 1;
   const min2 = result[1].min || 0;
 
-  // 如果最小值不小于零，不需要特殊处理
-  if (min1 >= 0 || min2 >= 0) {
-    return false;
-  }
-
   // 计算比例
   const ratio = (max1 - min1) / (max2 - min2);
   let minMax = {} as { y1Min: number; y1Max: number; y2Min: number; y2Max: number };
@@ -901,7 +896,7 @@ function createChartOption() {
       // 计算双Y轴对齐范围
       minMax = maintainScale(series);
     }
-    
+
     return {
       title: {
         left: 'center',

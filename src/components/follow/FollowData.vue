@@ -326,7 +326,7 @@ function createChartOption() {
         });
 
         if (targetTrend !== null) {
-          result += `${targetTrend} (绿色靠右，红色靠左)<br/>`;
+          result += `${targetTrend}<br/>`;
         }
 
         if (pidLeft !== null && pidRight !== null) {
@@ -341,7 +341,7 @@ function createChartOption() {
               pidTrend = 'PID趋势: 小车直行';
             }
           }
-          result += `${pidTrend}  (涂色区域为右转)<br/>`;
+          result += `${pidTrend}<br/>`;
         }
 
         if (motorLeft !== null && motorRight !== null) {
@@ -356,7 +356,7 @@ function createChartOption() {
               motorTrend = '电机趋势: 小车直行';
             }
           }
-          result += `${motorTrend} (涂色区域为右转)<br/>`;
+          result += `${motorTrend}<br/>`;
         }
 
         return result;
@@ -375,7 +375,6 @@ function createChartOption() {
     legend: { 
       data: ['相机距离', '相机角度', '左轮PID速度', '右轮PID速度', '左轮电机速度', '右轮电机速度'],
       top: 50,
-      left: 'right'
     },
     grid: [
       {
