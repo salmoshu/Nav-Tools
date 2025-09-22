@@ -36,7 +36,7 @@ const appConfig: any = {
     followsim: createModuleItem({
       title: 'FollowSim',
       icon: toolBarIcon.follow,
-      action: ['dashboard', 'motion', 'config'],
+      action: ['dashboard', 'data', 'config'],
       props: {}
     }),
   },

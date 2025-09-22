@@ -1,5 +1,5 @@
 <template>
-  <div class="motion-container">
+  <div class="data-container">
     <div class="controls">
       <div class="time-range-buttons">
         <button 
@@ -19,7 +19,7 @@
 
 <script setup lang="ts">
 import { onMounted, onUnmounted, watch } from 'vue'
-import { useEcharts } from '@/hooks/useEcharts'
+import { useEcharts } from '@/composables/followsim/useEcharts'
 import { useFollowStore } from '@/stores/followsim'
 import { useSpeedRecorder } from '@/composables/followsim/useSpeedRecorder'
 
@@ -82,12 +82,11 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-.motion-container {
+.data-container {
   width: 100%;
   height: 100%;
   display: flex;
   flex-direction: column;
-  padding: 10px;
   box-sizing: border-box;
 }
 
@@ -95,7 +94,11 @@ onUnmounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 10px;
+  padding: 8px 12px;
+  background-color: #f8f9fa;
+  border-bottom: 1px solid #e9ecef;
+  height: 50px;
+  box-sizing: border-box;
 }
 
 .time-range-buttons {

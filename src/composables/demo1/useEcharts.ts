@@ -46,7 +46,21 @@ export function useEcharts(
           left: 'center',
           textStyle: { fontSize: 14 }
         },
-        tooltip: { trigger: 'axis' },
+        tooltip: { 
+          trigger: 'axis',
+          formatter: function(params: any) {
+            let result = params[0].axisValue + '<br/>'
+            params.forEach((param: any) => {
+              result += `${param.marker} ${param.seriesName}: ${param.value.toFixed(2)}`
+              if (param.seriesName === '线速度') {
+                result += ' m/s<br/>'
+              } else if (param.seriesName === '角速度') {
+                result += ' rad/s<br/>'
+              }
+            })
+            return result
+          }
+        },
         legend: {
           data: ['线速度', '角速度'],
           bottom: 0

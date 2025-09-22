@@ -7,7 +7,7 @@
 
 <script setup lang="ts">
 import { watch } from 'vue'
-import { useEcharts } from '@/hooks/useEcharts'
+import { useEcharts } from '@/composables/demo1/useEcharts'
 import { useDemo1Store } from '@/stores/demo1'
 
 const demo1Store = useDemo1Store()

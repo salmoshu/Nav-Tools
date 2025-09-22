@@ -24,7 +24,6 @@
         </el-button>
       </div>
     </div>
-    <!-- 使用从useEcharts返回的chartRef -->
     <div ref="chartRef" class="chart-container"></div>
     
     <el-dialog

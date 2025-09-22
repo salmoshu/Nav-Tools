@@ -159,7 +159,7 @@
           </el-form-item>
 
           <!-- 颜色选择表单项 -->
-           <!-- 颜色选择功能以后再增加 -->
+          <!-- 颜色选择功能以后再增加 -->
           <el-form-item v-if="false" label="颜色" prop="color">
             <!-- 编辑模式 -->
             <el-color-picker 
