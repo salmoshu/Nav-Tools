@@ -1,5 +1,5 @@
 <template>
-  <div class="flow-console" @keyup.esc="toggleSearch">
+  <div class="flow-console" @keyup.esc="toggleSearch" ref="consoleRoot" tabindex="0">
     <div class="console-header">
       <div class="console-controls">
         <!-- 左侧按钮组 -->
@@ -9,7 +9,7 @@
             <el-option label="NMEA" value="nmea"></el-option>
           </el-select>
           <el-button @click="toggleDataFilter" type="default" size="small">
-            <span :style="{ textDecoration: dataFilter ? 'line-through' : 'none' }">{{ dataFilter ? `过滤${dataFormat.toUpperCase()}` : `过滤${dataFormat.toUpperCase()}` }}</span>
+            <span :style="{ textDecoration: dataFilter ? 'line-through' : 'none' }">过滤</span>
           </el-button>
           <el-button @click="toggleAddTimestamp" type="default" size="small">
             <span :style="{ textDecoration: addTimestamp ? 'line-through' : 'none' }">时间</span>
@@ -403,6 +403,15 @@ const getMessageKey = (message: { raw: string; timestamp: string }) => {
   return `${message.timestamp}_${message.raw}`;
 };
 
+// 添加全局ESC键处理函数
+const consoleRoot = ref<HTMLDivElement | null>(null);
+const handleGlobalEscape = (event: KeyboardEvent) => {
+  // 只有当搜索框显示时才处理ESC键
+  if (event.key === 'Escape' && showSearch.value) {
+    toggleSearch();
+  }
+};
+
 onMounted(() => {
   if (navMode.funcMode === 'gnss') {
     dataFormat.value = 'nmea';
@@ -410,10 +419,22 @@ onMounted(() => {
     dataFormat.value = 'json';
   }
   window.ipcRenderer.on("serial-data-to-renderer", handleSerialData);
+
+  // 添加全局ESC键事件监听
+  nextTick(() => {
+    if (consoleRoot.value) {
+      consoleRoot.value.addEventListener('keyup', handleGlobalEscape);
+    }
+  });
 });
 
 onUnmounted(() => {
   window.ipcRenderer.off('serial-data-to-renderer', handleSerialData);
+
+  // 移除全局ESC键事件监听
+  if (consoleRoot.value) {
+    consoleRoot.value.removeEventListener('keyup', handleGlobalEscape);
+  }
 });
 </script>
 
@@ -431,6 +452,10 @@ onUnmounted(() => {
   box-sizing: border-box;
   position: relative;
   z-index: 1;
+}
+
+.flow-console:focus {
+  outline: none;
 }
 
 .console-header {
