@@ -166,8 +166,10 @@ function openSerialPort(
       }
     });
 
-    currentPort.on("data", (data) => {
-      serialDataToRenderer(event, data.toString());
+    const serial_decoder = new TextDecoder('utf-8', { stream: true } as any);
+    currentPort.on("data", (chunk) => {
+      const str = serial_decoder.decode(chunk, { stream: true });
+      serialDataToRenderer(event, str);
     });
   });
 }

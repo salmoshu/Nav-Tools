@@ -167,10 +167,7 @@ const handleStatusbarPositionChange = (position: 'left' | 'right') => {
 
 // 切换卡片全屏状态
 const toggleCardFullScreen = (itemId: string | null) => {
-  if (fullScreenItem.value === itemId) {
-    // 退出全屏
-    fullScreenItem.value = null
-  } else {
+  if (fullScreenItem.value === null) {
     // 进入全屏
     fullScreenItem.value = itemId
     ElMessage({
@@ -180,6 +177,9 @@ const toggleCardFullScreen = (itemId: string | null) => {
       placement: 'bottom-right',
       offset: 50,
     })
+  } else {
+    // 退出全屏
+    fullScreenItem.value = null
   }
 }
 
