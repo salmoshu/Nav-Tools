@@ -717,6 +717,13 @@ function applyDataSourceConfig(config: any) {
         singleChartColor3.value = config.colors.source3 || ''
         singleChartColor4.value = config.colors.source4 || ''
       }
+      // 应用区域配置
+      if (config.area) {
+        singleChartUseArea1.value = config.area.left1 || ''
+        singleChartUseArea2.value = config.area.left2 || ''
+        singleChartUseArea3.value = config.area.left3 || ''
+        singleChartUseArea4.value = config.area.left4 || ''
+      }
     } else if (config.yAxisConfig === 'double') {
       // 单图双Y轴模式
       singleChartLeftSource1.value = config.sources.left1 || ''
@@ -738,6 +745,17 @@ function applyDataSourceConfig(config: any) {
         singleChartRightColor3.value = config.colors.right3 || ''
         singleChartRightColor4.value = config.colors.right4 || ''
       }
+      // 应用区域配置
+      if (config.area) {
+        singleChartLeftUseArea1.value = config.area.left1 || ''
+        singleChartLeftUseArea2.value = config.area.left2 || ''
+        singleChartLeftUseArea3.value = config.area.left3 || ''
+        singleChartLeftUseArea4.value = config.area.left4 || ''
+        singleChartRightUseArea1.value = config.area.right1 || ''
+        singleChartRightUseArea2.value = config.area.right2 || ''
+        singleChartRightUseArea3.value = config.area.right3 || ''
+        singleChartRightUseArea4.value = config.area.right4 || ''
+      }
     }
   }
   
@@ -756,6 +774,13 @@ function applyDataSourceConfig(config: any) {
           upperChartColor2.value = config.upperColors.source2 || ''
           upperChartColor3.value = config.upperColors.source3 || ''
           upperChartColor4.value = config.upperColors.source4 || ''
+        }
+        // 应用区域配置
+        if (config.upperArea) {
+          upperChartUseArea1.value = config.upperArea.source1 || ''
+          upperChartUseArea2.value = config.upperArea.source2 || ''
+          upperChartUseArea3.value = config.upperArea.source3 || ''
+          upperChartUseArea4.value = config.upperArea.source4 || ''
         }
       } else if (config.yAxisConfig === 'double') {
         upperChartLeftSource1.value = config.upperSources.left1 || ''
@@ -777,6 +802,17 @@ function applyDataSourceConfig(config: any) {
           upperChartRightColor3.value = config.upperColors.right3 || ''
           upperChartRightColor4.value = config.upperColors.right4 || ''
         }
+        // 应用区域配置
+        if (config.upperArea) {
+          upperChartLeftUseArea1.value = config.upperArea.left1 || ''
+          upperChartLeftUseArea2.value = config.upperArea.left2 || ''
+          upperChartLeftUseArea3.value = config.upperArea.left3 || ''
+          upperChartLeftUseArea4.value = config.upperArea.left4 || ''
+          upperChartRightUseArea1.value = config.upperArea.right1 || ''
+          upperChartRightUseArea2.value = config.upperArea.right2 || ''
+          upperChartRightUseArea3.value = config.upperArea.right3 || ''
+          upperChartRightUseArea4.value = config.upperArea.right4 || ''
+        }
       }
     }
     
@@ -793,6 +829,13 @@ function applyDataSourceConfig(config: any) {
           lowerChartColor2.value = config.lowerColors.source2 || ''
           lowerChartColor3.value = config.lowerColors.source3 || ''
           lowerChartColor4.value = config.lowerColors.source4 || ''
+        }
+        // 应用区域配置
+        if (config.lowerArea) {
+          lowerChartUseArea1.value = config.lowerArea.source1 || ''
+          lowerChartUseArea2.value = config.lowerArea.source2 || ''
+          lowerChartUseArea3.value = config.lowerArea.source3 || ''
+          lowerChartUseArea4.value = config.lowerArea.source4 || ''
         }
       } else if (config.yAxisConfig === 'double') {
         lowerChartLeftSource1.value = config.lowerSources.left1 || ''
@@ -813,6 +856,17 @@ function applyDataSourceConfig(config: any) {
           lowerChartRightColor2.value = config.lowerColors.right2 || ''
           lowerChartRightColor3.value = config.lowerColors.right3 || ''
           lowerChartRightColor4.value = config.lowerColors.right4 || ''
+        }
+        // 应用区域配置
+        if (config.lowerArea) {
+          lowerChartLeftUseArea1.value = config.lowerArea.left1 || ''
+          lowerChartLeftUseArea2.value = config.lowerArea.left2 || ''
+          lowerChartLeftUseArea3.value = config.lowerArea.left3 || ''
+          lowerChartLeftUseArea4.value = config.lowerArea.left4 || ''
+          lowerChartRightUseArea1.value = config.lowerArea.right1 || ''
+          lowerChartRightUseArea2.value = config.lowerArea.right2 || ''
+          lowerChartRightUseArea3.value = config.lowerArea.right3 || ''
+          lowerChartRightUseArea4.value = config.lowerArea.right4 || ''
         }
       }
     }
@@ -842,6 +896,12 @@ function exportConfigFile() {
         source3: singleChartColor3.value,
         source4: singleChartColor4.value
       }
+      config.area = {
+        source1: singleChartUseArea1.value,
+        source2: singleChartUseArea2.value,
+        source3: singleChartUseArea3.value,
+        source4: singleChartUseArea4.value,
+      }
     } else {
       config.sources = {
         left1: singleChartLeftSource1.value,
@@ -863,6 +923,17 @@ function exportConfigFile() {
         right2: singleChartRightColor2.value,
         right3: singleChartRightColor3.value,
         right4: singleChartRightColor4.value
+      }
+      // 添加区域配置
+      config.area = {
+        left1: singleChartLeftUseArea1.value,
+        left2: singleChartLeftUseArea2.value,
+        left3: singleChartLeftUseArea3.value,
+        left4: singleChartLeftUseArea4.value,
+        right1: singleChartRightUseArea1.value,
+        right2: singleChartRightUseArea2.value,
+        right3: singleChartRightUseArea3.value,
+        right4: singleChartRightUseArea4.value,
       }
     }
   } else {
@@ -894,6 +965,19 @@ function exportConfigFile() {
         source2: lowerChartColor2.value,
         source3: lowerChartColor3.value,
         source4: lowerChartColor4.value
+      }
+      // 添加区域配置
+      config.upperArea = {
+        source1: upperChartUseArea1.value,
+        source2: upperChartUseArea2.value,
+        source3: upperChartUseArea3.value,
+        source4: upperChartUseArea4.value,
+      }
+      config.lowerArea = {
+        source1: lowerChartUseArea1.value,
+        source2: lowerChartUseArea2.value,
+        source3: lowerChartUseArea3.value,
+        source4: lowerChartUseArea4.value,
       }
     } else {
       config.upperSources = {
@@ -936,6 +1020,27 @@ function exportConfigFile() {
         right2: lowerChartRightColor2.value,
         right3: lowerChartRightColor3.value,
         right4: lowerChartRightColor4.value
+      }
+      // 添加区域配置
+      config.upperArea = {
+        left1: upperChartLeftUseArea1.value,
+        left2: upperChartLeftUseArea2.value,
+        left3: upperChartLeftUseArea3.value,
+        left4: upperChartLeftUseArea4.value,
+        right1: upperChartRightUseArea1.value,
+        right2: upperChartRightUseArea2.value,
+        right3: upperChartRightUseArea3.value,
+        right4: upperChartRightUseArea4.value,
+      }
+      config.lowerArea = {
+        left1: lowerChartLeftUseArea1.value,
+        left2: lowerChartLeftUseArea2.value,
+        left3: lowerChartLeftUseArea3.value,
+        left4: lowerChartLeftUseArea4.value,
+        right1: lowerChartRightUseArea1.value,
+        right2: lowerChartRightUseArea2.value,
+        right3: lowerChartRightUseArea3.value,
+        right4: lowerChartRightUseArea4.value,
       }
     }
   }

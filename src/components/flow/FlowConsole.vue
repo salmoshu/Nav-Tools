@@ -81,20 +81,19 @@
 import { ref, onMounted, onUnmounted, nextTick } from 'vue';
 import { ElMessage, ElButton, ElSelect, ElOption, ElInput } from 'element-plus';
 import { navMode } from '@/settings/config';
+import { useConsole } from '@/composables/flow/useConsole';
 
-// 控制台相关状态
-const consoleContent = ref<HTMLDivElement | null>(null);
-const rawMessages = ref<{ 
-  timestamp: string;
-  raw: string;
-  dataType: 'nmea' | 'json';
-  isValid: boolean
-}[]>([]);
-const autoScroll = ref(true);
-const msgCount = ref(0);
-const msgNmeaCount = ref(0);
-const msgJsonCount = ref(0);
-const dataFormat = ref<'json' | 'nmea'>('json');
+const { 
+  consoleContent,
+  autoScroll,
+  rawMessages, 
+  msgCount, 
+  msgNmeaCount, 
+  msgJsonCount, 
+  dataFormat,
+  isValidNmea,
+  isValidJson,
+} = useConsole();
 
 // 搜索相关状态
 const showSearch = ref(false);
@@ -103,63 +102,7 @@ const searchInput = ref<InstanceType<typeof ElInput> | null>(null);
 const searchResults = ref<{index: number, element: HTMLElement | null}[]>([]);
 const currentResultIndex = ref(-1);
 
-const calculateNmeaChecksum = (sentence: string): string => {
-  let checksum = 0;
-  for (let i = 0; i < sentence.length; i++) {
-    checksum ^= sentence.charCodeAt(i);
-  }
-  // 转换为2位十六进制字符串
-  return checksum.toString(16).toUpperCase().padStart(2, '0');
-}
 
-const isValidNmea = (str: string) => {
-  // 基本格式检查
-  if (!str.startsWith('$')) {
-    return false;
-  }
-  
-  // 移除结尾的换行符以便处理
-  const cleanStr = str.trimEnd();
-  
-  // 检查是否包含星号(校验和分隔符)
-  const asteriskIndex = cleanStr.indexOf('*');
-  if (asteriskIndex === -1 || asteriskIndex < 6) { // 至少需要$xxxx,格式
-    return false;
-  }
-  
-  // 检查校验和是否为2位十六进制字符
-  const checksumPart = cleanStr.substring(asteriskIndex + 1);
-  if (!/^[0-9A-Fa-f]{2}$/.test(checksumPart)) {
-    return false;
-  }
-  
-  // 可选：验证校验和
-  const dataPart = cleanStr.substring(1, asteriskIndex); // 不包含$和校验和部分
-  const calculatedChecksum = calculateNmeaChecksum(dataPart);
-  return calculatedChecksum === checksumPart.toUpperCase();
-}
-
-const isValidJson = (str: string) => {
-  if (str.endsWith('\n')) {
-    str = str.slice(0, -1);
-  }
-  if (str.endsWith('\r')) {
-    str = str.slice(0, -1);
-  }
-  // 目前仅考虑大括号起始的JSON格式
-  if (!str.startsWith('{') || !str.endsWith('}')) {
-    return false;
-  }
-  try {
-    JSON.parse(str, (_, value) => {
-      // 需要以大括号起始
-       return value
-    })
-    return true;
-  } catch (error) {
-    return false;
-  }
-}
 
 // 处理接收到的Flow数据
 let totalString = ''
@@ -405,9 +348,16 @@ const getMessageKey = (message: { raw: string; timestamp: string }) => {
 
 // 添加全局ESC键处理函数
 const consoleRoot = ref<HTMLDivElement | null>(null);
-const handleGlobalEscape = (event: KeyboardEvent) => {
+const handleSearchEvent = (event: KeyboardEvent) => {
   // 只有当搜索框显示时才处理ESC键
   if (event.key === 'Escape' && showSearch.value) {
+    toggleSearch();
+  }
+
+  // 处理Ctrl+F快捷键 - 打开搜索框
+  if ((event.ctrlKey || event.metaKey) && event.key === 'f') {
+    event.preventDefault();
+    event.stopPropagation();
     toggleSearch();
   }
 };
@@ -423,7 +373,7 @@ onMounted(() => {
   // 添加全局ESC键事件监听
   nextTick(() => {
     if (consoleRoot.value) {
-      consoleRoot.value.addEventListener('keyup', handleGlobalEscape);
+      consoleRoot.value.addEventListener('keyup', handleSearchEvent);
     }
   });
 });
@@ -433,7 +383,7 @@ onUnmounted(() => {
 
   // 移除全局ESC键事件监听
   if (consoleRoot.value) {
-    consoleRoot.value.removeEventListener('keyup', handleGlobalEscape);
+    consoleRoot.value.removeEventListener('keyup', handleSearchEvent);
   }
 });
 </script>

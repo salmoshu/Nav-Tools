@@ -5,12 +5,14 @@ import { useNmea } from '@/composables/gnss/useNmea'
 import { useUltrasonic } from '@/composables/ultrasonic/useUltrasonic'
 import { useFollow } from '@/composables/follow/useFollow'
 import { useFlow } from '@/composables/flow/useFlow'
+import { useConsole } from '@/composables/flow/useConsole'
 import emitter from '@/hooks/useMitt'
 
 const { processRawData: processNmeaRawData } = useNmea()
 const { addRawData: addUltrasonicRawData } = useUltrasonic()
 const { addRawData: addFollowRawData, initRawData: initFollowRawData } = useFollow()
 const { addRawData: addFlowRawData, initRawData: initFlowRawData } = useFlow()
+const { handleRawDataBatch: initFlowConsole } = useConsole()
 
 // 串口配置
 const serialPort = ref("");
@@ -190,6 +192,7 @@ export function useDevice() {
                 offset: 50,
               })
               initFlowRawData(content)
+              initFlowConsole(content)
               break
             case 'follow':
               initFollowRawData(content)
