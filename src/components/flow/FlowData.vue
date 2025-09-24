@@ -1129,9 +1129,11 @@ function clearPlotData() {
 
 // 注意alignTicks: true与自定义的 min 和 max 值两者不要同时设定，当这两个设置同时使用时，ECharts无法找到合适的刻度间隔，导致刻度可能会非常密集，影响可读性。
 function maintainScale(allData: LineSeriesOption[]) {
+  let yIndexOffset = 0;
   let result = {} as { [key: number]: { max: number; min: number } };
   allData.forEach(item => {
     const yAxisIndex = (item as LineSeriesOption).yAxisIndex || 0;
+    yIndexOffset = yAxisIndex < 2 ? 0 : 2;
     const values = (item as LineSeriesOption).data?.map((value: any) => {
       // 确保值是数字并且不为null
       if (value[1] === null || value[1] === undefined || typeof value[1] !== 'number') {
@@ -1154,14 +1156,14 @@ function maintainScale(allData: LineSeriesOption[]) {
   });
 
   // 检查是否有两个Y轴的数据
-  if (Object.keys(result).length !== 2 || !result[0] || !result[1]) {
+  if (Object.keys(result).length !== 2 || !result[0+yIndexOffset] || !result[1+yIndexOffset]) {
     return false;
   }
 
-  const max1 = result[0].max || 1;
-  const min1 = result[0].min || 0;
-  const max2 = result[1].max || 1;
-  const min2 = result[1].min || 0;
+  const max1 = result[0+yIndexOffset].max || 1;
+  const min1 = result[0+yIndexOffset].min || 0;
+  const max2 = result[1+yIndexOffset].max || 1;
+  const min2 = result[1+yIndexOffset].min || 0;
 
   // 计算比例
   const ratio = (max1 - min1) / (max2 - min2);
@@ -1605,12 +1607,14 @@ function createChartOption() {
         // 只提取上图表的Y轴0和1的数据进行计算
         const upperChartData = upperSeries.filter(s => s.yAxisIndex === 0 || s.yAxisIndex === 1) as LineSeriesOption[];
         upperMinMax = maintainScale(upperChartData);
+        console.log('上图表Y轴对齐范围upperMinMax:', upperMinMax);
       }
       
       if (lowerSeries.length > 0) {
         // 只提取下图表的Y轴2和3的数据进行计算，并将索引调整为0和1
         const lowerChartData = lowerSeries.filter(s => s.yAxisIndex === 2 || s.yAxisIndex === 3) as LineSeriesOption[];
         lowerMinMax = maintainScale(lowerChartData);
+        console.log('下图表Y轴对齐范围lowerMinMax:', lowerMinMax);
       }
     } else {
       // 双图单Y轴模式 - 上图表
