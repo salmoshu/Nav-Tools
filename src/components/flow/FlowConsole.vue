@@ -91,18 +91,19 @@ const {
   msgNmeaCount, 
   msgJsonCount, 
   dataFormat,
+  searchQuery,
+  showSearch,
+  searchInput,
+  searchResults,
+  currentResultIndex,
   isValidNmea,
   isValidJson,
+  toggleSearch,
+  clearSearch,
+  performSearch,
+  scrollToResult,
+  isMatch,
 } = useConsole();
-
-// 搜索相关状态
-const showSearch = ref(false);
-const searchQuery = ref('');
-const searchInput = ref<InstanceType<typeof ElInput> | null>(null);
-const searchResults = ref<{index: number, element: HTMLElement | null}[]>([]);
-const currentResultIndex = ref(-1);
-
-
 
 // 处理接收到的Flow数据
 let totalString = ''
@@ -240,88 +241,10 @@ const handleSerialData = (_: unknown, data: string) => {
   handleRawData(data);
 };
 
-// 搜索功能实现
-const toggleSearch = () => {
-  showSearch.value = !showSearch.value;
-  if (showSearch.value) {
-    nextTick(() => {
-      if (searchInput.value) {
-        searchInput.value.focus();
-      }
-    });
-  } else {
-    clearSearch();
-  }
-};
-
-const clearSearch = () => {
-  searchQuery.value = '';
-  searchResults.value = [];
-  currentResultIndex.value = -1;
-  
-  // 强制重新渲染以清除所有高亮样式
-  nextTick(() => {
-    const allMessageElements = document.querySelectorAll('.message-line');
-    allMessageElements.forEach(element => {
-      element.classList.remove('current-search-result');
-    });
-  });
-};
-
-const isMatch = (text: string, query: string): boolean => {
-  return text.toLowerCase().includes(query.toLowerCase());
-};
-
 const highlightSearch = (text: string, query: string): string => {
   if (!query) return text;
   const regex = new RegExp(`(${query})`, 'gi');
   return text.replace(regex, '<mark>$1</mark>');
-};
-
-const performSearch = () => {
-  if (!searchQuery.value) {
-    clearSearch();
-    return;
-  }
-  
-  searchResults.value = [];
-  currentResultIndex.value = -1;
-  
-  nextTick(() => {
-    const messageElements = document.querySelectorAll('.message-line');
-    messageElements.forEach((element, index) => {
-      const rawText = rawMessages.value[index]?.raw || '';
-      if (isMatch(rawText, searchQuery.value)) {
-        searchResults.value.push({ index, element: element as HTMLElement });
-      }
-    });
-    
-    if (searchResults.value.length > 0) {
-      currentResultIndex.value = 0;
-      scrollToResult(0);
-    }
-  });
-};
-
-const scrollToResult = (index: number) => {
-  if (searchResults.value[index]?.element) {
-    searchResults.value[index].element.scrollIntoView({
-      behavior: 'smooth',
-      block: 'center',
-      inline: 'nearest'
-    });
-    
-    // 高亮当前结果
-    searchResults.value.forEach((result, i) => {
-      if (result.element) {
-        if (i === index) {
-          result.element.classList.add('current-search-result');
-        } else {
-          result.element.classList.remove('current-search-result');
-        }
-      }
-    });
-  }
 };
 
 const findNext = () => {

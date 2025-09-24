@@ -457,9 +457,11 @@ import type { LineSeriesOption } from 'echarts';
 import { useFlow } from '@/composables/flow/useFlow'
 import { useDataConfig } from '@/composables/flow/useDataConfig'
 import { ElMessage } from 'element-plus'
+import { useConsole } from '@/composables/flow/useConsole'
 
 // 初始化数据流处理
 const { flowData, initRawData, clearRawData } = useFlow()
+const { searchQuery, performSearch } = useConsole()
 
 // 初始化视图配置处理
 const { 
@@ -1202,6 +1204,10 @@ function createChart() {
   }
   
   chart = echarts.init(chartRef.value)
+
+  // 添加双击事件监听器
+  chart.on('dblclick', handleChartDblClick)
+
   updateChart()
 }
 
@@ -1221,7 +1227,7 @@ function updateChart() {
           let result = `显示时间: `
           if (params[0] && params[0].data && params[0].data[0] !== null) {
             if (typeof params[0].data[0] === 'number') {
-              result += `${params[0].data[0].toFixed(2)}s`
+              result += `${params[0].data[0].toFixed(3)}s`
             } else {
               result += `${params[0].data[0]}s`
             }
@@ -1237,7 +1243,7 @@ function updateChart() {
               <path d="M12 7v5l3 3"/>
             </svg>
           </div>`
-          result += `${timeMarker}time: ${(params[0].data[0]+flowData.value.startTime).toFixed(2)}<br/>`
+          result += `${timeMarker}time: ${(params[0].data[0]+flowData.value.startTime).toFixed(3)}<br/>`
           
           // 安全处理每个参数值
           params.forEach((param: any) => {
@@ -1270,6 +1276,20 @@ function updateChart() {
   // 根据视图配置准备图表选项
   const option = createChartOption()
   chart.setOption(option)
+}
+
+// 图表双击事件处理函数
+function handleChartDblClick(params: any) {
+  // params 包含了双击事件的相关信息，如坐标、数据等
+  if (params.componentType === 'series') {
+    const value = params.value
+    const rawTime = Number(value[0]) + (flowData.value.startTime ?? 0);
+    const parts = rawTime.toString().split('.');
+    const targetTime = parts[0] + (parts[1] ? '.' + parts[1].substring(0, 2) : '.00');
+
+    searchQuery.value = targetTime;
+    performSearch();
+  }
 }
 
 // 生成随机颜色的辅助函数
@@ -1397,7 +1417,7 @@ function createChartOption() {
         formatter: (params: any) => {
           if (params.length === 0) return '';
           
-          let result = `显示时间: ${params[0].data[0].toFixed(2)}s<br/>`
+          let result = `显示时间: ${params[0].data[0].toFixed(3)}s<br/>`
 
           const timeMarker = `<div style="line-height:16px;display:inline-block;vertical-align:middle;margin-right:4px;">
             <svg width="12" height="12" viewBox="0 0 24 24"
@@ -1406,7 +1426,7 @@ function createChartOption() {
               <path d="M12 7v5l3 3"/>
             </svg>
           </div>`
-          result += `${timeMarker}time: ${(params[0].data[0]+flowData.value.startTime).toFixed(2)}<br/>`
+          result += `${timeMarker}time: ${(params[0].data[0]+flowData.value.startTime).toFixed(3)}<br/>`
 
           params.forEach((param: any) => {
             if (param.data[1] !== null) {
@@ -1460,10 +1480,12 @@ function createChartOption() {
           }
         }
       ] : { type: 'value' },
+      // zoomOnMouseWheel 只有 布尔 和 'ctrl' 两种有效值：
+      // true / 省略 → 滚轮即触发
+      // 'ctrl' → 必须 Ctrl + 滚轮才触发
       dataZoom: [
         { type: 'slider', show: true, xAxisIndex: 0 },
-        { type: 'inside', xAxisIndex: 0 },
-        // 添加Y轴滚轮缩放支持
+        { type: 'inside', xAxisIndex: 0, zoomOnMouseWheel: true },
         { type: 'inside', yAxisIndex: 0, zoomOnMouseWheel: 'ctrl' },
         { type: 'inside', yAxisIndex: 1, zoomOnMouseWheel: 'ctrl' }
       ],
@@ -1724,7 +1746,7 @@ function createChartOption() {
           let result = `显示时间: `
           if (params[0] && params[0].data && params[0].data[0] !== null) {
             if (typeof params[0].data[0] === 'number') {
-              result += `${params[0].data[0].toFixed(2)}s`
+              result += `${params[0].data[0].toFixed(3)}s`
             } else {
               result += `${params[0].data[0]}s`
             }
@@ -1740,7 +1762,7 @@ function createChartOption() {
               <path d="M12 7v5l3 3"/>
             </svg>
           </div>`
-          result += `${timeMarker}time: ${(params[0].data[0]+flowData.value.startTime).toFixed(2)}<br/>`
+          result += `${timeMarker}time: ${(params[0].data[0]+flowData.value.startTime).toFixed(3)}<br/>`
           
           // 安全处理每个参数值
           params.forEach((param: any) => {
@@ -1772,8 +1794,7 @@ function createChartOption() {
       yAxis: yAxisConfigArray,
       dataZoom: [
         { type: 'slider', show: true, xAxisIndex: [0, 1] },
-        { type: 'inside', xAxisIndex: [0, 1] },
-        // 添加Y轴滚轮缩放支持
+        { type: 'inside', xAxisIndex: [0, 1], zoomOnMouseWheel: true },
         { type: 'inside', yAxisIndex: 0, zoomOnMouseWheel: 'ctrl' },
         { type: 'inside', yAxisIndex: 1, zoomOnMouseWheel: 'ctrl' },
         { type: 'inside', yAxisIndex: 2, zoomOnMouseWheel: 'ctrl' },
@@ -1804,6 +1825,35 @@ function handleResize() {
   chart?.resize()
 }
 
+function dataZoomPatch(disabledXAxisInside = false) {
+  const option = chart?.getOption();
+  if (!option?.dataZoom || !Array.isArray(option.dataZoom)) return [];
+  
+  // 保持原始配置的完整性，只修改disabled属性
+  return option.dataZoom.map((item: any, index: number) => {
+    // 识别x轴inside缩放组件
+    const isXAxisInside = item.type === 'inside' && item.xAxisIndex !== undefined;
+    return {
+      ...item,
+      disabled: isXAxisInside && disabledXAxisInside
+    };
+  });
+}
+
+function handleCtrlKeyDown(e: KeyboardEvent) {
+  if (e.key === 'Control' || e.key === 'Meta') {
+    // 禁用所有x轴的inside缩放
+    chart?.setOption({ dataZoom: dataZoomPatch(true) }, { replaceMerge: ['dataZoom'] });
+  }
+}
+
+function handleCtrlKeyUp(e: KeyboardEvent) {
+  if (e.key === 'Control' || e.key === 'Meta') {
+    // 恢复所有缩放功能
+    chart?.setOption({ dataZoom: dataZoomPatch(false) }, { replaceMerge: ['dataZoom'] });
+  }
+}
+
 // 组件挂载时初始化图表
 onMounted(() => {
   createChart()
@@ -1814,11 +1864,18 @@ onMounted(() => {
     resizeObserver = new ResizeObserver(handleResize)
     resizeObserver.observe(chartRef.value)
   }
+
+  // 监听 Ctrl 键
+  window.addEventListener('keydown', handleCtrlKeyDown)
+  window.addEventListener('keyup', handleCtrlKeyUp)
 })
 
 // 组件卸载时清理
 onUnmounted(() => {
   window.removeEventListener('resize', handleResize)
+  // 移除Ctrl键事件监听器
+  window.removeEventListener('keydown', handleCtrlKeyDown)
+  window.removeEventListener('keyup', handleCtrlKeyUp)
   if (resizeObserver && chartRef.value) {
     resizeObserver.unobserve(chartRef.value)
   }

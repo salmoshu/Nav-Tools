@@ -1,5 +1,7 @@
-import { ref, nextTick} from "vue";
+import { ref, nextTick } from "vue";
+import { ElInput } from 'element-plus';
 
+// 控制台相关状态
 const consoleContent = ref<HTMLDivElement | null>(null);
 const autoScroll = ref(true);
 const msgCount = ref(0);
@@ -14,6 +16,13 @@ const rawMessages = ref<
     isValid: boolean;
   }[]
 >([]);
+
+// 控制台信息查询
+const searchQuery = ref('');
+const showSearch = ref(false);
+const searchInput = ref<InstanceType<typeof ElInput> | null>(null);
+const searchResults = ref<{index: number, element: HTMLElement | null}[]>([]);
+const currentResultIndex = ref(-1);
 
 export function useConsole() {
   const calculateNmeaChecksum = (sentence: string): string => {
@@ -132,6 +141,84 @@ export function useConsole() {
     }
   };
 
+  const clearSearch = () => {
+    searchQuery.value = '';
+    searchResults.value = [];
+    currentResultIndex.value = -1;
+    
+    // 强制重新渲染以清除所有高亮样式
+    nextTick(() => {
+      const allMessageElements = document.querySelectorAll('.message-line');
+      allMessageElements.forEach(element => {
+        element.classList.remove('current-search-result');
+      });
+    });
+  };
+
+  // 搜索功能实现
+  const toggleSearch = () => {
+    showSearch.value = !showSearch.value;
+    if (showSearch.value) {
+      nextTick(() => {
+        if (searchInput.value) {
+          searchInput.value.focus();
+        }
+      });
+    } else {
+      clearSearch();
+    }
+  };
+
+  const isMatch = (text: string, query: string): boolean => {
+    return text.toLowerCase().includes(query.toLowerCase());
+  };
+
+  const scrollToResult = (index: number) => {
+    if (searchResults.value[index]?.element) {
+      searchResults.value[index].element.scrollIntoView({
+        behavior: 'smooth',
+        block: 'center',
+        inline: 'nearest'
+      });
+      
+      // 高亮当前结果
+      searchResults.value.forEach((result, i) => {
+        if (result.element) {
+          if (i === index) {
+            result.element.classList.add('current-search-result');
+          } else {
+            result.element.classList.remove('current-search-result');
+          }
+        }
+      });
+    }
+  };
+
+  const performSearch = () => {
+    if (!searchQuery.value) {
+      clearSearch();
+      return;
+    }
+    
+    searchResults.value = [];
+    currentResultIndex.value = -1;
+    
+    nextTick(() => {
+      const messageElements = document.querySelectorAll('.message-line');
+      messageElements.forEach((element, index) => {
+        const rawText = rawMessages.value[index]?.raw || '';
+        if (isMatch(rawText, searchQuery.value)) {
+          searchResults.value.push({ index, element: element as HTMLElement });
+        }
+      });
+      
+      if (searchResults.value.length > 0) {
+        currentResultIndex.value = 0;
+        scrollToResult(0);
+      }
+    });
+  };
+
   return {
     consoleContent,
     autoScroll,
@@ -140,8 +227,18 @@ export function useConsole() {
     msgJsonCount,
     dataFormat,
     rawMessages,
+    searchQuery,
+    showSearch,
+    searchInput,
+    searchResults,
+    currentResultIndex,
     isValidNmea,
     isValidJson,
     handleRawDataBatch,
+    toggleSearch,
+    clearSearch,
+    performSearch,
+    scrollToResult,
+    isMatch,
   };
 }
