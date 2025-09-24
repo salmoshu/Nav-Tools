@@ -35,7 +35,8 @@ function evaluateExpression(expr: string, context: Record<string, any>): any {
     
     // 先替换所有的flowData访问为实际值
     let processedExpr = trimmedExpr
-    for (const key of context.flowData.rawDataKeys) {
+    const sortedKeys = [...context.flowData.rawDataKeys].sort((a, b) => b.length - a.length)
+    for (const key of sortedKeys) {
       if (trimmedExpr.includes(key)) {
         if (context.flowData[key][context.index]) {
           processedExpr = processedExpr.replace(new RegExp(key, 'g'), context.flowData[key][context.index])

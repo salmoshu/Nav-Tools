@@ -376,6 +376,7 @@ export function useDevice() {
           switch (navMode.funcMode) {
             case 'flow':
               initFlowRawData(content);
+              initFlowConsole(content);
               ElMessage({
                 message: `数据加载成功`,
                 type: 'success',

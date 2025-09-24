@@ -1443,7 +1443,7 @@ function createChartOption() {
       grid: {
         left: '3%',
         right: '8%',
-        bottom: '20%', // 从3%增加到15%，为dataZoom留出空间
+        bottom: '20%',
         containLabel: true
       },
       xAxis: {
@@ -1484,7 +1484,7 @@ function createChartOption() {
       // true / 省略 → 滚轮即触发
       // 'ctrl' → 必须 Ctrl + 滚轮才触发
       dataZoom: [
-        { type: 'slider', show: true, xAxisIndex: 0 },
+        { type: 'slider', show: true, xAxisIndex: 0, brushSelect: false },
         { type: 'inside', xAxisIndex: 0, zoomOnMouseWheel: true },
         { type: 'inside', yAxisIndex: 0, zoomOnMouseWheel: 'ctrl' },
         { type: 'inside', yAxisIndex: 1, zoomOnMouseWheel: 'ctrl' }
@@ -1785,9 +1785,9 @@ function createChartOption() {
       },
       grid: [
         // 100 - 15 - 52 = 33
-        // 100 - 52 - 15 = 33
+        // 100 - 53 - 14 = 33
         { left: '3%', right: '8%', top: '15%', bottom: '52%', containLabel: true },
-        { left: '3%', right: '8%', top: '52%', bottom: '15%', containLabel: true } // 从3%增加到15%
+        { left: '3%', right: '8%', top: '53%', bottom: '14%', containLabel: true }
       ],
       xAxis: [
         { type: 'value', name: upperSeries.length < 2 ? 't' : '        t', gridIndex: 0, axisLabel: { formatter: (value: number) => value.toFixed(2) } },
@@ -1795,7 +1795,7 @@ function createChartOption() {
       ],
       yAxis: yAxisConfigArray,
       dataZoom: [
-        { type: 'slider', show: true, xAxisIndex: [0, 1] },
+        { type: 'slider', show: true, xAxisIndex: [0, 1], brushSelect: false },
         { type: 'inside', xAxisIndex: [0, 1], zoomOnMouseWheel: true },
         { type: 'inside', yAxisIndex: 0, zoomOnMouseWheel: 'ctrl' },
         { type: 'inside', yAxisIndex: 1, zoomOnMouseWheel: 'ctrl' },
