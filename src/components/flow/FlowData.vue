@@ -1784,8 +1784,10 @@ function createChartOption() {
         top: 30
       },
       grid: [
-        { left: '3%', right: '8%', top: '18%', bottom: '52%', containLabel: true },
-        { left: '3%', right: '8%', top: '50%', bottom: '20%', containLabel: true } // 从3%增加到15%
+        // 100 - 15 - 52 = 33
+        // 100 - 52 - 15 = 33
+        { left: '3%', right: '8%', top: '15%', bottom: '52%', containLabel: true },
+        { left: '3%', right: '8%', top: '52%', bottom: '15%', containLabel: true } // 从3%增加到15%
       ],
       xAxis: [
         { type: 'value', name: upperSeries.length < 2 ? 't' : '        t', gridIndex: 0, axisLabel: { formatter: (value: number) => value.toFixed(2) } },
@@ -1916,7 +1918,7 @@ watch(
 .chart-container {
   flex: 1;
   min-height: 300px;
-  padding: 10px;
+  padding: 5px 10px;
 }
 
 /* 按钮样式 */

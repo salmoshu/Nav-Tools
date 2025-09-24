@@ -478,7 +478,7 @@ onUnmounted(() => {
   justify-content: space-between;
   background-color: #409EFF;
   color: white;
-  height: 60px;
+  height: 45px;
   padding: 0 20px;
   box-sizing: border-box;
   user-select: none;
