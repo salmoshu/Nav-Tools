@@ -514,12 +514,22 @@ const snapToEdge = () => {
   emit('positionChange', position.value)
 }
 
+function handleDeviceEvent(event: KeyboardEvent) {
+  // 处理Ctrl+F快捷键 - 打开搜索框
+  if ((event.ctrlKey || event.metaKey) && event.key === 'd') {
+    event.preventDefault();
+    event.stopPropagation();
+    handleDeviceConnected()
+  }
+}
+
 onMounted(() => {
   searchSerialPorts()
   emitter.on('input-event', inputDialog)
 
   snapToEdge()
   window.addEventListener('resize', snapToEdge)
+  window.addEventListener('keyup', handleDeviceEvent)
   
   // 监听状态栏位置变化
   watch([statusbarPosition, statusbarSize], () => {
@@ -536,6 +546,7 @@ onUnmounted(() => {
   document.removeEventListener('mousemove', handleDrag)
   document.removeEventListener('mouseup', stopDrag)
   window.removeEventListener('resize', snapToEdge)
+  window.removeEventListener('keyup', handleDeviceEvent)
   
   // 移除布局更改监听
   emitter.off('layout-changed')
