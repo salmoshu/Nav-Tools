@@ -83,18 +83,32 @@ export function useConsole() {
       return false;
     }
   };
+
+  // 清除控制台
+  const clearConsole = () => {
+    rawMessages.value = [];
+    msgCount.value = 0;
+    clearSearch();
+  };
+
   const handleRawDataBatch = (rawData: string) => {
-    const now = new Date();
-    const timestamp =
-      now.toLocaleTimeString() +
+    clearConsole();
+    const baseTime = new Date();
+    const baseTimestamp =
+      baseTime.toLocaleTimeString() +
       "." +
-      now.getMilliseconds().toString().padStart(3, "0");
+      baseTime.getMilliseconds().toString().padStart(3, "0");
     const lines = rawData.split("\n");
 
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
       //
       if (line.trim() !== "") {
+        const uniqueTimestamp = 
+        baseTimestamp + 
+        "." + 
+        (baseTime.getMilliseconds() + i).toString().padStart(3, "0");
+
         // 检测是否为JSON格式
         let isValid = true;
 
@@ -104,7 +118,7 @@ export function useConsole() {
             msgNmeaCount.value++;
           }
           rawMessages.value.push({
-            timestamp,
+            timestamp: uniqueTimestamp,
             raw: line,
             dataType: "nmea",
             isValid,
@@ -116,7 +130,7 @@ export function useConsole() {
             msgJsonCount.value++;
           }
           rawMessages.value.push({
-            timestamp,
+            timestamp: uniqueTimestamp,
             raw: line,
             dataType: "json",
             isValid,
@@ -234,6 +248,7 @@ export function useConsole() {
     currentResultIndex,
     isValidNmea,
     isValidJson,
+    clearConsole,
     handleRawDataBatch,
     toggleSearch,
     clearSearch,

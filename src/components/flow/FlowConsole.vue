@@ -98,6 +98,7 @@ const {
   currentResultIndex,
   isValidNmea,
   isValidJson,
+  clearConsole,
   toggleSearch,
   clearSearch,
   performSearch,
@@ -205,13 +206,6 @@ const saveConsoleData = () => {
   a.download = `Nav-Tools_${timestamp}.log`;
   a.click();
   URL.revokeObjectURL(a.href);
-};
-
-// 清除控制台
-const clearConsole = () => {
-  rawMessages.value = [];
-  msgCount.value = 0;
-  clearSearch();
 };
 
 // 切换自动滚动
