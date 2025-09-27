@@ -122,7 +122,6 @@ const handleRawData = (rawData: string) => {
     // 处理所有完整的行（除了最后一行）
     for (let i = 0; i < lines.length - 1; i++) {
       const line = lines[i];
-      // 
       if (line.trim() !== '') {
         // 检测是否为JSON格式
         let isValid = true;

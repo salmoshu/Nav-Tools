@@ -69,6 +69,7 @@
   <el-dialog
     v-model="showAddDialog"
     width="600px"
+    @opened="createCodeEditor"
     @close="resetDialog"
     :title="isEditMode ? '编辑自定义属性' : '添加自定义属性'"
   >
@@ -99,7 +100,6 @@
               v-model="editStatusConfig.fieldName" 
               placeholder="选择或输入字段名" 
               required
-              :disabled="isEditMode"
             ></el-input>
             <!-- 新增模式 -->
             <el-input 
@@ -118,8 +118,9 @@
               v-if="isEditMode" 
               v-model="editStatusConfig.code" 
               type="textarea" 
-              placeholder="fieldName * 2" 
-              :rows="4"
+              placeholder="请在下方编辑公式" 
+              :rows="1"
+              readonly
               required
             ></el-input>
             <!-- 新增模式 -->
@@ -127,11 +128,13 @@
               v-else 
               v-model="newStatusConfig.code" 
               type="textarea" 
-              placeholder="如 sqrt(x * x + y * y)、 abs(camera_angle)" 
-              :rows="4"
+              placeholder="请在下方编辑公式" 
+              :rows="1"
               :disabled="availableFields.length === 0"
+              readonly
               required
             ></el-input>
+            <div ref="editorRef" class="editor" style="width: 100%; height: 100px;border:1px solid #ccc;"></div>
             <div class="code-hint">
               说明：直接使用字段名访问数据（如camera_angle），支持常用数学函数或常量（如abs、sqrt、pow、sin、cos、tan、round、floor、ceil、max、min、PI、E）
             </div>
@@ -191,14 +194,15 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, inject, watch, type Ref } from 'vue'
+import { ref, computed, onMounted, onUnmounted, inject, watch, nextTick, type Ref } from 'vue'
 import { getMonitorStatus, showStatusBar } from '@/composables/useStatusManager'
 import { navMode } from '@/settings/config'
 import { useFlow } from '@/composables/flow/useFlow'
 import { useFlowStore } from '@/stores/flow'
 // 4. 导入需要的图标
-import { Plus, Close, Edit, Delete } from '@element-plus/icons-vue'
+import { Plus, Close, Delete } from '@element-plus/icons-vue'
 import { ElMessage, ElDialog, ElButton, ElInput, ElForm, ElFormItem, ElColorPicker, ElInputNumber, ElMessageBox } from 'element-plus'
+import * as monaco from 'monaco-editor'
 
 const editStatusConfig = ref<any>(null)
 const isEditMode = ref(false)
@@ -585,6 +589,179 @@ const snapToEdge = () => {
   emit('positionChange', position.value)
 }
 
+/**
+ * 代码编辑区域
+ */
+const editorRef = ref<HTMLDivElement>()   // 容器
+let editor: monaco.editor.IStandaloneEditor | null = null
+let disposeListener: monaco.IDisposable | null = null
+let provider: monaco.languages.CompletionItemProvider | null = null
+
+monaco.languages.register({ id: 'mathjs' })
+monaco.languages.setLanguageConfiguration('mathjs', {
+  brackets: [['(', ')']],
+  autoClosingPairs: [{ open: '(', close: ')' }],
+  surroundingPairs: [{ open: '(', close: ')' }]
+})
+monaco.languages.registerCompletionItemProvider('mathjs', {
+  // ① 加入字母触发器
+  triggerCharacters: ['(', ',', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm',
+                      'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z'],
+
+  provideCompletionItems(model, position) {
+    const text = model.getValue()
+    const offset = model.getOffsetAt(position)
+
+    // ② 向前找“合法前缀”：字母、数字、点
+    let start = offset - 1
+    while (start >= 0 && /[\w.]/.test(text[start])) start--
+    const prefix = text.slice(start + 1, offset)
+
+    // ③ 过滤你的词库
+    const list = customHints.value.filter(it =>
+      it.label.toLowerCase().startsWith(prefix.toLowerCase())
+    )
+
+    return {
+      suggestions: list.map(it => ({
+        ...it,
+        insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+        range: new monaco.Range(
+          position.lineNumber, position.column - prefix.length,
+          position.lineNumber, position.column
+        )
+      }))
+    }
+  }
+})
+
+const MATHJS_FUNC_SNIPPETS = [
+  { label: 'abs',    insertText: 'abs', kind: Function, doc: '绝对值' },
+  { label: 'acos',   insertText: 'acos', kind: Function, doc: '反余弦（弧度）' },
+  { label: 'acosh',  insertText: 'acosh', kind: Function, doc: '反双曲余弦' },
+  { label: 'asin',   insertText: 'asin', kind: Function, doc: '反正弦（弧度）' },
+  { label: 'asinh',  insertText: 'asinh', kind: Function, doc: '反双曲正弦' },
+  { label: 'atan',   insertText: 'atan', kind: Function, doc: '反正切（弧度）' },
+  { label: 'atan2',  insertText: 'atan2', kind: Function, doc: '双参反正切' },
+  { label: 'atanh',  insertText: 'atanh', kind: Function, doc: '反双曲正切' },
+  { label: 'ceil',   insertText: 'ceil', kind: Function, doc: '向上取整' },
+  { label: 'cos',    insertText: 'cos', kind: Function, doc: '余弦' },
+  { label: 'cosh',   insertText: 'cosh', kind: Function, doc: '双曲余弦' },
+  { label: 'cube',   insertText: 'cube', kind: Function, doc: 'x³' },
+  { label: 'exp',    insertText: 'exp', kind: Function, doc: 'e^x' },
+  { label: 'floor',  insertText: 'floor', kind: Function, doc: '向下取整' },
+  { label: 'gcd',    insertText: 'gcd', kind: Function, doc: '最大公约数' },
+  { label: 'lcm',    insertText: 'lcm', kind: Function, doc: '最小公倍数' },
+  { label: 'log',    insertText: 'log', kind: Function, doc: '自然对数' },
+  { label: 'log10',  insertText: 'log10', kind: Function, doc: '10 为底对数' },
+  { label: 'log2',   insertText: 'log2', kind: Function, doc: '2 为底对数' },
+  { label: 'mean',   insertText: 'mean', kind: Function, doc: '算术平均' },
+  { label: 'median', insertText: 'median', kind: Function, doc: '中位数' },
+  { label: 'min',    insertText: 'min', kind: Function, doc: '最小值' },
+  { label: 'max',    insertText: 'max', kind: Function, doc: '最大值' },
+  { label: 'pow',    insertText: 'pow', kind: Function, doc: '幂运算' },
+  { label: 'random', insertText: 'random', kind: Function, doc: '随机数' },
+  { label: 'round',  insertText: 'round', kind: Function, doc: '四舍五入' },
+  { label: 'sign',   insertText: 'sign', kind: Function, doc: '符号函数' },
+  { label: 'sin',    insertText: 'sin', kind: Function, doc: '正弦' },
+  { label: 'sinh',   insertText: 'sinh', kind: Function, doc: '双曲正弦' },
+  { label: 'sqrt',   insertText: 'sqrt', kind: Function, doc: '平方根' },
+  { label: 'square', insertText: 'square', kind: Function, doc: 'x²' },
+  { label: 'tan',    insertText: 'tan', kind: Function, doc: '正切' },
+  { label: 'tanh',   insertText: 'tanh', kind: Function, doc: '双曲正切' },
+  { label: 'sum',    insertText: 'sum', kind: Function, doc: '求和' },
+  { label: 'prod',   insertText: 'prod', kind: Function, doc: '连乘' },
+  { label: 'std',    insertText: 'std', kind: Function, doc: '标准差' },
+  { label: 'var',    insertText: 'var', kind: Function, doc: '方差' },
+  { label: 'det',    insertText: 'det', kind: Function, doc: '矩阵行列式' },
+  { label: 'transpose', insertText: 'transpose', kind: Function, doc: '矩阵转置' },
+  { label: 'inv',    insertText: 'inv', kind: Function, doc: '矩阵求逆' }
+]
+
+monaco.languages.registerCompletionItemProvider('mathjs', {
+  provideCompletionItems() {
+    return {
+      suggestions: MATHJS_FUNC_SNIPPETS.map(item => ({
+        ...item,
+        insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+        range: monaco.Range.fromPositions(position, position)
+      }))
+    }
+  }
+})
+
+// 常量还需要完善
+// const MATHJS_CONSTANTS = [
+//   { label: 'PI',  insertText: 'PI',  kind: Constant, doc: '圆周率 π' },
+//   { label: 'E',   insertText: 'E',   kind: Constant, doc: '自然底数 e' },
+//   { label: 'LN2', insertText: 'LN2', kind: Constant, doc: 'ln(2)' },
+//   { label: 'LN10',insertText: 'LN10',kind: Constant, doc: 'ln(10)' },
+//   { label: 'LOG2E',insertText:'LOG2E',kind:Constant, doc: 'log2(e)' },
+//   { label: 'LOG10E',insertText:'LOG10E',kind:Constant, doc: 'log10(e)' },
+//   { label: 'SQRT1_2',insertText:'SQRT1_2',kind:Constant, doc: '√0.5' },
+//   { label: 'SQRT2',insertText:'SQRT2',kind:Constant, doc: '√2' }
+// ]
+
+const customHints = ref([
+  ...MATHJS_FUNC_SNIPPETS,
+  // ...MATHJS_CONSTANTS,
+])
+
+monaco.languages.registerCompletionItemProvider('mathjs', {
+  provideCompletionItems() {
+    // 每次补全都会重新读取 dynamicWords.value
+    return { suggestions: customHints.value }
+  }
+})
+
+function addWord(label: string) {
+  customHints.value.push({
+    label,
+    kind: monaco.languages.CompletionItemKind.Text,
+    insertText: label
+  })
+}
+
+watch(availableFields, (newFields) => {
+  if(provider) {
+    provider.dispose()
+  }
+  // 动态添加补全项
+  newFields.forEach(field => {
+    addWord(field)
+  })
+})
+
+async function createCodeEditor() {
+  // 必须等 DOM 真正插入完成
+  await nextTick()
+  await new Promise(r => requestAnimationFrame(r))
+
+  if(editor) {
+    editor.dispose();
+    disposeListener?.dispose();
+  }
+
+  // 2. 创建编辑器
+  editor = monaco.editor.create(editorRef.value!, {
+    value: '',
+    language: 'mathjs',
+    minimap: { enabled: false },
+    scrollBeyondLastLine: false,
+    lineNumbers: 'on'
+  })
+
+  disposeListener = editor.onDidChangeModelContent(() => {
+    const newCode = editor!.getValue() // 最新全文
+
+    if(isEditMode.value) {
+      editStatusConfig.value.code = newCode;
+    } else {
+      newStatusConfig.value.code = newCode;
+    }
+  })
+}
+
 onMounted(() => {
   snapToEdge()
   window.addEventListener('resize', snapToEdge)
@@ -844,5 +1021,9 @@ onUnmounted(() => {
   color: #909399;
   font-style: italic;
   text-align: left;
+}
+
+:deep(.monaco-editor .view-lines) {
+  text-align: left !important;
 }
 </style>
