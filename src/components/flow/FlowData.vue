@@ -939,8 +939,8 @@ function exportConfigFile() {
       }
     }
   } else {
-    config.upperSources = {},
-    config.lowerSources = {}
+    config.upperSources = {};
+    config.lowerSources = {};
     
     if (yAxisConfig.value === 'single') {
       config.upperSources = {
@@ -1860,10 +1860,171 @@ function handleCtrlKeyUp(e: KeyboardEvent) {
   }
 }
 
+/**
+ * 触屏事件
+ */
+interface TouchAxisZoomOptions {
+  enableX?: boolean;
+  enableY?: boolean;
+}
+
+let xAxisDataZoomOptions: any[] = []
+let yAxisDataZoomOptions: any[] = []
+function touchAxisZoom(options: TouchAxisZoomOptions) {
+  const opt = chart!.getOption() as any;
+  const { enableX = true, enableY = true } = options;
+  
+  // 备份当前的dataZoom配置
+  const currentDataZooms = [...opt.dataZoom];
+  
+  // 重置备份数组
+  if (!enableX) {
+    xAxisDataZoomOptions = [];
+  }
+  if (!enableY) {
+    yAxisDataZoomOptions = [];
+  }
+  
+  // 筛选需要保留的dataZoom配置
+  const filteredDataZooms = currentDataZooms.filter((d: any) => {
+    // 判断是否是x轴相关配置
+    const isXAxisZoom = d.xAxisIndex !== undefined && d.type === 'inside';
+    
+    // 判断是否是y轴相关配置
+    const isYAxisZoom = d.yAxisIndex !== undefined && d.type === 'inside';
+    
+    // 备份将要被移除的配置
+    if (!enableX && isXAxisZoom && d.type === 'inside') {
+      xAxisDataZoomOptions.push({ ...d });
+      return false; // 移除x轴配置
+    }
+    
+    if (!enableY && isYAxisZoom && d.type === 'inside') {
+      yAxisDataZoomOptions.push({ ...d });
+      return false; // 移除y轴配置
+    }
+    
+    // 保留不需要移除的配置
+    return true;
+  });
+  
+  // 添加需要启用的备份配置
+  if (enableX && xAxisDataZoomOptions.length > 0) {
+    filteredDataZooms.push(...xAxisDataZoomOptions);
+  }
+  
+  if (enableY && yAxisDataZoomOptions.length > 0) {
+    filteredDataZooms.push(...yAxisDataZoomOptions);
+  }
+  
+  // 应用更新后的配置
+  chart!.setOption({ dataZoom: filteredDataZooms }, { replaceMerge: ['dataZoom'] });
+}
+
+interface touchEventParams {
+  startX: number;
+  startY: number;
+  isTouching: boolean;
+}
+
+const touchParams: touchEventParams = {
+  startX: 0,
+  startY: 0,
+  isTouching: false,
+}
+
+function touchStartEvent(e: TouchEvent) {
+  if (e.touches.length === 1) {
+    touchParams.startX = e.touches[0].clientX
+    touchParams.startY = e.touches[0].clientY
+    touchParams.isTouching = true
+    touchAxisZoom({ enableX: true, enableY: false })
+  }
+}
+
+function touchMoveEvent(e: TouchEvent) {
+  if (!touchParams.isTouching || e.touches.length !== 1) return
+    
+  const currentX = e.touches[0].clientX
+  const deltaX = currentX - touchParams.startX
+
+  const currentY = e.touches[0].clientY
+  const deltaY = currentY - touchParams.startY
+  
+  // 只在有显著移动时触发拖拽
+  if (Math.abs(deltaX) >= 5 || Math.abs(deltaY) >= 5) {
+    const option = chart?.getOption()
+
+    // 根据方向参数处理不同的拖动逻辑
+    if (Math.abs(deltaX) >= Math.abs(deltaY)) {
+      // touchAxisZoom({ enableX: true, enableY: false })
+      // 水平拖动 - 控制X轴
+      if (!Array.isArray(option?.dataZoom)) return
+      const xAxisZoom = option.dataZoom.find((dz: any) =>
+        dz.type === 'inside' && dz.xAxisIndex !== undefined
+      )
+      
+      if (xAxisZoom) {
+        // if (!chartRef.value) return
+        const range = xAxisZoom.end - xAxisZoom.start
+        const moveAmount = chartRef.value ? (deltaX / chartRef.value.clientWidth) * 100 : 0
+
+        chart?.dispatchAction({
+          type: 'dataZoom',
+          xAxisIndex: xAxisZoom.xAxisIndex,
+          start: Math.max(0, Math.min(100 - range, xAxisZoom.start + moveAmount)),
+          end: Math.max(range, Math.min(100, xAxisZoom.end + moveAmount))
+        })
+        
+        touchParams.startX = currentX;
+        // touchAxisZoom({ enableX: true, enableY: true })
+      }
+    } else {
+      // touchAxisZoom({ enableX: false, enableY: true })
+      // 垂直拖动 - 控制Y轴
+      if (!Array.isArray(option?.dataZoom)) return
+      const yAxisZooms = option?.dataZoom?.filter((dz: any) => 
+        dz.type === 'inside' && dz.yAxisIndex !== undefined
+      )
+
+      yAxisZooms?.forEach((yAxisZoom: any) => {
+        const range = yAxisZoom.end - yAxisZoom.start
+        const moveAmount = chartRef.value ? (deltaY / chartRef.value.clientHeight) * 100 : 0
+        
+        chart?.dispatchAction({
+          type: 'dataZoom',
+          yAxisIndex: yAxisZoom.yAxisIndex,
+          start: Math.max(0, Math.min(100 - range, yAxisZoom.start - moveAmount)),
+          end: Math.max(range, Math.min(100, yAxisZoom.end - moveAmount))
+        })
+      })
+      
+      touchParams.startY = currentY
+      // touchAxisZoom({ enableX: true, enableY: true })
+    }
+  }
+}
+
+function touchEndEvent(e: TouchEvent) {
+  touchParams.isTouching = false
+  touchAxisZoom({ enableX: true, enableY: true })
+}
+
+function setupTouchEvents() {
+  if (!chartRef.value) return
+
+  touchParams.isTouching = false
+  touchParams.startX = 0
+  touchParams.startY = 0
+  
+  chartRef.value.addEventListener('touchstart', touchStartEvent, { passive: false }) // 触摸开始
+  chartRef.value.addEventListener('touchmove', touchMoveEvent, { passive: false }) // 触摸移动
+  chartRef.value.addEventListener('touchend', touchEndEvent, { passive: false }) // 触摸结束
+}
+
 // 组件挂载时初始化图表
 onMounted(() => {
   createChart()
-  window.addEventListener('resize', handleResize)
   
   // 设置ResizeObserver监听图表容器大小变化
   if (chartRef.value) {
@@ -1872,8 +2033,11 @@ onMounted(() => {
   }
 
   // 监听 Ctrl 键
+  window.addEventListener('resize', handleResize)
   window.addEventListener('keydown', handleCtrlKeyDown)
   window.addEventListener('keyup', handleCtrlKeyUp)
+
+  setupTouchEvents()
 })
 
 // 组件卸载时清理
@@ -1882,9 +2046,18 @@ onUnmounted(() => {
   // 移除Ctrl键事件监听器
   window.removeEventListener('keydown', handleCtrlKeyDown)
   window.removeEventListener('keyup', handleCtrlKeyUp)
+
+  if (chartRef.value) {
+    chartRef.value.removeEventListener('touchstart', touchStartEvent)
+    chartRef.value.removeEventListener('touchmove', touchMoveEvent)
+    chartRef.value.removeEventListener('touchend', touchEndEvent)
+  }
+
   if (resizeObserver && chartRef.value) {
     resizeObserver.unobserve(chartRef.value)
   }
+  
+  chart?.off('dblclick', handleChartDblClick)
   chart?.dispose()
 })
 

@@ -88,6 +88,8 @@ export function useConsole() {
   const clearConsole = () => {
     rawMessages.value = [];
     msgCount.value = 0;
+    msgNmeaCount.value = 0;
+    msgJsonCount.value = 0;
     clearSearch();
   };
 
