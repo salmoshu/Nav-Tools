@@ -22,14 +22,14 @@
           <!-- 为字段名添加点击进入编辑模式的功能 -->
           <span 
             class="status-label"
-            @click="showComputedStatus && flowStore.customStatusConfigs.some(config => config.fieldName === statusName) && (!flowData.value || typeof flowData.value !== 'object' || !('rawDataKeys' in flowData.value) || !Array.isArray(flowData.value.rawDataKeys) || !flowData.value.rawDataKeys.includes(statusName)) ? editCustomStatus(statusName) : undefined"
+            @click="showComputedStatusDialog(statusName)"
           >{{ statusName }}</span>
           <div style="display: flex; align-items: center; gap: 8px;">
             <!-- 为值添加点击进入编辑模式的功能 -->
             <span 
               class="status-indicator" 
               :style="getStatusStyle(statusValue)"
-              @click="showComputedStatus && flowStore.customStatusConfigs.some(config => config.fieldName === statusName) && (!flowData.value || typeof flowData.value !== 'object' || !('rawDataKeys' in flowData.value) || !Array.isArray(flowData.value.rawDataKeys) || !flowData.value.rawDataKeys.includes(statusName)) ? editCustomStatus(statusName) : undefined"
+              @click="showComputedStatusDialog(statusName)"
             >{{ getStatusValue(statusValue) }}</span>
             <!-- 只为自定义属性显示删除按钮 -->
             <template v-if="showComputedStatus && 
@@ -222,6 +222,10 @@ const editCustomStatus = (fieldName: string) => {
 const showComputedStatus = computed(() => {
   return navMode.funcMode === 'flow'
 })
+
+const showComputedStatusDialog = (statusName: string)=> {
+  return showComputedStatus && flowStore.customStatusConfigs.some(config => config.fieldName === statusName) && (!flowData.value || typeof flowData.value !== 'object' || !('rawDataKeys' in flowData.value) || !Array.isArray(flowData.value.rawDataKeys) || !flowData.value.rawDataKeys.includes(statusName)) ? editCustomStatus(statusName) : undefined
+}
 
 const commonStyle = {
   trueStyle: 'color: #00b894; background: rgba(0, 184, 148, 0.1); font-weight: 700;',

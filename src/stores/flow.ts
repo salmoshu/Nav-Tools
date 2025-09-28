@@ -4,6 +4,22 @@ import { defineStore } from 'pinia'
 import { create, all } from 'mathjs';
 
 const math = create(all);
+math.import({
+  divide_s: (a: number, b: number) => {
+    let result: number | null = 0;
+    if (b !== 0) {
+      result = a / b;
+    } else {
+      if (a === 0) {
+        result = 0;
+      } else {
+        result = null;
+      }
+    }
+
+    return result;
+  }
+}, { override: true });
 
 // 元数据属性列表 - 这些属性不应被添加到status中
 const META_PROPERTIES = ['plotTime', 'timestamp', 'isBatchData', 'rawString', 'rawDataKeys']
@@ -38,7 +54,7 @@ function evaluateExpression(expr: string, context: Record<string, any>): any {
     const sortedKeys = [...context.flowData.rawDataKeys].sort((a, b) => b.length - a.length)
     for (const key of sortedKeys) {
       if (trimmedExpr.includes(key)) {
-        if (context.flowData[key][context.index]) {
+        if (context.flowData[key] && context.flowData[key][context.index] !== undefined) {
           processedExpr = processedExpr.replace(new RegExp(key, 'g'), context.flowData[key][context.index])
         } else {
           return null

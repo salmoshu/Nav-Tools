@@ -65,46 +65,12 @@ const editorRef = ref<HTMLDivElement>()   // 容器
 let editor: monaco.editor.IStandaloneCodeEditor | null = null
 let disposeListener: monaco.IDisposable | null = null
 
-monaco.languages.register({ id: 'mathjs' })
-monaco.languages.setLanguageConfiguration('mathjs', {
-  brackets: [['(', ')']],
-  autoClosingPairs: [{ open: '(', close: ')' }],
-  surroundingPairs: [{ open: '(', close: ')' }]
-})
-monaco.languages.registerCompletionItemProvider('mathjs', {
-  // 1. 加入字母触发器
-  triggerCharacters: ['(', ',', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm',
-                      'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z'],
-
-  provideCompletionItems(model, position) {
-    const text = model.getValue()
-    const offset = model.getOffsetAt(position)
-
-    // 2. 向前找“合法前缀”：字母、数字、点
-    let start = offset - 1
-    while (start >= 0 && /[\w.]/.test(text[start])) start--
-    const prefix = text.slice(start + 1, offset)
-
-    // 3. 过滤你的词库
-    const list = customHints.value.filter(it =>
-      it.label.toLowerCase().startsWith(prefix.toLowerCase())
-    )
-
-    return {
-      suggestions: list.map(it => ({
-        ...it,
-        insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
-        range: new monaco.Range(
-          position.lineNumber, position.column - prefix.length,
-          position.lineNumber, position.column
-        )
-      }))
-    }
-  }
-})
-
 const Function = monaco.languages.CompletionItemKind.Function
 const Constant = monaco.languages.CompletionItemKind.Constant
+const SAFE_FUNC_SNIPPETS = [
+  { label: 'divide_s', insertText: 'divide_s', kind: Constant, doc: '安全除法' },
+]
+
 const MATHJS_FUNC_SNIPPETS = [
   { label: 'abs',    insertText: 'abs', kind: Function, doc: '绝对值' },
   { label: 'acos',   insertText: 'acos', kind: Function, doc: '反余弦（弧度）' },
@@ -160,26 +126,55 @@ const MATHJS_CONSTANTS = [
 ]
 
 const customHints = ref([
+  ...SAFE_FUNC_SNIPPETS,
   ...MATHJS_FUNC_SNIPPETS,
   ...MATHJS_CONSTANTS,
 ])  
 
+monaco.languages.register({ id: 'mathjs' })
+monaco.languages.setLanguageConfiguration('mathjs', {
+  brackets: [['(', ')']],
+  autoClosingPairs: [{ open: '(', close: ')' }],
+  surroundingPairs: [{ open: '(', close: ')' }]
+})
 monaco.languages.registerCompletionItemProvider('mathjs', {
+  // 1. 加入字母触发器
+  triggerCharacters: ['(', ',', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm',
+                      'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z'],
+
   provideCompletionItems(model, position) {
-    // 为每个补全项添加range属性
-    const suggestionsWithRange = customHints.value.map(item => ({
-      ...item,
-      range: new monaco.Range(
-        position.lineNumber, 1,
-        position.lineNumber, position.column
-      )
-    }));
-    
-    return { suggestions: suggestionsWithRange };
+    const text = model.getValue()
+    const offset = model.getOffsetAt(position)
+
+    // 2. 向前找“合法前缀”：字母、数字、点
+    let start = offset - 1
+    while (start >= 0 && /[\w.]/.test(text[start])) start--
+    const prefix = text.slice(start + 1, offset)
+
+    // 3. 过滤你的词库
+    const list = customHints.value.filter(it =>
+      it.label.toLowerCase().startsWith(prefix.toLowerCase())
+    )
+
+    return {
+      suggestions: list.map(it => ({
+        ...it,
+        insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+        range: new monaco.Range(
+          position.lineNumber, position.column - prefix.length,
+          position.lineNumber, position.column
+        )
+      }))
+    }
   }
-});
+})
 
 function addMonacoWords(label: string) {
+  // 检查是否已存在相同标签的项
+  if (customHints.value.some(item => item.label === label)) {
+    return; // 如果已存在，直接返回
+  }
+
   customHints.value.push({
     label,
     kind: monaco.languages.CompletionItemKind.Text,
