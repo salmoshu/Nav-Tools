@@ -38,7 +38,7 @@
     "vite-plugin-monaco-editor-esm": "^2.0.2",
     "vite-plugin-vue-devtools": "^8.0.0",
     "vue": "^3.5.13",
-    "vue-tsc": "^2.1.10"
+    "vue-tsc": "^3.0.8"
   },
   "dependencies": {
     "@element-plus/icons-vue": "^2.3.2",
