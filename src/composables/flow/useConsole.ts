@@ -104,8 +104,10 @@ export function useConsole() {
 
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
-      //
-      if (line.trim() !== "") {
+      const time_reg = /^\d{2}:\d{2}:\d{2}\.\d+(?:\.\d+)?:/;
+      const cleanedLine = line.replace(time_reg, '').trim();
+
+      if (cleanedLine.trim() !== "") {
         const uniqueTimestamp = 
         baseTimestamp + 
         "." + 
@@ -115,25 +117,25 @@ export function useConsole() {
         let isValid = true;
 
         if (dataFormat.value === "nmea") {
-          isValid = isValidNmea(line);
+          isValid = isValidNmea(cleanedLine);
           if (isValid) {
             msgNmeaCount.value++;
           }
           rawMessages.value.push({
             timestamp: uniqueTimestamp,
-            raw: line,
+            raw: cleanedLine,
             dataType: "nmea",
             isValid,
           });
           msgCount.value = msgNmeaCount.value;
         } else {
-          isValid = isValidJson(line);
+          isValid = isValidJson(cleanedLine);
           if (isValid) {
             msgJsonCount.value++;
           }
           rawMessages.value.push({
             timestamp: uniqueTimestamp,
-            raw: line,
+            raw: cleanedLine,
             dataType: "json",
             isValid,
           });

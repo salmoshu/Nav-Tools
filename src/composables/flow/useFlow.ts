@@ -39,10 +39,13 @@ export function useFlow() {
     for (const line of lines) {
       if (line.trim() !== "") {
         try {
-          if (line.indexOf('{') === -1 || line.indexOf('}') === -1) {
+          const time_reg = /^\d{2}:\d{2}:\d{2}\.\d+(?:\.\d+)?:/;
+          const cleanedLine = line.replace(time_reg, '').trim()
+
+          if (cleanedLine.indexOf('{') === -1 || cleanedLine.indexOf('}') === -1) {
             continue
           }
-          const json = JSON.parse(line)
+          const json = JSON.parse(cleanedLine)
           
           // 自适应添加新的数据源字段
           Object.keys(json).forEach(key => {
