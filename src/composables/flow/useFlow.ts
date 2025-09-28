@@ -39,6 +39,9 @@ export function useFlow() {
     for (const line of lines) {
       if (line.trim() !== "") {
         try {
+          if (line.indexOf('{') === -1 || line.indexOf('}') === -1) {
+            continue
+          }
           const json = JSON.parse(line)
           
           // 自适应添加新的数据源字段
