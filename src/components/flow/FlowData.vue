@@ -460,7 +460,7 @@ import { ElMessage } from 'element-plus'
 import { useConsole } from '@/composables/flow/useConsole'
 
 // 初始化数据流处理
-const { flowData, initRawData, clearRawData } = useFlow()
+const { flowData, clearRawData } = useFlow()
 const { searchQuery, performSearch } = useConsole()
 
 // 初始化视图配置处理
@@ -1068,42 +1068,6 @@ function showMessageFormat() {
   messageDialogVisible.value = true
 }
 
-// 处理文件上传
-const handleFileUpload = (event: Event) => {
-  const target = event.target as HTMLInputElement
-  const file = target.files?.[0]
-  
-  if (file) {
-    const reader = new FileReader()
-    reader.onload = (e) => {
-      const content = e.target?.result as string
-      try {
-        initRawData(content)
-        updateChart()
-        ElMessage({
-          message: `数据加载成功`,
-          type: 'success',
-          placement: 'bottom-right',
-          offset: 50,
-        })
-      } catch (error) {
-        ElMessage({
-          message: `数据加载失败`,
-          type: 'error',
-          placement: 'bottom-right',
-          offset: 50,
-        })
-        console.error('数据加载失败:', error)
-      }
-    }
-    
-    reader.readAsText(file)
-    
-    // 清空input以允许重复选择同一文件
-    target.value = ''
-  }
-}
-
 // 首先在导入部分添加clearAllCustomStatus
 import { useFlowStore } from '@/stores/flow'
 
@@ -1127,8 +1091,26 @@ function clearPlotData() {
   })
 }
 
+function getScale(singleData: LineSeriesOption) {
+  let result = {};
+  const values = (singleData as LineSeriesOption).data?.map((value: any) => {
+    // 确保值是数字并且不为null
+    if (value[1] === null || value[1] === undefined || typeof value[1] !== 'number') {
+      return 0;
+    }
+    return value[1];
+  }).filter((val: number) => !isNaN(val)); // 过滤掉NaN值
+
+  if (values?.length === 0) return; // 跳过没有有效数据的系列
+  result = {
+    max: values ? Math.max(...values) : 0,
+    min: values ? Math.min(...values) : 0
+  };
+  return result;
+}
+
 // 注意alignTicks: true与自定义的 min 和 max 值两者不要同时设定，当这两个设置同时使用时，ECharts无法找到合适的刻度间隔，导致刻度可能会非常密集，影响可读性。
-function maintainScale(allData: LineSeriesOption[]) {
+function getScaleMulti(allData: LineSeriesOption[]) {
   let yIndexOffset = 0;
   let result = {} as { [key: number]: { max: number; min: number } };
   allData.forEach(item => {
@@ -1342,7 +1324,8 @@ function createChartOption() {
           type: 'line',
           data: seriesData,
           symbolSize: 4,
-          smooth: true,
+          smooth: false,
+          clip: true,
           yAxisIndex: 0,
           color: color,
           areaStyle: {
@@ -1368,7 +1351,8 @@ function createChartOption() {
           type: 'line',
           data: seriesData,
           symbolSize: 4,
-          smooth: true,
+          smooth: false,
+          clip: true,
           yAxisIndex: 0,
           color: color,
           areaStyle: {
@@ -1393,7 +1377,8 @@ function createChartOption() {
           type: 'line',
           data: seriesData,
           symbolSize: 4,
-          smooth: true,
+          smooth: false,
+          clip: true,
           yAxisIndex: 1,
           color: color,
           areaStyle: {
@@ -1406,7 +1391,7 @@ function createChartOption() {
       series = [...leftSeries, ...rightSeries];
       
       // 计算双Y轴对齐范围
-      minMax = maintainScale(series);
+      minMax = getScaleMulti(series);
     }
 
     return {
@@ -1486,10 +1471,22 @@ function createChartOption() {
       // true / 省略 → 滚轮即触发
       // 'ctrl' → 必须 Ctrl + 滚轮才触发
       dataZoom: [
-        { type: 'slider', show: true, xAxisIndex: 0, brushSelect: false },
-        { type: 'inside', xAxisIndex: 0, zoomOnMouseWheel: true },
-        { type: 'inside', yAxisIndex: 0, zoomOnMouseWheel: 'ctrl' },
-        { type: 'inside', yAxisIndex: 1, zoomOnMouseWheel: 'ctrl' }
+        { 
+          type: 'slider', show: true, xAxisIndex: 0, brushSelect: false,
+          filterMode: 'none',
+        },
+        { 
+          type: 'inside', xAxisIndex: 0, zoomOnMouseWheel: true,
+          filterMode: 'none',
+        },
+        { 
+          type: 'inside', yAxisIndex: 0, zoomOnMouseWheel: 'ctrl',
+          filterMode: 'none',
+        },
+        { 
+          type: 'inside', yAxisIndex: 1, zoomOnMouseWheel: 'ctrl',
+          filterMode: 'none',
+        }
       ],
       series
     }
@@ -1517,7 +1514,8 @@ function createChartOption() {
           type: 'line',
           data: seriesData,
           symbolSize: 4,
-          smooth: true,
+          smooth: false,
+          clip: true,
           yAxisIndex: 0,
           color: color,
           areaStyle: {
@@ -1542,7 +1540,8 @@ function createChartOption() {
           type: 'line',
           data: seriesData,
           symbolSize: 4,
-          smooth: true,
+          smooth: false,
+          clip: true,
           yAxisIndex: 1,
           color: color,
           areaStyle: {
@@ -1567,7 +1566,8 @@ function createChartOption() {
           type: 'line',
           data: seriesData,
           symbolSize: 4,
-          smooth: true,
+          smooth: false,
+          clip: true,
           yAxisIndex: 2,
           color: color,
           areaStyle: {
@@ -1592,7 +1592,8 @@ function createChartOption() {
           type: 'line',
           data: seriesData,
           symbolSize: 4,
-          smooth: true,
+          smooth: false,
+          clip: true,
           yAxisIndex: 3,
           color: color,
           areaStyle: {
@@ -1606,14 +1607,14 @@ function createChartOption() {
       if (upperSeries.length > 0) {
         // 只提取上图表的Y轴0和1的数据进行计算
         const upperChartData = upperSeries.filter(s => s.yAxisIndex === 0 || s.yAxisIndex === 1) as LineSeriesOption[];
-        upperMinMax = maintainScale(upperChartData);
+        upperMinMax = getScaleMulti(upperChartData);
         console.log('上图表Y轴对齐范围upperMinMax:', upperMinMax);
       }
       
       if (lowerSeries.length > 0) {
         // 只提取下图表的Y轴2和3的数据进行计算，并将索引调整为0和1
         const lowerChartData = lowerSeries.filter(s => s.yAxisIndex === 2 || s.yAxisIndex === 3) as LineSeriesOption[];
-        lowerMinMax = maintainScale(lowerChartData);
+        lowerMinMax = getScaleMulti(lowerChartData);
         console.log('下图表Y轴对齐范围lowerMinMax:', lowerMinMax);
       }
     } else {
@@ -1634,7 +1635,8 @@ function createChartOption() {
           type: 'line',
           data: seriesData,
           symbolSize: 4,
-          smooth: true,
+          smooth: false,
+          clip: true,
           yAxisIndex: 0,
           color: color,
           areaStyle: {
@@ -1661,7 +1663,8 @@ function createChartOption() {
           type: 'line',
           data: seriesData,
           symbolSize: 4,
-          smooth: true,
+          smooth: false,
+          clip: true,
           yAxisIndex: 1,
           color: color,
           areaStyle: {
@@ -1799,12 +1802,29 @@ function createChartOption() {
       ],
       yAxis: yAxisConfigArray,
       dataZoom: [
-        { type: 'slider', show: true, xAxisIndex: [0, 1], brushSelect: false },
-        { type: 'inside', xAxisIndex: [0, 1], zoomOnMouseWheel: true },
-        { type: 'inside', yAxisIndex: 0, zoomOnMouseWheel: 'ctrl' },
-        { type: 'inside', yAxisIndex: 1, zoomOnMouseWheel: 'ctrl' },
-        { type: 'inside', yAxisIndex: 2, zoomOnMouseWheel: 'ctrl' },
-        { type: 'inside', yAxisIndex: 3, zoomOnMouseWheel: 'ctrl' }
+        { 
+          type: 'slider', show: true, xAxisIndex: [0, 1], brushSelect: false, filterMode: 'none' 
+        },
+        { 
+          type: 'inside', xAxisIndex: [0, 1], zoomOnMouseWheel: true, 
+          filterMode: 'none' 
+        },
+        { 
+          type: 'inside', yAxisIndex: 0, zoomOnMouseWheel: 'ctrl', 
+          filterMode: 'none' 
+        },
+        { 
+          type: 'inside', yAxisIndex: 1, zoomOnMouseWheel: 'ctrl', 
+          filterMode: 'none' 
+        },
+        { 
+          type: 'inside', yAxisIndex: 2, zoomOnMouseWheel: 'ctrl', 
+          filterMode: 'none' 
+        },
+        { 
+          type: 'inside', yAxisIndex: 3, zoomOnMouseWheel: 'ctrl', 
+          filterMode: 'none' 
+        }
       ],
       series: [
         // 上图表系列 - 添加gridIndex和xAxisIndex
