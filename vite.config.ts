@@ -66,7 +66,7 @@ export default defineConfig(({ command }) => {
         // See 👉 https://github.com/electron-vite/vite-plugin-electron-renderer
         renderer: {},
       }),
-      monacoEditorPlugin({languageWorkers: ['typescript']}),
+      monacoEditorPlugin({}),
     ],
     resolve: {
       alias: {
