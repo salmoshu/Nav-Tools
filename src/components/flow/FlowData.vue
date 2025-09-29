@@ -24,8 +24,11 @@
         
         <!-- 右侧按钮 -->
         <div class="right-buttons">
+          <el-button :disabled="deviceConnected" type="default" size="small" @click="toggleSlideWindow" class="layout-btn">
+            <span :style="{ textDecoration: enableWindow ? 'line-through' : 'none' }">滑窗</span>
+          </el-button>
           <el-button type="default" size="small" @click="refreshPlotData" class="refresh-btn">
-              刷新
+            刷新
           </el-button>
           <el-button type="default" size="small" @click="clearPlotData" class="clear-btn">
             清除
@@ -461,10 +464,12 @@ import { useFlow } from '@/composables/flow/useFlow'
 import { useDataConfig } from '@/composables/flow/useDataConfig'
 import { ElMessage } from 'element-plus'
 import { useConsole } from '@/composables/flow/useConsole'
+import { useDevice } from '@/hooks/useDevice'
 
 // 初始化数据流处理
-const { flowData, clearRawData } = useFlow()
+const { flowData, plotData, enableWindow, clearRawData } = useFlow()
 const { searchQuery, performSearch } = useConsole()
+const { deviceConnected } = useDevice()
 
 // 初始化视图配置处理
 const { 
@@ -606,14 +611,14 @@ const {
   onYAxisChange,
   onLayoutChange,
   applyViewConfig
-} = useDataConfig(flowData)
+} = useDataConfig(plotData)
 
 const chartRef = ref<HTMLDivElement>()
 let chart: echarts.ECharts | null = null
 let resizeObserver: ResizeObserver | null = null
 
 const largeDataOptions = computed(() => {
-  if (flowData.value.plotTime && flowData.value.plotTime.length > 500) {
+  if (plotData.value?.plotTime && plotData.value.plotTime.length > 500) {
     return {
       showSymbol: false,
       large: true,
@@ -1077,6 +1082,10 @@ import { useFlowStore } from '@/stores/flow'
 // 在script setup中初始化store
 const flowStore = useFlowStore()
 
+function toggleSlideWindow() {
+  enableWindow.value = !enableWindow.value
+}
+
 function refreshPlotData() {
   createChart()
 }
@@ -1234,7 +1243,7 @@ function updateChart() {
               <path d="M12 7v5l3 3"/>
             </svg>
           </div>`
-          result += `${timeMarker}time: ${(params[0].data[0]+flowData.value.startTime).toFixed(3)}<br/>`
+          result += `${timeMarker}time: ${(params[0].data[0]+plotData.value.startTime).toFixed(3)}<br/>`
           
           // 安全处理每个参数值
           params.forEach((param: any) => {
@@ -1274,7 +1283,7 @@ function handleChartDblClick(params: any) {
   // params 包含了双击事件的相关信息，如坐标、数据等
   if (params.componentType === 'series') {
     const value = params.value
-    const rawTime = Number(value[0]) + (flowData.value.startTime ?? 0);
+    const rawTime = Number(value[0]) + (plotData.value.startTime ?? 0);
     const parts = rawTime.toString().split('.');
     const targetTime = parts[0] + (parts[1] ? '.' + parts[1].substring(0, 2) : '.00');
 
@@ -1309,6 +1318,12 @@ function getRandomColor(excludeColor: any, index: number) {
 
 // 创建图表选项
 function createChartOption() {
+  const plotDataRatio = flowData.value.plotTime?.length ? 1 - 110 / flowData.value.plotTime.length : 0;
+  let dataZoomStart = 0;
+  if (enableWindow.value) {
+    dataZoomStart = !plotData.value.plotTime || plotData.value.plotTime.length < 100 ? 0 : 100 * plotDataRatio;
+  }
+
   if (viewLayout.value === 'single') {
     // 单图模式
     let series: LineSeriesOption[] = [];
@@ -1322,8 +1337,8 @@ function createChartOption() {
         const areaMap = [singleChartUseArea1, singleChartUseArea2, singleChartUseArea3, singleChartUseArea4];
         const color = colorMap[index].value || getRandomColor(colorMap[index], index);
         
-        const seriesData = (flowData.value[source] as any[]).map((value: any, idx: number) => [
-          flowData.value.plotTime![idx], value
+        const seriesData = (plotData.value[source] as any[]).map((value: any, idx: number) => [
+          plotData.value.plotTime![idx], value
         ]);
         
         return {
@@ -1344,8 +1359,8 @@ function createChartOption() {
     } else {
       // 单图双Y轴模式
       const leftSeries: LineSeriesOption[] = singleChartLeftSources.value.map((source, index) => {
-        const seriesData = (flowData.value[source] as any[]).map((value: any, idx: number) => [
-          flowData.value.plotTime![idx], value
+        const seriesData = (plotData.value[source] as any[]).map((value: any, idx: number) => [
+          plotData.value.plotTime![idx], value
         ]);
 
         // 获取左侧Y轴对应的颜色配置
@@ -1375,8 +1390,8 @@ function createChartOption() {
         const areaMap = [singleChartRightUseArea1, singleChartRightUseArea2, singleChartRightUseArea3, singleChartRightUseArea4];
         const color = colorMap[index].value || getRandomColor(colorMap[index], index+singleChartLeftSources.value.length);
         
-        const seriesData = (flowData.value[source] as any[]).map((value: any, idx: number) => [
-          flowData.value.plotTime![idx], value
+        const seriesData = (plotData.value[source] as any[]).map((value: any, idx: number) => [
+          plotData.value.plotTime![idx], value
         ]);
         
         return {
@@ -1420,7 +1435,7 @@ function createChartOption() {
               <path d="M12 7v5l3 3"/>
             </svg>
           </div>`
-          result += `${timeMarker}time: ${(params[0].data[0]+flowData.value.startTime).toFixed(3)}<br/>`
+          result += `${timeMarker}time: ${(params[0].data[0]+plotData.value.startTime).toFixed(3)}<br/>`
 
           params.forEach((param: any) => {
             if (param.data[1] !== null) {
@@ -1479,20 +1494,17 @@ function createChartOption() {
       // 'ctrl' → 必须 Ctrl + 滚轮才触发
       dataZoom: [
         { 
-          type: 'slider', show: true, xAxisIndex: 0, brushSelect: false,
-          filterMode: 'none',
+          type: 'slider', show: true, xAxisIndex: 0, brushSelect: false, filterMode: 'none',
+          start: dataZoomStart, end: 100,
         },
         { 
-          type: 'inside', xAxisIndex: 0, zoomOnMouseWheel: true,
-          filterMode: 'none',
+          type: 'inside', xAxisIndex: 0, zoomOnMouseWheel: true, filterMode: 'none',
         },
         { 
-          type: 'inside', yAxisIndex: 0, zoomOnMouseWheel: 'ctrl',
-          filterMode: 'none',
+          type: 'inside', yAxisIndex: 0, zoomOnMouseWheel: 'ctrl', filterMode: 'none',
         },
         { 
-          type: 'inside', yAxisIndex: 1, zoomOnMouseWheel: 'ctrl',
-          filterMode: 'none',
+          type: 'inside', yAxisIndex: 1, zoomOnMouseWheel: 'ctrl', filterMode: 'none',
         }
       ],
       series
@@ -1512,8 +1524,8 @@ function createChartOption() {
         const areaMap = [upperChartLeftUseArea1, upperChartLeftUseArea2, upperChartLeftUseArea3, upperChartLeftUseArea4];
         const color = colorMap[index].value || getRandomColor(colorMap[index], index);
 
-        const seriesData = (flowData.value[source] as any[]).map((value: any, idx: number) => [
-          flowData.value.plotTime![idx], value
+        const seriesData = (plotData.value[source] as any[]).map((value: any, idx: number) => [
+          plotData.value.plotTime![idx], value
         ]);
         
         return {
@@ -1538,8 +1550,8 @@ function createChartOption() {
         const areaMap = [upperChartRightUseArea1, upperChartRightUseArea2, upperChartRightUseArea3, upperChartRightUseArea4];
         const color = colorMap[index].value || getRandomColor(colorMap[index], index+upperChartLeftSources.value.length);
 
-        const seriesData = (flowData.value[source] as any[]).map((value: any, idx: number) => [
-          flowData.value.plotTime![idx], value
+        const seriesData = (plotData.value[source] as any[]).map((value: any, idx: number) => [
+          plotData.value.plotTime![idx], value
         ]);
         
         return {
@@ -1564,8 +1576,8 @@ function createChartOption() {
         const areaMap = [lowerChartLeftUseArea1, lowerChartLeftUseArea2, lowerChartLeftUseArea3, lowerChartLeftUseArea4];
         const color = colorMap[index].value || getRandomColor(colorMap[index], index);
 
-        const seriesData = (flowData.value[source] as any[]).map((value: any, idx: number) => [
-          flowData.value.plotTime![idx], value
+        const seriesData = (plotData.value[source] as any[]).map((value: any, idx: number) => [
+          plotData.value.plotTime![idx], value
         ]);
         
         return {
@@ -1590,8 +1602,8 @@ function createChartOption() {
         const areaMap = [lowerChartRightUseArea1, lowerChartRightUseArea2, lowerChartRightUseArea3, lowerChartRightUseArea4];
         const color = colorMap[index].value || getRandomColor(colorMap[index], index+lowerChartLeftSources.value.length);
 
-        const seriesData = (flowData.value[source] as any[]).map((value: any, idx: number) => [
-          flowData.value.plotTime![idx], value
+        const seriesData = (plotData.value[source] as any[]).map((value: any, idx: number) => [
+          plotData.value.plotTime![idx], value
         ]);
         
         return {
@@ -1630,9 +1642,9 @@ function createChartOption() {
         const color = colorMap[index].value || getRandomColor(colorMap[index], index);
 
         // 添加安全检查
-        const sourceData = flowData.value[source];
+        const sourceData = plotData.value[source];
         const seriesData = Array.isArray(sourceData) 
-        ? sourceData.map((value: any, idx: number) => [flowData.value.plotTime![idx], value])
+        ? sourceData.map((value: any, idx: number) => [plotData.value.plotTime![idx], value])
         : [];
         
         return {
@@ -1658,9 +1670,9 @@ function createChartOption() {
         const color = colorMap[index].value || getRandomColor(colorMap[index], index+upperChartSources.value.length);
 
         // 添加安全检查
-        const sourceData = flowData.value[source];
+        const sourceData = plotData.value[source];
         const seriesData = Array.isArray(sourceData) 
-        ? sourceData.map((value: any, idx: number) => [flowData.value.plotTime![idx], value])
+        ? sourceData.map((value: any, idx: number) => [plotData.value.plotTime![idx], value])
         : [];
 
         return {
@@ -1774,7 +1786,7 @@ function createChartOption() {
               <path d="M12 7v5l3 3"/>
             </svg>
           </div>`
-          result += `${timeMarker}time: ${(params[0].data[0]+flowData.value.startTime).toFixed(3)}<br/>`
+          result += `${timeMarker}time: ${(params[0].data[0]+plotData.value.startTime).toFixed(3)}<br/>`
           
           // 安全处理每个参数值
           params.forEach((param: any) => {
@@ -1808,7 +1820,7 @@ function createChartOption() {
       yAxis: yAxisConfigArray,
       dataZoom: [
         { 
-          type: 'slider', show: true, xAxisIndex: [0, 1], brushSelect: false, filterMode: 'none' 
+          type: 'slider', show: true, xAxisIndex: [0, 1], brushSelect: false, filterMode: 'none', start: dataZoomStart, end: 100,
         },
         { 
           type: 'inside', xAxisIndex: [0, 1], zoomOnMouseWheel: true, 
@@ -2172,9 +2184,9 @@ onUnmounted(() => {
 
 // 监听flowData变化，更新图表
 watch(
-  () => flowData.value.plotTime?.length,
+  () => plotData.value.plotTime,
   () => {
-    if (flowData.value.plotTime?.length) {
+    if (plotData.value.plotTime) {
       updateChart()
     } else {
       createChart()

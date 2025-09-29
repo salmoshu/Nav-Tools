@@ -1,7 +1,6 @@
-import { ref } from "vue"
+import { computed, ref } from "vue"
 
-// 主数据存储对象，只包含时间相关的已知选项
-const flowData = ref<{
+type FlowDataType = {
   plotTime?: number[]
   timestamp?: number[]
   startTime?: number
@@ -9,14 +8,36 @@ const flowData = ref<{
   rawString?: string
   rawDataKeys?: string[]
   [key: string]: any[] | number | string | boolean | undefined
-}>({
+};
+
+// 主数据存储对象，只包含时间相关的已知选项
+const flowData = ref<FlowDataType>({
   plotTime: [],
   timestamp: [],
   startTime: 0,
   isBatchData: false,
   rawString: '',
   rawDataKeys: []
-})
+});
+
+// 如果开启滑窗，则显示100条数据
+const enableWindow = ref(false);
+const plotData = computed<FlowDataType>(() => {
+  if (enableWindow.value) {
+    const result: FlowDataType = {};
+    for (const key in flowData.value) {
+      const value = flowData.value[key];
+      if (Array.isArray(value)) {
+        result[key] = value.slice(-100);
+      } else {
+        result[key] = value;
+      }
+    }
+    return result;
+  } else {
+    return flowData.value;
+  }
+});
 
 export function useFlow() {
   const clearRawData = () => {
@@ -106,6 +127,7 @@ export function useFlow() {
       clearRawData()
       flowData.value.isBatchData = false
     }
+    enableWindow.value = true;
     
     // 处理原始字符串
     flowData.value.rawString! += data
@@ -224,6 +246,8 @@ export function useFlow() {
   
   return {
     flowData,
+    plotData,
+    enableWindow,
     addRawData,
     initRawData,
     clearRawData,
