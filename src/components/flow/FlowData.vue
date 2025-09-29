@@ -24,6 +24,9 @@
         
         <!-- 右侧按钮 -->
         <div class="right-buttons">
+          <el-button type="default" size="small" @click="refreshPlotData" class="refresh-btn">
+              刷新
+          </el-button>
           <el-button type="default" size="small" @click="clearPlotData" class="clear-btn">
             清除
           </el-button>
@@ -1074,6 +1077,10 @@ import { useFlowStore } from '@/stores/flow'
 // 在script setup中初始化store
 const flowStore = useFlowStore()
 
+function refreshPlotData() {
+  createChart()
+}
+
 // 修改clearPlotData函数
 function clearPlotData() {
   // 清除所有自定义属性
@@ -1608,14 +1615,12 @@ function createChartOption() {
         // 只提取上图表的Y轴0和1的数据进行计算
         const upperChartData = upperSeries.filter(s => s.yAxisIndex === 0 || s.yAxisIndex === 1) as LineSeriesOption[];
         upperMinMax = getScaleMulti(upperChartData);
-        console.log('上图表Y轴对齐范围upperMinMax:', upperMinMax);
       }
       
       if (lowerSeries.length > 0) {
         // 只提取下图表的Y轴2和3的数据进行计算，并将索引调整为0和1
         const lowerChartData = lowerSeries.filter(s => s.yAxisIndex === 2 || s.yAxisIndex === 3) as LineSeriesOption[];
         lowerMinMax = getScaleMulti(lowerChartData);
-        console.log('下图表Y轴对齐范围lowerMinMax:', lowerMinMax);
       }
     } else {
       // 双图单Y轴模式 - 上图表
@@ -1883,6 +1888,12 @@ function handleCtrlKeyUp(e: KeyboardEvent) {
 /**
  * 触屏事件
  */
+function getPinchDistance(touch1: Touch, touch2: Touch): number {
+  const dx = touch2.clientX - touch1.clientX
+  const dy = touch2.clientY - touch1.clientY
+  return Math.sqrt(dx * dx + dy * dy)
+}
+
 interface TouchAxisZoomOptions {
   enableX?: boolean;
   enableY?: boolean;
@@ -1942,91 +1953,165 @@ function touchAxisZoom(options: TouchAxisZoomOptions) {
 }
 
 interface touchEventParams {
-  startX: number;
-  startY: number;
-  isTouching: boolean;
+  startX: number
+  startY: number
+  isTouching: boolean
+  isPinching: boolean // 新增：标记是否为双指缩放
+  initialPinchDistance: number // 新增：初始双指距离
+  pinchCenterX: number // 新增：缩放中心点 X
+  pinchCenterY: number // 新增：缩放中心点 Y
 }
 
 const touchParams: touchEventParams = {
   startX: 0,
   startY: 0,
   isTouching: false,
+  isPinching: false,
+  initialPinchDistance: 0,
+  pinchCenterX: 0,
+  pinchCenterY: 0,
 }
 
 function touchStartEvent(e: TouchEvent) {
   if (e.touches.length === 1) {
+    // 单指触控：拖动模式
     touchParams.startX = e.touches[0].clientX
     touchParams.startY = e.touches[0].clientY
     touchParams.isTouching = true
-    touchAxisZoom({ enableX: true, enableY: false })
+    touchParams.isPinching = false
+    touchAxisZoom({ enableX: true, enableY: true })
+  } else if (e.touches.length === 2) {
+    // 双指触控：缩放模式
+    touchParams.isTouching = false
+    touchParams.isPinching = true
+    touchParams.initialPinchDistance = getPinchDistance(e.touches[0], e.touches[1])
+    touchParams.pinchCenterX = (e.touches[0].clientX + e.touches[1].clientX) / 2
+    touchParams.pinchCenterY = (e.touches[0].clientY + e.touches[1].clientY) / 2
+    touchAxisZoom({ enableX: true, enableY: true })
   }
 }
 
 function touchMoveEvent(e: TouchEvent) {
-  if (!touchParams.isTouching || e.touches.length !== 1) return
-    
-  const currentX = e.touches[0].clientX
-  const deltaX = currentX - touchParams.startX
-
-  const currentY = e.touches[0].clientY
-  const deltaY = currentY - touchParams.startY
-  
-  // 只在有显著移动时触发拖拽
-  if (Math.abs(deltaX) >= 5 || Math.abs(deltaY) >= 5) {
+  if (touchParams.isPinching && e.touches.length === 2) {
+    // 双指缩放逻辑
+    const currentDistance = getPinchDistance(e.touches[0], e.touches[1])
+    const scale = touchParams.initialPinchDistance / currentDistance // 缩放比例（<1 放大，>1 缩小）
     const option = chart?.getOption()
 
-    // 根据方向参数处理不同的拖动逻辑
+    if (!Array.isArray(option?.dataZoom)) return
+
+    // 计算缩放中心在图表中的相对位置（0到1）
+    const chartRect = chartRef.value?.getBoundingClientRect()
+    if (!chartRect) return
+    const relativeX = (touchParams.pinchCenterX - chartRect.left) / chartRect.width
+    const relativeY = (touchParams.pinchCenterY - chartRect.top) / chartRect.height
+
+    const deltaX = Math.abs(e.touches[1].clientX - e.touches[0].clientX)
+    const deltaY = Math.abs(e.touches[1].clientY - e.touches[0].clientY)
+
     if (Math.abs(deltaX) >= Math.abs(deltaY)) {
-      // touchAxisZoom({ enableX: true, enableY: false })
-      // 水平拖动 - 控制X轴
-      if (!Array.isArray(option?.dataZoom)) return
-      const xAxisZoom = option.dataZoom.find((dz: any) =>
+      // 处理 X 轴缩放
+      const xAxisZooms = option.dataZoom.filter((dz: any) => 
         dz.type === 'inside' && dz.xAxisIndex !== undefined
       )
-      
-      if (xAxisZoom) {
-        // if (!chartRef.value) return
+      xAxisZooms.forEach((xAxisZoom: any) => {
+        if (!Array.isArray(option?.dataZoom)) return
+        const dataZoomIndex = option.dataZoom.findIndex((dz: any) => dz === xAxisZoom)
         const range = xAxisZoom.end - xAxisZoom.start
-        const moveAmount = chartRef.value ? (deltaX / chartRef.value.clientWidth) * 100 : 0
-
+        const newRange = Math.min(100, Math.max(5, range * scale)) // 限制最小范围为 5%
+        const center = xAxisZoom.start + range * relativeX // 缩放中心点
+  
         chart?.dispatchAction({
           type: 'dataZoom',
-          xAxisIndex: xAxisZoom.xAxisIndex,
-          start: Math.max(0, Math.min(100 - range, xAxisZoom.start + moveAmount)),
-          end: Math.max(range, Math.min(100, xAxisZoom.end + moveAmount))
-        })
-        
-        touchParams.startX = currentX;
-        // touchAxisZoom({ enableX: true, enableY: true })
-      }
-    } else {
-      // touchAxisZoom({ enableX: false, enableY: true })
-      // 垂直拖动 - 控制Y轴
-      if (!Array.isArray(option?.dataZoom)) return
-      const yAxisZooms = option?.dataZoom?.filter((dz: any) => 
-        dz.type === 'inside' && dz.yAxisIndex !== undefined
-      )
-
-      yAxisZooms?.forEach((yAxisZoom: any) => {
-        const range = yAxisZoom.end - yAxisZoom.start
-        const moveAmount = chartRef.value ? (deltaY / chartRef.value.clientHeight) * 100 : 0
-        
-        chart?.dispatchAction({
-          type: 'dataZoom',
-          yAxisIndex: yAxisZoom.yAxisIndex,
-          start: Math.max(0, Math.min(100 - range, yAxisZoom.start - moveAmount)),
-          end: Math.max(range, Math.min(100, yAxisZoom.end - moveAmount))
+          dataZoomIndex: dataZoomIndex,
+          start: Math.max(0, Math.min(100 - newRange, center - (newRange * relativeX))),
+          end: Math.max(newRange, Math.min(100, center + (newRange * (1 - relativeX))))
         })
       })
-      
-      touchParams.startY = currentY
-      // touchAxisZoom({ enableX: true, enableY: true })
+    } else {
+      // 处理 Y 轴缩放
+      const yAxisZooms = option.dataZoom.filter((dz: any) => 
+        dz.type === 'inside' && dz.yAxisIndex !== undefined
+      )
+      yAxisZooms.forEach((yAxisZoom: any) => {
+        if (!Array.isArray(option?.dataZoom)) return;
+        const dataZoomIndex = option.dataZoom.findIndex((dz: any) => dz === yAxisZoom)
+        const range = yAxisZoom.end - yAxisZoom.start
+        const newRange = Math.min(100, Math.max(5, range * scale)) // 限制最小范围为 5%
+        const center = yAxisZoom.start + range * relativeY // 缩放中心点
+  
+        chart?.dispatchAction({
+          type: 'dataZoom',
+          dataZoomIndex: dataZoomIndex,
+          start: Math.max(0, Math.min(100 - newRange, center - (newRange * relativeY))),
+          end: Math.max(newRange, Math.min(100, center + (newRange * (1 - relativeY))))
+        })
+      })
+    }
+
+    // 更新初始距离以支持连续缩放
+    touchParams.initialPinchDistance = currentDistance
+  } else if (touchParams.isTouching && e.touches.length === 1) {
+    // 单指拖动逻辑（保持 X 轴反转方向）
+    const currentX = e.touches[0].clientX
+    const deltaX = currentX - touchParams.startX
+
+    const currentY = e.touches[0].clientY
+    const deltaY = currentY - touchParams.startY
+    
+    if (Math.abs(deltaX) >= 5 || Math.abs(deltaY) >= 5) {
+      const option = chart?.getOption()
+
+      if (Math.abs(deltaX) >= Math.abs(deltaY)) {
+        // 水平拖动 - 控制 X 轴
+        if (!Array.isArray(option?.dataZoom)) return
+        const xAxisZoom = option.dataZoom.find((dz: any) =>
+          dz.type === 'inside' && dz.xAxisIndex !== undefined
+        )
+        if (xAxisZoom) {
+          const range = xAxisZoom.end - xAxisZoom.start
+          const moveAmount = chartRef.value ? (deltaX / chartRef.value.clientWidth) * 100 : 0
+          const dataZoomIndex = option.dataZoom.findIndex((dz: any) => dz === xAxisZoom)
+
+          chart?.dispatchAction({
+            type: 'dataZoom',
+            dataZoomIndex: dataZoomIndex,
+            start: Math.max(0, Math.min(100 - range, xAxisZoom.start - moveAmount)),
+            end: Math.max(range, Math.min(100, xAxisZoom.end - moveAmount))
+          })
+          
+          touchParams.startX = currentX
+        }
+      } else {
+        // 垂直拖动 - 控制 Y 轴
+        if (!Array.isArray(option?.dataZoom)) return
+        const yAxisZooms = option?.dataZoom?.filter((dz: any) => 
+          dz.type === 'inside' && dz.yAxisIndex !== undefined
+        )
+
+        yAxisZooms?.forEach((yAxisZoom: any) => {
+          if (!Array.isArray(option?.dataZoom)) return
+          const range = yAxisZoom.end - yAxisZoom.start
+          const moveAmount = chartRef.value ? (deltaY / chartRef.value.clientHeight) * 100 : 0
+          const dataZoomIndex = option.dataZoom.findIndex((dz: any) => dz === yAxisZoom)
+          
+          chart?.dispatchAction({
+            type: 'dataZoom',
+            dataZoomIndex: dataZoomIndex,
+            start: Math.max(0, Math.min(100 - range, yAxisZoom.start + moveAmount)),
+            end: Math.max(range, Math.min(100, yAxisZoom.end + moveAmount)),
+          })
+        })
+        
+        touchParams.startY = currentY
+      }
     }
   }
 }
 
 function touchEndEvent(e: TouchEvent) {
   touchParams.isTouching = false
+  touchParams.isPinching = false
   touchAxisZoom({ enableX: true, enableY: true })
 }
 
@@ -2034,8 +2119,12 @@ function setupTouchEvents() {
   if (!chartRef.value) return
 
   touchParams.isTouching = false
+  touchParams.isPinching = false
   touchParams.startX = 0
   touchParams.startY = 0
+  touchParams.initialPinchDistance = 0
+  touchParams.pinchCenterX = 0
+  touchParams.pinchCenterY = 0
   
   chartRef.value.addEventListener('touchstart', touchStartEvent, { passive: false }) // 触摸开始
   chartRef.value.addEventListener('touchmove', touchMoveEvent, { passive: false }) // 触摸移动
