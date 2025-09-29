@@ -11,7 +11,7 @@ import { useFlowStore } from "@/stores/flow";
  * 1. 状态管理
  */
 const isEditMode = ref(false);
-const showStatusBar = ref(true);
+const showStatusBar = ref<boolean | null>(null);
 const editStatusConfig = ref<any>(null);
 const newStatusConfig = ref({
   fieldName: '',

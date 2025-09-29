@@ -3,6 +3,7 @@ import type { DefineComponent } from 'vue'
 import { appConfig } from '@/settings/config'
 import { ElMessage } from 'element-plus'
 import emitter from '@/hooks/useMitt'
+import { showStatusBar } from '@/composables/useStatusManager'
 
 export interface LayoutItem {
   titleName: string
@@ -199,6 +200,15 @@ export function useLayoutManager() {
     }
   })
 
+  let showStatusBarFlag = 0;
+  watch(showStatusBar, () => {
+    if (showStatusBarFlag === 0) {
+      showStatusBarFlag = 1
+      return
+    }
+    emitter.emit('layout-changed');
+  })
+
   // 更新动态组件映射
   const updateDynamicComponentMap = (mode: string) => {
     const componentMap = getDynamicComponentMap(mode)
@@ -257,6 +267,7 @@ export function useLayoutManager() {
     }))
     
     localStorage.setItem(`dashboard-layout-${currentFuncMode.value}`, JSON.stringify(layoutToSave))
+    localStorage.setItem(`statusbar-layout-${currentFuncMode.value}`, JSON.stringify(showStatusBar.value))
   }
 
   // 创建最佳布局 = 组件数量 * 组件最佳宽度
@@ -306,11 +317,18 @@ export function useLayoutManager() {
     updateDynamicComponentMap(currentFuncMode.value)
 
     const savedLayout = localStorage.getItem(`dashboard-layout-${currentFuncMode.value}`)
+    const savedStatusBar = localStorage.getItem(`statusbar-layout-${currentFuncMode.value}`)
+
+    if (savedStatusBar) {
+      showStatusBar.value = JSON.parse(savedStatusBar)
+    } else {
+      showStatusBar.value = true
+    }
     
     if (savedLayout) {
       try {
-        const parsed = JSON.parse(savedLayout)
-        await loadLayoutFromConfig(parsed)
+        const parsedLayout = JSON.parse(savedLayout)
+        await loadLayoutFromConfig(parsedLayout)
       } catch (error) {
         console.error('Failed to load saved layout:', error)
         await createDefaultLayout()
