@@ -56,7 +56,7 @@
     </div>
     
     <div ref="consoleContent" class="console-content" @keydown.ctrl.f.prevent="toggleSearch">
-      <div v-for="message in rawMessages" :key="getMessageKey(message)" class="message-line">
+      <div v-for="message in visibleMessages" :key="getMessageKey(message)" class="message-line">
         <div v-if="!dataFilter || (message.dataType === dataFormat && message.isValid)">
           <span v-if="addTimestamp" class="timestamp">{{ message.timestamp }}: </span>
           <span 
@@ -83,92 +83,29 @@ import { ElMessage, ElButton, ElSelect, ElOption, ElInput } from 'element-plus';
 import { navMode } from '@/settings/config';
 import { useConsole } from '@/composables/flow/useConsole';
 
-const { 
+const {
   consoleContent,
   autoScroll,
-  rawMessages, 
-  msgCount, 
-  msgNmeaCount, 
-  msgJsonCount, 
+  rawMessages,
+  visibleMessages, // 使用visibleMessages替代rawMessages
+  msgCount,
   dataFormat,
   searchQuery,
   showSearch,
   searchInput,
   searchResults,
   currentResultIndex,
-  isValidNmea,
-  isValidJson,
+  handleRawData,
   clearConsole,
   toggleSearch,
   clearSearch,
   performSearch,
   scrollToResult,
   isMatch,
+  initScrollListener,
+  removeScrollListener,
+  toggleAutoScrollLocal // 使用新的toggleAutoScrollLocal函数
 } = useConsole();
-
-// 处理接收到的Flow数据
-let totalString = ''
-const handleRawData = (rawData: string) => {
-  totalString += rawData;
-
-  if (totalString.includes('\n')) {
-    const now = new Date();
-    const timestamp = now.toLocaleTimeString() + '.' + now.getMilliseconds().toString().padStart(3, '0');
-    const lines = totalString.split('\n');
-    
-    // 保留最后一行，因为它可能是不完整的
-    totalString = lines[lines.length - 1];
-
-    // 处理所有完整的行（除了最后一行）
-    for (let i = 0; i < lines.length - 1; i++) {
-      const line = lines[i];
-      if (line.trim() !== '') {
-        // 检测是否为JSON格式
-        let isValid = true;
-
-        if (dataFormat.value === 'nmea') {
-          isValid = isValidNmea(line);
-          if (isValid) {
-            msgNmeaCount.value++;
-          }
-          rawMessages.value.push({
-            timestamp,
-            raw: line,
-            dataType: 'nmea',
-            isValid
-          });
-          msgCount.value = msgNmeaCount.value;
-        } else {
-          isValid = isValidJson(line);
-          if (isValid) {
-            msgJsonCount.value++;
-          }
-          rawMessages.value.push({
-            timestamp,
-            raw: line,
-            dataType: 'json',
-            isValid
-          });
-          msgCount.value = msgJsonCount.value;
-        }
-      }
-    }
-
-    // 限制消息数量
-    if (rawMessages.value.length > 100000) {
-      rawMessages.value.shift();
-    }
-
-    // 优化自动滚动
-    if (autoScroll.value) {
-      nextTick(() => {
-        if (consoleContent.value) {
-          consoleContent.value.scrollTop = consoleContent.value.scrollHeight;
-        }
-      });
-    }
-  }
-};
 
 const saveConsoleData = () => {
   if (rawMessages.value.length === 0) {
@@ -209,14 +146,7 @@ const saveConsoleData = () => {
 
 // 切换自动滚动
 const toggleAutoScroll = () => {
-  autoScroll.value = !autoScroll.value;
-  if (autoScroll.value) {
-    nextTick(() => {
-      if (consoleContent.value) {
-        consoleContent.value.scrollTop = consoleContent.value.scrollHeight;
-      }
-    });
-  }
+  toggleAutoScrollLocal();
 };
 
 const addTimestamp = ref(true);
@@ -291,6 +221,8 @@ onMounted(() => {
     if (consoleRoot.value) {
       consoleRoot.value.addEventListener('keyup', handleSearchEvent);
     }
+    // 初始化滚动监听
+    initScrollListener();
   });
 });
 
@@ -301,6 +233,8 @@ onUnmounted(() => {
   if (consoleRoot.value) {
     consoleRoot.value.removeEventListener('keyup', handleSearchEvent);
   }
+  // 移除滚动监听
+  removeScrollListener();
 });
 </script>
 
