@@ -23,12 +23,15 @@
         
         <!-- 将重置、清除按钮放在右侧 -->
         <div class="right-buttons">
+          <el-button :disabled="deviceConnected" type="default" size="small" @click="toggleSlideWindow" class="layout-btn">
+            <span :style="{ textDecoration: enableWindow ? 'line-through' : 'none' }">滑窗</span>
+          </el-button>
           <!-- 添加视图配置按钮 -->
           <el-button type="default" size="small" @click="showViewConfig" class="control-btn config-btn">
             配置
           </el-button>
           <el-button type="default" size="small" @click="resetZoom" class="zoom-btn">重置</el-button>
-          <el-button type="default" size="small" @click="clearTrack" class="clear-btn">清除</el-button>
+          <el-button type="default" size="small" @click="toggleDataUpdate" class="clear-btn">{{ isDataUpdating ? '暂停' : '更新' }}</el-button>
         </div>
       </div>
     </div>
@@ -70,15 +73,17 @@
 
 <script setup>
 import * as echarts from 'echarts';
-import { ref, onMounted, onUnmounted, watch, nextTick, computed } from 'vue';
+import { ref, onMounted, onUnmounted, nextTick, computed } from 'vue';
 import { useFlow } from '../../composables/flow/useFlow';
+import { useDevice } from '@/hooks/useDevice'
 import { ScatterChart } from 'echarts/charts';
 import { GridComponent } from 'echarts/components';
 import { CanvasRenderer } from 'echarts/renderers';
 import { ElMessage } from 'element-plus';
 
 // 注册ECharts组件
-const { flowData, clearRawData } = useFlow();
+const { plotData, toggleSlideWindow, enableWindow } = useFlow();
+const { deviceConnected } = useDevice()
 
 echarts.use([ScatterChart, GridComponent, CanvasRenderer]);
 
@@ -99,13 +104,13 @@ const selectedYField = ref('');
 
 // 计算可用数据源
 const availableSources = computed(() => {
-  if (!flowData.value || !flowData.value.plotTime) return [];
-  return Object.keys(flowData.value).filter(
+  if (!plotData.value || !plotData.value.plotTime) return [];
+  return Object.keys(plotData.value).filter(
     key => key !== 'plotTime' && 
     key !== 'timestamp' && 
     key !== 'startTime' && 
     key !== 'rawDataKeys' &&
-    flowData.value[key].length > 0
+    plotData.value[key].length > 0
   );
 });
 
@@ -134,7 +139,7 @@ function applyViewConfig() {
   }
   
   // 清除现有轨迹数据
-  trackData = [];
+  trackData.splice(0, trackData.length);
   
   // 更新图表
   if (chartInstance.value) {
@@ -430,50 +435,25 @@ function updateFlowData() {
   }
   
   // 从flowData中获取所有数据
-  const xData = flowData.value[selectedXField.value];
-  const yData = flowData.value[selectedYField.value];
+  const xData = plotData.value[selectedXField.value];
+  const yData = plotData.value[selectedYField.value];
   
   if (!xData || !yData || xData.length === 0 || yData.length === 0) {
     return;
   }
   
-  // 检查是否为批量数据模式（例如文件载入）
-  if (flowData.value.isBatchData) {
-    // 批量数据模式：加载所有历史数据
-    trackData = [];
-    const dataLength = Math.min(xData.length, yData.length);
-    
-    for (let i = 0; i < dataLength; i++) {
-      const x = xData[i];
-      const y = yData[i];
-      
-      // 确保数据是有效的数字
-      if (typeof x === 'number' && typeof y === 'number' && !isNaN(x) && !isNaN(y)) {
-        const roundedX = Math.round(x * 1000) / 1000;
-        const roundedY = Math.round(y * 1000) / 1000;
-        trackData.push([roundedX, roundedY]);
-      }
-    }
-  } else {
-    // 实时数据模式：添加最新的数据点
-    const latestIndex = Math.min(xData.length - 1, yData.length - 1);
-    const x = xData[latestIndex];
-    const y = yData[latestIndex];
+  trackData.splice(0, trackData.length);
+  const dataLength = Math.min(xData.length, yData.length);
+
+  for (let i = 0; i < dataLength; i++) {
+    const x = xData[i];
+    const y = yData[i];
     
     // 确保数据是有效的数字
-    if (typeof x !== 'number' || typeof y !== 'number' || isNaN(x) || isNaN(y)) {
-      return;
-    }
-    
-    const roundedX = Math.round(x * 1000) / 1000;
-    const roundedY = Math.round(y * 1000) / 1000;
-
-    // 添加到轨迹数据
-    trackData.push([roundedX, roundedY]);
-
-    // 限制最大数据点数量
-    if (trackData.length > maxTrackPoints) {
-      trackData.shift();
+    if (typeof x === 'number' && typeof y === 'number' && !isNaN(x) && !isNaN(y)) {
+      const roundedX = Math.round(x * 1000) / 1000;
+      const roundedY = Math.round(y * 1000) / 1000;
+      trackData.push([roundedX, roundedY]);
     }
   }
 
@@ -555,28 +535,6 @@ function resetZoom() {
   initChart();
 }
 
-// 清除轨迹
-function clearTrack() {
-  trackData = [];
-  firstPosition = null;
-  // clearRawData();
-
-  if (chartInstance.value) {
-    chartInstance.value.setOption({
-      series: [
-        {
-          name: '历史轨迹',
-          data: [],
-        },
-        {
-          name: '当前位置',
-          data: [],
-        },
-      ],
-    });
-  }
-}
-
 // 更新点大小
 function updatePointSize() {
   if (chartInstance.value) {
@@ -647,6 +605,32 @@ function maintainEqualAxisScale() {
 let handleKeyDown = null;
 let dataUpdateInterval = null;
 
+function pauseDataUpdate() {
+  if (dataUpdateInterval) {
+    clearInterval(dataUpdateInterval);
+    dataUpdateInterval = null;
+  }
+}
+
+function resumeDataUpdate() {
+  if (!dataUpdateInterval) {
+    dataUpdateInterval = setInterval(() => {
+      updateFlowData();
+    }, 100);
+  }
+}
+
+const isDataUpdating = ref(true);
+
+function toggleDataUpdate() {
+  isDataUpdating.value = !isDataUpdating.value;
+  if (isDataUpdating.value) {
+    resumeDataUpdate();
+  } else {
+    pauseDataUpdate();
+  }
+}
+
 // 组件挂载时初始化
 onMounted(() => {
   // 修复：使用nextTick确保DOM完全渲染后再初始化图表
@@ -665,9 +649,7 @@ onMounted(() => {
   });
 
   // 每100ms更新一次数据
-  dataUpdateInterval = setInterval(() => {
-    updateFlowData();
-  }, 100);
+  resumeDataUpdate();
 
   window.addEventListener('keydown', handleKeyDown);
 });

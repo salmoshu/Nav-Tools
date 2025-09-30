@@ -1,6 +1,6 @@
 {
   "name": "nav-tools",
-  "version": "v0.2.7-20250928",
+  "version": "v0.2.8-20251008",
   "main": "dist-electron/main/index.js",
   "description": "Nav-Tools is a desktop-grade visualization workbench built with Electron & Vue3, tailored for roboticists.",
   "author": "Winchell.Hu <winchell.hu@outlook.com>",

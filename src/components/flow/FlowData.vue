@@ -467,7 +467,7 @@ import { useConsole } from '@/composables/flow/useConsole'
 import { useDevice } from '@/hooks/useDevice'
 
 // 初始化数据流处理
-const { flowData, plotData, enableWindow, clearRawData } = useFlow()
+const { flowData, plotData, enableWindow, toggleSlideWindow, clearRawData } = useFlow()
 const { searchQuery, performSearch } = useConsole()
 const { deviceConnected } = useDevice()
 
@@ -1081,10 +1081,6 @@ import { useFlowStore } from '@/stores/flow'
 
 // 在script setup中初始化store
 const flowStore = useFlowStore()
-
-function toggleSlideWindow() {
-  enableWindow.value = !enableWindow.value
-}
 
 function refreshPlotData() {
   createChart()

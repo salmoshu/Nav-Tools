@@ -40,6 +40,10 @@ const plotData = computed<FlowDataType>(() => {
 });
 
 export function useFlow() {
+  const toggleSlideWindow = () => {
+    enableWindow.value = !enableWindow.value
+  }
+
   const clearRawData = () => {
     // 重置所有数据
     flowData.value = {
@@ -248,6 +252,7 @@ export function useFlow() {
     flowData,
     plotData,
     enableWindow,
+    toggleSlideWindow,
     addRawData,
     initRawData,
     clearRawData,
