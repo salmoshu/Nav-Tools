@@ -214,6 +214,7 @@ onMounted(() => {
   } else {
     dataFormat.value = 'json';
   }
+
   window.ipcRenderer.on("serial-data-to-renderer", handleSerialData);
 
   // 添加全局ESC键事件监听
