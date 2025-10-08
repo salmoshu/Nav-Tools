@@ -1,7 +1,7 @@
 import { ref, computed } from 'vue'
 import { useGnssStore } from '@/stores/gnss'
 
-export const MAX_NMEA_DATA = 5*60    // 5min 先存储5分钟数据以规避系统崩溃的问题
+const MAX_NMEA_DATA = 12*3600    // 12h
 const MAX_SNR_DATA = 50*3
 
 // 使用环形缓冲区管理nmeaData
@@ -14,11 +14,19 @@ const satelliteSnrBuffer = Array(MAX_SNR_DATA).fill(null)
 const satelliteSnrData = ref<SatelliteSnrData[]>([])
 const utcTime = [0, 0, 0, 0, 0, 0]
 
+function llhToEnu(latitude: number, longitude: number, firstLatitude: number, firstLongitude: number) {
+  const enuE = (longitude - firstLongitude) * 111320 * Math.cos(firstLatitude * Math.PI / 180);
+  const enuN = (latitude - firstLatitude) * 110574;
+  const roundedE = Math.round(enuE * 1000) / 1000;
+  const roundedN = Math.round(enuN * 1000) / 1000;
+  return [roundedE, roundedN]
+}
+
 // 优化parseNmea函数中的数组操作
 function addNmeaData(data: NmeaData) {
   nmeaDataBuffer[nmeaDataIndex] = data
   nmeaDataIndex = (nmeaDataIndex + 1) % MAX_NMEA_DATA
-  
+
   // 更新响应式数据
   // nmeaData.value = nmeaDataBuffer.filter(item => item !== null)
   nmeaData.value = nmeaDataBuffer.slice(0, nmeaDataIndex)
@@ -68,9 +76,13 @@ enum NmeaType {
 // NMEA数据接口定义
 interface NmeaData {
   time: string | null
+  firstLatitude: number | null
+  firstLongitude: number | null
   latitude: number | null
   longitude: number | null
   altitude: number | null
+  enuE: number | null
+  enuN: number | null
   speed: number | null
   course: number | null
   satellites: number | null
@@ -79,6 +91,7 @@ interface NmeaData {
   hdop: number | null
   vdop: number | null
   status: 'A' | 'V' | null // A=有效, V=无效
+  quality: number | null
   mode: string | null
   date: string | null
   raw: string
@@ -165,9 +178,14 @@ interface SatelliteSnrData {
 }
 
 const currentData = ref<NmeaData>({
+  time: null,
+  firstLatitude: null,
+  firstLongitude: null,
   latitude: null,
   longitude: null,
   altitude: null,
+  enuE: null,
+  enuN: null,
   speed: null,
   course: null,
   satellites: null,
@@ -176,9 +194,9 @@ const currentData = ref<NmeaData>({
   hdop: null,
   vdop: null,
   status: null,
+  quality: null,
   mode: null,
   date: null,
-  time: null,
   raw: ''
 })
 
@@ -210,6 +228,26 @@ const latestPosition = computed(() => {
   }
   return null
 })
+
+const enableWindow = ref(false);
+const plotData = computed(() => {
+  if (enableWindow.value) {
+    if (Array.isArray(nmeaData.value)) {
+      const res = [];
+      for (let d of nmeaData.value.slice(-100)) {
+        res.push([d.enuE, d.enuN, d.quality])
+      }
+      return res;
+    }
+    return [];
+  } else {
+    const res = [];
+    for (let d of nmeaData.value) {
+      res.push([d.enuE, d.enuN, d.quality])
+    }
+    return res;
+  }
+});
 
 const latestGgaPosition = computed(() => {
   // 从后往前遍历，找到第一个有效位置
@@ -243,6 +281,7 @@ export function numberToQuality (num: number) {
 export function useNmea() {
   // 添加数据缓冲区
   const buffer = ref('')
+  let firstLLh: any = null
 
   // 计算属性：信号质量
   const signalQuality = computed(() => {
@@ -367,6 +406,7 @@ export function useNmea() {
       satellites: parseInt(data.satellites) || null,
       hdop: parseFloat(data.hdop) || null,
       status: data.quality === '0' ? 'V' : 'A',
+      quality: parseInt(data.quality),
       raw: sentence
     }
   }
@@ -556,10 +596,26 @@ export function useNmea() {
         ...currentData.value,
         ...parsedData,
       }
-      currentData.value = newData
-      addNmeaData(newData)
-      // console.log('nmeaData:', nmeaDataIndex);
-      // console.log('ggaData:', ggaDataIndex);
+
+      if (firstLLh === null) {
+        firstLLh = [newData.latitude, newData.longitude, newData.altitude];
+      }
+
+      newData.firstLatitude = firstLLh[0];
+      newData.firstLongitude = firstLLh[1];
+
+      if (!newData || !newData.latitude || !newData.longitude || !newData.firstLatitude || !newData.firstLongitude) {
+        return NmeaType.UNKNOWN;
+      }
+
+      let enuEN = llhToEnu(newData.latitude, newData.longitude, newData.firstLatitude, newData.firstLongitude);
+      newData.enuE = enuEN[0];
+      newData.enuN = enuEN[1];
+
+      currentData.value = newData;
+
+      addNmeaData(newData);
+
       return NmeaType.GGA
     } else if (sentence.includes('RMC')) {
       parsedData = parseRmc(sentence)
@@ -605,9 +661,14 @@ export function useNmea() {
     ggaData.value = []
     satelliteSnrData.value = []  // 确保清除卫星数据
     currentData.value = {
+      time: null,
+      firstLatitude: null,
+      firstLongitude: null,
       latitude: null,
       longitude: null,
       altitude: null,
+      enuE: null,
+      enuN: null,
       speed: null,
       course: null,
       satellites: null,
@@ -616,9 +677,9 @@ export function useNmea() {
       hdop: null,
       vdop: null,
       status: null,
+      quality: null,
       mode: null,
       date: null,
-      time: null,
       raw: ''
     }
     currentGgaData.value = {
@@ -742,6 +803,9 @@ export function useNmea() {
       satelliteSnrData, // 添加卫星SNR数据
       signalQuality,
       fixStatus,
+      enableWindow,
+      plotData,
+      // toggleSlideWindow,
       parseNmea,
       parseNmeaBatch,
       getStatistics,

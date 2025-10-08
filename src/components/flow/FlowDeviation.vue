@@ -4,7 +4,7 @@
       <div class="controls">
 
         <!-- 添加轨迹点尺寸调节滑块 -->
-        <span class="switch-label">追踪:</span>
+        <span class="switch-label">跟踪:</span>
         <el-switch v-model="isTracking" @change="toggleTracking" class="tracking-switch" />
         
         <!-- 添加轨迹点尺寸调节滑块 -->
@@ -73,7 +73,7 @@
 
 <script setup>
 import * as echarts from 'echarts';
-import { ref, onMounted, onUnmounted, nextTick, computed } from 'vue';
+import { ref, watch, onMounted, onUnmounted, nextTick, computed } from 'vue';
 import { useFlow } from '../../composables/flow/useFlow';
 import { useDevice } from '@/hooks/useDevice'
 import { ScatterChart } from 'echarts/charts';
@@ -645,6 +645,12 @@ onMounted(() => {
           initChart();
         }
       }, 300);
+    }
+  });
+
+  watch(deviceConnected, () => {
+    if (deviceConnected.value) {
+      enableWindow.value = true;
     }
   });
 

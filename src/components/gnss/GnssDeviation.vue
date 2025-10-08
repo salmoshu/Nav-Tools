@@ -2,14 +2,11 @@
   <div class="deviation-container">
     <div class="control-panel">
       <div class="controls">
+        <span class="switch-label">跟踪:</span>
         <el-switch v-model="isTracking" @change="toggleTracking" class="tracking-switch" />
-        <span class="switch-label">实时追踪</span>
-        <el-button type="primary" size="small" @click="resetZoom" class="control-btn zoom-btn">重置</el-button>
-        <el-button type="primary" size="small" @click="clearTrack" class="control-btn clear-btn">清除轨迹</el-button>
-        
         <!-- 添加轨迹点尺寸调节滑块 -->
         <div class="point-size-control">
-          <span class="size-label">轨迹尺寸:</span>
+          <span class="size-label">尺寸:</span>
           <el-slider
             v-model="pointSize"
             :min="5"
@@ -19,6 +16,14 @@
             @change="updatePointSize"
           />
           <span class="size-value">{{ pointSize }}</span>
+        </div>
+
+        <div class="right-buttons">
+          <el-button :disabled="deviceConnected" type="default" size="small" @click="toggleSlideWindow" class="layout-btn">
+            <span :style="{ textDecoration: enableWindow ? 'line-through' : 'none' }">滑窗</span>
+          </el-button>
+          <el-button type="primary" size="small" @click="resetZoom" class="control-btn zoom-btn">重置</el-button>
+          <el-button type="primary" size="small" @click="clearTrack" class="control-btn clear-btn">清除</el-button>
         </div>
       </div>
     </div>
@@ -31,29 +36,37 @@
 <script setup>
 import * as echarts from 'echarts';
 import { ref, onMounted, onUnmounted, watch, nextTick } from 'vue';
-import { useNmea, MAX_NMEA_DATA } from '../../composables/gnss/useNmea';
+import { useNmea } from '../../composables/gnss/useNmea';
 import { ScatterChart } from 'echarts/charts';
 import { GridComponent } from 'echarts/components';
 import { CanvasRenderer } from 'echarts/renderers';
+import { useDevice } from '@/hooks/useDevice'
 
 echarts.use([ScatterChart, GridComponent, CanvasRenderer]);
 
-const { latestPosition, latestGgaPosition, clearData } = useNmea();
+const { latestPosition, latestGgaPosition, enableWindow, plotData, clearData } = useNmea();
+const { deviceConnected } = useDevice()
 
 const chartRef = ref(null);
 const chartInstance = ref(null);
 const isTracking = ref(true);
-const deviation = ref('');
+// const deviation = ref('');
 const padding = ref(10000); // 默认正负10km
 const pointSize = ref(10); // 初始值与图表配置一致
 const chartDom = ref(null); // 添加chartDom引用
 const chartContainerRef = ref(null); // 添加容器引用
 
-let trackData = [];
+// let trackData = [];
 let firstPosition = null;
-const maxTrackPoints = 3600*12;
+// const maxTrackPoints = 3600*12;
 let resizeObserver = null;
 const minPadding = 10000; // 最小范围正负10km
+const MAX_LARGE_THRESHOLD = 5*60    // 5min 先存储5分钟数据以规避系统崩溃的问题
+
+function toggleSlideWindow() {
+  enableWindow.value = !enableWindow.value;
+  handleNmeaUpdate();
+}
 
 function setupResizeObserver() {
   if (!chartRef.value) return;
@@ -226,7 +239,7 @@ function initChart() {
         },
         sampling: 'lttb',
         large: true,
-        largeThreshold: MAX_NMEA_DATA,
+        largeThreshold: MAX_LARGE_THRESHOLD,
       },
       {
         name: '当前位置',
@@ -239,7 +252,7 @@ function initChart() {
         },
         sampling: 'lttb',
         large: true,
-        largeThreshold: MAX_NMEA_DATA,
+        largeThreshold: MAX_LARGE_THRESHOLD,
       },
     ],
   };
@@ -386,21 +399,21 @@ function handleNmeaUpdate() {
   const roundedX = Math.round(x * 1000) / 1000;
   const roundedY = Math.round(y * 1000) / 1000;
 
-  deviation.value = Math.sqrt(x * x + y * y).toFixed(2);
-  trackData.push([roundedX, roundedY, Number(latest.quality)]);
+  // deviation.value = Math.sqrt(x * x + y * y).toFixed(2);
+  // trackData.push([roundedX, roundedY, Number(latest.quality)]);
 
-  if (trackData.length > maxTrackPoints) {
-    trackData.shift();
-  }
+  // if (trackData.length > maxTrackPoints) {
+  //   trackData.shift();
+  // }
 
-  let displayTrackData = [...trackData];
+  let displayTrackData = [...plotData.value];
   let currentDisplayPoint = [roundedX, roundedY, Number(latest.quality)];
 
-  if (isTracking.value && trackData.length > 0) {
-    const latestPoint = trackData[trackData.length - 1];
+  if (isTracking.value && plotData.value.length > 0) {
+    const latestPoint = plotData.value[plotData.value.length - 1];
     const offsetX = latestPoint[0];
     const offsetY = latestPoint[1];
-    displayTrackData = trackData.map(point => [point[0] - offsetX, point[1] - offsetY, point[2]]);
+    displayTrackData = plotData.value.map(point => [point[0] - offsetX, point[1] - offsetY, point[2]]);
     currentDisplayPoint = [0, 0, Number(latest.quality)];
   }
 
@@ -438,11 +451,11 @@ function handleNmeaUpdate() {
 }
 
 function toggleTracking() {
-  if (isTracking.value && trackData.length > 0) {
-    const latestPoint = trackData[trackData.length - 1];
+  if (isTracking.value && plotData.value.length > 0) {
+    const latestPoint = plotData.value[plotData.value.length - 1];
     const offsetX = latestPoint[0];
     const offsetY = latestPoint[1];
-    const displayTrackData = trackData.map(point => [point[0] - offsetX, point[1] - offsetY, point[2]]);
+    const displayTrackData = plotData.value.map(point => [point[0] - offsetX, point[1] - offsetY, point[2]]);
     const currentDisplayPoint = [0, 0];
 
     const opt = chartInstance.value.getOption();
@@ -467,8 +480,8 @@ function toggleTracking() {
       dataZoom: getDataZoomConfig(-xSpan, xSpan, -ySpan, ySpan),
     });
     // handleWheel()
-  } else if (trackData.length > 0) {
-    const latestPoint = trackData[trackData.length - 1];
+  } else if (plotData.value.length > 0) {
+    const latestPoint = plotData.value[plotData.value.length - 1];
 
     const offsetX = latestPoint[0];
     const offsetY = latestPoint[1];
@@ -483,7 +496,7 @@ function toggleTracking() {
       series: [
         {
           name: '历史轨迹',
-          data: [...trackData],
+          data: [...plotData.value],
         },
         {
           name: '当前位置',
@@ -502,9 +515,9 @@ function resetZoom() {
 }
 
 function clearTrack() {
-  trackData = [];
+  // trackData = [];
   firstPosition = null;
-  deviation.value = '0.00';
+  // deviation.value = '0.00';
   clearData();
 
   chartInstance.value.setOption({
@@ -594,6 +607,12 @@ onMounted(() => {
   setTimeout(() => {
     initChart();
   }, 100);
+
+  watch(deviceConnected, () => {
+    if (deviceConnected.value) {
+      enableWindow.value = true;
+    }
+  });
 
   stopWatch = watch(
     latestPosition,
@@ -750,5 +769,11 @@ onUnmounted(() => {
 
 :deep(.el-slider__button:active) {
   transform: scale(0.95);
+}
+
+.right-buttons {
+  display: flex;
+  align-items: center;
+  margin-left: auto; /* 自动占据剩余空间，将按钮推到右侧 */
 }
 </style>
