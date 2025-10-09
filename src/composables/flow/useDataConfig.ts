@@ -155,7 +155,8 @@ export function useDataConfig(flowData: any) {
       upperChartSource2.value,
       upperChartSource3.value,
       upperChartSource4.value
-    ].filter(source => source !== '')
+    ]
+    // ].filter(source => source !== '')
   })
 
   // 计算属性 - 上图表颜色配置（双图模式）
@@ -175,7 +176,8 @@ export function useDataConfig(flowData: any) {
       lowerChartSource2.value,
       lowerChartSource3.value,
       lowerChartSource4.value
-    ].filter(source => source !== '')
+    ]
+    // ].filter(source => source !== '')
   })
 
   // 计算属性 - 下图表颜色配置（双图模式）
@@ -195,7 +197,8 @@ export function useDataConfig(flowData: any) {
       upperChartLeftSource2.value,
       upperChartLeftSource3.value,
       upperChartLeftSource4.value
-    ].filter(source => source !== '')
+    ]
+    // ].filter(source => source !== '')
   })
 
   // 计算属性 - 上图表左Y轴颜色配置（双图双Y轴模式）
@@ -215,7 +218,8 @@ export function useDataConfig(flowData: any) {
       upperChartRightSource2.value,
       upperChartRightSource3.value,
       upperChartRightSource4.value
-    ].filter(source => source !== '')
+    ]
+    // ].filter(source => source !== '')
   })
 
   // 计算属性 - 上图表右Y轴颜色配置（双图双Y轴模式）
@@ -235,7 +239,8 @@ export function useDataConfig(flowData: any) {
       lowerChartLeftSource2.value,
       lowerChartLeftSource3.value,
       lowerChartLeftSource4.value
-    ].filter(source => source !== '')
+    ]
+    // ].filter(source => source !== '')
   })
 
   // 计算属性 - 下图表左Y轴颜色配置（双图双Y轴模式）
@@ -255,7 +260,8 @@ export function useDataConfig(flowData: any) {
       lowerChartRightSource2.value,
       lowerChartRightSource3.value,
       lowerChartRightSource4.value
-    ].filter(source => source !== '')
+    ]
+    // ].filter(source => source !== '')
   })
 
   // 计算属性 - 下图表右Y轴颜色配置（双图双Y轴模式）
@@ -275,7 +281,8 @@ export function useDataConfig(flowData: any) {
       singleChartSource2.value,
       singleChartSource3.value,
       singleChartSource4.value
-    ].filter(source => source !== '')
+    ]
+    // ].filter(source => source !== '')
   })
 
   // 计算属性 - 单图模式颜色配置
@@ -295,7 +302,8 @@ export function useDataConfig(flowData: any) {
       singleChartLeftSource2.value,
       singleChartLeftSource3.value,
       singleChartLeftSource4.value
-    ].filter(source => source !== '')
+    ]
+    // ].filter(source => source !== '')
   })
 
   // 计算属性 - 单图模式左Y轴颜色配置
@@ -315,7 +323,8 @@ export function useDataConfig(flowData: any) {
       singleChartRightSource2.value,
       singleChartRightSource3.value,
       singleChartRightSource4.value
-    ].filter(source => source !== '')
+    ]
+    // ].filter(source => source !== '')
   })
 
   // 计算属性 - 单图模式右Y轴颜色配置
