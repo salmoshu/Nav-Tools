@@ -1333,50 +1333,74 @@ function createChartOption() {
         const areaMap = [singleChartUseArea1, singleChartUseArea2, singleChartUseArea3, singleChartUseArea4];
         const color = colorMap[index].value || getRandomColor(colorMap[index], index);
         
-        const seriesData = (plotData.value[source] as any[]).map((value: any, idx: number) => [
-          plotData.value.plotTime![idx], value
-        ]);
-        
-        return {
-          name: source, // 不再替换下划线
-          type: 'line',
-          data: seriesData,
-          symbolSize: 4,
-          smooth: false,
-          clip: true,
-          yAxisIndex: 0,
-          color: color,
-          areaStyle: {
-            color: areaMap[index].value ? color : 'transparent'
-          },
-          ...largeDataOptions.value,
+        try {
+          const seriesData = (plotData.value[source] as any[]).map((value: any, idx: number) => [
+            plotData.value.plotTime![idx], value
+          ]);
+          return {
+            name: source, // 不再替换下划线
+            type: 'line',
+            data: seriesData,
+            symbolSize: 4,
+            smooth: false,
+            clip: true,
+            yAxisIndex: 0,
+            color: color,
+            areaStyle: {
+              color: areaMap[index].value ? color : 'transparent'
+            },
+            ...largeDataOptions.value,
+          }
+        } catch(err) {
+          return {
+            name: source, // 确保有name属性
+            type: 'line',
+            data: undefined, // 空数据
+            symbolSize: 4,
+            smooth: false,
+            yAxisIndex: 0,
+            color: color
+          };
         }
+        
       });
     } else {
       // 单图双Y轴模式
       const leftSeries: LineSeriesOption[] = singleChartLeftSources.value.map((source, index) => {
-        const seriesData = (plotData.value[source] as any[]).map((value: any, idx: number) => [
-          plotData.value.plotTime![idx], value
-        ]);
-
         // 获取左侧Y轴对应的颜色配置
         const colorMap = [singleChartLeftColor1, singleChartLeftColor2, singleChartLeftColor3, singleChartLeftColor4];
         const areaMap = [singleChartLeftUseArea1, singleChartLeftUseArea2, singleChartLeftUseArea3, singleChartLeftUseArea4];
         const color = colorMap[index].value || getRandomColor(colorMap[index], index);
-        
-        return {
-          name: source, // 不再替换下划线
-          type: 'line',
-          data: seriesData,
-          symbolSize: 4,
-          smooth: false,
-          clip: true,
-          yAxisIndex: 0,
-          color: color,
-          areaStyle: {
-            color: areaMap[index].value ? color : 'transparent'
-          },
-          ...largeDataOptions.value,
+
+        try {
+          const seriesData = (plotData.value[source] as any[]).map((value: any, idx: number) => [
+            plotData.value.plotTime![idx], value
+          ]);
+          
+          return {
+            name: source, // 不再替换下划线
+            type: 'line',
+            data: seriesData,
+            symbolSize: 4,
+            smooth: false,
+            clip: true,
+            yAxisIndex: 0,
+            color: color,
+            areaStyle: {
+              color: areaMap[index].value ? color : 'transparent'
+            },
+            ...largeDataOptions.value,
+          }
+        } catch (err) {
+          return {
+            name: source, // 确保有name属性
+            type: 'line',
+            data: undefined, // 空数据
+            symbolSize: 4,
+            smooth: false,
+            yAxisIndex: 0,
+            color: color
+          };
         }
       });
       
@@ -1385,24 +1409,36 @@ function createChartOption() {
         const colorMap = [singleChartRightColor1, singleChartRightColor2, singleChartRightColor3, singleChartRightColor4];
         const areaMap = [singleChartRightUseArea1, singleChartRightUseArea2, singleChartRightUseArea3, singleChartRightUseArea4];
         const color = colorMap[index].value || getRandomColor(colorMap[index], index+singleChartLeftSources.value.length);
-        
-        const seriesData = (plotData.value[source] as any[]).map((value: any, idx: number) => [
-          plotData.value.plotTime![idx], value
-        ]);
-        
-        return {
-          name: source, // 不再替换下划线
-          type: 'line',
-          data: seriesData,
-          symbolSize: 4,
-          smooth: false,
-          clip: true,
-          yAxisIndex: 1,
-          color: color,
-          areaStyle: {
-            color: areaMap[index].value ? color : 'transparent'
-          },
-          ...largeDataOptions.value,
+
+        try {
+          const seriesData = (plotData.value[source] as any[]).map((value: any, idx: number) => [
+            plotData.value.plotTime![idx], value
+          ]);
+          
+          return {
+            name: source, // 不再替换下划线
+            type: 'line',
+            data: seriesData,
+            symbolSize: 4,
+            smooth: false,
+            clip: true,
+            yAxisIndex: 1,
+            color: color,
+            areaStyle: {
+              color: areaMap[index].value ? color : 'transparent'
+            },
+            ...largeDataOptions.value,
+          }
+        } catch (err) {
+          return {
+            name: source, // 确保有name属性
+            type: 'line',
+            data: undefined, // 空数据
+            symbolSize: 4,
+            smooth: false,
+            yAxisIndex: 0,
+            color: color
+          }
         }
       });
       
@@ -1420,7 +1456,7 @@ function createChartOption() {
       tooltip: {
         trigger: 'axis',
         formatter: (params: any) => {
-          if (params.length === 0) return '';
+          if (params.length === 0 || params[0].data === undefined) return '';
           
           let result = `显示时间: ${params[0].data[0].toFixed(3)}s<br/>`
 
@@ -1520,23 +1556,35 @@ function createChartOption() {
         const areaMap = [upperChartLeftUseArea1, upperChartLeftUseArea2, upperChartLeftUseArea3, upperChartLeftUseArea4];
         const color = colorMap[index].value || getRandomColor(colorMap[index], index);
 
-        const seriesData = (plotData.value[source] as any[]).map((value: any, idx: number) => [
-          plotData.value.plotTime![idx], value
-        ]);
-        
-        return {
-          name: source,
-          type: 'line',
-          data: seriesData,
-          symbolSize: 4,
-          smooth: false,
-          clip: true,
-          yAxisIndex: 0,
-          color: color,
-          areaStyle: {
-            color: areaMap[index].value ? color : 'transparent'
-          },
-          ...largeDataOptions.value,
+        try {
+          const seriesData = (plotData.value[source] as any[]).map((value: any, idx: number) => [
+            plotData.value.plotTime![idx], value
+          ]);
+
+          return {
+            name: source,
+            type: 'line',
+            data: seriesData,
+            symbolSize: 4,
+            smooth: false,
+            clip: true,
+            yAxisIndex: 0,
+            color: color,
+            areaStyle: {
+              color: areaMap[index].value ? color : 'transparent'
+            },
+            ...largeDataOptions.value,
+          }
+        } catch (err) {
+          return {
+            name: source, // 确保有name属性
+            type: 'line',
+            data: undefined, // 空数据
+            symbolSize: 4,
+            smooth: false,
+            yAxisIndex: 0,
+            color: color
+          }
         }
       });
       
@@ -1546,23 +1594,35 @@ function createChartOption() {
         const areaMap = [upperChartRightUseArea1, upperChartRightUseArea2, upperChartRightUseArea3, upperChartRightUseArea4];
         const color = colorMap[index].value || getRandomColor(colorMap[index], index+upperChartLeftSources.value.length);
 
-        const seriesData = (plotData.value[source] as any[]).map((value: any, idx: number) => [
-          plotData.value.plotTime![idx], value
-        ]);
-        
-        return {
-          name: source,
-          type: 'line',
-          data: seriesData,
-          symbolSize: 4,
-          smooth: false,
-          clip: true,
-          yAxisIndex: 1,
-          color: color,
-          areaStyle: {
-            color: areaMap[index].value ? color : 'transparent'
-          },
-          ...largeDataOptions.value,
+        try {
+          const seriesData = (plotData.value[source] as any[]).map((value: any, idx: number) => [
+            plotData.value.plotTime![idx], value
+          ]);
+          
+          return {
+            name: source,
+            type: 'line',
+            data: seriesData,
+            symbolSize: 4,
+            smooth: false,
+            clip: true,
+            yAxisIndex: 1,
+            color: color,
+            areaStyle: {
+              color: areaMap[index].value ? color : 'transparent'
+            },
+            ...largeDataOptions.value,
+          }
+        } catch (err) {
+          return {
+            name: source, // 确保有name属性
+            type: 'line',
+            data: undefined, // 空数据
+            symbolSize: 4,
+            smooth: false,
+            yAxisIndex: 1,
+            color: color
+          }
         }
       }));
       
@@ -1572,23 +1632,35 @@ function createChartOption() {
         const areaMap = [lowerChartLeftUseArea1, lowerChartLeftUseArea2, lowerChartLeftUseArea3, lowerChartLeftUseArea4];
         const color = colorMap[index].value || getRandomColor(colorMap[index], index);
 
-        const seriesData = (plotData.value[source] as any[]).map((value: any, idx: number) => [
-          plotData.value.plotTime![idx], value
-        ]);
-        
-        return {
-          name: source,
-          type: 'line',
-          data: seriesData,
-          symbolSize: 4,
-          smooth: false,
-          clip: true,
-          yAxisIndex: 2,
-          color: color,
-          areaStyle: {
-            color: areaMap[index].value ? color : 'transparent'
-          },
-          ...largeDataOptions.value,
+        try {
+          const seriesData = (plotData.value[source] as any[]).map((value: any, idx: number) => [
+            plotData.value.plotTime![idx], value
+          ]);
+
+          return {
+            name: source,
+            type: 'line',
+            data: seriesData,
+            symbolSize: 4,
+            smooth: false,
+            clip: true,
+            yAxisIndex: 2,
+            color: color,
+            areaStyle: {
+              color: areaMap[index].value ? color : 'transparent'
+            },
+            ...largeDataOptions.value,
+          }
+        } catch (err) {
+          return {
+            name: source, // 确保有name属性
+            type: 'line',
+            data: undefined, // 空数据
+            symbolSize: 4,
+            smooth: false,
+            yAxisIndex: 2,
+            color: color
+          }
         }
       });
       
@@ -1598,23 +1670,35 @@ function createChartOption() {
         const areaMap = [lowerChartRightUseArea1, lowerChartRightUseArea2, lowerChartRightUseArea3, lowerChartRightUseArea4];
         const color = colorMap[index].value || getRandomColor(colorMap[index], index+lowerChartLeftSources.value.length);
 
-        const seriesData = (plotData.value[source] as any[]).map((value: any, idx: number) => [
-          plotData.value.plotTime![idx], value
-        ]);
-        
-        return {
-          name: source,
-          type: 'line',
-          data: seriesData,
-          symbolSize: 4,
-          smooth: false,
-          clip: true,
-          yAxisIndex: 3,
-          color: color,
-          areaStyle: {
-            color: areaMap[index].value ? color : 'transparent'
-          },
-          ...largeDataOptions.value,
+        try {
+          const seriesData = (plotData.value[source] as any[]).map((value: any, idx: number) => [
+            plotData.value.plotTime![idx], value
+          ]);
+
+          return {
+            name: source,
+            type: 'line',
+            data: seriesData,
+            symbolSize: 4,
+            smooth: false,
+            clip: true,
+            yAxisIndex: 3,
+            color: color,
+            areaStyle: {
+              color: areaMap[index].value ? color : 'transparent'
+            },
+            ...largeDataOptions.value,
+          }
+        } catch (err) {
+          return {
+            name: source, // 确保有name属性
+            type: 'line',
+            data: undefined, // 空数据
+            symbolSize: 4,
+            smooth: false,
+            yAxisIndex: 3,
+            color: color
+          }
         }
       }));
       
@@ -1637,25 +1721,36 @@ function createChartOption() {
         const areaMap = [upperChartUseArea1, upperChartUseArea2, upperChartUseArea3, upperChartUseArea4];
         const color = colorMap[index].value || getRandomColor(colorMap[index], index);
 
-        // 添加安全检查
-        const sourceData = plotData.value[source];
-        const seriesData = Array.isArray(sourceData) 
-        ? sourceData.map((value: any, idx: number) => [plotData.value.plotTime![idx], value])
-        : [];
-        
-        return {
-          name: source,
-          type: 'line',
-          data: seriesData,
-          symbolSize: 4,
-          smooth: false,
-          clip: true,
-          yAxisIndex: 0,
-          color: color,
-          areaStyle: {
-            color: areaMap[index].value ? color : 'transparent'
-          },
-          ...largeDataOptions.value,
+        try {
+          const sourceData = plotData.value[source];
+          const seriesData = Array.isArray(sourceData) 
+          ? sourceData.map((value: any, idx: number) => [plotData.value.plotTime![idx], value])
+          : [];
+          
+          return {
+            name: source,
+            type: 'line',
+            data: seriesData,
+            symbolSize: 4,
+            smooth: false,
+            clip: true,
+            yAxisIndex: 0,
+            color: color,
+            areaStyle: {
+              color: areaMap[index].value ? color : 'transparent'
+            },
+            ...largeDataOptions.value,
+          }
+        } catch (err) {
+          return {
+            name: source, // 确保有name属性
+            type: 'line',
+            data: undefined, // 空数据
+            symbolSize: 4,
+            smooth: false,
+            yAxisIndex: 0,
+            color: color
+          }
         }
       });
       
@@ -1665,25 +1760,36 @@ function createChartOption() {
         const areaMap = [lowerChartUseArea1, lowerChartUseArea2, lowerChartUseArea3, lowerChartUseArea4];
         const color = colorMap[index].value || getRandomColor(colorMap[index], index+upperChartSources.value.length);
 
-        // 添加安全检查
-        const sourceData = plotData.value[source];
-        const seriesData = Array.isArray(sourceData) 
-        ? sourceData.map((value: any, idx: number) => [plotData.value.plotTime![idx], value])
-        : [];
-
-        return {
-          name: source,
-          type: 'line',
-          data: seriesData,
-          symbolSize: 4,
-          smooth: false,
-          clip: true,
-          yAxisIndex: 1,
-          color: color,
-          areaStyle: {
-            color: areaMap[index].value ? color : 'transparent'
-          },
-          ...largeDataOptions.value,
+        try {
+          const sourceData = plotData.value[source];
+          const seriesData = Array.isArray(sourceData) 
+          ? sourceData.map((value: any, idx: number) => [plotData.value.plotTime![idx], value])
+          : [];
+  
+          return {
+            name: source,
+            type: 'line',
+            data: seriesData,
+            symbolSize: 4,
+            smooth: false,
+            clip: true,
+            yAxisIndex: 1,
+            color: color,
+            areaStyle: {
+              color: areaMap[index].value ? color : 'transparent'
+            },
+            ...largeDataOptions.value,
+          }
+        } catch (err) {
+          return {
+            name: source, // 确保有name属性
+            type: 'line',
+            data: undefined, // 空数据
+            symbolSize: 4,
+            smooth: false,
+            yAxisIndex: 1,
+            color: color
+          }
         }
       });
     }
@@ -1760,7 +1866,7 @@ function createChartOption() {
       tooltip: {
         trigger: 'axis',
         formatter: (params: any) => {
-          if (params.length === 0) return '';
+          if (params.length === 0 || params[0].data === undefined) return '';
           
           // 安全处理时间戳
           let result = `显示时间: `
