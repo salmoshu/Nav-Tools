@@ -159,11 +159,6 @@ const toggleDataFilter = () => {
   dataFilter.value = !dataFilter.value;
 };
 
-// 定义命名的回调函数
-const handleSerialData = (_: unknown, data: string) => {
-  handleRawData(data);
-};
-
 const highlightSearch = (text: string, query: string): string => {
   if (!query) return text;
   const regex = new RegExp(`(${query})`, 'gi');
@@ -215,8 +210,6 @@ onMounted(() => {
     dataFormat.value = 'json';
   }
 
-  window.ipcRenderer.on("serial-data-to-renderer", handleSerialData);
-
   // 添加全局ESC键事件监听
   nextTick(() => {
     if (consoleRoot.value) {
@@ -228,8 +221,6 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
-  window.ipcRenderer.off('serial-data-to-renderer', handleSerialData);
-
   // 移除全局ESC键事件监听
   if (consoleRoot.value) {
     consoleRoot.value.removeEventListener('keyup', handleSearchEvent);

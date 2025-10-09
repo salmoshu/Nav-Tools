@@ -1,42 +1,45 @@
 import { ref, nextTick } from "vue";
 import { ElInput } from 'element-plus';
 
+const MAX_RAW_MESSAGES = 72000; // 2h 10Hz 数据
+const DISPLAY_COUNT = 100; // 显示的消息数量
+const CONTEXT_COUNT = 50; // 上下文消息数量
+
+// 窗口状态
+const consoleContent = ref<HTMLDivElement | null>(null);
+const autoScroll = ref(true);
+const dataFormat = ref<"json" | "nmea">("json");
+
+// 数据状态
+const msgCount = ref(0);
+const msgNmeaCount = ref(0);
+const msgJsonCount = ref(0);
+const rawMessages = ref<
+  {
+    timestamp: string;
+    raw: string;
+    dataType: "nmea" | "json";
+    isValid: boolean;
+  }[]
+>([]);
+const visibleMessages = ref<typeof rawMessages.value>([]);
+
+// 滚动状态
+const currentViewStartIndex = ref(0);
+const isSearchMode = ref(false);
+const lastScrollTop = ref(0);
+const isAtBottom = ref(true);
+const isAtTop = ref(false);
+const lastAutoScrollIndex = ref(0); // 记录自动滚动时的最后索引
+
+// 控制台信息查询
+const searchQuery = ref('');
+const showSearch = ref(false);
+const searchInput = ref<InstanceType<typeof ElInput> | null>(null);
+const searchResults = ref<{index: number, element: HTMLElement | null}[]>([]);
+const currentResultIndex = ref(-1);
+
 export function useConsole() {
-  // 控制台相关状态
-  const consoleContent = ref<HTMLDivElement | null>(null);
-  const autoScroll = ref(true);
-  const msgCount = ref(0);
-  const msgNmeaCount = ref(0);
-  const msgJsonCount = ref(0);
-  const dataFormat = ref<"json" | "nmea">("json");
-  const MAX_RAW_MESSAGES = 72000; // 2h 10Hz 数据
-  const DISPLAY_COUNT = 100; // 显示的消息数量
-  const CONTEXT_COUNT = 50; // 上下文消息数量
-  const rawMessages = ref<
-    {
-      timestamp: string;
-      raw: string;
-      dataType: "nmea" | "json";
-      isValid: boolean;
-    }[]
-  >([]);
-
-  // 新增状态变量
-  const visibleMessages = ref<typeof rawMessages.value>([]);
-  const currentViewStartIndex = ref(0);
-  const isSearchMode = ref(false);
-  const lastScrollTop = ref(0);
-  const isAtBottom = ref(true);
-  const isAtTop = ref(false);
-  const lastAutoScrollIndex = ref(0); // 记录自动滚动时的最后索引
-
-  // 控制台信息查询
-  const searchQuery = ref('');
-  const showSearch = ref(false);
-  const searchInput = ref<InstanceType<typeof ElInput> | null>(null);
-  const searchResults = ref<{index: number, element: HTMLElement | null}[]>([]);
-  const currentResultIndex = ref(-1);
-
   const calculateNmeaChecksum = (sentence: string): string => {
     let checksum = 0;
     for (let i = 0; i < sentence.length; i++) {

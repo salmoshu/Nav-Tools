@@ -12,7 +12,7 @@ const { processRawData: processNmeaRawData } = useNmea()
 const { addRawData: addUltrasonicRawData } = useUltrasonic()
 const { addRawData: addFollowRawData, initRawData: initFollowRawData } = useFollow()
 const { addRawData: addFlowRawData, initRawData: initFlowRawData } = useFlow()
-const { handleRawDataBatch: initFlowConsole } = useConsole()
+const { handleRawDataBatch: initFlowConsole, handleRawData: addFlowConsole } = useConsole()
 
 // 串口配置
 const serialPort = ref("");
@@ -28,7 +28,7 @@ const networkPort = ref("");
 
 // 文件配置
 const filePath = ref("");
-const fileContent = ref("");
+// const fileContent = ref("");
 
 // 创建全局设备变量，connected值：null(无设备)、true(有设备已连接)、false(有设备未连接)
 const globalDevice = ref<{
@@ -561,7 +561,8 @@ export function useDevice() {
         addFollowRawData(data)
         break;
       case 'flow':
-        addFlowRawData(data)
+        addFlowConsole(data);
+        addFlowRawData(data);
         break;
       default:
         break;
