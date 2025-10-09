@@ -1879,10 +1879,20 @@ function dataZoomPatch(disabledXAxisInside = false) {
   });
 }
 
+let zoomResetTimer: number | null = null;
 function handleCtrlKeyDown(e: KeyboardEvent) {
   if (e.key === 'Control' || e.key === 'Meta') {
     // 禁用所有x轴的inside缩放
     chart?.setOption({ dataZoom: dataZoomPatch(true) }, { replaceMerge: ['dataZoom'] });
+
+    if (zoomResetTimer !== null) {
+      clearTimeout(zoomResetTimer);
+    }
+    zoomResetTimer = window.setTimeout(() => {
+      chart?.setOption({ dataZoom: dataZoomPatch(false) }, { replaceMerge: ['dataZoom'] });
+      // 定时器执行完毕后，重置ID为null
+      zoomResetTimer = null;
+    }, 2000);
   }
 }
 
