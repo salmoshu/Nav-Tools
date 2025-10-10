@@ -707,9 +707,9 @@ function validateAndApplyConfig(config: any) {
   applyDataSourceConfig(config)
   
   // 应用配置并更新图表
-  applyViewConfig(() => {
-    createChart()
-  })
+  // applyViewConfig(() => {
+  //   createChart()
+  // })
 }
 
 // 应用数据源配置
@@ -731,10 +731,10 @@ function applyDataSourceConfig(config: any) {
       }
       // 应用区域配置
       if (config.area) {
-        singleChartUseArea1.value = config.area.left1 || ''
-        singleChartUseArea2.value = config.area.left2 || ''
-        singleChartUseArea3.value = config.area.left3 || ''
-        singleChartUseArea4.value = config.area.left4 || ''
+        singleChartUseArea1.value = config.area.source1 || ''
+        singleChartUseArea2.value = config.area.source2 || ''
+        singleChartUseArea3.value = config.area.source3 || ''
+        singleChartUseArea4.value = config.area.source4 || ''
       }
     } else if (config.yAxisConfig === 'double') {
       // 单图双Y轴模式
@@ -895,6 +895,7 @@ function exportConfigFile() {
   // 根据当前布局和Y轴配置收集数据源配置
   if (viewLayout.value === 'single') {
     if (yAxisConfig.value === 'single') {
+      // 单图单Y轴模式
       config.sources = {
         source1: singleChartSource1.value,
         source2: singleChartSource2.value,
@@ -915,6 +916,7 @@ function exportConfigFile() {
         source4: singleChartUseArea4.value,
       }
     } else {
+      // 单图双Y轴模式
       config.sources = {
         left1: singleChartLeftSource1.value,
         left2: singleChartLeftSource2.value,
@@ -953,6 +955,7 @@ function exportConfigFile() {
     config.lowerSources = {};
     
     if (yAxisConfig.value === 'single') {
+      // 双图单Y轴模式
       config.upperSources = {
         source1: upperChartSource1.value,
         source2: upperChartSource2.value,
@@ -992,6 +995,7 @@ function exportConfigFile() {
         source4: lowerChartUseArea4.value,
       }
     } else {
+      // 双图双Y轴模式
       config.upperSources = {
         left1: upperChartLeftSource1.value,
         left2: upperChartLeftSource2.value,

@@ -77,7 +77,7 @@
                         class="fullscreen-btn"
                         title="全屏展示"
                       >
-                        <el-icon><Expand /></el-icon>
+                        <el-icon><FullScreen /></el-icon>
                       </el-button>
                       <el-button 
                         type="text" 
@@ -97,7 +97,7 @@
                       class="exit-fullscreen-btn"
                       title="退出全屏"
                     >
-                      <el-icon><FullScreen /></el-icon>
+                      <el-icon><Expand /></el-icon>
                     </el-button>
                   </div>
                 </template>
