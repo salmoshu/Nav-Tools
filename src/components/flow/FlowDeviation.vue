@@ -55,7 +55,7 @@
     <div class="dialog-content">
       <div style="margin-bottom: 20px;">
         <span style="display: inline-block; width: 100px;">X轴字段：</span>
-        <el-select v-model="selectedXField" placeholder="选择X轴字段" style="width: 200px;">
+        <el-select v-model="deviationX" placeholder="选择X轴字段" style="width: 200px;">
           <el-option label="" value=""></el-option>
           <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
         </el-select>
@@ -63,7 +63,7 @@
       
       <div style="margin-bottom: 20px;">
         <span style="display: inline-block; width: 100px;">Y轴字段：</span>
-        <el-select v-model="selectedYField" placeholder="选择Y轴字段" style="width: 200px;">
+        <el-select v-model="deviationY" placeholder="选择Y轴字段" style="width: 200px;">
           <el-option label="" value=""></el-option>
           <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
         </el-select>
@@ -85,6 +85,9 @@ import { ScatterChart } from 'echarts/charts';
 import { GridComponent } from 'echarts/components';
 import { CanvasRenderer } from 'echarts/renderers';
 import { ElMessage } from 'element-plus';
+import { useDataConfig } from '../../composables/flow/useDataConfig';
+
+const { deviationX, deviationY } = useDataConfig();
 
 // 注册ECharts组件
 const { plotData, toggleSlideWindow, enableWindow } = useFlow();
@@ -104,8 +107,6 @@ const chartDom = ref(null); // 添加chartDom引用
 
 // 视图配置相关变量
 const viewConfigDialogVisible = ref(false);
-const selectedXField = ref('');
-const selectedYField = ref('');
 
 // 计算可用数据源
 const availableSources = computed(() => {
@@ -121,10 +122,10 @@ const availableSources = computed(() => {
 
 // 数据存储变量
 let trackData = [];
-let firstPosition = null;
-const maxTrackPoints = 3600 * 12;
+// let firstPosition = null;
+// const maxTrackPoints = 3600 * 12;
 let resizeObserver = null;
-const minPadding = 10000; // 最小范围正负10km
+// const minPadding = 10000; // 最小范围正负10km
 
 // 显示视图配置对话框
 function showViewConfig() {
@@ -133,7 +134,7 @@ function showViewConfig() {
 
 // 应用视图配置
 function applyViewConfig() {
-  if (!selectedXField.value || !selectedYField.value) {
+  if (!deviationX.value || !deviationY.value) {
     ElMessage({
       message: `请选择X轴和Y轴字段`,
       type: 'warning',
@@ -150,10 +151,10 @@ function applyViewConfig() {
   if (chartInstance.value) {
     chartInstance.value.setOption({
       xAxis: {
-        name: selectedXField.value
+        name: deviationX.value
       },
       yAxis: {
-        name: selectedYField.value
+        name: deviationY.value
       }
     });
   }
@@ -265,8 +266,8 @@ function initChart() {
       trigger: 'axis',
       formatter: function(params) {
         const point = params[0].value;
-        const xField = selectedXField.value || 'X';
-        const yField = selectedYField.value || 'Y';
+        const xField = deviationX.value || 'X';
+        const yField = deviationY.value || 'Y';
         return `${xField}: ${point[0].toFixed(2)}<br/>${yField}: ${point[1].toFixed(2)}`;
       },
       show: true,
@@ -296,7 +297,7 @@ function initChart() {
     dataZoom: getDataZoomConfig(-10, 10, -10, 10),
     xAxis: {
       type: 'value',
-      name: selectedXField.value || '',
+      name: deviationX.value || '',
       nameLocation: 'middle',
       nameGap: 30,
       axisLabel: {
@@ -318,7 +319,7 @@ function initChart() {
     },
     yAxis: {
       type: 'value',
-      name: selectedYField.value || '',
+      name: deviationY.value || '',
       nameLocation: 'middle',
       nameGap: 40,
       axisLabel: {
@@ -435,13 +436,13 @@ function handleWheel(e) {
 // 更新数据点 - 使用真实数据而不是随机数据
 function updateFlowData() {
   // 只有在选择了X轴和Y轴字段后才处理数据
-  if (!selectedXField.value || !selectedYField.value) {
+  if (!deviationX.value || !deviationY.value) {
     return;
   }
   
   // 从flowData中获取所有数据
-  const xData = plotData.value[selectedXField.value];
-  const yData = plotData.value[selectedYField.value];
+  const xData = plotData.value[deviationX.value];
+  const yData = plotData.value[deviationY.value];
   
   if (!xData || !yData || xData.length === 0 || yData.length === 0) {
     return;

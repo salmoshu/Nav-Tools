@@ -446,12 +446,8 @@
         style="display: none"
         @change="handleConfigFileUpload"
       />
-      <el-button type="primary" @click="importConfigFile">
-        <el-icon><Setting /></el-icon>&nbsp;载入
-      </el-button>
-      <el-button type="primary" @click="exportConfigFile">
-        <el-icon><Setting /></el-icon>&nbsp;导出
-      </el-button>
+      <el-button type="primary" @click="importConfigFile">载入</el-button>
+      <el-button type="primary" @click="exportConfigFile">导出</el-button>
       <el-button type="primary" @click="applyViewConfig(createChart)">确定</el-button>
       <el-button type="default" @click="viewConfigDialogVisible = false">取消</el-button>
     </template>
@@ -480,6 +476,11 @@ const {
   viewLayout,
   yAxisConfig,
 
+  // FlowDeviation
+  deviationX,
+  deviationY,
+
+  // FlowData
   // 单图单Y轴
   singleChartSource1,
   singleChartSource2,
@@ -612,7 +613,8 @@ const {
   showViewConfig,
   onYAxisChange,
   onLayoutChange,
-  applyViewConfig
+  applyViewConfig,
+  exportConfigFile,
 } = useDataConfig(plotData)
 
 const chartRef = ref<HTMLDivElement>()
@@ -707,13 +709,19 @@ function validateAndApplyConfig(config: any) {
   applyDataSourceConfig(config)
   
   // 应用配置并更新图表
-  // applyViewConfig(() => {
-  //   createChart()
-  // })
+  applyViewConfig(() => {
+    createChart()
+  })
 }
 
 // 应用数据源配置
 function applyDataSourceConfig(config: any) {
+  // 应用FlowDeviation配置
+  if (config.deviation) {
+    deviationX.value = config.deviation.x || ''
+    deviationY.value = config.deviation.y || ''
+  }
+
   // 单图模式下的数据源配置
   if (config.viewLayout === 'single' && config.sources) {
     if (config.yAxisConfig === 'single') {
@@ -883,194 +891,6 @@ function applyDataSourceConfig(config: any) {
       }
     }
   }
-}
-
-// 同时，为了方便用户，我们可以添加一个导出配置的功能
-function exportConfigFile() {
-  let config: any = {
-    viewLayout: viewLayout.value,
-    yAxisConfig: yAxisConfig.value
-  }
-  
-  // 根据当前布局和Y轴配置收集数据源配置
-  if (viewLayout.value === 'single') {
-    if (yAxisConfig.value === 'single') {
-      // 单图单Y轴模式
-      config.sources = {
-        source1: singleChartSource1.value,
-        source2: singleChartSource2.value,
-        source3: singleChartSource3.value,
-        source4: singleChartSource4.value
-      }
-      // 添加颜色配置
-      config.colors = {
-        source1: singleChartColor1.value,
-        source2: singleChartColor2.value,
-        source3: singleChartColor3.value,
-        source4: singleChartColor4.value
-      }
-      config.area = {
-        source1: singleChartUseArea1.value,
-        source2: singleChartUseArea2.value,
-        source3: singleChartUseArea3.value,
-        source4: singleChartUseArea4.value,
-      }
-    } else {
-      // 单图双Y轴模式
-      config.sources = {
-        left1: singleChartLeftSource1.value,
-        left2: singleChartLeftSource2.value,
-        left3: singleChartLeftSource3.value,
-        left4: singleChartLeftSource4.value,
-        right1: singleChartRightSource1.value,
-        right2: singleChartRightSource2.value,
-        right3: singleChartRightSource3.value,
-        right4: singleChartRightSource4.value
-      }
-      // 添加颜色配置
-      config.colors = {
-        left1: singleChartLeftColor1.value,
-        left2: singleChartLeftColor2.value,
-        left3: singleChartLeftColor3.value,
-        left4: singleChartLeftColor4.value,
-        right1: singleChartRightColor1.value,
-        right2: singleChartRightColor2.value,
-        right3: singleChartRightColor3.value,
-        right4: singleChartRightColor4.value
-      }
-      // 添加区域配置
-      config.area = {
-        left1: singleChartLeftUseArea1.value,
-        left2: singleChartLeftUseArea2.value,
-        left3: singleChartLeftUseArea3.value,
-        left4: singleChartLeftUseArea4.value,
-        right1: singleChartRightUseArea1.value,
-        right2: singleChartRightUseArea2.value,
-        right3: singleChartRightUseArea3.value,
-        right4: singleChartRightUseArea4.value,
-      }
-    }
-  } else {
-    config.upperSources = {};
-    config.lowerSources = {};
-    
-    if (yAxisConfig.value === 'single') {
-      // 双图单Y轴模式
-      config.upperSources = {
-        source1: upperChartSource1.value,
-        source2: upperChartSource2.value,
-        source3: upperChartSource3.value,
-        source4: upperChartSource4.value
-      }
-      config.lowerSources = {
-        source1: lowerChartSource1.value,
-        source2: lowerChartSource2.value,
-        source3: lowerChartSource3.value,
-        source4: lowerChartSource4.value
-      }
-      // 添加颜色配置
-      config.upperColors = {
-        source1: upperChartColor1.value,
-        source2: upperChartColor2.value,
-        source3: upperChartColor3.value,
-        source4: upperChartColor4.value
-      }
-      config.lowerColors = {
-        source1: lowerChartColor1.value,
-        source2: lowerChartColor2.value,
-        source3: lowerChartColor3.value,
-        source4: lowerChartColor4.value
-      }
-      // 添加区域配置
-      config.upperArea = {
-        source1: upperChartUseArea1.value,
-        source2: upperChartUseArea2.value,
-        source3: upperChartUseArea3.value,
-        source4: upperChartUseArea4.value,
-      }
-      config.lowerArea = {
-        source1: lowerChartUseArea1.value,
-        source2: lowerChartUseArea2.value,
-        source3: lowerChartUseArea3.value,
-        source4: lowerChartUseArea4.value,
-      }
-    } else {
-      // 双图双Y轴模式
-      config.upperSources = {
-        left1: upperChartLeftSource1.value,
-        left2: upperChartLeftSource2.value,
-        left3: upperChartLeftSource3.value,
-        left4: upperChartLeftSource4.value,
-        right1: upperChartRightSource1.value,
-        right2: upperChartRightSource2.value,
-        right3: upperChartRightSource3.value,
-        right4: upperChartRightSource4.value
-      }
-      config.lowerSources = {
-        left1: lowerChartLeftSource1.value,
-        left2: lowerChartLeftSource2.value,
-        left3: lowerChartLeftSource3.value,
-        left4: lowerChartLeftSource4.value,
-        right1: lowerChartRightSource1.value,
-        right2: lowerChartRightSource2.value,
-        right3: lowerChartRightSource3.value,
-        right4: lowerChartRightSource4.value
-      }
-      // 添加颜色配置
-      config.upperColors = {
-        left1: upperChartLeftColor1.value,
-        left2: upperChartLeftColor2.value,
-        left3: upperChartLeftColor3.value,
-        left4: upperChartLeftColor4.value,
-        right1: upperChartRightColor1.value,
-        right2: upperChartRightColor2.value,
-        right3: upperChartRightColor3.value,
-        right4: upperChartRightColor4.value
-      }
-      config.lowerColors = {
-        left1: lowerChartLeftColor1.value,
-        left2: lowerChartLeftColor2.value,
-        left3: lowerChartLeftColor3.value,
-        left4: lowerChartLeftColor4.value,
-        right1: lowerChartRightColor1.value,
-        right2: lowerChartRightColor2.value,
-        right3: lowerChartRightColor3.value,
-        right4: lowerChartRightColor4.value
-      }
-      // 添加区域配置
-      config.upperArea = {
-        left1: upperChartLeftUseArea1.value,
-        left2: upperChartLeftUseArea2.value,
-        left3: upperChartLeftUseArea3.value,
-        left4: upperChartLeftUseArea4.value,
-        right1: upperChartRightUseArea1.value,
-        right2: upperChartRightUseArea2.value,
-        right3: upperChartRightUseArea3.value,
-        right4: upperChartRightUseArea4.value,
-      }
-      config.lowerArea = {
-        left1: lowerChartLeftUseArea1.value,
-        left2: lowerChartLeftUseArea2.value,
-        left3: lowerChartLeftUseArea3.value,
-        left4: lowerChartLeftUseArea4.value,
-        right1: lowerChartRightUseArea1.value,
-        right2: lowerChartRightUseArea2.value,
-        right3: lowerChartRightUseArea3.value,
-        right4: lowerChartRightUseArea4.value,
-      }
-    }
-  }
-  
-  // 创建下载链接
-  const dataStr = JSON.stringify(config, null, 2)
-  const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr)
-  
-  const exportFileDefaultName = `flow_chart_config_${new Date().toISOString().slice(0,10)}.json`
-  
-  const linkElement = document.createElement('a')
-  linkElement.setAttribute('href', dataUri)
-  linkElement.setAttribute('download', exportFileDefaultName)
-  linkElement.click()
 }
 
 // 消息格式对话框相关
