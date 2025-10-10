@@ -23,15 +23,20 @@
         
         <!-- 将重置、清除按钮放在右侧 -->
         <div class="right-buttons">
-          <el-button :disabled="deviceConnected" type="default" size="small" @click="toggleSlideWindow" class="layout-btn">
-            <span :style="{ textDecoration: enableWindow ? 'line-through' : 'none' }">滑窗</span>
-          </el-button>
-          <!-- 添加视图配置按钮 -->
+          <!-- 视图配置按钮 -->
           <el-button type="default" size="small" @click="showViewConfig" class="control-btn config-btn">
-            配置
+            <el-icon><Setting /></el-icon>&nbsp;配置
           </el-button>
-          <el-button type="default" size="small" @click="resetZoom" class="zoom-btn">重置</el-button>
-          <el-button type="default" size="small" @click="toggleDataUpdate" class="clear-btn">{{ isDataUpdating ? '暂停' : '更新' }}</el-button>
+          <!-- 滑窗开关按钮 -->
+          <el-button :disabled="deviceConnected" type="default" size="small" @click="toggleSlideWindow">
+            <el-icon v-if="enableWindow"><CircleClose /></el-icon>
+            <el-icon v-else><CircleCheck /></el-icon>
+            &nbsp;{{enableWindow?"关闭滑窗":"启用滑窗"}}
+          </el-button>
+          <!-- 重置布局按钮 -->
+          <el-button type="default" size="small" @click="resetZoom" class="zoom-btn">
+            <el-icon><RefreshLeft /></el-icon>&nbsp;重置布局
+          </el-button>
         </div>
       </div>
     </div>

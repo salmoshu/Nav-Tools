@@ -19,11 +19,13 @@
         </div>
 
         <div class="right-buttons">
-          <el-button :disabled="deviceConnected" type="default" size="small" @click="toggleSlideWindow" class="layout-btn">
-            <span :style="{ textDecoration: enableWindow ? 'line-through' : 'none' }">滑窗</span>
+          <el-button :disabled="deviceConnected" type="default" size="small" @click="toggleSlideWindow">
+            <el-icon v-if="enableWindow"><CircleClose /></el-icon>
+            <el-icon v-else><CircleCheck /></el-icon>
+            &nbsp;{{enableWindow?"关闭滑窗":"启用滑窗"}}
           </el-button>
-          <el-button type="primary" size="small" @click="resetZoom" class="control-btn zoom-btn">重置</el-button>
-          <el-button type="primary" size="small" @click="clearTrack" class="control-btn clear-btn">清除</el-button>
+          <el-button type="primary" size="small" @click="resetZoom" class="control-btn zoom-btn"><el-icon><RefreshLeft /></el-icon>&nbsp;重置布局</el-button>
+          <el-button type="primary" size="small" @click="clearTrack" class="control-btn clear-btn"><el-icon><Delete /></el-icon>&nbsp;清除</el-button>
         </div>
       </div>
     </div>

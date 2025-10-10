@@ -9,13 +9,14 @@
             <el-option label="NMEA" value="nmea"></el-option>
           </el-select>
           <el-button @click="toggleDataFilter" type="default" size="small">
-            <span :style="{ textDecoration: dataFilter ? 'line-through' : 'none' }">过滤</span>
+            <el-icon><Filter /></el-icon>&nbsp;{{dataFilter?"还原":"过滤"}}
           </el-button>
           <el-button @click="toggleAddTimestamp" type="default" size="small">
-            <span :style="{ textDecoration: addTimestamp ? 'line-through' : 'none' }">时间</span>
+            <el-icon><Clock /></el-icon>&nbsp;{{addTimestamp?"禁用时间":"开启时间"}}
           </el-button>
           <el-button @click="toggleAutoScroll" type="default" size="small">
-            <span :style="{ textDecoration: autoScroll ? 'line-through' : 'none' }">滚动</span>
+            <el-icon v-if="autoScroll"><Sort /></el-icon>
+            <el-icon v-else><Bottom /></el-icon>&nbsp;{{autoScroll?"滚动":"吸附"}}
           </el-button>
           <el-button @click="toggleSearch" type="default" size="small">
             <el-icon><Search /></el-icon>
@@ -24,8 +25,12 @@
         
         <!-- 右侧按钮组 -->
         <div class="right-controls">
-          <el-button @click="saveConsoleData" type="default" size="small" :disabled="rawMessages.length === 0">保存</el-button>
-          <el-button @click="clearConsole" type="default" size="small">清除</el-button>
+          <el-button @click="saveConsoleData" type="default" size="small" :disabled="rawMessages.length === 0">
+            <el-icon><Download /></el-icon>&nbsp;保存
+          </el-button>
+          <el-button @click="clearConsole" type="default" size="small">
+            <el-icon><Delete /></el-icon>&nbsp;清除
+          </el-button>
         </div>
       </div>
     </div>
@@ -56,19 +61,17 @@
     </div>
     
     <div ref="consoleContent" class="console-content" @keydown.ctrl.f.prevent="toggleSearch">
-      <div v-for="message in visibleMessages" :key="getMessageKey(message)" class="message-line">
-        <div v-if="!dataFilter || (message.dataType === dataFormat && message.isValid)">
-          <span v-if="addTimestamp" class="timestamp">{{ message.timestamp }}: </span>
-          <span 
-            :class="{ 
-              'valid-message': message.isValid, 
-              'invalid-message': !message.isValid, 
-              'search-match': searchQuery && isMatch(message.raw, searchQuery) 
-            }"
-            v-html="highlightSearch(message.raw, searchQuery)"
-          >
-          </span>
-        </div>
+      <div v-for="message in filteredMessages" :key="getMessageKey(message)" class="message-line">
+        <span v-if="addTimestamp" class="timestamp">{{ message.timestamp }}: </span>
+        <span 
+          :class="{ 
+            'valid-message': message.isValid, 
+            'invalid-message': !message.isValid, 
+            'search-match': searchQuery && isMatch(message.raw, searchQuery) 
+          }"
+          v-html="highlightSearch(message.raw, searchQuery)"
+        >
+        </span>
       </div>
     </div>
     <div class="console-footer">
@@ -78,7 +81,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, nextTick } from 'vue';
+import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue';
 import { ElMessage, ElButton, ElSelect, ElOption, ElInput } from 'element-plus';
 import { navMode } from '@/settings/config';
 import { useConsole } from '@/composables/flow/useConsole';
@@ -106,6 +109,15 @@ const {
   removeScrollListener,
   toggleAutoScrollLocal // 使用新的toggleAutoScrollLocal函数
 } = useConsole();
+
+const filteredMessages = computed(() => {
+  if (!dataFilter.value) {
+    return visibleMessages.value;
+  }
+  return visibleMessages.value.filter(
+    message => message.dataType === dataFormat.value && message.isValid
+  );
+});
 
 const saveConsoleData = () => {
   if (rawMessages.value.length === 0) {
@@ -204,6 +216,8 @@ const handleSearchEvent = (event: KeyboardEvent) => {
 };
 
 onMounted(() => {
+  clearConsole();
+  
   if (navMode.funcMode === 'gnss') {
     dataFormat.value = 'nmea';
   } else {

@@ -4,34 +4,26 @@
       <div class="file-controls">
         <!-- 左侧按钮 -->
         <div class="left-buttons">
-          <el-button type="default" size="small" @click="importConfigFile" class="layout-btn">
-            载入配置
-          </el-button>
-          <input
-            ref="configFileInput"
-            type="file"
-            accept=".json"
-            style="display: none"
-            @change="handleConfigFileUpload"
-          />
           <el-button type="default" size="small" @click="showViewConfig" class="layout-btn">
-            手动配置
+            <el-icon><Setting /></el-icon>&nbsp;配置
           </el-button>
           <el-button type="default" size="small" @click="showMessageFormat" class="message-btn">
-            消息格式
+            <el-icon><Message /></el-icon>&nbsp;消息格式
           </el-button>
         </div>
         
         <!-- 右侧按钮 -->
         <div class="right-buttons">
-          <el-button :disabled="deviceConnected" type="default" size="small" @click="toggleSlideWindow" class="layout-btn">
-            <span :style="{ textDecoration: enableWindow ? 'line-through' : 'none' }">滑窗</span>
+          <el-button :disabled="deviceConnected" type="default" size="small" @click="toggleSlideWindow">
+            <el-icon v-if="enableWindow"><CircleClose /></el-icon>
+            <el-icon v-else><CircleCheck /></el-icon>
+            &nbsp;{{enableWindow?"关闭滑窗":"启用滑窗"}}
           </el-button>
-          <el-button type="default" size="small" @click="refreshPlotData" class="refresh-btn">
-            刷新
+          <el-button type="default" size="small" @click="refreshPlotData">
+            <el-icon><Refresh /></el-icon>&nbsp;刷新
           </el-button>
-          <el-button type="default" size="small" @click="clearPlotData" class="clear-btn">
-            清除
+          <el-button type="default" size="small" @click="clearPlotData">
+            <el-icon><Delete /></el-icon>&nbsp;清除
           </el-button>
         </div>
       </div>
@@ -447,7 +439,19 @@
       </div>
     </div>
     <template #footer>
-      <el-button type="primary" @click="exportConfigFile">导出</el-button>
+      <input
+        ref="configFileInput"
+        type="file"
+        accept=".json"
+        style="display: none"
+        @change="handleConfigFileUpload"
+      />
+      <el-button type="primary" @click="importConfigFile">
+        <el-icon><Setting /></el-icon>&nbsp;载入
+      </el-button>
+      <el-button type="primary" @click="exportConfigFile">
+        <el-icon><Setting /></el-icon>&nbsp;导出
+      </el-button>
       <el-button type="primary" @click="applyViewConfig(createChart)">确定</el-button>
       <el-button type="default" @click="viewConfigDialogVisible = false">取消</el-button>
     </template>
@@ -2372,16 +2376,6 @@ watch(
   display: flex;
 }
 
-.el-button {
-  font-size: 12px;
-}
-
-/* 移除原来的margin-left样式 */
-.layout-btn {
-  margin-left: 0;
-}
-
-/* 其他样式保持不变 */
 /* 示例代码样式 */
 .example-code {
   background-color: #f5f5f5;
