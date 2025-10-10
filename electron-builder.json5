@@ -40,7 +40,7 @@
   },
   "linux": {
     "target": [
-      "AppImage"
+      "tar.gz"
     ],
     "artifactName": "${productName}-Linux-${version}.${ext}"
   }
