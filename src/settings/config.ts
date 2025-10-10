@@ -9,12 +9,6 @@ const appConfig: any = {
       action: ['data', 'console', 'deviation'],
       props: {}
     }),
-    follow: createModuleItem({
-      title: 'Follow',
-      icon: toolBarIcon.follow,
-      action: ['data', 'console'],
-      props: {}
-    }),
   },
   perc: {
     ultrasonic: createModuleItem({

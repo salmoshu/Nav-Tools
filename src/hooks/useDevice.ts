@@ -3,14 +3,12 @@ import { ElMessage } from "element-plus"
 import { navMode } from "@/settings/config"
 import { useNmea } from '@/composables/gnss/useNmea'
 import { useUltrasonic } from '@/composables/ultrasonic/useUltrasonic'
-import { useFollow } from '@/composables/follow/useFollow'
 import { useFlow } from '@/composables/flow/useFlow'
 import { useConsole } from '@/composables/flow/useConsole'
 import emitter from '@/hooks/useMitt'
 
 const { processRawData: processNmeaRawData } = useNmea()
 const { addRawData: addUltrasonicRawData } = useUltrasonic()
-const { addRawData: addFollowRawData, initRawData: initFollowRawData } = useFollow()
 const { addRawData: addFlowRawData, initRawData: initFlowRawData } = useFlow()
 const { handleRawDataBatch: initFlowConsole, handleRawData: addFlowConsole } = useConsole()
 
@@ -193,9 +191,6 @@ export function useDevice() {
               })
               initFlowRawData(content)
               initFlowConsole(content)
-              break
-            case 'follow':
-              initFollowRawData(content)
               break
             default:
               // 其他模式下发送通用事件
@@ -384,15 +379,6 @@ export function useDevice() {
                 offset: 50,
               });
               break;
-            case 'follow':
-              initFollowRawData(content);
-              ElMessage({
-                message: `数据加载成功`,
-                type: 'success',
-                placement: 'bottom-right',
-                offset: 50,
-              });
-              break;
             default:
               ElMessage({
                 message: `未定义的文件处理模式`,
@@ -556,9 +542,6 @@ export function useDevice() {
         break;
       case 'ultrasonic':
         addUltrasonicRawData(data)
-        break;
-      case 'follow':
-        addFollowRawData(data)
         break;
       case 'flow':
         addFlowConsole(data);

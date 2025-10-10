@@ -1,4 +1,4 @@
-// src/composables/follow/useFOV.ts
+// src/composables/followsim/useFOV.ts
 import { computed } from 'vue'
 import type { CarState, PersonState } from '@/stores/followsim'
 

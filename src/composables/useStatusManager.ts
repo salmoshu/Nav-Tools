@@ -1,7 +1,6 @@
 import { ref } from "vue";
 import { useGnssStore } from "@/stores/gnss";
 import { useFollowStore as useFollowsimStore } from "@/stores/followsim";
-import { useFollowStore } from "@/stores/follow";
 import { useUltrasonicStore } from "@/stores/ultrasonic";
 import { navMode } from "@/settings/config";
 // import { useDemo1Store } from "@/stores/demo1";
@@ -27,10 +26,6 @@ function getMonitorStatus() {
     case 'flow':
       const flowStore = useFlowStore();
       result.value = flowStore.status
-      break;
-    case 'follow':
-      const followStore = useFollowStore();
-      result.value = followStore.status
       break;
     case 'ultrasonic':
       const ultrasonicStore = useUltrasonicStore()

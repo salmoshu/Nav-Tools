@@ -1,4 +1,4 @@
-// src/composables/follow/useSpeedRecorder.ts
+// src/composables/followsim/useSpeedRecorder.ts
 import { ref, computed, onUnmounted } from 'vue'
 import { useFollowStore } from '@/stores/followsim'
 
