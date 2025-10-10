@@ -29,7 +29,14 @@ jobs:
         uses: actions/checkout@v4
         timeout-minutes: 10  # 单独设置checkout超时
         with:
-          fetch-depth: 1  # 只获取最新提交，减少传输量
+          fetch-depth: 1
+
+      # ① 仅 macOS 降级到 Python 3.11（自带 distutils）
+      - name: Use Python 3.11 for node-gyp
+        if: matrix.os == 'macos-latest'
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
 
       - name: Enable Corepack
         run: corepack enable
@@ -40,14 +47,6 @@ jobs:
         with:
           node-version: 20
           cache: 'pnpm'
-      
-      - name: Install Python setuptools on macOS
-        if: matrix.os == 'macos-latest'
-        run: |
-          python3 -m pip install --upgrade pip setuptools
-        env:
-          PYTHON: python3
-          NODE_GYP_FORCE_PYTHON: python3
 
       - name: Install Dependencies
         run: pnpm install --frozen-lockfile
@@ -59,8 +58,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NODE_OPTIONS: --max-old-space-size=8192
-          PYTHON: python3
-          NODE_GYP_FORCE_PYTHON: python3
 
       - name: Delete old artifacts
         uses: geekyeggo/delete-artifact@v4
