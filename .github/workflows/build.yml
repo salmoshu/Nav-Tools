@@ -40,6 +40,10 @@ jobs:
         with:
           node-version: 20
           cache: 'pnpm'
+      
+      - name: Install Python setuptools on macOS
+        if: matrix.os == 'macos-latest'
+        run: pip install setuptools
 
       - name: Install Dependencies
         run: pnpm install --frozen-lockfile
