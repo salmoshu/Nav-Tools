@@ -21,7 +21,9 @@ jobs:
     
     strategy:
       matrix:
-        os: [macos-latest, ubuntu-latest, windows-latest]
+        # 先不构建macos应用
+        # os: [macos-latest, ubuntu-latest, windows-latest]
+        os: [ubuntu-latest, windows-latest]
       fail-fast: false  # 避免一个平台失败影响其他平台
 
     steps:
