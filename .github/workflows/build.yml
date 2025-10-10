@@ -43,7 +43,11 @@ jobs:
       
       - name: Install Python setuptools on macOS
         if: matrix.os == 'macos-latest'
-        run: pip install setuptools
+        run: |
+          python3 -m pip install --upgrade pip setuptools
+        env:
+          PYTHON: python3
+          NODE_GYP_FORCE_PYTHON: python3
 
       - name: Install Dependencies
         run: pnpm install --frozen-lockfile
@@ -55,6 +59,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NODE_OPTIONS: --max-old-space-size=8192
+          PYTHON: python3
+          NODE_GYP_FORCE_PYTHON: python3
 
       - name: Delete old artifacts
         uses: geekyeggo/delete-artifact@v4
