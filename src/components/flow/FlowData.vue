@@ -629,7 +629,6 @@ const largeDataOptions = computed(() => {
       largeThreshold: 5000,
       progressive: 5000,
       progressiveThreshold: 10000,
-      animation: false,
     }
   } else {
     return {}
@@ -1179,6 +1178,7 @@ function createChartOption() {
             areaStyle: {
               color: areaMap[index].value ? color : 'transparent'
             },
+            animation: false,
             ...largeDataOptions.value,
           }
         } catch(err) {
@@ -1221,6 +1221,7 @@ function createChartOption() {
             areaStyle: {
               color: areaMap[index].value ? color : 'transparent'
             },
+            animation: false,
             ...largeDataOptions.value,
           }
         } catch (err) {
@@ -1262,6 +1263,7 @@ function createChartOption() {
             areaStyle: {
               color: areaMap[index].value ? color : 'transparent'
             },
+            animation: false,
             ...largeDataOptions.value,
           }
         } catch (err) {
@@ -1411,6 +1413,7 @@ function createChartOption() {
             areaStyle: {
               color: areaMap[index].value ? color : 'transparent'
             },
+            animation: false,
             ...largeDataOptions.value,
           }
         } catch (err) {
@@ -1452,6 +1455,7 @@ function createChartOption() {
             areaStyle: {
               color: areaMap[index].value ? color : 'transparent'
             },
+            animation: false,
             ...largeDataOptions.value,
           }
         } catch (err) {
@@ -1493,6 +1497,7 @@ function createChartOption() {
             areaStyle: {
               color: areaMap[index].value ? color : 'transparent'
             },
+            animation: false,
             ...largeDataOptions.value,
           }
         } catch (err) {
@@ -1534,6 +1539,7 @@ function createChartOption() {
             areaStyle: {
               color: areaMap[index].value ? color : 'transparent'
             },
+            animation: false,
             ...largeDataOptions.value,
           }
         } catch (err) {
@@ -1589,6 +1595,7 @@ function createChartOption() {
             areaStyle: {
               color: areaMap[index].value ? color : 'transparent'
             },
+            animation: false,
             ...largeDataOptions.value,
           }
         } catch (err) {
@@ -1631,6 +1638,7 @@ function createChartOption() {
             areaStyle: {
               color: areaMap[index].value ? color : 'transparent'
             },
+            animation: false,
             ...largeDataOptions.value,
           }
         } catch (err) {
@@ -1804,6 +1812,7 @@ function createChartOption() {
           ...series,
           gridIndex: 0,
           xAxisIndex: 0,
+          animation: false,
           ...largeDataOptions.value,
         })),
         // 下图表系列 - 添加gridIndex和xAxisIndex
@@ -1811,6 +1820,7 @@ function createChartOption() {
           ...series,
           gridIndex: 1,
           xAxisIndex: 1,
+          animation: false,
           ...largeDataOptions.value,
         }))
       ]
