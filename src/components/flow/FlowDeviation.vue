@@ -49,22 +49,61 @@
   <!-- 视图配置对话框 -->
   <el-dialog
     v-model="viewConfigDialogVisible"
-    width="400px"
+    width="500px"
     destroy-on-close
+    title="轨迹配置"
   >
     <div class="dialog-content">
+      <!-- 轨迹1配置 -->
+      <el-divider content-position="left">轨迹1</el-divider>
       <div style="margin-bottom: 20px;">
-        <span style="display: inline-block; width: 100px;">X轴字段：</span>
-        <el-select v-model="deviationX" placeholder="选择X轴字段" style="width: 200px;">
-          <el-option label="" value=""></el-option>
+        <span style="display: inline-block; width: 100px;">轨迹1 X轴：</span>
+        <el-select v-model="deviationTrack1X" placeholder="选择X轴字段" style="width: 200px;">
+          <el-option label="<None>" value=""></el-option>
           <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
         </el-select>
       </div>
       
       <div style="margin-bottom: 20px;">
-        <span style="display: inline-block; width: 100px;">Y轴字段：</span>
-        <el-select v-model="deviationY" placeholder="选择Y轴字段" style="width: 200px;">
-          <el-option label="" value=""></el-option>
+        <span style="display: inline-block; width: 100px;">轨迹1 Y轴：</span>
+        <el-select v-model="deviationTrack1Y" placeholder="选择Y轴字段" style="width: 200px;">
+          <el-option label="<None>" value=""></el-option>
+          <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
+        </el-select>
+      </div>
+
+      <!-- 轨迹2配置 -->
+      <el-divider content-position="left">轨迹2</el-divider>
+      <div style="margin-bottom: 20px;">
+        <span style="display: inline-block; width: 100px;">轨迹2 X轴：</span>
+        <el-select v-model="deviationTrack2X" placeholder="选择X轴字段" style="width: 200px;">
+          <el-option label="<None>" value=""></el-option>
+          <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
+        </el-select>
+      </div>
+      
+      <div style="margin-bottom: 20px;">
+        <span style="display: inline-block; width: 100px;">轨迹2 Y轴：</span>
+        <el-select v-model="deviationTrack2Y" placeholder="选择Y轴字段" style="width: 200px;">
+          <el-option label="<None>" value=""></el-option>
+          <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
+        </el-select>
+      </div>
+
+      <!-- 轨迹3配置 -->
+      <el-divider content-position="left">轨迹3</el-divider>
+      <div style="margin-bottom: 20px;">
+        <span style="display: inline-block; width: 100px;">轨迹3 X轴：</span>
+        <el-select v-model="deviationTrack3X" placeholder="选择X轴字段" style="width: 200px;">
+          <el-option label="<None>" value=""></el-option>
+          <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
+        </el-select>
+      </div>
+      
+      <div style="margin-bottom: 20px;">
+        <span style="display: inline-block; width: 100px;">轨迹3 Y轴：</span>
+        <el-select v-model="deviationTrack3Y" placeholder="选择Y轴字段" style="width: 200px;">
+          <el-option label="<None>" value=""></el-option>
           <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
         </el-select>
       </div>
@@ -78,16 +117,27 @@
 
 <script setup>
 import * as echarts from 'echarts';
-import { ref, watch, onMounted, onUnmounted, nextTick, computed } from 'vue';
-import { useFlow } from '../../composables/flow/useFlow';
+import { ref, watch, onMounted, onUnmounted, nextTick, computed, reactive } from 'vue';
+import { useFlow } from '@/composables/flow/useFlow';
 import { useDevice } from '@/hooks/useDevice'
 import { ScatterChart } from 'echarts/charts';
 import { GridComponent } from 'echarts/components';
 import { CanvasRenderer } from 'echarts/renderers';
 import { ElMessage } from 'element-plus';
-import { useDataConfig } from '../../composables/flow/useDataConfig';
+import { useDataConfig } from '@/composables/flow/useDataConfig';
+import { useConsole } from '@/composables/flow/useConsole';
 
-const { deviationX, deviationY } = useDataConfig();
+const { 
+  deviationTrack1X,
+  deviationTrack1Y,
+  deviationTrack2X,
+  deviationTrack2Y,
+  deviationTrack3X,
+  deviationTrack3Y
+} = useDataConfig();
+
+// 导入搜索功能
+const { searchQuery, performSearch } = useConsole();
 
 // 注册ECharts组件
 const { plotData, toggleSlideWindow, enableWindow } = useFlow();
@@ -103,6 +153,7 @@ const isTracking = ref(true);
 const padding = ref(10000); // 默认正负10km
 const pointSize = ref(10); // 初始值与图表配置一致
 const chartDom = ref(null); // 添加chartDom引用
+const highlightTimeout = ref(null); // 添加高亮超时定时器
 // 移除squareSize变量
 
 // 视图配置相关变量
@@ -121,7 +172,19 @@ const availableSources = computed(() => {
 });
 
 // 数据存储变量
-let trackData = [];
+let track1Data = [];
+let track2Data = [];
+let track3Data = [];
+// 添加时间索引映射，用于时间同步显示
+let track1TimeIndex = [];
+let track2TimeIndex = [];
+let track3TimeIndex = [];
+// 最新点信息，用于高亮显示
+const latestPointInfo = reactive({
+  track: null, // 1, 2, 或 3
+  index: -1,   // 在对应轨迹中的索引
+  data: null   // [x, y] 坐标
+});
 // let firstPosition = null;
 // const maxTrackPoints = 3600 * 12;
 let resizeObserver = null;
@@ -134,9 +197,10 @@ function showViewConfig() {
 
 // 应用视图配置
 function applyViewConfig() {
-  if (!deviationX.value || !deviationY.value) {
+  // 验证是否至少配置了一条轨迹
+  if (!deviationTrack1X.value && !deviationTrack2X.value && !deviationTrack3X.value) {
     ElMessage({
-      message: `请选择X轴和Y轴字段`,
+      message: `请至少配置一条轨迹的X轴和Y轴字段`,
       type: 'warning',
       placement: 'bottom-right',
       offset: 50,
@@ -145,36 +209,50 @@ function applyViewConfig() {
   }
   
   // 清除现有轨迹数据
-  trackData.splice(0, trackData.length);
+  track1Data.splice(0, track1Data.length);
+  track2Data.splice(0, track2Data.length);
+  track3Data.splice(0, track3Data.length);
   
-  // 更新图表
+  // 更新图表轴名称（使用第一个配置的轨迹）
+  let xAxisName = '';
+  let yAxisName = '';
+  
+  if (deviationTrack1X.value) {
+    xAxisName = deviationTrack1X.value;
+  } else if (deviationTrack2X.value) {
+    xAxisName = deviationTrack2X.value;
+  } else if (deviationTrack3X.value) {
+    xAxisName = deviationTrack3X.value;
+  }
+  
+  if (deviationTrack1Y.value) {
+    yAxisName = deviationTrack1Y.value;
+  } else if (deviationTrack2Y.value) {
+    yAxisName = deviationTrack2Y.value;
+  } else if (deviationTrack3Y.value) {
+    yAxisName = deviationTrack3Y.value;
+  }
+  
+  // 根据跟踪模式调整轴名称
+  if (!isTracking.value && xAxisName) {
+    xAxisName = `${xAxisName}`;
+  }
+  if (!isTracking.value && yAxisName) {
+    yAxisName = `${yAxisName}`;
+  }
+  
   if (chartInstance.value) {
     chartInstance.value.setOption({
       xAxis: {
-        name: deviationX.value
+        name: xAxisName || 'X轴'
       },
       yAxis: {
-        name: deviationY.value
+        name: yAxisName || 'Y轴'
       }
     });
   }
   
   viewConfigDialogVisible.value = false;
-}
-
-// 计算正方形尺寸
-function calculateSquareSize() {
-  if (!chartContainerRef.value) return;
-  
-  // 获取容器可用尺寸
-  const containerWidth = chartContainerRef.value.clientWidth;
-  const containerHeight = chartContainerRef.value.clientHeight;
-  
-  // 计算最大可能的正方形尺寸，取宽和高中的较小值
-  const size = Math.min(containerWidth, containerHeight);
-  
-  // 设置正方形尺寸
-  // squareSize.value = size;
 }
 
 // 设置调整大小观察器
@@ -263,27 +341,92 @@ function initChart() {
     hoverAnimation: false,
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
     tooltip: {
-      trigger: 'axis',
+      trigger: 'item',
       formatter: function(params) {
-        const point = params[0].value;
-        const xField = deviationX.value || 'X';
-        const yField = deviationY.value || 'Y';
-        return `${xField}: ${point[0].toFixed(2)}<br/>${yField}: ${point[1].toFixed(2)}`;
+        const point = params.value;
+        const seriesName = params.seriesName;
+        const dataIndex = params.dataIndex;
+        
+        let xField = 'X';
+        let yField = 'Y';
+        let currentTime = null;
+        
+        // 根据系列名称选择对应的轴字段和时间
+        if (seriesName === '轨迹1' && deviationTrack1X.value && deviationTrack1Y.value) {
+          xField = deviationTrack1X.value;
+          yField = deviationTrack1Y.value;
+          currentTime = track1TimeIndex[dataIndex];
+        } else if (seriesName === '轨迹2' && deviationTrack2X.value && deviationTrack2Y.value) {
+          xField = deviationTrack2X.value;
+          yField = deviationTrack2Y.value;
+          currentTime = track2TimeIndex[dataIndex];
+        } else if (seriesName === '轨迹3' && deviationTrack3X.value && deviationTrack3Y.value) {
+          xField = deviationTrack3X.value;
+          yField = deviationTrack3Y.value;
+          currentTime = track3TimeIndex[dataIndex];
+        } else if (seriesName === '当前位置1' && deviationTrack1X.value && deviationTrack1Y.value) {
+          // 当前位置1使用轨迹1的字段和时间
+          xField = deviationTrack1X.value;
+          yField = deviationTrack1Y.value;
+          if (track1TimeIndex.length > 0) {
+            currentTime = track1TimeIndex[track1TimeIndex.length - 1];
+          }
+        } else if (seriesName === '当前位置2' && deviationTrack2X.value && deviationTrack2Y.value) {
+          // 当前位置2使用轨迹2的字段和时间
+          xField = deviationTrack2X.value;
+          yField = deviationTrack2Y.value;
+          if (track2TimeIndex.length > 0) {
+            currentTime = track2TimeIndex[track2TimeIndex.length - 1];
+          }
+        } else if (seriesName === '当前位置3' && deviationTrack3X.value && deviationTrack3Y.value) {
+          // 当前位置3使用轨迹3的字段和时间
+          xField = deviationTrack3X.value;
+          yField = deviationTrack3Y.value;
+          if (track3TimeIndex.length > 0) {
+            currentTime = track3TimeIndex[track3TimeIndex.length - 1];
+          }
+        }
+        
+        // 构建基础tooltip内容，添加marker图标
+        let tooltipContent = `${params.marker}${seriesName}<br/>${xField}: ${point[0].toFixed(2)}<br/>${yField}: ${point[1].toFixed(2)}`;
+        
+        // 添加时间信息（如果有）
+        if (currentTime !== null && currentTime !== undefined) {
+          // 参考FlowData.vue的时间显示格式
+          let result = `显示时间: `
+          
+          // 使用plotTime作为显示时间（从0开始的相对时间）
+          let displayTime = 0;
+          if (plotData.value.plotTime && plotData.value.plotTime[dataIndex] !== undefined) {
+            displayTime = plotData.value.plotTime[dataIndex];
+          } else if (seriesName.startsWith('当前位置')) {
+            // 对于当前位置系列，使用最后一个plotTime值
+            const lastIndex = plotData.value.plotTime ? plotData.value.plotTime.length - 1 : 0;
+            if (plotData.value.plotTime && plotData.value.plotTime[lastIndex] !== undefined) {
+              displayTime = plotData.value.plotTime[lastIndex];
+            }
+          }
+          result += `${displayTime.toFixed(3)}s`
+          result += `<br/>`
+
+          const timeMarker = `<div style="line-height:16px;display:inline-block;vertical-align:middle;margin-right:4px;">
+            <svg width="12" height="12" viewBox="0 0 24 24"
+                fill="none" stroke="grey" stroke-width="2">
+              <circle cx="12" cy="12" r="9"/>
+              <path d="M12 7v5l3 3"/>
+            </svg>
+          </div>`
+          result += `${timeMarker}time: ${currentTime.toFixed(3)}<br/>`
+          
+          tooltipContent = result + tooltipContent;
+        }
+        
+        return tooltipContent;
       },
       show: true,
     },
     legend: {
-      data: [
-        {
-          name: '历史轨迹',
-          itemStyle: {
-            color: 'grey',
-          },
-        },
-        {
-          name: '当前位置',
-        },
-      ],
+      data: [], // 初始为空，后续动态更新
       right: 10,
       top: 10,
     },
@@ -297,7 +440,7 @@ function initChart() {
     dataZoom: getDataZoomConfig(-10, 10, -10, 10),
     xAxis: {
       type: 'value',
-      name: deviationX.value || '',
+      name: isTracking.value ? 'X轴' : 'X轴',
       nameLocation: 'middle',
       nameGap: 30,
       axisLabel: {
@@ -319,7 +462,7 @@ function initChart() {
     },
     yAxis: {
       type: 'value',
-      name: deviationY.value || '',
+      name: isTracking.value ? 'Y轴' : 'Y轴',
       nameLocation: 'middle',
       nameGap: 40,
       axisLabel: {
@@ -359,9 +502,13 @@ function initChart() {
         type: 'scatter',
         data: [],
         coordinateSystem: 'cartesian2d',
-        symbolSize: pointSize.value,
+        symbolSize: pointSize.value * 1.2,
         itemStyle: {
           color: '#ff4d4f',
+          borderWidth: 2,
+          borderColor: '#fff',
+          shadowBlur: 2,
+          shadowColor: '#222',
         },
         sampling: 'lttb',
         large: true,
@@ -370,6 +517,13 @@ function initChart() {
   };
 
   chartInstance.value.setOption(option);
+  
+  // 添加鼠标事件监听
+  chartInstance.value.on('mouseover', handleMouseOver);
+  chartInstance.value.on('mouseout', handleMouseOut);
+  chartInstance.value.on('globalout', handleMouseOut); // 添加全局鼠标移出事件
+  chartInstance.value.on('dblclick', handleChartDblClick); // 添加双击事件监听
+  
   setupResizeObserver();
 
   // 直接在DOM元素上绑定事件监听器
@@ -405,11 +559,13 @@ function handleWheel(e) {
   let newYEnd = yEnd;
 
   if (isTracking.value) {
+    // 跟踪模式下保持中心在原点
     newXStart = Math.max(-limit, -xSpan / 2);
     newXEnd = Math.min(limit, xSpan / 2);
     newYStart = Math.max(-limit, -ySpan / 2);
     newYEnd = Math.min(limit, ySpan / 2);
   } else {
+    // 非跟踪模式下，以当前视图中心进行缩放（参考GnssDeviation的实现）
     const xCenter = (xStart + xEnd) / 2;
     const yCenter = (yStart + yEnd) / 2;
     newXStart = Math.max(-limit, xCenter - xSpan / 2);
@@ -433,33 +589,160 @@ function handleWheel(e) {
   return false;
 };
 
-// 更新数据点 - 使用真实数据而不是随机数据
+// 更新数据点 - 支持三条平级轨迹
 function updateFlowData() {
-  // 只有在选择了X轴和Y轴字段后才处理数据
-  if (!deviationX.value || !deviationY.value) {
-    return;
-  }
-  
-  // 从flowData中获取所有数据
-  const xData = plotData.value[deviationX.value];
-  const yData = plotData.value[deviationY.value];
-  
-  if (!xData || !yData || xData.length === 0 || yData.length === 0) {
-    return;
-  }
-  
-  trackData.splice(0, trackData.length);
-  const dataLength = Math.min(xData.length, yData.length);
+  // 清空所有轨迹数据和时间索引
+  track1Data.splice(0, track1Data.length);
+  track2Data.splice(0, track2Data.length);
+  track3Data.splice(0, track3Data.length);
+  track1TimeIndex.splice(0, track1TimeIndex.length);
+  track2TimeIndex.splice(0, track2TimeIndex.length);
+  track3TimeIndex.splice(0, track3TimeIndex.length);
 
-  for (let i = 0; i < dataLength; i++) {
-    const x = xData[i];
-    const y = yData[i];
+  // 确定跟踪目标：优先顺序为轨迹1 > 轨迹2 > 轨迹3
+  let trackingTrack = null;
+  let trackingData = null;
+  let latestPointIndex = -1;
+  
+  if (deviationTrack1X.value && deviationTrack1Y.value && plotData.value[deviationTrack1X.value] && plotData.value[deviationTrack1Y.value]) {
+    const track1XData = plotData.value[deviationTrack1X.value];
+    const track1YData = plotData.value[deviationTrack1Y.value];
+    if (track1XData && track1YData && track1XData.length > 0 && track1YData.length > 0) {
+      trackingTrack = 1;
+      trackingData = [track1XData[track1XData.length - 1], track1YData[track1YData.length - 1]];
+      latestPointIndex = track1XData.length - 1;
+    }
+  }
+  if (!trackingTrack && deviationTrack2X.value && deviationTrack2Y.value && plotData.value[deviationTrack2X.value] && plotData.value[deviationTrack2Y.value]) {
+    const track2XData = plotData.value[deviationTrack2X.value];
+    const track2YData = plotData.value[deviationTrack2Y.value];
+    if (track2XData && track2YData && track2XData.length > 0 && track2YData.length > 0) {
+      trackingTrack = 2;
+      trackingData = [track2XData[track2XData.length - 1], track2YData[track2YData.length - 1]];
+      latestPointIndex = track2XData.length - 1;
+    }
+  }
+  if (!trackingTrack && deviationTrack3X.value && deviationTrack3Y.value && plotData.value[deviationTrack3X.value] && plotData.value[deviationTrack3Y.value]) {
+    const track3XData = plotData.value[deviationTrack3X.value];
+    const track3YData = plotData.value[deviationTrack3Y.value];
+    if (track3XData && track3YData && track3XData.length > 0 && track3YData.length > 0) {
+      trackingTrack = 3;
+      trackingData = [track3XData[track3XData.length - 1], track3YData[track3YData.length - 1]];
+      latestPointIndex = track3XData.length - 1;
+    }
+  }
+
+  // 计算跟踪偏移量
+  let offsetX = 0;
+  let offsetY = 0;
+  if (isTracking.value && trackingTrack && trackingData) {
+    offsetX = trackingData[0];
+    offsetY = trackingData[1];
+  } else if (!isTracking.value) {
+    // 非跟踪模式下，将第一条轨迹的第一个点作为(0,0)参考点
+    if (deviationTrack1X.value && deviationTrack1Y.value && plotData.value[deviationTrack1X.value] && plotData.value[deviationTrack1Y.value]) {
+      const track1XData = plotData.value[deviationTrack1X.value];
+      const track1YData = plotData.value[deviationTrack1Y.value];
+      if (track1XData && track1YData && track1XData.length > 0 && track1YData.length > 0) {
+        offsetX = track1XData[0];  // 第一条轨迹的第一个点的X坐标
+        offsetY = track1YData[0];  // 第一条轨迹的第一个点的Y坐标
+      }
+    }
+  } else if (!isTracking.value) {
+    // 非跟踪模式下，将第一条轨迹的第一个点作为(0,0)参考点
+    if (deviationTrack1X.value && deviationTrack1Y.value && plotData.value[deviationTrack1X.value] && plotData.value[deviationTrack1Y.value]) {
+      const track1XData = plotData.value[deviationTrack1X.value];
+      const track1YData = plotData.value[deviationTrack1Y.value];
+      if (track1XData && track1YData && track1XData.length > 0 && track1YData.length > 0) {
+        offsetX = track1XData[0];  // 第一条轨迹的第一个点的X坐标
+        offsetY = track1YData[0];  // 第一条轨迹的第一个点的Y坐标
+      }
+    }
+  }
+
+  // 更新最新点信息
+  if (trackingTrack && latestPointIndex >= 0) {
+    latestPointInfo.track = trackingTrack;
+    latestPointInfo.index = latestPointIndex;
+    latestPointInfo.data = trackingData;
+  } else {
+    latestPointInfo.track = null;
+    latestPointInfo.index = -1;
+    latestPointInfo.data = null;
+  }
+
+  // 处理轨迹1数据
+  if (deviationTrack1X.value && deviationTrack1Y.value) {
+    const track1XData = plotData.value[deviationTrack1X.value];
+    const track1YData = plotData.value[deviationTrack1Y.value];
     
-    // 确保数据是有效的数字
-    if (typeof x === 'number' && typeof y === 'number' && !isNaN(x) && !isNaN(y)) {
-      const roundedX = Math.round(x * 1000) / 1000;
-      const roundedY = Math.round(y * 1000) / 1000;
-      trackData.push([roundedX, roundedY]);
+    if (track1XData && track1YData && track1XData.length > 0 && track1YData.length > 0) {
+      const track1DataLength = Math.min(track1XData.length, track1YData.length);
+      for (let i = 0; i < track1DataLength; i++) {
+        const x = track1XData[i];
+        const y = track1YData[i];
+        if (typeof x === 'number' && typeof y === 'number' && !isNaN(x) && !isNaN(y)) {
+          const roundedX = Math.round((x - offsetX) * 1000) / 1000;
+          const roundedY = Math.round((y - offsetY) * 1000) / 1000;
+          track1Data.push([roundedX, roundedY]);
+          // 保存时间索引，用于时间同步显示
+          if (plotData.value.timestamp && plotData.value.timestamp[i] !== undefined) {
+            track1TimeIndex.push(plotData.value.timestamp[i]);
+          } else {
+            track1TimeIndex.push(i); // 如果没有时间戳，使用索引作为备用
+          }
+        }
+      }
+    }
+  }
+
+  // 处理轨迹2数据
+  if (deviationTrack2X.value && deviationTrack2Y.value) {
+    const track2XData = plotData.value[deviationTrack2X.value];
+    const track2YData = plotData.value[deviationTrack2Y.value];
+    
+    if (track2XData && track2YData && track2XData.length > 0 && track2YData.length > 0) {
+      const track2DataLength = Math.min(track2XData.length, track2YData.length);
+      for (let i = 0; i < track2DataLength; i++) {
+        const x = track2XData[i];
+        const y = track2YData[i];
+        if (typeof x === 'number' && typeof y === 'number' && !isNaN(x) && !isNaN(y)) {
+          const roundedX = Math.round((x - offsetX) * 1000) / 1000;
+          const roundedY = Math.round((y - offsetY) * 1000) / 1000;
+          track2Data.push([roundedX, roundedY]);
+          // 保存时间索引，用于时间同步显示
+          if (plotData.value.timestamp && plotData.value.timestamp[i] !== undefined) {
+            track2TimeIndex.push(plotData.value.timestamp[i]);
+          } else {
+            track2TimeIndex.push(i); // 如果没有时间戳，使用索引作为备用
+          }
+        }
+      }
+    }
+  }
+
+  // 处理轨迹3数据
+  if (deviationTrack3X.value && deviationTrack3Y.value) {
+    const track3XData = plotData.value[deviationTrack3X.value];
+    const track3YData = plotData.value[deviationTrack3Y.value];
+    
+    if (track3XData && track3YData && track3XData.length > 0 && track3YData.length > 0) {
+      const track3DataLength = Math.min(track3XData.length, track3YData.length);
+      for (let i = 0; i < track3DataLength; i++) {
+        const x = track3XData[i];
+        const y = track3YData[i];
+        if (typeof x === 'number' && typeof y === 'number' && !isNaN(x) && !isNaN(y)) {
+          const roundedX = Math.round((x - offsetX) * 1000) / 1000;
+          const roundedY = Math.round((y - offsetY) * 1000) / 1000;
+          track3Data.push([roundedX, roundedY]);
+          // 保存时间索引，用于时间同步显示
+          if (plotData.value.timestamp && plotData.value.timestamp[i] !== undefined) {
+            track3TimeIndex.push(plotData.value.timestamp[i]);
+          } else {
+            track3TimeIndex.push(i); // 如果没有时间戳，使用索引作为备用
+          }
+        }
+      }
     }
   }
 
@@ -467,70 +750,533 @@ function updateFlowData() {
   updateChartDisplay();
 }
 
-// 更新图表显示
+// 更新图表显示 - 三条平级轨迹
 function updateChartDisplay() {
   if (!chartInstance.value) return;
   
-  let displayTrackData = [...trackData];
-  let currentDisplayPoint = trackData.length > 0 ? [...trackData[trackData.length - 1]] : [];
+  // 构建系列数据
+  const series = [];
 
-  if (isTracking.value && trackData.length > 0) {
-    const latestPoint = trackData[trackData.length - 1];
-    const offsetX = latestPoint[0];
-    const offsetY = latestPoint[1];
-    displayTrackData = trackData.map(point => [point[0] - offsetX, point[1] - offsetY]);
-    currentDisplayPoint = [0, 0];
+  // 添加轨迹1
+  if (deviationTrack1X.value && deviationTrack1Y.value && track1Data.length > 0) {
+    const isLatestTrack = latestPointInfo.track === 1;
+    series.push({
+      name: '轨迹1',
+      type: 'scatter',
+      data: track1Data,
+      coordinateSystem: 'cartesian2d',
+      symbolSize: function(params, paramsIndex) {
+        // 在非跟踪模式下高亮最新点
+        if (!isTracking.value && isLatestTrack && paramsIndex === latestPointInfo.index) {
+          return pointSize.value * 1.5;
+        }
+        return pointSize.value;
+      },
+      symbol: 'circle',
+      itemStyle: {
+        color: function(params, paramsIndex) {
+          // 在非跟踪模式下高亮最新点
+          if (!isTracking.value && isLatestTrack && paramsIndex === latestPointInfo.index) {
+            return '#52c41a';
+          }
+          return '#52c41a';
+        },
+        opacity: function(params, paramsIndex) {
+          // 在非跟踪模式下高亮最新点
+          if (!isTracking.value && isLatestTrack && paramsIndex === latestPointInfo.index) {
+            return 1;
+          }
+          return 0.6;
+        },
+        borderWidth: function(params, paramsIndex) {
+          // 在非跟踪模式下高亮最新点
+          if (!isTracking.value && isLatestTrack && paramsIndex === latestPointInfo.index) {
+            return 3;
+          }
+          return 0;
+        },
+        borderColor: function(params, paramsIndex) {
+          // 在非跟踪模式下高亮最新点
+          if (!isTracking.value && isLatestTrack && paramsIndex === latestPointInfo.index) {
+            return '#fff';
+          }
+          return 'transparent';
+        },
+        shadowBlur: function(params, paramsIndex) {
+          // 在非跟踪模式下高亮最新点
+          if (!isTracking.value && isLatestTrack && paramsIndex === latestPointInfo.index) {
+            return 10;
+          }
+          return 0;
+        },
+        shadowColor: function(params, paramsIndex) {
+          // 在非跟踪模式下高亮最新点
+          if (!isTracking.value && isLatestTrack && paramsIndex === latestPointInfo.index) {
+            return 'rgba(82, 196, 26, 0.5)';
+          }
+          return 'transparent';
+        }
+      },
+      emphasis: {
+        itemStyle: {
+          color: '#52c41a',
+          opacity: 1,
+          borderColor: '#fff',
+          borderWidth: 2,
+          shadowBlur: 10,
+          shadowColor: 'rgba(82, 196, 26, 0.5)'
+        },
+        scale: 1.5
+      },
+      sampling: 'lttb',
+      large: true,
+    });
   }
 
-  chartInstance.value.setOption({
-    series: [
-      {
-        name: '历史轨迹',
-        data: displayTrackData,
-        symbolSize: pointSize.value,
-        itemStyle: {
-          color: '#4e6ef2',
-          opacity: 0.6,
-        },
+  // 添加轨迹2
+  if (deviationTrack2X.value && deviationTrack2Y.value && track2Data.length > 0) {
+    const isLatestTrack = latestPointInfo.track === 2;
+    series.push({
+      name: '轨迹2',
+      type: 'scatter',
+      data: track2Data,
+      coordinateSystem: 'cartesian2d',
+      symbolSize: function(params, paramsIndex) {
+        // 在非跟踪模式下高亮最新点
+        if (!isTracking.value && isLatestTrack && paramsIndex === latestPointInfo.index) {
+          return pointSize.value * 1.5;
+        }
+        return pointSize.value;
       },
-      {
-        name: '当前位置',
-        data: currentDisplayPoint.length > 0 ? [currentDisplayPoint] : [],
+      symbol: 'circle',
+      itemStyle: {
+        color: function(params, paramsIndex) {
+          // 在非跟踪模式下高亮最新点
+          if (!isTracking.value && isLatestTrack && paramsIndex === latestPointInfo.index) {
+            return '#fa8c16';
+          }
+          return '#fa8c16';
+        },
+        opacity: function(params, paramsIndex) {
+          // 在非跟踪模式下高亮最新点
+          if (!isTracking.value && isLatestTrack && paramsIndex === latestPointInfo.index) {
+            return 1;
+          }
+          return 0.6;
+        },
+        borderWidth: function(params, paramsIndex) {
+          // 在非跟踪模式下高亮最新点
+          if (!isTracking.value && isLatestTrack && paramsIndex === latestPointInfo.index) {
+            return 3;
+          }
+          return 0;
+        },
+        borderColor: function(params, paramsIndex) {
+          // 在非跟踪模式下高亮最新点
+          if (!isTracking.value && isLatestTrack && paramsIndex === latestPointInfo.index) {
+            return '#fff';
+          }
+          return 'transparent';
+        },
+        shadowBlur: function(params, paramsIndex) {
+          // 在非跟踪模式下高亮最新点
+          if (!isTracking.value && isLatestTrack && paramsIndex === latestPointInfo.index) {
+            return 10;
+          }
+          return 0;
+        },
+        shadowColor: function(params, paramsIndex) {
+          // 在非跟踪模式下高亮最新点
+          if (!isTracking.value && isLatestTrack && paramsIndex === latestPointInfo.index) {
+            return 'rgba(250, 140, 22, 0.5)';
+          }
+          return 'transparent';
+        }
+      },
+      emphasis: {
+        itemStyle: {
+          color: '#fa8c16',
+          opacity: 1,
+          borderColor: '#fff',
+          borderWidth: 2,
+          shadowBlur: 10,
+          shadowColor: 'rgba(250, 140, 22, 0.5)'
+        },
+        scale: 1.5
+      },
+      sampling: 'lttb',
+      large: true,
+    });
+  }
+
+  // 添加轨迹3
+  if (deviationTrack3X.value && deviationTrack3Y.value && track3Data.length > 0) {
+    const isLatestTrack = latestPointInfo.track === 3;
+    series.push({
+      name: '轨迹3',
+      type: 'scatter',
+      data: track3Data,
+      coordinateSystem: 'cartesian2d',
+      symbolSize: function(params, paramsIndex) {
+        // 在非跟踪模式下高亮最新点
+        if (!isTracking.value && isLatestTrack && paramsIndex === latestPointInfo.index) {
+          return pointSize.value * 1.5;
+        }
+        return pointSize.value;
+      },
+      symbol: 'circle',
+      itemStyle: {
+        color: function(params, paramsIndex) {
+          // 在非跟踪模式下高亮最新点
+          if (!isTracking.value && isLatestTrack && paramsIndex === latestPointInfo.index) {
+            return '#722ed1';
+          }
+          return '#722ed1';
+        },
+        opacity: function(params, paramsIndex) {
+          // 在非跟踪模式下高亮最新点
+          if (!isTracking.value && isLatestTrack && paramsIndex === latestPointInfo.index) {
+            return 1;
+          }
+          return 0.6;
+        },
+        borderWidth: function(params, paramsIndex) {
+          // 在非跟踪模式下高亮最新点
+          if (!isTracking.value && isLatestTrack && paramsIndex === latestPointInfo.index) {
+            return 3;
+          }
+          return 0;
+        },
+        borderColor: function(params, paramsIndex) {
+          // 在非跟踪模式下高亮最新点
+          if (!isTracking.value && isLatestTrack && paramsIndex === latestPointInfo.index) {
+            return '#fff';
+          }
+          return 'transparent';
+        },
+        shadowBlur: function(params, paramsIndex) {
+          // 在非跟踪模式下高亮最新点
+          if (!isTracking.value && isLatestTrack && paramsIndex === latestPointInfo.index) {
+            return 10;
+          }
+          return 0;
+        },
+        shadowColor: function(params, paramsIndex) {
+          // 在非跟踪模式下高亮最新点
+          if (!isTracking.value && isLatestTrack && paramsIndex === latestPointInfo.index) {
+            return 'rgba(114, 46, 209, 0.5)';
+          }
+          return 'transparent';
+        }
+      },
+      emphasis: {
+        itemStyle: {
+          color: '#722ed1',
+          opacity: 1,
+          borderColor: '#fff',
+          borderWidth: 2,
+          shadowBlur: 10,
+          shadowColor: 'rgba(114, 46, 209, 0.5)'
+        },
+        scale: 1.5
+      },
+      sampling: 'lttb',
+      large: true,
+    });
+  }
+
+  // 为每条轨迹添加独立的当前位置系列（不在legend中显示）
+  // 跟踪模式下：所有轨迹都显示当前位置，但只有轨迹1的当前位置固定在中心
+  if (isTracking.value) {
+    // 轨迹1当前位置（固定在中心）
+    if (deviationTrack1X.value && deviationTrack1Y.value && track1Data.length > 0) {
+      series.push({
+        name: '当前位置1',
+        type: 'scatter',
+        data: [[0, 0]], // 跟踪模式下轨迹1固定在中心
+        coordinateSystem: 'cartesian2d',
         symbolSize: pointSize.value * 1.2,
         itemStyle: {
-          color: '#ff4d4f', // 内部填充色
-          borderWidth: 2,   // 边框总宽度
-          borderColor: '#fff', // 外层边框颜色
-          borderType: 'solid',
-          shadowColor: '#222', // 内层边框颜色
-          shadowOffsetX: 0,
-          shadowOffsetY: 0,
-          shadowBlur: 2
+          color: '#52c41a',
+          borderWidth: 2,
+          borderColor: '#fff',
+          shadowBlur: 2,
+          shadowColor: '#222',
         },
-      },
-    ],
+        emphasis: {
+          itemStyle: {
+            color: '#52c41a',
+            opacity: 1,
+            borderColor: '#fff',
+            borderWidth: 2,
+            shadowBlur: 10,
+            shadowColor: 'rgba(82, 196, 26, 0.5)'
+          },
+          scale: 1.5
+        },
+        sampling: 'lttb',
+        large: true,
+      });
+    }
+
+    // 轨迹2当前位置（显示在真实位置）
+    if (deviationTrack2X.value && deviationTrack2Y.value && track2Data.length > 0) {
+      const lastPoint2 = track2Data[track2Data.length - 1];
+      series.push({
+        name: '当前位置2',
+        type: 'scatter',
+        data: [lastPoint2],
+        coordinateSystem: 'cartesian2d',
+        symbolSize: pointSize.value * 1.2,
+        itemStyle: {
+          color: '#fa8c16',
+          borderWidth: 2,
+          borderColor: '#fff',
+          shadowBlur: 2,
+          shadowColor: '#222',
+        },
+        emphasis: {
+          itemStyle: {
+            color: '#fa8c16',
+            opacity: 1,
+            borderColor: '#fff',
+            borderWidth: 2,
+            shadowBlur: 10,
+            shadowColor: 'rgba(250, 140, 22, 0.5)'
+          },
+          scale: 1.5
+        },
+        sampling: 'lttb',
+        large: true,
+      });
+    }
+
+    // 轨迹3当前位置（显示在真实位置）
+    if (deviationTrack3X.value && deviationTrack3Y.value && track3Data.length > 0) {
+      const lastPoint3 = track3Data[track3Data.length - 1];
+      series.push({
+        name: '当前位置3',
+        type: 'scatter',
+        data: [lastPoint3],
+        coordinateSystem: 'cartesian2d',
+        symbolSize: pointSize.value * 1.2,
+        itemStyle: {
+          color: '#722ed1',
+          borderWidth: 2,
+          borderColor: '#fff',
+          shadowBlur: 2,
+          shadowColor: '#222',
+        },
+        emphasis: {
+          itemStyle: {
+            color: '#722ed1',
+            opacity: 1,
+            borderColor: '#fff',
+            borderWidth: 2,
+            shadowBlur: 10,
+            shadowColor: 'rgba(114, 46, 209, 0.5)'
+          },
+          scale: 1.5
+        },
+        sampling: 'lttb',
+        large: true,
+      });
+    }
+  } else {
+    // 非跟踪模式下，显示所有轨迹的当前位置
+    // 轨迹1当前位置
+    if (deviationTrack1X.value && deviationTrack1Y.value && track1Data.length > 0) {
+      const lastPoint1 = track1Data[track1Data.length - 1];
+      series.push({
+        name: '当前位置1',
+        type: 'scatter',
+        data: [lastPoint1],
+        coordinateSystem: 'cartesian2d',
+        symbolSize: pointSize.value * 1.2,
+        itemStyle: {
+          color: '#52c41a',
+          borderWidth: 2,
+          borderColor: '#fff',
+          shadowBlur: 2,
+          shadowColor: '#222',
+        },
+        emphasis: {
+          itemStyle: {
+            color: '#52c41a',
+            opacity: 1,
+            borderColor: '#fff',
+            borderWidth: 2,
+            shadowBlur: 10,
+            shadowColor: 'rgba(82, 196, 26, 0.5)'
+          },
+          scale: 1.5
+        },
+        sampling: 'lttb',
+        large: true,
+      });
+    }
+
+    // 轨迹2当前位置
+    if (deviationTrack2X.value && deviationTrack2Y.value && track2Data.length > 0) {
+      const lastPoint2 = track2Data[track2Data.length - 1];
+      series.push({
+        name: '当前位置2',
+        type: 'scatter',
+        data: [lastPoint2],
+        coordinateSystem: 'cartesian2d',
+        symbolSize: pointSize.value * 1.2,
+        itemStyle: {
+          color: '#fa8c16',
+          borderWidth: 2,
+          borderColor: '#fff',
+          shadowBlur: 2,
+          shadowColor: '#222',
+        },
+        emphasis: {
+          itemStyle: {
+            color: '#fa8c16',
+            opacity: 1,
+            borderColor: '#fff',
+            borderWidth: 2,
+            shadowBlur: 10,
+            shadowColor: 'rgba(250, 140, 22, 0.5)'
+          },
+          scale: 1.5
+        },
+        sampling: 'lttb',
+        large: true,
+      });
+    }
+
+    // 轨迹3当前位置
+    if (deviationTrack3X.value && deviationTrack3Y.value && track3Data.length > 0) {
+      const lastPoint3 = track3Data[track3Data.length - 1];
+      series.push({
+        name: '当前位置3',
+        type: 'scatter',
+        data: [lastPoint3],
+        coordinateSystem: 'cartesian2d',
+        symbolSize: pointSize.value * 1.2,
+        itemStyle: {
+          color: '#722ed1',
+          borderWidth: 2,
+          borderColor: '#fff',
+          shadowBlur: 2,
+          shadowColor: '#222',
+        },
+        emphasis: {
+          itemStyle: {
+            color: '#722ed1',
+            opacity: 1,
+            borderColor: '#fff',
+            borderWidth: 2,
+            shadowBlur: 10,
+            shadowColor: 'rgba(114, 46, 209, 0.5)'
+          },
+          scale: 1.5
+        },
+        sampling: 'lttb',
+        large: true,
+      });
+    }
+  }
+
+  // 更新图例（过滤掉所有当前位置系列）
+  const legendData = series.filter(s => !s.name.startsWith('当前位置')).map(s => {
+    // 获取系列的颜色 - 处理函数和直接值的情况
+    let seriesColor;
+    if (typeof s.itemStyle.color === 'function') {
+      // 如果是函数，获取默认颜色（非高亮状态）
+      seriesColor = s.itemStyle.color({}, 0); // 传入索引0获取默认颜色
+    } else {
+      // 如果是直接的颜色值
+      seriesColor = s.itemStyle.color;
+    }
+    
+    return {
+      name: s.name,
+      itemStyle: { color: seriesColor }
+    };
+  });
+
+  chartInstance.value.setOption({
+    legend: {
+      data: legendData,
+      right: 10,
+      top: 10,
+    },
+    series: series
   });
 }
 
 // 切换追踪模式
 function toggleTracking() {
-  updateChartDisplay();
+  if (isTracking.value) {
+    // 开启跟踪模式：以最新轨迹点为中心
+    updateFlowData(); // 重新计算偏移量
+    
+    if (chartInstance.value) {
+      // const limit = 100;
+      const span = 20; // 显示范围
+      
+      chartInstance.value.setOption({
+        dataZoom: getDataZoomConfig(-span/2, span/2, -span/2, span/2)
+      });
+    }
+  } else {
+    // 关闭跟踪模式：将第一条轨迹的第一个点作为(0,0)参考点
+    updateFlowData(); // 重新计算，设置新的偏移量
+    
+    if (chartInstance.value) {
+      // 非跟踪模式下，将视图中心调整到第一条轨迹的第一个点（偏移后的0,0点）
+      const span = 20; // 显示范围
+      chartInstance.value.setOption({
+        dataZoom: getDataZoomConfig(-span/2, span/2, -span/2, span/2)
+      });
+    }
+  }
   
   // 更新数据缩放配置以响应跟踪模式的变化
   if (chartInstance.value) {
+    // 更新坐标轴名称
+    let xAxisName = '';
+    let yAxisName = '';
+    
+    if (deviationTrack1X.value) {
+      xAxisName = deviationTrack1X.value;
+    } else if (deviationTrack2X.value) {
+      xAxisName = deviationTrack2X.value;
+    } else if (deviationTrack3X.value) {
+      xAxisName = deviationTrack3X.value;
+    }
+    
+    if (deviationTrack1Y.value) {
+      yAxisName = deviationTrack1Y.value;
+    } else if (deviationTrack2Y.value) {
+      yAxisName = deviationTrack2Y.value;
+    } else if (deviationTrack3Y.value) {
+      yAxisName = deviationTrack3Y.value;
+    }
+    
+    // 根据跟踪模式调整轴名称
+    if (!isTracking.value && xAxisName) {
+      xAxisName = `${xAxisName}`;
+    }
+    if (!isTracking.value && yAxisName) {
+      yAxisName = `${yAxisName}`;
+    }
+    
     chartInstance.value.setOption({
-      dataZoom: [
-        {
-          xAxisIndex: 0,
-          moveOnMouseWheel: !isTracking.value,
-          moveOnMouseMove: !isTracking.value
-        },
-        {
-          yAxisIndex: 0,
-          moveOnMouseWheel: !isTracking.value,
-          moveOnMouseMove: !isTracking.value
-        }
-      ]
+      xAxis: {
+        name: xAxisName || 'X轴',
+        moveOnMouseWheel: !isTracking.value,
+        moveOnMouseMove: !isTracking.value
+      },
+      yAxis: {
+        name: yAxisName || 'Y轴',
+        moveOnMouseWheel: !isTracking.value,
+        moveOnMouseMove: !isTracking.value
+      }
     });
   }
 }
@@ -544,14 +1290,28 @@ function resetZoom() {
 // 更新点大小
 function updatePointSize() {
   if (chartInstance.value) {
-    chartInstance.value.setOption({
-      series: [
-        {
-          name: '历史轨迹',
-          symbolSize: pointSize.value
+    // 获取当前图表配置
+    const option = chartInstance.value.getOption();
+    if (option && option.series) {
+      // 更新所有系列的点大小，当前位置系列使用1.2倍大小
+      const updatedSeries = option.series.map(series => {
+        if (series.name === '当前位置' || series.name.startsWith('当前位置')) {
+          return {
+            ...series,
+            symbolSize: pointSize.value * 1.2
+          };
+        } else {
+          return {
+            ...series,
+            symbolSize: pointSize.value
+          };
         }
-      ]
-    });
+      });
+      
+      chartInstance.value.setOption({
+        series: updatedSeries
+      });
+    }
   }
 }
 
@@ -666,9 +1426,162 @@ onMounted(() => {
   window.addEventListener('keydown', handleKeyDown);
 });
 
+function handleChartDblClick(params) {
+  // params 包含了双击事件的相关信息，如坐标、数据等
+  if (params.componentType === 'series') {
+    const dataIndex = params.dataIndex;
+    const seriesName = params.seriesName;
+    let rawTime = null;
+    
+    // 根据系列名称获取对应的时间戳
+    if (seriesName === '轨迹1' && track1TimeIndex[dataIndex] !== undefined) {
+      rawTime = track1TimeIndex[dataIndex];
+    } else if (seriesName === '轨迹2' && track2TimeIndex[dataIndex] !== undefined) {
+      rawTime = track2TimeIndex[dataIndex];
+    } else if (seriesName === '轨迹3' && track3TimeIndex[dataIndex] !== undefined) {
+      rawTime = track3TimeIndex[dataIndex];
+    } else if (seriesName === '当前位置1' && track1TimeIndex.length > 0) {
+      // 当前位置1使用轨迹1的最后一个时间戳
+      rawTime = track1TimeIndex[track1TimeIndex.length - 1];
+    } else if (seriesName === '当前位置2' && track2TimeIndex.length > 0) {
+      // 当前位置2使用轨迹2的最后一个时间戳
+      rawTime = track2TimeIndex[track2TimeIndex.length - 1];
+    } else if (seriesName === '当前位置3' && track3TimeIndex.length > 0) {
+      // 当前位置3使用轨迹3的最后一个时间戳
+      rawTime = track3TimeIndex[track3TimeIndex.length - 1];
+    }
+    
+    if (rawTime !== null) {
+      const parts = rawTime.toString().split('.');
+      const targetTime = parts[0] + (parts[1] ? '.' + parts[1].substring(0, 2) : '.00');
+
+      searchQuery.value = targetTime;
+      performSearch();
+    }
+  }
+}
+
+// 鼠标悬停事件处理函数
+const handleMouseOver = function(params) {
+  if (!chartInstance.value) return;
+  
+  // 清除之前的高亮超时定时器
+  if (highlightTimeout.value) {
+    clearTimeout(highlightTimeout.value);
+    highlightTimeout.value = null;
+  }
+  
+  const seriesName = params.seriesName;
+  const dataIndex = params.dataIndex;
+  let targetTime = null;
+  
+  // 获取当前悬停点的时间
+  if (seriesName === '轨迹1' && track1TimeIndex[dataIndex] !== undefined) {
+    targetTime = track1TimeIndex[dataIndex];
+  } else if (seriesName === '轨迹2' && track2TimeIndex[dataIndex] !== undefined) {
+    targetTime = track2TimeIndex[dataIndex];
+  } else if (seriesName === '轨迹3' && track3TimeIndex[dataIndex] !== undefined) {
+    targetTime = track3TimeIndex[dataIndex];
+  }
+  
+  if (targetTime === null) return;
+  
+  // 首先清理之前的高亮状态
+  handleMouseOut();
+  
+  // 找到所有轨迹中相同时间的点并高亮（包括当前轨迹）
+  const highlightData = [];
+  const series = chartInstance.value.getOption().series;
+  
+  // 检查轨迹1中是否有相同时间的点
+  for (let i = 0; i < track1TimeIndex.length; i++) {
+    if (track1TimeIndex[i] === targetTime) {
+      const seriesIndex = series.findIndex(s => s.name === '轨迹1');
+      if (seriesIndex !== -1) {
+        highlightData.push({
+          seriesIndex: seriesIndex,
+          dataIndex: i
+        });
+      }
+      break;
+    }
+  }
+  
+  // 检查轨迹2中是否有相同时间的点
+  for (let i = 0; i < track2TimeIndex.length; i++) {
+    if (track2TimeIndex[i] === targetTime) {
+      const seriesIndex = series.findIndex(s => s.name === '轨迹2');
+      if (seriesIndex !== -1) {
+        highlightData.push({
+          seriesIndex: seriesIndex,
+          dataIndex: i
+        });
+      }
+      break;
+    }
+  }
+  
+  // 检查轨迹3中是否有相同时间的点
+  for (let i = 0; i < track3TimeIndex.length; i++) {
+    if (track3TimeIndex[i] === targetTime) {
+      const seriesIndex = series.findIndex(s => s.name === '轨迹3');
+      if (seriesIndex !== -1) {
+        highlightData.push({
+          seriesIndex: seriesIndex,
+          dataIndex: i
+        });
+      }
+      break;
+    }
+  }
+  
+  // 高亮显示所有相同时间的点
+  if (highlightData.length > 0) {
+    chartInstance.value.dispatchAction({
+      type: 'highlight',
+      seriesIndex: highlightData.map(h => h.seriesIndex),
+      dataIndex: highlightData.map(h => h.dataIndex)
+    });
+  }
+  
+  // 设置自动清理定时器（3秒后自动清除高亮）
+  highlightTimeout.value = setTimeout(() => {
+    handleMouseOut();
+  }, 3000);
+};
+
+// 鼠标移出事件处理函数
+const handleMouseOut = function() {
+  if (!chartInstance.value) return;
+  
+  // 获取当前图表配置
+  const option = chartInstance.value.getOption();
+  if (!option || !option.series) return;
+  
+  // 取消所有系列的高亮状态
+  option.series.forEach((series, index) => {
+    if (series.data && series.data.length > 0) {
+      // 为每个数据点执行downplay操作
+      for (let i = 0; i < series.data.length; i++) {
+        chartInstance.value.dispatchAction({
+          type: 'downplay',
+          seriesIndex: index,
+          dataIndex: i
+        });
+      }
+    }
+  });
+};
+
 // 组件卸载时清理资源
 onUnmounted(() => {
   if (chartInstance.value) {
+    // 移除事件监听
+    chartInstance.value.off('mouseover', handleMouseOver);
+    chartInstance.value.off('mouseout', handleMouseOut);
+    chartInstance.value.off('globalout', handleMouseOut);
+    chartInstance.value.off('dblclick', handleChartDblClick); // 移除双击事件监听
+    
     chartInstance.value.dispose();
   }
   if (resizeObserver) {
@@ -676,6 +1589,11 @@ onUnmounted(() => {
   }
   if (dataUpdateInterval) {
     clearInterval(dataUpdateInterval);
+  }
+  // 清理高亮超时定时器
+  if (highlightTimeout.value) {
+    clearTimeout(highlightTimeout.value);
+    highlightTimeout.value = null;
   }
   // 清理滚轮事件监听器
   if (chartDom.value) {

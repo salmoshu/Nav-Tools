@@ -477,8 +477,12 @@ const {
   yAxisConfig,
 
   // FlowDeviation
-  deviationX,
-  deviationY,
+  deviationTrack1X,
+  deviationTrack1Y,
+  deviationTrack2X,
+  deviationTrack2Y,
+  deviationTrack3X,
+  deviationTrack3Y,
 
   // FlowData
   // 单图单Y轴
@@ -717,8 +721,12 @@ function validateAndApplyConfig(config: any) {
 function applyDataSourceConfig(config: any) {
   // 应用FlowDeviation配置
   if (config.deviation) {
-    deviationX.value = config.deviation.x || ''
-    deviationY.value = config.deviation.y || ''
+    deviationTrack1X.value = config.deviation.track1X || ''
+    deviationTrack1Y.value = config.deviation.track1Y || ''
+    deviationTrack2X.value = config.deviation.track2X || ''
+    deviationTrack2Y.value = config.deviation.track2Y || ''
+    deviationTrack3X.value = config.deviation.track3X || ''
+    deviationTrack3Y.value = config.deviation.track3Y || ''
   }
 
   // 单图模式下的数据源配置

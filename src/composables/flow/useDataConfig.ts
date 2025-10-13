@@ -8,6 +8,13 @@ export type YAxisConfig = 'single' | 'double'
 // FlowDeviation
 const deviationX = ref<string>('')
 const deviationY = ref<string>('')
+// 添加三条轨迹的配置
+const deviationTrack1X = ref<string>('')
+const deviationTrack1Y = ref<string>('')
+const deviationTrack2X = ref<string>('')
+const deviationTrack2Y = ref<string>('')
+const deviationTrack3X = ref<string>('')
+const deviationTrack3Y = ref<string>('')
 
 // FlowData
 /**
@@ -406,8 +413,12 @@ export function useDataConfig(flowData: any) {
 
     // 添加FlowDeviation配置
     config.deviation = {
-      x: deviationX.value,
-      y: deviationY.value
+      track1X: deviationTrack1X.value,
+      track1Y: deviationTrack1Y.value,
+      track2X: deviationTrack2X.value,
+      track2Y: deviationTrack2Y.value,
+      track3X: deviationTrack3X.value,
+      track3Y: deviationTrack3Y.value
     }
     
     // 根据当前布局和Y轴配置收集数据源配置
@@ -599,8 +610,12 @@ export function useDataConfig(flowData: any) {
     yAxisConfig,
 
     // FlowDeviation
-    deviationX,
-    deviationY,
+    deviationTrack1X,
+    deviationTrack1Y,
+    deviationTrack2X,
+    deviationTrack2Y,
+    deviationTrack3X,
+    deviationTrack3Y,
 
     // FlowData
     // 单图单Y轴模式
