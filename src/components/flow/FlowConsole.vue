@@ -98,7 +98,6 @@ const {
   searchInput,
   searchResults,
   currentResultIndex,
-  handleRawData,
   clearConsole,
   toggleSearch,
   clearSearch,

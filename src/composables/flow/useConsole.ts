@@ -336,14 +336,47 @@ export function useConsole() {
 
   // 处理滚动事件
   const handleScroll = () => {
-    if (!consoleContent.value || isSearchMode.value) return;
-    
+    if (!consoleContent.value) return;
+
     const { scrollTop, scrollHeight, clientHeight } = consoleContent.value;
     
     // 检测是否滚动到底部
     const isBottom = scrollTop + clientHeight >= scrollHeight - 10; // 容差10px
     // 检测是否滚动到顶部
     const isTop = scrollTop <= 10; // 容差10px
+    
+    // 在搜索模式下，只允许置顶、置底刷新数据，并且不影响搜索状态
+    if (isSearchMode.value) {
+      if (isBottom && !isAtBottom.value) {
+        // 滚动到底部：显示置底数据的前后各50条数据
+        updateVisibleMessages(undefined, 'bottom');
+        
+        // 调整滚动位置以保持视觉连续性
+        nextTick(() => {
+          if (consoleContent.value) {
+            // 保持在底部附近
+            const newScrollTop = Math.max(0, consoleContent.value.scrollHeight - clientHeight - 50);
+            consoleContent.value.scrollTop = newScrollTop;
+            lastScrollTop.value = newScrollTop;
+          }
+        });
+      } else if (isTop && !isAtTop.value) {
+        // 滚动到顶部：显示置顶数据的前后各50条数据
+        updateVisibleMessages(undefined, 'top');
+        
+        // 调整滚动位置以保持视觉连续性
+        nextTick(() => {
+          if (consoleContent.value) {
+            // 保持在顶部附近
+            consoleContent.value.scrollTop = 50;
+            lastScrollTop.value = 50;
+          }
+        });
+      }
+      
+      lastScrollTop.value = scrollTop;
+      return;
+    }
     
     if (autoScroll.value) {
       // 如果用户手动滚动了，禁用自动滚动
@@ -471,7 +504,7 @@ export function useConsole() {
       
       if (messageElements[relativeIndex]) {
         messageElements[relativeIndex].scrollIntoView({
-          behavior: 'smooth',
+          behavior: 'auto',
           block: 'center',
           inline: 'nearest'
         });
@@ -505,7 +538,6 @@ export function useConsole() {
     });
     
     if (searchResults.value.length > 0) {
-      isSearchMode.value = true;
       currentResultIndex.value = 0;
       scrollToResult(0);
     }
