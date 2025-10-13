@@ -1087,7 +1087,7 @@ function updateChart() {
         bottom: '20%',
         containLabel: true
       },
-      xAxis: { type: 'value', name: 't' },
+      xAxis: { type: 'value', name: '' },
       yAxis: { type: 'value' },
       series: []
     })
@@ -1135,6 +1135,39 @@ function getRandomColor(excludeColor: any, index: number) {
   excludeColor.value = color[cycle_index];
 
   return color[cycle_index];
+}
+
+const unifiedAxisLabel = {
+  formatter: function(value: number) {
+    // 假设数据范围在 -999.99 到 999.99 之间
+    const formatted = value.toFixed(2);
+    
+    const numberDigits = formatted.toString().length-3;
+    let spaceStr = '';
+    switch (numberDigits) {
+      case 0:
+        spaceStr = '    ';
+        break;
+      case 1:
+        spaceStr = '   ';
+        break;
+      case 2:
+        spaceStr = '  ';
+        break;
+      case 3:
+        spaceStr = ' '
+        break;
+      default:
+        spaceStr = '';
+        break;
+    }
+
+    return `${spaceStr}${formatted}`;
+  },
+  width: 70,  // 稍微增加宽度以容纳更大的数值
+  overflow: 'none',
+  margin: 8,
+  // fontFamily: 'monospace'
 }
 
 // 创建图表选项
@@ -1326,7 +1359,7 @@ function createChartOption() {
       },
       xAxis: {
         type: 'value',
-        name: series.length < 2 ? 't' : '        t',
+        name: series.length < 2 ? '' : '',
         axisLabel: {
           formatter: function(value: number) {
             return value.toFixed(2)
@@ -1339,11 +1372,7 @@ function createChartOption() {
           // alignTicks: true,
           max: minMax ? minMax.y1Max : undefined,
           min: minMax ? minMax.y1Min : undefined,
-          axisLabel: {
-            formatter: function(value: number) {
-              return value.toFixed(2)
-            }
-          }
+          axisLabel: unifiedAxisLabel
         },
         {
           type: 'value',
@@ -1351,11 +1380,7 @@ function createChartOption() {
           show: true,
           max: minMax ? minMax.y2Max : undefined,
           min: minMax ? minMax.y2Min : undefined,
-          axisLabel: {
-            formatter: function(value: number) {
-              return value.toFixed(2)
-            }
-          }
+          axisLabel: unifiedAxisLabel
         }
       ] : { type: 'value' },
       // zoomOnMouseWheel 只有 布尔 和 'ctrl' 两种有效值：
@@ -1659,6 +1684,8 @@ function createChartOption() {
     const yAxisConfigArray = [];
     if (yAxisConfig.value === 'double') {
       // 双图双Y轴模式，每个图表都有左右两个Y轴
+      ;
+      
       yAxisConfigArray.push(
         {
           type: 'value', 
@@ -1666,11 +1693,7 @@ function createChartOption() {
           gridIndex: 0,
           max: upperMinMax ? upperMinMax.y1Max : undefined,
           min: upperMinMax ? upperMinMax.y1Min : undefined,
-          axisLabel: {
-            formatter: function(value: number) {
-              return value.toFixed(2)
-            }
-          }
+          axisLabel: unifiedAxisLabel
         },
         {
           type: 'value', 
@@ -1679,11 +1702,7 @@ function createChartOption() {
           show: true,
           max: upperMinMax ? upperMinMax.y2Max : undefined,
           min: upperMinMax ? upperMinMax.y2Min : undefined,
-          axisLabel: {
-            formatter: function(value: number) {
-              return value.toFixed(2)
-            }
-          }
+          axisLabel: unifiedAxisLabel
         },
         {
           type: 'value', 
@@ -1691,11 +1710,7 @@ function createChartOption() {
           gridIndex: 1,
           max: lowerMinMax ? lowerMinMax.y1Max : undefined,
           min: lowerMinMax ? lowerMinMax.y1Min : undefined,
-          axisLabel: {
-            formatter: function(value: number) {
-              return value.toFixed(2)
-            }
-          }
+          axisLabel: unifiedAxisLabel
         },
         {
           type: 'value', 
@@ -1704,18 +1719,13 @@ function createChartOption() {
           show: true,
           max: lowerMinMax ? lowerMinMax.y2Max : undefined,
           min: lowerMinMax ? lowerMinMax.y2Min : undefined,
-          axisLabel: {
-            formatter: function(value: number) {
-              return value.toFixed(2)
-            }
-          }
+          axisLabel: unifiedAxisLabel
         }
       );
     } else {
-      // 双图单Y轴模式
       yAxisConfigArray.push(
-        { type: 'value', gridIndex: 0 },
-        { type: 'value', gridIndex: 1 }
+        { type: 'value', gridIndex: 0, axisLabel: unifiedAxisLabel },
+        { type: 'value', gridIndex: 1, axisLabel: unifiedAxisLabel }
       );
     }
     
@@ -1777,8 +1787,8 @@ function createChartOption() {
         { left: '3%', right: '8%', top: '53%', bottom: '14%', containLabel: true }
       ],
       xAxis: [
-        { type: 'value', name: upperSeries.length < 2 ? 't' : '        t', gridIndex: 0, axisLabel: { formatter: (value: number) => value.toFixed(2) } },
-        { type: 'value', name: lowerSeries.length < 2 ? 't' : '        t', gridIndex: 1, axisLabel: { formatter: (value: number) => value.toFixed(2) } }
+        { type: 'value', name: upperSeries.length < 2 ? '' : '', gridIndex: 0, axisLabel: { formatter: (value: number) => value.toFixed(2) } },
+        { type: 'value', name: lowerSeries.length < 2 ? '' : '', gridIndex: 1, axisLabel: { formatter: (value: number) => value.toFixed(2) } }
       ],
       yAxis: yAxisConfigArray,
       dataZoom: [
