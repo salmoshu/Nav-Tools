@@ -350,31 +350,42 @@ function initChart() {
       formatter: function(params) {
         const point = params.value;
         const seriesName = params.seriesName;
-        const dataIndex = params.dataIndex;
+        const timeIndexOffset = plotData.value.timestamp.length - track1Data.length;
+        const dataIndex = params.dataIndex + timeIndexOffset;
         
         let xField = 'X';
         let yField = 'Y';
         let currentTime = null;
+        let originX = point[0];
+        let originY = point[1];
         
         // 根据系列名称选择对应的轴字段和时间
         if (seriesName === '轨迹1' && deviationTrack1X.value && deviationTrack1Y.value) {
           xField = deviationTrack1X.value;
           yField = deviationTrack1Y.value;
           currentTime = track1TimeIndex[dataIndex];
+          originX = plotData.value[deviationTrack1X.value][dataIndex];
+          originY = plotData.value[deviationTrack1Y.value][dataIndex];
         } else if (seriesName === '轨迹2' && deviationTrack2X.value && deviationTrack2Y.value) {
           xField = deviationTrack2X.value;
           yField = deviationTrack2Y.value;
           currentTime = track2TimeIndex[dataIndex];
+          originX = plotData.value[deviationTrack2X.value][dataIndex];
+          originY = plotData.value[deviationTrack2Y.value][dataIndex];
         } else if (seriesName === '轨迹3' && deviationTrack3X.value && deviationTrack3Y.value) {
           xField = deviationTrack3X.value;
           yField = deviationTrack3Y.value;
           currentTime = track3TimeIndex[dataIndex];
+          originX = plotData.value[deviationTrack3X.value][dataIndex];
+          originY = plotData.value[deviationTrack3Y.value][dataIndex];
         } else if (seriesName === '当前位置1' && deviationTrack1X.value && deviationTrack1Y.value) {
           // 当前位置1使用轨迹1的字段和时间
           xField = deviationTrack1X.value;
           yField = deviationTrack1Y.value;
           if (track1TimeIndex.length > 0) {
             currentTime = track1TimeIndex[track1TimeIndex.length - 1];
+            originX = plotData.value[deviationTrack1X.value][track1Data.length - 1];
+            originY = plotData.value[deviationTrack1Y.value][track1Data.length - 1];
           }
         } else if (seriesName === '当前位置2' && deviationTrack2X.value && deviationTrack2Y.value) {
           // 当前位置2使用轨迹2的字段和时间
@@ -382,6 +393,8 @@ function initChart() {
           yField = deviationTrack2Y.value;
           if (track2TimeIndex.length > 0) {
             currentTime = track2TimeIndex[track2TimeIndex.length - 1];
+            originX = plotData.value[deviationTrack2X.value][track2Data.length - 1];
+            originY = plotData.value[deviationTrack2Y.value][track2Data.length - 1];
           }
         } else if (seriesName === '当前位置3' && deviationTrack3X.value && deviationTrack3Y.value) {
           // 当前位置3使用轨迹3的字段和时间
@@ -389,11 +402,13 @@ function initChart() {
           yField = deviationTrack3Y.value;
           if (track3TimeIndex.length > 0) {
             currentTime = track3TimeIndex[track3TimeIndex.length - 1];
+            originX = plotData.value[deviationTrack3X.value][track3Data.length - 1];
+            originY = plotData.value[deviationTrack3Y.value][track3Data.length - 1];
           }
         }
         
         // 构建基础tooltip内容，添加marker图标
-        let tooltipContent = `${params.marker}${seriesName}<br/>${xField}: ${point[0].toFixed(2)}<br/>${yField}: ${point[1].toFixed(2)}`;
+        let tooltipContent = `${params.marker}${seriesName}<br/>${xField}: ${originX}<br/>${yField}: ${originY}`;
         
         // 添加时间信息（如果有）
         if (currentTime !== null && currentTime !== undefined) {
@@ -656,16 +671,6 @@ function updateFlowData() {
         offsetY = track1YData[0];  // 第一条轨迹的第一个点的Y坐标
       }
     }
-  } else if (!isTracking.value) {
-    // 非跟踪模式下，将第一条轨迹的第一个点作为(0,0)参考点
-    if (deviationTrack1X.value && deviationTrack1Y.value && plotData.value[deviationTrack1X.value] && plotData.value[deviationTrack1Y.value]) {
-      const track1XData = plotData.value[deviationTrack1X.value];
-      const track1YData = plotData.value[deviationTrack1Y.value];
-      if (track1XData && track1YData && track1XData.length > 0 && track1YData.length > 0) {
-        offsetX = track1XData[0];  // 第一条轨迹的第一个点的X坐标
-        offsetY = track1YData[0];  // 第一条轨迹的第一个点的Y坐标
-      }
-    }
   }
 
   // 更新最新点信息
@@ -686,6 +691,7 @@ function updateFlowData() {
     
     if (track1XData && track1YData && track1XData.length > 0 && track1YData.length > 0) {
       const track1DataLength = Math.min(track1XData.length, track1YData.length);
+      const timeIndexOffset = plotData.value.timestamp.length - track1DataLength;
       for (let i = 0; i < track1DataLength; i++) {
         const x = track1XData[i];
         const y = track1YData[i];
@@ -694,10 +700,11 @@ function updateFlowData() {
           const roundedY = Math.round((y - offsetY) * 1000) / 1000;
           track1Data.push([roundedX, roundedY]);
           // 保存时间索引，用于时间同步显示
-          if (plotData.value.timestamp && plotData.value.timestamp[i] !== undefined) {
-            track1TimeIndex.push(plotData.value.timestamp[i]);
+          const timeIndex = timeIndexOffset + i;
+          if (plotData.value.timestamp && plotData.value.timestamp[timeIndex] !== undefined) {
+            track1TimeIndex.push(plotData.value.timestamp[timeIndex]);
           } else {
-            track1TimeIndex.push(i); // 如果没有时间戳，使用索引作为备用
+            track1TimeIndex.push(timeIndex); // 如果没有时间戳，使用索引作为备用
           }
         }
       }
@@ -711,6 +718,7 @@ function updateFlowData() {
     
     if (track2XData && track2YData && track2XData.length > 0 && track2YData.length > 0) {
       const track2DataLength = Math.min(track2XData.length, track2YData.length);
+      const timeIndexOffset = plotData.value.timestamp.length - track2DataLength;
       for (let i = 0; i < track2DataLength; i++) {
         const x = track2XData[i];
         const y = track2YData[i];
@@ -719,10 +727,11 @@ function updateFlowData() {
           const roundedY = Math.round((y - offsetY) * 1000) / 1000;
           track2Data.push([roundedX, roundedY]);
           // 保存时间索引，用于时间同步显示
-          if (plotData.value.timestamp && plotData.value.timestamp[i] !== undefined) {
-            track2TimeIndex.push(plotData.value.timestamp[i]);
+          const timeIndex = timeIndexOffset + i;
+          if (plotData.value.timestamp && plotData.value.timestamp[timeIndex] !== undefined) {
+            track2TimeIndex.push(plotData.value.timestamp[timeIndex]);
           } else {
-            track2TimeIndex.push(i); // 如果没有时间戳，使用索引作为备用
+            track2TimeIndex.push(timeIndex); // 如果没有时间戳，使用索引作为备用
           }
         }
       }
@@ -736,6 +745,7 @@ function updateFlowData() {
     
     if (track3XData && track3YData && track3XData.length > 0 && track3YData.length > 0) {
       const track3DataLength = Math.min(track3XData.length, track3YData.length);
+      const timeIndexOffset = plotData.value.timestamp.length - track3DataLength;
       for (let i = 0; i < track3DataLength; i++) {
         const x = track3XData[i];
         const y = track3YData[i];
@@ -744,10 +754,11 @@ function updateFlowData() {
           const roundedY = Math.round((y - offsetY) * 1000) / 1000;
           track3Data.push([roundedX, roundedY]);
           // 保存时间索引，用于时间同步显示
-          if (plotData.value.timestamp && plotData.value.timestamp[i] !== undefined) {
-            track3TimeIndex.push(plotData.value.timestamp[i]);
+          const timeIndex = timeIndexOffset + i;
+          if (plotData.value.timestamp && plotData.value.timestamp[timeIndex] !== undefined) {
+            track3TimeIndex.push(plotData.value.timestamp[timeIndex]);
           } else {
-            track3TimeIndex.push(i); // 如果没有时间戳，使用索引作为备用
+            track3TimeIndex.push(timeIndex); // 如果没有时间戳，使用索引作为备用
           }
         }
       }
@@ -1321,8 +1332,51 @@ function updatePointSize() {
 
 // 处理legend点击事件
 function handleLegendSelectChanged(params) {
-  // 触发数据更新
-  updateFlowData();
+  // 获取当前图表配置
+  const option = chartInstance.value.getOption();
+  const selected = option.legend[0].selected;
+  
+  // 当点击轨迹1时，同步控制当前位置1的显示状态
+  if (params.name === '轨迹1') {
+    // 获取轨迹1的选中状态
+    const track1Selected = selected['轨迹1'];
+    
+    // 同步设置当前位置1的选中状态
+    if (track1Selected !== undefined) {
+      chartInstance.value.dispatchAction({
+        type: 'legendToggleSelect',
+        name: '当前位置1'
+      });
+    }
+  }
+  
+  // 当点击轨迹2时，同步控制当前位置2的显示状态
+  if (params.name === '轨迹2') {
+    // 获取轨迹2的选中状态
+    const track2Selected = selected['轨迹2'];
+    
+    // 同步设置当前位置2的选中状态
+    if (track2Selected !== undefined) {
+      chartInstance.value.dispatchAction({
+        type: 'legendToggleSelect',
+        name: '当前位置2'
+      });
+    }
+  }
+  
+  // 当点击轨迹3时，同步控制当前位置3的显示状态
+  if (params.name === '轨迹3') {
+    // 获取轨迹3的选中状态
+    const track3Selected = selected['轨迹3'];
+    
+    // 同步设置当前位置3的选中状态
+    if (track3Selected !== undefined) {
+      chartInstance.value.dispatchAction({
+        type: 'legendToggleSelect',
+        name: '当前位置3'
+      });
+    }
+  }
 }
 
 // 新增：保持坐标轴等宽的函数
