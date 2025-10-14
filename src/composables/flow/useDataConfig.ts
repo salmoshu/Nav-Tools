@@ -443,7 +443,7 @@ export function useDataConfig(flowData: any) {
     // 应用配置并更新图表
     applyViewConfig(() => {
       // 这个回调函数将在FlowData组件中提供
-      console.log('配置已应用，需要更新图表')
+      // console.log('配置已应用，需要更新图表')
     })
   }
 

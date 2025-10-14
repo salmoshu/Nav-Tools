@@ -547,6 +547,24 @@ const handleDrag = (event: MouseEvent) => {
 const toolbarPosition = inject<Ref<'top' | 'right' | 'bottom' | 'left'>>('toolbarPosition')
 const toolbarSize = inject<Ref<{width: number, height: number}>>('toolbarSize')
 
+// 计算状态栏高度（考虑工具栏位置）
+const statusbarHeight = computed(() => {
+  const toolbarHeight = toolbarSize?.value?.height || 40
+  if (toolbarPosition?.value === 'top' || toolbarPosition?.value === 'bottom') {
+    return `calc(100vh - ${toolbarHeight}px)`
+  }
+  return '100vh'
+})
+
+// 计算状态栏顶部偏移（工具栏在顶部时）
+const statusbarTop = computed(() => {
+  const toolbarHeight = toolbarSize?.value?.height || 40
+  if (toolbarPosition?.value === 'top') {
+    return `${toolbarHeight}px`
+  }
+  return '0'
+})
+
 const snapToEdge = () => {
   const windowWidth = window.innerWidth
   const windowHeight = window.innerHeight
@@ -643,14 +661,16 @@ onUnmounted(() => {
 
 .statusbar-left {
   left: 0;
-  top: 0;
+  top: v-bind(statusbarTop);
   border-radius: 0;
+  height: v-bind(statusbarHeight);
 }
 
 .statusbar-right {
   right: 0;
-  top: 0;
+  top: v-bind(statusbarTop);
   border-radius: 0;
+  height: v-bind(statusbarHeight);
 }
 
 .statusbar-handle {
