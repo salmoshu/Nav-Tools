@@ -1226,23 +1226,16 @@ function toggleTracking() {
     updateFlowData(); // 重新计算偏移量
     
     if (chartInstance.value) {
-      // const limit = 100;
-      const span = 20; // 显示范围
-      
-      chartInstance.value.setOption({
-        dataZoom: getDataZoomConfig(-span/2, span/2, -span/2, span/2)
-      });
+      // 使用maintainEqualAxisScale来保持坐标轴等比例关系
+      maintainEqualAxisScale();
     }
   } else {
     // 关闭跟踪模式：将第一条轨迹的第一个点作为(0,0)参考点
     updateFlowData(); // 重新计算，设置新的偏移量
     
     if (chartInstance.value) {
-      // 非跟踪模式下，将视图中心调整到第一条轨迹的第一个点（偏移后的0,0点）
-      const span = 20; // 显示范围
-      chartInstance.value.setOption({
-        dataZoom: getDataZoomConfig(-span/2, span/2, -span/2, span/2)
-      });
+      // 非跟踪模式下，使用maintainEqualAxisScale来保持坐标轴等比例关系
+      maintainEqualAxisScale();
     }
   }
   
@@ -1566,11 +1559,6 @@ const handleMouseOver = function(params) {
       dataIndex: highlightData.map(h => h.dataIndex)
     });
   }
-  
-  // 设置自动清理定时器（3秒后自动清除高亮）
-  highlightTimeout.value = setTimeout(() => {
-    handleMouseOut();
-  }, 3000);
 };
 
 // 鼠标移出事件处理函数
