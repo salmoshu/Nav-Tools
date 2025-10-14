@@ -51,63 +51,107 @@
   <!-- 视图配置对话框 -->
   <el-dialog
     v-model="viewConfigDialogVisible"
-    width="500px"
+    :width="'710px'"
     destroy-on-close
     title="轨迹配置"
   >
     <div class="dialog-content">
-      <!-- 轨迹1配置 -->
-      <el-divider content-position="left">轨迹1</el-divider>
-      <div style="margin-bottom: 20px;">
-        <span style="display: inline-block; width: 100px;">轨迹1 X轴：</span>
-        <el-select v-model="deviationTrack1X" placeholder="选择X轴字段" style="width: 200px;">
-          <el-option label="<None>" value=""></el-option>
-          <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
-        </el-select>
-      </div>
-      
-      <div style="margin-bottom: 20px;">
-        <span style="display: inline-block; width: 100px;">轨迹1 Y轴：</span>
-        <el-select v-model="deviationTrack1Y" placeholder="选择Y轴字段" style="width: 200px;">
-          <el-option label="<None>" value=""></el-option>
-          <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
-        </el-select>
-      </div>
+      <div class="chart-config-grid">
+        <!-- 轨迹1配置 -->
+        <div class="chart-config-section">
+          <div style="display: flex; align-items: center; justify-content: center; margin-bottom: 15px;">
+            <h4 style="color: #303133; margin: 0;">轨迹1</h4>
+            <el-color-picker v-model="deviationTrack1Color" placeholder="选择颜色" style="margin-left: 10px;"></el-color-picker>
+          </div>
+          <div class="source-selectors">
+            <div style="display: flex; align-items: center; margin-bottom: 12px;">
+              <span style="display: inline-block; width: 80px; font-size: 14px; color: #606266;">X轴：</span>
+              <el-select v-model="deviationTrack1X" placeholder="选择X轴字段" style="width: 200px;">
+                <el-option label="<None>" value=""></el-option>
+                <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
+              </el-select>
+            </div>
+            <div style="display: flex; align-items: center;">
+              <span style="display: inline-block; width: 80px; font-size: 14px; color: #606266;">Y轴：</span>
+              <el-select v-model="deviationTrack1Y" placeholder="选择Y轴字段" style="width: 200px;">
+                <el-option label="<None>" value=""></el-option>
+                <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
+              </el-select>
+            </div>
+          </div>
+        </div>
 
-      <!-- 轨迹2配置 -->
-      <el-divider content-position="left">轨迹2</el-divider>
-      <div style="margin-bottom: 20px;">
-        <span style="display: inline-block; width: 100px;">轨迹2 X轴：</span>
-        <el-select v-model="deviationTrack2X" placeholder="选择X轴字段" style="width: 200px;">
-          <el-option label="<None>" value=""></el-option>
-          <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
-        </el-select>
-      </div>
-      
-      <div style="margin-bottom: 20px;">
-        <span style="display: inline-block; width: 100px;">轨迹2 Y轴：</span>
-        <el-select v-model="deviationTrack2Y" placeholder="选择Y轴字段" style="width: 200px;">
-          <el-option label="<None>" value=""></el-option>
-          <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
-        </el-select>
-      </div>
+        <!-- 轨迹2配置 -->
+        <div class="chart-config-section">
+          <div style="display: flex; align-items: center; justify-content: center; margin-bottom: 15px;">
+            <h4 style="color: #303133; margin: 0;">轨迹2</h4>
+            <el-color-picker v-model="deviationTrack2Color" placeholder="选择颜色" style="margin-left: 10px;"></el-color-picker>
+          </div>
+          <div class="source-selectors">
+            <div style="display: flex; align-items: center; margin-bottom: 12px;">
+              <span style="display: inline-block; width: 80px; font-size: 14px; color: #606266;">X轴：</span>
+              <el-select v-model="deviationTrack2X" placeholder="选择X轴字段" style="width: 200px;">
+                <el-option label="<None>" value=""></el-option>
+                <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
+              </el-select>
+            </div>
+            <div style="display: flex; align-items: center;">
+              <span style="display: inline-block; width: 80px; font-size: 14px; color: #606266;">Y轴：</span>
+              <el-select v-model="deviationTrack2Y" placeholder="选择Y轴字段" style="width: 200px;">
+                <el-option label="<None>" value=""></el-option>
+                <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
+              </el-select>
+            </div>
+          </div>
+        </div>
 
-      <!-- 轨迹3配置 -->
-      <el-divider content-position="left">轨迹3</el-divider>
-      <div style="margin-bottom: 20px;">
-        <span style="display: inline-block; width: 100px;">轨迹3 X轴：</span>
-        <el-select v-model="deviationTrack3X" placeholder="选择X轴字段" style="width: 200px;">
-          <el-option label="<None>" value=""></el-option>
-          <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
-        </el-select>
-      </div>
-      
-      <div style="margin-bottom: 20px;">
-        <span style="display: inline-block; width: 100px;">轨迹3 Y轴：</span>
-        <el-select v-model="deviationTrack3Y" placeholder="选择Y轴字段" style="width: 200px;">
-          <el-option label="<None>" value=""></el-option>
-          <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
-        </el-select>
+        <!-- 轨迹3配置 -->
+        <div class="chart-config-section">
+          <div style="display: flex; align-items: center; justify-content: center; margin-bottom: 15px;">
+            <h4 style="color: #303133; margin: 0;">轨迹3</h4>
+            <el-color-picker v-model="deviationTrack3Color" placeholder="选择颜色" style="margin-left: 10px;"></el-color-picker>
+          </div>
+          <div class="source-selectors">
+            <div style="display: flex; align-items: center; margin-bottom: 12px;">
+              <span style="display: inline-block; width: 80px; font-size: 14px; color: #606266;">X轴：</span>
+              <el-select v-model="deviationTrack3X" placeholder="选择X轴字段" style="width: 200px;">
+                <el-option label="<None>" value=""></el-option>
+                <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
+              </el-select>
+            </div>
+            <div style="display: flex; align-items: center;">
+              <span style="display: inline-block; width: 80px; font-size: 14px; color: #606266;">Y轴：</span>
+              <el-select v-model="deviationTrack3Y" placeholder="选择Y轴字段" style="width: 200px;">
+                <el-option label="<None>" value=""></el-option>
+                <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
+              </el-select>
+            </div>
+          </div>
+        </div>
+
+        <!-- 轨迹4配置 -->
+        <div class="chart-config-section">
+          <div style="display: flex; align-items: center; justify-content: center; margin-bottom: 15px;">
+            <h4 style="color: #303133; margin: 0;">轨迹4</h4>
+            <el-color-picker v-model="deviationTrack4Color" placeholder="选择颜色" style="margin-left: 10px;"></el-color-picker>
+          </div>
+          <div class="source-selectors">
+            <div style="display: flex; align-items: center; margin-bottom: 12px;">
+              <span style="display: inline-block; width: 80px; font-size: 14px; color: #606266;">X轴：</span>
+              <el-select v-model="deviationTrack4X" placeholder="选择X轴字段" style="width: 200px;">
+                <el-option label="<None>" value=""></el-option>
+                <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
+              </el-select>
+            </div>
+            <div style="display: flex; align-items: center;">
+              <span style="display: inline-block; width: 80px; font-size: 14px; color: #606266;">Y轴：</span>
+              <el-select v-model="deviationTrack4Y" placeholder="选择Y轴字段" style="width: 200px;">
+                <el-option label="<None>" value=""></el-option>
+                <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
+              </el-select>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
     <template #footer>
@@ -135,7 +179,13 @@ const {
   deviationTrack2X,
   deviationTrack2Y,
   deviationTrack3X,
-  deviationTrack3Y
+  deviationTrack3Y,
+  deviationTrack4X,
+  deviationTrack4Y,
+  deviationTrack1Color,
+  deviationTrack2Color,
+  deviationTrack3Color,
+  deviationTrack4Color
 } = useDataConfig();
 
 // 导入搜索功能
@@ -146,6 +196,22 @@ const { plotData, toggleSlideWindow, enableWindow } = useFlow();
 const { deviceConnected } = useDevice()
 
 echarts.use([ScatterChart, GridComponent, CanvasRenderer]);
+
+// 颜色处理辅助函数
+function getValidColor(color, defaultColor) {
+  if (!color || color === '' || !color.startsWith('#')) {
+    return defaultColor;
+  }
+  return color;
+}
+
+function hexToRgba(color, alpha = 1) {
+  const validColor = getValidColor(color, '#5470c6');
+  const r = parseInt(validColor.slice(1, 3), 16);
+  const g = parseInt(validColor.slice(3, 5), 16);
+  const b = parseInt(validColor.slice(5, 7), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
 
 // DOM引用和响应式变量
 const chartRef = ref(null);
@@ -177,10 +243,12 @@ const availableSources = computed(() => {
 let track1Data = [];
 let track2Data = [];
 let track3Data = [];
+let track4Data = [];
 // 添加时间索引映射，用于时间同步显示
 let track1TimeIndex = [];
 let track2TimeIndex = [];
 let track3TimeIndex = [];
+let track4TimeIndex = [];
 // 最新点信息，用于高亮显示
 const latestPointInfo = reactive({
   track: null, // 1, 2, 或 3
@@ -200,7 +268,7 @@ function showViewConfig() {
 // 应用视图配置
 function applyViewConfig() {
   // 验证是否至少配置了一条轨迹
-  if (!deviationTrack1X.value && !deviationTrack2X.value && !deviationTrack3X.value) {
+  if (!deviationTrack1X.value && !deviationTrack2X.value && !deviationTrack3X.value && !deviationTrack4X.value) {
     ElMessage({
       message: `请至少配置一条轨迹的X轴和Y轴字段`,
       type: 'warning',
@@ -214,6 +282,7 @@ function applyViewConfig() {
   track1Data.splice(0, track1Data.length);
   track2Data.splice(0, track2Data.length);
   track3Data.splice(0, track3Data.length);
+  track4Data.splice(0, track4Data.length);
   
   // 更新图表轴名称（使用第一个配置的轨迹）
   let xAxisName = '';
@@ -225,6 +294,8 @@ function applyViewConfig() {
     xAxisName = deviationTrack2X.value;
   } else if (deviationTrack3X.value) {
     xAxisName = deviationTrack3X.value;
+  } else if (deviationTrack4X.value) {
+    xAxisName = deviationTrack4X.value;
   }
   
   if (deviationTrack1Y.value) {
@@ -233,6 +304,8 @@ function applyViewConfig() {
     yAxisName = deviationTrack2Y.value;
   } else if (deviationTrack3Y.value) {
     yAxisName = deviationTrack3Y.value;
+  } else if (deviationTrack4Y.value) {
+    yAxisName = deviationTrack4Y.value;
   }
   
   // 根据跟踪模式调整轴名称
@@ -378,6 +451,12 @@ function initChart() {
           currentTime = track3TimeIndex[dataIndex];
           originX = plotData.value[deviationTrack3X.value][dataIndex];
           originY = plotData.value[deviationTrack3Y.value][dataIndex];
+        } else if (seriesName === '轨迹4' && deviationTrack4X.value && deviationTrack4Y.value) {
+          xField = deviationTrack4X.value;
+          yField = deviationTrack4Y.value;
+          currentTime = track4TimeIndex[dataIndex];
+          originX = plotData.value[deviationTrack4X.value][dataIndex];
+          originY = plotData.value[deviationTrack4Y.value][dataIndex];
         } else if (seriesName === '当前位置1' && deviationTrack1X.value && deviationTrack1Y.value) {
           // 当前位置1使用轨迹1的字段和时间
           xField = deviationTrack1X.value;
@@ -404,6 +483,15 @@ function initChart() {
             currentTime = track3TimeIndex[track3TimeIndex.length - 1];
             originX = plotData.value[deviationTrack3X.value][track3Data.length - 1];
             originY = plotData.value[deviationTrack3Y.value][track3Data.length - 1];
+          }
+        } else if (seriesName === '当前位置4' && deviationTrack4X.value && deviationTrack4Y.value) {
+          // 当前位置4使用轨迹4的字段和时间
+          xField = deviationTrack4X.value;
+          yField = deviationTrack4Y.value;
+          if (track4TimeIndex.length > 0) {
+            currentTime = track4TimeIndex[track4TimeIndex.length - 1];
+            originX = plotData.value[deviationTrack4X.value][track4Data.length - 1];
+            originY = plotData.value[deviationTrack4Y.value][track4Data.length - 1];
           }
         }
         
@@ -528,7 +616,7 @@ function initChart() {
           borderWidth: 2,
           borderColor: '#fff',
           shadowBlur: 2,
-          shadowColor: '#222',
+          shadowColor: 'rgba(0, 0, 0, 0.3)',
         },
         sampling: 'lttb',
         large: true,
@@ -618,11 +706,13 @@ function updateFlowData() {
   track1Data.splice(0, track1Data.length);
   track2Data.splice(0, track2Data.length);
   track3Data.splice(0, track3Data.length);
+  track4Data.splice(0, track4Data.length);
   track1TimeIndex.splice(0, track1TimeIndex.length);
   track2TimeIndex.splice(0, track2TimeIndex.length);
   track3TimeIndex.splice(0, track3TimeIndex.length);
+  track4TimeIndex.splice(0, track4TimeIndex.length);
 
-  // 确定跟踪目标：优先顺序为轨迹1 > 轨迹2 > 轨迹3
+  // 确定跟踪目标：优先顺序为轨迹1 > 轨迹2 > 轨迹3 > 轨迹4
   let trackingTrack = null;
   let trackingData = null;
   let latestPointIndex = -1;
@@ -652,6 +742,15 @@ function updateFlowData() {
       trackingTrack = 3;
       trackingData = [track3XData[track3XData.length - 1], track3YData[track3YData.length - 1]];
       latestPointIndex = track3XData.length - 1;
+    }
+  }
+  if (!trackingTrack && deviationTrack4X.value && deviationTrack4Y.value && plotData.value[deviationTrack4X.value] && plotData.value[deviationTrack4Y.value]) {
+    const track4XData = plotData.value[deviationTrack4X.value];
+    const track4YData = plotData.value[deviationTrack4Y.value];
+    if (track4XData && track4YData && track4XData.length > 0 && track4YData.length > 0) {
+      trackingTrack = 4;
+      trackingData = [track4XData[track4XData.length - 1], track4YData[track4YData.length - 1]];
+      latestPointIndex = track4XData.length - 1;
     }
   }
 
@@ -765,6 +864,33 @@ function updateFlowData() {
     }
   }
 
+  // 处理轨迹4数据
+  if (deviationTrack4X.value && deviationTrack4Y.value) {
+    const track4XData = plotData.value[deviationTrack4X.value];
+    const track4YData = plotData.value[deviationTrack4Y.value];
+    
+    if (track4XData && track4YData && track4XData.length > 0 && track4YData.length > 0) {
+      const track4DataLength = Math.min(track4XData.length, track4YData.length);
+      const timeIndexOffset = plotData.value.timestamp.length - track4DataLength;
+      for (let i = 0; i < track4DataLength; i++) {
+        const x = track4XData[i];
+        const y = track4YData[i];
+        if (typeof x === 'number' && typeof y === 'number' && !isNaN(x) && !isNaN(y)) {
+          const roundedX = Math.round((x - offsetX) * 1000) / 1000;
+          const roundedY = Math.round((y - offsetY) * 1000) / 1000;
+          track4Data.push([roundedX, roundedY]);
+          // 保存时间索引，用于时间同步显示
+          const timeIndex = timeIndexOffset + i;
+          if (plotData.value.timestamp && plotData.value.timestamp[timeIndex] !== undefined) {
+            track4TimeIndex.push(plotData.value.timestamp[timeIndex]);
+          } else {
+            track4TimeIndex.push(timeIndex); // 如果没有时间戳，使用索引作为备用
+          }
+        }
+      }
+    }
+  }
+
   // 更新图表显示
   updateChartDisplay();
 }
@@ -796,9 +922,9 @@ function updateChartDisplay() {
         color: function(params, paramsIndex) {
           // 在非跟踪模式下高亮最新点
           if (!isTracking.value && isLatestTrack && paramsIndex === latestPointInfo.index) {
-            return '#52c41a';
+            return deviationTrack1Color.value;
           }
-          return '#52c41a';
+          return deviationTrack1Color.value;
         },
         opacity: function(params, paramsIndex) {
           // 在非跟踪模式下高亮最新点
@@ -831,19 +957,19 @@ function updateChartDisplay() {
         shadowColor: function(params, paramsIndex) {
           // 在非跟踪模式下高亮最新点
           if (!isTracking.value && isLatestTrack && paramsIndex === latestPointInfo.index) {
-            return 'rgba(82, 196, 26, 0.5)';
+            return hexToRgba(deviationTrack1Color.value, 0.5);
           }
           return 'transparent';
         }
       },
       emphasis: {
         itemStyle: {
-          color: '#52c41a',
+          color: deviationTrack1Color.value,
           opacity: 1,
           borderColor: '#fff',
           borderWidth: 2,
           shadowBlur: 10,
-          shadowColor: 'rgba(82, 196, 26, 0.5)'
+          shadowColor: hexToRgba(deviationTrack1Color.value, 0.5)
         },
         scale: 1.5
       },
@@ -872,9 +998,9 @@ function updateChartDisplay() {
         color: function(params, paramsIndex) {
           // 在非跟踪模式下高亮最新点
           if (!isTracking.value && isLatestTrack && paramsIndex === latestPointInfo.index) {
-            return '#fa8c16';
+            return deviationTrack2Color.value;
           }
-          return '#fa8c16';
+          return deviationTrack2Color.value;
         },
         opacity: function(params, paramsIndex) {
           // 在非跟踪模式下高亮最新点
@@ -907,19 +1033,19 @@ function updateChartDisplay() {
         shadowColor: function(params, paramsIndex) {
           // 在非跟踪模式下高亮最新点
           if (!isTracking.value && isLatestTrack && paramsIndex === latestPointInfo.index) {
-            return 'rgba(250, 140, 22, 0.5)';
+            return hexToRgba(deviationTrack2Color.value, 0.5);
           }
           return 'transparent';
         }
       },
       emphasis: {
         itemStyle: {
-          color: '#fa8c16',
+          color: deviationTrack2Color.value,
           opacity: 1,
           borderColor: '#fff',
           borderWidth: 2,
           shadowBlur: 10,
-          shadowColor: 'rgba(250, 140, 22, 0.5)'
+          shadowColor: hexToRgba(deviationTrack2Color.value, 0.5)
         },
         scale: 1.5
       },
@@ -948,9 +1074,9 @@ function updateChartDisplay() {
         color: function(params, paramsIndex) {
           // 在非跟踪模式下高亮最新点
           if (!isTracking.value && isLatestTrack && paramsIndex === latestPointInfo.index) {
-            return '#722ed1';
+            return deviationTrack3Color.value;
           }
-          return '#722ed1';
+          return deviationTrack3Color.value;
         },
         opacity: function(params, paramsIndex) {
           // 在非跟踪模式下高亮最新点
@@ -980,22 +1106,86 @@ function updateChartDisplay() {
           }
           return 0;
         },
-        shadowColor: function(params, paramsIndex) {
-          // 在非跟踪模式下高亮最新点
-          if (!isTracking.value && isLatestTrack && paramsIndex === latestPointInfo.index) {
-            return 'rgba(114, 46, 209, 0.5)';
-          }
-          return 'transparent';
-        }
+        shadowColor: hexToRgba(deviationTrack3Color.value, 0.5)
       },
       emphasis: {
         itemStyle: {
-          color: '#722ed1',
+          color: deviationTrack3Color.value,
           opacity: 1,
           borderColor: '#fff',
           borderWidth: 2,
           shadowBlur: 10,
-          shadowColor: 'rgba(114, 46, 209, 0.5)'
+          shadowColor: hexToRgba(deviationTrack3Color.value, 0.5)
+        },
+        scale: 1.5
+      },
+      sampling: 'lttb',
+      large: true,
+    });
+  }
+
+  // 添加轨迹4
+  if (deviationTrack4X.value && deviationTrack4Y.value && track4Data.length > 0) {
+    const isLatestTrack = latestPointInfo.track === 4;
+    series.push({
+      name: '轨迹4',
+      type: 'scatter',
+      data: track4Data,
+      coordinateSystem: 'cartesian2d',
+      symbolSize: function(params, paramsIndex) {
+        // 在非跟踪模式下高亮最新点
+        if (!isTracking.value && isLatestTrack && paramsIndex === latestPointInfo.index) {
+          return pointSize.value * 1.5;
+        }
+        return pointSize.value;
+      },
+      symbol: 'circle',
+      itemStyle: {
+        color: function(params, paramsIndex) {
+          // 在非跟踪模式下高亮最新点
+          if (!isTracking.value && isLatestTrack && paramsIndex === latestPointInfo.index) {
+            return deviationTrack4Color.value;
+          }
+          return deviationTrack4Color.value;
+        },
+        opacity: function(params, paramsIndex) {
+          // 在非跟踪模式下高亮最新点
+          if (!isTracking.value && isLatestTrack && paramsIndex === latestPointInfo.index) {
+            return 1;
+          }
+          return 0.6;
+        },
+        borderWidth: function(params, paramsIndex) {
+          // 在非跟踪模式下高亮最新点
+          if (!isTracking.value && isLatestTrack && paramsIndex === latestPointInfo.index) {
+            return 3;
+          }
+          return 0;
+        },
+        borderColor: function(params, paramsIndex) {
+          // 在非跟踪模式下高亮最新点
+          if (!isTracking.value && isLatestTrack && paramsIndex === latestPointInfo.index) {
+            return '#fff';
+          }
+          return 'transparent';
+        },
+        shadowBlur: function(params, paramsIndex) {
+          // 在非跟踪模式下高亮最新点
+          if (!isTracking.value && isLatestTrack && paramsIndex === latestPointInfo.index) {
+            return 10;
+          }
+          return 0;
+        },
+        shadowColor: hexToRgba(deviationTrack4Color.value, 0.5)
+      },
+      emphasis: {
+        itemStyle: {
+          color: deviationTrack4Color.value,
+          opacity: 1,
+          borderColor: '#fff',
+          borderWidth: 2,
+          shadowBlur: 10,
+          shadowColor: hexToRgba(deviationTrack4Color.value, 0.5)
         },
         scale: 1.5
       },
@@ -1016,20 +1206,20 @@ function updateChartDisplay() {
         coordinateSystem: 'cartesian2d',
         symbolSize: pointSize.value * 1.2,
         itemStyle: {
-          color: '#52c41a',
+          color: deviationTrack1Color.value,
           borderWidth: 2,
           borderColor: '#fff',
           shadowBlur: 2,
-          shadowColor: '#222',
+          shadowColor: 'rgba(0, 0, 0, 0.3)',
         },
         emphasis: {
           itemStyle: {
-            color: '#52c41a',
+            color: deviationTrack1Color.value,
             opacity: 1,
             borderColor: '#fff',
             borderWidth: 2,
             shadowBlur: 10,
-            shadowColor: 'rgba(82, 196, 26, 0.5)'
+            shadowColor: hexToRgba(deviationTrack1Color.value, 0.5)
           },
           scale: 1.5
         },
@@ -1048,20 +1238,20 @@ function updateChartDisplay() {
         coordinateSystem: 'cartesian2d',
         symbolSize: pointSize.value * 1.2,
         itemStyle: {
-          color: '#fa8c16',
+          color: deviationTrack2Color.value,
           borderWidth: 2,
           borderColor: '#fff',
           shadowBlur: 2,
-          shadowColor: '#222',
+          shadowColor: 'rgba(0, 0, 0, 0.3)',
         },
         emphasis: {
           itemStyle: {
-            color: '#fa8c16',
+            color: deviationTrack2Color.value,
             opacity: 1,
             borderColor: '#fff',
             borderWidth: 2,
             shadowBlur: 10,
-            shadowColor: 'rgba(250, 140, 22, 0.5)'
+            shadowColor: hexToRgba(deviationTrack2Color.value, 0.5)
           },
           scale: 1.5
         },
@@ -1080,20 +1270,52 @@ function updateChartDisplay() {
         coordinateSystem: 'cartesian2d',
         symbolSize: pointSize.value * 1.2,
         itemStyle: {
-          color: '#722ed1',
+          color: deviationTrack3Color.value,
           borderWidth: 2,
           borderColor: '#fff',
           shadowBlur: 2,
-          shadowColor: '#222',
+          shadowColor: 'rgba(0, 0, 0, 0.3)',
         },
         emphasis: {
           itemStyle: {
-            color: '#722ed1',
+            color: deviationTrack3Color.value,
             opacity: 1,
             borderColor: '#fff',
             borderWidth: 2,
             shadowBlur: 10,
-            shadowColor: 'rgba(114, 46, 209, 0.5)'
+            shadowColor: hexToRgba(deviationTrack3Color.value, 0.5)
+          },
+          scale: 1.5
+        },
+        sampling: 'lttb',
+        large: true,
+      });
+    }
+
+    // 轨迹4当前位置（显示在真实位置）
+    if (deviationTrack4X.value && deviationTrack4Y.value && track4Data.length > 0) {
+      const lastPoint4 = track4Data[track4Data.length - 1];
+      series.push({
+        name: '当前位置4',
+        type: 'scatter',
+        data: [lastPoint4],
+        coordinateSystem: 'cartesian2d',
+        symbolSize: pointSize.value * 1.2,
+        itemStyle: {
+          color: deviationTrack4Color.value,
+          borderWidth: 2,
+          borderColor: '#fff',
+          shadowBlur: 2,
+          shadowColor: 'rgba(0, 0, 0, 0.3)',
+        },
+        emphasis: {
+          itemStyle: {
+            color: deviationTrack4Color.value,
+            opacity: 1,
+            borderColor: '#fff',
+            borderWidth: 2,
+            shadowBlur: 10,
+            shadowColor: hexToRgba(deviationTrack4Color.value, 0.5)
           },
           scale: 1.5
         },
@@ -1113,20 +1335,20 @@ function updateChartDisplay() {
         coordinateSystem: 'cartesian2d',
         symbolSize: pointSize.value * 1.2,
         itemStyle: {
-          color: '#52c41a',
+          color: deviationTrack1Color.value,
           borderWidth: 2,
           borderColor: '#fff',
           shadowBlur: 2,
-          shadowColor: '#222',
+          shadowColor: 'rgba(0, 0, 0, 0.3)',
         },
         emphasis: {
           itemStyle: {
-            color: '#52c41a',
+            color: deviationTrack1Color.value,
             opacity: 1,
             borderColor: '#fff',
             borderWidth: 2,
             shadowBlur: 10,
-            shadowColor: 'rgba(82, 196, 26, 0.5)'
+            shadowColor: hexToRgba(deviationTrack1Color.value, 0.5)
           },
           scale: 1.5
         },
@@ -1145,20 +1367,20 @@ function updateChartDisplay() {
         coordinateSystem: 'cartesian2d',
         symbolSize: pointSize.value * 1.2,
         itemStyle: {
-          color: '#fa8c16',
+          color: deviationTrack2Color.value,
           borderWidth: 2,
           borderColor: '#fff',
           shadowBlur: 2,
-          shadowColor: '#222',
+          shadowColor: 'rgba(0, 0, 0, 0.3)',
         },
         emphasis: {
           itemStyle: {
-            color: '#fa8c16',
+            color: deviationTrack2Color.value,
             opacity: 1,
             borderColor: '#fff',
             borderWidth: 2,
             shadowBlur: 10,
-            shadowColor: 'rgba(250, 140, 22, 0.5)'
+            shadowColor: hexToRgba(deviationTrack2Color.value, 0.5)
           },
           scale: 1.5
         },
@@ -1177,20 +1399,52 @@ function updateChartDisplay() {
         coordinateSystem: 'cartesian2d',
         symbolSize: pointSize.value * 1.2,
         itemStyle: {
-          color: '#722ed1',
+          color: deviationTrack3Color.value,
           borderWidth: 2,
           borderColor: '#fff',
           shadowBlur: 2,
-          shadowColor: '#222',
+          shadowColor: 'rgba(0, 0, 0, 0.3)',
         },
         emphasis: {
           itemStyle: {
-            color: '#722ed1',
+            color: deviationTrack3Color.value,
             opacity: 1,
             borderColor: '#fff',
             borderWidth: 2,
             shadowBlur: 10,
-            shadowColor: 'rgba(114, 46, 209, 0.5)'
+            shadowColor: hexToRgba(deviationTrack3Color.value, 0.5)
+          },
+          scale: 1.5
+        },
+        sampling: 'lttb',
+        large: true,
+      });
+    }
+
+    // 轨迹4当前位置
+    if (deviationTrack4X.value && deviationTrack4Y.value && track4Data.length > 0) {
+      const lastPoint4 = track4Data[track4Data.length - 1];
+      series.push({
+        name: '当前位置4',
+        type: 'scatter',
+        data: [lastPoint4],
+        coordinateSystem: 'cartesian2d',
+        symbolSize: pointSize.value * 1.2,
+        itemStyle: {
+          color: deviationTrack4Color.value,
+          borderWidth: 2,
+          borderColor: '#fff',
+          shadowBlur: 2,
+          shadowColor: 'rgba(0, 0, 0, 0.3)',
+        },
+        emphasis: {
+          itemStyle: {
+            color: deviationTrack4Color.value,
+            opacity: 1,
+            borderColor: '#fff',
+            borderWidth: 2,
+            shadowBlur: 10,
+            shadowColor: hexToRgba(deviationTrack4Color.value, 0.5)
           },
           scale: 1.5
         },
@@ -1265,6 +1519,8 @@ function toggleTracking() {
       xAxisName = deviationTrack2X.value;
     } else if (deviationTrack3X.value) {
       xAxisName = deviationTrack3X.value;
+    } else if (deviationTrack4X.value) {
+      xAxisName = deviationTrack4X.value;
     }
     
     if (deviationTrack1Y.value) {
@@ -1273,6 +1529,8 @@ function toggleTracking() {
       yAxisName = deviationTrack2Y.value;
     } else if (deviationTrack3Y.value) {
       yAxisName = deviationTrack3Y.value;
+    } else if (deviationTrack4Y.value) {
+      yAxisName = deviationTrack4Y.value;
     }
     
     // 根据跟踪模式调整轴名称
@@ -1380,6 +1638,20 @@ function handleLegendSelectChanged(params) {
     }
   }
 
+  // 当点击轨迹4时，同步控制当前位置4的显示状态
+  if (params.name === '轨迹4') {
+    // 获取轨迹4的选中状态
+    const track4Selected = selected['轨迹4'];
+    
+    // 同步设置当前位置4的选中状态
+    if (track4Selected !== undefined) {
+      chartInstance.value.dispatchAction({
+        type: 'legendToggleSelect',
+        name: '当前位置4'
+      });
+    }
+  }
+
   updateFlowData();
 }
 
@@ -1479,6 +1751,8 @@ function handleChartDblClick(params) {
       rawTime = track2TimeIndex[dataIndex];
     } else if (seriesName === '轨迹3' && track3TimeIndex[dataIndex] !== undefined) {
       rawTime = track3TimeIndex[dataIndex];
+    } else if (seriesName === '轨迹4' && track4TimeIndex[dataIndex] !== undefined) {
+      rawTime = track4TimeIndex[dataIndex];
     } else if (seriesName === '当前位置1' && track1TimeIndex.length > 0) {
       // 当前位置1使用轨迹1的最后一个时间戳
       rawTime = track1TimeIndex[track1TimeIndex.length - 1];
@@ -1488,6 +1762,9 @@ function handleChartDblClick(params) {
     } else if (seriesName === '当前位置3' && track3TimeIndex.length > 0) {
       // 当前位置3使用轨迹3的最后一个时间戳
       rawTime = track3TimeIndex[track3TimeIndex.length - 1];
+    } else if (seriesName === '当前位置4' && track4TimeIndex.length > 0) {
+      // 当前位置4使用轨迹4的最后一个时间戳
+      rawTime = track4TimeIndex[track4TimeIndex.length - 1];
     }
     
     if (rawTime !== null) {
@@ -1521,6 +1798,8 @@ const handleMouseOver = function(params) {
     targetTime = track2TimeIndex[dataIndex];
   } else if (seriesName === '轨迹3' && track3TimeIndex[dataIndex] !== undefined) {
     targetTime = track3TimeIndex[dataIndex];
+  } else if (seriesName === '轨迹4' && track4TimeIndex[dataIndex] !== undefined) {
+    targetTime = track4TimeIndex[dataIndex];
   }
   
   if (targetTime === null) return;
@@ -1564,6 +1843,20 @@ const handleMouseOver = function(params) {
   for (let i = 0; i < track3TimeIndex.length; i++) {
     if (track3TimeIndex[i] === targetTime) {
       const seriesIndex = series.findIndex(s => s.name === '轨迹3');
+      if (seriesIndex !== -1) {
+        highlightData.push({
+          seriesIndex: seriesIndex,
+          dataIndex: i
+        });
+      }
+      break;
+    }
+  }
+  
+  // 检查轨迹4中是否有相同时间的点
+  for (let i = 0; i < track4TimeIndex.length; i++) {
+    if (track4TimeIndex[i] === targetTime) {
+      const seriesIndex = series.findIndex(s => s.name === '轨迹4');
       if (seriesIndex !== -1) {
         highlightData.push({
           seriesIndex: seriesIndex,
@@ -1807,5 +2100,65 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   margin-left: auto; /* 自动占据剩余空间，将按钮推到右侧 */
+}
+
+/* 配置对话框样式 - 参考FlowData的现代化设计 */
+.chart-config-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  margin-bottom: 20px;
+}
+
+.chart-config-section {
+  margin-bottom: 15px;
+  padding: 15px;
+  background-color: #f9f9f9;
+  border-radius: 8px;
+  border: 1px solid #e4e7ed;
+  transition: all 0.3s ease;
+}
+
+.chart-config-section:hover {
+  background-color: #f5f7fa;
+  border-color: #c0c4cc;
+}
+
+.source-selectors {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* 针对不同屏幕尺寸的响应式调整 */
+@media (max-width: 768px) {
+  .chart-config-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* 对话框内容样式优化 */
+:deep(.el-dialog__body) {
+  padding: 20px;
+}
+
+:deep(.el-dialog__title) {
+  font-size: 16px;
+  font-weight: 600;
+  color: #303133;
+}
+
+/* 选择器样式优化 */
+:deep(.el-select) {
+  --el-select-border-color-hover: #409eff;
+}
+
+:deep(.el-select__wrapper) {
+  border-radius: 4px;
+  transition: all 0.2s ease;
+}
+
+:deep(.el-select__wrapper:hover) {
+  border-color: #409eff;
 }
 </style>

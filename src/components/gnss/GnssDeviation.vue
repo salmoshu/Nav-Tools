@@ -442,7 +442,7 @@ function handleNmeaUpdate() {
           borderWidth: 2,   // 边框总宽度
           borderColor: '#fff', // 外层边框颜色
           borderType: 'solid',
-          shadowColor: '#222', // 内层边框颜色
+          shadowColor: 'rgba(100, 100, 100, 0.2)', // 内层边框颜色
           shadowOffsetX: 0,
           shadowOffsetY: 0,
           shadowBlur: 2
