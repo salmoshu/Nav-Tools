@@ -2,10 +2,22 @@
   <div class="deviation-container">
     <div class="control-panel">
       <div class="controls">
+        <!-- 视图配置按钮 -->
+        <el-button type="default" size="small" @click="showViewConfig" class="control-btn config-btn">
+          <el-icon><Setting /></el-icon>&nbsp;配置
+        </el-button>
+        
+        <!-- 滑窗开关按钮 -->
+        <el-button :disabled="deviceConnected" type="default" size="small" @click="toggleSlideWindow">
+          <el-icon v-if="enableWindow"><CircleClose /></el-icon>
+          <el-icon v-else><CircleCheck /></el-icon>
+          &nbsp;{{enableWindow?"关闭滑窗":"启用滑窗"}}
+        </el-button>
 
-        <!-- 添加轨迹点尺寸调节滑块 -->
-        <span class="switch-label">跟踪:</span>
-        <el-switch v-model="isTracking" @change="toggleTracking" class="tracking-switch" />
+        <el-button type="default" size="small" @click="toggleTracking">
+          <el-icon><Aim /></el-icon>
+          &nbsp;{{isTracking?"关闭跟踪":"启用跟踪"}}
+        </el-button>
         
         <!-- 添加轨迹点尺寸调节滑块 -->
         <div class="point-size-control">
@@ -14,28 +26,18 @@
             v-model="pointSize"
             :min="5"
             :max="20"
-            :step="1"
+            :step="1" 
             class="point-slider"
             @change="updatePointSize"
           />
           <span class="size-value">{{ pointSize }}</span>
         </div>
-        
+
         <!-- 将重置、清除按钮放在右侧 -->
         <div class="right-buttons">
-          <!-- 视图配置按钮 -->
-          <el-button type="default" size="small" @click="showViewConfig" class="control-btn config-btn">
-            <el-icon><Setting /></el-icon>&nbsp;配置
-          </el-button>
-          <!-- 滑窗开关按钮 -->
-          <el-button :disabled="deviceConnected" type="default" size="small" @click="toggleSlideWindow">
-            <el-icon v-if="enableWindow"><CircleClose /></el-icon>
-            <el-icon v-else><CircleCheck /></el-icon>
-            &nbsp;{{enableWindow?"关闭滑窗":"启用滑窗"}}
-          </el-button>
           <!-- 重置布局按钮 -->
-          <el-button type="default" size="small" @click="resetZoom" class="zoom-btn">
-            <el-icon><RefreshLeft /></el-icon>&nbsp;重置布局
+          <el-button type="text" size="small" @click="resetZoom" class="zoom-btn" style="margin: 0px 0px;">
+            <el-icon><Refresh /></el-icon>
           </el-button>
         </div>
       </div>
@@ -1211,6 +1213,8 @@ function updateChartDisplay() {
 
 // 切换追踪模式
 function toggleTracking() {
+  isTracking.value = !isTracking.value;
+
   if (isTracking.value) {
     // 开启跟踪模式：以最新轨迹点为中心
     updateFlowData(); // 重新计算偏移量
@@ -1635,10 +1639,6 @@ onUnmounted(() => {
   position: relative;
 }
 
-.tracking-switch {
-  margin-right: 8px;
-}
-
 .switch-label {
   font-size: 12px;
   color: #6b7280;
@@ -1678,7 +1678,7 @@ onUnmounted(() => {
 .point-size-control {
   display: flex;
   align-items: center;
-  margin-left: 10px;
+  margin: 0 10px;
 }
 
 .size-label {

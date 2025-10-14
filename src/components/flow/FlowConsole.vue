@@ -8,6 +8,7 @@
             <el-option label="JSON" value="json"></el-option>
             <el-option label="NMEA" value="nmea"></el-option>
           </el-select>
+          
           <el-button @click="toggleDataFilter" type="default" size="small">
             <el-icon><Filter /></el-icon>&nbsp;{{dataFilter?"还原":"过滤"}}
           </el-button>
@@ -18,18 +19,18 @@
             <el-icon v-if="autoScroll"><Sort /></el-icon>
             <el-icon v-else><Bottom /></el-icon>&nbsp;{{autoScroll?"滚动":"吸附"}}
           </el-button>
-          <el-button @click="toggleSearch" type="default" size="small">
-            <el-icon><Search /></el-icon>
-          </el-button>
         </div>
         
         <!-- 右侧按钮组 -->
         <div class="right-controls">
-          <el-button @click="saveConsoleData" type="default" size="small" :disabled="rawMessages.length === 0">
-            <el-icon><Download /></el-icon>&nbsp;保存
+          <el-button @click="toggleSearch" type="text" size="small">
+            <el-icon><Search /></el-icon>
           </el-button>
-          <el-button @click="clearConsole" type="default" size="small">
-            <el-icon><Delete /></el-icon>&nbsp;清除
+          <el-button @click="saveConsoleData" type="text" size="small" :disabled="rawMessages.length === 0" style="margin: 0px 0px;">
+            <el-icon><Download /></el-icon>
+          </el-button>
+          <el-button @click="clearConsole" type="text" size="small" style="margin: 0px 0px;">
+            <el-icon><Delete /></el-icon>
           </el-button>
         </div>
       </div>

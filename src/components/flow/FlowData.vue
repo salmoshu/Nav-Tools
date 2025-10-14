@@ -7,23 +7,23 @@
           <el-button type="default" size="small" @click="showViewConfig" class="layout-btn">
             <el-icon><Setting /></el-icon>&nbsp;配置
           </el-button>
-          <el-button type="default" size="small" @click="showMessageFormat" class="message-btn">
-            <el-icon><Message /></el-icon>&nbsp;消息格式
-          </el-button>
-        </div>
-        
-        <!-- 右侧按钮 -->
-        <div class="right-buttons">
           <el-button :disabled="deviceConnected" type="default" size="small" @click="toggleSlideWindow">
             <el-icon v-if="enableWindow"><CircleClose /></el-icon>
             <el-icon v-else><CircleCheck /></el-icon>
             &nbsp;{{enableWindow?"关闭滑窗":"启用滑窗"}}
           </el-button>
-          <el-button type="default" size="small" @click="refreshPlotData">
-            <el-icon><Refresh /></el-icon>&nbsp;刷新
+        </div>
+        
+        <!-- 右侧按钮 -->
+        <div class="right-buttons">
+          <el-button type="text" size="small" @click="showMessageFormat" class="message-btn" style="margin: 0px 0px;">
+            <el-icon><Message /></el-icon>
           </el-button>
-          <el-button type="default" size="small" @click="clearPlotData">
-            <el-icon><Delete /></el-icon>&nbsp;清除
+          <el-button type="text" size="small" style="margin: 0px 0px;">
+            <el-icon @click="refreshPlotData"><Refresh /></el-icon>
+          </el-button>
+          <el-button type="text" size="small" @click="clearPlotData" style="margin: 0px 0px;">
+            <el-icon><Delete /></el-icon>
           </el-button>
         </div>
       </div>
