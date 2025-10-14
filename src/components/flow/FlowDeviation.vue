@@ -1225,6 +1225,9 @@ function updateChartDisplay() {
       top: 10,
     },
     series: series
+  }, {
+    replaceMerge: ['series'],
+    silent: false
   });
 }
 
@@ -1333,8 +1336,7 @@ function updatePointSize() {
 // 处理legend点击事件
 function handleLegendSelectChanged(params) {
   // 获取当前图表配置
-  const option = chartInstance.value.getOption();
-  const selected = option.legend[0].selected;
+  const selected = params.selected;
   
   // 当点击轨迹1时，同步控制当前位置1的显示状态
   if (params.name === '轨迹1') {
@@ -1377,6 +1379,8 @@ function handleLegendSelectChanged(params) {
       });
     }
   }
+
+  updateFlowData();
 }
 
 // 新增：保持坐标轴等宽的函数
@@ -1460,41 +1464,6 @@ function toggleDataUpdate() {
     pauseDataUpdate();
   }
 }
-
-// 组件挂载时初始化
-onMounted(() => {
-  // 修复：使用nextTick确保DOM完全渲染后再初始化图表
-  nextTick(() => {
-    // 确保chartRef.value存在且有尺寸后再初始化图表
-    if (chartRef.value && chartRef.value.clientWidth > 0 && chartRef.value.clientHeight > 0) {
-      initChart();
-    } else {
-      // 如果DOM还没有尺寸，添加一个小延迟再次尝试
-      setTimeout(() => {
-        if (chartRef.value) {
-          initChart();
-        }
-      }, 300);
-    }
-  });
-
-  watch(deviceConnected, () => {
-    if (deviceConnected.value) {
-      enableWindow.value = true;
-      // 每100ms更新一次数据
-      resumeDataUpdate();
-    } else {
-      pauseDataUpdate();
-    }
-  });
-
-  watch(enableWindow, () => {
-    updateFlowData();
-  });
-
-
-  window.addEventListener('keydown', handleKeyDown);
-});
 
 function handleChartDblClick(params) {
   // params 包含了双击事件的相关信息，如坐标、数据等
@@ -1637,6 +1606,41 @@ const handleMouseOut = function() {
     }
   });
 };
+
+// 组件挂载时初始化
+onMounted(() => {
+  // 修复：使用nextTick确保DOM完全渲染后再初始化图表
+  nextTick(() => {
+    // 确保chartRef.value存在且有尺寸后再初始化图表
+    if (chartRef.value && chartRef.value.clientWidth > 0 && chartRef.value.clientHeight > 0) {
+      initChart();
+    } else {
+      // 如果DOM还没有尺寸，添加一个小延迟再次尝试
+      setTimeout(() => {
+        if (chartRef.value) {
+          initChart();
+        }
+      }, 300);
+    }
+  });
+
+  watch(deviceConnected, () => {
+    if (deviceConnected.value) {
+      enableWindow.value = true;
+      // 每100ms更新一次数据
+      resumeDataUpdate();
+    } else {
+      pauseDataUpdate();
+    }
+  });
+
+  watch(enableWindow, () => {
+    updateFlowData();
+  });
+
+
+  window.addEventListener('keydown', handleKeyDown);
+});
 
 // 组件卸载时清理资源
 onUnmounted(() => {
