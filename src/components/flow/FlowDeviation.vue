@@ -151,7 +151,7 @@ echarts.use([ScatterChart, GridComponent, CanvasRenderer]);
 const chartRef = ref(null);
 const chartInstance = ref(null);
 const chartContainerRef = ref(null); // 添加容器引用
-const isTracking = ref(true);
+const isTracking = ref(false);
 const padding = ref(10000); // 默认正负10km
 const pointSize = ref(10); // 初始值与图表配置一致
 const chartDom = ref(null); // 添加chartDom引用
@@ -255,6 +255,8 @@ function applyViewConfig() {
   }
   
   viewConfigDialogVisible.value = false;
+
+  updateFlowData();
 }
 
 // 设置调整大小观察器
@@ -289,6 +291,7 @@ function setupResizeObserver() {
   if (chartContainerRef.value) {
     resizeObserver.observe(chartContainerRef.value);
   }
+  updateFlowData();
 }
 
 // 获取数据缩放配置
@@ -525,6 +528,9 @@ function initChart() {
   chartInstance.value.on('mouseout', handleMouseOut);
   chartInstance.value.on('globalout', handleMouseOut); // 添加全局鼠标移出事件
   chartInstance.value.on('dblclick', handleChartDblClick); // 添加双击事件监听
+  
+  // 添加legend点击事件监听
+  chartInstance.value.on('legendselectchanged', handleLegendSelectChanged);
   
   setupResizeObserver();
 
@@ -1289,6 +1295,7 @@ function toggleTracking() {
 function resetZoom() {
   if (!chartInstance.value) return;
   initChart();
+  updateFlowData();
 }
 
 // 更新点大小
@@ -1317,6 +1324,12 @@ function updatePointSize() {
       });
     }
   }
+}
+
+// 处理legend点击事件
+function handleLegendSelectChanged(params) {
+  // 触发数据更新
+  updateFlowData();
 }
 
 // 新增：保持坐标轴等宽的函数
@@ -1421,11 +1434,17 @@ onMounted(() => {
   watch(deviceConnected, () => {
     if (deviceConnected.value) {
       enableWindow.value = true;
+      // 每100ms更新一次数据
+      resumeDataUpdate();
+    } else {
+      pauseDataUpdate();
     }
   });
 
-  // 每100ms更新一次数据
-  resumeDataUpdate();
+  watch(enableWindow, () => {
+    updateFlowData();
+  });
+
 
   window.addEventListener('keydown', handleKeyDown);
 });
@@ -1585,6 +1604,7 @@ onUnmounted(() => {
     chartInstance.value.off('mouseout', handleMouseOut);
     chartInstance.value.off('globalout', handleMouseOut);
     chartInstance.value.off('dblclick', handleChartDblClick); // 移除双击事件监听
+    chartInstance.value.off('legendselectchanged', handleLegendSelectChanged); // 移除图例点击事件监听
     
     chartInstance.value.dispose();
   }
