@@ -439,12 +439,6 @@ export function useDataConfig(flowData: any) {
     
     // 应用数据源配置（如果有）
     applyDataSourceConfig(config)
-    
-    // 应用配置并更新图表
-    applyViewConfig(() => {
-      // 这个回调函数将在FlowData组件中提供
-      // console.log('配置已应用，需要更新图表')
-    })
   }
 
   // 函数 - 应用数据源配置
