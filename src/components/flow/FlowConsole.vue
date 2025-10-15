@@ -45,7 +45,7 @@
           size="small"
           placeholder="搜索... (按ESC关闭)"
           style="width: 200px; margin-right: 5px;"
-          @input="performSearch"
+          @input="findAll"
           @keyup.enter="findNext"
         >
           <template #suffix>
@@ -108,14 +108,14 @@ const {
   // 功能函数
   toggleDataFilter,
   toggleDataTimestamp,
-  clearConsole,
-  handleScroll,
+  toggleAutoScroll,
   toggleSearch,
+  handleScroll,
+  clearConsole,
   checkSearchMatch,
-  performSearch,
+  findAll,
   findNext,
   findPrev,
-  toggleAutoScroll,
   clearSearch,
 } = useConsole();
 

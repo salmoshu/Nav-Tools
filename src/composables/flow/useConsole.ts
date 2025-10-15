@@ -302,6 +302,37 @@ export function useConsole() {
     dataTimestamp.value = !dataTimestamp.value;
   };
 
+  // 切换自动滚动
+  const toggleAutoScroll = () => {
+    dataAutoScroll.value = !dataAutoScroll.value;
+    if (dataAutoScroll.value) {
+      isSearchMode.value = false;
+      // 滚动到底部并更新显示
+      const start = Math.max(0, rawMessages.value.length - DISPLAY_COUNT);
+      updateVisibleMessages(start);
+      nextTick(() => {
+        if (consoleContent.value) {
+          consoleContent.value.scrollTop = consoleContent.value.scrollHeight;
+          lastScrollTop.value = consoleContent.value.scrollTop;
+        }
+      });
+    }
+  };
+
+  // 搜索功能
+  const toggleSearch = () => {
+    showSearchBox.value = !showSearchBox.value;
+    if (showSearchBox.value) {
+      nextTick(() => {
+        if (searchInput.value) {
+          searchInput.value.focus();
+        }
+      });
+    } else {
+      clearSearch();
+    }
+  };
+
   // 更新可见消息
   const updateVisibleMessages = (startIndex?: number, contextMode: 'top' | 'bottom' | 'normal' | 'search' = 'normal') => {
     if (isSearchMode.value && searchResults.value.length > 0 && contextMode !== 'top' && contextMode !== 'bottom') {
@@ -349,16 +380,17 @@ export function useConsole() {
 
   // 清除控制台
   const clearConsole = () => {
-    rawMessages.value = [];
-    visibleMessages.value = [];
     msgCount.value = 0;
     msgNmeaCount.value = 0;
     msgJsonCount.value = 0;
-    currentViewStartIndex.value = 0;
-    isScrollAtBottom.value = true;
-    isScrollAtTop.value = true;
-    lastAutoScrollIndex.value = 0;
     tempDataString = '';
+    rawMessages.value = [];
+    visibleMessages.value = [];
+    isScrollAtBottom.value = true;
+    isScrollAtTop.value = false;
+    lastScrollTop.value = 0;
+    currentViewStartIndex.value = 0;
+    lastAutoScrollIndex.value = 0;
     clearSearch();
   };
 
@@ -468,20 +500,6 @@ export function useConsole() {
     lastScrollTop.value = scrollTop;
   };
 
-  // 搜索功能
-  const toggleSearch = () => {
-    showSearchBox.value = !showSearchBox.value;
-    if (showSearchBox.value) {
-      nextTick(() => {
-        if (searchInput.value) {
-          searchInput.value.focus();
-        }
-      });
-    } else {
-      clearSearch();
-    }
-  };
-
   const checkSearchMatch = (text: string, query: string): boolean => {
     return text.toLowerCase().includes(query.toLowerCase());
   };
@@ -517,7 +535,7 @@ export function useConsole() {
     });
   };
 
-  const performSearch = () => {
+  const findAll = () => {
     if (!searchQuery.value) {
       clearSearch();
       return;
@@ -554,23 +572,6 @@ export function useConsole() {
     currentResultIndex.value = 
       (currentResultIndex.value - 1 + searchResults.value.length) % searchResults.value.length;
     scrollToSearchResult(currentResultIndex.value);
-  };
-
-  // 切换自动滚动
-  const toggleAutoScroll = () => {
-    dataAutoScroll.value = !dataAutoScroll.value;
-    if (dataAutoScroll.value) {
-      isSearchMode.value = false;
-      // 滚动到底部并更新显示
-      const start = Math.max(0, rawMessages.value.length - DISPLAY_COUNT);
-      updateVisibleMessages(start);
-      nextTick(() => {
-        if (consoleContent.value) {
-          consoleContent.value.scrollTop = consoleContent.value.scrollHeight;
-          lastScrollTop.value = consoleContent.value.scrollTop;
-        }
-      });
-    }
   };
 
   const clearSearch = () => {
@@ -617,14 +618,14 @@ export function useConsole() {
     handleRawDataBatch,
     toggleDataFilter,
     toggleDataTimestamp,
+    toggleAutoScroll,
+    toggleSearch,
     clearConsole,
     handleScroll,
-    toggleSearch,
     checkSearchMatch,
-    performSearch,
+    findAll,
     findNext,
     findPrev,
-    toggleAutoScroll,
     clearSearch,
   };
 }
