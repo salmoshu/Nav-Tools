@@ -23,16 +23,6 @@ const COLOR_PALETTE = [
   '#c1232b'   // 深红
 ]
 
-// 生成随机颜色的辅助函数
-export function getRandomColor(colorRef: any, index: number): string {
-  const cycleIndex = index % COLOR_PALETTE.length
-  const color = COLOR_PALETTE[cycleIndex]
-  if (colorRef) {
-    colorRef.value = color
-  }
-  return color
-}
-
 // FlowDeviation 配置对象
 const deviationConfig = {
   // 轨迹字段
@@ -51,7 +41,6 @@ const deviationConfig = {
   track4Color: ref<string>('#9a60b4')
 }
 
-// FlowData
 // FlowData 配置对象 - 单图单Y轴模式
 const singleChartConfig = {
   // 数据源选择
@@ -197,6 +186,28 @@ export function useDataConfig(flowData: any) {
   const viewConfigDialogVisible = ref(false)
   const viewLayout = ref<ViewLayout>('single')
   const yAxisConfig = ref<YAxisConfig>('single')
+    // 计算属性 - 检查是否有数据
+  const checkDataExist = computed(() => {
+    return flowData.value.plotTime && flowData.value.plotTime.length > 0
+  })
+
+  // 计算属性 - 获取所有可用的数据源字段（排除元数据字段）
+  const availableSources = computed(() => {
+    // 确保 flowData.value 存在
+    if (!flowData.value) {
+      return []
+    }
+    
+    return Object.keys(flowData.value).filter(key => 
+      key !== 'plotTime' && 
+      key !== 'timestamp' && 
+      key !== 'startTime' && 
+      key !== 'isBatchData' && 
+      key !== 'rawString' && 
+      key !== 'rawDataKeys' && 
+      Array.isArray(flowData.value[key])
+    )
+  })
 
   // 计算属性 - 上图表数据源（双图模式）
   const upperChartSources = computed(() => {
@@ -378,29 +389,15 @@ export function useDataConfig(flowData: any) {
     ]
   })
 
-  // 计算属性 - 检查是否有数据
-  const hasData = computed(() => {
-    return flowData.value.plotTime && flowData.value.plotTime.length > 0
-  })
-
-  // 计算属性 - 获取所有可用的数据源字段（排除元数据字段）
-  // 修改 availableSources 计算属性，确保它能正确反映 flowData 的变化
-  const availableSources = computed(() => {
-    // 确保 flowData.value 存在
-    if (!flowData.value) {
-      return []
+  // 生成随机颜色的辅助函数
+  function getRandomColor(colorRef: any, index: number): string {
+    const cycleIndex = index % COLOR_PALETTE.length
+    const color = COLOR_PALETTE[cycleIndex]
+    if (colorRef) {
+      colorRef.value = color
     }
-    
-    return Object.keys(flowData.value).filter(key => 
-      key !== 'plotTime' && 
-      key !== 'timestamp' && 
-      key !== 'startTime' && 
-      key !== 'isBatchData' && 
-      key !== 'rawString' && 
-      key !== 'rawDataKeys' && 
-      Array.isArray(flowData.value[key])
-    )
-  })
+    return color
+  }
 
   // 显示视图配置对话框
   function showViewConfig() {
@@ -845,6 +842,7 @@ export function useDataConfig(flowData: any) {
     viewConfigDialogVisible,
     viewLayout,
     yAxisConfig,
+    checkDataExist,
 
     // 配置对象
     deviationConfig,
@@ -853,7 +851,8 @@ export function useDataConfig(flowData: any) {
     doubleChartConfig,
     doubleChartDoubleYConfig,
 
-    // 计算属性
+    // 字段计算属性
+    availableSources,
     upperChartSources,
     lowerChartSources,
     upperChartLeftSources,
@@ -863,8 +862,7 @@ export function useDataConfig(flowData: any) {
     singleChartSources,
     singleChartLeftSources,
     singleChartRightSources,
-    hasData,
-    availableSources,
+
     // 颜色计算属性
     upperChartColors,
     lowerChartColors,
@@ -875,9 +873,9 @@ export function useDataConfig(flowData: any) {
     singleChartColors,
     singleChartLeftColors,
     singleChartRightColors,
-    // 工具函数
-    getRandomColor,
+
     // 方法
+    getRandomColor,
     showViewConfig,
     applyViewConfig,
     exportConfigFile,

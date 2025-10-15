@@ -492,7 +492,7 @@ const {
   singleChartSources,
   singleChartLeftSources,
   singleChartRightSources,
-  hasData,
+  checkDataExist,
   availableSources,
   // 工具函数
   getRandomColor,
@@ -707,7 +707,7 @@ function createChart() {
 
 // 更新图表
 function updateChart() {
-  if (!chart || !hasData.value) {
+  if (!chart || !checkDataExist.value) {
     // 如果没有数据，显示空图表
     chart?.setOption({
       // 移除双图模式下的标题
