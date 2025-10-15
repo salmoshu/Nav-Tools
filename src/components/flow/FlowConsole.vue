@@ -12,12 +12,12 @@
           <el-button @click="toggleDataFilter" type="default" size="small">
             <el-icon><Filter /></el-icon>&nbsp;{{dataFilter?"还原":"过滤"}}
           </el-button>
-          <el-button @click="toggleAddTimestamp" type="default" size="small">
-            <el-icon><Clock /></el-icon>&nbsp;{{addTimestamp?"禁用时间":"开启时间"}}
+          <el-button @click="toggleDataTimestamp" type="default" size="small">
+            <el-icon><Clock /></el-icon>&nbsp;{{dataTimestamp?"禁用时间":"开启时间"}}
           </el-button>
           <el-button @click="toggleAutoScroll" type="default" size="small">
-            <el-icon v-if="autoScroll"><Sort /></el-icon>
-            <el-icon v-else><Bottom /></el-icon>&nbsp;{{autoScroll?"滚动":"吸附"}}
+            <el-icon v-if="dataAutoScroll"><Sort /></el-icon>
+            <el-icon v-else><Bottom /></el-icon>&nbsp;{{dataAutoScroll?"滚动":"置底"}}
           </el-button>
         </div>
         
@@ -37,7 +37,7 @@
     </div>
     
     <!-- 悬浮搜索框 - 移到console-header下方 -->
-    <div v-show="showSearch" class="search-overlay">
+    <div v-show="showSearchBox" class="search-overlay">
       <div class="search-container">
         <el-input
           ref="searchInput"
@@ -63,12 +63,12 @@
     
     <div ref="consoleContent" class="console-content" @keydown.ctrl.f.prevent="toggleSearch">
       <div v-for="message in filteredMessages" :key="getMessageKey(message)" class="message-line">
-        <span v-if="addTimestamp" class="timestamp">{{ message.timestamp }}: </span>
+        <span v-if="dataTimestamp" class="timestamp">{{ message.timestamp }}: </span>
         <span 
           :class="{ 
             'valid-message': message.isValid, 
             'invalid-message': !message.isValid, 
-            'search-match': searchQuery && isMatch(message.raw, searchQuery) 
+            'search-match': searchQuery && checkSearchMatch(message.raw, searchQuery) 
           }"
           v-html="highlightSearch(message.raw, searchQuery)"
         >
@@ -82,44 +82,77 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue';
+import { ref, onMounted, onUnmounted, nextTick } from 'vue';
 import { ElMessage, ElButton, ElSelect, ElOption, ElInput } from 'element-plus';
 import { navMode } from '@/settings/config';
 import { useConsole } from '@/composables/flow/useConsole';
 
 const {
+  // DOM
   consoleContent,
-  autoScroll,
-  rawMessages,
-  visibleMessages, // 使用visibleMessages替代rawMessages
-  msgCount,
-  dataFormat,
-  searchQuery,
-  showSearch,
   searchInput,
   searchResults,
+  // 组件配置
+  dataFormat,
+  dataFilter,
+  dataTimestamp,
+  dataAutoScroll,
+  // 数据与状态
+  msgCount,
+  rawMessages,
+  filteredMessages,
+  // 搜索
+  searchQuery,
+  showSearchBox,
   currentResultIndex,
+  // 功能函数
+  toggleDataFilter,
+  toggleDataTimestamp,
   clearConsole,
+  handleScroll,
   toggleSearch,
-  clearSearch,
+  checkSearchMatch,
   performSearch,
-  scrollToResult,
-  isMatch,
-  initScrollListener,
-  removeScrollListener,
-  toggleAutoScrollLocal // 使用新的toggleAutoScrollLocal函数
+  findNext,
+  findPrev,
+  toggleAutoScroll,
+  clearSearch,
 } = useConsole();
 
-const filteredMessages = computed(() => {
-  if (!dataFilter.value) {
-    return visibleMessages.value;
-  }
-  return visibleMessages.value.filter(
-    message => message.dataType === dataFormat.value && message.isValid
-  );
-});
+// 生成时间戳格式的文件名
+const generateTimestampedFilename = (): string => {
+  const now = new Date();
+  const timestamp = now.getUTCFullYear() + '-' +
+    String(now.getUTCMonth() + 1).padStart(2, '0') + '-' +
+    String(now.getUTCDate()).padStart(2, '0') + 'T' +
+    String(now.getUTCHours()).padStart(2, '0') + '-' +
+    String(now.getUTCMinutes()).padStart(2, '0') + '-' +
+    String(now.getUTCSeconds()).padStart(2, '0') + 'Z';
+  
+  return `Nav-Tools_${timestamp}.log`;
+};
 
-const saveConsoleData = () => {
+// 生成文件内容
+const generateFileContent = (): string => {
+  return rawMessages.value
+    .map(message => dataTimestamp.value 
+      ? `${message.timestamp}: ${message.raw}` 
+      : message.raw)
+    .join('\n');
+};
+
+// 下载日志文件
+const downloadFile = (content: string, filename: string): void => {
+  const blob = new Blob([content], { type: 'text/plain;charset=utf-8;' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(a.href);
+};
+
+// 保存控制台数据
+const saveConsoleData = (): void => {
   if (rawMessages.value.length === 0) {
     ElMessage({
       message: `没有可保存的数据`,
@@ -130,67 +163,15 @@ const saveConsoleData = () => {
     return;
   }
 
-  // 生成文件内容，根据是否显示时间戳决定输出格式
-  const fileContent = rawMessages.value
-    .map(message => addTimestamp.value 
-      ? `${message.timestamp}: ${message.raw}` 
-      : message.raw)
-    .join('\n');
-
-  // 创建Blob并下载文件
-  const blob = new Blob([fileContent], { type: 'text/plain;charset=utf-8;' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  
-  // 生成带时间戳的文件名
-  const now = new Date();
-  const timestamp = now.getUTCFullYear() + '-' +
-    String(now.getUTCMonth() + 1).padStart(2, '0') + '-' +
-    String(now.getUTCDate()).padStart(2, '0') + 'T' +
-    String(now.getUTCHours()).padStart(2, '0') + '-' +
-    String(now.getUTCMinutes()).padStart(2, '0') + '-' +
-    String(now.getUTCSeconds()).padStart(2, '0') + 'Z';
-  
-  a.download = `Nav-Tools_${timestamp}.log`;
-  a.click();
-  URL.revokeObjectURL(a.href);
-};
-
-// 切换自动滚动
-const toggleAutoScroll = () => {
-  toggleAutoScrollLocal();
-};
-
-const addTimestamp = ref(true);
-const toggleAddTimestamp = () => {
-  addTimestamp.value = !addTimestamp.value;
-};
-
-const dataFilter = ref(false);
-const toggleDataFilter = () => {
-  dataFilter.value = !dataFilter.value;
+  const fileContent = generateFileContent();
+  const filename = generateTimestampedFilename();
+  downloadFile(fileContent, filename);
 };
 
 const highlightSearch = (text: string, query: string): string => {
   if (!query) return text;
   const regex = new RegExp(`(${query})`, 'gi');
   return text.replace(regex, '<mark>$1</mark>');
-};
-
-const findNext = () => {
-  if (searchResults.value.length === 0) return;
-  
-  currentResultIndex.value = 
-    (currentResultIndex.value + 1) % searchResults.value.length;
-  scrollToResult(currentResultIndex.value);
-};
-
-const findPrev = () => {
-  if (searchResults.value.length === 0) return;
-  
-  currentResultIndex.value = 
-    (currentResultIndex.value - 1 + searchResults.value.length) % searchResults.value.length;
-  scrollToResult(currentResultIndex.value);
 };
 
 // 获取消息唯一key的函数
@@ -203,7 +184,7 @@ const getMessageKey = (message: { raw: string; timestamp: string }) => {
 const consoleRoot = ref<HTMLDivElement | null>(null);
 const handleSearchEvent = (event: KeyboardEvent) => {
   // 只有当搜索框显示时才处理ESC键
-  if (event.key === 'Escape' && showSearch.value) {
+  if (event.key === 'Escape' && showSearchBox.value) {
     toggleSearch();
   }
 
@@ -229,8 +210,9 @@ onMounted(() => {
     if (consoleRoot.value) {
       consoleRoot.value.addEventListener('keyup', handleSearchEvent);
     }
-    // 初始化滚动监听
-    initScrollListener();
+    if (consoleContent.value) {
+      consoleContent.value.addEventListener('scroll', handleScroll);
+    }
   });
 });
 
@@ -239,8 +221,9 @@ onUnmounted(() => {
   if (consoleRoot.value) {
     consoleRoot.value.removeEventListener('keyup', handleSearchEvent);
   }
-  // 移除滚动监听
-  removeScrollListener();
+  if (consoleContent.value) {
+    consoleContent.value.removeEventListener('scroll', handleScroll);
+  }
 });
 </script>
 
@@ -323,23 +306,6 @@ onUnmounted(() => {
 /* 当搜索框显示时，给内容区域添加上边距 */
 :deep(.search-overlay[style*="display: block"]) ~ .console-content {
   margin-top: 45px;
-}
-
-/* 搜索结果样式 */
-.search-match {
-  border-left-color: #409eff;
-}
-
-.current-search-result {
-  background-color: #e6f4ff !important;
-  border-left-color: #409eff;
-  font-weight: bold;
-}
-
-.message-line mark {
-  background-color: #ffecb3;
-  padding: 0 2px;
-  border-radius: 2px;
 }
 
 /* 优化滚动条样式 */

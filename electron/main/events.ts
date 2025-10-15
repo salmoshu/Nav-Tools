@@ -18,6 +18,7 @@ const eventsMap = {
   "serial-data-to-renderer": serialDataToRenderer, // 串口数据发送到渲染进程
 
   // 2. 文件
+  // 使用 HTML 自身的文件对话框，不需要额外处理
   "open-file-dialog": openFileDialog, // 打开文件对话框
   "read-file-event": readFileEvent, // 读取文件事件
 };
@@ -31,7 +32,7 @@ async function searchSerialPorts(_: IpcMainEvent) {
   const ports = await SerialPort.list();
   const result = [];
 
-  // // 用于存储临时打开的端口实例
+  // // 用于存储临时打开的端口实例，从而判断哪些端口被占用
   // const tempPorts: SerialPort[] = [];
 
   // // 尝试打开每个端口以检查是否被占用
