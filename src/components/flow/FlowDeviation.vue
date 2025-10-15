@@ -61,19 +61,19 @@
         <div class="chart-config-section">
           <div style="display: flex; align-items: center; justify-content: center; margin-bottom: 15px;">
             <h4 style="color: #303133; margin: 0;">轨迹1</h4>
-            <el-color-picker v-model="deviationTrack1Color" placeholder="选择颜色" style="margin-left: 10px;"></el-color-picker>
+            <el-color-picker v-model="deviationConfig.track1Color.value" placeholder="选择颜色" style="margin-left: 10px;"></el-color-picker>
           </div>
           <div class="source-selectors">
             <div style="display: flex; align-items: center; margin-bottom: 12px;">
               <span style="display: inline-block; width: 80px; font-size: 14px; color: #606266;">X轴：</span>
-              <el-select v-model="deviationTrack1X" placeholder="选择X轴字段" style="width: 200px;">
+              <el-select v-model="deviationConfig.track1X.value" placeholder="选择X轴字段" style="width: 200px;">
                 <el-option label="<None>" value=""></el-option>
                 <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
               </el-select>
             </div>
             <div style="display: flex; align-items: center;">
               <span style="display: inline-block; width: 80px; font-size: 14px; color: #606266;">Y轴：</span>
-              <el-select v-model="deviationTrack1Y" placeholder="选择Y轴字段" style="width: 200px;">
+              <el-select v-model="deviationConfig.track1Y.value" placeholder="选择Y轴字段" style="width: 200px;">
                 <el-option label="<None>" value=""></el-option>
                 <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
               </el-select>
@@ -85,19 +85,19 @@
         <div class="chart-config-section">
           <div style="display: flex; align-items: center; justify-content: center; margin-bottom: 15px;">
             <h4 style="color: #303133; margin: 0;">轨迹2</h4>
-            <el-color-picker v-model="deviationTrack2Color" placeholder="选择颜色" style="margin-left: 10px;"></el-color-picker>
+            <el-color-picker v-model="deviationConfig.track2Color.value" placeholder="选择颜色" style="margin-left: 10px;"></el-color-picker>
           </div>
           <div class="source-selectors">
             <div style="display: flex; align-items: center; margin-bottom: 12px;">
               <span style="display: inline-block; width: 80px; font-size: 14px; color: #606266;">X轴：</span>
-              <el-select v-model="deviationTrack2X" placeholder="选择X轴字段" style="width: 200px;">
+              <el-select v-model="deviationConfig.track2X.value" placeholder="选择X轴字段" style="width: 200px;">
                 <el-option label="<None>" value=""></el-option>
                 <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
               </el-select>
             </div>
             <div style="display: flex; align-items: center;">
               <span style="display: inline-block; width: 80px; font-size: 14px; color: #606266;">Y轴：</span>
-              <el-select v-model="deviationTrack2Y" placeholder="选择Y轴字段" style="width: 200px;">
+              <el-select v-model="deviationConfig.track2Y.value" placeholder="选择Y轴字段" style="width: 200px;">
                 <el-option label="<None>" value=""></el-option>
                 <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
               </el-select>
@@ -109,19 +109,19 @@
         <div class="chart-config-section">
           <div style="display: flex; align-items: center; justify-content: center; margin-bottom: 15px;">
             <h4 style="color: #303133; margin: 0;">轨迹3</h4>
-            <el-color-picker v-model="deviationTrack3Color" placeholder="选择颜色" style="margin-left: 10px;"></el-color-picker>
+            <el-color-picker v-model="deviationConfig.track3Color.value" placeholder="选择颜色" style="margin-left: 10px;"></el-color-picker>
           </div>
           <div class="source-selectors">
             <div style="display: flex; align-items: center; margin-bottom: 12px;">
               <span style="display: inline-block; width: 80px; font-size: 14px; color: #606266;">X轴：</span>
-              <el-select v-model="deviationTrack3X" placeholder="选择X轴字段" style="width: 200px;">
+              <el-select v-model="deviationConfig.track3X.value" placeholder="选择X轴字段" style="width: 200px;">
                 <el-option label="<None>" value=""></el-option>
                 <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
               </el-select>
             </div>
             <div style="display: flex; align-items: center;">
               <span style="display: inline-block; width: 80px; font-size: 14px; color: #606266;">Y轴：</span>
-              <el-select v-model="deviationTrack3Y" placeholder="选择Y轴字段" style="width: 200px;">
+              <el-select v-model="deviationConfig.track3Y.value" placeholder="选择Y轴字段" style="width: 200px;">
                 <el-option label="<None>" value=""></el-option>
                 <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
               </el-select>
@@ -133,19 +133,19 @@
         <div class="chart-config-section">
           <div style="display: flex; align-items: center; justify-content: center; margin-bottom: 15px;">
             <h4 style="color: #303133; margin: 0;">轨迹4</h4>
-            <el-color-picker v-model="deviationTrack4Color" placeholder="选择颜色" style="margin-left: 10px;"></el-color-picker>
+            <el-color-picker v-model="deviationConfig.track4Color.value" placeholder="选择颜色" style="margin-left: 10px;"></el-color-picker>
           </div>
           <div class="source-selectors">
             <div style="display: flex; align-items: center; margin-bottom: 12px;">
               <span style="display: inline-block; width: 80px; font-size: 14px; color: #606266;">X轴：</span>
-              <el-select v-model="deviationTrack4X" placeholder="选择X轴字段" style="width: 200px;">
+              <el-select v-model="deviationConfig.track4X.value" placeholder="选择X轴字段" style="width: 200px;">
                 <el-option label="<None>" value=""></el-option>
                 <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
               </el-select>
             </div>
             <div style="display: flex; align-items: center;">
               <span style="display: inline-block; width: 80px; font-size: 14px; color: #606266;">Y轴：</span>
-              <el-select v-model="deviationTrack4Y" placeholder="选择Y轴字段" style="width: 200px;">
+              <el-select v-model="deviationConfig.track4Y.value" placeholder="选择Y轴字段" style="width: 200px;">
                 <el-option label="<None>" value=""></el-option>
                 <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
               </el-select>
@@ -173,20 +173,7 @@ import { ElMessage } from 'element-plus';
 import { useDataConfig } from '@/composables/flow/useDataConfig';
 import { useConsole } from '@/composables/flow/useConsole';
 
-const { 
-  deviationTrack1X,
-  deviationTrack1Y,
-  deviationTrack2X,
-  deviationTrack2Y,
-  deviationTrack3X,
-  deviationTrack3Y,
-  deviationTrack4X,
-  deviationTrack4Y,
-  deviationTrack1Color,
-  deviationTrack2Color,
-  deviationTrack3Color,
-  deviationTrack4Color
-} = useDataConfig();
+const { deviationConfig } = useDataConfig();
 
 // 导入搜索功能
 const { searchQuery, findAll } = useConsole();
@@ -268,7 +255,7 @@ function showViewConfig() {
 // 应用视图配置
 function applyViewConfig() {
   // 验证是否至少配置了一条轨迹
-  if (!deviationTrack1X.value && !deviationTrack2X.value && !deviationTrack3X.value && !deviationTrack4X.value) {
+  if (!deviationConfig.track1X.value && !deviationConfig.track2X.value && !deviationConfig.track3X.value && !deviationConfig.track4X.value) {
     ElMessage({
       message: `请至少配置一条轨迹的X轴和Y轴字段`,
       type: 'warning',
@@ -288,24 +275,24 @@ function applyViewConfig() {
   let xAxisName = '';
   let yAxisName = '';
   
-  if (deviationTrack1X.value) {
-    xAxisName = deviationTrack1X.value;
-  } else if (deviationTrack2X.value) {
-    xAxisName = deviationTrack2X.value;
-  } else if (deviationTrack3X.value) {
-    xAxisName = deviationTrack3X.value;
-  } else if (deviationTrack4X.value) {
-    xAxisName = deviationTrack4X.value;
+  if (deviationConfig.track1X.value) {
+    xAxisName = deviationConfig.track1X.value;
+  } else if (deviationConfig.track2X.value) {
+    xAxisName = deviationConfig.track2X.value;
+  } else if (deviationConfig.track3X.value) {
+    xAxisName = deviationConfig.track3X.value;
+  } else if (deviationConfig.track4X.value) {
+    xAxisName = deviationConfig.track4X.value;
   }
   
-  if (deviationTrack1Y.value) {
-    yAxisName = deviationTrack1Y.value;
-  } else if (deviationTrack2Y.value) {
-    yAxisName = deviationTrack2Y.value;
-  } else if (deviationTrack3Y.value) {
-    yAxisName = deviationTrack3Y.value;
-  } else if (deviationTrack4Y.value) {
-    yAxisName = deviationTrack4Y.value;
+  if (deviationConfig.track1Y.value) {
+    yAxisName = deviationConfig.track1Y.value;
+  } else if (deviationConfig.track2Y.value) {
+    yAxisName = deviationConfig.track2Y.value;
+  } else if (deviationConfig.track3Y.value) {
+    yAxisName = deviationConfig.track3Y.value;
+  } else if (deviationConfig.track4Y.value) {
+    yAxisName = deviationConfig.track4Y.value;
   }
   
   // 根据跟踪模式调整轴名称
@@ -433,65 +420,65 @@ function initChart() {
         let originY = point[1];
         
         // 根据系列名称选择对应的轴字段和时间
-        if (seriesName === '轨迹1' && deviationTrack1X.value && deviationTrack1Y.value) {
-          xField = deviationTrack1X.value;
-          yField = deviationTrack1Y.value;
+        if (seriesName === '轨迹1' && deviationConfig.track1X.value && deviationConfig.track1Y.value) {
+          xField = deviationConfig.track1X.value;
+          yField = deviationConfig.track1Y.value;
           currentTime = track1TimeIndex[dataIndex];
-          originX = plotData.value[deviationTrack1X.value][dataIndex];
-          originY = plotData.value[deviationTrack1Y.value][dataIndex];
-        } else if (seriesName === '轨迹2' && deviationTrack2X.value && deviationTrack2Y.value) {
-          xField = deviationTrack2X.value;
-          yField = deviationTrack2Y.value;
+          originX = plotData.value[deviationConfig.track1X.value][dataIndex];
+          originY = plotData.value[deviationConfig.track1Y.value][dataIndex];
+        } else if (seriesName === '轨迹2' && deviationConfig.track2X.value && deviationConfig.track2Y.value) {
+          xField = deviationConfig.track2X.value;
+          yField = deviationConfig.track2Y.value;
           currentTime = track2TimeIndex[dataIndex];
-          originX = plotData.value[deviationTrack2X.value][dataIndex];
-          originY = plotData.value[deviationTrack2Y.value][dataIndex];
-        } else if (seriesName === '轨迹3' && deviationTrack3X.value && deviationTrack3Y.value) {
-          xField = deviationTrack3X.value;
-          yField = deviationTrack3Y.value;
+          originX = plotData.value[deviationConfig.track2X.value][dataIndex];
+          originY = plotData.value[deviationConfig.track2Y.value][dataIndex];
+        } else if (seriesName === '轨迹3' && deviationConfig.track3X.value && deviationConfig.track3Y.value) {
+          xField = deviationConfig.track3X.value;
+          yField = deviationConfig.track3Y.value;
           currentTime = track3TimeIndex[dataIndex];
-          originX = plotData.value[deviationTrack3X.value][dataIndex];
-          originY = plotData.value[deviationTrack3Y.value][dataIndex];
-        } else if (seriesName === '轨迹4' && deviationTrack4X.value && deviationTrack4Y.value) {
-          xField = deviationTrack4X.value;
-          yField = deviationTrack4Y.value;
+          originX = plotData.value[deviationConfig.track3X.value][dataIndex];
+          originY = plotData.value[deviationConfig.track3Y.value][dataIndex];
+        } else if (seriesName === '轨迹4' && deviationConfig.track4X.value && deviationConfig.track4Y.value) {
+          xField = deviationConfig.track4X.value;
+          yField = deviationConfig.track4Y.value;
           currentTime = track4TimeIndex[dataIndex];
-          originX = plotData.value[deviationTrack4X.value][dataIndex];
-          originY = plotData.value[deviationTrack4Y.value][dataIndex];
-        } else if (seriesName === '当前位置1' && deviationTrack1X.value && deviationTrack1Y.value) {
+          originX = plotData.value[deviationConfig.track4X.value][dataIndex];
+          originY = plotData.value[deviationConfig.track4Y.value][dataIndex];
+        } else if (seriesName === '当前位置1' && deviationConfig.track1X.value && deviationConfig.track1Y.value) {
           // 当前位置1使用轨迹1的字段和时间
-          xField = deviationTrack1X.value;
-          yField = deviationTrack1Y.value;
+          xField = deviationConfig.track1X.value;
+          yField = deviationConfig.track1Y.value;
           if (track1TimeIndex.length > 0) {
             currentTime = track1TimeIndex[track1TimeIndex.length - 1];
-            originX = plotData.value[deviationTrack1X.value][track1Data.length - 1];
-            originY = plotData.value[deviationTrack1Y.value][track1Data.length - 1];
+            originX = plotData.value[deviationConfig.track1X.value][track1Data.length - 1];
+            originY = plotData.value[deviationConfig.track1Y.value][track1Data.length - 1];
           }
-        } else if (seriesName === '当前位置2' && deviationTrack2X.value && deviationTrack2Y.value) {
+        } else if (seriesName === '当前位置2' && deviationConfig.track2X.value && deviationConfig.track2Y.value) {
           // 当前位置2使用轨迹2的字段和时间
-          xField = deviationTrack2X.value;
-          yField = deviationTrack2Y.value;
+          xField = deviationConfig.track2X.value;
+          yField = deviationConfig.track2Y.value;
           if (track2TimeIndex.length > 0) {
             currentTime = track2TimeIndex[track2TimeIndex.length - 1];
-            originX = plotData.value[deviationTrack2X.value][track2Data.length - 1];
-            originY = plotData.value[deviationTrack2Y.value][track2Data.length - 1];
+            originX = plotData.value[deviationConfig.track2X.value][track2Data.length - 1];
+            originY = plotData.value[deviationConfig.track2Y.value][track2Data.length - 1];
           }
-        } else if (seriesName === '当前位置3' && deviationTrack3X.value && deviationTrack3Y.value) {
+        } else if (seriesName === '当前位置3' && deviationConfig.track3X.value && deviationConfig.track3Y.value) {
           // 当前位置3使用轨迹3的字段和时间
-          xField = deviationTrack3X.value;
-          yField = deviationTrack3Y.value;
+          xField = deviationConfig.track3X.value;
+          yField = deviationConfig.track3Y.value;
           if (track3TimeIndex.length > 0) {
             currentTime = track3TimeIndex[track3TimeIndex.length - 1];
-            originX = plotData.value[deviationTrack3X.value][track3Data.length - 1];
-            originY = plotData.value[deviationTrack3Y.value][track3Data.length - 1];
+            originX = plotData.value[deviationConfig.track3X.value][track3Data.length - 1];
+            originY = plotData.value[deviationConfig.track3Y.value][track3Data.length - 1];
           }
-        } else if (seriesName === '当前位置4' && deviationTrack4X.value && deviationTrack4Y.value) {
+        } else if (seriesName === '当前位置4' && deviationConfig.track4X.value && deviationConfig.track4Y.value) {
           // 当前位置4使用轨迹4的字段和时间
-          xField = deviationTrack4X.value;
-          yField = deviationTrack4Y.value;
+          xField = deviationConfig.track4X.value;
+          yField = deviationConfig.track4Y.value;
           if (track4TimeIndex.length > 0) {
             currentTime = track4TimeIndex[track4TimeIndex.length - 1];
-            originX = plotData.value[deviationTrack4X.value][track4Data.length - 1];
-            originY = plotData.value[deviationTrack4Y.value][track4Data.length - 1];
+            originX = plotData.value[deviationConfig.track4X.value][track4Data.length - 1];
+            originY = plotData.value[deviationConfig.track4Y.value][track4Data.length - 1];
           }
         }
         
@@ -717,36 +704,36 @@ function updateFlowData() {
   let trackingData = null;
   let latestPointIndex = -1;
   
-  if (deviationTrack1X.value && deviationTrack1Y.value && plotData.value[deviationTrack1X.value] && plotData.value[deviationTrack1Y.value]) {
-    const track1XData = plotData.value[deviationTrack1X.value];
-    const track1YData = plotData.value[deviationTrack1Y.value];
+  if (deviationConfig.track1X.value && deviationConfig.track1Y.value && plotData.value[deviationConfig.track1X.value] && plotData.value[deviationConfig.track1Y.value]) {
+    const track1XData = plotData.value[deviationConfig.track1X.value];
+    const track1YData = plotData.value[deviationConfig.track1Y.value];
     if (track1XData && track1YData && track1XData.length > 0 && track1YData.length > 0) {
       trackingTrack = 1;
       trackingData = [track1XData[track1XData.length - 1], track1YData[track1YData.length - 1]];
       latestPointIndex = track1XData.length - 1;
     }
   }
-  if (!trackingTrack && deviationTrack2X.value && deviationTrack2Y.value && plotData.value[deviationTrack2X.value] && plotData.value[deviationTrack2Y.value]) {
-    const track2XData = plotData.value[deviationTrack2X.value];
-    const track2YData = plotData.value[deviationTrack2Y.value];
+  if (!trackingTrack && deviationConfig.track2X.value && deviationConfig.track2Y.value && plotData.value[deviationConfig.track2X.value] && plotData.value[deviationConfig.track2Y.value]) {
+    const track2XData = plotData.value[deviationConfig.track2X.value];
+    const track2YData = plotData.value[deviationConfig.track2Y.value];
     if (track2XData && track2YData && track2XData.length > 0 && track2YData.length > 0) {
       trackingTrack = 2;
       trackingData = [track2XData[track2XData.length - 1], track2YData[track2YData.length - 1]];
       latestPointIndex = track2XData.length - 1;
     }
   }
-  if (!trackingTrack && deviationTrack3X.value && deviationTrack3Y.value && plotData.value[deviationTrack3X.value] && plotData.value[deviationTrack3Y.value]) {
-    const track3XData = plotData.value[deviationTrack3X.value];
-    const track3YData = plotData.value[deviationTrack3Y.value];
+  if (!trackingTrack && deviationConfig.track3X.value && deviationConfig.track3Y.value && plotData.value[deviationConfig.track3X.value] && plotData.value[deviationConfig.track3Y.value]) {
+    const track3XData = plotData.value[deviationConfig.track3X.value];
+    const track3YData = plotData.value[deviationConfig.track3Y.value];
     if (track3XData && track3YData && track3XData.length > 0 && track3YData.length > 0) {
       trackingTrack = 3;
       trackingData = [track3XData[track3XData.length - 1], track3YData[track3YData.length - 1]];
       latestPointIndex = track3XData.length - 1;
     }
   }
-  if (!trackingTrack && deviationTrack4X.value && deviationTrack4Y.value && plotData.value[deviationTrack4X.value] && plotData.value[deviationTrack4Y.value]) {
-    const track4XData = plotData.value[deviationTrack4X.value];
-    const track4YData = plotData.value[deviationTrack4Y.value];
+  if (!trackingTrack && deviationConfig.track4X.value && deviationConfig.track4Y.value && plotData.value[deviationConfig.track4X.value] && plotData.value[deviationConfig.track4Y.value]) {
+    const track4XData = plotData.value[deviationConfig.track4X.value];
+    const track4YData = plotData.value[deviationConfig.track4Y.value];
     if (track4XData && track4YData && track4XData.length > 0 && track4YData.length > 0) {
       trackingTrack = 4;
       trackingData = [track4XData[track4XData.length - 1], track4YData[track4YData.length - 1]];
@@ -762,9 +749,9 @@ function updateFlowData() {
     offsetY = trackingData[1];
   } else if (!isTracking.value) {
     // 非跟踪模式下，将第一条轨迹的第一个点作为(0,0)参考点
-    if (deviationTrack1X.value && deviationTrack1Y.value && plotData.value[deviationTrack1X.value] && plotData.value[deviationTrack1Y.value]) {
-      const track1XData = plotData.value[deviationTrack1X.value];
-      const track1YData = plotData.value[deviationTrack1Y.value];
+    if (deviationConfig.track1X.value && deviationConfig.track1Y.value && plotData.value[deviationConfig.track1X.value] && plotData.value[deviationConfig.track1Y.value]) {
+      const track1XData = plotData.value[deviationConfig.track1X.value];
+      const track1YData = plotData.value[deviationConfig.track1Y.value];
       if (track1XData && track1YData && track1XData.length > 0 && track1YData.length > 0) {
         offsetX = track1XData[0];  // 第一条轨迹的第一个点的X坐标
         offsetY = track1YData[0];  // 第一条轨迹的第一个点的Y坐标
@@ -784,9 +771,9 @@ function updateFlowData() {
   }
 
   // 处理轨迹1数据
-  if (deviationTrack1X.value && deviationTrack1Y.value) {
-    const track1XData = plotData.value[deviationTrack1X.value];
-    const track1YData = plotData.value[deviationTrack1Y.value];
+  if (deviationConfig.track1X.value && deviationConfig.track1Y.value) {
+    const track1XData = plotData.value[deviationConfig.track1X.value];
+    const track1YData = plotData.value[deviationConfig.track1Y.value];
     
     if (track1XData && track1YData && track1XData.length > 0 && track1YData.length > 0) {
       const track1DataLength = Math.min(track1XData.length, track1YData.length);
@@ -811,9 +798,9 @@ function updateFlowData() {
   }
 
   // 处理轨迹2数据
-  if (deviationTrack2X.value && deviationTrack2Y.value) {
-    const track2XData = plotData.value[deviationTrack2X.value];
-    const track2YData = plotData.value[deviationTrack2Y.value];
+  if (deviationConfig.track2X.value && deviationConfig.track2Y.value) {
+    const track2XData = plotData.value[deviationConfig.track2X.value];
+    const track2YData = plotData.value[deviationConfig.track2Y.value];
     
     if (track2XData && track2YData && track2XData.length > 0 && track2YData.length > 0) {
       const track2DataLength = Math.min(track2XData.length, track2YData.length);
@@ -838,9 +825,9 @@ function updateFlowData() {
   }
 
   // 处理轨迹3数据
-  if (deviationTrack3X.value && deviationTrack3Y.value) {
-    const track3XData = plotData.value[deviationTrack3X.value];
-    const track3YData = plotData.value[deviationTrack3Y.value];
+  if (deviationConfig.track3X.value && deviationConfig.track3Y.value) {
+    const track3XData = plotData.value[deviationConfig.track3X.value];
+    const track3YData = plotData.value[deviationConfig.track3Y.value];
     
     if (track3XData && track3YData && track3XData.length > 0 && track3YData.length > 0) {
       const track3DataLength = Math.min(track3XData.length, track3YData.length);
@@ -865,9 +852,9 @@ function updateFlowData() {
   }
 
   // 处理轨迹4数据
-  if (deviationTrack4X.value && deviationTrack4Y.value) {
-    const track4XData = plotData.value[deviationTrack4X.value];
-    const track4YData = plotData.value[deviationTrack4Y.value];
+  if (deviationConfig.track4X.value && deviationConfig.track4Y.value) {
+    const track4XData = plotData.value[deviationConfig.track4X.value];
+    const track4YData = plotData.value[deviationConfig.track4Y.value];
     
     if (track4XData && track4YData && track4XData.length > 0 && track4YData.length > 0) {
       const track4DataLength = Math.min(track4XData.length, track4YData.length);
@@ -903,7 +890,7 @@ function updateChartDisplay() {
   const series = [];
 
   // 添加轨迹1
-  if (deviationTrack1X.value && deviationTrack1Y.value && track1Data.length > 0) {
+  if (deviationConfig.track1X.value && deviationConfig.track1Y.value && track1Data.length > 0) {
     const isLatestTrack = latestPointInfo.track === 1;
     series.push({
       name: '轨迹1',
@@ -922,9 +909,9 @@ function updateChartDisplay() {
         color: function(params, paramsIndex) {
           // 在非跟踪模式下高亮最新点
           if (!isTracking.value && isLatestTrack && paramsIndex === latestPointInfo.index) {
-            return deviationTrack1Color.value;
+            return deviationConfig.track1Color.value;
           }
-          return deviationTrack1Color.value;
+          return deviationConfig.track1Color.value;
         },
         opacity: function(params, paramsIndex) {
           // 在非跟踪模式下高亮最新点
@@ -957,19 +944,19 @@ function updateChartDisplay() {
         shadowColor: function(params, paramsIndex) {
           // 在非跟踪模式下高亮最新点
           if (!isTracking.value && isLatestTrack && paramsIndex === latestPointInfo.index) {
-            return hexToRgba(deviationTrack1Color.value, 0.5);
+            return hexToRgba(deviationConfig.track1Color.value, 0.5);
           }
           return 'transparent';
         }
       },
       emphasis: {
         itemStyle: {
-          color: deviationTrack1Color.value,
+          color: deviationConfig.track1Color.value,
           opacity: 1,
           borderColor: '#fff',
           borderWidth: 2,
           shadowBlur: 10,
-          shadowColor: hexToRgba(deviationTrack1Color.value, 0.5)
+          shadowColor: hexToRgba(deviationConfig.track1Color.value, 0.5)
         },
         scale: 1.5
       },
@@ -979,7 +966,7 @@ function updateChartDisplay() {
   }
 
   // 添加轨迹2
-  if (deviationTrack2X.value && deviationTrack2Y.value && track2Data.length > 0) {
+  if (deviationConfig.track2X.value && deviationConfig.track2Y.value && track2Data.length > 0) {
     const isLatestTrack = latestPointInfo.track === 2;
     series.push({
       name: '轨迹2',
@@ -998,9 +985,9 @@ function updateChartDisplay() {
         color: function(params, paramsIndex) {
           // 在非跟踪模式下高亮最新点
           if (!isTracking.value && isLatestTrack && paramsIndex === latestPointInfo.index) {
-            return deviationTrack2Color.value;
+            return deviationConfig.track2Color.value;
           }
-          return deviationTrack2Color.value;
+          return deviationConfig.track2Color.value;
         },
         opacity: function(params, paramsIndex) {
           // 在非跟踪模式下高亮最新点
@@ -1033,19 +1020,19 @@ function updateChartDisplay() {
         shadowColor: function(params, paramsIndex) {
           // 在非跟踪模式下高亮最新点
           if (!isTracking.value && isLatestTrack && paramsIndex === latestPointInfo.index) {
-            return hexToRgba(deviationTrack2Color.value, 0.5);
+            return hexToRgba(deviationConfig.track2Color.value, 0.5);
           }
           return 'transparent';
         }
       },
       emphasis: {
         itemStyle: {
-          color: deviationTrack2Color.value,
+          color: deviationConfig.track2Color.value,
           opacity: 1,
           borderColor: '#fff',
           borderWidth: 2,
           shadowBlur: 10,
-          shadowColor: hexToRgba(deviationTrack2Color.value, 0.5)
+          shadowColor: hexToRgba(deviationConfig.track2Color.value, 0.5)
         },
         scale: 1.5
       },
@@ -1055,7 +1042,7 @@ function updateChartDisplay() {
   }
 
   // 添加轨迹3
-  if (deviationTrack3X.value && deviationTrack3Y.value && track3Data.length > 0) {
+  if (deviationConfig.track3X.value && deviationConfig.track3Y.value && track3Data.length > 0) {
     const isLatestTrack = latestPointInfo.track === 3;
     series.push({
       name: '轨迹3',
@@ -1074,9 +1061,9 @@ function updateChartDisplay() {
         color: function(params, paramsIndex) {
           // 在非跟踪模式下高亮最新点
           if (!isTracking.value && isLatestTrack && paramsIndex === latestPointInfo.index) {
-            return deviationTrack3Color.value;
+            return deviationConfig.track3Color.value;
           }
-          return deviationTrack3Color.value;
+          return deviationConfig.track3Color.value;
         },
         opacity: function(params, paramsIndex) {
           // 在非跟踪模式下高亮最新点
@@ -1106,16 +1093,16 @@ function updateChartDisplay() {
           }
           return 0;
         },
-        shadowColor: hexToRgba(deviationTrack3Color.value, 0.5)
+        shadowColor: hexToRgba(deviationConfig.track3Color.value, 0.5)
       },
       emphasis: {
         itemStyle: {
-          color: deviationTrack3Color.value,
+          color: deviationConfig.track3Color.value,
           opacity: 1,
           borderColor: '#fff',
           borderWidth: 2,
           shadowBlur: 10,
-          shadowColor: hexToRgba(deviationTrack3Color.value, 0.5)
+          shadowColor: hexToRgba(deviationConfig.track3Color.value, 0.5)
         },
         scale: 1.5
       },
@@ -1125,7 +1112,7 @@ function updateChartDisplay() {
   }
 
   // 添加轨迹4
-  if (deviationTrack4X.value && deviationTrack4Y.value && track4Data.length > 0) {
+  if (deviationConfig.track4X.value && deviationConfig.track4Y.value && track4Data.length > 0) {
     const isLatestTrack = latestPointInfo.track === 4;
     series.push({
       name: '轨迹4',
@@ -1144,9 +1131,9 @@ function updateChartDisplay() {
         color: function(params, paramsIndex) {
           // 在非跟踪模式下高亮最新点
           if (!isTracking.value && isLatestTrack && paramsIndex === latestPointInfo.index) {
-            return deviationTrack4Color.value;
+            return deviationConfig.track4Color.value;
           }
-          return deviationTrack4Color.value;
+          return deviationConfig.track4Color.value;
         },
         opacity: function(params, paramsIndex) {
           // 在非跟踪模式下高亮最新点
@@ -1176,16 +1163,16 @@ function updateChartDisplay() {
           }
           return 0;
         },
-        shadowColor: hexToRgba(deviationTrack4Color.value, 0.5)
+        shadowColor: hexToRgba(deviationConfig.track4Color.value, 0.5)
       },
       emphasis: {
         itemStyle: {
-          color: deviationTrack4Color.value,
+          color: deviationConfig.track4Color.value,
           opacity: 1,
           borderColor: '#fff',
           borderWidth: 2,
           shadowBlur: 10,
-          shadowColor: hexToRgba(deviationTrack4Color.value, 0.5)
+          shadowColor: hexToRgba(deviationConfig.track4Color.value, 0.5)
         },
         scale: 1.5
       },
@@ -1198,7 +1185,7 @@ function updateChartDisplay() {
   // 跟踪模式下：所有轨迹都显示当前位置，但只有轨迹1的当前位置固定在中心
   if (isTracking.value) {
     // 轨迹1当前位置（固定在中心）
-    if (deviationTrack1X.value && deviationTrack1Y.value && track1Data.length > 0) {
+    if (deviationConfig.track1X.value && deviationConfig.track1Y.value && track1Data.length > 0) {
       series.push({
         name: '当前位置1',
         type: 'scatter',
@@ -1206,7 +1193,7 @@ function updateChartDisplay() {
         coordinateSystem: 'cartesian2d',
         symbolSize: pointSize.value * 1.2,
         itemStyle: {
-          color: deviationTrack1Color.value,
+          color: deviationConfig.track1Color.value,
           borderWidth: 2,
           borderColor: '#fff',
           shadowBlur: 2,
@@ -1214,12 +1201,12 @@ function updateChartDisplay() {
         },
         emphasis: {
           itemStyle: {
-            color: deviationTrack1Color.value,
+            color: deviationConfig.track1Color.value,
             opacity: 1,
             borderColor: '#fff',
             borderWidth: 2,
             shadowBlur: 10,
-            shadowColor: hexToRgba(deviationTrack1Color.value, 0.5)
+            shadowColor: hexToRgba(deviationConfig.track1Color.value, 0.5)
           },
           scale: 1.5
         },
@@ -1229,7 +1216,7 @@ function updateChartDisplay() {
     }
 
     // 轨迹2当前位置（显示在真实位置）
-    if (deviationTrack2X.value && deviationTrack2Y.value && track2Data.length > 0) {
+    if (deviationConfig.track2X.value && deviationConfig.track2Y.value && track2Data.length > 0) {
       const lastPoint2 = track2Data[track2Data.length - 1];
       series.push({
         name: '当前位置2',
@@ -1238,7 +1225,7 @@ function updateChartDisplay() {
         coordinateSystem: 'cartesian2d',
         symbolSize: pointSize.value * 1.2,
         itemStyle: {
-          color: deviationTrack2Color.value,
+          color: deviationConfig.track2Color.value,
           borderWidth: 2,
           borderColor: '#fff',
           shadowBlur: 2,
@@ -1246,12 +1233,12 @@ function updateChartDisplay() {
         },
         emphasis: {
           itemStyle: {
-            color: deviationTrack2Color.value,
+            color: deviationConfig.track2Color.value,
             opacity: 1,
             borderColor: '#fff',
             borderWidth: 2,
             shadowBlur: 10,
-            shadowColor: hexToRgba(deviationTrack2Color.value, 0.5)
+            shadowColor: hexToRgba(deviationConfig.track2Color.value, 0.5)
           },
           scale: 1.5
         },
@@ -1261,7 +1248,7 @@ function updateChartDisplay() {
     }
 
     // 轨迹3当前位置（显示在真实位置）
-    if (deviationTrack3X.value && deviationTrack3Y.value && track3Data.length > 0) {
+    if (deviationConfig.track3X.value && deviationConfig.track3Y.value && track3Data.length > 0) {
       const lastPoint3 = track3Data[track3Data.length - 1];
       series.push({
         name: '当前位置3',
@@ -1270,7 +1257,7 @@ function updateChartDisplay() {
         coordinateSystem: 'cartesian2d',
         symbolSize: pointSize.value * 1.2,
         itemStyle: {
-          color: deviationTrack3Color.value,
+          color: deviationConfig.track3Color.value,
           borderWidth: 2,
           borderColor: '#fff',
           shadowBlur: 2,
@@ -1278,12 +1265,12 @@ function updateChartDisplay() {
         },
         emphasis: {
           itemStyle: {
-            color: deviationTrack3Color.value,
+            color: deviationConfig.track3Color.value,
             opacity: 1,
             borderColor: '#fff',
             borderWidth: 2,
             shadowBlur: 10,
-            shadowColor: hexToRgba(deviationTrack3Color.value, 0.5)
+            shadowColor: hexToRgba(deviationConfig.track3Color.value, 0.5)
           },
           scale: 1.5
         },
@@ -1293,7 +1280,7 @@ function updateChartDisplay() {
     }
 
     // 轨迹4当前位置（显示在真实位置）
-    if (deviationTrack4X.value && deviationTrack4Y.value && track4Data.length > 0) {
+    if (deviationConfig.track4X.value && deviationConfig.track4Y.value && track4Data.length > 0) {
       const lastPoint4 = track4Data[track4Data.length - 1];
       series.push({
         name: '当前位置4',
@@ -1302,7 +1289,7 @@ function updateChartDisplay() {
         coordinateSystem: 'cartesian2d',
         symbolSize: pointSize.value * 1.2,
         itemStyle: {
-          color: deviationTrack4Color.value,
+          color: deviationConfig.track4Color.value,
           borderWidth: 2,
           borderColor: '#fff',
           shadowBlur: 2,
@@ -1310,12 +1297,12 @@ function updateChartDisplay() {
         },
         emphasis: {
           itemStyle: {
-            color: deviationTrack4Color.value,
+            color: deviationConfig.track4Color.value,
             opacity: 1,
             borderColor: '#fff',
             borderWidth: 2,
             shadowBlur: 10,
-            shadowColor: hexToRgba(deviationTrack4Color.value, 0.5)
+            shadowColor: hexToRgba(deviationConfig.track4Color.value, 0.5)
           },
           scale: 1.5
         },
@@ -1326,7 +1313,7 @@ function updateChartDisplay() {
   } else {
     // 非跟踪模式下，显示所有轨迹的当前位置
     // 轨迹1当前位置
-    if (deviationTrack1X.value && deviationTrack1Y.value && track1Data.length > 0) {
+    if (deviationConfig.track1X.value && deviationConfig.track1Y.value && track1Data.length > 0) {
       const lastPoint1 = track1Data[track1Data.length - 1];
       series.push({
         name: '当前位置1',
@@ -1335,7 +1322,7 @@ function updateChartDisplay() {
         coordinateSystem: 'cartesian2d',
         symbolSize: pointSize.value * 1.2,
         itemStyle: {
-          color: deviationTrack1Color.value,
+          color: deviationConfig.track1Color.value,
           borderWidth: 2,
           borderColor: '#fff',
           shadowBlur: 2,
@@ -1343,12 +1330,12 @@ function updateChartDisplay() {
         },
         emphasis: {
           itemStyle: {
-            color: deviationTrack1Color.value,
+            color: deviationConfig.track1Color.value,
             opacity: 1,
             borderColor: '#fff',
             borderWidth: 2,
             shadowBlur: 10,
-            shadowColor: hexToRgba(deviationTrack1Color.value, 0.5)
+            shadowColor: hexToRgba(deviationConfig.track1Color.value, 0.5)
           },
           scale: 1.5
         },
@@ -1358,7 +1345,7 @@ function updateChartDisplay() {
     }
 
     // 轨迹2当前位置
-    if (deviationTrack2X.value && deviationTrack2Y.value && track2Data.length > 0) {
+    if (deviationConfig.track2X.value && deviationConfig.track2Y.value && track2Data.length > 0) {
       const lastPoint2 = track2Data[track2Data.length - 1];
       series.push({
         name: '当前位置2',
@@ -1367,7 +1354,7 @@ function updateChartDisplay() {
         coordinateSystem: 'cartesian2d',
         symbolSize: pointSize.value * 1.2,
         itemStyle: {
-          color: deviationTrack2Color.value,
+          color: deviationConfig.track2Color.value,
           borderWidth: 2,
           borderColor: '#fff',
           shadowBlur: 2,
@@ -1375,12 +1362,12 @@ function updateChartDisplay() {
         },
         emphasis: {
           itemStyle: {
-            color: deviationTrack2Color.value,
+            color: deviationConfig.track2Color.value,
             opacity: 1,
             borderColor: '#fff',
             borderWidth: 2,
             shadowBlur: 10,
-            shadowColor: hexToRgba(deviationTrack2Color.value, 0.5)
+            shadowColor: hexToRgba(deviationConfig.track2Color.value, 0.5)
           },
           scale: 1.5
         },
@@ -1390,7 +1377,7 @@ function updateChartDisplay() {
     }
 
     // 轨迹3当前位置
-    if (deviationTrack3X.value && deviationTrack3Y.value && track3Data.length > 0) {
+    if (deviationConfig.track3X.value && deviationConfig.track3Y.value && track3Data.length > 0) {
       const lastPoint3 = track3Data[track3Data.length - 1];
       series.push({
         name: '当前位置3',
@@ -1399,7 +1386,7 @@ function updateChartDisplay() {
         coordinateSystem: 'cartesian2d',
         symbolSize: pointSize.value * 1.2,
         itemStyle: {
-          color: deviationTrack3Color.value,
+          color: deviationConfig.track3Color.value,
           borderWidth: 2,
           borderColor: '#fff',
           shadowBlur: 2,
@@ -1407,12 +1394,12 @@ function updateChartDisplay() {
         },
         emphasis: {
           itemStyle: {
-            color: deviationTrack3Color.value,
+            color: deviationConfig.track3Color.value,
             opacity: 1,
             borderColor: '#fff',
             borderWidth: 2,
             shadowBlur: 10,
-            shadowColor: hexToRgba(deviationTrack3Color.value, 0.5)
+            shadowColor: hexToRgba(deviationConfig.track3Color.value, 0.5)
           },
           scale: 1.5
         },
@@ -1422,7 +1409,7 @@ function updateChartDisplay() {
     }
 
     // 轨迹4当前位置
-    if (deviationTrack4X.value && deviationTrack4Y.value && track4Data.length > 0) {
+    if (deviationConfig.track4X.value && deviationConfig.track4Y.value && track4Data.length > 0) {
       const lastPoint4 = track4Data[track4Data.length - 1];
       series.push({
         name: '当前位置4',
@@ -1431,7 +1418,7 @@ function updateChartDisplay() {
         coordinateSystem: 'cartesian2d',
         symbolSize: pointSize.value * 1.2,
         itemStyle: {
-          color: deviationTrack4Color.value,
+          color: deviationConfig.track4Color.value,
           borderWidth: 2,
           borderColor: '#fff',
           shadowBlur: 2,
@@ -1439,12 +1426,12 @@ function updateChartDisplay() {
         },
         emphasis: {
           itemStyle: {
-            color: deviationTrack4Color.value,
+            color: deviationConfig.track4Color.value,
             opacity: 1,
             borderColor: '#fff',
             borderWidth: 2,
             shadowBlur: 10,
-            shadowColor: hexToRgba(deviationTrack4Color.value, 0.5)
+            shadowColor: hexToRgba(deviationConfig.track4Color.value, 0.5)
           },
           scale: 1.5
         },
@@ -1513,24 +1500,24 @@ function toggleTracking() {
     let xAxisName = '';
     let yAxisName = '';
     
-    if (deviationTrack1X.value) {
-      xAxisName = deviationTrack1X.value;
-    } else if (deviationTrack2X.value) {
-      xAxisName = deviationTrack2X.value;
-    } else if (deviationTrack3X.value) {
-      xAxisName = deviationTrack3X.value;
-    } else if (deviationTrack4X.value) {
-      xAxisName = deviationTrack4X.value;
+    if (deviationConfig.track1X.value) {
+      xAxisName = deviationConfig.track1X.value;
+    } else if (deviationConfig.track2X.value) {
+      xAxisName = deviationConfig.track2X.value;
+    } else if (deviationConfig.track3X.value) {
+      xAxisName = deviationConfig.track3X.value;
+    } else if (deviationConfig.track4X.value) {
+      xAxisName = deviationConfig.track4X.value;
     }
     
-    if (deviationTrack1Y.value) {
-      yAxisName = deviationTrack1Y.value;
-    } else if (deviationTrack2Y.value) {
-      yAxisName = deviationTrack2Y.value;
-    } else if (deviationTrack3Y.value) {
-      yAxisName = deviationTrack3Y.value;
-    } else if (deviationTrack4Y.value) {
-      yAxisName = deviationTrack4Y.value;
+    if (deviationConfig.track1Y.value) {
+      yAxisName = deviationConfig.track1Y.value;
+    } else if (deviationConfig.track2Y.value) {
+      yAxisName = deviationConfig.track2Y.value;
+    } else if (deviationConfig.track3Y.value) {
+      yAxisName = deviationConfig.track3Y.value;
+    } else if (deviationConfig.track4Y.value) {
+      yAxisName = deviationConfig.track4Y.value;
     }
     
     // 根据跟踪模式调整轴名称

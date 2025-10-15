@@ -91,36 +91,36 @@
             <h4 style="margin-bottom: 10px;">单图表数据源（最多4个）：</h4>
             <div class="source-selectors">
               <div style="display: flex; align-items: center; margin-bottom: 8px;">
-                <el-select v-model="singleChartSource1" placeholder="选择数据" style="width: 200px; margin-right: 10px;">
+                <el-select v-model="singleChartConfig.source1.value" placeholder="选择数据" style="width: 200px; margin-right: 10px;">
                   <el-option label="<None>" value=""></el-option>
                   <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
                 </el-select>
-                <el-color-picker v-model="singleChartColor1" placeholder="选择颜色"></el-color-picker>
-                <el-checkbox v-model="singleChartUseArea1" style="margin-left: 10px;" class="custom-checkbox">填充</el-checkbox>
+                <el-color-picker v-model="singleChartConfig.color1.value" placeholder="选择颜色"></el-color-picker>
+                <el-checkbox v-model="singleChartConfig.useArea1.value" style="margin-left: 10px;" class="custom-checkbox">填充</el-checkbox>
               </div>
               <div style="display: flex; align-items: center; margin-bottom: 8px;">
-                <el-select v-model="singleChartSource2" placeholder="选择数据" style="width: 200px; margin-right: 10px;">
+                <el-select v-model="singleChartConfig.source2.value" placeholder="选择数据" style="width: 200px; margin-right: 10px;">
                   <el-option label="<None>" value=""></el-option>
                   <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
                 </el-select>
-                <el-color-picker v-model="singleChartColor2" placeholder="选择颜色"></el-color-picker>
-                <el-checkbox v-model="singleChartUseArea2" style="margin-left: 10px;" class="custom-checkbox">填充</el-checkbox>
+                <el-color-picker v-model="singleChartConfig.color2.value" placeholder="选择颜色"></el-color-picker>
+                <el-checkbox v-model="singleChartConfig.useArea2.value" style="margin-left: 10px;" class="custom-checkbox">填充</el-checkbox>
               </div>
               <div style="display: flex; align-items: center; margin-bottom: 8px;">
-                <el-select v-model="singleChartSource3" placeholder="选择数据" style="width: 200px; margin-right: 10px;">
+                <el-select v-model="singleChartConfig.source3.value" placeholder="选择数据" style="width: 200px; margin-right: 10px;">
                   <el-option label="<None>" value=""></el-option>
                   <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
                 </el-select>
-                <el-color-picker v-model="singleChartColor3" placeholder="选择颜色"></el-color-picker>
-                <el-checkbox v-model="singleChartUseArea3" style="margin-left: 10px;" class="custom-checkbox">填充</el-checkbox>
+                <el-color-picker v-model="singleChartConfig.color3.value" placeholder="选择颜色"></el-color-picker>
+                <el-checkbox v-model="singleChartConfig.useArea3.value" style="margin-left: 10px;" class="custom-checkbox">填充</el-checkbox>
               </div>
               <div style="display: flex; align-items: center;">
-                <el-select v-model="singleChartSource4" placeholder="选择数据" style="width: 200px; margin-right: 10px;">
+                <el-select v-model="singleChartConfig.source4.value" placeholder="选择数据" style="width: 200px; margin-right: 10px;">
                   <el-option label="<None>" value=""></el-option>
                   <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
                 </el-select>
-                <el-color-picker v-model="singleChartColor4" placeholder="选择颜色"></el-color-picker>
-                <el-checkbox v-model="singleChartUseArea4" style="margin-left: 10px;" class="custom-checkbox">填充</el-checkbox>
+                <el-color-picker v-model="singleChartConfig.color4.value" placeholder="选择颜色"></el-color-picker>
+                <el-checkbox v-model="singleChartConfig.useArea4.value" style="margin-left: 10px;" class="custom-checkbox">填充</el-checkbox>
               </div>
             </div>
           </div>
@@ -132,36 +132,36 @@
             <h4 style="margin-bottom: 10px;">左Y轴数据（最多4个）：</h4>
             <div class="source-selectors">
               <div style="display: flex; align-items: center; margin-bottom: 8px;">
-                <el-select v-model="singleChartLeftSource1" placeholder="选择数据" style="width: 200px; margin-right: 10px;">
+                <el-select v-model="singleChartDoubleYConfig.leftSource1.value" placeholder="选择数据" style="width: 200px; margin-right: 10px;">
                   <el-option label="<None>" value=""></el-option>
                   <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
                 </el-select>
-                <el-color-picker v-model="singleChartLeftColor1" placeholder="选择颜色"></el-color-picker>
-                <el-checkbox v-model="singleChartLeftUseArea1" style="margin-left: 10px;" class="custom-checkbox">填充</el-checkbox>
+                <el-color-picker v-model="singleChartDoubleYConfig.leftColor1.value" placeholder="选择颜色"></el-color-picker>
+                <el-checkbox v-model="singleChartDoubleYConfig.leftUseArea1.value" style="margin-left: 10px;" class="custom-checkbox">填充</el-checkbox>
               </div>
               <div style="display: flex; align-items: center; margin-bottom: 8px;">
-                <el-select v-model="singleChartLeftSource2" placeholder="选择数据" style="width: 200px; margin-right: 10px;">
+                <el-select v-model="singleChartDoubleYConfig.leftSource2.value" placeholder="选择数据" style="width: 200px; margin-right: 10px;">
                   <el-option label="<None>" value=""></el-option>
                   <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
                 </el-select>
-                <el-color-picker v-model="singleChartLeftColor2" placeholder="选择颜色"></el-color-picker>
-                <el-checkbox v-model="singleChartLeftUseArea2" style="margin-left: 10px;" class="custom-checkbox">填充</el-checkbox>
+                <el-color-picker v-model="singleChartDoubleYConfig.leftColor2.value" placeholder="选择颜色"></el-color-picker>
+                <el-checkbox v-model="singleChartDoubleYConfig.leftUseArea2.value" style="margin-left: 10px;" class="custom-checkbox">填充</el-checkbox>
               </div>
               <div style="display: flex; align-items: center; margin-bottom: 8px;">
-                <el-select v-model="singleChartLeftSource3" placeholder="选择数据" style="width: 200px; margin-right: 10px;">
+                <el-select v-model="singleChartDoubleYConfig.leftSource3.value" placeholder="选择数据" style="width: 200px; margin-right: 10px;">
                   <el-option label="<None>" value=""></el-option>
                   <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
                 </el-select>
-                <el-color-picker v-model="singleChartLeftColor3" placeholder="选择颜色"></el-color-picker>
-                <el-checkbox v-model="singleChartLeftUseArea3" style="margin-left: 10px;" class="custom-checkbox">填充</el-checkbox>
+                <el-color-picker v-model="singleChartDoubleYConfig.leftColor3.value" placeholder="选择颜色"></el-color-picker>
+                <el-checkbox v-model="singleChartDoubleYConfig.leftUseArea3.value" style="margin-left: 10px;" class="custom-checkbox">填充</el-checkbox>
               </div>
               <div style="display: flex; align-items: center;">
-                <el-select v-model="singleChartLeftSource4" placeholder="选择数据" style="width: 200px; margin-right: 10px;">
+                <el-select v-model="singleChartDoubleYConfig.leftSource4.value" placeholder="选择数据" style="width: 200px; margin-right: 10px;">
                   <el-option label="<None>" value=""></el-option>
                   <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
                 </el-select>
-                <el-color-picker v-model="singleChartLeftColor4" placeholder="选择颜色"></el-color-picker>
-                <el-checkbox v-model="singleChartLeftUseArea4" style="margin-left: 10px;" class="custom-checkbox">填充</el-checkbox>
+                <el-color-picker v-model="singleChartDoubleYConfig.leftColor4.value" placeholder="选择颜色"></el-color-picker>
+                <el-checkbox v-model="singleChartDoubleYConfig.leftUseArea4.value" style="margin-left: 10px;" class="custom-checkbox">填充</el-checkbox>
               </div>
             </div>
           </div>
@@ -169,36 +169,36 @@
             <h4 style="margin-bottom: 10px;">右Y轴数据（最多4个）：</h4>
             <div class="source-selectors">
               <div style="display: flex; align-items: center; margin-bottom: 8px;">
-                <el-select v-model="singleChartRightSource1" placeholder="选择数据" style="width: 200px; margin-right: 10px;">
+                <el-select v-model="singleChartDoubleYConfig.rightSource1.value" placeholder="选择数据" style="width: 200px; margin-right: 10px;">
                   <el-option label="<None>" value=""></el-option>
                   <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
                 </el-select>
-                <el-color-picker v-model="singleChartRightColor1" placeholder="选择颜色" ></el-color-picker>
-                <el-checkbox v-model="singleChartRightUseArea1" style="margin-left: 10px;" class="custom-checkbox">填充</el-checkbox>
+                <el-color-picker v-model="singleChartDoubleYConfig.rightColor1.value" placeholder="选择颜色"></el-color-picker>
+                <el-checkbox v-model="singleChartDoubleYConfig.rightUseArea1.value" style="margin-left: 10px;" class="custom-checkbox">填充</el-checkbox>
               </div>
               <div style="display: flex; align-items: center; margin-bottom: 8px;">
-                <el-select v-model="singleChartRightSource2" placeholder="选择数据" style="width: 200px; margin-right: 10px;">
+                <el-select v-model="singleChartDoubleYConfig.rightSource2.value" placeholder="选择数据" style="width: 200px; margin-right: 10px;">
                   <el-option label="<None>" value=""></el-option>
                   <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
                 </el-select>
-                <el-color-picker v-model="singleChartRightColor2" placeholder="选择颜色"></el-color-picker>
-                <el-checkbox v-model="singleChartRightUseArea2" style="margin-left: 10px;" class="custom-checkbox">填充</el-checkbox>
+                <el-color-picker v-model="singleChartDoubleYConfig.rightColor2.value" placeholder="选择颜色"></el-color-picker>
+                <el-checkbox v-model="singleChartDoubleYConfig.rightUseArea2.value" style="margin-left: 10px;" class="custom-checkbox">填充</el-checkbox>
               </div>
               <div style="display: flex; align-items: center; margin-bottom: 8px;">
-                <el-select v-model="singleChartRightSource3" placeholder="选择数据" style="width: 200px; margin-right: 10px;">
+                <el-select v-model="singleChartDoubleYConfig.rightSource3.value" placeholder="选择数据" style="width: 200px; margin-right: 10px;">
                   <el-option label="<None>" value=""></el-option>
                   <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
                 </el-select>
-                <el-color-picker v-model="singleChartRightColor3" placeholder="选择颜色"></el-color-picker>
-                <el-checkbox v-model="singleChartRightUseArea3" style="margin-left: 10px;" class="custom-checkbox">填充</el-checkbox>
+                <el-color-picker v-model="singleChartDoubleYConfig.rightColor3.value" placeholder="选择颜色"></el-color-picker>
+                <el-checkbox v-model="singleChartDoubleYConfig.rightUseArea3.value" style="margin-left: 10px;" class="custom-checkbox">填充</el-checkbox>
               </div>
               <div style="display: flex; align-items: center;">
-                <el-select v-model="singleChartRightSource4" placeholder="选择数据" style="width: 200px; margin-right: 10px;">
+                <el-select v-model="singleChartDoubleYConfig.rightSource4.value" placeholder="选择数据" style="width: 200px; margin-right: 10px;">
                   <el-option label="<None>" value=""></el-option>
                   <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
                 </el-select>
-                <el-color-picker v-model="singleChartRightColor4" placeholder="选择颜色"></el-color-picker>
-                <el-checkbox v-model="singleChartRightUseArea4" style="margin-left: 10px;" class="custom-checkbox">填充</el-checkbox>
+                <el-color-picker v-model="singleChartDoubleYConfig.rightColor4.value" placeholder="选择颜色"></el-color-picker>
+                <el-checkbox v-model="singleChartDoubleYConfig.rightUseArea4.value" style="margin-left: 10px;" class="custom-checkbox">填充</el-checkbox>
               </div>
             </div>
           </div>
@@ -213,36 +213,36 @@
             <h4 style="margin-bottom: 10px;">上图表数据源（最多4个）：</h4>
             <div class="source-selectors">
             <div style="display: flex; align-items: center; margin-bottom: 8px;">
-              <el-select v-model="upperChartSource1" placeholder="选择数据" style="width: 200px; margin-right: 10px;">
+              <el-select v-model="doubleChartConfig.upperSource1.value" placeholder="选择数据" style="width: 200px; margin-right: 10px;">
                 <el-option label="<None>" value=""></el-option>
                 <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
               </el-select>
-              <el-color-picker v-model="upperChartColor1" placeholder="选择颜色"></el-color-picker>
-              <el-checkbox v-model="upperChartUseArea1" style="margin-left: 10px;" class="custom-checkbox">填充</el-checkbox>
+              <el-color-picker v-model="doubleChartConfig.upperColor1.value" placeholder="选择颜色"></el-color-picker>
+              <el-checkbox v-model="doubleChartConfig.upperUseArea1.value" style="margin-left: 10px;" class="custom-checkbox">填充</el-checkbox>
             </div>
             <div style="display: flex; align-items: center; margin-bottom: 8px;">
-              <el-select v-model="upperChartSource2" placeholder="选择数据" style="width: 200px; margin-right: 10px;">
+              <el-select v-model="doubleChartConfig.upperSource2.value" placeholder="选择数据" style="width: 200px; margin-right: 10px;">
                 <el-option label="<None>" value=""></el-option>
                 <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
               </el-select>
-              <el-color-picker v-model="upperChartColor2" placeholder="选择颜色"></el-color-picker>
-              <el-checkbox v-model="upperChartUseArea2" style="margin-left: 10px;" class="custom-checkbox">填充</el-checkbox>
+              <el-color-picker v-model="doubleChartConfig.upperColor2.value" placeholder="选择颜色"></el-color-picker>
+              <el-checkbox v-model="doubleChartConfig.upperUseArea2.value" style="margin-left: 10px;" class="custom-checkbox">填充</el-checkbox>
             </div>
             <div style="display: flex; align-items: center; margin-bottom: 8px;">
-              <el-select v-model="upperChartSource3" placeholder="选择数据" style="width: 200px; margin-right: 10px;">
+              <el-select v-model="doubleChartConfig.upperSource3.value" placeholder="选择数据" style="width: 200px; margin-right: 10px;">
                 <el-option label="<None>" value=""></el-option>
                 <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
               </el-select>
-              <el-color-picker v-model="upperChartColor3" placeholder="选择颜色"></el-color-picker>
-              <el-checkbox v-model="upperChartUseArea3" style="margin-left: 10px;" class="custom-checkbox">填充</el-checkbox>
+              <el-color-picker v-model="doubleChartConfig.upperColor3.value" placeholder="选择颜色"></el-color-picker>
+              <el-checkbox v-model="doubleChartConfig.upperUseArea3.value" style="margin-left: 10px;" class="custom-checkbox">填充</el-checkbox>
             </div>
             <div style="display: flex; align-items: center;">
-              <el-select v-model="upperChartSource4" placeholder="选择数据" style="width: 200px; margin-right: 10px;">
+              <el-select v-model="doubleChartConfig.upperSource4.value" placeholder="选择数据" style="width: 200px; margin-right: 10px;">
                 <el-option label="<None>" value=""></el-option>
                 <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
               </el-select>
-              <el-color-picker v-model="upperChartColor4" placeholder="选择颜色"></el-color-picker>
-              <el-checkbox v-model="upperChartUseArea4" style="margin-left: 10px;" class="custom-checkbox">填充</el-checkbox>
+              <el-color-picker v-model="doubleChartConfig.upperColor4.value" placeholder="选择颜色"></el-color-picker>
+              <el-checkbox v-model="doubleChartConfig.upperUseArea4.value" style="margin-left: 10px;" class="custom-checkbox">填充</el-checkbox>
             </div>
             </div>
           </div>
@@ -250,36 +250,36 @@
             <h4 style="margin-bottom: 10px;">下图表数据源（最多4个）：</h4>
             <div class="source-selectors">
             <div style="display: flex; align-items: center; margin-bottom: 8px;">
-              <el-select v-model="lowerChartSource1" placeholder="选择数据" style="width: 200px; margin-right: 10px;">
+              <el-select v-model="doubleChartConfig.lowerSource1.value" placeholder="选择数据" style="width: 200px; margin-right: 10px;">
                 <el-option label="<None>" value=""></el-option>
                 <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
               </el-select>
-              <el-color-picker v-model="lowerChartColor1" placeholder="选择颜色"></el-color-picker>
-              <el-checkbox v-model="lowerChartUseArea1" style="margin-left: 10px;" class="custom-checkbox">填充</el-checkbox>
+              <el-color-picker v-model="doubleChartConfig.lowerColor1.value" placeholder="选择颜色"></el-color-picker>
+              <el-checkbox v-model="doubleChartConfig.lowerUseArea1.value" style="margin-left: 10px;" class="custom-checkbox">填充</el-checkbox>
             </div>
             <div style="display: flex; align-items: center; margin-bottom: 8px;">
-              <el-select v-model="lowerChartSource2" placeholder="选择数据" style="width: 200px; margin-right: 10px;">
+              <el-select v-model="doubleChartConfig.lowerSource2.value" placeholder="选择数据" style="width: 200px; margin-right: 10px;">
                 <el-option label="<None>" value=""></el-option>
                 <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
               </el-select>
-              <el-color-picker v-model="lowerChartColor2" placeholder="选择颜色"></el-color-picker>
-              <el-checkbox v-model="lowerChartUseArea2" style="margin-left: 10px;" class="custom-checkbox">填充</el-checkbox>
+              <el-color-picker v-model="doubleChartConfig.lowerColor2.value" placeholder="选择颜色"></el-color-picker>
+              <el-checkbox v-model="doubleChartConfig.lowerUseArea2.value" style="margin-left: 10px;" class="custom-checkbox">填充</el-checkbox>
             </div>
             <div style="display: flex; align-items: center; margin-bottom: 8px;">
-              <el-select v-model="lowerChartSource3" placeholder="选择数据" style="width: 200px; margin-right: 10px;">
+              <el-select v-model="doubleChartConfig.lowerSource3.value" placeholder="选择数据" style="width: 200px; margin-right: 10px;">
                 <el-option label="<None>" value=""></el-option>
                 <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
               </el-select>
-              <el-color-picker v-model="lowerChartColor3" placeholder="选择颜色"></el-color-picker>
-              <el-checkbox v-model="lowerChartUseArea3" style="margin-left: 10px;" class="custom-checkbox">填充</el-checkbox>
+              <el-color-picker v-model="doubleChartConfig.lowerColor3.value" placeholder="选择颜色"></el-color-picker>
+              <el-checkbox v-model="doubleChartConfig.lowerUseArea3.value" style="margin-left: 10px;" class="custom-checkbox">填充</el-checkbox>
             </div>
             <div style="display: flex; align-items: center;">
-              <el-select v-model="lowerChartSource4" placeholder="选择数据" style="width: 200px; margin-right: 10px;">
+              <el-select v-model="doubleChartConfig.lowerSource4.value" placeholder="选择数据" style="width: 200px; margin-right: 10px;">
                 <el-option label="<None>" value=""></el-option>
                 <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
               </el-select>
-              <el-color-picker v-model="lowerChartColor4" placeholder="选择颜色"></el-color-picker>
-              <el-checkbox v-model="lowerChartUseArea4" style="margin-left: 10px;" class="custom-checkbox">填充</el-checkbox>
+              <el-color-picker v-model="doubleChartConfig.lowerColor4.value" placeholder="选择颜色"></el-color-picker>
+              <el-checkbox v-model="doubleChartConfig.lowerUseArea4.value" style="margin-left: 10px;" class="custom-checkbox">填充</el-checkbox>
             </div>
             </div>
           </div>
@@ -291,36 +291,36 @@
             <h4 style="margin-bottom: 10px;">上图左Y轴数据（最多4个）：</h4>
             <div class="source-selectors">
               <div style="display: flex; align-items: center; margin-bottom: 8px;">
-                <el-select v-model="upperChartLeftSource1" placeholder="选择数据" style="width: 200px; margin-right: 10px;">
+                <el-select v-model="doubleChartDoubleYConfig.upperLeftSource1.value" placeholder="选择数据" style="width: 200px; margin-right: 10px;">
                   <el-option label="<None>" value=""></el-option>
                   <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
                 </el-select>
-                <el-color-picker v-model="upperChartLeftColor1" placeholder="选择颜色"></el-color-picker>
-                <el-checkbox v-model="upperChartLeftUseArea1" style="margin-left: 10px;" class="custom-checkbox">填充</el-checkbox>
+                <el-color-picker v-model="doubleChartDoubleYConfig.upperLeftColor1.value" placeholder="选择颜色"></el-color-picker>
+                <el-checkbox v-model="doubleChartDoubleYConfig.upperLeftUseArea1.value" style="margin-left: 10px;" class="custom-checkbox">填充</el-checkbox>
               </div>
               <div style="display: flex; align-items: center; margin-bottom: 8px;">
-                <el-select v-model="upperChartLeftSource2" placeholder="选择数据" style="width: 200px; margin-right: 10px;">
+                <el-select v-model="doubleChartDoubleYConfig.upperLeftSource2.value" placeholder="选择数据" style="width: 200px; margin-right: 10px;">
                   <el-option label="<None>" value=""></el-option>
                   <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
                 </el-select>
-                <el-color-picker v-model="upperChartLeftColor2" placeholder="选择颜色"></el-color-picker>
-                <el-checkbox v-model="upperChartLeftUseArea2" style="margin-left: 10px;" class="custom-checkbox">填充</el-checkbox>
+                <el-color-picker v-model="doubleChartDoubleYConfig.upperLeftColor2.value" placeholder="选择颜色"></el-color-picker>
+                <el-checkbox v-model="doubleChartDoubleYConfig.upperLeftUseArea2.value" style="margin-left: 10px;" class="custom-checkbox">填充</el-checkbox>
               </div>
               <div style="display: flex; align-items: center; margin-bottom: 8px;">
-                <el-select v-model="upperChartLeftSource3" placeholder="选择数据" style="width: 200px; margin-right: 10px;">
+                <el-select v-model="doubleChartDoubleYConfig.upperLeftSource3.value" placeholder="选择数据" style="width: 200px; margin-right: 10px;">
                   <el-option label="<None>" value=""></el-option>
                   <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
                 </el-select>
-                <el-color-picker v-model="upperChartLeftColor3" placeholder="选择颜色"></el-color-picker>
-                <el-checkbox v-model="upperChartLeftUseArea3" style="margin-left: 10px;" class="custom-checkbox">填充</el-checkbox>
+                <el-color-picker v-model="doubleChartDoubleYConfig.upperLeftColor3.value" placeholder="选择颜色"></el-color-picker>
+                <el-checkbox v-model="doubleChartDoubleYConfig.upperLeftUseArea3.value" style="margin-left: 10px;" class="custom-checkbox">填充</el-checkbox>
               </div>
               <div style="display: flex; align-items: center;">
-                <el-select v-model="upperChartLeftSource4" placeholder="选择数据" style="width: 200px; margin-right: 10px;">
+                <el-select v-model="doubleChartDoubleYConfig.upperLeftSource4.value" placeholder="选择数据" style="width: 200px; margin-right: 10px;">
                   <el-option label="<None>" value=""></el-option>
                   <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
                 </el-select>
-                <el-color-picker v-model="upperChartLeftColor4" placeholder="选择颜色"></el-color-picker>
-                <el-checkbox v-model="upperChartLeftUseArea4" style="margin-left: 10px;" class="custom-checkbox">填充</el-checkbox>
+                <el-color-picker v-model="doubleChartDoubleYConfig.upperLeftColor4.value" placeholder="选择颜色"></el-color-picker>
+                <el-checkbox v-model="doubleChartDoubleYConfig.upperLeftUseArea4.value" style="margin-left: 10px;" class="custom-checkbox">填充</el-checkbox>
               </div>
             </div>
           </div>
@@ -328,36 +328,36 @@
             <h4 style="margin-bottom: 10px;">上图右Y轴数据（最多4个）：</h4>
             <div class="source-selectors">
               <div style="display: flex; align-items: center; margin-bottom: 8px;">
-                <el-select v-model="upperChartRightSource1" placeholder="选择数据" style="width: 200px; margin-right: 10px;">
+                <el-select v-model="doubleChartDoubleYConfig.upperRightSource1.value" placeholder="选择数据" style="width: 200px; margin-right: 10px;">
                   <el-option label="<None>" value=""></el-option>
                   <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
                 </el-select>
-                <el-color-picker v-model="upperChartRightColor1" placeholder="选择颜色"></el-color-picker>
-                <el-checkbox v-model="upperChartRightUseArea1" style="margin-left: 10px;" class="custom-checkbox">填充</el-checkbox>
+                <el-color-picker v-model="doubleChartDoubleYConfig.upperRightColor1.value" placeholder="选择颜色"></el-color-picker>
+                <el-checkbox v-model="doubleChartDoubleYConfig.upperRightUseArea1.value" style="margin-left: 10px;" class="custom-checkbox">填充</el-checkbox>
               </div>
               <div style="display: flex; align-items: center; margin-bottom: 8px;">
-                <el-select v-model="upperChartRightSource2" placeholder="选择数据" style="width: 200px; margin-right: 10px;">
+                <el-select v-model="doubleChartDoubleYConfig.upperRightSource2.value" placeholder="选择数据" style="width: 200px; margin-right: 10px;">
                   <el-option label="<None>" value=""></el-option>
                   <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
                 </el-select>
-                <el-color-picker v-model="upperChartRightColor2" placeholder="选择颜色"></el-color-picker>
-                <el-checkbox v-model="upperChartRightUseArea2" style="margin-left: 10px;" class="custom-checkbox">填充</el-checkbox>
+                <el-color-picker v-model="doubleChartDoubleYConfig.upperRightColor2.value" placeholder="选择颜色"></el-color-picker>
+                <el-checkbox v-model="doubleChartDoubleYConfig.upperRightUseArea2.value" style="margin-left: 10px;" class="custom-checkbox">填充</el-checkbox>
               </div>
               <div style="display: flex; align-items: center; margin-bottom: 8px;">
-                <el-select v-model="upperChartRightSource3" placeholder="选择数据" style="width: 200px; margin-right: 10px;">
+                <el-select v-model="doubleChartDoubleYConfig.upperRightSource3.value" placeholder="选择数据" style="width: 200px; margin-right: 10px;">
                   <el-option label="<None>" value=""></el-option>
                   <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
                 </el-select>
-                <el-color-picker v-model="upperChartRightColor3" placeholder="选择颜色"></el-color-picker>
-                <el-checkbox v-model="upperChartRightUseArea3" style="margin-left: 10px;" class="custom-checkbox">填充</el-checkbox>
+                <el-color-picker v-model="doubleChartDoubleYConfig.upperRightColor3.value" placeholder="选择颜色"></el-color-picker>
+                <el-checkbox v-model="doubleChartDoubleYConfig.upperRightUseArea3.value" style="margin-left: 10px;" class="custom-checkbox">填充</el-checkbox>
               </div>
               <div style="display: flex; align-items: center;">
-                <el-select v-model="upperChartRightSource4" placeholder="选择数据" style="width: 200px; margin-right: 10px;">
+                <el-select v-model="doubleChartDoubleYConfig.upperRightSource4.value" placeholder="选择数据" style="width: 200px; margin-right: 10px;">
                   <el-option label="<None>" value=""></el-option>
                   <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
                 </el-select>
-                <el-color-picker v-model="upperChartRightColor4" placeholder="选择颜色"></el-color-picker>
-                <el-checkbox v-model="upperChartRightUseArea4" style="margin-left: 10px;" class="custom-checkbox">填充</el-checkbox>
+                <el-color-picker v-model="doubleChartDoubleYConfig.upperRightColor4.value" placeholder="选择颜色"></el-color-picker>
+                <el-checkbox v-model="doubleChartDoubleYConfig.upperRightUseArea4.value" style="margin-left: 10px;" class="custom-checkbox">填充</el-checkbox>
               </div>
             </div>
           </div>
@@ -365,36 +365,36 @@
             <h4 style="margin-bottom: 10px;">下图左Y轴数据（最多4个）：</h4>
             <div class="source-selectors">
               <div style="display: flex; align-items: center; margin-bottom: 8px;">
-                <el-select v-model="lowerChartLeftSource1" placeholder="选择数据" style="width: 200px; margin-right: 10px;">
+                <el-select v-model="doubleChartDoubleYConfig.lowerLeftSource1.value" placeholder="选择数据" style="width: 200px; margin-right: 10px;">
                   <el-option label="<None>" value=""></el-option>
                   <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
                 </el-select>
-                <el-color-picker v-model="lowerChartLeftColor1" placeholder="选择颜色"></el-color-picker>
-                <el-checkbox v-model="lowerChartLeftUseArea1" style="margin-left: 10px;" class="custom-checkbox">填充</el-checkbox>
+                <el-color-picker v-model="doubleChartDoubleYConfig.lowerLeftColor1.value" placeholder="选择颜色"></el-color-picker>
+                <el-checkbox v-model="doubleChartDoubleYConfig.lowerLeftUseArea1.value" style="margin-left: 10px;" class="custom-checkbox">填充</el-checkbox>
               </div>
               <div style="display: flex; align-items: center; margin-bottom: 8px;">
-                <el-select v-model="lowerChartLeftSource2" placeholder="选择数据" style="width: 200px; margin-right: 10px;">
+                <el-select v-model="doubleChartDoubleYConfig.lowerLeftSource2.value" placeholder="选择数据" style="width: 200px; margin-right: 10px;">
                   <el-option label="<None>" value=""></el-option>
                   <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
                 </el-select>
-                <el-color-picker v-model="lowerChartLeftColor2" placeholder="选择颜色"></el-color-picker>
-                <el-checkbox v-model="lowerChartLeftUseArea2" style="margin-left: 10px;" class="custom-checkbox">填充</el-checkbox>
+                <el-color-picker v-model="doubleChartDoubleYConfig.lowerLeftColor2.value" placeholder="选择颜色"></el-color-picker>
+                <el-checkbox v-model="doubleChartDoubleYConfig.lowerLeftUseArea2.value" style="margin-left: 10px;" class="custom-checkbox">填充</el-checkbox>
               </div>
               <div style="display: flex; align-items: center; margin-bottom: 8px;">
-                <el-select v-model="lowerChartLeftSource3" placeholder="选择数据" style="width: 200px; margin-right: 10px;">
+                <el-select v-model="doubleChartDoubleYConfig.lowerLeftSource3.value" placeholder="选择数据" style="width: 200px; margin-right: 10px;">
                   <el-option label="<None>" value=""></el-option>
                   <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
                 </el-select>
-                <el-color-picker v-model="lowerChartLeftColor3" placeholder="选择颜色"></el-color-picker>
-                <el-checkbox v-model="lowerChartLeftUseArea3" style="margin-left: 10px;" class="custom-checkbox">填充</el-checkbox>
+                <el-color-picker v-model="doubleChartDoubleYConfig.lowerLeftColor3.value" placeholder="选择颜色"></el-color-picker>
+                <el-checkbox v-model="doubleChartDoubleYConfig.lowerLeftUseArea3.value" style="margin-left: 10px;" class="custom-checkbox">填充</el-checkbox>
               </div>
               <div style="display: flex; align-items: center;">
-                <el-select v-model="lowerChartLeftSource4" placeholder="选择数据" style="width: 200px; margin-right: 10px;">
+                <el-select v-model="doubleChartDoubleYConfig.lowerLeftSource4.value" placeholder="选择数据" style="width: 200px; margin-right: 10px;">
                   <el-option label="<None>" value=""></el-option>
                   <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
                 </el-select>
-                <el-color-picker v-model="lowerChartLeftColor4" placeholder="选择颜色"></el-color-picker>
-                <el-checkbox v-model="lowerChartLeftUseArea4" style="margin-left: 10px;" class="custom-checkbox">填充</el-checkbox>
+                <el-color-picker v-model="doubleChartDoubleYConfig.lowerLeftColor4.value" placeholder="选择颜色"></el-color-picker>
+                <el-checkbox v-model="doubleChartDoubleYConfig.lowerLeftUseArea4.value" style="margin-left: 10px;" class="custom-checkbox">填充</el-checkbox>
               </div>
             </div>
           </div>
@@ -402,36 +402,36 @@
             <h4 style="margin-bottom: 10px;">下图右Y轴数据（最多4个）：</h4>
             <div class="source-selectors">
               <div style="display: flex; align-items: center; margin-bottom: 8px;">
-                <el-select v-model="lowerChartRightSource1" placeholder="选择数据" style="width: 200px; margin-right: 10px;">
+                <el-select v-model="doubleChartDoubleYConfig.lowerRightSource1.value" placeholder="选择数据" style="width: 200px; margin-right: 10px;">
                   <el-option label="<None>" value=""></el-option>
                   <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
                 </el-select>
-                <el-color-picker v-model="lowerChartRightColor1" placeholder="选择颜色"></el-color-picker>
-                <el-checkbox v-model="lowerChartRightUseArea1" style="margin-left: 10px;" class="custom-checkbox">填充</el-checkbox>
+                <el-color-picker v-model="doubleChartDoubleYConfig.lowerRightColor1.value" placeholder="选择颜色"></el-color-picker>
+                <el-checkbox v-model="doubleChartDoubleYConfig.lowerRightUseArea1.value" style="margin-left: 10px;" class="custom-checkbox">填充</el-checkbox>
               </div>
               <div style="display: flex; align-items: center; margin-bottom: 8px;">
-                <el-select v-model="lowerChartRightSource2" placeholder="选择数据" style="width: 200px; margin-right: 10px;">
+                <el-select v-model="doubleChartDoubleYConfig.lowerRightSource2.value" placeholder="选择数据" style="width: 200px; margin-right: 10px;">
                   <el-option label="<None>" value=""></el-option>
                   <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
                 </el-select>
-                <el-color-picker v-model="lowerChartRightColor2" placeholder="选择颜色"></el-color-picker>
-                <el-checkbox v-model="lowerChartRightUseArea2" style="margin-left: 10px;" class="custom-checkbox">填充</el-checkbox>
+                <el-color-picker v-model="doubleChartDoubleYConfig.lowerRightColor2.value" placeholder="选择颜色"></el-color-picker>
+                <el-checkbox v-model="doubleChartDoubleYConfig.lowerRightUseArea2.value" style="margin-left: 10px;" class="custom-checkbox">填充</el-checkbox>
               </div>
               <div style="display: flex; align-items: center; margin-bottom: 8px;">
-                <el-select v-model="lowerChartRightSource3" placeholder="选择数据" style="width: 200px; margin-right: 10px;">
+                <el-select v-model="doubleChartDoubleYConfig.lowerRightSource3.value" placeholder="选择数据" style="width: 200px; margin-right: 10px;">
                   <el-option label="<None>" value=""></el-option>
                   <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
                 </el-select>
-                <el-color-picker v-model="lowerChartRightColor3" placeholder="选择颜色"></el-color-picker>
-                <el-checkbox v-model="lowerChartRightUseArea3" style="margin-left: 10px;" class="custom-checkbox">填充</el-checkbox>
+                <el-color-picker v-model="doubleChartDoubleYConfig.lowerRightColor3.value" placeholder="选择颜色"></el-color-picker>
+                <el-checkbox v-model="doubleChartDoubleYConfig.lowerRightUseArea3.value" style="margin-left: 10px;" class="custom-checkbox">填充</el-checkbox>
               </div>
               <div style="display: flex; align-items: center;">
-                <el-select v-model="lowerChartRightSource4" placeholder="选择数据" style="width: 200px; margin-right: 10px;">
+                <el-select v-model="doubleChartDoubleYConfig.lowerRightSource4.value" placeholder="选择数据" style="width: 200px; margin-right: 10px;">
                   <el-option label="<None>" value=""></el-option>
                   <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
                 </el-select>
-                <el-color-picker v-model="lowerChartRightColor4" placeholder="选择颜色"></el-color-picker>
-                <el-checkbox v-model="lowerChartRightUseArea4" style="margin-left: 10px;" class="custom-checkbox">填充</el-checkbox>
+                <el-color-picker v-model="doubleChartDoubleYConfig.lowerRightColor4.value" placeholder="选择颜色"></el-color-picker>
+                <el-checkbox v-model="doubleChartDoubleYConfig.lowerRightUseArea4.value" style="margin-left: 10px;" class="custom-checkbox">填充</el-checkbox>
               </div>
             </div>
           </div>
@@ -476,122 +476,11 @@ const {
   viewLayout,
   yAxisConfig,
 
-  // FlowData
-  // 单图单Y轴
-  singleChartSource1,
-  singleChartSource2,
-  singleChartSource3,
-  singleChartSource4,
-  singleChartColor1,
-  singleChartColor2,
-  singleChartColor3,
-  singleChartColor4,
-  singleChartUseArea1,
-  singleChartUseArea2,
-  singleChartUseArea3,
-  singleChartUseArea4,
-
-  // 单图双Y轴
-  singleChartLeftSource1,
-  singleChartLeftSource2,
-  singleChartLeftSource3,
-  singleChartLeftSource4,
-  singleChartRightSource1,
-  singleChartRightSource2,
-  singleChartRightSource3,
-  singleChartRightSource4,
-  singleChartLeftColor1,
-  singleChartLeftColor2,
-  singleChartLeftColor3,
-  singleChartLeftColor4,
-  singleChartRightColor1,
-  singleChartRightColor2,
-  singleChartRightColor3,
-  singleChartRightColor4,
-  singleChartLeftUseArea1,
-  singleChartLeftUseArea2,
-  singleChartLeftUseArea3,
-  singleChartLeftUseArea4,
-  singleChartRightUseArea1,
-  singleChartRightUseArea2,
-  singleChartRightUseArea3,
-  singleChartRightUseArea4,
-
-  // 双图单Y轴
-  upperChartSource1,
-  upperChartSource2,
-  upperChartSource3,
-  upperChartSource4,
-  lowerChartSource1,
-  lowerChartSource2,
-  lowerChartSource3,
-  lowerChartSource4,
-  upperChartColor1,
-  upperChartColor2,
-  upperChartColor3,
-  upperChartColor4,
-  lowerChartColor1,
-  lowerChartColor2,
-  lowerChartColor3,
-  lowerChartColor4,
-  upperChartUseArea1,
-  upperChartUseArea2,
-  upperChartUseArea3,
-  upperChartUseArea4,
-  lowerChartUseArea1,
-  lowerChartUseArea2,
-  lowerChartUseArea3,
-  lowerChartUseArea4,
-
-  // 双图双Y轴
-  upperChartLeftSource1,
-  upperChartLeftSource2,
-  upperChartLeftSource3,
-  upperChartLeftSource4,
-  upperChartRightSource1,
-  upperChartRightSource2,
-  upperChartRightSource3,
-  upperChartRightSource4,
-  lowerChartLeftSource1,
-  lowerChartLeftSource2,
-  lowerChartLeftSource3,
-  lowerChartLeftSource4,
-  lowerChartRightSource1,
-  lowerChartRightSource2,
-  lowerChartRightSource3,
-  lowerChartRightSource4,
-  upperChartLeftColor1,
-  upperChartLeftColor2,
-  upperChartLeftColor3,
-  upperChartLeftColor4,
-  upperChartRightColor1,
-  upperChartRightColor2,
-  upperChartRightColor3,
-  upperChartRightColor4,
-  lowerChartLeftColor1,
-  lowerChartLeftColor2,
-  lowerChartLeftColor3,
-  lowerChartLeftColor4,
-  lowerChartRightColor1,
-  lowerChartRightColor2,
-  lowerChartRightColor3,
-  lowerChartRightColor4,
-  upperChartLeftUseArea1,
-  upperChartLeftUseArea2,
-  upperChartLeftUseArea3,
-  upperChartLeftUseArea4,
-  upperChartRightUseArea1,
-  upperChartRightUseArea2,
-  upperChartRightUseArea3,
-  upperChartRightUseArea4,
-  lowerChartLeftUseArea1,
-  lowerChartLeftUseArea2,
-  lowerChartLeftUseArea3,
-  lowerChartLeftUseArea4,
-  lowerChartRightUseArea1,
-  lowerChartRightUseArea2,
-  lowerChartRightUseArea3,
-  lowerChartRightUseArea4,
+  // 配置对象
+  singleChartConfig,
+  singleChartDoubleYConfig,
+  doubleChartConfig,
+  doubleChartDoubleYConfig,
 
   // 计算属性
   upperChartSources,
@@ -605,6 +494,8 @@ const {
   singleChartRightSources,
   hasData,
   availableSources,
+  // 工具函数
+  getRandomColor,
   // 方法
   showViewConfig,
   applyViewConfig,
@@ -895,30 +786,6 @@ function handleChartDblClick(params: any) {
   }
 }
 
-// 生成随机颜色的辅助函数
-function getRandomColor(excludeColor: any, index: number) {
-  const color = [
-    '#5470c6',  // 蓝
-    '#91cc75',  // 绿
-    '#fac858',  // 黄
-    '#ee6666',  // 红
-    '#73c0de',  // 青
-    '#3ba272',  // 深绿
-    '#fc8452',  // 橙
-    '#9a60b4',  // 紫
-    '#ea7ccc',  // 粉
-    '#ffbd52',  // 浅橙
-    '#33baab',  // 蓝绿
-    '#ffdb5c',  // 浅黄
-    '#8293f0',  // 浅蓝
-    '#c1232b'   // 深红
-  ]
-  const cycle_index = index % color.length;
-  excludeColor.value = color[cycle_index];
-
-  return color[cycle_index];
-}
-
 const unifiedAxisLabel = {
   formatter: function(value: number) {
     // 假设数据范围在 -999.99 到 999.99 之间
@@ -969,8 +836,8 @@ function createChartOption() {
       // 单图单Y轴模式
       series = singleChartSources.value.map((source, index) => {
         // 获取对应的颜色配置
-        const colorMap = [singleChartColor1, singleChartColor2, singleChartColor3, singleChartColor4];
-        const areaMap = [singleChartUseArea1, singleChartUseArea2, singleChartUseArea3, singleChartUseArea4];
+        const colorMap = [singleChartConfig.color1, singleChartConfig.color2, singleChartConfig.color3, singleChartConfig.color4];
+        const areaMap = [singleChartConfig.useArea1, singleChartConfig.useArea2, singleChartConfig.useArea3, singleChartConfig.useArea4];
 
         let color = colorMap[index].value
         if (source && !color) {
@@ -1012,8 +879,8 @@ function createChartOption() {
       // 单图双Y轴模式
       const leftSeries: LineSeriesOption[] = singleChartLeftSources.value.map((source, index) => {
         // 获取左侧Y轴对应的颜色配置
-        const colorMap = [singleChartLeftColor1, singleChartLeftColor2, singleChartLeftColor3, singleChartLeftColor4];
-        const areaMap = [singleChartLeftUseArea1, singleChartLeftUseArea2, singleChartLeftUseArea3, singleChartLeftUseArea4];
+        const colorMap = [singleChartDoubleYConfig.leftColor1, singleChartDoubleYConfig.leftColor2, singleChartDoubleYConfig.leftColor3, singleChartDoubleYConfig.leftColor4];
+        const areaMap = [singleChartDoubleYConfig.leftUseArea1, singleChartDoubleYConfig.leftUseArea2, singleChartDoubleYConfig.leftUseArea3, singleChartDoubleYConfig.leftUseArea4];
         let color = colorMap[index].value
         if (source && !color) {
           color = getRandomColor(colorMap[index], index);
@@ -1054,8 +921,8 @@ function createChartOption() {
       
       const rightSeries: LineSeriesOption[] = singleChartRightSources.value.map((source, index) => {
         // 获取右侧Y轴对应的颜色配置
-        const colorMap = [singleChartRightColor1, singleChartRightColor2, singleChartRightColor3, singleChartRightColor4];
-        const areaMap = [singleChartRightUseArea1, singleChartRightUseArea2, singleChartRightUseArea3, singleChartRightUseArea4];
+        const colorMap = [singleChartDoubleYConfig.rightColor1, singleChartDoubleYConfig.rightColor2, singleChartDoubleYConfig.rightColor3, singleChartDoubleYConfig.rightColor4];
+        const areaMap = [singleChartDoubleYConfig.rightUseArea1, singleChartDoubleYConfig.rightUseArea2, singleChartDoubleYConfig.rightUseArea3, singleChartDoubleYConfig.rightUseArea4];
         let color = colorMap[index].value
         if (source && !color) {
           color = getRandomColor(colorMap[index], index+singleChartLeftSources.value.length);
@@ -1196,8 +1063,8 @@ function createChartOption() {
       // 双图双Y轴模式 - 使用特定的左右Y轴数据
       // 上图表左侧Y轴数据
       upperSeries = upperChartLeftSources.value.map((source, index) => {
-        const colorMap = [upperChartLeftColor1, upperChartLeftColor2, upperChartLeftColor3, upperChartLeftColor4];
-        const areaMap = [upperChartLeftUseArea1, upperChartLeftUseArea2, upperChartLeftUseArea3, upperChartLeftUseArea4];
+        const colorMap = [doubleChartDoubleYConfig.upperLeftColor1, doubleChartDoubleYConfig.upperLeftColor2, doubleChartDoubleYConfig.upperLeftColor3, doubleChartDoubleYConfig.upperLeftColor4];
+        const areaMap = [doubleChartDoubleYConfig.upperLeftUseArea1, doubleChartDoubleYConfig.upperLeftUseArea2, doubleChartDoubleYConfig.upperLeftUseArea3, doubleChartDoubleYConfig.upperLeftUseArea4];
         let color = colorMap[index].value
         if (source && !color) {
           color = getRandomColor(colorMap[index], index);
@@ -1238,8 +1105,8 @@ function createChartOption() {
       
       // 上图表右侧Y轴数据
       upperSeries.push(...upperChartRightSources.value.map((source, index) => {
-        const colorMap = [upperChartRightColor1, upperChartRightColor2, upperChartRightColor3, upperChartRightColor4];
-        const areaMap = [upperChartRightUseArea1, upperChartRightUseArea2, upperChartRightUseArea3, upperChartRightUseArea4];
+        const colorMap = [doubleChartDoubleYConfig.upperRightColor1, doubleChartDoubleYConfig.upperRightColor2, doubleChartDoubleYConfig.upperRightColor3, doubleChartDoubleYConfig.upperRightColor4];
+        const areaMap = [doubleChartDoubleYConfig.upperRightUseArea1, doubleChartDoubleYConfig.upperRightUseArea2, doubleChartDoubleYConfig.upperRightUseArea3, doubleChartDoubleYConfig.upperRightUseArea4];
         let color = colorMap[index].value
         if (source && !color) {
           color = getRandomColor(colorMap[index], index+upperChartLeftSources.value.length);
@@ -1280,8 +1147,8 @@ function createChartOption() {
       
       // 下图表左侧Y轴数据
       lowerSeries = lowerChartLeftSources.value.map((source, index) => {
-        const colorMap = [lowerChartLeftColor1, lowerChartLeftColor2, lowerChartLeftColor3, lowerChartLeftColor4];
-        const areaMap = [lowerChartLeftUseArea1, lowerChartLeftUseArea2, lowerChartLeftUseArea3, lowerChartLeftUseArea4];
+        const colorMap = [doubleChartDoubleYConfig.lowerLeftColor1, doubleChartDoubleYConfig.lowerLeftColor2, doubleChartDoubleYConfig.lowerLeftColor3, doubleChartDoubleYConfig.lowerLeftColor4];
+        const areaMap = [doubleChartDoubleYConfig.lowerLeftUseArea1, doubleChartDoubleYConfig.lowerLeftUseArea2, doubleChartDoubleYConfig.lowerLeftUseArea3, doubleChartDoubleYConfig.lowerLeftUseArea4];
         let color = colorMap[index].value
         if (source && !color) {
           color = getRandomColor(colorMap[index], index);
@@ -1322,8 +1189,8 @@ function createChartOption() {
       
       // 下图表右侧Y轴数据
       lowerSeries.push(...lowerChartRightSources.value.map((source, index) => {
-        const colorMap = [lowerChartRightColor1, lowerChartRightColor2, lowerChartRightColor3, lowerChartRightColor4];
-        const areaMap = [lowerChartRightUseArea1, lowerChartRightUseArea2, lowerChartRightUseArea3, lowerChartRightUseArea4];
+        const colorMap = [doubleChartDoubleYConfig.lowerRightColor1, doubleChartDoubleYConfig.lowerRightColor2, doubleChartDoubleYConfig.lowerRightColor3, doubleChartDoubleYConfig.lowerRightColor4];
+        const areaMap = [doubleChartDoubleYConfig.lowerRightUseArea1, doubleChartDoubleYConfig.lowerRightUseArea2, doubleChartDoubleYConfig.lowerRightUseArea3, doubleChartDoubleYConfig.lowerRightUseArea4];
         let color = colorMap[index].value
         if (source && !color) {
           color = getRandomColor(colorMap[index], index+lowerChartLeftSources.value.length);
@@ -1377,8 +1244,8 @@ function createChartOption() {
     } else {
       // 双图单Y轴模式 - 上图表
       upperSeries = upperChartSources.value.map((source, index) => {
-        const colorMap = [upperChartColor1, upperChartColor2, upperChartColor3, upperChartColor4];
-        const areaMap = [upperChartUseArea1, upperChartUseArea2, upperChartUseArea3, upperChartUseArea4];
+        const colorMap = [doubleChartConfig.upperColor1, doubleChartConfig.upperColor2, doubleChartConfig.upperColor3, doubleChartConfig.upperColor4];
+        const areaMap = [doubleChartConfig.upperUseArea1, doubleChartConfig.upperUseArea2, doubleChartConfig.upperUseArea3, doubleChartConfig.upperUseArea4];
         let color = colorMap[index].value
         if (source && !color) {
           color = getRandomColor(colorMap[index], index);
@@ -1420,8 +1287,8 @@ function createChartOption() {
       
       // 双图单Y轴模式 - 下图表
       lowerSeries = lowerChartSources.value.map((source, index) => {
-        const colorMap = [lowerChartColor1, lowerChartColor2, lowerChartColor3, lowerChartColor4];
-        const areaMap = [lowerChartUseArea1, lowerChartUseArea2, lowerChartUseArea3, lowerChartUseArea4];
+        const colorMap = [doubleChartConfig.lowerColor1, doubleChartConfig.lowerColor2, doubleChartConfig.lowerColor3, doubleChartConfig.lowerColor4];
+        const areaMap = [doubleChartConfig.lowerUseArea1, doubleChartConfig.lowerUseArea2, doubleChartConfig.lowerUseArea3, doubleChartConfig.lowerUseArea4];
         let color = colorMap[index].value
         if (source && !color) {
           color = getRandomColor(colorMap[index], index+upperChartSources.value.length);

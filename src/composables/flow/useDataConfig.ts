@@ -5,158 +5,191 @@ export type ViewLayout = 'single' | 'double'
 // 定义Y轴配置类型
 export type YAxisConfig = 'single' | 'double'
 
-// FlowDeviation
-// 轨迹字段
-const deviationTrack1X = ref<string>('')
-const deviationTrack1Y = ref<string>('')
-const deviationTrack2X = ref<string>('')
-const deviationTrack2Y = ref<string>('')
-const deviationTrack3X = ref<string>('')
-const deviationTrack3Y = ref<string>('')
-const deviationTrack4X = ref<string>('')
-const deviationTrack4Y = ref<string>('')
-// 轨迹颜色
-const deviationTrack1Color = ref<string>('#5470c6')
-const deviationTrack2Color = ref<string>('#3ba272')
-const deviationTrack3Color = ref<string>('#fac858')
-const deviationTrack4Color = ref<string>('#9a60b4')
+// 预定义颜色数组
+const COLOR_PALETTE = [
+  '#5470c6',  // 蓝
+  '#91cc75',  // 绿
+  '#fac858',  // 黄
+  '#ee6666',  // 红
+  '#73c0de',  // 青
+  '#3ba272',  // 深绿
+  '#fc8452',  // 橙
+  '#9a60b4',  // 紫
+  '#ea7ccc',  // 粉
+  '#ffbd52',  // 浅橙
+  '#33baab',  // 蓝绿
+  '#ffdb5c',  // 浅黄
+  '#8293f0',  // 浅蓝
+  '#c1232b'   // 深红
+]
+
+// 生成随机颜色的辅助函数
+export function getRandomColor(colorRef: any, index: number): string {
+  const cycleIndex = index % COLOR_PALETTE.length
+  const color = COLOR_PALETTE[cycleIndex]
+  if (colorRef) {
+    colorRef.value = color
+  }
+  return color
+}
+
+// FlowDeviation 配置对象
+const deviationConfig = {
+  // 轨迹字段
+  track1X: ref<string>(''),
+  track1Y: ref<string>(''),
+  track2X: ref<string>(''),
+  track2Y: ref<string>(''),
+  track3X: ref<string>(''),
+  track3Y: ref<string>(''),
+  track4X: ref<string>(''),
+  track4Y: ref<string>(''),
+  // 轨迹颜色
+  track1Color: ref<string>('#5470c6'),
+  track2Color: ref<string>('#3ba272'),
+  track3Color: ref<string>('#fac858'),
+  track4Color: ref<string>('#9a60b4')
+}
 
 // FlowData
-/**
- * * 单图单Y轴模式
- */
-// * 单图模式下的数据源选择
-const singleChartSource1 = ref<string>('')
-const singleChartSource2 = ref<string>('')
-const singleChartSource3 = ref<string>('')
-const singleChartSource4 = ref<string>('')
-// ** 添加颜色配置
-const singleChartColor1 = ref<string>('')
-const singleChartColor2 = ref<string>('')
-const singleChartColor3 = ref<string>('')
-const singleChartColor4 = ref<string>('')
-// ** 添加areaStyle控制配置
-const singleChartUseArea1 = ref<boolean>(false)
-const singleChartUseArea2 = ref<boolean>(false)
-const singleChartUseArea3 = ref<boolean>(false)
-const singleChartUseArea4 = ref<boolean>(false)
+// FlowData 配置对象 - 单图单Y轴模式
+const singleChartConfig = {
+  // 数据源选择
+  source1: ref<string>(''),
+  source2: ref<string>(''),
+  source3: ref<string>(''),
+  source4: ref<string>(''),
+  // 颜色配置
+  color1: ref<string>(''),
+  color2: ref<string>(''),
+  color3: ref<string>(''),
+  color4: ref<string>(''),
+  // areaStyle控制配置
+  useArea1: ref<boolean>(false),
+  useArea2: ref<boolean>(false),
+  useArea3: ref<boolean>(false),
+  useArea4: ref<boolean>(false)
+}
 
-/**
- * * 单图双Y轴模式
- */
-// 单图双Y轴模式下的数据源选择
-const singleChartLeftSource1 = ref<string>('')
-const singleChartLeftSource2 = ref<string>('')
-const singleChartLeftSource3 = ref<string>('')
-const singleChartLeftSource4 = ref<string>('')
-const singleChartRightSource1 = ref<string>('')
-const singleChartRightSource2 = ref<string>('')
-const singleChartRightSource3 = ref<string>('')
-const singleChartRightSource4 = ref<string>('')
-// ** 添加颜色配置
-const singleChartLeftColor1 = ref<string>('')
-const singleChartLeftColor2 = ref<string>('')
-const singleChartLeftColor3 = ref<string>('')
-const singleChartLeftColor4 = ref<string>('')
-const singleChartRightColor1 = ref<string>('')
-const singleChartRightColor2 = ref<string>('')
-const singleChartRightColor3 = ref<string>('')
-const singleChartRightColor4 = ref<string>('')
-// ** 添加areaStyle控制配置
-const singleChartLeftUseArea1 = ref<boolean>(false)
-const singleChartLeftUseArea2 = ref<boolean>(false)
-const singleChartLeftUseArea3 = ref<boolean>(false)
-const singleChartLeftUseArea4 = ref<boolean>(false)
-const singleChartRightUseArea1 = ref<boolean>(false)
-const singleChartRightUseArea2 = ref<boolean>(false)
-const singleChartRightUseArea3 = ref<boolean>(false)
-const singleChartRightUseArea4 = ref<boolean>(false)
+// FlowData 配置对象 - 单图双Y轴模式
+const singleChartDoubleYConfig = {
+  // 左Y轴数据源
+  leftSource1: ref<string>(''),
+  leftSource2: ref<string>(''),
+  leftSource3: ref<string>(''),
+  leftSource4: ref<string>(''),
+  rightSource1: ref<string>(''),
+  rightSource2: ref<string>(''),
+  rightSource3: ref<string>(''),
+  rightSource4: ref<string>(''),
+  // 左Y轴颜色配置
+  leftColor1: ref<string>(''),
+  leftColor2: ref<string>(''),
+  leftColor3: ref<string>(''),
+  leftColor4: ref<string>(''),
+  rightColor1: ref<string>(''),
+  rightColor2: ref<string>(''),
+  rightColor3: ref<string>(''),
+  rightColor4: ref<string>(''),
+  // 区域配置
+  leftUseArea1: ref<boolean>(false),
+  leftUseArea2: ref<boolean>(false),
+  leftUseArea3: ref<boolean>(false),
+  leftUseArea4: ref<boolean>(false),
+  rightUseArea1: ref<boolean>(false),
+  rightUseArea2: ref<boolean>(false),
+  rightUseArea3: ref<boolean>(false),
+  rightUseArea4: ref<boolean>(false)
+}
 
-/**
- * 双图单Y轴
- */
-// ** 双图模式下的数据源选择
-const upperChartSource1 = ref<string>('')
-const upperChartSource2 = ref<string>('')
-const upperChartSource3 = ref<string>('')
-const upperChartSource4 = ref<string>('')
-const lowerChartSource1 = ref<string>('')
-const lowerChartSource2 = ref<string>('')
-const lowerChartSource3 = ref<string>('')
-const lowerChartSource4 = ref<string>('')
-// ** 添加颜色配置
-const upperChartColor1 = ref<string>('')
-const upperChartColor2 = ref<string>('')
-const upperChartColor3 = ref<string>('')
-const upperChartColor4 = ref<string>('')
-const lowerChartColor1 = ref<string>('')
-const lowerChartColor2 = ref<string>('')
-const lowerChartColor3 = ref<string>('')
-const lowerChartColor4 = ref<string>('')
-// ** 添加areaStyle控制配置
-const upperChartUseArea1 = ref<boolean>(false)
-const upperChartUseArea2 = ref<boolean>(false)
-const upperChartUseArea3 = ref<boolean>(false)
-const upperChartUseArea4 = ref<boolean>(false)
-const lowerChartUseArea1 = ref<boolean>(false)
-const lowerChartUseArea2 = ref<boolean>(false)
-const lowerChartUseArea3 = ref<boolean>(false)
-const lowerChartUseArea4 = ref<boolean>(false)
+// FlowData 配置对象 - 双图单Y轴模式
+const doubleChartConfig = {
+  // 上图数据源
+  upperSource1: ref<string>(''),
+  upperSource2: ref<string>(''),
+  upperSource3: ref<string>(''),
+  upperSource4: ref<string>(''),
+  lowerSource1: ref<string>(''),
+  lowerSource2: ref<string>(''),
+  lowerSource3: ref<string>(''),
+  lowerSource4: ref<string>(''),
+  // 上图颜色配置
+  upperColor1: ref<string>(''),
+  upperColor2: ref<string>(''),
+  upperColor3: ref<string>(''),
+  upperColor4: ref<string>(''),
+  lowerColor1: ref<string>(''),
+  lowerColor2: ref<string>(''),
+  lowerColor3: ref<string>(''),
+  lowerColor4: ref<string>(''),
+  // 区域配置
+  upperUseArea1: ref<boolean>(false),
+  upperUseArea2: ref<boolean>(false),
+  upperUseArea3: ref<boolean>(false),
+  upperUseArea4: ref<boolean>(false),
+  lowerUseArea1: ref<boolean>(false),
+  lowerUseArea2: ref<boolean>(false),
+  lowerUseArea3: ref<boolean>(false),
+  lowerUseArea4: ref<boolean>(false)
+}
 
 /**
  * * 双图双Y轴模式
  */
-// ** 双图双Y轴模式下的数据源选择
-const upperChartLeftSource1 = ref<string>('')
-const upperChartLeftSource2 = ref<string>('')
-const upperChartLeftSource3 = ref<string>('')
-const upperChartLeftSource4 = ref<string>('')
-const upperChartRightSource1 = ref<string>('')
-const upperChartRightSource2 = ref<string>('')
-const upperChartRightSource3 = ref<string>('')
-const upperChartRightSource4 = ref<string>('')
-const lowerChartLeftSource1 = ref<string>('')
-const lowerChartLeftSource2 = ref<string>('')
-const lowerChartLeftSource3 = ref<string>('')
-const lowerChartLeftSource4 = ref<string>('')
-const lowerChartRightSource1 = ref<string>('')
-const lowerChartRightSource2 = ref<string>('')
-const lowerChartRightSource3 = ref<string>('')
-const lowerChartRightSource4 = ref<string>('')
-// ** 添加颜色配置
-const upperChartLeftColor1 = ref<string>('')
-const upperChartLeftColor2 = ref<string>('')
-const upperChartLeftColor3 = ref<string>('')
-const upperChartLeftColor4 = ref<string>('')
-const upperChartRightColor1 = ref<string>('')
-const upperChartRightColor2 = ref<string>('')
-const upperChartRightColor3 = ref<string>('')
-const upperChartRightColor4 = ref<string>('')
-const lowerChartLeftColor1 = ref<string>('')
-const lowerChartLeftColor2 = ref<string>('')
-const lowerChartLeftColor3 = ref<string>('')
-const lowerChartLeftColor4 = ref<string>('')
-const lowerChartRightColor1 = ref<string>('')
-const lowerChartRightColor2 = ref<string>('')
-const lowerChartRightColor3 = ref<string>('')
-const lowerChartRightColor4 = ref<string>('')
-// ** 添加areaStyle控制配置
-const upperChartLeftUseArea1 = ref<boolean>(false)
-const upperChartLeftUseArea2 = ref<boolean>(false)
-const upperChartLeftUseArea3 = ref<boolean>(false)
-const upperChartLeftUseArea4 = ref<boolean>(false)
-const upperChartRightUseArea1 = ref<boolean>(false)
-const upperChartRightUseArea2 = ref<boolean>(false)
-const upperChartRightUseArea3 = ref<boolean>(false)
-const upperChartRightUseArea4 = ref<boolean>(false)
-const lowerChartLeftUseArea1 = ref<boolean>(false)
-const lowerChartLeftUseArea2 = ref<boolean>(false)
-const lowerChartLeftUseArea3 = ref<boolean>(false)
-const lowerChartLeftUseArea4 = ref<boolean>(false)
-const lowerChartRightUseArea1 = ref<boolean>(false)
-const lowerChartRightUseArea2 = ref<boolean>(false)
-const lowerChartRightUseArea3 = ref<boolean>(false)
-const lowerChartRightUseArea4 = ref<boolean>(false)
+// FlowData 配置对象 - 双图双Y轴模式
+const doubleChartDoubleYConfig = {
+  // 上图左Y轴数据源
+  upperLeftSource1: ref<string>(''),
+  upperLeftSource2: ref<string>(''),
+  upperLeftSource3: ref<string>(''),
+  upperLeftSource4: ref<string>(''),
+  upperRightSource1: ref<string>(''),
+  upperRightSource2: ref<string>(''),
+  upperRightSource3: ref<string>(''),
+  upperRightSource4: ref<string>(''),
+  lowerLeftSource1: ref<string>(''),
+  lowerLeftSource2: ref<string>(''),
+  lowerLeftSource3: ref<string>(''),
+  lowerLeftSource4: ref<string>(''),
+  lowerRightSource1: ref<string>(''),
+  lowerRightSource2: ref<string>(''),
+  lowerRightSource3: ref<string>(''),
+  lowerRightSource4: ref<string>(''),
+  // 上图颜色配置
+  upperLeftColor1: ref<string>(''),
+  upperLeftColor2: ref<string>(''),
+  upperLeftColor3: ref<string>(''),
+  upperLeftColor4: ref<string>(''),
+  upperRightColor1: ref<string>(''),
+  upperRightColor2: ref<string>(''),
+  upperRightColor3: ref<string>(''),
+  upperRightColor4: ref<string>(''),
+  lowerLeftColor1: ref<string>(''),
+  lowerLeftColor2: ref<string>(''),
+  lowerLeftColor3: ref<string>(''),
+  lowerLeftColor4: ref<string>(''),
+  lowerRightColor1: ref<string>(''),
+  lowerRightColor2: ref<string>(''),
+  lowerRightColor3: ref<string>(''),
+  lowerRightColor4: ref<string>(''),
+  // 区域配置
+  upperLeftUseArea1: ref<boolean>(false),
+  upperLeftUseArea2: ref<boolean>(false),
+  upperLeftUseArea3: ref<boolean>(false),
+  upperLeftUseArea4: ref<boolean>(false),
+  upperRightUseArea1: ref<boolean>(false),
+  upperRightUseArea2: ref<boolean>(false),
+  upperRightUseArea3: ref<boolean>(false),
+  upperRightUseArea4: ref<boolean>(false),
+  lowerLeftUseArea1: ref<boolean>(false),
+  lowerLeftUseArea2: ref<boolean>(false),
+  lowerLeftUseArea3: ref<boolean>(false),
+  lowerLeftUseArea4: ref<boolean>(false),
+  lowerRightUseArea1: ref<boolean>(false),
+  lowerRightUseArea2: ref<boolean>(false),
+  lowerRightUseArea3: ref<boolean>(false),
+  lowerRightUseArea4: ref<boolean>(false)
+}
 
 // 创建并导出useFlowData钩子
 export function useDataConfig(flowData: any) {
@@ -168,180 +201,180 @@ export function useDataConfig(flowData: any) {
   // 计算属性 - 上图表数据源（双图模式）
   const upperChartSources = computed(() => {
     return [
-      upperChartSource1.value,
-      upperChartSource2.value,
-      upperChartSource3.value,
-      upperChartSource4.value
+      doubleChartConfig.upperSource1.value,
+      doubleChartConfig.upperSource2.value,
+      doubleChartConfig.upperSource3.value,
+      doubleChartConfig.upperSource4.value
     ]
   })
 
   // 计算属性 - 上图表颜色配置（双图模式）
   const upperChartColors = computed(() => {
     return [
-      upperChartColor1.value,
-      upperChartColor2.value,
-      upperChartColor3.value,
-      upperChartColor4.value
+      doubleChartConfig.upperColor1.value,
+      doubleChartConfig.upperColor2.value,
+      doubleChartConfig.upperColor3.value,
+      doubleChartConfig.upperColor4.value
     ]
   })
 
   // 计算属性 - 下图表数据源（双图模式）
   const lowerChartSources = computed(() => {
     return [
-      lowerChartSource1.value,
-      lowerChartSource2.value,
-      lowerChartSource3.value,
-      lowerChartSource4.value
+      doubleChartConfig.lowerSource1.value,
+      doubleChartConfig.lowerSource2.value,
+      doubleChartConfig.lowerSource3.value,
+      doubleChartConfig.lowerSource4.value
     ]
   })
 
   // 计算属性 - 下图表颜色配置（双图模式）
   const lowerChartColors = computed(() => {
     return [
-      lowerChartColor1.value,
-      lowerChartColor2.value,
-      lowerChartColor3.value,
-      lowerChartColor4.value
+      doubleChartConfig.lowerColor1.value,
+      doubleChartConfig.lowerColor2.value,
+      doubleChartConfig.lowerColor3.value,
+      doubleChartConfig.lowerColor4.value
     ]
   })
 
   // 计算属性 - 上图表左Y轴数据（双图双Y轴模式）
   const upperChartLeftSources = computed(() => {
     return [
-      upperChartLeftSource1.value,
-      upperChartLeftSource2.value,
-      upperChartLeftSource3.value,
-      upperChartLeftSource4.value
+      doubleChartDoubleYConfig.upperLeftSource1.value,
+      doubleChartDoubleYConfig.upperLeftSource2.value,
+      doubleChartDoubleYConfig.upperLeftSource3.value,
+      doubleChartDoubleYConfig.upperLeftSource4.value
     ]
   })
 
   // 计算属性 - 上图表左Y轴颜色配置（双图双Y轴模式）
   const upperChartLeftColors = computed(() => {
     return [
-      upperChartLeftColor1.value,
-      upperChartLeftColor2.value,
-      upperChartLeftColor3.value,
-      upperChartLeftColor4.value
+      doubleChartDoubleYConfig.upperLeftColor1.value,
+      doubleChartDoubleYConfig.upperLeftColor2.value,
+      doubleChartDoubleYConfig.upperLeftColor3.value,
+      doubleChartDoubleYConfig.upperLeftColor4.value
     ]
   })
 
   // 计算属性 - 上图表右Y轴数据（双图双Y轴模式）
   const upperChartRightSources = computed(() => {
     return [
-      upperChartRightSource1.value,
-      upperChartRightSource2.value,
-      upperChartRightSource3.value,
-      upperChartRightSource4.value
+      doubleChartDoubleYConfig.upperRightSource1.value,
+      doubleChartDoubleYConfig.upperRightSource2.value,
+      doubleChartDoubleYConfig.upperRightSource3.value,
+      doubleChartDoubleYConfig.upperRightSource4.value
     ]
   })
 
   // 计算属性 - 上图表右Y轴颜色配置（双图双Y轴模式）
   const upperChartRightColors = computed(() => {
     return [
-      upperChartRightColor1.value,
-      upperChartRightColor2.value,
-      upperChartRightColor3.value,
-      upperChartRightColor4.value
+      doubleChartDoubleYConfig.upperRightColor1.value,
+      doubleChartDoubleYConfig.upperRightColor2.value,
+      doubleChartDoubleYConfig.upperRightColor3.value,
+      doubleChartDoubleYConfig.upperRightColor4.value
     ]
   })
 
   // 计算属性 - 下图表左Y轴数据（双图双Y轴模式）
   const lowerChartLeftSources = computed(() => {
     return [
-      lowerChartLeftSource1.value,
-      lowerChartLeftSource2.value,
-      lowerChartLeftSource3.value,
-      lowerChartLeftSource4.value
+      doubleChartDoubleYConfig.lowerLeftSource1.value,
+      doubleChartDoubleYConfig.lowerLeftSource2.value,
+      doubleChartDoubleYConfig.lowerLeftSource3.value,
+      doubleChartDoubleYConfig.lowerLeftSource4.value
     ]
   })
 
   // 计算属性 - 下图表左Y轴颜色配置（双图双Y轴模式）
   const lowerChartLeftColors = computed(() => {
     return [
-      lowerChartLeftColor1.value,
-      lowerChartLeftColor2.value,
-      lowerChartLeftColor3.value,
-      lowerChartLeftColor4.value
+      doubleChartDoubleYConfig.lowerLeftColor1.value,
+      doubleChartDoubleYConfig.lowerLeftColor2.value,
+      doubleChartDoubleYConfig.lowerLeftColor3.value,
+      doubleChartDoubleYConfig.lowerLeftColor4.value
     ]
   })
 
   // 计算属性 - 下图表右Y轴数据（双图双Y轴模式）
   const lowerChartRightSources = computed(() => {
     return [
-      lowerChartRightSource1.value,
-      lowerChartRightSource2.value,
-      lowerChartRightSource3.value,
-      lowerChartRightSource4.value
+      doubleChartDoubleYConfig.lowerRightSource1.value,
+      doubleChartDoubleYConfig.lowerRightSource2.value,
+      doubleChartDoubleYConfig.lowerRightSource3.value,
+      doubleChartDoubleYConfig.lowerRightSource4.value
     ]
   })
 
   // 计算属性 - 下图表右Y轴颜色配置（双图双Y轴模式）
   const lowerChartRightColors = computed(() => {
     return [
-      lowerChartRightColor1.value,
-      lowerChartRightColor2.value,
-      lowerChartRightColor3.value,
-      lowerChartRightColor4.value
+      doubleChartDoubleYConfig.lowerRightColor1.value,
+      doubleChartDoubleYConfig.lowerRightColor2.value,
+      doubleChartDoubleYConfig.lowerRightColor3.value,
+      doubleChartDoubleYConfig.lowerRightColor4.value
     ]
   })
 
   // 计算属性 - 单图模式数据源
   const singleChartSources = computed(() => {
     return [
-      singleChartSource1.value,
-      singleChartSource2.value,
-      singleChartSource3.value,
-      singleChartSource4.value
+      singleChartConfig.source1.value,
+      singleChartConfig.source2.value,
+      singleChartConfig.source3.value,
+      singleChartConfig.source4.value
     ]
   })
 
   // 计算属性 - 单图模式颜色配置
   const singleChartColors = computed(() => {
     return [
-      singleChartColor1.value,
-      singleChartColor2.value,
-      singleChartColor3.value,
-      singleChartColor4.value
+      singleChartConfig.color1.value,
+      singleChartConfig.color2.value,
+      singleChartConfig.color3.value,
+      singleChartConfig.color4.value
     ]
   })
 
   // 计算属性 - 单图模式左Y轴数据
   const singleChartLeftSources = computed(() => {
     return [
-      singleChartLeftSource1.value,
-      singleChartLeftSource2.value,
-      singleChartLeftSource3.value,
-      singleChartLeftSource4.value
+      singleChartDoubleYConfig.leftSource1.value,
+      singleChartDoubleYConfig.leftSource2.value,
+      singleChartDoubleYConfig.leftSource3.value,
+      singleChartDoubleYConfig.leftSource4.value
     ]
   })
 
   // 计算属性 - 单图模式左Y轴颜色配置
   const singleChartLeftColors = computed(() => {
     return [
-      singleChartLeftColor1.value,
-      singleChartLeftColor2.value,
-      singleChartLeftColor3.value,
-      singleChartLeftColor4.value
+      singleChartDoubleYConfig.leftColor1.value,
+      singleChartDoubleYConfig.leftColor2.value,
+      singleChartDoubleYConfig.leftColor3.value,
+      singleChartDoubleYConfig.leftColor4.value
     ]
   })
 
   // 计算属性 - 单图模式右Y轴数据
   const singleChartRightSources = computed(() => {
     return [
-      singleChartRightSource1.value,
-      singleChartRightSource2.value,
-      singleChartRightSource3.value,
-      singleChartRightSource4.value
+      singleChartDoubleYConfig.rightSource1.value,
+      singleChartDoubleYConfig.rightSource2.value,
+      singleChartDoubleYConfig.rightSource3.value,
+      singleChartDoubleYConfig.rightSource4.value
     ]
   })
 
   // 计算属性 - 单图模式右Y轴颜色配置
   const singleChartRightColors = computed(() => {
     return [
-      singleChartRightColor1.value,
-      singleChartRightColor2.value,
-      singleChartRightColor3.value,
-      singleChartRightColor4.value
+      singleChartDoubleYConfig.rightColor1.value,
+      singleChartDoubleYConfig.rightColor2.value,
+      singleChartDoubleYConfig.rightColor3.value,
+      singleChartDoubleYConfig.rightColor4.value
     ]
   })
 
@@ -415,74 +448,74 @@ export function useDataConfig(flowData: any) {
     // 应用FlowDeviation配置
     if (config.deviation) {
       // 应用Deviation轨迹配置
-      deviationTrack1X.value = config.deviation.track1X || ''
-      deviationTrack1Y.value = config.deviation.track1Y || ''
-      deviationTrack2X.value = config.deviation.track2X || ''
-      deviationTrack2Y.value = config.deviation.track2Y || ''
-      deviationTrack3X.value = config.deviation.track3X || ''
-      deviationTrack3Y.value = config.deviation.track3Y || ''
-      deviationTrack4X.value = config.deviation.track4X || ''
-      deviationTrack4Y.value = config.deviation.track4Y || ''
+      deviationConfig.track1X.value = config.deviation.track1X || ''
+      deviationConfig.track1Y.value = config.deviation.track1Y || ''
+      deviationConfig.track2X.value = config.deviation.track2X || ''
+      deviationConfig.track2Y.value = config.deviation.track2Y || ''
+      deviationConfig.track3X.value = config.deviation.track3X || ''
+      deviationConfig.track3Y.value = config.deviation.track3Y || ''
+      deviationConfig.track4X.value = config.deviation.track4X || ''
+      deviationConfig.track4Y.value = config.deviation.track4Y || ''
       // 应用Deviation颜色配置
-      deviationTrack1Color.value = config.deviation.track1Color || ''
-      deviationTrack2Color.value = config.deviation.track2Color || ''
-      deviationTrack3Color.value = config.deviation.track3Color || ''
-      deviationTrack4Color.value = config.deviation.track4Color || ''
+      deviationConfig.track1Color.value = config.deviation.track1Color || ''
+      deviationConfig.track2Color.value = config.deviation.track2Color || ''
+      deviationConfig.track3Color.value = config.deviation.track3Color || ''
+      deviationConfig.track4Color.value = config.deviation.track4Color || ''
     }
 
     // 单图模式下的数据源配置
     if (config.viewLayout === 'single' && config.sources) {
       if (config.yAxisConfig === 'single') {
         // 单Y轴模式
-        singleChartSource1.value = config.sources.source1 || ''
-        singleChartSource2.value = config.sources.source2 || ''
-        singleChartSource3.value = config.sources.source3 || ''
-        singleChartSource4.value = config.sources.source4 || ''
+        singleChartConfig.source1.value = config.sources.source1 || ''
+        singleChartConfig.source2.value = config.sources.source2 || ''
+        singleChartConfig.source3.value = config.sources.source3 || ''
+        singleChartConfig.source4.value = config.sources.source4 || ''
         // 应用颜色配置
         if (config.colors) {
-          singleChartColor1.value = config.colors.source1 || ''
-          singleChartColor2.value = config.colors.source2 || ''
-          singleChartColor3.value = config.colors.source3 || ''
-          singleChartColor4.value = config.colors.source4 || ''
+          singleChartConfig.color1.value = config.colors.source1 || ''
+          singleChartConfig.color2.value = config.colors.source2 || ''
+          singleChartConfig.color3.value = config.colors.source3 || ''
+          singleChartConfig.color4.value = config.colors.source4 || ''
         }
         // 应用区域配置
         if (config.area) {
-          singleChartUseArea1.value = config.area.source1 || ''
-          singleChartUseArea2.value = config.area.source2 || ''
-          singleChartUseArea3.value = config.area.source3 || ''
-          singleChartUseArea4.value = config.area.source4 || ''
+          singleChartConfig.useArea1.value = config.area.source1 || ''
+          singleChartConfig.useArea2.value = config.area.source2 || ''
+          singleChartConfig.useArea3.value = config.area.source3 || ''
+          singleChartConfig.useArea4.value = config.area.source4 || ''
         }
       } else if (config.yAxisConfig === 'double') {
         // 单图双Y轴模式
-        singleChartLeftSource1.value = config.sources.left1 || ''
-        singleChartLeftSource2.value = config.sources.left2 || ''
-        singleChartLeftSource3.value = config.sources.left3 || ''
-        singleChartLeftSource4.value = config.sources.left4 || ''
-        singleChartRightSource1.value = config.sources.right1 || ''
-        singleChartRightSource2.value = config.sources.right2 || ''
-        singleChartRightSource3.value = config.sources.right3 || ''
-        singleChartRightSource4.value = config.sources.right4 || ''
+        singleChartDoubleYConfig.leftSource1.value = config.sources.left1 || ''
+        singleChartDoubleYConfig.leftSource2.value = config.sources.left2 || ''
+        singleChartDoubleYConfig.leftSource3.value = config.sources.left3 || ''
+        singleChartDoubleYConfig.leftSource4.value = config.sources.left4 || ''
+        singleChartDoubleYConfig.rightSource1.value = config.sources.right1 || ''
+        singleChartDoubleYConfig.rightSource2.value = config.sources.right2 || ''
+        singleChartDoubleYConfig.rightSource3.value = config.sources.right3 || ''
+        singleChartDoubleYConfig.rightSource4.value = config.sources.right4 || ''
         // 应用颜色配置
         if (config.colors) {
-          singleChartLeftColor1.value = config.colors.left1 || ''
-          singleChartLeftColor2.value = config.colors.left2 || ''
-          singleChartLeftColor3.value = config.colors.left3 || ''
-          singleChartLeftColor4.value = config.colors.left4 || ''
-          singleChartRightColor1.value = config.colors.right1 || ''
-          singleChartRightColor2.value = config.colors.right2 || ''
-          singleChartRightColor3.value = config.colors.right3 || ''
-          singleChartRightColor4.value = config.colors.right4 || ''
+          singleChartDoubleYConfig.leftColor1.value = config.colors.left1 || ''
+          singleChartDoubleYConfig.leftColor2.value = config.colors.left2 || ''
+          singleChartDoubleYConfig.leftColor3.value = config.colors.left3 || ''
+          singleChartDoubleYConfig.leftColor4.value = config.colors.left4 || ''
+          singleChartDoubleYConfig.rightColor1.value = config.colors.right1 || ''
+          singleChartDoubleYConfig.rightColor2.value = config.colors.right2 || ''
+          singleChartDoubleYConfig.rightColor3.value = config.colors.right3 || ''
+          singleChartDoubleYConfig.rightColor4.value = config.colors.right4 || ''
         }
         // 应用区域配置
         if (config.area) {
-          singleChartLeftUseArea1.value = config.area.left1 || ''
-          singleChartLeftUseArea2.value = config.area.left2 || ''
-          singleChartLeftUseArea3.value = config.area.left3 || ''
-          singleChartLeftUseArea4.value = config.area.left4 || ''
-          singleChartRightUseArea1.value = config.area.right1 || ''
-          singleChartRightUseArea2.value = config.area.right2 || ''
-          singleChartRightUseArea3.value = config.area.right3 || ''
-          singleChartRightUseArea4.value = config.area.right4 || ''
+          singleChartDoubleYConfig.leftUseArea1.value = config.area.left1 || false
+          singleChartDoubleYConfig.leftUseArea2.value = config.area.left2 || false
+          singleChartDoubleYConfig.leftUseArea3.value = config.area.left3 || false
+          singleChartDoubleYConfig.leftUseArea4.value = config.area.left4 || false
+          singleChartDoubleYConfig.rightUseArea1.value = config.area.right1 || false
+          singleChartDoubleYConfig.rightUseArea2.value = config.area.right2 || false
+          singleChartDoubleYConfig.rightUseArea3.value = config.area.right3 || false
+          singleChartDoubleYConfig.rightUseArea4.value = config.area.right4 || false
         }
       }
     }
@@ -492,54 +525,54 @@ export function useDataConfig(flowData: any) {
       // 上图数据源
       if (config.upperSources) {
         if (config.yAxisConfig === 'single') {
-          upperChartSource1.value = config.upperSources.source1 || ''
-          upperChartSource2.value = config.upperSources.source2 || ''
-          upperChartSource3.value = config.upperSources.source3 || ''
-          upperChartSource4.value = config.upperSources.source4 || ''
+          doubleChartConfig.upperSource1.value = config.upperSources.source1 || ''
+          doubleChartConfig.upperSource2.value = config.upperSources.source2 || ''
+          doubleChartConfig.upperSource3.value = config.upperSources.source3 || ''
+          doubleChartConfig.upperSource4.value = config.upperSources.source4 || ''
           // 应用颜色配置
           if (config.upperColors) {
-            upperChartColor1.value = config.upperColors.source1 || ''
-            upperChartColor2.value = config.upperColors.source2 || ''
-            upperChartColor3.value = config.upperColors.source3 || ''
-            upperChartColor4.value = config.upperColors.source4 || ''
+            doubleChartConfig.upperColor1.value = config.upperColors.source1 || ''
+            doubleChartConfig.upperColor2.value = config.upperColors.source2 || ''
+            doubleChartConfig.upperColor3.value = config.upperColors.source3 || ''
+            doubleChartConfig.upperColor4.value = config.upperColors.source4 || ''
           }
           // 应用区域配置
           if (config.upperArea) {
-            upperChartUseArea1.value = config.upperArea.source1 || ''
-            upperChartUseArea2.value = config.upperArea.source2 || ''
-            upperChartUseArea3.value = config.upperArea.source3 || ''
-            upperChartUseArea4.value = config.upperArea.source4 || ''
+            doubleChartConfig.upperUseArea1.value = config.upperArea.source1 || ''
+            doubleChartConfig.upperUseArea2.value = config.upperArea.source2 || ''
+            doubleChartConfig.upperUseArea3.value = config.upperArea.source3 || ''
+            doubleChartConfig.upperUseArea4.value = config.upperArea.source4 || ''
           }
         } else if (config.yAxisConfig === 'double') {
-          upperChartLeftSource1.value = config.upperSources.left1 || ''
-          upperChartLeftSource2.value = config.upperSources.left2 || ''
-          upperChartLeftSource3.value = config.upperSources.left3 || ''
-          upperChartLeftSource4.value = config.upperSources.left4 || ''
-          upperChartRightSource1.value = config.upperSources.right1 || ''
-          upperChartRightSource2.value = config.upperSources.right2 || ''
-          upperChartRightSource3.value = config.upperSources.right3 || ''
-          upperChartRightSource4.value = config.upperSources.right4 || ''
+          doubleChartDoubleYConfig.upperLeftSource1.value = config.upperSources.left1 || ''
+          doubleChartDoubleYConfig.upperLeftSource2.value = config.upperSources.left2 || ''
+          doubleChartDoubleYConfig.upperLeftSource3.value = config.upperSources.left3 || ''
+          doubleChartDoubleYConfig.upperLeftSource4.value = config.upperSources.left4 || ''
+          doubleChartDoubleYConfig.upperRightSource1.value = config.upperSources.right1 || ''
+          doubleChartDoubleYConfig.upperRightSource2.value = config.upperSources.right2 || ''
+          doubleChartDoubleYConfig.upperRightSource3.value = config.upperSources.right3 || ''
+          doubleChartDoubleYConfig.upperRightSource4.value = config.upperSources.right4 || ''
           // 应用颜色配置
           if (config.upperColors) {
-            upperChartLeftColor1.value = config.upperColors.left1 || ''
-            upperChartLeftColor2.value = config.upperColors.left2 || ''
-            upperChartLeftColor3.value = config.upperColors.left3 || ''
-            upperChartLeftColor4.value = config.upperColors.left4 || ''
-            upperChartRightColor1.value = config.upperColors.right1 || ''
-            upperChartRightColor2.value = config.upperColors.right2 || ''
-            upperChartRightColor3.value = config.upperColors.right3 || ''
-            upperChartRightColor4.value = config.upperColors.right4 || ''
+            doubleChartDoubleYConfig.upperLeftColor1.value = config.upperColors.left1 || ''
+            doubleChartDoubleYConfig.upperLeftColor2.value = config.upperColors.left2 || ''
+            doubleChartDoubleYConfig.upperLeftColor3.value = config.upperColors.left3 || ''
+            doubleChartDoubleYConfig.upperLeftColor4.value = config.upperColors.left4 || ''
+            doubleChartDoubleYConfig.upperRightColor1.value = config.upperColors.right1 || ''
+            doubleChartDoubleYConfig.upperRightColor2.value = config.upperColors.right2 || ''
+            doubleChartDoubleYConfig.upperRightColor3.value = config.upperColors.right3 || ''
+            doubleChartDoubleYConfig.upperRightColor4.value = config.upperColors.right4 || ''
           }
           // 应用区域配置
           if (config.upperArea) {
-            upperChartLeftUseArea1.value = config.upperArea.left1 || ''
-            upperChartLeftUseArea2.value = config.upperArea.left2 || ''
-            upperChartLeftUseArea3.value = config.upperArea.left3 || ''
-            upperChartLeftUseArea4.value = config.upperArea.left4 || ''
-            upperChartRightUseArea1.value = config.upperArea.right1 || ''
-            upperChartRightUseArea2.value = config.upperArea.right2 || ''
-            upperChartRightUseArea3.value = config.upperArea.right3 || ''
-            upperChartRightUseArea4.value = config.upperArea.right4 || ''
+            doubleChartDoubleYConfig.upperLeftUseArea1.value = config.upperArea.left1 || ''
+            doubleChartDoubleYConfig.upperLeftUseArea2.value = config.upperArea.left2 || ''
+            doubleChartDoubleYConfig.upperLeftUseArea3.value = config.upperArea.left3 || ''
+            doubleChartDoubleYConfig.upperLeftUseArea4.value = config.upperArea.left4 || ''
+            doubleChartDoubleYConfig.upperRightUseArea1.value = config.upperArea.right1 || ''
+            doubleChartDoubleYConfig.upperRightUseArea2.value = config.upperArea.right2 || ''
+            doubleChartDoubleYConfig.upperRightUseArea3.value = config.upperArea.right3 || ''
+            doubleChartDoubleYConfig.upperRightUseArea4.value = config.upperArea.right4 || ''
           }
         }
       }
@@ -547,54 +580,54 @@ export function useDataConfig(flowData: any) {
       // 下图数据源
       if (config.lowerSources) {
         if (config.yAxisConfig === 'single') {
-          lowerChartSource1.value = config.lowerSources.source1 || ''
-          lowerChartSource2.value = config.lowerSources.source2 || ''
-          lowerChartSource3.value = config.lowerSources.source3 || ''
-          lowerChartSource4.value = config.lowerSources.source4 || ''
+          doubleChartConfig.lowerSource1.value = config.lowerSources.source1 || ''
+          doubleChartConfig.lowerSource2.value = config.lowerSources.source2 || ''
+          doubleChartConfig.lowerSource3.value = config.lowerSources.source3 || ''
+          doubleChartConfig.lowerSource4.value = config.lowerSources.source4 || ''
           // 应用颜色配置
           if (config.lowerColors) {
-            lowerChartColor1.value = config.lowerColors.source1 || ''
-            lowerChartColor2.value = config.lowerColors.source2 || ''
-            lowerChartColor3.value = config.lowerColors.source3 || ''
-            lowerChartColor4.value = config.lowerColors.source4 || ''
+            doubleChartConfig.lowerColor1.value = config.lowerColors.source1 || ''
+            doubleChartConfig.lowerColor2.value = config.lowerColors.source2 || ''
+            doubleChartConfig.lowerColor3.value = config.lowerColors.source3 || ''
+            doubleChartConfig.lowerColor4.value = config.lowerColors.source4 || ''
           }
           // 应用区域配置
           if (config.lowerArea) {
-            lowerChartUseArea1.value = config.lowerArea.source1 || ''
-            lowerChartUseArea2.value = config.lowerArea.source2 || ''
-            lowerChartUseArea3.value = config.lowerArea.source3 || ''
-            lowerChartUseArea4.value = config.lowerArea.source4 || ''
+            doubleChartConfig.lowerUseArea1.value = config.lowerArea.source1 || ''
+            doubleChartConfig.lowerUseArea2.value = config.lowerArea.source2 || ''
+            doubleChartConfig.lowerUseArea3.value = config.lowerArea.source3 || ''
+            doubleChartConfig.lowerUseArea4.value = config.lowerArea.source4 || ''
           }
         } else if (config.yAxisConfig === 'double') {
-          lowerChartLeftSource1.value = config.lowerSources.left1 || ''
-          lowerChartLeftSource2.value = config.lowerSources.left2 || ''
-          lowerChartLeftSource3.value = config.lowerSources.left3 || ''
-          lowerChartLeftSource4.value = config.lowerSources.left4 || ''
-          lowerChartRightSource1.value = config.lowerSources.right1 || ''
-          lowerChartRightSource2.value = config.lowerSources.right2 || ''
-          lowerChartRightSource3.value = config.lowerSources.right3 || ''
-          lowerChartRightSource4.value = config.lowerSources.right4 || ''
+          doubleChartDoubleYConfig.lowerLeftSource1.value = config.lowerSources.left1 || ''
+          doubleChartDoubleYConfig.lowerLeftSource2.value = config.lowerSources.left2 || ''
+          doubleChartDoubleYConfig.lowerLeftSource3.value = config.lowerSources.left3 || ''
+          doubleChartDoubleYConfig.lowerLeftSource4.value = config.lowerSources.left4 || ''
+          doubleChartDoubleYConfig.lowerRightSource1.value = config.lowerSources.right1 || ''
+          doubleChartDoubleYConfig.lowerRightSource2.value = config.lowerSources.right2 || ''
+          doubleChartDoubleYConfig.lowerRightSource3.value = config.lowerSources.right3 || ''
+          doubleChartDoubleYConfig.lowerRightSource4.value = config.lowerSources.right4 || ''
           // 应用颜色配置
           if (config.lowerColors) {
-            lowerChartLeftColor1.value = config.lowerColors.left1 || ''
-            lowerChartLeftColor2.value = config.lowerColors.left2 || ''
-            lowerChartLeftColor3.value = config.lowerColors.left3 || ''
-            lowerChartLeftColor4.value = config.lowerColors.left4 || ''
-            lowerChartRightColor1.value = config.lowerColors.right1 || ''
-            lowerChartRightColor2.value = config.lowerColors.right2 || ''
-            lowerChartRightColor3.value = config.lowerColors.right3 || ''
-            lowerChartRightColor4.value = config.lowerColors.right4 || ''
+            doubleChartDoubleYConfig.lowerLeftColor1.value = config.lowerColors.left1 || ''
+            doubleChartDoubleYConfig.lowerLeftColor2.value = config.lowerColors.left2 || ''
+            doubleChartDoubleYConfig.lowerLeftColor3.value = config.lowerColors.left3 || ''
+            doubleChartDoubleYConfig.lowerLeftColor4.value = config.lowerColors.left4 || ''
+            doubleChartDoubleYConfig.lowerRightColor1.value = config.lowerColors.right1 || ''
+            doubleChartDoubleYConfig.lowerRightColor2.value = config.lowerColors.right2 || ''
+            doubleChartDoubleYConfig.lowerRightColor3.value = config.lowerColors.right3 || ''
+            doubleChartDoubleYConfig.lowerRightColor4.value = config.lowerColors.right4 || ''
           }
           // 应用区域配置
           if (config.lowerArea) {
-            lowerChartLeftUseArea1.value = config.lowerArea.left1 || ''
-            lowerChartLeftUseArea2.value = config.lowerArea.left2 || ''
-            lowerChartLeftUseArea3.value = config.lowerArea.left3 || ''
-            lowerChartLeftUseArea4.value = config.lowerArea.left4 || ''
-            lowerChartRightUseArea1.value = config.lowerArea.right1 || ''
-            lowerChartRightUseArea2.value = config.lowerArea.right2 || ''
-            lowerChartRightUseArea3.value = config.lowerArea.right3 || ''
-            lowerChartRightUseArea4.value = config.lowerArea.right4 || ''
+            doubleChartDoubleYConfig.lowerLeftUseArea1.value = config.lowerArea.left1 || ''
+            doubleChartDoubleYConfig.lowerLeftUseArea2.value = config.lowerArea.left2 || ''
+            doubleChartDoubleYConfig.lowerLeftUseArea3.value = config.lowerArea.left3 || ''
+            doubleChartDoubleYConfig.lowerLeftUseArea4.value = config.lowerArea.left4 || ''
+            doubleChartDoubleYConfig.lowerRightUseArea1.value = config.lowerArea.right1 || ''
+            doubleChartDoubleYConfig.lowerRightUseArea2.value = config.lowerArea.right2 || ''
+            doubleChartDoubleYConfig.lowerRightUseArea3.value = config.lowerArea.right3 || ''
+            doubleChartDoubleYConfig.lowerRightUseArea4.value = config.lowerArea.right4 || ''
           }
         }
       }
@@ -607,20 +640,22 @@ export function useDataConfig(flowData: any) {
       yAxisConfig: yAxisConfig.value
     }
 
-    // 添加FlowDeviation配置
-    config.deviation = {
-      track1X: deviationTrack1X.value,
-      track1Y: deviationTrack1Y.value,
-      track2X: deviationTrack2X.value,
-      track2Y: deviationTrack2Y.value,
-      track3X: deviationTrack3X.value,
-      track3Y: deviationTrack3Y.value,
-      track4X: deviationTrack4X.value,
-      track4Y: deviationTrack4Y.value,
-      track1Color: deviationTrack1Color.value,
-      track2Color: deviationTrack2Color.value,
-      track3Color: deviationTrack3Color.value,
-      track4Color: deviationTrack4Color.value,
+    // 收集Deviation配置
+    if (deviationConfig.track1X.value || deviationConfig.track1Y.value) {
+      config.deviation = {
+        track1X: deviationConfig.track1X.value,
+        track1Y: deviationConfig.track1Y.value,
+        track2X: deviationConfig.track2X.value,
+        track2Y: deviationConfig.track2Y.value,
+        track3X: deviationConfig.track3X.value,
+        track3Y: deviationConfig.track3Y.value,
+        track4X: deviationConfig.track4X.value,
+        track4Y: deviationConfig.track4Y.value,
+        track1Color: deviationConfig.track1Color.value,
+        track2Color: deviationConfig.track2Color.value,
+        track3Color: deviationConfig.track3Color.value,
+        track4Color: deviationConfig.track4Color.value
+      }
     }
     
     // 根据当前布局和Y轴配置收集数据源配置
@@ -628,57 +663,57 @@ export function useDataConfig(flowData: any) {
       if (yAxisConfig.value === 'single') {
         // 单图单Y轴模式
         config.sources = {
-          source1: singleChartSource1.value,
-          source2: singleChartSource2.value,
-          source3: singleChartSource3.value,
-          source4: singleChartSource4.value
+          source1: singleChartConfig.source1.value,
+          source2: singleChartConfig.source2.value,
+          source3: singleChartConfig.source3.value,
+          source4: singleChartConfig.source4.value
         }
         // 添加颜色配置
         config.colors = {
-          source1: singleChartColor1.value,
-          source2: singleChartColor2.value,
-          source3: singleChartColor3.value,
-          source4: singleChartColor4.value
+          source1: singleChartConfig.color1.value,
+          source2: singleChartConfig.color2.value,
+          source3: singleChartConfig.color3.value,
+          source4: singleChartConfig.color4.value
         }
         config.area = {
-          source1: singleChartUseArea1.value,
-          source2: singleChartUseArea2.value,
-          source3: singleChartUseArea3.value,
-          source4: singleChartUseArea4.value,
+          source1: singleChartConfig.useArea1.value,
+          source2: singleChartConfig.useArea2.value,
+          source3: singleChartConfig.useArea3.value,
+          source4: singleChartConfig.useArea4.value,
         }
       } else {
         // 单图双Y轴模式
         config.sources = {
-          left1: singleChartLeftSource1.value,
-          left2: singleChartLeftSource2.value,
-          left3: singleChartLeftSource3.value,
-          left4: singleChartLeftSource4.value,
-          right1: singleChartRightSource1.value,
-          right2: singleChartRightSource2.value,
-          right3: singleChartRightSource3.value,
-          right4: singleChartRightSource4.value
+          left1: singleChartDoubleYConfig.leftSource1.value,
+        left2: singleChartDoubleYConfig.leftSource2.value,
+        left3: singleChartDoubleYConfig.leftSource3.value,
+        left4: singleChartDoubleYConfig.leftSource4.value,
+        right1: singleChartDoubleYConfig.rightSource1.value,
+        right2: singleChartDoubleYConfig.rightSource2.value,
+        right3: singleChartDoubleYConfig.rightSource3.value,
+        right4: singleChartDoubleYConfig.rightSource4.value
         }
         // 添加颜色配置
         config.colors = {
-          left1: singleChartLeftColor1.value,
-          left2: singleChartLeftColor2.value,
-          left3: singleChartLeftColor3.value,
-          left4: singleChartLeftColor4.value,
-          right1: singleChartRightColor1.value,
-          right2: singleChartRightColor2.value,
-          right3: singleChartRightColor3.value,
-          right4: singleChartRightColor4.value
+          left1: singleChartDoubleYConfig.leftColor1.value,
+          left2: singleChartDoubleYConfig.leftColor2.value,
+          left3: singleChartDoubleYConfig.leftColor3.value,
+          left4: singleChartDoubleYConfig.leftColor4.value,
+          right1: singleChartDoubleYConfig.rightColor1.value,
+          right2: singleChartDoubleYConfig.rightColor2.value,
+          right3: singleChartDoubleYConfig.rightColor3.value,
+          right4: singleChartDoubleYConfig.rightColor4.value
         }
         // 添加区域配置
         config.area = {
-          left1: singleChartLeftUseArea1.value,
-          left2: singleChartLeftUseArea2.value,
-          left3: singleChartLeftUseArea3.value,
-          left4: singleChartLeftUseArea4.value,
-          right1: singleChartRightUseArea1.value,
-          right2: singleChartRightUseArea2.value,
-          right3: singleChartRightUseArea3.value,
-          right4: singleChartRightUseArea4.value,
+          left1: singleChartDoubleYConfig.leftUseArea1.value,
+          left2: singleChartDoubleYConfig.leftUseArea2.value,
+          left3: singleChartDoubleYConfig.leftUseArea3.value,
+          left4: singleChartDoubleYConfig.leftUseArea4.value,
+          right1: singleChartDoubleYConfig.rightUseArea1.value,
+          right2: singleChartDoubleYConfig.rightUseArea2.value,
+          right3: singleChartDoubleYConfig.rightUseArea3.value,
+          right4: singleChartDoubleYConfig.rightUseArea4.value,
         }
       }
     } else {
@@ -688,106 +723,106 @@ export function useDataConfig(flowData: any) {
       if (yAxisConfig.value === 'single') {
         // 双图单Y轴模式
         config.upperSources = {
-          source1: upperChartSource1.value,
-          source2: upperChartSource2.value,
-          source3: upperChartSource3.value,
-          source4: upperChartSource4.value
+          source1: doubleChartConfig.upperSource1.value,
+          source2: doubleChartConfig.upperSource2.value,
+          source3: doubleChartConfig.upperSource3.value,
+          source4: doubleChartConfig.upperSource4.value
         }
         config.lowerSources = {
-          source1: lowerChartSource1.value,
-          source2: lowerChartSource2.value,
-          source3: lowerChartSource3.value,
-          source4: lowerChartSource4.value
+          source1: doubleChartConfig.lowerSource1.value,
+          source2: doubleChartConfig.lowerSource2.value,
+          source3: doubleChartConfig.lowerSource3.value,
+          source4: doubleChartConfig.lowerSource4.value
         }
         // 添加颜色配置
         config.upperColors = {
-          source1: upperChartColor1.value,
-          source2: upperChartColor2.value,
-          source3: upperChartColor3.value,
-          source4: upperChartColor4.value
+          source1: doubleChartConfig.upperColor1.value,
+          source2: doubleChartConfig.upperColor2.value,
+          source3: doubleChartConfig.upperColor3.value,
+          source4: doubleChartConfig.upperColor4.value
         }
         config.lowerColors = {
-          source1: lowerChartColor1.value,
-          source2: lowerChartColor2.value,
-          source3: lowerChartColor3.value,
-          source4: lowerChartColor4.value
+          source1: doubleChartConfig.lowerColor1.value,
+          source2: doubleChartConfig.lowerColor2.value,
+          source3: doubleChartConfig.lowerColor3.value,
+          source4: doubleChartConfig.lowerColor4.value
         }
         // 添加区域配置
         config.upperArea = {
-          source1: upperChartUseArea1.value,
-          source2: upperChartUseArea2.value,
-          source3: upperChartUseArea3.value,
-          source4: upperChartUseArea4.value,
+          source1: doubleChartConfig.upperUseArea1.value,
+          source2: doubleChartConfig.upperUseArea2.value,
+          source3: doubleChartConfig.upperUseArea3.value,
+          source4: doubleChartConfig.upperUseArea4.value,
         }
         config.lowerArea = {
-          source1: lowerChartUseArea1.value,
-          source2: lowerChartUseArea2.value,
-          source3: lowerChartUseArea3.value,
-          source4: lowerChartUseArea4.value,
+          source1: doubleChartConfig.lowerUseArea1.value,
+          source2: doubleChartConfig.lowerUseArea2.value,
+          source3: doubleChartConfig.lowerUseArea3.value,
+          source4: doubleChartConfig.lowerUseArea4.value,
         }
       } else {
         // 双图双Y轴模式
         config.upperSources = {
-          left1: upperChartLeftSource1.value,
-          left2: upperChartLeftSource2.value,
-          left3: upperChartLeftSource3.value,
-          left4: upperChartLeftSource4.value,
-          right1: upperChartRightSource1.value,
-          right2: upperChartRightSource2.value,
-          right3: upperChartRightSource3.value,
-          right4: upperChartRightSource4.value
+          left1: doubleChartDoubleYConfig.upperLeftSource1.value,
+          left2: doubleChartDoubleYConfig.upperLeftSource2.value,
+          left3: doubleChartDoubleYConfig.upperLeftSource3.value,
+          left4: doubleChartDoubleYConfig.upperLeftSource4.value,
+          right1: doubleChartDoubleYConfig.upperRightSource1.value,
+          right2: doubleChartDoubleYConfig.upperRightSource2.value,
+          right3: doubleChartDoubleYConfig.upperRightSource3.value,
+          right4: doubleChartDoubleYConfig.upperRightSource4.value
         }
         config.lowerSources = {
-          left1: lowerChartLeftSource1.value,
-          left2: lowerChartLeftSource2.value,
-          left3: lowerChartLeftSource3.value,
-          left4: lowerChartLeftSource4.value,
-          right1: lowerChartRightSource1.value,
-          right2: lowerChartRightSource2.value,
-          right3: lowerChartRightSource3.value,
-          right4: lowerChartRightSource4.value
+          left1: doubleChartDoubleYConfig.lowerLeftSource1.value,
+          left2: doubleChartDoubleYConfig.lowerLeftSource2.value,
+          left3: doubleChartDoubleYConfig.lowerLeftSource3.value,
+          left4: doubleChartDoubleYConfig.lowerLeftSource4.value,
+          right1: doubleChartDoubleYConfig.lowerRightSource1.value,
+          right2: doubleChartDoubleYConfig.lowerRightSource2.value,
+          right3: doubleChartDoubleYConfig.lowerRightSource3.value,
+          right4: doubleChartDoubleYConfig.lowerRightSource4.value
         }
         // 添加颜色配置
         config.upperColors = {
-          left1: upperChartLeftColor1.value,
-          left2: upperChartLeftColor2.value,
-          left3: upperChartLeftColor3.value,
-          left4: upperChartLeftColor4.value,
-          right1: upperChartRightColor1.value,
-          right2: upperChartRightColor2.value,
-          right3: upperChartRightColor3.value,
-          right4: upperChartRightColor4.value
+          left1: doubleChartDoubleYConfig.upperLeftColor1.value,
+          left2: doubleChartDoubleYConfig.upperLeftColor2.value,
+          left3: doubleChartDoubleYConfig.upperLeftColor3.value,
+          left4: doubleChartDoubleYConfig.upperLeftColor4.value,
+          right1: doubleChartDoubleYConfig.upperRightColor1.value,
+          right2: doubleChartDoubleYConfig.upperRightColor2.value,
+          right3: doubleChartDoubleYConfig.upperRightColor3.value,
+          right4: doubleChartDoubleYConfig.upperRightColor4.value
         }
         config.lowerColors = {
-          left1: lowerChartLeftColor1.value,
-          left2: lowerChartLeftColor2.value,
-          left3: lowerChartLeftColor3.value,
-          left4: lowerChartLeftColor4.value,
-          right1: lowerChartRightColor1.value,
-          right2: lowerChartRightColor2.value,
-          right3: lowerChartRightColor3.value,
-          right4: lowerChartRightColor4.value
+          left1: doubleChartDoubleYConfig.lowerLeftColor1.value,
+          left2: doubleChartDoubleYConfig.lowerLeftColor2.value,
+          left3: doubleChartDoubleYConfig.lowerLeftColor3.value,
+          left4: doubleChartDoubleYConfig.lowerLeftColor4.value,
+          right1: doubleChartDoubleYConfig.lowerRightColor1.value,
+          right2: doubleChartDoubleYConfig.lowerRightColor2.value,
+          right3: doubleChartDoubleYConfig.lowerRightColor3.value,
+          right4: doubleChartDoubleYConfig.lowerRightColor4.value
         }
         // 添加区域配置
         config.upperArea = {
-          left1: upperChartLeftUseArea1.value,
-          left2: upperChartLeftUseArea2.value,
-          left3: upperChartLeftUseArea3.value,
-          left4: upperChartLeftUseArea4.value,
-          right1: upperChartRightUseArea1.value,
-          right2: upperChartRightUseArea2.value,
-          right3: upperChartRightUseArea3.value,
-          right4: upperChartRightUseArea4.value,
+          left1: doubleChartDoubleYConfig.upperLeftUseArea1.value,
+          left2: doubleChartDoubleYConfig.upperLeftUseArea2.value,
+          left3: doubleChartDoubleYConfig.upperLeftUseArea3.value,
+          left4: doubleChartDoubleYConfig.upperLeftUseArea4.value,
+          right1: doubleChartDoubleYConfig.upperRightUseArea1.value,
+          right2: doubleChartDoubleYConfig.upperRightUseArea2.value,
+          right3: doubleChartDoubleYConfig.upperRightUseArea3.value,
+          right4: doubleChartDoubleYConfig.upperRightUseArea4.value,
         }
         config.lowerArea = {
-          left1: lowerChartLeftUseArea1.value,
-          left2: lowerChartLeftUseArea2.value,
-          left3: lowerChartLeftUseArea3.value,
-          left4: lowerChartLeftUseArea4.value,
-          right1: lowerChartRightUseArea1.value,
-          right2: lowerChartRightUseArea2.value,
-          right3: lowerChartRightUseArea3.value,
-          right4: lowerChartRightUseArea4.value,
+          left1: doubleChartDoubleYConfig.lowerLeftUseArea1.value,
+          left2: doubleChartDoubleYConfig.lowerLeftUseArea2.value,
+          left3: doubleChartDoubleYConfig.lowerLeftUseArea3.value,
+          left4: doubleChartDoubleYConfig.lowerLeftUseArea4.value,
+          right1: doubleChartDoubleYConfig.lowerRightUseArea1.value,
+          right2: doubleChartDoubleYConfig.lowerRightUseArea2.value,
+          right3: doubleChartDoubleYConfig.lowerRightUseArea3.value,
+          right4: doubleChartDoubleYConfig.lowerRightUseArea4.value,
         }
       }
     }
@@ -811,136 +846,12 @@ export function useDataConfig(flowData: any) {
     viewLayout,
     yAxisConfig,
 
-    // FlowDeviation
-    deviationTrack1X,
-    deviationTrack1Y,
-    deviationTrack2X,
-    deviationTrack2Y,
-    deviationTrack3X,
-    deviationTrack3Y,
-    deviationTrack4X,
-    deviationTrack4Y,
-    deviationTrack1Color,
-    deviationTrack2Color,
-    deviationTrack3Color,
-    deviationTrack4Color,
-
-    // FlowData
-    // 单图单Y轴模式
-    singleChartSource1,
-    singleChartSource2,
-    singleChartSource3,
-    singleChartSource4,
-    singleChartColor1,
-    singleChartColor2,
-    singleChartColor3,
-    singleChartColor4,
-    singleChartUseArea1,
-    singleChartUseArea2,
-    singleChartUseArea3,
-    singleChartUseArea4,
-
-    // 单图双Y轴
-    singleChartLeftSource1,
-    singleChartLeftSource2,
-    singleChartLeftSource3,
-    singleChartLeftSource4,
-    singleChartRightSource1,
-    singleChartRightSource2,
-    singleChartRightSource3,
-    singleChartRightSource4,
-    singleChartLeftColor1,
-    singleChartLeftColor2,
-    singleChartLeftColor3,
-    singleChartLeftColor4,
-    singleChartRightColor1,
-    singleChartRightColor2,
-    singleChartRightColor3,
-    singleChartRightColor4,
-    singleChartLeftUseArea1,
-    singleChartLeftUseArea2,
-    singleChartLeftUseArea3,
-    singleChartLeftUseArea4,
-    singleChartRightUseArea1,
-    singleChartRightUseArea2,
-    singleChartRightUseArea3,
-    singleChartRightUseArea4,
-
-    // 双图单Y轴
-    upperChartSource1,
-    upperChartSource2,
-    upperChartSource3,
-    upperChartSource4,
-    lowerChartSource1,
-    lowerChartSource2,
-    lowerChartSource3,
-    lowerChartSource4,
-    upperChartColor1,
-    upperChartColor2,
-    upperChartColor3,
-    upperChartColor4,
-    lowerChartColor1,
-    lowerChartColor2,
-    lowerChartColor3,
-    lowerChartColor4,
-    upperChartUseArea1,
-    upperChartUseArea2,
-    upperChartUseArea3,
-    upperChartUseArea4,
-    lowerChartUseArea1,
-    lowerChartUseArea2,
-    lowerChartUseArea3,
-    lowerChartUseArea4,
-    
-    // 双图双Y轴
-    upperChartLeftSource1,
-    upperChartLeftSource2,
-    upperChartLeftSource3,
-    upperChartLeftSource4,
-    upperChartRightSource1,
-    upperChartRightSource2,
-    upperChartRightSource3,
-    upperChartRightSource4,
-    lowerChartLeftSource1,
-    lowerChartLeftSource2,
-    lowerChartLeftSource3,
-    lowerChartLeftSource4,
-    lowerChartRightSource1,
-    lowerChartRightSource2,
-    lowerChartRightSource3,
-    lowerChartRightSource4,
-    upperChartLeftColor1,
-    upperChartLeftColor2,
-    upperChartLeftColor3,
-    upperChartLeftColor4,
-    upperChartRightColor1,
-    upperChartRightColor2,
-    upperChartRightColor3,
-    upperChartRightColor4,
-    lowerChartLeftColor1,
-    lowerChartLeftColor2,
-    lowerChartLeftColor3,
-    lowerChartLeftColor4,
-    lowerChartRightColor1,
-    lowerChartRightColor2,
-    lowerChartRightColor3,
-    lowerChartRightColor4,
-    upperChartLeftUseArea1,
-    upperChartLeftUseArea2,
-    upperChartLeftUseArea3,
-    upperChartLeftUseArea4,
-    upperChartRightUseArea1,
-    upperChartRightUseArea2,
-    upperChartRightUseArea3,
-    upperChartRightUseArea4,
-    lowerChartLeftUseArea1,
-    lowerChartLeftUseArea2,
-    lowerChartLeftUseArea3,
-    lowerChartLeftUseArea4,
-    lowerChartRightUseArea1,
-    lowerChartRightUseArea2,
-    lowerChartRightUseArea3,
-    lowerChartRightUseArea4,
+    // 配置对象
+    deviationConfig,
+    singleChartConfig,
+    singleChartDoubleYConfig,
+    doubleChartConfig,
+    doubleChartDoubleYConfig,
 
     // 计算属性
     upperChartSources,
@@ -964,11 +875,12 @@ export function useDataConfig(flowData: any) {
     singleChartColors,
     singleChartLeftColors,
     singleChartRightColors,
+    // 工具函数
+    getRandomColor,
     // 方法
     showViewConfig,
     applyViewConfig,
     exportConfigFile,
-    validateAndApplyConfig,
-    applyDataSourceConfig,
+    validateAndApplyConfig
   }
 }
