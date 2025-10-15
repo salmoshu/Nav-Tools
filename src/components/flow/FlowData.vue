@@ -69,7 +69,7 @@
     <div class="dialog-content">
       <div style="margin-bottom: 20px;">
         <span style="display: inline-block; width: 100px;">布局方式：</span>
-        <el-radio-group v-model="viewLayout" @change="onLayoutChange">
+        <el-radio-group v-model="viewLayout">
           <el-radio-button label="single">单图</el-radio-button>
           <el-radio-button label="double">双图</el-radio-button>
         </el-radio-group>
@@ -77,7 +77,7 @@
       
       <div style="margin-bottom: 20px;">
         <span style="display: inline-block; width: 100px;">Y轴配置：</span>
-        <el-radio-group v-model="yAxisConfig" @change="onYAxisChange">
+        <el-radio-group v-model="yAxisConfig">
           <el-radio-button label="single">单Y轴</el-radio-button>
           <el-radio-button label="double">双Y轴</el-radio-button>
         </el-radio-group>
@@ -466,7 +466,7 @@ import { useDevice } from '@/hooks/useDevice'
 
 // 初始化数据流处理
 const { flowData, plotData, enableWindow, toggleSlideWindow, clearRawData } = useFlow()
-const { searchQuery, performSearch } = useConsole()
+const { searchQuery, findAll } = useConsole()
 const { deviceConnected } = useDevice()
 
 // 初始化视图配置处理
@@ -607,12 +607,9 @@ const {
   availableSources,
   // 方法
   showViewConfig,
-  onYAxisChange,
-  onLayoutChange,
   applyViewConfig,
   exportConfigFile,
   validateAndApplyConfig,
-  applyDataSourceConfig,
 } = useDataConfig(plotData)
 
 const chartRef = ref<HTMLDivElement>()
@@ -894,7 +891,7 @@ function handleChartDblClick(params: any) {
     const targetTime = parts[0] + (parts[1] ? '.' + parts[1].substring(0, 2) : '.00');
 
     searchQuery.value = targetTime;
-    performSearch();
+    findAll();
   }
 }
 

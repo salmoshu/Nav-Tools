@@ -6,9 +6,7 @@ export type ViewLayout = 'single' | 'double'
 export type YAxisConfig = 'single' | 'double'
 
 // FlowDeviation
-const deviationX = ref<string>('')
-const deviationY = ref<string>('')
-// 添加三条轨迹的配置
+// 轨迹字段
 const deviationTrack1X = ref<string>('')
 const deviationTrack1Y = ref<string>('')
 const deviationTrack2X = ref<string>('')
@@ -17,7 +15,7 @@ const deviationTrack3X = ref<string>('')
 const deviationTrack3Y = ref<string>('')
 const deviationTrack4X = ref<string>('')
 const deviationTrack4Y = ref<string>('')
-// 添加轨迹颜色配置
+// 轨迹颜色
 const deviationTrack1Color = ref<string>('#5470c6')
 const deviationTrack2Color = ref<string>('#3ba272')
 const deviationTrack3Color = ref<string>('#fac858')
@@ -175,7 +173,6 @@ export function useDataConfig(flowData: any) {
       upperChartSource3.value,
       upperChartSource4.value
     ]
-    // ].filter(source => source !== '')
   })
 
   // 计算属性 - 上图表颜色配置（双图模式）
@@ -196,7 +193,6 @@ export function useDataConfig(flowData: any) {
       lowerChartSource3.value,
       lowerChartSource4.value
     ]
-    // ].filter(source => source !== '')
   })
 
   // 计算属性 - 下图表颜色配置（双图模式）
@@ -217,7 +213,6 @@ export function useDataConfig(flowData: any) {
       upperChartLeftSource3.value,
       upperChartLeftSource4.value
     ]
-    // ].filter(source => source !== '')
   })
 
   // 计算属性 - 上图表左Y轴颜色配置（双图双Y轴模式）
@@ -238,7 +233,6 @@ export function useDataConfig(flowData: any) {
       upperChartRightSource3.value,
       upperChartRightSource4.value
     ]
-    // ].filter(source => source !== '')
   })
 
   // 计算属性 - 上图表右Y轴颜色配置（双图双Y轴模式）
@@ -259,7 +253,6 @@ export function useDataConfig(flowData: any) {
       lowerChartLeftSource3.value,
       lowerChartLeftSource4.value
     ]
-    // ].filter(source => source !== '')
   })
 
   // 计算属性 - 下图表左Y轴颜色配置（双图双Y轴模式）
@@ -280,7 +273,6 @@ export function useDataConfig(flowData: any) {
       lowerChartRightSource3.value,
       lowerChartRightSource4.value
     ]
-    // ].filter(source => source !== '')
   })
 
   // 计算属性 - 下图表右Y轴颜色配置（双图双Y轴模式）
@@ -301,7 +293,6 @@ export function useDataConfig(flowData: any) {
       singleChartSource3.value,
       singleChartSource4.value
     ]
-    // ].filter(source => source !== '')
   })
 
   // 计算属性 - 单图模式颜色配置
@@ -322,7 +313,6 @@ export function useDataConfig(flowData: any) {
       singleChartLeftSource3.value,
       singleChartLeftSource4.value
     ]
-    // ].filter(source => source !== '')
   })
 
   // 计算属性 - 单图模式左Y轴颜色配置
@@ -343,7 +333,6 @@ export function useDataConfig(flowData: any) {
       singleChartRightSource3.value,
       singleChartRightSource4.value
     ]
-    // ].filter(source => source !== '')
   })
 
   // 计算属性 - 单图模式右Y轴颜色配置
@@ -364,55 +353,35 @@ export function useDataConfig(flowData: any) {
   // 计算属性 - 获取所有可用的数据源字段（排除元数据字段）
   // 修改 availableSources 计算属性，确保它能正确反映 flowData 的变化
   const availableSources = computed(() => {
-  // 确保 flowData.value 存在
-  if (!flowData.value) {
-    return []
-  }
-  
-  return Object.keys(flowData.value).filter(key => 
-    key !== 'plotTime' && 
-    key !== 'timestamp' && 
-    key !== 'startTime' && 
-    key !== 'isBatchData' && 
-    key !== 'rawString' && 
-    key !== 'rawDataKeys' && 
-    Array.isArray(flowData.value[key])
-  )
-})
+    // 确保 flowData.value 存在
+    if (!flowData.value) {
+      return []
+    }
+    
+    return Object.keys(flowData.value).filter(key => 
+      key !== 'plotTime' && 
+      key !== 'timestamp' && 
+      key !== 'startTime' && 
+      key !== 'isBatchData' && 
+      key !== 'rawString' && 
+      key !== 'rawDataKeys' && 
+      Array.isArray(flowData.value[key])
+    )
+  })
 
-  // 函数 - 显示视图配置对话框
+  // 显示视图配置对话框
   function showViewConfig() {
     viewConfigDialogVisible.value = true
   }
 
-  // 函数 - Y轴配置变化处理
-  function onYAxisChange() {
-    // Y轴配置变更时只清空相关配置的选择
-    if (yAxisConfig.value === 'single') {
-      // 切换到单Y轴模式
-    } else {
-      // 切换到双Y轴模式
-    }
-  }
-
-  // 函数 - 布局变化处理
-  function onLayoutChange() {
-    // 布局变更时只清空相关模式的选择，保留其他模式的选择
-    if (viewLayout.value === 'single') {
-      // 切换到单图模式
-    } else {
-      // 切换到双图模式
-    }
-  }
-
-  // 函数 - 应用视图配置
+  // 应用视图配置
   function applyViewConfig(createChart: () => void) {
     // 在更新图表前先销毁并重新创建图表，确保清除所有残留数据
     createChart()
     viewConfigDialogVisible.value = false
   }
 
-  // 函数 - 验证并应用配置
+  // 验证并应用配置
   function validateAndApplyConfig(config: any) {
     // 验证必要字段
     if (!config.viewLayout && !config.yAxisConfig) {
@@ -441,7 +410,7 @@ export function useDataConfig(flowData: any) {
     applyDataSourceConfig(config)
   }
 
-  // 函数 - 应用数据源配置
+  // 应用数据源配置
   function applyDataSourceConfig(config: any) {
     // 应用FlowDeviation配置
     if (config.deviation) {
@@ -997,8 +966,6 @@ export function useDataConfig(flowData: any) {
     singleChartRightColors,
     // 方法
     showViewConfig,
-    onYAxisChange,
-    onLayoutChange,
     applyViewConfig,
     exportConfigFile,
     validateAndApplyConfig,

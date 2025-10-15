@@ -189,7 +189,7 @@ const {
 } = useDataConfig();
 
 // 导入搜索功能
-const { searchQuery, performSearch } = useConsole();
+const { searchQuery, findAll } = useConsole();
 
 // 注册ECharts组件
 const { plotData, toggleSlideWindow, enableWindow } = useFlow();
@@ -1772,7 +1772,7 @@ function handleChartDblClick(params) {
       const targetTime = parts[0] + (parts[1] ? '.' + parts[1].substring(0, 2) : '.00');
 
       searchQuery.value = targetTime;
-      performSearch();
+      findAll();
     }
   }
 }
