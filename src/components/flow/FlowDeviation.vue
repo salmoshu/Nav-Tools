@@ -405,9 +405,27 @@ function initChart() {
     animation: false,
     hoverAnimation: false,
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    graphic: [{
+      type: 'text',
+      left: 10,
+      top: 10,
+      z: 99,
+      style: {
+        text: '',
+        font: '14px Microsoft YaHei',
+        fill: '#000',
+        backgroundColor: '#fff',
+        padding: [6, 10]
+      }
+    }],
     tooltip: {
       trigger: 'item',
+      axisPointer: {
+        type: 'cross',
+      },
       formatter: function(params) {
+        // 暂时关闭tooltip的显示
+        return;
         const point = params.value;
         const seriesName = params.seriesName;
         const timeIndexOffset = plotData.value.timestamp.length - track1Data.length;
@@ -1862,6 +1880,65 @@ const handleMouseOver = function(params) {
       dataIndex: highlightData.map(h => h.dataIndex)
     });
   }
+
+  // 显示graphic的内容
+  const timeIndexOffset = plotData.value.timestamp.length - track1Data.length;
+  const dataIndexModifed = params.dataIndex + timeIndexOffset;
+  let xField = 'X';
+  let yField = 'Y';
+  let currentTime = null;
+  
+  // 根据系列名称选择对应的轴字段和时间
+  if (seriesName === '轨迹1' && deviationConfig.track1X.value && deviationConfig.track1Y.value) {
+    xField = deviationConfig.track1X.value;
+    yField = deviationConfig.track1Y.value;
+    currentTime = track1TimeIndex[dataIndexModifed];
+  } else if (seriesName === '轨迹2' && deviationConfig.track2X.value && deviationConfig.track2Y.value) {
+    xField = deviationConfig.track2X.value;
+    yField = deviationConfig.track2Y.value;
+    currentTime = track2TimeIndex[dataIndexModifed];
+  } else if (seriesName === '轨迹3' && deviationConfig.track3X.value && deviationConfig.track3Y.value) {
+    xField = deviationConfig.track3X.value;
+    yField = deviationConfig.track3Y.value;
+    currentTime = track3TimeIndex[dataIndexModifed];
+  } else if (seriesName === '轨迹4' && deviationConfig.track4X.value && deviationConfig.track4Y.value) {
+    xField = deviationConfig.track4X.value;
+    yField = deviationConfig.track4Y.value;
+    currentTime = track4TimeIndex[dataIndexModifed];
+  } else if (seriesName === '当前位置1' && deviationConfig.track1X.value && deviationConfig.track1Y.value) {
+    // 当前位置1使用轨迹1的字段和时间
+    xField = deviationConfig.track1X.value;
+    yField = deviationConfig.track1Y.value;
+    if (track1TimeIndex.length > 0) {
+      currentTime = track1TimeIndex[track1TimeIndex.length - 1];
+    }
+  } else if (seriesName === '当前位置2' && deviationConfig.track2X.value && deviationConfig.track2Y.value) {
+    // 当前位置2使用轨迹2的字段和时间
+    xField = deviationConfig.track2X.value;
+    yField = deviationConfig.track2Y.value;
+    if (track2TimeIndex.length > 0) {
+      currentTime = track2TimeIndex[track2TimeIndex.length - 1];
+    }
+  } else if (seriesName === '当前位置3' && deviationConfig.track3X.value && deviationConfig.track3Y.value) {
+    // 当前位置3使用轨迹3的字段和时间
+    xField = deviationConfig.track3X.value;
+    yField = deviationConfig.track3Y.value;
+    if (track3TimeIndex.length > 0) {
+      currentTime = track3TimeIndex[track3TimeIndex.length - 1];
+    }
+  } else if (seriesName === '当前位置4' && deviationConfig.track4X.value && deviationConfig.track4Y.value) {
+    // 当前位置4使用轨迹4的字段和时间
+    xField = deviationConfig.track4X.value;
+    yField = deviationConfig.track4Y.value;
+    if (track4TimeIndex.length > 0) {
+      currentTime = track4TimeIndex[track4TimeIndex.length - 1];
+    }
+  }
+
+  const option = chartInstance.value.getOption();
+  if (!option || !option.series) return;
+  const text = `${params.seriesName} 🕐time: ${currentTime.toFixed(3)} 📍${xField}:${params.value[0]}, ${yField}:${params.value[1]}`;
+  chartInstance.value.setOption({ graphic: [{ style: { text } }] });
 };
 
 // 鼠标移出事件处理函数
@@ -1885,6 +1962,9 @@ const handleMouseOut = function() {
       }
     }
   });
+
+  // 显示graphic的内容
+  chartInstance.value.setOption({ graphic: [{ style: { text: '' } }] });
 };
 
 // 组件挂载时初始化
