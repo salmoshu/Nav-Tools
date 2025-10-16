@@ -781,7 +781,7 @@ function handleChartDblClick(params: any) {
     const parts = rawTime.toString().split('.');
     const targetTime = parts[0] + (parts[1] ? '.' + parts[1].substring(0, 2) : '.00');
 
-    searchQuery.value = targetTime;
+    searchQuery.value = '"time":' + targetTime;
     findAll();
   }
 }
