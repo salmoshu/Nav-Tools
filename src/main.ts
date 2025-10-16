@@ -7,6 +7,8 @@ import ElementPlus from 'element-plus'
 import 'element-plus/dist/index.css'
 import * as ElementPlusIconsVue from '@element-plus/icons-vue'
 import { useDevice } from '@/hooks/useDevice'
+import 'vue-virtual-scroller/dist/vue-virtual-scroller.css'
+import VirtualScroller from 'vue-virtual-scroller'
 
 const app = createApp(App)
 const pinia = createPinia()
@@ -14,6 +16,9 @@ const { removeCurrDevice } = useDevice()
 
 // 使用Pinia
 app.use(pinia)
+
+// 使用VueVirtualScroller
+app.use(VirtualScroller)
 
 // 使用ElementPlus
 app.use(ElementPlus)

@@ -5,12 +5,14 @@ import { useNmea } from '@/composables/gnss/useNmea'
 import { useUltrasonic } from '@/composables/ultrasonic/useUltrasonic'
 import { useFlow } from '@/composables/flow/useFlow'
 import { useConsole } from '@/composables/flow/useConsole'
+import { useConsolex } from '@/composables/flow/useConsolex'
 import emitter from '@/hooks/useMitt'
 
 const { processRawData: processNmeaRawData } = useNmea()
 const { addRawData: addUltrasonicRawData } = useUltrasonic()
 const { addRawData: addFlowRawData, initRawData: initFlowRawData } = useFlow()
 const { handleRawDataBatch: initFlowConsole, handleRawData: addFlowConsole } = useConsole()
+const { handleRawDataBatch: initFlowConsolex } = useConsolex(true) // 使用全局实例
 
 // 串口配置
 const serialPort = ref("");
@@ -191,6 +193,7 @@ export function useDevice() {
               })
               initFlowRawData(content)
               initFlowConsole(content)
+              initFlowConsolex(content)
               break
             default:
               // 其他模式下发送通用事件
