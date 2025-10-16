@@ -226,16 +226,18 @@ const availableSources = computed(() => {
   );
 });
 
+let trackOffsetX = 0;
+let trackOffsetY = 0;
 // 数据存储变量
 let track1Data = [];
 let track2Data = [];
 let track3Data = [];
 let track4Data = [];
-// 添加时间索引映射，用于时间同步显示
-let track1TimeIndex = [];
-let track2TimeIndex = [];
-let track3TimeIndex = [];
-let track4TimeIndex = [];
+// 索引映射
+let track1ToRawIndex = [];
+let track2ToRawIndex = [];
+let track3ToRawIndex = [];
+let track4ToRawIndex = [];
 // 最新点信息，用于高亮显示
 const latestPointInfo = reactive({
   track: null, // 1, 2, 或 3
@@ -264,12 +266,6 @@ function applyViewConfig() {
     });
     return;
   }
-  
-  // 清除现有轨迹数据
-  track1Data.splice(0, track1Data.length);
-  track2Data.splice(0, track2Data.length);
-  track3Data.splice(0, track3Data.length);
-  track4Data.splice(0, track4Data.length);
   
   // 更新图表轴名称（使用第一个配置的轨迹）
   let xAxisName = '';
@@ -422,121 +418,27 @@ function initChart() {
       trigger: 'item',
       axisPointer: {
         type: 'cross',
-      },
-      formatter: function(params) {
-        // 暂时关闭tooltip的显示
-        return;
-        const point = params.value;
-        const seriesName = params.seriesName;
-        const timeIndexOffset = plotData.value.timestamp.length - track1Data.length;
-        const dataIndex = params.dataIndex + timeIndexOffset;
-        
-        let xField = 'X';
-        let yField = 'Y';
-        let currentTime = null;
-        let originX = point[0];
-        let originY = point[1];
-        
-        // 根据系列名称选择对应的轴字段和时间
-        if (seriesName === '轨迹1' && deviationConfig.track1X.value && deviationConfig.track1Y.value) {
-          xField = deviationConfig.track1X.value;
-          yField = deviationConfig.track1Y.value;
-          currentTime = track1TimeIndex[dataIndex];
-          originX = plotData.value[deviationConfig.track1X.value][dataIndex];
-          originY = plotData.value[deviationConfig.track1Y.value][dataIndex];
-        } else if (seriesName === '轨迹2' && deviationConfig.track2X.value && deviationConfig.track2Y.value) {
-          xField = deviationConfig.track2X.value;
-          yField = deviationConfig.track2Y.value;
-          currentTime = track2TimeIndex[dataIndex];
-          originX = plotData.value[deviationConfig.track2X.value][dataIndex];
-          originY = plotData.value[deviationConfig.track2Y.value][dataIndex];
-        } else if (seriesName === '轨迹3' && deviationConfig.track3X.value && deviationConfig.track3Y.value) {
-          xField = deviationConfig.track3X.value;
-          yField = deviationConfig.track3Y.value;
-          currentTime = track3TimeIndex[dataIndex];
-          originX = plotData.value[deviationConfig.track3X.value][dataIndex];
-          originY = plotData.value[deviationConfig.track3Y.value][dataIndex];
-        } else if (seriesName === '轨迹4' && deviationConfig.track4X.value && deviationConfig.track4Y.value) {
-          xField = deviationConfig.track4X.value;
-          yField = deviationConfig.track4Y.value;
-          currentTime = track4TimeIndex[dataIndex];
-          originX = plotData.value[deviationConfig.track4X.value][dataIndex];
-          originY = plotData.value[deviationConfig.track4Y.value][dataIndex];
-        } else if (seriesName === '当前位置1' && deviationConfig.track1X.value && deviationConfig.track1Y.value) {
-          // 当前位置1使用轨迹1的字段和时间
-          xField = deviationConfig.track1X.value;
-          yField = deviationConfig.track1Y.value;
-          if (track1TimeIndex.length > 0) {
-            currentTime = track1TimeIndex[track1TimeIndex.length - 1];
-            originX = plotData.value[deviationConfig.track1X.value][track1Data.length - 1];
-            originY = plotData.value[deviationConfig.track1Y.value][track1Data.length - 1];
-          }
-        } else if (seriesName === '当前位置2' && deviationConfig.track2X.value && deviationConfig.track2Y.value) {
-          // 当前位置2使用轨迹2的字段和时间
-          xField = deviationConfig.track2X.value;
-          yField = deviationConfig.track2Y.value;
-          if (track2TimeIndex.length > 0) {
-            currentTime = track2TimeIndex[track2TimeIndex.length - 1];
-            originX = plotData.value[deviationConfig.track2X.value][track2Data.length - 1];
-            originY = plotData.value[deviationConfig.track2Y.value][track2Data.length - 1];
-          }
-        } else if (seriesName === '当前位置3' && deviationConfig.track3X.value && deviationConfig.track3Y.value) {
-          // 当前位置3使用轨迹3的字段和时间
-          xField = deviationConfig.track3X.value;
-          yField = deviationConfig.track3Y.value;
-          if (track3TimeIndex.length > 0) {
-            currentTime = track3TimeIndex[track3TimeIndex.length - 1];
-            originX = plotData.value[deviationConfig.track3X.value][track3Data.length - 1];
-            originY = plotData.value[deviationConfig.track3Y.value][track3Data.length - 1];
-          }
-        } else if (seriesName === '当前位置4' && deviationConfig.track4X.value && deviationConfig.track4Y.value) {
-          // 当前位置4使用轨迹4的字段和时间
-          xField = deviationConfig.track4X.value;
-          yField = deviationConfig.track4Y.value;
-          if (track4TimeIndex.length > 0) {
-            currentTime = track4TimeIndex[track4TimeIndex.length - 1];
-            originX = plotData.value[deviationConfig.track4X.value][track4Data.length - 1];
-            originY = plotData.value[deviationConfig.track4Y.value][track4Data.length - 1];
-          }
-        }
-        
-        // 构建基础tooltip内容，添加marker图标
-        let tooltipContent = `${params.marker}${seriesName}<br/>${xField}: ${originX}<br/>${yField}: ${originY}`;
-        
-        // 添加时间信息（如果有）
-        if (currentTime !== null && currentTime !== undefined) {
-          // 参考FlowData.vue的时间显示格式
-          let result = `显示时间: `
-          
-          // 使用plotTime作为显示时间（从0开始的相对时间）
-          let displayTime = 0;
-          if (plotData.value.plotTime && plotData.value.plotTime[dataIndex] !== undefined) {
-            displayTime = plotData.value.plotTime[dataIndex];
-          } else if (seriesName.startsWith('当前位置')) {
-            // 对于当前位置系列，使用最后一个plotTime值
-            const lastIndex = plotData.value.plotTime ? plotData.value.plotTime.length - 1 : 0;
-            if (plotData.value.plotTime && plotData.value.plotTime[lastIndex] !== undefined) {
-              displayTime = plotData.value.plotTime[lastIndex];
+        label: {
+          show: true,
+          formatter: function(params) {
+            // params.value 包含当前坐标值
+            let result = params.value;
+            if (params.axisDimension === 'x') {
+              result += trackOffsetX;
+            } else if (params.axisDimension === 'y') {
+              result += trackOffsetY;
             }
-          }
-          result += `${displayTime.toFixed(3)}s`
-          result += `<br/>`
 
-          const timeMarker = `<div style="line-height:16px;display:inline-block;vertical-align:middle;margin-right:4px;">
-            <svg width="12" height="12" viewBox="0 0 24 24"
-                fill="none" stroke="grey" stroke-width="2">
-              <circle cx="12" cy="12" r="9"/>
-              <path d="M12 7v5l3 3"/>
-            </svg>
-          </div>`
-          result += `${timeMarker}time: ${currentTime.toFixed(3)}<br/>`
-          
-          tooltipContent = result + tooltipContent;
+            return result.toFixed(2);
+          },
+          backgroundColor: '#333',
+          color: '#fff',
+          padding: [3, 5],
+          borderRadius: 3
         }
-        
-        return tooltipContent;
       },
       show: true,
+      formatter: {}
     },
     legend: {
       data: [], // 初始为空，后续动态更新
@@ -712,10 +614,12 @@ function updateFlowData() {
   track2Data.splice(0, track2Data.length);
   track3Data.splice(0, track3Data.length);
   track4Data.splice(0, track4Data.length);
-  track1TimeIndex.splice(0, track1TimeIndex.length);
-  track2TimeIndex.splice(0, track2TimeIndex.length);
-  track3TimeIndex.splice(0, track3TimeIndex.length);
-  track4TimeIndex.splice(0, track4TimeIndex.length);
+  track1ToRawIndex.splice(0, track1ToRawIndex.length);
+  track2ToRawIndex.splice(0, track2ToRawIndex.length);
+  track3ToRawIndex.splice(0, track3ToRawIndex.length);
+  track4ToRawIndex.splice(0, track4ToRawIndex.length);
+  trackOffsetX = 0;
+  trackOffsetY = 0;
 
   // 确定跟踪目标：优先顺序为轨迹1 > 轨迹2 > 轨迹3 > 轨迹4
   let trackingTrack = null;
@@ -788,6 +692,9 @@ function updateFlowData() {
     latestPointInfo.data = null;
   }
 
+  trackOffsetX = offsetX;
+  trackOffsetY = offsetY;
+
   // 处理轨迹1数据
   if (deviationConfig.track1X.value && deviationConfig.track1Y.value) {
     const track1XData = plotData.value[deviationConfig.track1X.value];
@@ -795,7 +702,6 @@ function updateFlowData() {
     
     if (track1XData && track1YData && track1XData.length > 0 && track1YData.length > 0) {
       const track1DataLength = Math.min(track1XData.length, track1YData.length);
-      const timeIndexOffset = plotData.value.timestamp.length - track1DataLength;
       for (let i = 0; i < track1DataLength; i++) {
         const x = track1XData[i];
         const y = track1YData[i];
@@ -803,13 +709,7 @@ function updateFlowData() {
           const roundedX = Math.round((x - offsetX) * 1000) / 1000;
           const roundedY = Math.round((y - offsetY) * 1000) / 1000;
           track1Data.push([roundedX, roundedY]);
-          // 保存时间索引，用于时间同步显示
-          const timeIndex = timeIndexOffset + i;
-          if (plotData.value.timestamp && plotData.value.timestamp[timeIndex] !== undefined) {
-            track1TimeIndex.push(plotData.value.timestamp[timeIndex]);
-          } else {
-            track1TimeIndex.push(timeIndex); // 如果没有时间戳，使用索引作为备用
-          }
+          track1ToRawIndex.push(i);
         }
       }
     }
@@ -822,7 +722,6 @@ function updateFlowData() {
     
     if (track2XData && track2YData && track2XData.length > 0 && track2YData.length > 0) {
       const track2DataLength = Math.min(track2XData.length, track2YData.length);
-      const timeIndexOffset = plotData.value.timestamp.length - track2DataLength;
       for (let i = 0; i < track2DataLength; i++) {
         const x = track2XData[i];
         const y = track2YData[i];
@@ -830,13 +729,7 @@ function updateFlowData() {
           const roundedX = Math.round((x - offsetX) * 1000) / 1000;
           const roundedY = Math.round((y - offsetY) * 1000) / 1000;
           track2Data.push([roundedX, roundedY]);
-          // 保存时间索引，用于时间同步显示
-          const timeIndex = timeIndexOffset + i;
-          if (plotData.value.timestamp && plotData.value.timestamp[timeIndex] !== undefined) {
-            track2TimeIndex.push(plotData.value.timestamp[timeIndex]);
-          } else {
-            track2TimeIndex.push(timeIndex); // 如果没有时间戳，使用索引作为备用
-          }
+          track2ToRawIndex.push(i);
         }
       }
     }
@@ -849,7 +742,6 @@ function updateFlowData() {
     
     if (track3XData && track3YData && track3XData.length > 0 && track3YData.length > 0) {
       const track3DataLength = Math.min(track3XData.length, track3YData.length);
-      const timeIndexOffset = plotData.value.timestamp.length - track3DataLength;
       for (let i = 0; i < track3DataLength; i++) {
         const x = track3XData[i];
         const y = track3YData[i];
@@ -857,13 +749,7 @@ function updateFlowData() {
           const roundedX = Math.round((x - offsetX) * 1000) / 1000;
           const roundedY = Math.round((y - offsetY) * 1000) / 1000;
           track3Data.push([roundedX, roundedY]);
-          // 保存时间索引，用于时间同步显示
-          const timeIndex = timeIndexOffset + i;
-          if (plotData.value.timestamp && plotData.value.timestamp[timeIndex] !== undefined) {
-            track3TimeIndex.push(plotData.value.timestamp[timeIndex]);
-          } else {
-            track3TimeIndex.push(timeIndex); // 如果没有时间戳，使用索引作为备用
-          }
+          track3ToRawIndex.push(i);
         }
       }
     }
@@ -876,21 +762,14 @@ function updateFlowData() {
     
     if (track4XData && track4YData && track4XData.length > 0 && track4YData.length > 0) {
       const track4DataLength = Math.min(track4XData.length, track4YData.length);
-      const timeIndexOffset = plotData.value.timestamp.length - track4DataLength;
       for (let i = 0; i < track4DataLength; i++) {
         const x = track4XData[i];
         const y = track4YData[i];
+        track4ToRawIndex.push(i);
         if (typeof x === 'number' && typeof y === 'number' && !isNaN(x) && !isNaN(y)) {
           const roundedX = Math.round((x - offsetX) * 1000) / 1000;
           const roundedY = Math.round((y - offsetY) * 1000) / 1000;
           track4Data.push([roundedX, roundedY]);
-          // 保存时间索引，用于时间同步显示
-          const timeIndex = timeIndexOffset + i;
-          if (plotData.value.timestamp && plotData.value.timestamp[timeIndex] !== undefined) {
-            track4TimeIndex.push(plotData.value.timestamp[timeIndex]);
-          } else {
-            track4TimeIndex.push(timeIndex); // 如果没有时间戳，使用索引作为备用
-          }
         }
       }
     }
@@ -1750,26 +1629,26 @@ function handleChartDblClick(params) {
     let rawTime = null;
     
     // 根据系列名称获取对应的时间戳
-    if (seriesName === '轨迹1' && track1TimeIndex[dataIndex] !== undefined) {
-      rawTime = track1TimeIndex[dataIndex];
-    } else if (seriesName === '轨迹2' && track2TimeIndex[dataIndex] !== undefined) {
-      rawTime = track2TimeIndex[dataIndex];
-    } else if (seriesName === '轨迹3' && track3TimeIndex[dataIndex] !== undefined) {
-      rawTime = track3TimeIndex[dataIndex];
-    } else if (seriesName === '轨迹4' && track4TimeIndex[dataIndex] !== undefined) {
-      rawTime = track4TimeIndex[dataIndex];
-    } else if (seriesName === '当前位置1' && track1TimeIndex.length > 0) {
+    if (seriesName === '轨迹1' && track1ToRawIndex[dataIndex] !== undefined) {
+      rawTime = plotData.value.timestamp[track1ToRawIndex[dataIndex]];
+    } else if (seriesName === '轨迹2' && track2ToRawIndex[dataIndex] !== undefined) {
+      rawTime = plotData.value.timestamp[track2ToRawIndex[dataIndex]];
+    } else if (seriesName === '轨迹3' && track3ToRawIndex[dataIndex] !== undefined) {
+      rawTime = plotData.value.timestamp[track3ToRawIndex[dataIndex]];
+    } else if (seriesName === '轨迹4' && track4ToRawIndex[dataIndex] !== undefined) {
+      rawTime = plotData.value.timestamp[track4ToRawIndex[dataIndex]];
+    } else if (seriesName === '当前位置1' && track1ToRawIndex.length > 0) {
       // 当前位置1使用轨迹1的最后一个时间戳
-      rawTime = track1TimeIndex[track1TimeIndex.length - 1];
-    } else if (seriesName === '当前位置2' && track2TimeIndex.length > 0) {
+      rawTime = plotData.value.timestamp[track1ToRawIndex[track1ToRawIndex.length - 1]];
+    } else if (seriesName === '当前位置2' && track2ToRawIndex.length > 0) {
       // 当前位置2使用轨迹2的最后一个时间戳
-      rawTime = track2TimeIndex[track2TimeIndex.length - 1];
-    } else if (seriesName === '当前位置3' && track3TimeIndex.length > 0) {
+      rawTime = plotData.value.timestamp[track2ToRawIndex[track2ToRawIndex.length - 1]];
+    } else if (seriesName === '当前位置3' && track3ToRawIndex.length > 0) {
       // 当前位置3使用轨迹3的最后一个时间戳
-      rawTime = track3TimeIndex[track3TimeIndex.length - 1];
-    } else if (seriesName === '当前位置4' && track4TimeIndex.length > 0) {
+      rawTime = plotData.value.timestamp[track3ToRawIndex[track3ToRawIndex.length - 1]];
+    } else if (seriesName === '当前位置4' && track4ToRawIndex.length > 0) {
       // 当前位置4使用轨迹4的最后一个时间戳
-      rawTime = track4TimeIndex[track4TimeIndex.length - 1];
+      rawTime = plotData.value.timestamp[track4ToRawIndex[track4ToRawIndex.length - 1]];
     }
     
     if (rawTime !== null) {
@@ -1797,14 +1676,22 @@ const handleMouseOver = function(params) {
   let targetTime = null;
   
   // 获取当前悬停点的时间
-  if (seriesName === '轨迹1' && track1TimeIndex[dataIndex] !== undefined) {
-    targetTime = track1TimeIndex[dataIndex];
-  } else if (seriesName === '轨迹2' && track2TimeIndex[dataIndex] !== undefined) {
-    targetTime = track2TimeIndex[dataIndex];
-  } else if (seriesName === '轨迹3' && track3TimeIndex[dataIndex] !== undefined) {
-    targetTime = track3TimeIndex[dataIndex];
-  } else if (seriesName === '轨迹4' && track4TimeIndex[dataIndex] !== undefined) {
-    targetTime = track4TimeIndex[dataIndex];
+  if (seriesName === '轨迹1' && track1ToRawIndex[dataIndex] !== undefined) {
+    targetTime = plotData.value.timestamp[track1ToRawIndex[dataIndex]];
+  } else if (seriesName === '轨迹2' && track2ToRawIndex[dataIndex] !== undefined) {
+    targetTime = plotData.value.timestamp[track2ToRawIndex[dataIndex]];
+  } else if (seriesName === '轨迹3' && track3ToRawIndex[dataIndex] !== undefined) {
+    targetTime = plotData.value.timestamp[track3ToRawIndex[dataIndex]];
+  } else if (seriesName === '轨迹4' && track4ToRawIndex[dataIndex] !== undefined) {
+    targetTime = plotData.value.timestamp[track4ToRawIndex[dataIndex]];
+  } else if (seriesName === '当前位置1' && track1ToRawIndex.length > 0) {
+    targetTime = plotData.value.timestamp[track1ToRawIndex[track1ToRawIndex.length - 1]];
+  } else if (seriesName === '当前位置2' && track2ToRawIndex.length > 0) {
+    targetTime = plotData.value.timestamp[track2ToRawIndex[track2ToRawIndex.length - 1]];
+  } else if (seriesName === '当前位置3' && track3ToRawIndex.length > 0) {
+    targetTime = plotData.value.timestamp[track3ToRawIndex[track3ToRawIndex.length - 1]];
+  } else if (seriesName === '当前位置4' && track4ToRawIndex.length > 0) {
+    targetTime = plotData.value.timestamp[track4ToRawIndex[track4ToRawIndex.length - 1]];
   }
   
   if (targetTime === null) return;
@@ -1817,8 +1704,8 @@ const handleMouseOver = function(params) {
   const series = chartInstance.value.getOption().series;
   
   // 检查轨迹1中是否有相同时间的点
-  for (let i = 0; i < track1TimeIndex.length; i++) {
-    if (track1TimeIndex[i] === targetTime) {
+  for (let i = 0; i < track1ToRawIndex.length; i++) {
+    if (plotData.value.timestamp[track1ToRawIndex[i]] === targetTime) {
       const seriesIndex = series.findIndex(s => s.name === '轨迹1');
       if (seriesIndex !== -1) {
         highlightData.push({
@@ -1831,8 +1718,8 @@ const handleMouseOver = function(params) {
   }
   
   // 检查轨迹2中是否有相同时间的点
-  for (let i = 0; i < track2TimeIndex.length; i++) {
-    if (track2TimeIndex[i] === targetTime) {
+  for (let i = 0; i < track2ToRawIndex.length; i++) {
+    if (plotData.value.timestamp[track2ToRawIndex[i]] === targetTime) {
       const seriesIndex = series.findIndex(s => s.name === '轨迹2');
       if (seriesIndex !== -1) {
         highlightData.push({
@@ -1845,8 +1732,8 @@ const handleMouseOver = function(params) {
   }
   
   // 检查轨迹3中是否有相同时间的点
-  for (let i = 0; i < track3TimeIndex.length; i++) {
-    if (track3TimeIndex[i] === targetTime) {
+  for (let i = 0; i < track3ToRawIndex.length; i++) {
+    if (plotData.value.timestamp[track3ToRawIndex[i]] === targetTime) {
       const seriesIndex = series.findIndex(s => s.name === '轨迹3');
       if (seriesIndex !== -1) {
         highlightData.push({
@@ -1859,8 +1746,8 @@ const handleMouseOver = function(params) {
   }
   
   // 检查轨迹4中是否有相同时间的点
-  for (let i = 0; i < track4TimeIndex.length; i++) {
-    if (track4TimeIndex[i] === targetTime) {
+  for (let i = 0; i < track4ToRawIndex.length; i++) {
+    if (plotData.value.timestamp[track4ToRawIndex[i]] === targetTime) {
       const seriesIndex = series.findIndex(s => s.name === '轨迹4');
       if (seriesIndex !== -1) {
         highlightData.push({
@@ -1882,62 +1769,79 @@ const handleMouseOver = function(params) {
   }
 
   // 显示graphic的内容
-  const timeIndexOffset = plotData.value.timestamp.length - track1Data.length;
-  const dataIndexModifed = params.dataIndex + timeIndexOffset;
+  let dataIndexModifed = 0;
   let xField = 'X';
   let yField = 'Y';
   let currentTime = null;
+  let originX = params.value[0];
+  let originY = params.value[1];
   
   // 根据系列名称选择对应的轴字段和时间
   if (seriesName === '轨迹1' && deviationConfig.track1X.value && deviationConfig.track1Y.value) {
     xField = deviationConfig.track1X.value;
     yField = deviationConfig.track1Y.value;
-    currentTime = track1TimeIndex[dataIndexModifed];
+    dataIndexModifed = track1ToRawIndex[params.dataIndex];
+    currentTime = plotData.value.timestamp[dataIndexModifed];
+    originX = plotData.value[deviationConfig.track1X.value][dataIndexModifed];
+    originY = plotData.value[deviationConfig.track1Y.value][dataIndexModifed];
   } else if (seriesName === '轨迹2' && deviationConfig.track2X.value && deviationConfig.track2Y.value) {
     xField = deviationConfig.track2X.value;
     yField = deviationConfig.track2Y.value;
-    currentTime = track2TimeIndex[dataIndexModifed];
+    dataIndexModifed = track2ToRawIndex[params.dataIndex];
+    currentTime = plotData.value.timestamp[dataIndexModifed];
+    originX = plotData.value[deviationConfig.track2X.value][dataIndexModifed];
+    originY = plotData.value[deviationConfig.track2Y.value][dataIndexModifed];
   } else if (seriesName === '轨迹3' && deviationConfig.track3X.value && deviationConfig.track3Y.value) {
     xField = deviationConfig.track3X.value;
     yField = deviationConfig.track3Y.value;
-    currentTime = track3TimeIndex[dataIndexModifed];
+    dataIndexModifed = track3ToRawIndex[params.dataIndex];
+    currentTime = plotData.value.timestamp[dataIndexModifed];
+    originX = plotData.value[deviationConfig.track3X.value][dataIndexModifed];
+    originY = plotData.value[deviationConfig.track3Y.value][dataIndexModifed];
   } else if (seriesName === '轨迹4' && deviationConfig.track4X.value && deviationConfig.track4Y.value) {
     xField = deviationConfig.track4X.value;
     yField = deviationConfig.track4Y.value;
-    currentTime = track4TimeIndex[dataIndexModifed];
+    dataIndexModifed = track4ToRawIndex[params.dataIndex];
+    currentTime = plotData.value.timestamp[dataIndexModifed];
+    originX = plotData.value[deviationConfig.track4X.value][dataIndexModifed];
+    originY = plotData.value[deviationConfig.track4Y.value][dataIndexModifed];
   } else if (seriesName === '当前位置1' && deviationConfig.track1X.value && deviationConfig.track1Y.value) {
     // 当前位置1使用轨迹1的字段和时间
     xField = deviationConfig.track1X.value;
     yField = deviationConfig.track1Y.value;
-    if (track1TimeIndex.length > 0) {
-      currentTime = track1TimeIndex[track1TimeIndex.length - 1];
-    }
+    dataIndexModifed = track1ToRawIndex[track1Data.length - 1];
+    currentTime = plotData.value.timestamp[dataIndexModifed];
+    originX = plotData.value[deviationConfig.track1X.value][dataIndexModifed];
+    originY = plotData.value[deviationConfig.track1Y.value][dataIndexModifed];
   } else if (seriesName === '当前位置2' && deviationConfig.track2X.value && deviationConfig.track2Y.value) {
     // 当前位置2使用轨迹2的字段和时间
     xField = deviationConfig.track2X.value;
     yField = deviationConfig.track2Y.value;
-    if (track2TimeIndex.length > 0) {
-      currentTime = track2TimeIndex[track2TimeIndex.length - 1];
-    }
+    dataIndexModifed = track2ToRawIndex[track2Data.length - 1];
+    currentTime = plotData.value.timestamp[dataIndexModifed];
+    originX = plotData.value[deviationConfig.track2X.value][dataIndexModifed];
+    originY = plotData.value[deviationConfig.track2Y.value][dataIndexModifed];
   } else if (seriesName === '当前位置3' && deviationConfig.track3X.value && deviationConfig.track3Y.value) {
     // 当前位置3使用轨迹3的字段和时间
     xField = deviationConfig.track3X.value;
     yField = deviationConfig.track3Y.value;
-    if (track3TimeIndex.length > 0) {
-      currentTime = track3TimeIndex[track3TimeIndex.length - 1];
-    }
+    dataIndexModifed = track3ToRawIndex[track3Data.length - 1];
+    currentTime = plotData.value.timestamp[dataIndexModifed];
+    originX = plotData.value[deviationConfig.track3X.value][dataIndexModifed];
+    originY = plotData.value[deviationConfig.track3Y.value][dataIndexModifed];
   } else if (seriesName === '当前位置4' && deviationConfig.track4X.value && deviationConfig.track4Y.value) {
     // 当前位置4使用轨迹4的字段和时间
     xField = deviationConfig.track4X.value;
     yField = deviationConfig.track4Y.value;
-    if (track4TimeIndex.length > 0) {
-      currentTime = track4TimeIndex[track4TimeIndex.length - 1];
-    }
+    dataIndexModifed = track4ToRawIndex[track4Data.length - 1];
+    currentTime = plotData.value.timestamp[dataIndexModifed];
+    originX = plotData.value[deviationConfig.track4X.value][dataIndexModifed];
+    originY = plotData.value[deviationConfig.track4Y.value][dataIndexModifed];
   }
 
   const option = chartInstance.value.getOption();
-  if (!option || !option.series) return;
-  const text = `${params.seriesName} 🕐time: ${currentTime.toFixed(3)} 📍${xField}:${params.value[0]}, ${yField}:${params.value[1]}`;
+  if (!option) return;
+  const text = `${params.seriesName} 🕐time: ${currentTime.toFixed(3)} 📍${xField}:${originX.toFixed(3)}, ${yField}:${originY.toFixed(3)}`;
   chartInstance.value.setOption({ graphic: [{ style: { text } }] });
 };
 
