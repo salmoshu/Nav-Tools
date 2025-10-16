@@ -515,14 +515,21 @@ export function useConsole() {
       const messageElements = document.querySelectorAll('.message-line');
       const resultIndex = searchResults.value[index]?.index || 0;
       const relativeIndex = resultIndex - currentViewStartIndex.value;
-      
+
       if (messageElements[relativeIndex]) {
-        messageElements[relativeIndex].scrollIntoView({
-          behavior: 'auto',
-          block: 'center',
-          inline: 'nearest'
-        });
+        const targetElement = messageElements[relativeIndex] as HTMLElement;
+        const container = consoleContent.value;
         
+        if (container && targetElement) {
+          const elementTop = targetElement.offsetTop;
+          const elementHeight = targetElement.offsetHeight;
+          const containerHeight = container.clientHeight;
+          
+          // 计算滚动位置，使元素居中
+          const scrollTop = elementTop - (containerHeight / 2) + (elementHeight / 2);
+          container.scrollTop = Math.max(0, scrollTop);
+        }
+
         // 高亮当前结果
         messageElements.forEach((element, i) => {
           if (i === relativeIndex) {
