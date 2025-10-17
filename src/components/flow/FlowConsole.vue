@@ -33,7 +33,7 @@
             <el-icon><Search /></el-icon>
           </el-button>
           <el-button @click="saveConsoleData" type="text" size="small" :disabled="totalCount === 0" style="margin: 0px 0px;" title="保存到文件">
-            <el-icon><Download /></el-icon>
+            <el-icon><Document /></el-icon>
           </el-button>
           <el-button @click="clearConsole" type="text" size="small" style="margin: 0px 0px;" title="清空控制台">
             <el-icon><Delete /></el-icon>
@@ -133,12 +133,13 @@ import {
   ArrowDown
 } from '@element-plus/icons-vue'
 import { useConsole } from '@/composables/flow/useConsole'
+import { DynamicScroller, DynamicScrollerItem } from 'vue-virtual-scroller'
 
 // DOM引用
 const consoleRoot = ref<HTMLDivElement | null>(null)
 const consoleContent = ref<HTMLDivElement | null>(null)
 const searchInput = ref<InstanceType<typeof HTMLInputElement> | null>(null)
-const scrollerRef = ref<InstanceType<typeof DynamicScrollerType> | null>(null)
+const scrollerRef = ref<InstanceType<typeof DynamicScroller> | null>(null)
 
 // 搜索状态
 const showSearchBox = ref(false)
@@ -423,12 +424,31 @@ const handleAutoScroll = () => {
   toggleAutoScroll();
 }
 
-// 滚动到底部函数
+// 滚动到底部函数 - 精确版本
 const handleScrollToBottom = () => {
   if (scrollerRef.value && filteredMessages.value.length > 0) {
-    // 滚动到最后一条消息
-    scrollerRef.value.scrollToBottom();
-    isAtBottom.value = true;
+    nextTick(() => {
+      // 方法1：先滚动到最后一项
+      scrollerRef.value.scrollToItem(filteredMessages.value.length - 1);
+      
+      // 方法2：再微调到底部（处理边距和padding）
+      setTimeout(() => {
+        if (scrollerRef.value) {
+          const el = scrollerRef.value.$el;
+          const currentScrollTop = el.scrollTop;
+          const scrollHeight = el.scrollHeight;
+          const clientHeight = el.clientHeight;
+          
+          // 如果还有距离，手动滚动到底部
+          const distanceFromBottom = scrollHeight - (currentScrollTop + clientHeight);
+          if (distanceFromBottom > 2) { // 允许2px的误差
+            el.scrollTop = scrollHeight - clientHeight;
+          }
+          
+          isAtBottom.value = true;
+        }
+      }, 50); // 给DOM足够的稳定时间
+    });
   }
 };
 
