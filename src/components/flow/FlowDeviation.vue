@@ -176,7 +176,7 @@ import { useConsole } from '@/composables/flow/useConsole';
 const { deviationConfig } = useDataConfig();
 
 // 导入搜索功能
-const { searchQuery, findAll } = useConsole();
+const { searchQuery } = useConsole(true);
 
 // 注册ECharts组件
 const { plotData, toggleSlideWindow, enableWindow } = useFlow();
@@ -1656,7 +1656,6 @@ function handleChartDblClick(params) {
       const targetTime = parts[0] + (parts[1] ? '.' + parts[1].substring(0, 2) : '.00');
 
       searchQuery.value = '"time":' + targetTime;
-      findAll();
     }
   }
 }

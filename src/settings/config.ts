@@ -6,7 +6,7 @@ const appConfig: any = {
     flow: createModuleItem({
       title: 'Flow',
       icon: toolBarIcon.default,
-      action: ['data', 'console', 'consolex', 'deviation'],
+      action: ['data', 'console', 'deviation'],
       props: {}
     }),
   },

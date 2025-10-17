@@ -466,7 +466,7 @@ import { useDevice } from '@/hooks/useDevice'
 
 // 初始化数据流处理
 const { flowData, plotData, enableWindow, toggleSlideWindow, clearRawData } = useFlow()
-const { searchQuery, findAll } = useConsole()
+const { searchQuery } = useConsole(true)
 const { deviceConnected } = useDevice()
 
 // 初始化视图配置处理
@@ -782,7 +782,6 @@ function handleChartDblClick(params: any) {
     const targetTime = parts[0] + (parts[1] ? '.' + parts[1].substring(0, 2) : '.00');
 
     searchQuery.value = '"time":' + targetTime;
-    findAll();
   }
 }
 
