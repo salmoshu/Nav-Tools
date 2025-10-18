@@ -509,8 +509,6 @@ function initChart() {
           color: '#4e6ef2',
           opacity: 0.6,
         },
-        sampling: 'lttb',
-        large: true,
       },
       {
         name: '当前位置',
@@ -525,8 +523,6 @@ function initChart() {
           shadowBlur: 2,
           shadowColor: 'rgba(0, 0, 0, 0.3)',
         },
-        sampling: 'lttb',
-        large: true,
       },
     ],
   };
@@ -857,8 +853,6 @@ function updateChartDisplay() {
         },
         scale: 1.5
       },
-      sampling: 'lttb',
-      large: true,
     });
   }
 
@@ -933,8 +927,6 @@ function updateChartDisplay() {
         },
         scale: 1.5
       },
-      sampling: 'lttb',
-      large: true,
     });
   }
 
@@ -1003,8 +995,6 @@ function updateChartDisplay() {
         },
         scale: 1.5
       },
-      sampling: 'lttb',
-      large: true,
     });
   }
 
@@ -1073,8 +1063,6 @@ function updateChartDisplay() {
         },
         scale: 1.5
       },
-      sampling: 'lttb',
-      large: true,
     });
   }
 
@@ -1107,8 +1095,6 @@ function updateChartDisplay() {
           },
           scale: 1.5
         },
-        sampling: 'lttb',
-        large: true,
       });
     }
 
@@ -1139,8 +1125,6 @@ function updateChartDisplay() {
           },
           scale: 1.5
         },
-        sampling: 'lttb',
-        large: true,
       });
     }
 
@@ -1171,8 +1155,6 @@ function updateChartDisplay() {
           },
           scale: 1.5
         },
-        sampling: 'lttb',
-        large: true,
       });
     }
 
@@ -1203,8 +1185,6 @@ function updateChartDisplay() {
           },
           scale: 1.5
         },
-        sampling: 'lttb',
-        large: true,
       });
     }
   } else {
@@ -1236,8 +1216,6 @@ function updateChartDisplay() {
           },
           scale: 1.5
         },
-        sampling: 'lttb',
-        large: true,
       });
     }
 
@@ -1268,8 +1246,6 @@ function updateChartDisplay() {
           },
           scale: 1.5
         },
-        sampling: 'lttb',
-        large: true,
       });
     }
 
@@ -1300,8 +1276,6 @@ function updateChartDisplay() {
           },
           scale: 1.5
         },
-        sampling: 'lttb',
-        large: true,
       });
     }
 
@@ -1332,8 +1306,6 @@ function updateChartDisplay() {
           },
           scale: 1.5
         },
-        sampling: 'lttb',
-        large: true,
       });
     }
   }
