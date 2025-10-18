@@ -389,34 +389,6 @@ const handleKeydown = (event: KeyboardEvent) => {
   }
 }
 
-// 防抖工具函数
-const debounce = (fn: Function, delay: number) => {
-  let timer: number | null = null;
-  return (...args: any[]) => {
-    if (timer) clearTimeout(timer);
-    timer = window.setTimeout(() => fn(...args), delay);
-  };
-};
-
-// 滚动事件处理函数（防抖优化）
-const handleScroll = debounce(() => {
-  if (!scrollerRef.value) return
-  
-  // 获取滚动信息
-  const scrollTop = scrollerRef.value.$el.scrollTop
-  const scrollHeight = scrollerRef.value.$el.scrollHeight
-  const clientHeight = scrollerRef.value.$el.clientHeight
-
-  const isNearBottom = scrollTop + clientHeight >= scrollHeight - 10;
-
-  if (isNearBottom && !isAtBottom.value) {
-    isAtBottom.value = true;
-  } else if (!isNearBottom && isAtBottom.value) {
-    isAtBottom.value = false;
-    dataAutoScroll.value = false;
-  }
-}, 100);
-
 const handleAutoScroll = () => {
   if (!dataAutoScroll.value) {
     handleScrollToBottom();
@@ -476,9 +448,6 @@ onMounted(() => {
   
   // 添加滚动事件监听
   nextTick(() => {
-    if (scrollerRef.value && scrollerRef.value.$el) {
-      scrollerRef.value.$el.addEventListener('scroll', handleScroll);
-    }
     if (consoleRoot.value) {
       consoleRoot.value.addEventListener('keydown', handleKeydown);
     }
@@ -486,10 +455,6 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
-  // 移除滚动事件监听
-  if (scrollerRef.value && scrollerRef.value.$el) {
-    scrollerRef.value.$el.removeEventListener('scroll', handleScroll);
-  }
   if (consoleRoot.value) {
     consoleRoot.value.removeEventListener('keydown', handleKeydown);
   }
