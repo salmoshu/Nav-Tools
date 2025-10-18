@@ -9,6 +9,8 @@
           stripe
           border
           :default-sort="{ prop: 'constellation', order: 'ascending' }"
+          :fit="true"
+          :show-overflow-tooltip="true"
         >
           <el-table-column
             prop="constellation"
@@ -29,14 +31,14 @@
           <el-table-column
             prop="prn"
             label="PRN"
-            width="80"
+            min-width="80"
             sortable
           />
           
           <el-table-column
             prop="snr"
             label="信号强度 (SNR)"
-            width="150"
+            min-width="150"
             sortable
           >
             <template #default="{ row }">
@@ -58,7 +60,7 @@
           <el-table-column
             prop="elevation"
             label="仰角"
-            width="100"
+            min-width="100"
             sortable
           >
             <template #default="{ row }">
@@ -69,7 +71,7 @@
           <el-table-column
             prop="azimuth"
             label="方位角"
-            width="100"
+            min-width="100"
             sortable
           >
             <template #default="{ row }">
@@ -80,7 +82,7 @@
           <el-table-column
             prop="timestamp"
             label="更新时间"
-            width="180"
+            min-width="180"
             sortable
           >
             <template #default="{ row }">
@@ -91,7 +93,7 @@
           <el-table-column
             prop="status"
             label="状态"
-            width="100"
+            min-width="100"
             fixed="right"
           >
             <template #default="{ row }">
@@ -251,5 +253,15 @@ function filterConstellation(value, row) {
 
 :deep(.el-table__row:hover) {
   background-color: #f5f7fa;
+}
+
+/* 全屏模式下表格样式优化 */
+.full-screen-card .snr-table-container {
+  height: 100%;
+  overflow: hidden;
+}
+
+.full-screen-card .el-table {
+  height: 100% !important;
 }
 </style>

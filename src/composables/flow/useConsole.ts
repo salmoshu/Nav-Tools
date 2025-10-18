@@ -29,18 +29,14 @@ export interface ConsoleState {
   validMsgCount: Ref<number>;
 
   // 方法
-  addMessage: (
-    raw: string,
-    dataType?: "json" | "nmea",
-    isValid?: boolean
-  ) => void;
+  addMessage: (rawData: string) => void;
+  addMessages: (rawData: string) => void;
   clearMessages: () => void;
   toggleFilter: () => void;
   toggleTimestamp: () => void;
   toggleAutoScroll: () => void;
   togglePause: () => void;
   saveToFile: () => void;
-  handleRawDataBatch: (rawData: string) => void;
   exportMessages: () => void;
   searchMessages: (query: string) => void;
 }
@@ -66,6 +62,7 @@ export function useConsole(useGlobal: boolean = true): ConsoleState {
   const dataTimestamp = ref(true);
   const dataAutoScroll = ref(true);
   const isPaused = ref(false);
+  let tempDataString = ''; // 临时存储数据，用于处理不完整的消息
 
   // 搜索
   const searchQuery = ref('')
@@ -90,8 +87,135 @@ export function useConsole(useGlobal: boolean = true): ConsoleState {
 
   const totalCount = computed(() => messages.value.length);
 
+  const calcNmeaChecksum = (sentence: string): string => {
+    let checksum = 0;
+    for (let i = 0; i < sentence.length; i++) {
+      checksum ^= sentence.charCodeAt(i);
+    }
+    // 转换为2位十六进制字符串
+    return checksum.toString(16).toUpperCase().padStart(2, "0");
+  };
+
+  const validateNmeaMessage = (message: string): boolean => {
+    // 基本格式检查
+    if (!message.startsWith("$")) {
+      return false;
+    }
+    
+    const cleanStr = message.trimEnd(); // 移除结尾的换行符以便处理
+    const asteriskIndex = cleanStr.indexOf("*"); // 检查是否包含星号(校验和分隔符)
+    if (asteriskIndex === -1 || asteriskIndex < 6) {
+      return false; // 至少需要$xxxx,格式
+    }
+
+    // 检查校验和是否为2位十六进制字符
+    const checksumPart = cleanStr.substring(asteriskIndex + 1);
+    if (!/^[0-9A-Fa-f]{2}$/.test(checksumPart)) {
+      return false;
+    }
+
+    // 验证校验和
+    const dataPart = cleanStr.substring(1, asteriskIndex); // 不包含$和校验和部分
+    const calculatedChecksum = calcNmeaChecksum(dataPart);
+    return calculatedChecksum === checksumPart.toUpperCase();
+  };
+
+  // JSON消息验证
+  const validateJsonMessage = (message: string): boolean => {
+    try {
+      JSON.parse(message);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  // 工具函数
+  const generateTimestamp = (): string => {
+    const now = new Date();
+    return (
+      now.toLocaleTimeString() +
+      "." +
+      now.getMilliseconds().toString().padStart(3, "0")
+    );
+  };
+
+  const generateKey = (timestamp: string, raw: string): string => {
+    return `${timestamp}_${raw}_${Date.now()}_${Math.random()
+      .toString(36)
+      .slice(2, 11)}`;   // ← 等价于原来的 substr(2, 9)
+  };
+
+  const validateMessage = (raw: string, dataType: "json" | "nmea"): boolean => {
+    if (!raw || raw.trim().length === 0) return false;
+
+    switch (dataType) {
+      case "json":
+        try {
+          JSON.parse(raw);
+          return true;
+        } catch {
+          return false;
+        }
+      case "nmea":
+        // NMEA 格式验证
+        return /^\$[A-Z]{2}[A-Z]{3},.*\*[0-9A-F]{2}$/.test(raw.trim());
+      default:
+        return true;
+    }
+  };
+
+  // 核心方法
+  const addMessage = (rawData: string) => {
+    if (isPaused.value) return;
+
+    tempDataString += rawData;
+    if (tempDataString.includes('\n')) {
+      const timestamp = generateTimestamp();
+      const lines = tempDataString.split('\n');
+
+      // 保留最后一行，因为它可能是不完整的
+      tempDataString = lines[lines.length - 1];
+
+      // 处理所有完整的行（除了最后一行）
+      for (let i = 0; i < lines.length - 1; i++) {
+        const line = lines[i];
+        if (line.trim() !== '') {
+          let isValid = true;
+
+          if (dataFormat.value === 'nmea') {
+            isValid = validateNmeaMessage(line);
+            const message: ConsoleMessage = {
+              timestamp,
+              raw: line,
+              dataType: 'nmea',
+              isValid,
+              key: generateKey(timestamp, line),
+            };
+            messages.value.push(message);
+          } else {
+            isValid = validateJsonMessage(line);
+            const message: ConsoleMessage = {
+              timestamp,
+              raw: line,
+              dataType: 'json',
+              isValid,
+              key: generateKey(timestamp, line),
+            };
+            messages.value.push(message);
+          }
+        }
+      }
+  
+      // 限制消息数量，保持内存使用
+      if (messages.value.length > maxMessages) {
+        messages.value.shift();
+      }
+    }
+  };
+
   // 批量导入文件数据
-  const handleRawDataBatch = (rawData: string) => {
+  const addMessages = (rawData: string) => {
     clearMessages();
     const baseTime = new Date();
     const baseTimestamp =
@@ -148,103 +272,9 @@ export function useConsole(useGlobal: boolean = true): ConsoleState {
     }
   };
 
-  // NMEA消息验证
-  const validateNmeaMessage = (message: string): boolean => {
-    if (!message.startsWith("$")) return false;
-
-    const asteriskIndex = message.indexOf("*");
-    if (asteriskIndex === -1 || asteriskIndex < 6) return false;
-
-    const checksumPart = message.substring(asteriskIndex + 1);
-    if (!/^[0-9A-Fa-f]{2}$/.test(checksumPart)) return false;
-
-    const dataPart = message.substring(1, asteriskIndex);
-    let checksum = 0;
-    for (let i = 0; i < dataPart.length; i++) {
-      checksum ^= dataPart.charCodeAt(i);
-    }
-
-    const calculatedChecksum = checksum
-      .toString(16)
-      .toUpperCase()
-      .padStart(2, "0");
-    return calculatedChecksum === checksumPart.toUpperCase();
-  };
-
-  // JSON消息验证
-  const validateJsonMessage = (message: string): boolean => {
-    try {
-      JSON.parse(message);
-      return true;
-    } catch {
-      return false;
-    }
-  };
-
-  // 工具函数
-  const generateTimestamp = (): string => {
-    const now = new Date();
-    return (
-      now.toLocaleTimeString() +
-      "." +
-      now.getMilliseconds().toString().padStart(3, "0")
-    );
-  };
-
-  const generateKey = (timestamp: string, raw: string): string => {
-    return `${timestamp}_${raw}_${Date.now()}_${Math.random()
-      .toString(36)
-      .substr(2, 9)}`;
-  };
-
-  const validateMessage = (raw: string, dataType: "json" | "nmea"): boolean => {
-    if (!raw || raw.trim().length === 0) return false;
-
-    switch (dataType) {
-      case "json":
-        try {
-          JSON.parse(raw);
-          return true;
-        } catch {
-          return false;
-        }
-      case "nmea":
-        // NMEA 格式验证
-        return /^\$[A-Z]{2}[A-Z]{3},.*\*[0-9A-F]{2}$/.test(raw.trim());
-      default:
-        return true;
-    }
-  };
-
-  // 核心方法
-  const addMessage = (
-    raw: string,
-    dataType: "json" | "nmea" = "json",
-    isValid: boolean = true
-  ) => {
-    if (isPaused.value) return;
-
-    const timestamp = generateTimestamp();
-    const actualIsValid = validateMessage(raw, dataType);
-
-    const message: ConsoleMessage = {
-      timestamp,
-      raw: raw.trim(),
-      dataType,
-      isValid: actualIsValid,
-      key: generateKey(timestamp, raw),
-    };
-
-    messages.value.push(message);
-
-    // 限制消息数量，保持内存使用
-    if (messages.value.length > maxMessages) {
-      messages.value.shift();
-    }
-  };
-
   const clearMessages = () => {
     messages.value = [];
+    tempDataString = '';
   };
 
   const toggleFilter = () => {
@@ -287,34 +317,6 @@ export function useConsole(useGlobal: boolean = true): ConsoleState {
       URL.revokeObjectURL(url);
     } catch (error) {
       console.error("保存文件失败:", error);
-    }
-  };
-
-  // 批量添加消息（用于初始化或导入）
-  const addMessages = (
-    rawMessages: string[],
-    dataType: "json" | "nmea" = "json"
-  ) => {
-    const newMessages = rawMessages
-      .filter((raw) => raw && raw.trim().length > 0)
-      .map((raw) => {
-        const timestamp = generateTimestamp();
-        const isValid = validateMessage(raw, dataType);
-
-        return {
-          timestamp,
-          raw: raw.trim(),
-          dataType,
-          isValid,
-          key: generateKey(timestamp, raw),
-        } as ConsoleMessage;
-      });
-
-    messages.value.push(...newMessages);
-
-    // 限制总数量
-    if (messages.value.length > maxMessages) {
-      messages.value = messages.value.slice(-maxMessages);
     }
   };
 
@@ -364,13 +366,13 @@ export function useConsole(useGlobal: boolean = true): ConsoleState {
     validMsgCount,
 
     addMessage,
+    addMessages,
     clearMessages,
     toggleFilter,
     toggleTimestamp,
     toggleAutoScroll,
     togglePause,
     saveToFile,
-    handleRawDataBatch,
     exportMessages,
     searchMessages,
   };

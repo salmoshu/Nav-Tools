@@ -10,7 +10,7 @@ import emitter from '@/hooks/useMitt'
 const { processRawData: processNmeaRawData } = useNmea()
 const { addRawData: addUltrasonicRawData } = useUltrasonic()
 const { addRawData: addFlowRawData, initRawData: initFlowRawData } = useFlow()
-const { handleRawDataBatch: initFlowConsole, addMessage:addFlowConsole } = useConsole(true) // 使用全局实例
+const { addMessages: initFlowConsole, addMessage:addFlowConsole } = useConsole(true) // 使用全局实例
 
 // 串口配置
 const serialPort = ref("");
@@ -539,13 +539,15 @@ export function useDevice() {
     switch (navMode.funcMode) {
       case 'gnss':
         processNmeaRawData(data);
+        addFlowConsole(data);
         break;
       case 'ultrasonic':
-        addUltrasonicRawData(data)
+        addUltrasonicRawData(data);
+        addFlowConsole(data);
         break;
       case 'flow':
-        addFlowConsole(data);
         addFlowRawData(data);
+        addFlowConsole(data);
         break;
       default:
         break;

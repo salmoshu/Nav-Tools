@@ -126,12 +126,12 @@ import {
   Sort, 
   Bottom, 
   Search, 
-  Download, 
   Delete,
   VideoPause,
   ArrowUp,
   ArrowDown
 } from '@element-plus/icons-vue'
+import { navMode } from '@/settings/config'
 import { useConsole } from '@/composables/flow/useConsole'
 import { DynamicScroller, DynamicScrollerItem } from 'vue-virtual-scroller'
 
@@ -440,10 +440,18 @@ watch(() => filteredMessages.value.length, () => {
 
 // 生命周期钩子
 onMounted(() => {
+  clearConsole();
+  
   if (dataAutoScroll.value) {
     nextTick(() => {
       handleScrollToBottom()
     })
+  }
+
+  if (navMode.funcMode === 'gnss') {
+    dataFormat.value = 'nmea';
+  } else {
+    dataFormat.value = 'json';
   }
   
   // 添加滚动事件监听
