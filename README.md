@@ -1,177 +1,132 @@
 # Nav-Tools
 
-🥳 Nav-Tools is a desktop-grade visualization workbench built with Electron & Vue3, tailored for roboticists.
+<img src="https://raw.githubusercontent.com/salmoshu/Winchell-ImgBed/main/img/20251020-145700.jpg"/>
 
-<!-- [![awesome-vite](https://awesome.re/mentioned-badge.svg)](https://github.com/vitejs/awesome-vite) -->
-<!-- [![Netlify Status](https://api.netlify.com/api/v1/badges/ae3863e3-1aec-4eb1-8f9f-1890af56929d/deploy-status)](https://app.netlify.com/sites/electron-vite/deploys) -->
-<!-- [![GitHub license](https://img.shields.io/github/license/caoxiemeihao/electron-vite-vue)](https://github.com/electron-vite/electron-vite-vue/blob/main/LICENSE) -->
-<!-- [![GitHub stars](https://img.shields.io/github/stars/caoxiemeihao/electron-vite-vue?color=fa6470)](https://github.com/electron-vite/electron-vite-vue) -->
-<!-- [![GitHub forks](https://img.shields.io/github/forks/caoxiemeihao/electron-vite-vue)](https://github.com/electron-vite/electron-vite-vue) -->
+🥳 Nav-Tools 是一款专为机器人开发者打造的**桌面级可视化工作台**，全面覆盖机器人复合应用与主流传感器。目前已集成通用数据流 Flow、GNSS 定位模块、超声波避障、PID 跟随仿真等功能，支持布局与数据字段的灵活自定义，极大提升调试效率与开发体验。更多请查看：
 
-<!-- [![GitHub Build](https://github.com/electron-vite/electron-vite-vue/actions/workflows/build.yml/badge.svg)](https://github.com/electron-vite/electron-vite-vue/actions/workflows/build.yml)
-[![GitHub Discord](https://img.shields.io/badge/chat-discord-blue?logo=discord)](https://discord.gg/sRqjYpEAUK) -->
+- 应用下载：https://github.com/salmoshu/Nav-Tools/releases
+- 在线文档：https://salmoshu.github.io/tools/Nav-Tools/01-overview.html
 
-## Features
+---
 
-📦 Out of the box  
-🎯 Based on the official [template-vue-ts](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-vue-ts), less invasive  
-🌱 Extensible, really simple directory structure  
-💪 Support using Node.js API in Electron-Renderer  
-🔩 Support C/C++ native addons  
-🖥 It's easy to implement multiple windows
+## ✨ 核心特性
 
-## Applications
+- 🌱 **简洁可扩展**：目录结构清晰，支持快速添加新模块
+- 🖥 **多窗口支持**：轻松实现多窗口并行调试
+- 📊 **实时可视化**：支持时序图、轨迹图、控制台、仪表盘等多种展示方式
+- 🧩 **高度自定义**：支持字段扩展、滑窗、过滤、颜色配置、布局保存等高级功能
 
-1. ROBOT
-   - Follow: 跟随机器人
-2. PNC
-   - Ultrasonic: 超声波传感器
-3. PNC
-   - FollowSim: PID跟随仿真
-4. POS
-   - GNSS:  GNSS定位
+---
 
-## Quick Setup
+## 🧪 支持模块与应用
 
-```sh
-# clone the project
+| 应用  | 模块名称   | 功能描述                                   |
+| ----- | ---------- | ------------------------------------------ |
+| ROBOT | Flow       | 通用数据流可视化（时序图、轨迹图、控制台） |
+| PERC  | Ultrasonic | 超声波避障数据可视化（滤波、障碍物检测）   |
+| POS   | GNSS       | 卫星定位模块（轨迹、信号、星空图）         |
+| PNC   | FollowSim  | PID 跟随仿真（仪表盘、速度曲线、参数配置） |
+
+---
+
+## 🚀 快速开始
+
+```bash
+# 克隆项目
 git clone https://github.com/salmoshu/Nav-Tools.git
-
-# enter the project directory
 cd Nav-Tools
 
-# set pnpm mirror in .npmrc
-electron_mirror=https://npmmirror.com/mirrors/electron/
+# 设置 electron 镜像（国内推荐）
+echo "electron_mirror=https://npmmirror.com/mirrors/electron/" >> .npmrc
 
-# install dependency
+# 安装依赖
 pnpm install
 pnpm approve-builds # for electron, esbuild
 
-# develop
+# 启动开发环境
 pnpm run dev
 ```
 
-## Development Process
+## 🛠 开发指南
 
-1. 在 `src\types\config.ts` 的 `appConfig` 中配置应用信息
+### 1. 添加新模块
 
-   ```typescript
-      example:                                  // example 为新 App 名称，会加载在 Electron 窗口上
-      {
-         demo1: createModuleItem({
-            title: 'Demo1',                  // 模块名称（与 module 的键名相同，采用 PascalCase 命名规范）
-            icon: toolBarIcon.default,       // 模块图标
-            action: ['draw', 'data', 'config'], // 模块包含的子模块（draw、data、config）
-         }),
-         demo2: createModuleItem({
-            title: 'Demo2',
-            icon: toolBarIcon.default,
-            action: ['draw', 'data', 'config'],
-         }),
-         ...
-      },
+在 `src/types/config.ts` 的 `appConfig` 中添加模块配置：
 
-   ```
-
-2. 在 `src\components` 和 `src\composables` 目录下增加相应的组件和钩子
-
-   ```text
-   # 组件和钩子采用扁平化文件结构
-   src
-   ├── components
-   │   ├── demo1
-   │   │   ├── Demo1Draw.vue
-   │   │   ├── Demo1Data.vue
-   │   │   └── Demo1Config.vue
-   │   ├── demo2
-   │   │   ├── Demo2Draw.vue
-   │   │   ├── Demo2Data.vue
-   │   │   └── Demo2Config.vue
-   │   └── ...
-   ├── composables
-   │   ├── demo1
-   │   │   └── useDemo1Props.ts
-   │   ├── demo2
-   │   │   └── useDemo2Props.ts
-   │   └── ...
-   ```
-
-3. 在 `src\stores` 目录下增加相应的组件间状态管理文件（这里使用了 Pinia）
-
-   ```text
-   src
-   ├── stores
-   │   ├── demo1.ts
-   │   ├── demo2.ts
-   │   └── ...
-   ```
-
-4. 模块运行状态
-   - 在 `src\stores\demo1.ts` 中增加相应的状态字段 `status`
-   - 在 `src\composables\useStatusManager.ts` 中应用 Pinia 定义好的状态
-   - 在 `src\components\StatusBar.vue` 中应用状态
-
-5. 实时数据流
-   - 在 `src\hooks\useDevice.ts` 中定义实时数据处理逻辑
-
-## Externel Tools
-
-1. Echarts
-2. Element-Plus
-
-## Debug
-
-![electron-vite-react-debug.gif](https://github.com/electron-vite/electron-vite-react/blob/main/electron-vite-react-debug.gif?raw=true)
-
-## Directory
-
-```diff
-  ├─┬ electron
-  │ ├─┬ main
-  │ │ └── index.ts    entry of Electron-Main
-  │ └─┬ preload
-  │   └── index.ts    entry of Preload-Scripts
-  ├─┬ src
-  │ ├── assets
-  │ ├── components
-  │ ├── composables
-  │ ├── hooks
-  │ ├── stores
-  │ ├─┬ types
-  │ │ ├── config.ts    types of app config
-  │ │ └── icon.ts      types of icon
-  │ ├── App.vue
-  │ ├── main.ts       entry of Electron-Renderer
-  ├── index.html
-  ├── package.json
-  └── vite.config.ts
+```ts
+newModule: createModuleItem({
+  title: 'NewModule',
+  icon: toolBarIcon.default,
+  action: ['draw', 'data', 'config'],
+})
 ```
 
-<!--
-## Be aware
+### 2. 创建组件与逻辑
 
-🚨 By default, this template integrates Node.js in the Renderer process. If you don't need it, you just remove the option below. [Because it will modify the default config of Vite](https://github.com/electron-vite/vite-plugin-electron-renderer#config-presets-opinionated).
+- 组件：`src/components/newModule/NewModuleDraw.vue`、`NewModuleData.vue`、`NewModuleConfig.vue`
+- 逻辑：`src/composables/newModule/useNewModuleProps.ts`
+- 状态管理：`src/stores/newModule.ts`
 
-```diff
-# vite.config.ts
+### 4. 状态显示
 
-export default {
-  plugins: [
--   // Use Node.js API in the Renderer-process
--   renderer({
--     nodeIntegration: true,
--   }),
-  ],
-}
+在 `src/stores/newModule.ts` 中定义状态字段，并在 `src/composables/useStatusManager.ts` 与 `src/components/StatusBar.vue` 中绑定使用。
+
+## 📁 项目结构
+
+```text
+├─┬ electron
+│ ├─┬ main
+│ │ └── index.ts         # Electron 主进程入口
+│ └─┬ preload
+│   └── index.ts         # Preload 脚本入口
+├─┬ src
+│ ├── assets
+│ ├── components         # 各模块可视化组件
+│ ├── composables        # 模块逻辑钩子
+│ ├── hooks              # 数据处理与设备通信
+│ ├── stores             # 状态管理（Pinia）
+│ ├─┬ types
+│ │ ├── config.ts        # 模块配置类型
+│ │ └── icon.ts          # 图标类型定义
+│ ├── App.vue
+│ └── main.ts            # Renderer 入口
+├── index.html
+├── package.json
+└── vite.config.ts
 ```
--->
 
-## FAQ
+## 📈 可视化组件说明（按模块）
 
-- [C/C++ addons, Node.js modules - Pre-Bundling](https://github.com/electron-vite/vite-plugin-electron-renderer#dependency-pre-bundling)
-- [dependencies vs devDependencies](https://github.com/electron-vite/vite-plugin-electron-renderer#dependencies-vs-devdependencies)
+### Flow（机器人通用数据流）
 
-## Release
+- **Console**：日志输出、过滤、保存、暂停
+- **Data**：时序图（支持双轴、滑窗、字段选择）
+- **Deviation**：轨迹图（支持多轨迹、跟踪、缩放）
 
-- 0.2.0: 新增 Flow 模块及FlowData 组件灵活加载数据源
-- 0.1.0: 初始版本
+### Ultrasonic（超声波避障）
+
+- **Console**：日志输出
+- **Data**：滤波后的距离曲线（支持中值滤波、障碍物检测）
+
+### GNSS（卫星定位）
+
+- **Console**：NMEA 日志
+- **Deviation**：轨迹图（单点解/浮点解/固定解）
+- **Signal**：卫星信号强度表格（PRN、SNR、星座等）
+- **Sky**：星空图（卫星分布）
+
+### FollowSim（PID 跟随仿真）
+
+- **Dashboard**：二维动画展示
+- **Data**：速度曲线（线速度、角速度）
+- **Config**：PID 参数调节面板
+
+## 🧩 技术栈
+
+- 前端框架：Vue 3 + TypeScript
+- 构建工具：Vite
+- 桌面框架：Electron
+- 状态管理：Pinia
+- UI 框架：Element Plus
+- 图表库：ECharts
+- 通信方式：串口 / 文件输入
