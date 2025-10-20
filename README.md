@@ -5,7 +5,7 @@
 🥳 Nav-Tools 是一款专为机器人开发者打造的**桌面级可视化工作台**，全面覆盖机器人复合应用与主流传感器。目前已集成通用数据流 Flow、GNSS 定位模块、超声波避障、PID 跟随仿真等功能，支持布局与数据字段的灵活自定义，极大提升调试效率与开发体验。更多请查看：
 
 - 应用下载：https://github.com/salmoshu/Nav-Tools/releases
-- 在线文档：https://salmoshu.github.io/tools/Nav-Tools/01-overview.html
+- 在线文档：https://salmoshu.github.io/robot/Nav-Tools/01-overview.html
 
 ---
 
