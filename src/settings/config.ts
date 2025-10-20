@@ -27,6 +27,12 @@ const appConfig: any = {
     }),
   },
   pnc: {
+    motor: createModuleItem({
+      title: 'Motor',
+      icon: toolBarIcon.motor,
+      action: ['config', 'console'],
+      props: {}
+    }),
     followsim: createModuleItem({
       title: 'FollowSim',
       icon: toolBarIcon.follow,
