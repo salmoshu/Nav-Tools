@@ -1,6 +1,6 @@
 import { ref, watch, computed, markRaw, defineAsyncComponent } from 'vue'
 import type { DefineComponent } from 'vue'
-import { appConfig } from '@/settings/config'
+import { appConfig, navMode } from '@/settings/config'
 import { ElMessage } from 'element-plus'
 import emitter from '@/hooks/useMitt'
 import { showStatusBar } from '@/composables/useStatusManager'
@@ -167,7 +167,11 @@ export function useLayoutManager() {
   const moudleKeys = Object.keys(firstApp) as Array<keyof typeof firstApp>
   const firstModuleKey = moudleKeys[0]
   const firstModule = firstApp[firstModuleKey]
-  const currentFuncMode = ref(firstModule.funcMode)
+  const savedAppMode = localStorage.getItem(`saved-app-mode`)
+  const savedFuncMode = localStorage.getItem(`saved-func-mode`)
+  const currentFuncMode = ref(savedFuncMode || firstModule.funcMode)
+  navMode.funcMode = currentFuncMode.value;
+  navMode.appMode = savedAppMode || String(firstAppKey);
 
   const layoutDraggableList = ref<LayoutItem[]>([])
 

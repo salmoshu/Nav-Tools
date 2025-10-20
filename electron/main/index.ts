@@ -79,7 +79,23 @@ async function createWindow() {
     if (url.startsWith('https:')) shell.openExternal(url)
     return { action: 'deny' }
   })
+
   // win.webContents.on('will-navigate', (event, url) => { }) #344
+
+  // 监听窗口关闭事件，在关闭前保存数据
+  let isForceClose = false
+  win.on('close', (event) => {
+    if (!isForceClose && win) {
+      event.preventDefault()
+      // 发送保存请求到渲染进程
+      win.webContents.send('save-app-mode')
+      // 给渲染进程一点时间处理保存操作，然后强制关闭
+      setTimeout(() => {
+        isForceClose = true;
+        win?.close()
+      }, 100)
+    }
+  })
 }
 
 function createMenu() {

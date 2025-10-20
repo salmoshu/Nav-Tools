@@ -323,6 +323,13 @@ const detachItem = (item: any) => {
 
 // 生命周期
 onMounted(() => {
+  // 监听主进程发送的保存请求
+  window.ipcRenderer.on('save-app-mode', () => {
+    // 保存当前的funcMode
+    localStorage.setItem('saved-app-mode', navMode.appMode)
+    localStorage.setItem('saved-func-mode', navMode.funcMode)
+  })
+
   initLayout()
 
   emitter.on('edit', editLayout)
