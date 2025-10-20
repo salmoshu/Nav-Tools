@@ -30,7 +30,7 @@ const appConfig: any = {
     motor: createModuleItem({
       title: 'Motor',
       icon: toolBarIcon.motor,
-      action: ['config', 'console'],
+      action: ['data', 'config', 'console'],
       props: {}
     }),
     followsim: createModuleItem({
