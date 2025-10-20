@@ -12,13 +12,6 @@
       </div>
       
       <div class="file-controls">
-        <input type="file" ref="fileInput" @change="handleFileUpload" accept=".txt,.csv" style="display: none">
-        <el-button type="default" size="small" @click="fileInput?.click()" class="upload-btn" :disabled="deviceConnected">
-          载入
-        </el-button>
-        <el-button type="default" size="small" @click="saveData" class="save-btn" :disabled="rawData.length===0 || deviceConnected">
-          保存
-        </el-button>
         <el-button type="default" size="small" @click="clearPlotData" class="clear-btn">
           清除
         </el-button>
@@ -32,11 +25,10 @@
 import { ref, onMounted, onUnmounted, watch } from 'vue'
 import * as echarts from 'echarts'
 import { useUltrasonic } from '@/composables/ultrasonic/useUltrasonic'
-import { ElMessage } from 'element-plus'
 import { useDevice } from '@/hooks/useDevice'
 
 // 初始化超声波数据处理
-const { timestamps, rawData, filteredData, obstacleData, initRawData, clearRawData, saveData } = useUltrasonic()
+const { timestamps, rawData, filteredData, obstacleData, clearRawData } = useUltrasonic()
 
 const fileInput = ref<HTMLInputElement>()
 const chartRef = ref<HTMLDivElement>()
@@ -331,49 +323,11 @@ function dispose() {
   }
 }
 
-// 处理文件上传
-function handleFileUpload(event: Event) {
-  clearPlotData()
-  const target = event.target as HTMLInputElement
-  const file = target.files?.[0]
-  
-  if (!file) return
-  
-  const reader = new FileReader()
-  reader.onload = (e) => {
-    const content = e.target?.result as string
-    try {
-      timeRange.value = 0
-      initRawData(content, 0)
-      updateChart()
-    } catch (error) {
-      ElMessage({
-        message: `文件数据处理失败`,
-        type: 'error',
-        placement: 'bottom-right',
-        offset: 50,
-      })
-      console.error('文件处理错误:', error)
-    }
-  }
-  reader.onerror = () => {
-    ElMessage({
-      message: `文件读取失败`,
-      type: 'error',
-      placement: 'bottom-right',
-      offset: 50,
-    })
-  }
-  reader.readAsText(file)
-  
-  // 重置文件输入，以便可以重复上传同一个文件
-  target.value = ''
-}
-
 // 监听数据变化更新图表
 watch(rawData, () => {
-  if (deviceConnected.value) {
-    updateChart()
+  updateChart()
+  if (!deviceConnected.value) {
+    timeRange.value = 0
   }
 }, { immediate: true, deep: true })
 

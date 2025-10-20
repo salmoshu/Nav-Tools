@@ -7,9 +7,9 @@ import { useFlow } from '@/composables/flow/useFlow'
 import { useConsole } from '@/composables/flow/useConsole'
 import emitter from '@/hooks/useMitt'
 
-const { processRawData: processNmeaRawData } = useNmea()
-const { addRawData: addUltrasonicRawData } = useUltrasonic()
-const { addRawData: addFlowRawData, initRawData: initFlowRawData } = useFlow()
+const { processRawData: addGnssData } = useNmea()
+const { addRawData: addUltrasonicData, initRawData: initUltrasonicData } = useUltrasonic()
+const { addRawData: addFlowData, initRawData: initFlowData } = useFlow()
 const { addMessages: initFlowConsole, addMessage:addFlowConsole } = useConsole(true) // 使用全局实例
 
 // 串口配置
@@ -183,15 +183,24 @@ export function useDevice() {
           // 根据当前模式处理数据
           switch (navMode.funcMode) {
             case 'flow':
+              initFlowData(content)
+              initFlowConsole(content)
               ElMessage({
                 message: `成功导入文件: ${file.name}`,
                 type: 'success',
                 placement: 'bottom-right',
                 offset: 50,
               })
-              initFlowRawData(content)
-              initFlowConsole(content)
               break
+            case 'ultrasonic':
+              initUltrasonicData(content, 0)
+              initFlowConsole(content)
+              ElMessage({
+                message: `成功导入文件: ${file.name}`,
+                type: 'success',
+                placement: 'bottom-right',
+                offset: 50,
+              })
             default:
               // 其他模式下发送通用事件
               emitter.emit('file-imported', { type: 'text', data: content, filename: file.name })
@@ -370,7 +379,7 @@ export function useDevice() {
         try {
           switch (navMode.funcMode) {
             case 'flow':
-              initFlowRawData(content);
+              initFlowData(content);
               initFlowConsole(content);
               ElMessage({
                 message: `数据加载成功`,
@@ -379,10 +388,12 @@ export function useDevice() {
                 offset: 50,
               });
               break;
-            default:
+            case 'ultrasonic':
+              initUltrasonicData(content, 0);
+              initFlowConsole(content);
               ElMessage({
-                message: `未定义的文件处理模式`,
-                type: 'error',
+                message: `数据加载成功`,
+                type: 'success',
                 placement: 'bottom-right',
                 offset: 50,
               });
@@ -538,15 +549,15 @@ export function useDevice() {
   ipcManager.on('serial-data-to-renderer', (event: any, data: string) => {
     switch (navMode.funcMode) {
       case 'gnss':
-        processNmeaRawData(data);
+        addGnssData(data);
         addFlowConsole(data);
         break;
       case 'ultrasonic':
-        addUltrasonicRawData(data);
+        addUltrasonicData(data);
         addFlowConsole(data);
         break;
       case 'flow':
-        addFlowRawData(data);
+        addFlowData(data);
         addFlowConsole(data);
         break;
       default:

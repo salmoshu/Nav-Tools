@@ -35,13 +35,16 @@ export function useUltrasonic() {
   }
 
   const initRawData = (data: string, startTime: number=0) => {
+    clearRawData();
     isBatchData.value = true
     timestamp.value = startTime
     const lines = data.split("\n")
     for (const line of lines) {
       if (line.trim() !== "") {
         try {
-          const json = JSON.parse(line)
+          const time_reg = /^\d{2}:\d{2}:\d{2}\.\d+(?:\.\d+)?:/;
+          const cleanedLine = line.replace(time_reg, '').trim()
+          const json = JSON.parse(cleanedLine)
           const data = json.ultrasonic
           if (typeof json.time === 'number') {
             if (timestamp.value == 0) {
@@ -126,35 +129,6 @@ export function useUltrasonic() {
     updateUltrasonicStatus()
   }
   
-  const saveData = () => {
-    // 创建符合要求的格式数据
-    const formattedData = rawData.value.map((ultrasonic, index) => {
-      return {
-        time: timestamps.value[index], // 使用已有的时间戳或计算时间
-        ultrasonic: ultrasonic,
-      };
-    });
-    
-    // 生成每行一个JSON对象的文件内容
-    const fileContent = formattedData.map(item => JSON.stringify(item)).join('\n');
-    
-    // 创建Blob并下载文件
-    const blob = new Blob([fileContent], { type: 'text/csv;charset=utf-8;' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    const now = new Date();
-    // 格式化为：YYYY-MM-DDTHH-mm-ssZ，不含毫秒
-    const timestamp = now.getUTCFullYear() + '-' +
-      String(now.getUTCMonth() + 1).padStart(2, '0') + '-' +
-      String(now.getUTCDate()).padStart(2, '0') + 'T' +
-      String(now.getUTCHours()).padStart(2, '0') + '-' +
-      String(now.getUTCMinutes()).padStart(2, '0') + '-' +
-      String(now.getUTCSeconds()).padStart(2, '0') + 'Z';
-    a.download = `Nav-Tools_${timestamp}.txt`;
-    a.click();
-    URL.revokeObjectURL(a.href);
-  }
-  
   return {
     timestamps,
     rawData,
@@ -163,7 +137,6 @@ export function useUltrasonic() {
     addRawData,
     initRawData,
     clearRawData,
-    saveData,
     updateUltrasonicStatus // 可选：导出更新函数，以便外部手动触发更新
   }
 }
