@@ -201,28 +201,23 @@ export function useMotorCmd() {
         start_index: configForm.checksum.start_index,
         end_index: configForm.checksum.end_index
       },
-      command: {} as Record<string, any>
+      readCommands: readCommands.value.map(cmd => ({
+        name: cmd.name,
+        address: cmd.address,
+        data: cmd.data,
+        length: cmd.length,
+        dataType: cmd.dataType,
+        frequency: cmd.frequency,
+        lastSentTime: cmd.lastSentTime
+      })),
+      writeCommands: writeCommands.value.map(cmd => ({
+        name: cmd.name,
+        address: cmd.address,
+        data: cmd.data,
+        length: cmd.length,
+        dataType: cmd.dataType
+      }))
     }
-
-    // 添加读命令
-    readCommands.value.forEach(cmd => {
-      config.command[cmd.name] = {
-        address: cmd.address,
-        data: cmd.data,
-        length: cmd.length.toString().padStart(2, '0'),
-        dataType: cmd.dataType
-      }
-    })
-
-    // 添加写命令
-    writeCommands.value.forEach(cmd => {
-      config.command[cmd.name] = {
-        address: cmd.address,
-        data: cmd.data,
-        length: cmd.length.toString().padStart(2, '0'),
-        dataType: cmd.dataType
-      }
-    })
 
     return JSON.stringify(config, null, 2)
   })

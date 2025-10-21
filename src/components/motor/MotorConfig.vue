@@ -83,7 +83,6 @@
                       size="default"
                       :disabled="!isConfigValid"
                       @input="(value: string) => handleSingleDecimalInput(cmd, value)"
-                      style="width: 110px;"
                     />
                     <span class="hex-display">{{ cmd.data }}</span>
                   </div>
@@ -96,7 +95,6 @@
                         size="default"
                         :disabled="!isConfigValid"
                         @input="(value: string) => updateDataValueWithDecimal(cmd, index, value)"
-                        style="width: 80px; margin-right: 4px;"
                       />
                       <span class="hex-display">{{ dataItem }}</span>
                     </div>
@@ -113,8 +111,8 @@
     <!-- 配置对话框 -->
     <el-dialog
       v-model="configDialogVisible"
-      title="🎯 电机驱动指令配置"
-      width="60%"
+      title="电机驱动指令配置"
+      width="65%"
       top="3vh"
       :close-on-click-modal="false"
       custom-class="motor-config-dialog"
@@ -142,7 +140,7 @@
           </el-button>
           
           <el-button type="warning" :icon="Refresh" size="default" @click="resetConfig">
-            重置默认
+            重置配置
           </el-button>
         </div>
 
@@ -174,13 +172,11 @@
             </el-col>
           </el-row>
           
-          <el-divider content-position="left">校验配置</el-divider>
-          
           <el-row :gutter="20">
             <el-col :span="8">
               <el-form-item label="校验方法：">
                 <el-select v-model="configForm.checksum.method" placeholder="校验方法">
-                    <el-option label="和校验" value="sum" />
+                  <el-option label="和校验" value="sum" />
                   <el-option label="XOR" value="xor" />
                   <el-option label="CRC8" value="crc8" />
                   <el-option label="CRC16" value="crc16" />
@@ -438,21 +434,8 @@ const loadConfigFromStorage = () => {
     const stored = localStorage.getItem(STORAGE_KEY)
     if (stored) {
       const config = JSON.parse(stored)
-      // 加载基础配置
-      updateConfigForm({
-        header: config.header || 'AACC',
-        format: config.format || 'hex',
-        checksum: config.checksum || { method: 'sum', start_index: 0, end_index: -1 }
-      })
-      
-      // 加载命令配置
-      if (config.readCommands && Array.isArray(config.readCommands)) {
-        updateReadCommands(config.readCommands)
-      }
-      if (config.writeCommands && Array.isArray(config.writeCommands)) {
-        updateWriteCommands(config.writeCommands)
-      }
-      
+      // 使用统一的 loadConfig 函数处理配置加载
+      loadConfig(config)
       console.log('配置已从localStorage加载')
       return true
     }
@@ -528,39 +511,6 @@ const showConfigDialog = () => {
 // 保存配置
 const saveConfig = () => {
   try {
-    // 验证配置格式
-    const config = JSON.parse(formattedConfig.value)
-    
-    // 更新配置表单数据
-    configForm.header = config.header
-    configForm.format = config.format
-    configForm.checksum.method = config.checksum.method
-    configForm.checksum.start_index = config.checksum.start_index
-    configForm.checksum.end_index = config.checksum.end_index
-    
-    // 直接使用配置中的读写命令列表，而不是重新分类
-    if (config.readCommands && Array.isArray(config.readCommands)) {
-      readCommands.value = config.readCommands.map((cmd: any) => ({
-        name: cmd.name,
-        address: cmd.address,
-        data: cmd.data,
-        length: parseInt(cmd.length) || 0,
-        dataType: cmd.dataType || 'int16',
-        frequency: cmd.frequency || null,
-        lastSentTime: cmd.lastSentTime || 0
-      }))
-    }
-    
-    if (config.writeCommands && Array.isArray(config.writeCommands)) {
-      writeCommands.value = config.writeCommands.map((cmd: any) => ({
-        name: cmd.name,
-        address: cmd.address,
-        data: cmd.data,
-        length: parseInt(cmd.length) || 2,
-        dataType: cmd.dataType || 'int16'
-      }))
-    }
-    
     // 保存到localStorage
     saveConfigToStorage()
     
@@ -574,7 +524,7 @@ const saveConfig = () => {
     })
   } catch (error) {
     ElMessage({
-      message: '配置格式错误，请检查输入',
+      message: '配置保存失败',
       type: 'error',
       duration: 1000,
       placement: 'bottom-right',
@@ -874,8 +824,8 @@ const resetConfig = () => {
 // 载入配置数据
 const loadConfig = (config: any) => {
   try {
-    // 验证配置结构
-    if (!config.header || !config.format || !config.checksum || !config.command) {
+    // 验证配置结构 - 支持新旧两种格式
+    if (!config.header || !config.format || !config.checksum) {
       throw new Error('配置格式不完整')
     }
     
@@ -890,40 +840,62 @@ const loadConfig = (config: any) => {
     readCommands.value = []
     writeCommands.value = []
     
-    // 分离读命令和写命令
-    Object.entries(config.command).forEach(([name, cmd]: [string, any]) => {
-      if (cmd.data !== undefined) {
-        // 写命令
-        writeCommands.value.push({
-          name,
-          address: cmd.address || '00',
-          data: cmd.data || '00',
-          length: parseInt(cmd.length) || 2,
-          dataType: cmd.dataType || 'int16'
-        })
-      } else {
-        // 读命令
-        readCommands.value.push({
-          name,
-          address: cmd.address || '00',
-          data: cmd.data || '00',
-          length: parseInt(cmd.length) || 0,
-          dataType: cmd.dataType || 'int16',
-          frequency: cmd.frequency || null,
-          lastSentTime: 0
-        })
-      }
-    })
+    // 处理新格式（有独立的readCommands和writeCommands数组）
+    if (config.readCommands && Array.isArray(config.readCommands) && config.writeCommands && Array.isArray(config.writeCommands)) {
+      // 新格式处理
+      readCommands.value = config.readCommands.map((cmd: any) => ({
+        name: cmd.name || 'UNKNOWN_CMD',
+        address: cmd.address || '00',
+        data: cmd.data || '0000',
+        length: parseInt(cmd.length) || 0,
+        dataType: cmd.dataType || 'int16',
+        frequency: cmd.frequency || null,
+        lastSentTime: cmd.lastSentTime || 0
+      }))
+      
+      writeCommands.value = config.writeCommands.map((cmd: any) => ({
+        name: cmd.name || 'UNKNOWN_CMD',
+        address: cmd.address || '00',
+        data: cmd.data || '0000',
+        length: parseInt(cmd.length) || 2,
+        dataType: cmd.dataType || 'int16'
+      }))
+    } else if (config.command && typeof config.command === 'object') {
+      // 旧格式处理（兼容旧配置文件）
+      Object.entries(config.command).forEach(([name, cmd]: [string, any]) => {
+        if (parseInt(cmd.length) === 0) {
+          // 读命令（长度为0）
+          readCommands.value.push({
+            name,
+            address: cmd.address || '00',
+            data: cmd.data || '0000',
+            length: 0,
+            dataType: cmd.dataType || 'int16',
+            frequency: cmd.frequency || null,
+            lastSentTime: 0
+          })
+        } else {
+          // 写命令（长度大于0）
+          writeCommands.value.push({
+            name,
+            address: cmd.address || '00',
+            data: cmd.data || '0000',
+            length: parseInt(cmd.length) || 2,
+            dataType: cmd.dataType || 'int16'
+          })
+        }
+      })
+    }
     
     // 如果没有命令，添加默认命令
     if (readCommands.value.length === 0) {
       readCommands.value = [
-        { name: 'GET_SPEED', address: '00', data: '00', length: 0, dataType: 'int16', frequency: null, lastSentTime: 0 }
+        { name: 'GET_SPEED', address: '00', data: '0000', length: 0, dataType: 'int16', frequency: null, lastSentTime: 0 }
       ]
     }
     if (writeCommands.value.length === 0) {
       writeCommands.value = [
-        { name: 'SET_SPEED', address: '00', data: '0000', length: 4, dataType: 'int16' }
+        { name: 'SET_SPEED', address: '00', data: '0000', length: 2, dataType: 'int16' }
       ]
     }
     
@@ -1006,10 +978,22 @@ const motor_cfg = computed(() => {
       start_index: configForm.checksum.start_index,
       end_index: configForm.checksum.end_index
     },
-    command: Object.fromEntries([
-      ...readCommands.value.map(cmd => [cmd.name, { address: cmd.address, data: cmd.data, length: cmd.length.toString().padStart(2, '0'), dataType: cmd.dataType || 'int16' }]),
-      ...writeCommands.value.map(cmd => [cmd.name, { address: cmd.address, data: cmd.data, length: cmd.length.toString().padStart(2, '0'), dataType: cmd.dataType || 'int16' }])
-    ])
+    readCommands: readCommands.value.map(cmd => ({
+      name: cmd.name,
+      address: cmd.address,
+      data: cmd.data,
+      length: cmd.length,
+      dataType: cmd.dataType,
+      frequency: cmd.frequency,
+      lastSentTime: cmd.lastSentTime
+    })),
+    writeCommands: writeCommands.value.map(cmd => ({
+      name: cmd.name,
+      address: cmd.address,
+      data: cmd.data,
+      length: cmd.length,
+      dataType: cmd.dataType
+    }))
   }
 })
 
@@ -1161,7 +1145,7 @@ onUnmounted(() => {
 }
 
 .command-btn {
-  min-width: 120px;
+  min-width: 140px;
   transition: all 0.3s ease;
 }
 
@@ -1207,7 +1191,7 @@ onUnmounted(() => {
 /* 防止标签页切换时的自动滚动 */
 :deep(.el-tabs__content) {
   overflow: visible;
-  min-height: 400px;
+  min-height: 300px;
   padding: 15px;
 }
 
@@ -1412,7 +1396,6 @@ onUnmounted(() => {
 }
 
 .multi-data-inputs .el-input {
-  width: 80px !important;
   flex-shrink: 0;
 }
 
