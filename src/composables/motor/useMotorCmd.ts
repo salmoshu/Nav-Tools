@@ -327,6 +327,108 @@ export function useMotorCmd() {
     return message
   }
 
+  const convertByteArrayToJson = (hexData: any) => {
+    try {
+      // 确保输入有效
+      if (!hexData || (typeof hexData !== 'string' && !Array.isArray(hexData))) {
+        console.log('输入数据无效或为空')
+        return ''
+      }
+      
+      let hexString: string;
+      
+      // 处理不同类型的输入
+      if (typeof hexData === 'string') {
+        // 如果已经是十六进制字符串，直接使用
+        hexString = hexData.toUpperCase();
+      } else if (Array.isArray(hexData)) {
+        // 如果是字节数组，转换为十六进制字符串
+        hexString = hexData.map((byte: number) => 
+          (byte as number).toString(16).padStart(2, '0').toUpperCase()
+        ).join('')
+      } else {
+        console.log('不支持的输入类型')
+        return ''
+      }
+      
+      // 确保十六进制字符串长度为偶数
+      if (hexString.length % 2 !== 0) {
+        console.warn('十六进制字符串长度为奇数，可能数据不完整，长度:', hexString.length)
+        return ''
+      }
+      
+      // 获取所有指令名称作为key
+      const allCommandNames = [
+        ...readCommands.value.map(cmd => cmd.name),
+        ...writeCommands.value.map(cmd => cmd.name)
+      ]
+      
+      // 如果没有指令，返回空字符串
+      if (allCommandNames.length === 0) {
+        return ''
+      }
+      
+      // 解析每个指令的数据
+      const results: Record<string, any> = {}
+      let currentIndex = 0
+      
+      // 先处理读指令
+      readCommands.value.forEach(cmd => {
+        if (currentIndex < hexString.length) {
+          const dataLength = cmd.length * 2 // 每个字节2个十六进制字符
+          if (dataLength > 0 && currentIndex + dataLength <= hexString.length) {
+            const cmdData = hexString.substring(currentIndex, currentIndex + dataLength)
+            
+            // 根据数据类型解析数据
+            if (cmd.dataType === 'int16') {
+              // int16: 小端格式，需要转换为大端
+              const bigEndian = cmdData.slice(2, 4) + cmdData.slice(0, 2)
+              const uint16 = parseInt(bigEndian, 16)
+              const int16 = uint16 > 32767 ? uint16 - 65536 : uint16
+              results[cmd.name] = int16
+            } else if (cmd.dataType === 'float32') {
+              // float32: 4字节小端格式
+              if (cmdData.length >= 8) {
+                const bytes = cmdData.match(/.{2}/g) || []
+                const buffer = new ArrayBuffer(4)
+                const view = new DataView(buffer)
+                
+                bytes.forEach((byte, index) => {
+                  view.setUint8(index, parseInt(byte, 16))
+                })
+                
+                const float32 = view.getFloat32(0, true) // true 表示小端
+                results[cmd.name] = float32
+              } else {
+                results[cmd.name] = null
+              }
+            } else {
+              results[cmd.name] = cmdData
+            }
+            
+            currentIndex += dataLength
+          } else {
+            results[cmd.name] = null
+          }
+        } else {
+          results[cmd.name] = null
+        }
+      })
+      
+      // 再处理写指令（写指令通常没有返回数据，设置为null）
+      writeCommands.value.forEach(cmd => {
+        results[cmd.name] = null
+      })
+      
+      // 生成JSON内容的字符串，最后加一个换行符
+      return JSON.stringify(results) + '\n'
+      
+    } catch (error) {
+      console.error('字节数组转JSON失败:', error)
+      return ''
+    }
+  }
+
   return {
     // 状态
     configForm,
@@ -355,6 +457,9 @@ export function useMotorCmd() {
     
     // 指令构建函数
     buildReadCommandMessage,
-    buildWriteCommandMessage
+    buildWriteCommandMessage,
+    
+    // 字节数组转JSON函数
+    convertByteArrayToJson
   }
 }

@@ -5,12 +5,14 @@ import { useNmea } from '@/composables/gnss/useNmea'
 import { useUltrasonic } from '@/composables/ultrasonic/useUltrasonic'
 import { useFlow } from '@/composables/flow/useFlow'
 import { useConsole } from '@/composables/flow/useConsole'
+import { useMotorCmd } from "@/composables/motor/useMotorCmd"
 import emitter from '@/hooks/useMitt'
 
 const { processRawData: addGnssData } = useNmea()
 const { addRawData: addUltrasonicData, initRawData: initUltrasonicData } = useUltrasonic()
 const { addRawData: addFlowData, initRawData: initFlowData } = useFlow()
 const { addMessages: initFlowConsole, addMessage:addFlowConsole } = useConsole(true) // 使用全局实例
+const { convertByteArrayToJson } = useMotorCmd()
 
 // 串口配置
 const serialPort = ref("");
@@ -560,6 +562,11 @@ export function useDevice() {
         addFlowData(data);
         addFlowConsole(data);
         break;
+      case 'motor':
+        const jsonData = convertByteArrayToJson(data)
+        addFlowConsole(data+'\n');
+        addFlowConsole(jsonData);
+        addFlowData(jsonData);
       default:
         break;
     }

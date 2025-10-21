@@ -112,7 +112,7 @@
     <el-dialog
       v-model="configDialogVisible"
       title="电机驱动指令配置"
-      width="65%"
+      width="800px"
       top="3vh"
       :close-on-click-modal="false"
       custom-class="motor-config-dialog"
@@ -255,7 +255,7 @@
                   </el-select>
                 </template>
               </el-table-column>
-              <el-table-column label="操作" width="100" align="center">
+              <el-table-column label="操作" width="50" align="center">
                 <template #default="scope">
                   <el-button
                     type="danger"

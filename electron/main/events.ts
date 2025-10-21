@@ -1,6 +1,15 @@
 import fs from "fs";
 import { dialog, IpcMainEvent } from "electron";
 import { SerialPort } from "serialport";
+import { navMode } from "../../src/settings/config";
+import { ipcMain } from "electron";
+
+// 监听渲染进程的模式同步
+ipcMain.on('sync-nav-mode', (event, { appMode, funcMode }) => {
+  console.log('主进程收到模式同步:', { appMode, funcMode });
+  navMode.appMode = appMode;
+  navMode.funcMode = funcMode;
+});
 
 const eventsMap = {
   /**
@@ -170,8 +179,15 @@ function openSerialPort(
 
     const serial_decoder = new TextDecoder('utf-8', { stream: true } as any);
     currentPort.on("data", (chunk) => {
-      const str = serial_decoder.decode(chunk, { stream: true });
-      serialDataToRenderer(event, str);
+      if (navMode.funcMode === 'motor') {
+        const hexString = Array.from(chunk as Uint8Array)
+          .map(byte => (byte as number).toString(16).padStart(2, '0').toUpperCase())
+          .join('');
+        serialDataToRenderer(event, hexString);
+      } else {
+        const str = serial_decoder.decode(chunk, { stream: true });
+        serialDataToRenderer(event, str);
+      }
     });
   });
 }

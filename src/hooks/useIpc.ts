@@ -14,6 +14,14 @@ function openModuleView(appKey: string, moduleKey: string) {
 
   ;(navMode as any).appMode = appModeMap[appKey]
   navMode.funcMode = funcModeMap[moduleKey]
+  
+  // 同步模式到主进程
+  if (window.ipcRenderer) {
+    window.ipcRenderer.send('sync-nav-mode', {
+      appMode: appModeMap[appKey],
+      funcMode: funcModeMap[moduleKey]
+    })
+  }
 }
 
 if (window.ipcRenderer) {

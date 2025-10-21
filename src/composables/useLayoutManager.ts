@@ -172,6 +172,14 @@ export function useLayoutManager() {
   const currentFuncMode = ref(savedFuncMode || firstModule.funcMode)
   navMode.funcMode = currentFuncMode.value;
   navMode.appMode = savedAppMode || String(firstAppKey);
+  
+  // 初始化时同步模式到主进程
+  if (window.ipcRenderer) {
+    window.ipcRenderer.send('sync-nav-mode', {
+      appMode: navMode.appMode,
+      funcMode: navMode.funcMode
+    })
+  }
 
   const layoutDraggableList = ref<LayoutItem[]>([])
 
