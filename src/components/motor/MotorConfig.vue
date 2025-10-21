@@ -403,6 +403,22 @@ const uploadRef = ref()
 const dataInputs = ref<Record<string, string>>({})
 const decimalInputs = ref<Record<string, string>>({}) // 存储十进制输入值
 
+// IPC事件监听器引用
+const serialSuccessListener = (event: any, result: any) => {
+  console.log('串口数据发送成功:', result.data)
+}
+
+const serialErrorListener = (event: any, error: any) => {
+  console.error('串口数据发送失败:', error.error)
+  ElMessage({
+    message: `串口发送失败: ${error.error}`,
+    type: 'error',
+    duration: 2000,
+    placement: 'bottom-right',
+    offset: 50,
+  })
+}
+
 // localStorage键名
 const STORAGE_KEY = 'motor-config'
 
@@ -505,8 +521,35 @@ const saveConfig = () => {
     // 验证配置格式
     const config = JSON.parse(formattedConfig.value)
     
-    // 更新原始配置数据
-    motor_cfg.value = formattedConfig.value
+    // 更新配置表单数据
+    configForm.header = config.header
+    configForm.format = config.format
+    configForm.checksum.method = config.checksum.method
+    configForm.checksum.start_index = config.checksum.start_index
+    configForm.checksum.end_index = config.checksum.end_index
+    
+    // 直接使用配置中的读写命令列表，而不是重新分类
+    if (config.readCommands && Array.isArray(config.readCommands)) {
+      readCommands.value = config.readCommands.map((cmd: any) => ({
+        name: cmd.name,
+        address: cmd.address,
+        data: cmd.data,
+        length: parseInt(cmd.length) || 0,
+        dataType: cmd.dataType || 'int16',
+        frequency: cmd.frequency || null,
+        lastSentTime: cmd.lastSentTime || 0
+      }))
+    }
+    
+    if (config.writeCommands && Array.isArray(config.writeCommands)) {
+      writeCommands.value = config.writeCommands.map((cmd: any) => ({
+        name: cmd.name,
+        address: cmd.address,
+        data: cmd.data,
+        length: parseInt(cmd.length) || 2,
+        dataType: cmd.dataType || 'int16'
+      }))
+    }
     
     // 保存到localStorage
     saveConfigToStorage()
@@ -875,21 +918,21 @@ const updateGlobalTimer = () => {
   
   // 获取所有活跃指令的频率
   const activeFrequencies = readCommands.value
-    .filter(cmd => activeReadCommands.value.has(cmd.name) && cmd.frequency > 0)
+    .filter(cmd => activeReadCommands.value.has(cmd.name) && (cmd.frequency && cmd.frequency > 0))
     .map(cmd => cmd.frequency)
   
   if (activeFrequencies.length === 0) return
   
   // 找到最小频率（最大间隔）
-  const minFrequency = Math.min(...activeFrequencies)
+  const minFrequency = Math.min(...activeFrequencies.filter(f => f !== null) as number[])
   const baseInterval = 1000 / minFrequency
   
   // 创建新的定时器
-  globalTimer.value = setInterval(() => {
+  globalTimer.value = window.setInterval(() => {
     const currentTime = Date.now()
     
     readCommands.value.forEach(command => {
-      if (activeReadCommands.value.has(command.name) && command.frequency > 0) {
+      if (activeReadCommands.value.has(command.name) && command.frequency && command.frequency > 0) {
         // 检查是否应该发送这个指令
         const sendInterval = 1000 / command.frequency
         if (!command.lastSentTime || 
@@ -1129,20 +1172,8 @@ onMounted(() => {
 
   // 监听串口发送结果
   if (window.ipcRenderer) {
-    window.ipcRenderer.on('serial-send-success', (event, result) => {
-      console.log('串口数据发送成功:', result.data)
-    })
-
-    window.ipcRenderer.on('serial-send-error', (event, error) => {
-      console.error('串口数据发送失败:', error.error)
-      ElMessage({
-        message: `串口发送失败: ${error.error}`,
-        type: 'error',
-        duration: 2000,
-        placement: 'bottom-right',
-        offset: 50,
-      })
-    })
+    window.ipcRenderer.on('serial-send-success', serialSuccessListener)
+    window.ipcRenderer.on('serial-send-error', serialErrorListener)
   }
 })
 
@@ -1158,8 +1189,8 @@ onUnmounted(() => {
   
   // 清理串口事件监听
   if (window.ipcRenderer) {
-    window.ipcRenderer.off('serial-send-success')
-    window.ipcRenderer.off('serial-send-error')
+    window.ipcRenderer.off('serial-send-success', serialSuccessListener)
+    window.ipcRenderer.off('serial-send-error', serialErrorListener)
   }
 })
 </script>
