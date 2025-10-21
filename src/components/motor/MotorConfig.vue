@@ -392,7 +392,17 @@ const {
   removeCommand,
   updateConfigForm,
   updateReadCommands,
-  updateWriteCommands
+  updateWriteCommands,
+  // 数据转换函数
+  getDataCount,
+  splitData,
+  getDataInputKey,
+  decimalToHex,
+  hexToDecimal,
+  calculateChecksum,
+  // 指令构建函数
+  buildReadCommandMessage,
+  buildWriteCommandMessage
 } = useMotorCmd()
 
 // 响应式变量
@@ -576,26 +586,8 @@ const saveConfig = () => {
 // 发送读指令
 const sendReadCommand = (cmd: any) => {
   try {
-    // 构建报文
-    const header = configForm.header
-    const address = cmd.address.padStart(2, '0')
-    
-    // 构建基础报文（不包含校验）
-    let message = header + address
-    
-    // 添加数据长度字段（始终包含，即使为0）
-    const length = cmd.length.toString().padStart(2, '0')
-    message += length
-    
-    // 如果数据长度大于0，添加数据字段
-    if (cmd.length > 0) {
-      const data = cmd.data.padStart(cmd.length * 2, '0')
-      message += data
-    }
-    
-    // 计算校验码
-    const checksum = calculateChecksum(message, configForm.checksum.method)
-    message += checksum
+    // 使用钩子中的函数构建报文
+    const message = buildReadCommandMessage(cmd, configForm)
     
     // 检查是否有频率设置
     if (cmd.frequency && cmd.frequency > 0) {
@@ -654,25 +646,8 @@ const sendReadCommand = (cmd: any) => {
 // 发送写指令
 const sendWriteCommand = (cmd: any) => {
   try {
-    // 确保数据长度正确
-    const dataCount = getDataCount(cmd)
-    const bytesPerData = cmd.dataType === 'int16' ? 2 : 4
-    const expectedLength = dataCount * bytesPerData
-    
-    // 填充数据到正确长度
-    let data = cmd.data.padStart(expectedLength * 2, '0')
-    
-    // 构建报文
-    const header = configForm.header
-    const address = cmd.address.padStart(2, '0')
-    const length = cmd.length.toString().padStart(2, '0')
-    
-    // 构建基础报文（不包含校验）
-    let message = header + address + length + data
-    
-    // 计算校验码
-    const checksum = calculateChecksum(message, configForm.checksum.method)
-    message += checksum
+    // 使用钩子中的函数构建报文
+    const message = buildWriteCommandMessage(cmd, configForm)
     
     // 实际发送到串口
     sendDataToSerial(message)
@@ -688,101 +663,7 @@ const sendWriteCommand = (cmd: any) => {
   }
 }
 
-// 计算数据个数（根据数据类型和长度）
-const getDataCount = (cmd: any): number => {
-  if (cmd.length === 0) return 1
-  
-  const bytesPerData = cmd.dataType === 'int16' ? 2 : 4
-  return Math.floor(cmd.length / bytesPerData)
-}
 
-// 分割数据字符串
-const splitData = (data: string, count: number): string[] => {
-  if (!data || count <= 1) return [data || '']
-  
-  const cleanData = data.replace(/\s/g, '').padEnd(count * 4, '0') // 确保总长度足够
-  const bytesPerData = 4 // int16占4个十六进制字符（2字节），float32占8个十六进制字符（4字节）
-  const result: string[] = []
-  
-  for (let i = 0; i < count; i++) {
-    const start = i * bytesPerData
-    const end = start + bytesPerData
-    result.push(cleanData.substring(start, end) || '0000')
-  }
-  
-  return result
-}
-
-// 获取数据输入键
-const getDataInputKey = (cmd: any, index: number): string => {
-  return `${cmd.name}_${index}`
-}
-
-// 十进制到十六进制转换函数（小端格式）
-const decimalToHex = (decimalStr: string, dataType: string): string => {
-  if (!decimalStr || isNaN(Number(decimalStr))) {
-    return '0000' // int16默认4个字符
-  }
-  
-  const num = Number(decimalStr)
-  
-  if (dataType === 'int16') {
-    // int16: 2字节，范围 -32768 到 32767，小端格式
-    const clamped = Math.max(-32768, Math.min(32767, num))
-    const uint16 = clamped < 0 ? clamped + 65536 : clamped
-    const hex = uint16.toString(16).padStart(4, '0').toUpperCase()
-    // 小端：低字节在前，高字节在后
-    return hex.slice(2, 4) + hex.slice(0, 2)
-  } else if (dataType === 'float32') {
-    // float32: 4字节，IEEE 754格式，小端格式
-    const buffer = new ArrayBuffer(4)
-    const view = new DataView(buffer)
-    view.setFloat32(0, num, true) // true 表示小端
-    const bytes = new Uint8Array(buffer)
-    return Array.from(bytes).map(b => b.toString(16).padStart(2, '0').toUpperCase()).join('')
-  }
-  
-  return '00'
-}
-
-// 十六进制到十进制转换函数（小端格式）
-const hexToDecimal = (hexStr: string, dataType: string): string => {
-  if (!hexStr || hexStr.length < 2) {
-    return '0'
-  }
-  
-  try {
-    if (dataType === 'int16') {
-      // int16: 2字节，小端格式，需要4个十六进制字符
-      const cleanHex = hexStr.replace(/\s/g, '').padStart(4, '0').slice(0, 4)
-      // 小端：低字节在前，高字节在后，需要转换为大端再解析
-      const bigEndian = cleanHex.slice(2, 4) + cleanHex.slice(0, 2)
-      const uint16 = parseInt(bigEndian, 16)
-      // 转换回有符号数
-      const int16 = uint16 > 32767 ? uint16 - 65536 : uint16
-      return int16.toString()
-    } else if (dataType === 'float32') {
-      // float32: 4字节，小端格式
-      const cleanHex = hexStr.replace(/\s/g, '').padStart(8, '0')
-      const bytes = cleanHex.match(/.{2}/g) || []
-      const buffer = new ArrayBuffer(4)
-      const view = new DataView(buffer)
-      
-      // 小端格式：按顺序写入字节
-      bytes.forEach((byte, index) => {
-        view.setUint8(index, parseInt(byte, 16))
-      })
-      
-      const float32 = view.getFloat32(0, true) // true 表示小端
-      return float32.toString()
-    }
-  } catch (error) {
-    console.error('十六进制转十进制失败:', error)
-    return '0'
-  }
-  
-  return '0'
-}
 
 // 处理配置对话框中的十进制输入
 const handleDecimalInput = (cmd: any, value: string) => {
@@ -868,29 +749,7 @@ const updateDataValueWithDecimal = (cmd: any, index: number, value: string) => {
   dataInputs.value[getDataInputKey(cmd, index)] = value
 }
 
-// 计算校验码
-const calculateChecksum = (message: string, method: string): string => {
-  const bytes = message.match(/.{2}/g) || []
-  
-  switch (method) {
-    case 'xor':
-      let xor = 0
-      bytes.forEach(byte => {
-        xor ^= parseInt(byte, 16)
-      })
-      return xor.toString(16).padStart(2, '0').toUpperCase()
-      
-    case 'sum':
-      let sum = 0
-      bytes.forEach(byte => {
-        sum += parseInt(byte, 16)
-      })
-      return (sum & 0xFF).toString(16).padStart(2, '0').toUpperCase()
-      
-    default:
-      return '00'
-  }
-}
+
 
 // 发送数据到串口
 const sendDataToSerial = (data: string) => {
