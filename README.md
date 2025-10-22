@@ -20,12 +20,37 @@
 
 ## 🧪 支持模块与应用
 
-| 应用  | 模块名称   | 功能描述                                   |
-| ----- | ---------- | ------------------------------------------ |
-| ROBOT | Flow       | 通用数据流可视化（时序图、轨迹图、控制台） |
-| PERC  | Ultrasonic | 超声波避障数据可视化（滤波、障碍物检测）   |
-| POS   | GNSS       | 卫星定位模块（轨迹、信号、星空图）         |
-| PNC   | FollowSim  | PID 跟随仿真（仪表盘、速度曲线、参数配置） |
+<table>
+  <tr>
+    <th>应用</th>
+    <th>模块名称</th>
+    <th>功能描述</th>
+  </tr>
+  <tr>
+    <td>ROBOT</td>
+    <td>Flow</td>
+    <td>通用数据流可视化（时序图、轨迹图、控制台）</td>
+  </tr>
+  <tr>
+    <td>PERC</td>
+    <td>Ultrasonic</td>
+    <td>超声波避障数据可视化（滤波、障碍物检测）</td>
+  </tr>
+  <tr>
+    <td>POS</td>
+    <td>GNSS</td>
+    <td>卫星定位模块（轨迹、信号、星空图）</td>
+  </tr>
+  <tr>
+    <td rowspan="2">PNC</td>
+    <td>Motor</td>
+    <td>电机驱动的控制下发与数据可视化</td>
+  </tr>
+  <tr>
+    <td>FollowSim</td>
+    <td>PID 跟随仿真（仪表盘、速度曲线、参数配置）</td>
+  </tr>
+</table>
 
 ---
 
@@ -114,6 +139,12 @@ newModule: createModuleItem({
 - **Deviation**：轨迹图（单点解/浮点解/固定解）
 - **Signal**：卫星信号强度表格（PRN、SNR、星座等）
 - **Sky**：星空图（卫星分布）
+
+### Motor（电机驱动）
+
+- **Console**：日志输出
+- **Data**：电机数据可视化（速度、角度）
+- **Config**：电机参数调节面板（读指令、写指令）
 
 ### FollowSim（PID 跟随仿真）
 
