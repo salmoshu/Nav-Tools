@@ -210,7 +210,7 @@
             </template>
             
             <div class="command-header">
-              <el-text type="info" size="small">读取电机状态的相关命令</el-text>
+              <el-text type="info" size="small">读取电机状态的相关命令（数据长度和数据类型用以决定应答数据）</el-text>
               <el-button type="primary" size="small" @click="addCommand('read')" :icon="Plus" :disabled="activeReadCommands.size > 0">
                 添加读命令
               </el-button>
@@ -235,7 +235,7 @@
               </el-table-column>
               <el-table-column prop="length" label="数据长度" width="100">
                 <template #default="scope">
-                  <el-input-number v-model="scope.row.length" size="default" :min="0" :max="0" controls-position="right" style="width: 100%;" disabled />
+                  <el-input-number v-model="scope.row.length" size="default" :min="0" :max="32" controls-position="right" style="width: 100%;"/>
                 </template>
               </el-table-column>
               <el-table-column prop="data" label="默认数据" width="120">
@@ -305,7 +305,7 @@
               </el-table-column>
               <el-table-column prop="length" label="数据长度" width="100">
                 <template #default="scope">
-                  <el-input-number v-model="scope.row.length" size="default" :min="1" :max="32" controls-position="right" style="width: 100%;" />
+                  <el-input-number v-model="scope.row.length" size="default" :min="0" :max="32" controls-position="right" style="width: 100%;" />
                 </template>
               </el-table-column>
               <el-table-column prop="data" label="默认数据" width="120">

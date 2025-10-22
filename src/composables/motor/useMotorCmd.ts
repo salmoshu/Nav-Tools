@@ -58,6 +58,20 @@ export function useMotorCmd() {
     { name: 'SET_SPEED_M2', address: '02', data: '0000', length: 2, dataType: 'int16' }
   ])
 
+  // 指令状态缓存，保存所有读指令的上次数值
+  const commandStatusCache = ref<Record<string, number | null>>({})
+
+  // 初始化指令状态缓存
+  const initializeCommandStatusCache = () => {
+    commandStatusCache.value = {}
+    readCommands.value.forEach(cmd => {
+      commandStatusCache.value[cmd.name] = null
+    })
+  }
+
+  // 初始化缓存
+  initializeCommandStatusCache()
+
   // ===== 数据转换工具函数 =====
 
   // 计算数据个数（根据数据类型和长度）
@@ -69,17 +83,19 @@ export function useMotorCmd() {
   }
 
   // 分割数据字符串
-  const splitData = (data: string, count: number): string[] => {
+  const splitData = (data: string, count: number, dataType: 'int16' | 'float32' = 'int16'): string[] => {
     if (!data || count <= 1) return [data || '']
     
-    const cleanData = data.replace(/\s/g, '').padEnd(count * 4, '0') // 确保总长度足够
-    const bytesPerData = 4 // int16占4个十六进制字符（2字节），float32占8个十六进制字符（4字节）
+    // 根据数据类型确定每个数据占用的十六进制字符数
+    const hexCharsPerData = dataType === 'int16' ? 4 : 8 // int16: 4字符(2字节), float32: 8字符(4字节)
+    
+    const cleanData = data.replace(/\s/g, '').padEnd(count * hexCharsPerData, '0') // 确保总长度足够
     const result: string[] = []
     
     for (let i = 0; i < count; i++) {
-      const start = i * bytesPerData
-      const end = start + bytesPerData
-      result.push(cleanData.substring(start, end) || '0000')
+      const start = i * hexCharsPerData
+      const end = start + hexCharsPerData
+      result.push(cleanData.substring(start, end) || (dataType === 'int16' ? '0000' : '00000000'))
     }
     
     return result
@@ -289,8 +305,9 @@ export function useMotorCmd() {
     const length = cmd.length.toString().padStart(2, '0')
     message += length
     
-    // 如果数据长度大于0，添加数据字段
-    if (cmd.length > 0) {
+    // 不管数据长度，强行视为0
+    // 数据长度和数据类型的作用是用来定义应答
+    if (false && cmd.length > 0) {
       const data = cmd.data.padStart(cmd.length * 2, '0')
       message += data
     }
@@ -337,12 +354,11 @@ export function useMotorCmd() {
       
       let hexString: string;
       
-      // 处理不同类型的输入
+      // 处理不同类型的输入 - 复用现有逻辑
       if (typeof hexData === 'string') {
-        // 如果已经是十六进制字符串，直接使用
         hexString = hexData.toUpperCase();
       } else if (Array.isArray(hexData)) {
-        // 如果是字节数组，转换为十六进制字符串
+        // 使用map和padStart处理字节数组
         hexString = hexData.map((byte: number) => 
           (byte as number).toString(16).padStart(2, '0').toUpperCase()
         ).join('')
@@ -351,74 +367,64 @@ export function useMotorCmd() {
         return ''
       }
       
-      // 确保十六进制字符串长度为偶数
-      if (hexString.length % 2 !== 0) {
-        console.warn('十六进制字符串长度为奇数，可能数据不完整，长度:', hexString.length)
+      // 验证报文长度
+      if (hexString.length < 6) {
+        console.warn('报文长度太短，无法解析')
         return ''
       }
       
-      // 获取所有指令名称作为key
-      const allCommandNames = [
-        ...readCommands.value.map(cmd => cmd.name),
-        ...writeCommands.value.map(cmd => cmd.name)
-      ]
+      // 解析报文结构
+      const header = hexString.substring(0, 4) // 2字节头部
+      const address = hexString.substring(4, 6) // 1字节地址
+      const dataLength = parseInt(hexString.substring(6, 8), 16) // 1字节数据长度
+      const dataStartIndex = 8
+      const dataEndIndex = dataStartIndex + dataLength * 2
       
-      // 如果没有指令，返回空字符串
-      if (allCommandNames.length === 0) {
+      // 验证数据长度
+      if (dataEndIndex > hexString.length - 2) {
+        console.warn('报文数据长度与实际情况不符')
         return ''
       }
       
-      // 解析每个指令的数据
-      const results: Record<string, any> = {}
-      let currentIndex = 0
+      // 提取数据部分
+      const dataHex = hexString.substring(dataStartIndex, dataEndIndex)
       
-      // 先处理读指令
-      readCommands.value.forEach(cmd => {
-        if (currentIndex < hexString.length) {
-          const dataLength = cmd.length * 2 // 每个字节2个十六进制字符
-          if (dataLength > 0 && currentIndex + dataLength <= hexString.length) {
-            const cmdData = hexString.substring(currentIndex, currentIndex + dataLength)
-            
-            // 根据数据类型解析数据
-            if (cmd.dataType === 'int16') {
-              // int16: 小端格式，需要转换为大端
-              const bigEndian = cmdData.slice(2, 4) + cmdData.slice(0, 2)
-              const uint16 = parseInt(bigEndian, 16)
-              const int16 = uint16 > 32767 ? uint16 - 65536 : uint16
-              results[cmd.name] = int16
-            } else if (cmd.dataType === 'float32') {
-              // float32: 4字节小端格式
-              if (cmdData.length >= 8) {
-                const bytes = cmdData.match(/.{2}/g) || []
-                const buffer = new ArrayBuffer(4)
-                const view = new DataView(buffer)
-                
-                bytes.forEach((byte, index) => {
-                  view.setUint8(index, parseInt(byte, 16))
-                })
-                
-                const float32 = view.getFloat32(0, true) // true 表示小端
-                results[cmd.name] = float32
-              } else {
-                results[cmd.name] = null
-              }
-            } else {
-              results[cmd.name] = cmdData
-            }
-            
-            currentIndex += dataLength
-          } else {
-            results[cmd.name] = null
-          }
-        } else {
-          results[cmd.name] = null
-        }
-      })
+      // 根据地址查找对应的指令配置
+      const matchedCmd = readCommands.value.find(cmd => cmd.address === address)
       
-      // 再处理写指令（写指令通常没有返回数据，设置为null）
-      writeCommands.value.forEach(cmd => {
-        results[cmd.name] = null
-      })
+      if (!matchedCmd) {
+        console.warn(`未找到地址为 ${address} 的指令配置`)
+        return ''
+      }
+      
+      // 使用报文中的实际数据长度来计算数据个数，而不是依赖指令配置中的length字段
+      const bytesPerData = matchedCmd.dataType === 'int16' ? 2 : 4
+      const actualDataCount = Math.floor(dataLength / bytesPerData)
+      
+      // 使用splitData分割数据，传入数据类型以确保正确分割
+      const dataArray = splitData(dataHex, actualDataCount, matchedCmd.dataType)
+      
+      // 解析结果 - 先获取所有指令的上次状态
+      const results: Record<string, number | null> = { ...commandStatusCache.value }
+      
+      if (actualDataCount === 1) {
+        // 单个数据 - 转换为数字类型并更新缓存
+        const value = Number(hexToDecimal(dataArray[0], matchedCmd.dataType))
+        results[matchedCmd.name] = value
+        commandStatusCache.value[matchedCmd.name] = value
+      } else if (actualDataCount > 1) {
+        // 多个数据，按指令名+序号拆分，转换为数字类型并更新缓存
+        // 当拆分为多个数据时，删除原始的指令名（如果存在）
+        delete results[matchedCmd.name]
+        delete commandStatusCache.value[matchedCmd.name]
+        
+        dataArray.forEach((data, index) => {
+          const keyName = `${matchedCmd.name}-${index + 1}`
+          const value = Number(hexToDecimal(data, matchedCmd.dataType))
+          results[keyName] = value
+          commandStatusCache.value[keyName] = value
+        })
+      }
       
       // 生成JSON内容的字符串，最后加一个换行符
       return JSON.stringify(results) + '\n'
