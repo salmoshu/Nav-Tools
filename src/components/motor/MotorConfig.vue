@@ -81,7 +81,7 @@
                       v-model="decimalInputs[cmd.name]"
                       placeholder=""
                       size="default"
-                      :disabled="!isConfigValid"
+                      :disabled="!isConfigValid || cmd.length===0"
                       @input="(value: string) => handleSingleDecimalInput(cmd, value)"
                     />
                     <span class="hex-display">{{ cmd.data }}</span>
@@ -356,7 +356,7 @@
 </template>
 
 <script lang="ts" setup>
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, onMounted, onUnmounted, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useMotorCmd } from '@/composables/motor/useMotorCmd'
 import { 
@@ -386,9 +386,6 @@ const {
   isConfigValid,
   addCommand,
   removeCommand,
-  updateConfigForm,
-  updateReadCommands,
-  updateWriteCommands,
   // 数据转换函数
   getDataCount,
   splitData,
@@ -475,35 +472,6 @@ watch(writeCommands, (newCommands) => {
     }
   })
 }, { deep: true })
-
-// 初始化数据输入框
-// const initDataInputs = () => {
-//   writeCommands.value.forEach(cmd => {
-//     const count = getDataCount(cmd)
-//     if (count === 1) {
-//       // 单个输入框
-//       if (!cmd.data || cmd.data.trim() === '') {
-//         // 空值时根据数据长度（字节数）设置默认值
-//         if (cmd.length === 2 || cmd.dataType === 'int16') {
-//           cmd.data = '0000'  // 2字节 = 4个十六进制字符
-//         } else if (cmd.length === 4 || cmd.dataType === 'float32') {
-//           cmd.data = '00000000'  // 4字节 = 8个十六进制字符
-//         } else {
-//           // 其他长度，根据字节数计算十六进制字符数（每字节2个字符）
-//           const hexChars = cmd.length * 2
-//           cmd.data = '0'.repeat(hexChars)
-//         }
-//       }
-//     } else if (count > 1) {
-//       // 多个输入框
-//       const dataArray = splitData(cmd.data, count)
-//       for (let i = 0; i < count; i++) {
-//         const key = getDataInputKey(cmd, i)
-//         dataInputs.value[key] = dataArray[i] || ''
-//       }
-//     }
-//   })
-// }
 
 // 方法
 const showConfigDialog = () => {
@@ -971,34 +939,6 @@ const downloadConfig = () => {
   }
 }
 
-const motor_cfg = computed(() => {
-  return {
-    header: configForm.header,
-    format: configForm.format,
-    checksum: {
-      method: configForm.checksum.method,
-      start_index: configForm.checksum.start_index,
-      end_index: configForm.checksum.end_index
-    },
-    readCommands: readCommands.value.map(cmd => ({
-      name: cmd.name,
-      address: cmd.address,
-      data: cmd.data,
-      length: cmd.length,
-      dataType: cmd.dataType,
-      frequency: cmd.frequency,
-      lastSentTime: cmd.lastSentTime
-    })),
-    writeCommands: writeCommands.value.map(cmd => ({
-      name: cmd.name,
-      address: cmd.address,
-      data: cmd.data,
-      length: cmd.length,
-      dataType: cmd.dataType
-    }))
-  }
-})
-
 // 监听频率变化
 watch(() => readCommands.value.map(cmd => ({name: cmd.name, frequency: cmd.frequency})), 
   () => {
@@ -1013,7 +953,6 @@ watch(() => readCommands.value.map(cmd => ({name: cmd.name, frequency: cmd.frequ
 // 组件挂载时加载配置
 onMounted(() => {
   loadConfigFromStorage()
-  // initDataInputs()
   initializeCommandStatusCache()
 
   // 监听串口发送结果
