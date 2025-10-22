@@ -49,9 +49,9 @@ export function useMotorCmd() {
 
   // 读命令列表
   const readCommands = ref<ReadCommand[]>([
-    { name: 'GET_SPEED', address: '00', data: '0000', length: 0, dataType: 'int16', frequency: null, lastSentTime: 0 },
-    { name: 'GET_SPEED_M1', address: '01', data: '0000', length: 0, dataType: 'int16', frequency: null, lastSentTime: 0 },
-    { name: 'GET_SPEED_M2', address: '02', data: '0000', length: 0, dataType: 'int16', frequency: null, lastSentTime: 0 }
+    { name: 'GET_SPEED', address: '00', data: '0000', length: 4, dataType: 'int16', frequency: null, lastSentTime: 0 },
+    { name: 'GET_SPEED_M1', address: '01', data: '0000', length: 2, dataType: 'int16', frequency: null, lastSentTime: 0 },
+    { name: 'GET_SPEED_M2', address: '02', data: '0000', length: 2, dataType: 'int16', frequency: null, lastSentTime: 0 }
   ])
 
   // 写命令列表

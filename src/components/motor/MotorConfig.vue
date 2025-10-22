@@ -477,33 +477,33 @@ watch(writeCommands, (newCommands) => {
 }, { deep: true })
 
 // 初始化数据输入框
-const initDataInputs = () => {
-  writeCommands.value.forEach(cmd => {
-    const count = getDataCount(cmd)
-    if (count === 1) {
-      // 单个输入框
-      if (!cmd.data || cmd.data.trim() === '') {
-        // 空值时根据数据长度（字节数）设置默认值
-        if (cmd.length === 2 || cmd.dataType === 'int16') {
-          cmd.data = '0000'  // 2字节 = 4个十六进制字符
-        } else if (cmd.length === 4 || cmd.dataType === 'float32') {
-          cmd.data = '00000000'  // 4字节 = 8个十六进制字符
-        } else {
-          // 其他长度，根据字节数计算十六进制字符数（每字节2个字符）
-          const hexChars = cmd.length * 2
-          cmd.data = '0'.repeat(hexChars)
-        }
-      }
-    } else if (count > 1) {
-      // 多个输入框
-      const dataArray = splitData(cmd.data, count)
-      for (let i = 0; i < count; i++) {
-        const key = getDataInputKey(cmd, i)
-        dataInputs.value[key] = dataArray[i] || ''
-      }
-    }
-  })
-}
+// const initDataInputs = () => {
+//   writeCommands.value.forEach(cmd => {
+//     const count = getDataCount(cmd)
+//     if (count === 1) {
+//       // 单个输入框
+//       if (!cmd.data || cmd.data.trim() === '') {
+//         // 空值时根据数据长度（字节数）设置默认值
+//         if (cmd.length === 2 || cmd.dataType === 'int16') {
+//           cmd.data = '0000'  // 2字节 = 4个十六进制字符
+//         } else if (cmd.length === 4 || cmd.dataType === 'float32') {
+//           cmd.data = '00000000'  // 4字节 = 8个十六进制字符
+//         } else {
+//           // 其他长度，根据字节数计算十六进制字符数（每字节2个字符）
+//           const hexChars = cmd.length * 2
+//           cmd.data = '0'.repeat(hexChars)
+//         }
+//       }
+//     } else if (count > 1) {
+//       // 多个输入框
+//       const dataArray = splitData(cmd.data, count)
+//       for (let i = 0; i < count; i++) {
+//         const key = getDataInputKey(cmd, i)
+//         dataInputs.value[key] = dataArray[i] || ''
+//       }
+//     }
+//   })
+// }
 
 // 方法
 const showConfigDialog = () => {
@@ -859,7 +859,7 @@ const loadConfig = (config: any) => {
         name: cmd.name || 'UNKNOWN_CMD',
         address: cmd.address || '00',
         data: cmd.data || '0000',
-        length: parseInt(cmd.length) || 2,
+        length: parseInt(cmd.length) || 0,
         dataType: cmd.dataType || 'int16'
       }))
     } else if (config.command && typeof config.command === 'object') {
@@ -1013,7 +1013,7 @@ watch(() => readCommands.value.map(cmd => ({name: cmd.name, frequency: cmd.frequ
 // 组件挂载时加载配置
 onMounted(() => {
   loadConfigFromStorage()
-  initDataInputs()
+  // initDataInputs()
   initializeCommandStatusCache()
 
   // 监听串口发送结果
