@@ -398,7 +398,9 @@ const {
   calculateChecksum,
   // 指令构建函数
   buildReadCommandMessage,
-  buildWriteCommandMessage
+  buildWriteCommandMessage,
+  // 指令状态缓存初始化函数
+  initializeCommandStatusCache
 } = useMotorCmd()
 
 // 响应式变量
@@ -1012,6 +1014,7 @@ watch(() => readCommands.value.map(cmd => ({name: cmd.name, frequency: cmd.frequ
 onMounted(() => {
   loadConfigFromStorage()
   initDataInputs()
+  initializeCommandStatusCache()
 
   // 监听串口发送结果
   if (window.ipcRenderer) {

@@ -39,6 +39,9 @@ function getMonitorStatus() {
       const followsimStore = useFollowsimStore();
       result.value = followsimStore.status
       break;
+    case 'motor':
+      result.value = useFlowStore().status
+      break;
     // case 'demo1':
     //   const demo1Store = useDemo1Store();
     //   result.value = demo1Store.status

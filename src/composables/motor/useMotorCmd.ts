@@ -32,6 +32,9 @@ export interface ConfigForm {
   checksum: ChecksumConfig
 }
 
+// 指令状态缓存，保存所有读指令的上次数值
+const commandStatusCache = ref<Record<string, number | null>>({})
+
 export function useMotorCmd() {
   // 配置表单数据
   const configForm = reactive<ConfigForm>({
@@ -58,20 +61,6 @@ export function useMotorCmd() {
     { name: 'SET_SPEED_M2', address: '02', data: '0000', length: 2, dataType: 'int16' }
   ])
 
-  // 指令状态缓存，保存所有读指令的上次数值
-  const commandStatusCache = ref<Record<string, number | null>>({})
-
-  // 初始化指令状态缓存
-  const initializeCommandStatusCache = () => {
-    commandStatusCache.value = {}
-    readCommands.value.forEach(cmd => {
-      commandStatusCache.value[cmd.name] = null
-    })
-  }
-
-  // 初始化缓存
-  initializeCommandStatusCache()
-
   // ===== 数据转换工具函数 =====
 
   // 计算数据个数（根据数据类型和长度）
@@ -80,6 +69,26 @@ export function useMotorCmd() {
     
     const bytesPerData = cmd.dataType === 'int16' ? 2 : 4
     return Math.floor(cmd.length / bytesPerData)
+  }
+
+  // 初始化指令状态缓存
+  const initializeCommandStatusCache = () => {
+    commandStatusCache.value = {}
+    readCommands.value.forEach(cmd => {
+      // 根据指令的长度和数据类型计算数据个数
+      const dataCount = getDataCount(cmd)
+      
+      if (dataCount === 1) {
+        // 单个数据，使用原始指令名
+        commandStatusCache.value[cmd.name] = null
+      } else if (dataCount > 1) {
+        // 多个数据，直接创建拆分后的数据项键
+        for (let i = 0; i < dataCount; i++) {
+          const keyName = `${cmd.name}_${i + 1}`
+          commandStatusCache.value[keyName] = null
+        }
+      }
+    })
   }
 
   // 分割数据字符串
@@ -409,8 +418,9 @@ export function useMotorCmd() {
       const dataArray = splitData(dataHex, actualDataCount, matchedCmd.dataType)
       
       // 解析结果 - 先获取所有指令的上次状态
-      const results: Record<string, number | null> = { ...commandStatusCache.value }
       
+      const results: Record<string, number | null> = { ...commandStatusCache.value }
+
       if (actualDataCount === 1) {
         // 单个数据 - 转换为数字类型并更新缓存
         const value = Number(hexToDecimal(dataArray[0], matchedCmd.dataType))
@@ -423,7 +433,7 @@ export function useMotorCmd() {
         delete commandStatusCache.value[matchedCmd.name]
         
         dataArray.forEach((data, index) => {
-          const keyName = `${matchedCmd.name}-${index + 1}`
+          const keyName = `${matchedCmd.name}_${index + 1}`
           const value = Number(hexToDecimal(data, matchedCmd.dataType))
           results[keyName] = value
           commandStatusCache.value[keyName] = value
@@ -464,6 +474,7 @@ export function useMotorCmd() {
     decimalToHex,
     hexToDecimal,
     calculateChecksum,
+    initializeCommandStatusCache,
     
     // 指令构建函数
     buildReadCommandMessage,
