@@ -321,21 +321,25 @@ export function useMotorCmd() {
 
   // 构建写指令报文
   const buildWriteCommandMessage = (cmd: WriteCommand, config: ConfigForm): string => {
-    // 确保数据长度正确
-    const dataCount = 1 // 默认单数据
-    const bytesPerData = cmd.dataType === 'int16' ? 2 : 4
-    const expectedLength = dataCount * bytesPerData
-    
-    // 填充数据到正确长度
-    let data = cmd.data.padStart(expectedLength * 2, '0')
-    
     // 构建报文
     const header = config.header
     const address = cmd.address.padStart(2, '0')
     const length = cmd.length.toString().padStart(2, '0')
     
     // 构建基础报文（不包含校验）
-    let message = header + address + length + data
+    let message = header + address + length
+    
+    // 当长度为0时，不发送数据位
+    if (cmd.length > 0) {
+      // 确保数据长度正确
+      const dataCount = 1 // 默认单数据
+      const bytesPerData = cmd.dataType === 'int16' ? 2 : 4
+      const expectedLength = dataCount * bytesPerData
+      
+      // 填充数据到正确长度
+      let data = cmd.data.padStart(expectedLength * 2, '0')
+      message += data
+    }
     
     // 计算校验码
     const checksum = calculateChecksum(message, config.checksum.method)
