@@ -1778,7 +1778,8 @@ function setupTouchEvents() {
 
 // 组件挂载时初始化图表
 onMounted(() => {
-  createChart()
+  clearRawData();
+  createChart();
   
   // 设置ResizeObserver监听图表容器大小变化
   if (chartRef.value) {
