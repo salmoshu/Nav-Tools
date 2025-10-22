@@ -312,9 +312,9 @@
                 <template #default="scope">
                   <el-input 
                     v-model="scope.row.data" 
+                    :disabled="scope.row.length===0"
                     size="default" 
                     placeholder="十进制或十六进制"
-                    @input="(value: string) => handleDecimalInput(scope.row, value)"
                   >
                     <template #prefix>
                       <el-icon><DataAnalysis /></el-icon>
@@ -330,7 +330,7 @@
                   </el-select>
                 </template>
               </el-table-column>
-              <el-table-column label="操作" width="100" align="center">
+              <el-table-column label="操作" width="50" align="center">
                 <template #default="scope">
                   <el-button
                     type="danger"
@@ -765,9 +765,9 @@ const resetConfig = () => {
     
     // 重置命令列表
     readCommands.value = [
-      { name: 'GET_SPEED', address: '00', data: '0000', length: 0, dataType: 'int16', frequency: null, lastSentTime: 0 },
-      { name: 'GET_SPEED_M1', address: '01', data: '0000', length: 0, dataType: 'int16', frequency: null, lastSentTime: 0 },
-      { name: 'GET_SPEED_M2', address: '02', data: '0000', length: 0, dataType: 'int16', frequency: null, lastSentTime: 0 }
+      { name: 'GET_SPEED', address: '00', data: '0000', length: 4, dataType: 'int16', frequency: null, lastSentTime: 0 },
+      { name: 'GET_SPEED_M1', address: '01', data: '0000', length: 2, dataType: 'int16', frequency: null, lastSentTime: 0 },
+      { name: 'GET_SPEED_M2', address: '02', data: '0000', length: 2, dataType: 'int16', frequency: null, lastSentTime: 0 }
     ]
     
     writeCommands.value = [
