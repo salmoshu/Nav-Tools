@@ -7,6 +7,7 @@ export interface Command {
   data: string
   length: number
   dataType: 'int16' | 'float32'
+  functionCode?: string // 功能码（可选）
 }
 
 export interface ReadCommand extends Command {
@@ -30,6 +31,7 @@ export interface ConfigForm {
   header: string
   format: 'hex' | 'ascii'
   checksum: ChecksumConfig
+  includeFunction?: boolean
 }
 
 // 指令状态缓存，保存所有读指令的上次数值
@@ -38,27 +40,28 @@ const commandStatusCache = ref<Record<string, number | null>>({})
 export function useMotorCmd() {
   // 配置表单数据
   const configForm = reactive<ConfigForm>({
-    header: 'AACC',
+    header: 'A5',
     format: 'hex',
     checksum: {
-      method: 'sum',
+      method: 'crc16',
       start_index: 0,
       end_index: -1
-    }
+    },
+    includeFunction: true
   })
 
   // 读命令列表
   const readCommands = ref<ReadCommand[]>([
-    { name: 'GET_SPEED', address: '00', data: '0000', length: 4, dataType: 'int16', frequency: null, lastSentTime: 0 },
-    { name: 'GET_SPEED_M1', address: '01', data: '0000', length: 2, dataType: 'int16', frequency: null, lastSentTime: 0 },
-    { name: 'GET_SPEED_M2', address: '02', data: '0000', length: 2, dataType: 'int16', frequency: null, lastSentTime: 0 }
+    { name: 'GET_SPEED', address: '00', data: '0000', length: 4, dataType: 'int16', functionCode: '03', frequency: null, lastSentTime: 0 },
+    { name: 'GET_SPEED_M1', address: '01', data: '0000', length: 2, dataType: 'int16', functionCode: '03', frequency: null, lastSentTime: 0 },
+    { name: 'GET_SPEED_M2', address: '02', data: '0000', length: 2, dataType: 'int16', functionCode: '03', frequency: null, lastSentTime: 0 }
   ])
 
   // 写命令列表
   const writeCommands = ref<WriteCommand[]>([
-    { name: 'SET_SPEED', address: '00', data: '00000000', length: 4, dataType: 'float32' },
-    { name: 'SET_SPEED_M1', address: '01', data: '0000', length: 2, dataType: 'int16' },
-    { name: 'SET_SPEED_M2', address: '02', data: '0000', length: 2, dataType: 'int16' }
+    { name: 'SET_SPEED', address: '00', data: '00000000', length: 4, dataType: 'float32', functionCode: '06' },
+    { name: 'SET_SPEED_M1', address: '01', data: '0000', length: 2, dataType: 'int16', functionCode: '06' },
+    { name: 'SET_SPEED_M2', address: '02', data: '0000', length: 2, dataType: 'int16', functionCode: '06' }
   ])
 
   // ===== 数据转换工具函数 =====
@@ -310,6 +313,12 @@ export function useMotorCmd() {
     // 构建基础报文（不包含校验）
     let message = header + address
     
+    // 如果包含功能码字段，则添加功能码（使用默认值）
+    if (config.includeFunction) {
+      const functionCode = 0x01 // 默认功能码0x01
+      message += functionCode.toString(16).padStart(2, '0')
+    }
+    
     // 添加数据长度字段（始终包含，即使为0）
     const length = cmd.length.toString().padStart(2, '0')
     message += length
@@ -333,10 +342,19 @@ export function useMotorCmd() {
     // 构建报文
     const header = config.header
     const address = cmd.address.padStart(2, '0')
-    const length = cmd.length.toString().padStart(2, '0')
     
     // 构建基础报文（不包含校验）
-    let message = header + address + length
+    let message = header + address
+    
+    // 如果包含功能码字段，则添加功能码（使用默认值）
+    if (config.includeFunction) {
+      const functionCode = '01' // 默认功能码0x01
+      message += functionCode
+    }
+    
+    // 添加长度字段
+    const length = cmd.length.toString().padStart(2, '0')
+    message += length
     
     // 当长度为0时，不发送数据位
     if (cmd.length > 0) {

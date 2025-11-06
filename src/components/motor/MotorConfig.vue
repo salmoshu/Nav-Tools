@@ -146,113 +146,136 @@
 
         <el-divider />
 
-        <!-- 基础配置 - 拖拽式报文结构 -->
-        <div class="message-structure-container">
-          <el-text type="info" size="small" style="margin-bottom: 15px; display: block;">
-            拖拽下方模块来调整报文结构（报头始终在前，校验和始终在后）
-          </el-text>
-          
-          <draggable
-            v-model="messageStructure"
-            :group="{ name: 'messageFields' }"
-            :animation="200"
-            :forceFallback="true"
-            class="message-fields-container"
-            item-key="id"
-            @change="handleStructureChange"
-          >
-            <template #item="{ element }">
-              <div class="message-field" :class="{ 'fixed-field': element.fixed }">
-                <div class="field-header">
-                  <el-icon class="drag-handle"><Rank /></el-icon>
-                  <span class="field-title">{{ element.title }}</span>
-                  <el-tag size="small" :type="element.tagType">{{ element.tag }}</el-tag>
-                </div>
-                <div class="field-content">
-                  <!-- 报头字段 -->
-                  <div v-if="element.id === 'header'" class="field-config">
-                    <el-input 
-                      v-model="configForm.header" 
-                      placeholder="例如: AACC"
-                      size="small"
-                    >
-                      <template #prefix>
-                        <el-icon><Key /></el-icon>
-                      </template>
-                    </el-input>
-                  </div>
-                  
-                  <!-- 地址字段 -->
-                  <div v-else-if="element.id === 'address'" class="field-config">
-                    <!-- 地址字段保持空白 -->
-                  </div>
-                  
-                  <!-- 功能码字段 -->
-                  <div v-else-if="element.id === 'function'" class="field-config">
-                    <!-- 功能码字段保持空白 -->
-                  </div>
-                  
-                  <!-- 长度字段 -->
-                  <div v-else-if="element.id === 'length'" class="field-config">
-                    <!-- 长度字段保持空白 -->
-                  </div>
-                  
-                  <!-- 数据字段 -->
-                  <div v-else-if="element.id === 'data'" class="field-config">
-                    <el-select 
-                      v-model="configForm.format" 
-                      placeholder="选择报文类型"
-                      size="small"
-                      style="width: 120px;"
-                    >
-                      <el-option label="十六进制" value="hex" />
-                      <el-option label="ASCII" value="ascii" />
-                    </el-select>
-                  </div>
-                  
-                  <!-- 校验和字段 -->
-                  <div v-else-if="element.id === 'checksum'" class="field-config">
-                    <el-select 
-                      v-model="configForm.checksum.method" 
-                      placeholder="校验方法"
-                      size="small"
-                      style="width: 80px;"
-                    >
-                      <el-option label="和校验" value="sum" />
-                      <el-option label="XOR" value="xor" />
-                      <el-option label="CRC8" value="crc8" />
-                      <el-option label="CRC16" value="crc16" />
-                    </el-select>
-                    <div class="checksum-params" v-if="configForm.checksum.method">
-                      <el-input-number 
-                        v-model="configForm.checksum.start_index" 
-                        :min="0" 
-                        size="small"
-                        controls-position="right"
-                        style="width: 70px;"
-                        placeholder="起始"
-                      />
-                      <span class="param-separator">-</span>
-                      <el-input-number 
-                        v-model="configForm.checksum.end_index" 
-                        :min="-1" 
-                        size="small"
-                        controls-position="right"
-                        style="width: 70px;"
-                        placeholder="结束"
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </template>
-          </draggable>
+        <!-- 指令预览区域 -->
+        <div class="command-preview-container">
+          <div class="message-preview">
+            <div 
+              v-for="(field, index) in previewMessage" 
+              :key="index"
+              class="preview-cell"
+              :class="'field-' + field.type"
+              :title="field.label + ': ' + field.value"
+            >
+              <div class="cell-content">{{ field.value }}</div>
+              <div class="cell-label">{{ field.label }}</div>
+            </div>
+          </div>
+          <div class="preview-hex" v-if="previewHex">
+            <el-text type="info" size="small">十六进制: </el-text>
+            <span class="hex-content">{{ previewHex }}</span>
+          </div>
         </div>
 
         <el-divider />
 
         <!-- 命令配置 Tab -->
         <el-tabs v-model="activeTab" type="border-card" class="command-tabs">
+          <!-- 指令结构 Tab -->
+          <el-tab-pane name="structure">
+            <template #label>
+              <span class="tab-label">
+                <el-icon><Rank /></el-icon>
+                指令结构
+              </span>
+            </template>
+            
+            <!-- 基础配置 - 拖拽式报文结构 -->
+            <div class="message-structure-container">
+              <el-text type="info" size="small" style="margin-bottom: 15px; display: block;">
+                拖拽下方模块来调整报文结构（报头始终在前，校验和始终在后）
+              </el-text>
+              
+              <draggable
+                v-model="messageStructure"
+                :group="{ name: 'messageFields' }"
+                :animation="200"
+                :forceFallback="true"
+                class="message-fields-container"
+                item-key="id"
+                @change="handleStructureChange"
+              >
+                <template #item="{ element }">
+                  <div class="message-field" :class="{ 'fixed-field': element.fixed }">
+                    <div class="field-header">
+                      <el-icon class="drag-handle"><Rank /></el-icon>
+                      <span class="field-title">{{ element.title }}</span>
+                      <el-tag size="small" :type="element.tagType">{{ element.tag }}</el-tag>
+                    </div>
+                    <div class="field-content">
+                      <!-- 报头字段 -->
+                      <div v-if="element.id === 'header'" class="field-config">
+                        <el-input 
+                          v-model="configForm.header" 
+                          placeholder="例如: AACC"
+                          size="small"
+                          style="width: 80px;"
+                        >
+                          <template #prefix>
+                            <el-icon><Key /></el-icon>
+                          </template>
+                        </el-input>
+                      </div>
+                      
+                      <!-- 地址字段 -->
+                      <div v-else-if="element.id === 'address'" class="field-config">
+                        <el-switch :model-value="false" size="small" active-text="包含地址位" />
+                      </div>
+                      
+                      <!-- 功能码字段 -->
+                      <div v-else-if="element.id === 'function'" class="field-config">
+                        <el-switch v-model="configForm.includeFunction" size="small" active-text="包含功能码" />
+                      </div>
+                      
+                      <!-- 长度字段 -->
+                      <div v-else-if="element.id === 'length'" class="field-config">
+                        <el-switch :model-value="false" size="small" active-text="包含长度位" />
+                      </div>
+                      
+                      <!-- 数据字段 -->
+                      <div v-else-if="element.id === 'data'" class="field-config">
+                        <el-switch :model-value="false" size="small" active-text="包含数据位" />
+                      </div>
+                      
+                      <!-- 校验和字段 -->
+                      <div v-else-if="element.id === 'checksum'" class="field-config">
+                        <el-select 
+                          v-model="configForm.checksum.method" 
+                          placeholder="校验方法"
+                          size="small"
+                          style="width: 80px;"
+                        >
+                          <el-option label="和校验" value="sum" />
+                          <el-option label="XOR" value="xor" />
+                          <el-option label="CRC8" value="crc8" />
+                          <el-option label="CRC16" value="crc16" />
+                        </el-select>
+                        <div class="checksum-params" v-if="configForm.checksum.method">
+                          <el-input-number 
+                            v-model="configForm.checksum.start_index" 
+                            :min="0" 
+                            size="small"
+                            controls-position="right"
+                            style="width: 70px;"
+                            placeholder="起始"
+                          />
+                          <span class="param-separator">-</span>
+                          <el-input-number 
+                            v-model="configForm.checksum.end_index" 
+                            :min="-1" 
+                            size="small"
+                            controls-position="right"
+                            style="width: 70px;"
+                            placeholder="结束"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </template>
+              </draggable>
+            </div>
+          </el-tab-pane>
+
           <el-tab-pane name="read">
             <template #label>
               <span class="tab-label">
@@ -467,8 +490,11 @@ const decimalInputs = ref<Record<string, string>>({}) // 存储十进制输入�
 const addressLength = ref(1) // 地址字段长度（字节）
 const includeLength = ref(true) // 是否包含长度字段（默认可变）
 const lengthBytes = ref(1) // 长度字段字节数
-const includeFunction = ref(true) // 是否包含功能码字段（默认可变）
 const functionBytes = ref(1) // 功能码字段字节数
+
+// 指令预览相关
+const previewMessage = ref<Array<{type: string, label: string, value: string, color: string}>>([])
+const previewHex = ref('')
 
 // 报文字段配置
 const messageFields = reactive([
@@ -483,13 +509,13 @@ const messageFields = reactive([
     id: 'address', 
     title: '地址', 
     tag: '可变', 
-    tagType: 'warning' as const, 
+    tagType: 'success' as const, 
     fixed: false 
   },
   { 
     id: 'function', 
     title: '功能码', 
-    tag: '可变', 
+    tag: '可选', 
     tagType: 'warning' as const, 
     fixed: false 
   },
@@ -497,13 +523,13 @@ const messageFields = reactive([
     id: 'length', 
     title: '长度', 
     tag: '可变', 
-    tagType: 'warning' as const, 
+    tagType: 'success' as const, 
     fixed: false 
   },
   { 
     id: 'data', 
     title: '数据', 
-    tag: '核心', 
+    tag: '可变', 
     tagType: 'success' as const, 
     fixed: false 
   },
@@ -522,6 +548,8 @@ const messageStructure = computed({
     // 确保报头始终在最前，校验和始终在最后
     const headerField = messageFields.find(f => f.id === 'header')
     const checksumField = messageFields.find(f => f.id === 'checksum')
+    
+    // 获取所有中间字段（不再过滤功能码字段，让它始终可见）
     const middleFields = messageFields.filter(f => f.id !== 'header' && f.id !== 'checksum')
     
     // 根据用户拖拽排序中间字段
@@ -601,7 +629,28 @@ watch(writeCommands, (newCommands) => {
       }
     }
   })
+  generateCommandPreview()
 }, { deep: true })
+
+// 监听读指令数据变化
+watch(readCommands, () => {
+  generateCommandPreview()
+}, { deep: true })
+
+// 监听拖拽结构变化
+watch(messageStructure, () => {
+  generateCommandPreview()
+}, { deep: true })
+
+// 监听配置变化
+watch([() => configForm.header, () => configForm.checksum.method, addressLength, includeLength, lengthBytes, () => configForm.includeFunction, functionBytes], () => {
+  generateCommandPreview()
+}, { deep: true })
+
+// 监听标签页切换
+watch(activeTab, () => {
+  generateCommandPreview()
+})
 
 // 方法
 const showConfigDialog = () => {
@@ -632,8 +681,7 @@ const saveConfig = () => {
       addressLength: addressLength.value,
       includeLength: includeLength.value,
       lengthBytes: lengthBytes.value,
-      includeFunction: includeFunction.value,
-      functionBytes: functionBytes.value
+      includeFunction: configForm.includeFunction
     }
     localStorage.setItem('motor-structure-config', JSON.stringify(structureConfig))
     
@@ -654,6 +702,111 @@ const saveConfig = () => {
       offset: 50,
     })
   }
+}
+
+// 生成指令预览
+const generateCommandPreview = () => {
+  const preview = []
+  let hexString = ''
+  
+  // 获取当前选中的指令
+  const currentCommands = activeTab.value === 'read' ? readCommands.value : writeCommands.value
+  
+  if (currentCommands.length === 0) {
+    previewMessage.value = []
+    previewHex.value = ''
+    return
+  }
+  
+  // 使用第一个指令作为预览示例
+  const command = currentCommands[0]
+  
+  // 根据拖拽顺序构建预览
+  messageStructure.value.forEach(field => {
+    if (!field) return
+    
+    switch (field.id) {
+      case 'header':
+        if (configForm.header) {
+          preview.push({
+            type: 'header',
+            label: '报头',
+            value: configForm.header,
+            color: '#667eea'
+          })
+          hexString += configForm.header + ' '
+        }
+        break
+        
+      case 'address':
+        if (command.address !== undefined) {
+          const addressHex = decimalToHex(command.address, addressLength.value)
+          preview.push({
+            type: 'address',
+            label: '地址',
+            value: addressHex,
+            color: '#f093fb'
+          })
+          hexString += addressHex + ' '
+        }
+        break
+        
+      case 'function':
+        if (configForm.includeFunction && command.functionCode !== undefined) {
+          // functionCode 已经是十六进制字符串，直接使用
+          const functionHex = command.functionCode.padStart(functionBytes.value * 2, '0').toUpperCase()
+          preview.push({
+            type: 'function',
+            label: '功能码',
+            value: functionHex,
+            color: '#4facfe'
+          })
+          hexString += functionHex + ' '
+        }
+        break
+        
+      case 'length':
+        if (includeLength.value && command.length !== undefined) {
+          const lengthHex = decimalToHex(command.length, lengthBytes.value)
+          preview.push({
+            type: 'length',
+            label: '长度',
+            value: lengthHex,
+            color: '#43e97b'
+          })
+          hexString += lengthHex + ' '
+        }
+        break
+        
+      case 'data':
+        if (command.data) {
+          preview.push({
+            type: 'data',
+            label: '数据',
+            value: command.data,
+            color: '#fa709a'
+          })
+          hexString += command.data + ' '
+        }
+        break
+        
+      case 'checksum':
+        if (configForm.checksum.method !== 'none') {
+          const checksum = calculateChecksum(hexString.trim().replace(/\s/g, ''), configForm.checksum.method)
+          preview.push({
+            type: 'checksum',
+            label: '校验',
+            value: checksum,
+            color: '#a8edea'
+          })
+          hexString += checksum + ' '
+        }
+        break
+    }
+  })
+  
+  previewMessage.value = preview
+  previewHex.value = hexString.trim()
 }
 
 // 发送读指令
@@ -963,8 +1116,7 @@ const loadConfig = (config: any) => {
     addressLength.value = config.addressLength || 1
     includeLength.value = config.includeLength !== false
     lengthBytes.value = config.lengthBytes || 1
-    includeFunction.value = config.includeFunction !== false
-    functionBytes.value = config.functionBytes || 1
+    configForm.includeFunction = config.includeFunction !== false
     
     // 清空现有命令
     readCommands.value = []
@@ -979,6 +1131,7 @@ const loadConfig = (config: any) => {
         data: cmd.data || '0000',
         length: parseInt(cmd.length) || 0,
         dataType: cmd.dataType || 'int16',
+        functionCode: cmd.functionCode || '03',
         frequency: cmd.frequency || null,
         lastSentTime: cmd.lastSentTime || 0
       }))
@@ -988,7 +1141,8 @@ const loadConfig = (config: any) => {
         address: cmd.address || '00',
         data: cmd.data || '0000',
         length: parseInt(cmd.length) || 0,
-        dataType: cmd.dataType || 'int16'
+        dataType: cmd.dataType || 'int16',
+        functionCode: cmd.functionCode || '06'
       }))
     } else if (config.command && typeof config.command === 'object') {
       // 旧格式处理（兼容旧配置文件）
@@ -1001,6 +1155,7 @@ const loadConfig = (config: any) => {
             data: cmd.data || '0000',
             length: 0,
             dataType: cmd.dataType || 'int16',
+            functionCode: cmd.functionCode || '03',
             frequency: cmd.frequency || null,
             lastSentTime: 0
           })
@@ -1011,7 +1166,8 @@ const loadConfig = (config: any) => {
             address: cmd.address || '00',
             data: cmd.data || '0000',
             length: parseInt(cmd.length) || 2,
-            dataType: cmd.dataType || 'int16'
+            dataType: cmd.dataType || 'int16',
+            functionCode: cmd.functionCode || '06'
           })
         }
       })
@@ -1020,12 +1176,12 @@ const loadConfig = (config: any) => {
     // 如果没有命令，添加默认命令
     if (readCommands.value.length === 0) {
       readCommands.value = [
-        { name: 'GET_SPEED', address: '00', data: '0000', length: 0, dataType: 'int16', frequency: null, lastSentTime: 0 }
+        { name: 'GET_SPEED', address: '00', data: '0000', length: 0, dataType: 'int16', functionCode: '03', frequency: null, lastSentTime: 0 }
       ]
     }
     if (writeCommands.value.length === 0) {
       writeCommands.value = [
-        { name: 'SET_SPEED', address: '00', data: '0000', length: 2, dataType: 'int16' }
+        { name: 'SET_SPEED', address: '00', data: '0000', length: 2, dataType: 'int16', functionCode: '06' }
       ]
     }
     
@@ -1120,6 +1276,9 @@ onMounted(() => {
     window.ipcRenderer.on('serial-send-success', serialSuccessListener)
     window.ipcRenderer.on('serial-send-error', serialErrorListener)
   }
+  
+  // 初始化指令预览
+  generateCommandPreview()
 })
 
 // 组件卸载时清理定时器
@@ -1401,8 +1560,8 @@ onUnmounted(() => {
   border: 2px solid #e6e8eb;
   border-radius: 8px;
   padding: 15px;
-  min-width: 200px;
-  max-width: 280px;
+  min-width: 100px;
+  max-width: 300px;
   transition: all 0.3s ease;
   cursor: move;
   position: relative;
@@ -1611,6 +1770,87 @@ onUnmounted(() => {
   align-items: center;     /* 保持垂直居中 */
   justify-content: center; /* 保持水平居中 */
   line-height: normal;     /* 保持正常行高 */
+}
+
+/* 指令预览区域样式 */
+.command-preview-container {
+  background-color: #fafbfc;
+  padding: 20px;
+  border-radius: 8px;
+  border: 1px solid #e6e8eb;
+  margin-bottom: 20px;
+}
+
+.message-preview {
+  display: flex;
+  gap: 4px;
+  padding: 15px;
+  background-color: white;
+  border-radius: 6px;
+  border: 1px solid #e6e8eb;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  min-height: 60px;
+}
+
+.preview-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: 50px;
+  height: 50px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  transition: all 0.3s ease;
+  cursor: pointer;
+  position: relative;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  background-color: #f5f7fa;
+  color: #606266;
+  border: 1px solid #e4e7ed;
+}
+
+.preview-cell:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+.cell-content {
+  font-family: 'Courier New', monospace;
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+
+.cell-label {
+  font-size: 10px;
+  opacity: 0.8;
+  text-align: center;
+}
+
+/* 预览单元悬停效果 */
+.preview-cell:hover {
+  background-color: #e6e8eb;
+  border-color: #c0c4cc;
+}
+
+.preview-hex {
+  margin-top: 10px;
+  padding: 8px 12px;
+  background-color: #f8f9fa;
+  border-radius: 4px;
+  border: 1px solid #e6e8eb;
+  font-family: 'Courier New', monospace;
+  font-size: 12px;
+}
+
+.hex-content {
+  color: #409eff;
+  font-weight: 600;
+  margin-left: 8px;
 }
 
 /* 单个数据输入框容器 */
