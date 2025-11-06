@@ -146,55 +146,108 @@
 
         <el-divider />
 
-        <!-- 基础配置 -->
-        <el-form :model="configForm" label-width="120px" size="default" class="config-form">
-          <el-row :gutter="20">
-            <el-col :span="12">
-              <el-form-item label="报文头部：">
-                <el-input v-model="configForm.header" placeholder="例如: AACC">
-                  <template #prefix>
-                    <el-icon><Key /></el-icon>
-                  </template>
-                </el-input>
-              </el-form-item>
-            </el-col>
-            <el-col :span="12">
-              <el-form-item label="报文类型：">
-                <el-select v-model="configForm.format" placeholder="选择报文类型">
-                  <el-option label="十六进制" value="hex">
-                    <el-icon style="margin-right: 5px;"><Coin /></el-icon>十六进制
-                  </el-option>
-                  <el-option label="ASCII" value="ascii">
-                    <el-icon style="margin-right: 5px;"><Document /></el-icon>ASCII
-                  </el-option>
-                </el-select>
-              </el-form-item>
-            </el-col>
-          </el-row>
+        <!-- 基础配置 - 拖拽式报文结构 -->
+        <div class="message-structure-container">
+          <el-text type="info" size="small" style="margin-bottom: 15px; display: block;">
+            拖拽下方模块来调整报文结构（报头始终在前，校验和始终在后）
+          </el-text>
           
-          <el-row :gutter="20">
-            <el-col :span="8">
-              <el-form-item label="校验方法：">
-                <el-select v-model="configForm.checksum.method" placeholder="校验方法">
-                  <el-option label="和校验" value="sum" />
-                  <el-option label="XOR" value="xor" />
-                  <el-option label="CRC8" value="crc8" />
-                  <el-option label="CRC16" value="crc16" />
-                </el-select>
-              </el-form-item>
-            </el-col>
-            <el-col :span="8">
-              <el-form-item label="起始位：">
-                <el-input-number v-model="configForm.checksum.start_index" :min="0" controls-position="right" />
-              </el-form-item>
-            </el-col>
-            <el-col :span="8">
-              <el-form-item label="结束位：">
-                <el-input-number v-model="configForm.checksum.end_index" :min="-1" controls-position="right" />
-              </el-form-item>
-            </el-col>
-          </el-row>
-        </el-form>
+          <draggable
+            v-model="messageStructure"
+            :group="{ name: 'messageFields' }"
+            :animation="200"
+            :forceFallback="true"
+            class="message-fields-container"
+            item-key="id"
+            @change="handleStructureChange"
+          >
+            <template #item="{ element }">
+              <div class="message-field" :class="{ 'fixed-field': element.fixed }">
+                <div class="field-header">
+                  <el-icon class="drag-handle"><Rank /></el-icon>
+                  <span class="field-title">{{ element.title }}</span>
+                  <el-tag size="small" :type="element.tagType">{{ element.tag }}</el-tag>
+                </div>
+                <div class="field-content">
+                  <!-- 报头字段 -->
+                  <div v-if="element.id === 'header'" class="field-config">
+                    <el-input 
+                      v-model="configForm.header" 
+                      placeholder="例如: AACC"
+                      size="small"
+                    >
+                      <template #prefix>
+                        <el-icon><Key /></el-icon>
+                      </template>
+                    </el-input>
+                  </div>
+                  
+                  <!-- 地址字段 -->
+                  <div v-else-if="element.id === 'address'" class="field-config">
+                    <!-- 地址字段保持空白 -->
+                  </div>
+                  
+                  <!-- 功能码字段 -->
+                  <div v-else-if="element.id === 'function'" class="field-config">
+                    <!-- 功能码字段保持空白 -->
+                  </div>
+                  
+                  <!-- 长度字段 -->
+                  <div v-else-if="element.id === 'length'" class="field-config">
+                    <!-- 长度字段保持空白 -->
+                  </div>
+                  
+                  <!-- 数据字段 -->
+                  <div v-else-if="element.id === 'data'" class="field-config">
+                    <el-select 
+                      v-model="configForm.format" 
+                      placeholder="选择报文类型"
+                      size="small"
+                      style="width: 120px;"
+                    >
+                      <el-option label="十六进制" value="hex" />
+                      <el-option label="ASCII" value="ascii" />
+                    </el-select>
+                  </div>
+                  
+                  <!-- 校验和字段 -->
+                  <div v-else-if="element.id === 'checksum'" class="field-config">
+                    <el-select 
+                      v-model="configForm.checksum.method" 
+                      placeholder="校验方法"
+                      size="small"
+                      style="width: 80px;"
+                    >
+                      <el-option label="和校验" value="sum" />
+                      <el-option label="XOR" value="xor" />
+                      <el-option label="CRC8" value="crc8" />
+                      <el-option label="CRC16" value="crc16" />
+                    </el-select>
+                    <div class="checksum-params" v-if="configForm.checksum.method">
+                      <el-input-number 
+                        v-model="configForm.checksum.start_index" 
+                        :min="0" 
+                        size="small"
+                        controls-position="right"
+                        style="width: 70px;"
+                        placeholder="起始"
+                      />
+                      <span class="param-separator">-</span>
+                      <el-input-number 
+                        v-model="configForm.checksum.end_index" 
+                        :min="-1" 
+                        size="small"
+                        controls-position="right"
+                        style="width: 70px;"
+                        placeholder="结束"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </template>
+          </draggable>
+        </div>
 
         <el-divider />
 
@@ -356,9 +409,10 @@
 </template>
 
 <script lang="ts" setup>
-import { ref, onMounted, onUnmounted, watch } from 'vue'
+import { ref, onMounted, onUnmounted, watch, computed, reactive } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useMotorCmd } from '@/composables/motor/useMotorCmd'
+import draggable from 'vuedraggable'
 import { 
   Setting, 
   Key, 
@@ -373,7 +427,8 @@ import {
   DataAnalysis, 
   Check, 
   Close,
-  Refresh
+  Refresh,
+  Rank
 } from '@element-plus/icons-vue'
 
 // 使用指令配置钩子
@@ -407,6 +462,81 @@ const activeControlTab = ref('read')
 const uploadRef = ref()
 const dataInputs = ref<Record<string, string>>({})
 const decimalInputs = ref<Record<string, string>>({}) // 存储十进制输入值
+
+// 拖拽式报文结构配置
+const addressLength = ref(1) // 地址字段长度（字节）
+const includeLength = ref(true) // 是否包含长度字段（默认可变）
+const lengthBytes = ref(1) // 长度字段字节数
+const includeFunction = ref(true) // 是否包含功能码字段（默认可变）
+const functionBytes = ref(1) // 功能码字段字节数
+
+// 报文字段配置
+const messageFields = reactive([
+  { 
+    id: 'header', 
+    title: '报头', 
+    tag: '固定', 
+    tagType: 'info' as const, 
+    fixed: true 
+  },
+  { 
+    id: 'address', 
+    title: '地址', 
+    tag: '可变', 
+    tagType: 'warning' as const, 
+    fixed: false 
+  },
+  { 
+    id: 'function', 
+    title: '功能码', 
+    tag: '可变', 
+    tagType: 'warning' as const, 
+    fixed: false 
+  },
+  { 
+    id: 'length', 
+    title: '长度', 
+    tag: '可变', 
+    tagType: 'warning' as const, 
+    fixed: false 
+  },
+  { 
+    id: 'data', 
+    title: '数据', 
+    tag: '核心', 
+    tagType: 'success' as const, 
+    fixed: false 
+  },
+  { 
+    id: 'checksum', 
+    title: '校验和', 
+    tag: '固定', 
+    tagType: 'info' as const, 
+    fixed: true 
+  }
+])
+
+// 拖拽排序后的字段列表
+const messageStructure = computed({
+  get() {
+    // 确保报头始终在最前，校验和始终在最后
+    const headerField = messageFields.find(f => f.id === 'header')
+    const checksumField = messageFields.find(f => f.id === 'checksum')
+    const middleFields = messageFields.filter(f => f.id !== 'header' && f.id !== 'checksum')
+    
+    // 根据用户拖拽排序中间字段
+    return [headerField, ...middleFields, checksumField]
+  },
+  set(newValue) {
+    // 更新字段顺序（保持报头和校验和的固定位置）
+    const newOrder = newValue.map(field => field.id)
+    messageFields.sort((a, b) => {
+      const aIndex = newOrder.indexOf(a.id)
+      const bIndex = newOrder.indexOf(b.id)
+      return aIndex - bIndex
+    })
+  }
+})
 
 // IPC事件监听器引用
 const serialSuccessListener = (event: any, result: any) => {
@@ -478,11 +608,34 @@ const showConfigDialog = () => {
   configDialogVisible.value = true
 }
 
+// 处理报文结构变化
+const handleStructureChange = (event: any) => {
+  console.log('报文结构已更新:', messageStructure.value.map(f => f.title))
+  // 这里可以添加保存用户偏好的逻辑
+  ElMessage({
+    message: '报文结构已更新',
+    type: 'success',
+    duration: 1000,
+    placement: 'bottom-right',
+    offset: 50,
+  })
+}
+
 // 保存配置
 const saveConfig = () => {
   try {
     // 保存到localStorage
     saveConfigToStorage()
+    
+    // 同时保存拖拽式报文结构配置
+    const structureConfig = {
+      addressLength: addressLength.value,
+      includeLength: includeLength.value,
+      lengthBytes: lengthBytes.value,
+      includeFunction: includeFunction.value,
+      functionBytes: functionBytes.value
+    }
+    localStorage.setItem('motor-structure-config', JSON.stringify(structureConfig))
     
     configDialogVisible.value = false
     ElMessage({
@@ -805,6 +958,13 @@ const loadConfig = (config: any) => {
     configForm.checksum.method = config.checksum.method || 'sum'
     configForm.checksum.start_index = config.checksum.start_index || 2
     configForm.checksum.end_index = config.checksum.end_index || -1
+    
+    // 载入拖拽式报文结构配置
+    addressLength.value = config.addressLength || 1
+    includeLength.value = config.includeLength !== false
+    lengthBytes.value = config.lengthBytes || 1
+    includeFunction.value = config.includeFunction !== false
+    functionBytes.value = config.functionBytes || 1
     
     // 清空现有命令
     readCommands.value = []
@@ -1215,6 +1375,145 @@ onUnmounted(() => {
 
 .config-actions .el-button {
   margin: 0;
+}
+
+/* 拖拽式报文结构样式 */
+.message-structure-container {
+  padding: 20px;
+  background-color: #fafbfc;
+  border-radius: 8px;
+  border: 1px solid #e6e8eb;
+}
+
+.message-fields-container {
+  display: flex;
+  gap: 15px;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+}
+
+.message-field {
+  background: #ffffff;
+  border: 2px solid #e6e8eb;
+  border-radius: 8px;
+  padding: 15px;
+  min-width: 200px;
+  max-width: 280px;
+  transition: all 0.3s ease;
+  cursor: move;
+  position: relative;
+}
+
+.message-field:hover {
+  border-color: #409eff;
+  box-shadow: 0 4px 12px rgba(64, 158, 255, 0.15);
+  transform: translateY(-2px);
+}
+
+.message-field.fixed-field {
+  border-color: #b3d8ff;
+  background: #f0f9ff;
+  cursor: default;
+}
+
+.message-field.fixed-field:hover {
+  border-color: #b3d8ff;
+  box-shadow: 0 2px 8px rgba(64, 158, 255, 0.1);
+  transform: none;
+}
+
+.field-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.drag-handle {
+  color: #909399;
+  cursor: grab;
+  font-size: 14px;
+}
+
+.fixed-field .drag-handle {
+  cursor: default;
+  color: #b3d8ff;
+}
+
+.field-title {
+  font-weight: 600;
+  color: #303133;
+  font-size: 14px;
+  flex: 1;
+}
+
+.field-content {
+  padding: 8px 0;
+}
+
+.field-config {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.field-unit {
+  font-size: 12px;
+  color: #909399;
+}
+
+.param-separator {
+  color: #c0c4cc;
+  font-weight: 500;
+}
+
+.checksum-params {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 8px;
+}
+
+/* 拖拽时的样式 */
+.sortable-ghost {
+  opacity: 0.5;
+  background: #f0f9ff;
+  border: 2px dashed #409eff;
+}
+
+.sortable-drag {
+  opacity: 0.9;
+  transform: rotate(2deg);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+}
+
+/* 响应式布局 */
+@media (max-width: 768px) {
+  .message-fields-container {
+    flex-direction: column;
+  }
+  
+  .message-field {
+    max-width: 100%;
+    min-width: auto;
+  }
+  
+  .field-config {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  
+  .checksum-params {
+    margin-left: 0;
+    margin-top: 8px;
+  }
 }
 
 :deep(.el-form-item__label) {
