@@ -460,8 +460,6 @@ const handleSendMessage = () => {
   
   try {
     sendMessage(inputMessage.value.trim(), inputFormat.value)
-    // 清空输入框
-    inputMessage.value = ''
   } catch (error) {
     console.error('发送消息失败:', error)
   }

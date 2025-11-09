@@ -294,7 +294,7 @@
             <template #label>
               <span class="tab-label">
                 <el-icon><Upload /></el-icon>
-                读命令
+                读指令
                 <el-tag size="small" type="info">{{ readCommands.length }}</el-tag>
               </span>
             </template>
@@ -431,7 +431,7 @@
             <template #label>
               <span class="tab-label">
                 <el-icon><Download /></el-icon>
-                写命令
+                写指令
                 <el-tag size="small" type="info">{{ writeCommands.length }}</el-tag>
               </span>
             </template>
@@ -608,11 +608,10 @@ import { ref, onMounted, onUnmounted, watch, computed, reactive } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useMotorCmd } from '@/composables/motor/useMotorCmd'
 import draggable from 'vuedraggable'
+import { useConsole } from '@/composables/flow/useConsole'
 import { 
   Setting, 
   Key, 
-  Coin, 
-  Document, 
   Download, 
   Upload, 
   Plus, 
@@ -651,6 +650,7 @@ const {
   // 指令状态缓存初始化函数
   initializeCommandStatusCache
 } = useMotorCmd()
+const { sendMessage } = useConsole(true)
 
 // 响应式变量
 const configDialogVisible = ref(false)
@@ -1360,7 +1360,8 @@ const handleDragEnd = () => {
 // 发送数据到串口
 const sendDataToSerial = (data: string) => {
   if (window.ipcRenderer) {
-    window.ipcRenderer.send('send-serial-hex-data', data)
+    sendMessage(data, 'hex')
+    // window.ipcRenderer.send('send-serial-hex-data', data)
   } else {
     console.error('IPC通信不可用')
     ElMessage({

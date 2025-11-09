@@ -5,7 +5,7 @@ import type { Ref } from "vue";
 export interface ConsoleMessage {
   timestamp: string;
   raw: string;
-  dataType: "json" | "nmea";
+  dataType: "json" | "nmea" | "undefined";
   isValid: boolean;
   key: string;
 }
@@ -383,8 +383,8 @@ export function useConsole(useGlobal: boolean = true): ConsoleState {
       const message: ConsoleMessage = {
         timestamp: timestamp + ' [TX ' + (format==='ascii'?'STR':'HEX') + ']',
         raw: data,
-        dataType: 'json',
-        isValid: true,
+        dataType: 'undefined',
+        isValid: false,
         key: generateKey(timestamp, data),
       };
       messages.value.push(message);
