@@ -25,7 +25,8 @@ const eventsMap = {
   "open-serial-port": openSerialPort, // 打开串口设备
   "close-serial-port": closeSerialPort, // 关闭串口设备
   "serial-data-to-renderer": serialDataToRenderer, // 串口数据发送到渲染进程
-  "send-serial-data": sendSerialData, // 发送数据到串口设备
+  "send-serial-hex-data": sendSerialHexData, // 发送数据到串口设备
+  "send-serial-ascii-data": sendSerialAsciiData, // 发送数据到串口设备
 
   // 2. 文件
   // 使用 HTML 自身的文件对话框，不需要额外处理
@@ -221,10 +222,30 @@ function serialDataToRenderer(event: IpcMainEvent, data: string) {
 }
 
 // 发送数据到串口设备
-function sendSerialData(event: IpcMainEvent, data: string) {
+function sendSerialHexData(event: IpcMainEvent, data: string) {
   if (currentPort && currentPort.isOpen) {
     // 将十六进制字符串转换为Buffer
     const buffer = Buffer.from(data, 'hex');
+    currentPort.write(buffer, (err) => {
+      if (err) {
+        console.error('串口发送数据失败:', err);
+        event.sender.send('serial-send-error', { error: err.message });
+      } else {
+        console.log('串口数据发送成功:', data);
+        event.sender.send('serial-send-success', { data: data });
+      }
+    });
+  } else {
+    const errorMsg = '串口未打开或不可用';
+    console.error(errorMsg);
+    event.sender.send('serial-send-error', { error: errorMsg });
+  }
+}
+
+function sendSerialAsciiData(event: IpcMainEvent, data: string) {
+  if (currentPort && currentPort.isOpen) {
+    // 将ASCII字符串转换为Buffer
+    const buffer = Buffer.from(data);
     currentPort.write(buffer, (err) => {
       if (err) {
         console.error('串口发送数据失败:', err);

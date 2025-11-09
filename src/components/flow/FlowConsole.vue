@@ -108,6 +108,51 @@
       </DynamicScroller>
     </div>
 
+    <!-- 消息输入框 -->
+    <div class="console-input-bar">
+      <div class="input-container">
+        <el-select 
+          v-model="inputFormat" 
+          size="default" 
+          style="width: 90px; margin-right: 8px;"
+          placeholder="格式"
+          :teleported="false"
+        >
+          <el-option 
+            label="ASCII" 
+            value="ascii"
+          ></el-option>
+          <el-option 
+            label="HEX" 
+            value="hex"
+          ></el-option>
+        </el-select>
+        
+        <el-input
+          v-model="inputMessage"
+          size="default"
+          :placeholder="inputFormat === 'hex' ? '输入十六进制数据，如: 01 02 03' : '输入ASCII数据'"
+          style="flex: 1; margin-right: 8px;"
+          @keyup.enter="sendMessage"
+          :disabled="!deviceConnected"
+        >
+          <template #suffix>
+            <el-icon><Edit /></el-icon>
+          </template>
+        </el-input>
+        
+        <el-button 
+          @click="handleSendMessage" 
+          type="primary" 
+          size="default"
+          style="font-size: 12px;"
+          :disabled="!deviceConnected || !inputMessage.trim()"
+        >
+          <el-icon><Position /></el-icon>&nbsp;发送
+        </el-button>
+      </div>
+    </div>
+
     <!-- 底部状态栏 -->
     <div class="console-footer">
       <span>共 {{ totalCount }} 条消息</span>
@@ -129,10 +174,13 @@ import {
   Delete,
   VideoPause,
   ArrowUp,
-  ArrowDown
+  ArrowDown,
+  Edit,
+  Position
 } from '@element-plus/icons-vue'
 import { navMode } from '@/settings/config'
 import { useConsole } from '@/composables/flow/useConsole'
+import { useDevice } from '@/hooks/useDevice'
 import { DynamicScroller, DynamicScrollerItem } from 'vue-virtual-scroller'
 
 // DOM引用
@@ -165,7 +213,15 @@ const {
   toggleAutoScroll,
   togglePause,
   saveToFile,
+  sendMessage,
 } = useConsole(true) // 使用全局实例
+
+// 获取设备连接状态
+const { deviceConnected } = useDevice()
+
+// 输入框状态
+const inputMessage = ref('')
+const inputFormat = ref<'hex' | 'ascii'>('ascii')
 
 // 性能监控
 const messageRate = ref(0)
@@ -394,6 +450,21 @@ const handleAutoScroll = () => {
     handleScrollToBottom();
   }
   toggleAutoScroll();
+}
+
+// 发送消息
+const handleSendMessage = () => {
+  if (!inputMessage.value.trim() || !deviceConnected.value) {
+    return
+  }
+  
+  try {
+    sendMessage(inputMessage.value.trim(), inputFormat.value)
+    // 清空输入框
+    inputMessage.value = ''
+  } catch (error) {
+    console.error('发送消息失败:', error)
+  }
 }
 
 // 滚动到底部函数 - 精确版本
@@ -647,7 +718,33 @@ onUnmounted(() => {
   min-height: 30px;
 }
 
+/* 消息输入栏样式 - 浅色主题 */
+.console-input-bar {
+  padding: 12px 16px;
+  background-color: #f8f9fa;
+  border-top: 1px solid #e9ecef;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.input-container {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  gap: 12px;
+}
+
+.input-container .el-input {
+  flex: 1;
+}
+
 /* Element Plus 按钮样式调整 - 浅色主题 */
+:deep(.el-button--default) {
+  padding: 8px 16px;
+  font-size: 13px;
+}
+
 :deep(.el-button--small) {
   padding: 6px 12px;
   font-size: 12px;
@@ -693,5 +790,14 @@ onUnmounted(() => {
 
 .scroller::-webkit-scrollbar-thumb:hover {
   background-color: #adb5bd;
+}
+
+/* Element Plus 选择框样式调整 */
+:deep(.el-select__wrapper) {
+  font-size: 12px;
+}
+
+:deep(.el-select__placeholder) {
+  font-size: 12px;
 }
 </style>

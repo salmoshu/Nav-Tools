@@ -1360,7 +1360,7 @@ const handleDragEnd = () => {
 // 发送数据到串口
 const sendDataToSerial = (data: string) => {
   if (window.ipcRenderer) {
-    window.ipcRenderer.send('send-serial-data', data)
+    window.ipcRenderer.send('send-serial-hex-data', data)
   } else {
     console.error('IPC通信不可用')
     ElMessage({

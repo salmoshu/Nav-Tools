@@ -39,6 +39,7 @@ export interface ConsoleState {
   saveToFile: () => void;
   exportMessages: () => void;
   searchMessages: (query: string) => void;
+  sendMessage: (data: string, format: "hex" | "ascii") => void;
 }
 
 // 全局单例实例
@@ -146,25 +147,6 @@ export function useConsole(useGlobal: boolean = true): ConsoleState {
       .slice(2, 11)}`;   // ← 等价于原来的 substr(2, 9)
   };
 
-  const validateMessage = (raw: string, dataType: "json" | "nmea"): boolean => {
-    if (!raw || raw.trim().length === 0) return false;
-
-    switch (dataType) {
-      case "json":
-        try {
-          JSON.parse(raw);
-          return true;
-        } catch {
-          return false;
-        }
-      case "nmea":
-        // NMEA 格式验证
-        return /^\$[A-Z]{2}[A-Z]{3},.*\*[0-9A-F]{2}$/.test(raw.trim());
-      default:
-        return true;
-    }
-  };
-
   // 核心方法
   const addMessage = (rawData: string) => {
     if (isPaused.value) return;
@@ -196,7 +178,7 @@ export function useConsole(useGlobal: boolean = true): ConsoleState {
           } else {
             isValid = validateJsonMessage(line);
             const message: ConsoleMessage = {
-              timestamp,
+              timestamp: timestamp + ' [RX MSG]',
               raw: line,
               dataType: 'json',
               isValid,
@@ -227,14 +209,30 @@ export function useConsole(useGlobal: boolean = true): ConsoleState {
     // 批量添加消息
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
-      const time_reg = /^\d{2}:\d{2}:\d{2}\.\d+(?:\.\d+)?:/;
-      const cleanedLine = line.replace(time_reg, "").trim();
+      let cleanedLine = '';
 
-      if (cleanedLine.trim() !== "") {
-        const uniqueTimestamp =
+      // 合并时间戳和消息前缀的正则表达式
+      const combined_reg = /^(\d{2}:\d{2}:\d{2}\.\d+)?\s*(\[RX MSG\]:\s+|\[TX STR\]:\s+|\[TX HEX\]:\s+)?/;
+      const matchResult = line.match(combined_reg);
+
+      // 提取文件中记录的时间和消息前缀，如果没有则使用当前时间
+      let messageTimestamp;
+      if (matchResult && matchResult[1]) {
+        // 使用文件中记录的时间 + 前缀
+        messageTimestamp = matchResult[1] + ' ' + (matchResult[2] ? matchResult[2].trim().slice(0, -1) : "");
+      } else {
+        // 使用唯一的时间戳
+        messageTimestamp =
           baseTimestamp +
           "." +
-          (baseTime.getMilliseconds() + i).toString().padStart(3, "0");
+          (baseTime.getMilliseconds() + i).toString().padStart(3, "0") + ' ' + 
+          (matchResult && matchResult[2] ? matchResult[2].trim().slice(0, -1) : "");
+      }
+      
+      // 一次性移除时间戳和消息前缀
+      cleanedLine = line.replace(combined_reg, "").trim();
+
+      if (cleanedLine.trim() !== "") {
 
         // 检测是否为JSON格式
         let isValid = false;
@@ -254,11 +252,11 @@ export function useConsole(useGlobal: boolean = true): ConsoleState {
         }
 
         const message: ConsoleMessage = {
-          timestamp: uniqueTimestamp,
+          timestamp: messageTimestamp,
           raw: cleanedLine,
           dataType,
           isValid,
-          key: generateKey(uniqueTimestamp, cleanedLine),
+          key: generateKey(messageTimestamp, cleanedLine),
         };
 
         messages.value.push(message);
@@ -349,6 +347,57 @@ export function useConsole(useGlobal: boolean = true): ConsoleState {
     );
   };
 
+  // 发送消息到串口
+  const sendMessage = (data: string, format: "hex" | "ascii") => {
+    if (!window.ipcRenderer) {
+      console.error('IPC通信不可用');
+      return;
+    }
+
+    try {
+      let sendData: string;
+      
+      if (format === "hex") {
+        // 验证十六进制格式
+        const cleanedData = data.replace(/\s/g, ''); // 移除所有空格
+        if (!/^[0-9A-Fa-f]*$/.test(cleanedData)) {
+          console.error('无效的十六进制格式');
+          return;
+        }
+        // 确保长度为偶数
+        if (cleanedData.length % 2 !== 0) {
+          console.error('十六进制数据长度必须为偶数');
+          return;
+        }
+        sendData = cleanedData;
+      } else {
+        // ASCII格式，直接发送
+        sendData = data;
+      }
+
+      // 发送到主进程
+      window.ipcRenderer.send(`send-serial-${format}-data`, sendData);
+      
+      // 在控制台显示发送的消息
+      const timestamp = generateTimestamp();
+      const message: ConsoleMessage = {
+        timestamp: timestamp + ' [TX ' + (format==='ascii'?'STR':'HEX') + ']',
+        raw: data,
+        dataType: 'json',
+        isValid: true,
+        key: generateKey(timestamp, data),
+      };
+      messages.value.push(message);
+      
+      // 限制消息数量
+      if (messages.value.length > maxMessages) {
+        messages.value.shift();
+      }
+    } catch (error) {
+      console.error('发送消息失败:', error);
+    }
+  };
+
   const instance: ConsoleState = {
     messages,
     dataFormat,
@@ -375,6 +424,7 @@ export function useConsole(useGlobal: boolean = true): ConsoleState {
     saveToFile,
     exportMessages,
     searchMessages,
+    sendMessage,
   };
 
   // 如果是全局实例，则保存到全局变量

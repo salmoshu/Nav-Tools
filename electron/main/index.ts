@@ -245,4 +245,6 @@ ipcMain.handle('search-serial-ports', eventsMap['search-serial-ports'])
 ipcMain.handle('open-serial-port', eventsMap['open-serial-port'])
 ipcMain.handle('close-serial-port', eventsMap['close-serial-port'])
 ipcMain.handle('read-file-event', eventsMap['read-file-event'])
-ipcMain.on('send-serial-data', eventsMap['send-serial-data'])
+ipcMain.on('send-serial-hex-data', eventsMap['send-serial-hex-data'])
+ipcMain.on('send-serial-ascii-data', eventsMap['send-serial-ascii-data'])
+
