@@ -64,7 +64,7 @@ export function useFlow() {
     for (const line of lines) {
       if (line.trim() !== "") {
         try {
-          const combined_reg = /^(\d{2}:\d{2}:\d{2}\.\d+)?\s*(\[RX MSG\]:\s+|\[TX STR\]:\s+|\[TX HEX\]:\s+)?/;
+          const combined_reg = /^(\d{2}:\d{2}:\d{2}\.\d+)?\s*(\[MSG ⬅️\]:\s+|\[STR ➡️\]:\s+|\[HEX ➡️\]:\s+)?/;
           const cleanedLine = line.replace(combined_reg, '').trim()
 
           if (cleanedLine.indexOf('{') === -1 || cleanedLine.indexOf('}') === -1) {

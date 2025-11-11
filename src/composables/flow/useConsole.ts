@@ -178,7 +178,7 @@ export function useConsole(useGlobal: boolean = true): ConsoleState {
           } else {
             isValid = validateJsonMessage(line);
             const message: ConsoleMessage = {
-              timestamp: timestamp + ' [RX MSG]',
+              timestamp: timestamp + ' [MSG ⬅️]',
               raw: line,
               dataType: 'json',
               isValid,
@@ -212,7 +212,7 @@ export function useConsole(useGlobal: boolean = true): ConsoleState {
       let cleanedLine = '';
 
       // 合并时间戳和消息前缀的正则表达式
-      const combined_reg = /^(\d{2}:\d{2}:\d{2}\.\d+)?\s*(\[RX MSG\]:\s+|\[TX STR\]:\s+|\[TX HEX\]:\s+)?/;
+      const combined_reg = /^(\d{2}:\d{2}:\d{2}\.\d+)?\s*(\[MSG ⬅️\]:\s+|\[STR ➡️\]:\s+|\[HEX ➡️\]:\s+)?/;
       const matchResult = line.match(combined_reg);
 
       // 提取文件中记录的时间和消息前缀，如果没有则使用当前时间
@@ -381,7 +381,7 @@ export function useConsole(useGlobal: boolean = true): ConsoleState {
       // 在控制台显示发送的消息
       const timestamp = generateTimestamp();
       const message: ConsoleMessage = {
-        timestamp: timestamp + ' [TX ' + (format==='ascii'?'STR':'HEX') + ']',
+        timestamp: timestamp + ' [' + (format==='ascii'?'STR':'HEX') + ' ➡️]',
         raw: data,
         dataType: 'undefined',
         isValid: false,
