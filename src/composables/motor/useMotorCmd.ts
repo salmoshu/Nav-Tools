@@ -26,7 +26,7 @@ export interface WriteCommand extends Command {
 
 // 校验配置接口
 export interface ChecksumConfig {
-  method: 'sum' | 'xor' | 'crc8' | 'crc16'
+  method: 'none' | 'sum' | 'xor' | 'crc8' | 'crc16'
   start_index: number
   end_index: number
 }
@@ -87,8 +87,14 @@ export function useMotorCmd() {
   const getDataCount = (cmd: Command): number => {
     if (cmd.length === 0) return 1
     
-    const bytesPerData = cmd.dataType === 'int16' ? 2 : 4
-    return Math.floor(cmd.length / bytesPerData)
+    // 修正：float32只能是4字节，如果长度超过4字节，应该当作多个float32处理
+    if (cmd.dataType === 'float32') {
+      return Math.floor(cmd.length / 4)  // 每个float32是4字节
+    } else if (cmd.dataType === 'int16') {
+      return Math.floor(cmd.length / 2)  // 每个int16是2字节
+    }
+    
+    return 1  // 默认返回1个数据
   }
 
   // 初始化指令状态缓存
@@ -116,7 +122,14 @@ export function useMotorCmd() {
     if (!data || count <= 1) return [data || '']
     
     // 根据数据类型确定每个数据占用的十六进制字符数
-    const hexCharsPerData = dataType === 'int16' ? 4 : 8 // int16: 4字符(2字节), float32: 8字符(4字节)
+    let hexCharsPerData: number
+    if (dataType === 'int16') {
+      hexCharsPerData = 4  // int16: 4字符(2字节)
+    } else if (dataType === 'float32') {
+      hexCharsPerData = 8  // float32: 8字符(4字节)
+    } else {
+      hexCharsPerData = 4  // 默认4字符
+    }
     
     const cleanData = data.replace(/\s/g, '').padEnd(count * hexCharsPerData, '0') // 确保总长度足够
     const result: string[] = []
@@ -137,11 +150,22 @@ export function useMotorCmd() {
 
   // 十进制到十六进制转换函数（支持大端和小端格式）
   const decimalToHex = (decimalStr: string, dataType: 'int16' | 'float32'): string => {
-    if (!decimalStr || isNaN(Number(decimalStr))) {
+    if (!decimalStr || decimalStr.trim() === '') {
       return dataType === 'int16' ? '0000' : '00000000'
     }
     
-    const num = Number(decimalStr)
+    // 处理不完整的小数输入（如"3."）
+    let cleanStr = decimalStr.trim()
+    
+    if (cleanStr.endsWith('.')) {
+      cleanStr = cleanStr + '0' // 补全小数
+    }
+    
+    if (isNaN(Number(cleanStr))) {
+      return dataType === 'int16' ? '0000' : '00000000'
+    }
+    
+    const num = Number(cleanStr)
     const endianness = configForm.dataEndianness || 'little'
     
     if (dataType === 'int16') {
@@ -159,6 +183,11 @@ export function useMotorCmd() {
       }
     } else if (dataType === 'float32') {
         // float32: 4字节，IEEE 754格式
+        // 确保数值在合理范围内，避免Infinity和NaN
+        if (!isFinite(num)) {
+          return '00000000'
+        }
+        
         const buffer = new ArrayBuffer(4)
         const view = new DataView(buffer)
         
@@ -166,17 +195,19 @@ export function useMotorCmd() {
         view.setFloat32(0, num, true)
         const bytes = new Uint8Array(buffer)
         
+        let result: string
         if (endianness === 'big') {
           // 大端：反转字节顺序
-          return Array.from([bytes[3], bytes[2], bytes[1], bytes[0]])
+          result = Array.from([bytes[3], bytes[2], bytes[1], bytes[0]])
             .map(b => b.toString(16).padStart(2, '0').toUpperCase())
             .join('')
         } else {
           // 小端：直接使用字节顺序
-          return Array.from(bytes)
+          result = Array.from(bytes)
             .map(b => b.toString(16).padStart(2, '0').toUpperCase())
             .join('')
         }
+        return result
     }
     
     return '00'
@@ -230,7 +261,16 @@ export function useMotorCmd() {
         
         // 由于我们已经根据字节序调整了字节顺序，这里始终使用小端格式读取
         const float32 = view.getFloat32(0, true)
-        return float32.toString()
+        
+        // 处理浮点数精度显示
+        if (Math.abs(float32 - Math.round(float32)) < 0.0001) {
+          // 如果接近整数，显示为整数
+          return Math.round(float32).toString()
+        } else {
+          // 否则限制小数位数，避免显示过多的精度误差
+          // IEEE 754单精度浮点数通常有6-7位有效数字
+          return parseFloat(float32.toFixed(4)).toString()
+        }
       }
     } catch (error) {
       console.error('十六进制转十进制失败:', error)
@@ -240,7 +280,7 @@ export function useMotorCmd() {
     return '0'
   }
 
-  const calculateChecksum = (message: string, method: 'sum' | 'xor' | 'crc8' | 'crc16', startIndex?: number): string => {
+  const calculateChecksum = (message: string, method: 'none' | 'sum' | 'xor' | 'crc8' | 'crc16', startIndex?: number): string => {
     let bytes = message.match(/.{2}/g) || []
     
     // 如果指定了起始索引，截取从起始位置到末尾的字节范围
@@ -251,6 +291,9 @@ export function useMotorCmd() {
     }
     
     switch (method) {
+      case 'none':
+        return ''  // 无校验位，返回空字符串
+        
       case 'xor':
         let xor = 0
         bytes.forEach(byte => {
@@ -353,7 +396,7 @@ export function useMotorCmd() {
 
   // 计算属性：配置是否有效
   const isConfigValid = computed(() => {
-    return configForm.header && configForm.format && readCommands.value.length > 0
+    return configForm.header && configForm.format
   })
 
   // 添加命令
@@ -593,7 +636,6 @@ export function useMotorCmd() {
     try {
       // 确保输入有效
       if (!hexData || (typeof hexData !== 'string' && !Array.isArray(hexData))) {
-        console.log('输入数据无效或为空')
         return ''
       }
       
@@ -608,7 +650,6 @@ export function useMotorCmd() {
           (byte as number).toString(16).padStart(2, '0').toUpperCase()
         ).join('')
       } else {
-        console.log('不支持的输入类型')
         return ''
       }
       

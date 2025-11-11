@@ -88,7 +88,7 @@
                   </div>
                   <!-- 多个输入框模式 -->
                   <div v-else class="multi-data-inputs">
-                    <div v-for="(dataItem, index) in splitData(cmd.data, getDataCount(cmd))" :key="index" class="multi-input-item">
+                    <div v-for="(dataItem, index) in splitData(cmd.data, getDataCount(cmd), cmd.dataType)" :key="index" class="multi-input-item">
                       <el-input
                         v-model="decimalInputs[getDataInputKey(cmd, index)]"
                         placeholder=""
@@ -264,12 +264,13 @@
                           size="small"
                           style="width: 90px;"
                         >
+                          <el-option label="无校验" value="none" />
                           <el-option label="和校验" value="sum" />
                           <el-option label="XOR" value="xor" />
                           <el-option label="CRC8" value="crc8" />
                           <el-option label="CRC16" value="crc16" />
                         </el-select>
-                        <div class="checksum-params" v-if="configForm.checksum.method">
+                        <div class="checksum-params" v-if="configForm.checksum.method && configForm.checksum.method !== 'none'">
                           <el-input-number 
                             v-model="configForm.checksum.start_index" 
                             :min="0" 
@@ -796,7 +797,8 @@ const saveConfigToStorage = () => {
   try {
     const config = {
       ...currentConfig.value,
-      messageStructure: messageStructure.value
+      messageStructure: messageStructure.value,
+      hasBeenCustomized: true  // 标记用户已自定义配置
     }
     localStorage.setItem(STORAGE_KEY, JSON.stringify(config))
     console.log('配置已保存到localStorage')
@@ -852,7 +854,6 @@ const showConfigDialog = () => {
 
 // 处理报文结构变化
 const handleStructureChange = (event: any) => {
-  console.log('报文结构已更新:', messageStructure.value.map(f => f?.title))
   // 这里可以添加保存用户偏好的逻辑
   ElMessage({
     message: '报文结构已更新',
@@ -984,7 +985,7 @@ const generateCommandPreview = () => {
         break
         
       case 'checksum':
-        if (configForm.checksum.method) {
+        if (configForm.checksum.method && configForm.checksum.method !== 'none') {
           const checksum = configForm.checksum.method === 'crc16' ? 'XXXX' : 'XX'
           preview.push({
             type: 'checksum',
@@ -1205,39 +1206,41 @@ const handleSingleDecimalInput = (cmd: any, value: string) => {
   
   const trimmedValue = value.trim()
   
-  // 检查是否为纯数字（十进制）
-  if (/^-?\d+$/.test(trimmedValue)) {
-    // 是十进制数字，转换为十六进制
+  // 检查是否为有效数字（支持整数和小数）
+  if (/^-?(\d+\.?\d*|\.\d+)$/.test(trimmedValue)) {
+    // 是有效数字，转换为十六进制
     const hexValue = decimalToHex(trimmedValue, cmd.dataType)
     cmd.data = hexValue
     // 更新十进制输入缓存
     decimalInputs.value[cmd.name] = trimmedValue
   } else {
-    // 不是纯数字，保留原始输入（假设是十六进制）
-    cmd.data = trimmedValue
-    // 更新十进制输入缓存（尝试转换回十进制）
-    decimalInputs.value[cmd.name] = hexToDecimal(trimmedValue, cmd.dataType)
+    // 不是有效数字，不能作为十六进制输入，使用默认值
+    cmd.data = cmd.dataType === 'float32' ? '00000000' : '0000'
+    // 更新十进制输入缓存为0
+    decimalInputs.value[cmd.name] = '0'
   }
 }
 
 // 处理多输入框的十进制输入并更新数据
 const updateDataValueWithDecimal = (cmd: any, index: number, value: string) => {
   const dataCount = getDataCount(cmd)
-  const dataArray = splitData(cmd.data, dataCount)
+  const dataArray = splitData(cmd.data, dataCount, cmd.dataType)
   
   if (!value || value.trim() === '') {
-    dataArray[index] = '0000' // int16默认4个字符
+    // 根据数据类型设置默认值
+    dataArray[index] = cmd.dataType === 'float32' ? '00000000' : '0000'
   } else {
     const trimmedValue = value.trim()
     
-    // 检查是否为纯数字（十进制）
-    if (/^-?\d+$/.test(trimmedValue)) {
-      // 是十进制数字，转换为十六进制
-      const hexValue = decimalToHex(trimmedValue, cmd.dataType)
+    // 检查是否为有效数字（支持整数和小数）
+    if (/^-?(\d+\.?\d*|\.\d+)$/.test(trimmedValue)) {
+      // 是有效数字，转换为十六进制
+      // 重要：8字节float32被分割成多个4字节的float32
+      const hexValue = decimalToHex(trimmedValue, 'float32')
       dataArray[index] = hexValue
     } else {
-      // 不是纯数字，按原始输入处理（假设是十六进制）
-      dataArray[index] = trimmedValue.padStart(4, '0').toUpperCase() // int16需要4个字符
+      // 不是有效数字，使用默认值
+      dataArray[index] = cmd.dataType === 'float32' ? '00000000' : '0000'
     }
   }
   
@@ -1407,7 +1410,6 @@ const updateGlobalTimer = () => {
           // 使用generateCommandMessage构建具体指令的报文，支持动态顺序
           const cmdMessage = generateCommandMessage(command, false)
           
-          console.log(`定时发送读指令: ${command.name}, 报文: ${cmdMessage}`)
           sendDataToSerial(cmdMessage)
           
           command.lastSentTime = currentTime
@@ -1582,8 +1584,8 @@ const loadConfig = (config: any) => {
       })
     }
     
-    // 如果没有命令，添加默认命令
-    if (readCommands.value.length === 0) {
+    // 如果没有命令，添加默认命令（仅在首次初始化时）
+    if (readCommands.value.length === 0 && !config.hasBeenCustomized) {
       readCommands.value = [
         { name: 'GET_SPEED', address: '00', data: '0000', length: 0, dataType: 'int16', functionCode: '03', registerCount: '01', includeRegisterCount: true, includeLength: true, frequency: null, lastSentTime: 0 }
       ]
@@ -1617,16 +1619,27 @@ const initializeDecimalInputs = () => {
   // 处理写命令（因为读命令没有实际数据输入）
   writeCommands.value.forEach(cmd => {
     const dataCount = getDataCount(cmd)
-    const dataArray = splitData(cmd.data, dataCount)
+    const dataArray = splitData(cmd.data, dataCount, cmd.dataType)
     
     if (dataCount === 1) {
       // 单个数据项
-      decimalInputs.value[cmd.name] = hexToDecimal(cmd.data, cmd.dataType)
+      // 只有在数据是有效的十六进制时才转换
+      if (cmd.data && /^[0-9A-Fa-f]+$/.test(cmd.data)) {
+        decimalInputs.value[cmd.name] = hexToDecimal(cmd.data, cmd.dataType)
+      } else {
+        // 如果数据无效，使用默认值
+        decimalInputs.value[cmd.name] = '0'
+      }
     } else {
       // 多个数据项
       dataArray.forEach((dataItem, index) => {
         const inputKey = getDataInputKey(cmd, index)
-        decimalInputs.value[inputKey] = hexToDecimal(dataItem, cmd.dataType)
+        if (dataItem && /^[0-9A-Fa-f]+$/.test(dataItem)) {
+          // 重要：8字节float32被分割成多个4字节的float32
+          decimalInputs.value[inputKey] = hexToDecimal(dataItem, 'float32')
+        } else {
+          decimalInputs.value[inputKey] = '0'
+        }
       })
     }
   })
