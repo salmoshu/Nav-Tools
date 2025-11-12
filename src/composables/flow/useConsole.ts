@@ -14,6 +14,7 @@ export interface ConsoleMessage {
 export interface ConsoleState {
   messages: Ref<ConsoleMessage[]>;
   dataFormat: Ref<"json" | "nmea">;
+  displayFormat: Ref<'hex' | 'ascii'>;
   dataFilter: Ref<boolean>;
   dataTimestamp: Ref<boolean>;
   dataAutoScroll: Ref<boolean>;
@@ -33,6 +34,7 @@ export interface ConsoleState {
   addMessages: (rawData: string) => void;
   clearMessages: () => void;
   toggleFilter: () => void;
+  toggleDisplayFormat: () => void;
   toggleTimestamp: () => void;
   toggleAutoScroll: () => void;
   togglePause: () => void;
@@ -59,6 +61,7 @@ export function useConsole(useGlobal: boolean = true): ConsoleState {
   // 状态管理
   const messages = ref<ConsoleMessage[]>([]);
   const dataFormat = ref<"json" | "nmea">("json");
+  const displayFormat = ref<'hex' | 'ascii'>('ascii')
   const dataFilter = ref(false);
   const dataTimestamp = ref(true);
   const dataAutoScroll = ref(true);
@@ -279,6 +282,11 @@ export function useConsole(useGlobal: boolean = true): ConsoleState {
     dataFilter.value = !dataFilter.value;
   };
 
+  const toggleDisplayFormat = () => {
+    displayFormat.value = displayFormat.value === 'ascii' ? 'hex' : 'ascii';
+    window.ipcRenderer.send('serial-data-format', displayFormat.value);
+  };
+
   const toggleTimestamp = () => {
     dataTimestamp.value = !dataTimestamp.value;
   };
@@ -401,6 +409,7 @@ export function useConsole(useGlobal: boolean = true): ConsoleState {
   const instance: ConsoleState = {
     messages,
     dataFormat,
+    displayFormat,
     dataFilter,
     dataTimestamp,
     dataAutoScroll,
@@ -418,6 +427,7 @@ export function useConsole(useGlobal: boolean = true): ConsoleState {
     addMessages,
     clearMessages,
     toggleFilter,
+    toggleDisplayFormat,
     toggleTimestamp,
     toggleAutoScroll,
     togglePause,

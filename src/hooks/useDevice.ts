@@ -11,7 +11,7 @@ import emitter from '@/hooks/useMitt'
 const { processRawData: addGnssData } = useNmea()
 const { addRawData: addUltrasonicData, initRawData: initUltrasonicData } = useUltrasonic()
 const { addRawData: addFlowData, initRawData: initFlowData } = useFlow()
-const { addMessages: initFlowConsole, addMessage:addFlowConsole } = useConsole(true) // 使用全局实例
+const { addMessages: initFlowConsole, addMessage:addFlowConsole, displayFormat: flowDisplayFormat } = useConsole(true) // 使用全局实例
 const { convertByteArrayToJson } = useMotorCmd()
 
 // 串口配置
@@ -563,10 +563,15 @@ export function useDevice() {
         addFlowConsole(data);
         break;
       case 'motor':
-        const jsonData = convertByteArrayToJson(data)
-        addFlowConsole(data+'\n');
-        addFlowConsole(jsonData);
-        addFlowData(jsonData);
+        if (flowDisplayFormat.value === 'hex') {
+          const jsonData = convertByteArrayToJson(data)
+          addFlowConsole(data+'\n');
+          addFlowConsole(jsonData);
+          addFlowData(jsonData);
+        } else {
+          addFlowConsole(data);
+          addFlowData(data);
+        }
       default:
         break;
     }

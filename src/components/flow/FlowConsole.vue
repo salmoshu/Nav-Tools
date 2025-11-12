@@ -11,10 +11,12 @@
           </el-select>
           
           <el-button @click="toggleFilter" :type="dataFilter ? 'success' : 'default'" size="small" :title="dataFilter?'取消过滤':'启用过滤'">
-            <el-icon><Filter /></el-icon>&nbsp;{{dataFilter?"还原":"过滤"}}
+            <el-icon><Filter /></el-icon>
+            &nbsp;过滤
           </el-button>
-          <el-button @click="toggleTimestamp" type="default" size="small" :title="dataTimestamp?'隐藏时间戳':'显示时间戳'">
-            <el-icon><Clock /></el-icon>&nbsp;{{dataTimestamp?"禁用时间":"开启时间"}}
+          <el-button @click="toggleTimestamp" :type="dataTimestamp ? 'success' : 'default'" size="small" :title="dataTimestamp?'隐藏时间戳':'显示时间戳'">
+            <el-icon><Clock /></el-icon>
+            &nbsp;时间
           </el-button>
           <el-button 
             @click="handleAutoScroll" 
@@ -22,8 +24,13 @@
             size="small" 
             :title="dataAutoScroll?'手动滚动':'自动滚动'"
           >
-            <el-icon v-if="dataAutoScroll"><Sort /></el-icon>
-            <el-icon v-else><Bottom /></el-icon>&nbsp;{{dataAutoScroll?"滚动":"置底"}}
+            <el-icon><Bottom /></el-icon>
+            &nbsp;置底
+          </el-button>
+
+          <el-button @click="toggleDisplayFormat" :type="displayFormat === 'hex' ? 'success' : 'default'" size="small" :title="displayFormat==='hex'?'HEX显示':'ASCII显示'">
+            <el-icon><Coin /></el-icon>
+            &nbsp;HEX
           </el-button>
         </div>
         
@@ -168,15 +175,17 @@ import { ref, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { 
   Filter, 
   Clock, 
-  Sort, 
   Bottom, 
   Search, 
   Delete,
   VideoPause,
+  VideoPlay,
   ArrowUp,
   ArrowDown,
   Edit,
-  Position
+  Position,
+  Document,
+  Coin
 } from '@element-plus/icons-vue'
 import { navMode } from '@/settings/config'
 import { useConsole } from '@/composables/flow/useConsole'
@@ -200,6 +209,7 @@ const isAtBottom = ref(false)
 const {
   validMsgCount,
   dataFormat,
+  displayFormat,
   dataFilter,
   dataTimestamp,
   dataAutoScroll,
@@ -209,6 +219,7 @@ const {
   searchQuery,
   clearMessages,
   toggleFilter,
+  toggleDisplayFormat,
   toggleTimestamp,
   toggleAutoScroll,
   togglePause,

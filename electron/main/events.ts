@@ -4,6 +4,8 @@ import { SerialPort } from "serialport";
 import { navMode } from "../../src/settings/config";
 import { ipcMain } from "electron";
 
+let serialDataFormat = 'ascii';
+
 // 监听渲染进程的模式同步
 ipcMain.on('sync-nav-mode', (event, { appMode, funcMode }) => {
   console.log('主进程收到模式同步:', { appMode, funcMode });
@@ -27,6 +29,7 @@ const eventsMap = {
   "serial-data-to-renderer": serialDataToRenderer, // 串口数据发送到渲染进程
   "send-serial-hex-data": sendSerialHexData, // 发送数据到串口设备
   "send-serial-ascii-data": sendSerialAsciiData, // 发送数据到串口设备
+  "serial-data-format": changeSerialDataFormat, // 串口数据格式
 
   // 2. 文件
   // 使用 HTML 自身的文件对话框，不需要额外处理
@@ -180,7 +183,7 @@ function openSerialPort(
 
     const serial_decoder = new TextDecoder('utf-8', { stream: true } as any);
     currentPort.on("data", (chunk) => {
-      if (navMode.funcMode === 'motor') {
+      if (serialDataFormat === 'hex') {
         const hexString = Array.from(chunk as Uint8Array)
           .map(byte => (byte as number).toString(16).padStart(2, '0').toUpperCase())
           .join('');
@@ -259,6 +262,14 @@ function sendSerialAsciiData(event: IpcMainEvent, data: string) {
     const errorMsg = '串口未打开或不可用';
     console.error(errorMsg);
     event.sender.send('serial-send-error', { error: errorMsg });
+  }
+}
+
+function changeSerialDataFormat(event: IpcMainEvent, format: string) {
+  if (format === 'hex') {
+    serialDataFormat = 'hex';
+  } else {
+    serialDataFormat = 'ascii';
   }
 }
 
