@@ -185,6 +185,7 @@ export function useDevice() {
           // 根据当前模式处理数据
           switch (navMode.funcMode) {
             case 'flow':
+            case 'motor':
               initFlowData(content)
               initFlowConsole(content)
               ElMessage({
@@ -381,6 +382,7 @@ export function useDevice() {
         try {
           switch (navMode.funcMode) {
             case 'flow':
+            case 'motor':
               initFlowData(content);
               initFlowConsole(content);
               ElMessage({
