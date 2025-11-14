@@ -1715,7 +1715,7 @@ function touchMoveEvent(e: TouchEvent) {
         )
         if (xAxisZoom) {
           const range = xAxisZoom.end - xAxisZoom.start
-          const moveAmount = chartRef.value ? (deltaX / chartRef.value.clientWidth) * 100 : 0
+          const moveAmount = chartRef.value ? (deltaX / chartRef.value.clientWidth) * 20 : 0
           const dataZoomIndex = option.dataZoom.findIndex((dz: any) => dz === xAxisZoom)
 
           chart?.dispatchAction({
