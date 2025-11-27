@@ -5,7 +5,7 @@ import type { Ref } from "vue";
 export interface ConsoleMessage {
   timestamp: string;
   raw: string;
-  dataType: "json" | "nmea" | "undefined";
+  dataType: "json" | "nmea" | "none";
   isValid: boolean;
   key: string;
 }
@@ -13,7 +13,7 @@ export interface ConsoleMessage {
 // 控制台状态接口
 export interface ConsoleState {
   messages: Ref<ConsoleMessage[]>;
-  dataFormat: Ref<"json" | "nmea">;
+  dataFormat: Ref<"none" | "json" | "nmea">;
   displayFormat: Ref<'hex' | 'ascii'>;
   dataFilter: Ref<boolean>;
   dataTimestamp: Ref<boolean>;
@@ -41,7 +41,7 @@ export interface ConsoleState {
   saveToFile: () => void;
   exportMessages: () => void;
   searchMessages: (query: string) => void;
-  sendMessage: (data: string, format: "hex" | "ascii") => void;
+  sendMessage: (data: string, format: "hex" | "ascii", addNewLine: boolean) => void;
 }
 
 // 全局单例实例
@@ -60,7 +60,7 @@ export function useConsole(useGlobal: boolean = true): ConsoleState {
 
   // 状态管理
   const messages = ref<ConsoleMessage[]>([]);
-  const dataFormat = ref<"json" | "nmea">("json");
+  const dataFormat = ref<"none" | "json" | "nmea">("none");
   const displayFormat = ref<'hex' | 'ascii'>('ascii')
   const dataFilter = ref(false);
   const dataTimestamp = ref(true);
@@ -154,8 +154,25 @@ export function useConsole(useGlobal: boolean = true): ConsoleState {
   const addMessage = (rawData: string) => {
     if (isPaused.value) return;
 
+    if (dataFormat.value == 'none') {
+      const timestamp = generateTimestamp();
+      const message: ConsoleMessage = {
+        timestamp: timestamp + ' [MSG ⬅️]',
+        raw: rawData,
+        dataType: 'none',
+        isValid: false,
+        key: generateKey(timestamp, rawData),
+      };
+      messages.value.push(message);
+
+      // 限制消息数量，保持内存使用
+      if (messages.value.length > maxMessages) {
+        messages.value.shift();
+      }
+    }
+
     tempDataString += rawData;
-    if (tempDataString.includes('\n')) {
+    if (dataFormat.value !== 'none' && tempDataString.includes('\n')) {
       const timestamp = generateTimestamp();
       const lines = tempDataString.split('\n');
 
@@ -178,7 +195,7 @@ export function useConsole(useGlobal: boolean = true): ConsoleState {
               key: generateKey(timestamp, line),
             };
             messages.value.push(message);
-          } else {
+          } else if (dataFormat.value === 'json') {
             isValid = validateJsonMessage(line);
             const message: ConsoleMessage = {
               timestamp: timestamp + ' [MSG ⬅️]',
@@ -356,10 +373,14 @@ export function useConsole(useGlobal: boolean = true): ConsoleState {
   };
 
   // 发送消息到串口
-  const sendMessage = (data: string, format: "hex" | "ascii") => {
+  const sendMessage = (data: string, format: "hex" | "ascii", addNewLine: boolean = false) => {
     if (!window.ipcRenderer) {
       console.error('IPC通信不可用');
       return;
+    }
+
+    if (addNewLine) {
+      console.log("换行了")
     }
 
     try {
@@ -379,8 +400,11 @@ export function useConsole(useGlobal: boolean = true): ConsoleState {
         }
         sendData = cleanedData;
       } else {
-        // ASCII格式，直接发送
+        // ASCII格式，如果需要添加换行符
         sendData = data;
+        if (addNewLine) {
+          sendData += '\r\n';
+        }
       }
 
       // 发送到主进程
@@ -391,7 +415,7 @@ export function useConsole(useGlobal: boolean = true): ConsoleState {
       const message: ConsoleMessage = {
         timestamp: timestamp + ' [' + (format==='ascii'?'STR':'HEX') + ' ➡️]',
         raw: data,
-        dataType: 'undefined',
+        dataType: 'none',
         isValid: false,
         key: generateKey(timestamp, data),
       };

@@ -6,11 +6,12 @@
         <!-- 左侧按钮组 -->
         <div class="left-controls">
           <el-select class="custom-select" v-model="dataFormat" placeholder="选择格式" size="small" style="width: 72px;">
+            <el-option label="NONE" value="none"></el-option>
             <el-option label="JSON" value="json"></el-option>
             <el-option label="NMEA" value="nmea"></el-option>
           </el-select>
           
-          <el-button @click="toggleFilter" :type="dataFilter ? 'success' : 'default'" size="small" :title="dataFilter?'取消过滤':'启用过滤'">
+          <el-button @click="toggleFilter" :type="dataFilter ? 'success' : 'default'" size="small" :title="dataFilter?'取消过滤':'启用过滤'" :disabled="dataFormat === 'none'">
             <el-icon><Filter /></el-icon>
             &nbsp;过滤
           </el-button>
@@ -149,6 +150,16 @@
         </el-input>
         
         <el-button 
+          @click="addNewLine = !addNewLine" 
+          :type="addNewLine ? 'success' : 'default'" 
+          size="default"
+          :disabled="inputFormat === 'hex' || !deviceConnected"
+          :title="addNewLine ? '已启用换行' : '启用换行'"
+        >
+          <el-icon><Bottom /></el-icon>&nbsp;换行
+        </el-button>
+        
+        <el-button 
           @click="handleSendMessage" 
           type="primary" 
           size="default"
@@ -233,6 +244,7 @@ const { deviceConnected } = useDevice()
 // 输入框状态
 const inputMessage = ref('')
 const inputFormat = ref<'hex' | 'ascii'>('ascii')
+const addNewLine = ref(false)
 
 // 性能监控
 const messageRate = ref(0)
@@ -470,7 +482,8 @@ const handleSendMessage = () => {
   }
   
   try {
-    sendMessage(inputMessage.value.trim(), inputFormat.value)
+    // 传递是否添加换行的标志
+    sendMessage(inputMessage.value.trim(), inputFormat.value, addNewLine.value)
   } catch (error) {
     console.error('发送消息失败:', error)
   }
@@ -531,7 +544,7 @@ onMounted(() => {
   if (navMode.funcMode === 'gnss') {
     dataFormat.value = 'nmea';
   } else {
-    dataFormat.value = 'json';
+    dataFormat.value = 'none';
   }
   
   // 添加滚动事件监听
