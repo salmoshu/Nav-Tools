@@ -1363,7 +1363,7 @@ const handleDragEnd = () => {
 // 发送数据到串口
 const sendDataToSerial = (data: string) => {
   if (window.ipcRenderer) {
-    sendMessage(data, 'hex')
+    sendMessage(data, 'hex', false)
     // window.ipcRenderer.send('send-serial-hex-data', data)
   } else {
     console.error('IPC通信不可用')
