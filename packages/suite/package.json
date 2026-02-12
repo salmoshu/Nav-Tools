@@ -1,0 +1,25 @@
+{
+  "name": "@lichtblick/suite",
+  "version": "1.23.1",
+  "license": "MPL-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/lichtblick-suite/lichtblick/tree/main/packages/suite"
+  },
+  "author": {
+    "name": "Lichtblick",
+    "email": "lichtblick@bmwgroup.com"
+  },
+  "homepage": "https://github.com/lichtblick-suite",
+  "main": "./src/index.ts",
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "prepack": "tsc -b tsconfig.json"
+  },
+  "devDependencies": {
+    "@lichtblick/tsconfig": "1.0.2",
+    "typescript": "5.9.3"
+  }
+}
