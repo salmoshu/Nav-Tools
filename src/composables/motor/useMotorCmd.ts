@@ -29,6 +29,7 @@ export interface ChecksumConfig {
   method: 'none' | 'sum' | 'xor' | 'crc8' | 'crc16'
   start_index: number
   end_index: number
+  endianness?: 'big' | 'little'  // 校验和字节序（主要针对CRC16）
 }
 
 // 配置表单接口
@@ -56,7 +57,8 @@ export function useMotorCmd() {
     checksum: {
       method: 'crc16',
       start_index: 0,
-      end_index: -1
+      end_index: -1,
+      endianness: 'big'  // 默认大端（高字节在前）
     },
     includeFunction: true,
     addressLength: 1,
@@ -324,7 +326,15 @@ export function useMotorCmd() {
           }
         }
 
-        return crc_result.toString(16).padStart(4, '0').toUpperCase()
+        let crcHex = crc_result.toString(16).padStart(4, '0').toUpperCase()
+        
+        // 根据字节序调整CRC16结果顺序
+        if (configForm.checksum.endianness === 'little') {
+          // 小端：低字节在前，高字节在后
+          crcHex = crcHex.slice(2, 4) + crcHex.slice(0, 2)
+        }
+        
+        return crcHex
         
       default:
         return '00'
@@ -336,7 +346,10 @@ export function useMotorCmd() {
     return {
       header: configForm.header,
       format: configForm.format,
-      checksum: configForm.checksum,
+      checksum: {
+        ...configForm.checksum,
+        endianness: configForm.checksum.endianness ?? 'big'
+      },
       includeFunction: configForm.includeFunction,
       addressLength: configForm.addressLength ?? 1,
       functionLength: configForm.functionLength ?? 1,
@@ -356,7 +369,8 @@ export function useMotorCmd() {
       format: configForm.format,
       checksum: {
         method: configForm.checksum.method,
-        start_index: configForm.checksum.start_index
+        start_index: configForm.checksum.start_index,
+        endianness: configForm.checksum.endianness ?? 'big'
       },
       includeFunction: configForm.includeFunction,
       addressLength: configForm.addressLength ?? 1,

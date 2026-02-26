@@ -270,6 +270,17 @@
                           <el-option label="CRC8" value="crc8" />
                           <el-option label="CRC16" value="crc16" />
                         </el-select>
+                        <div class="checksum-params" v-if="configForm.checksum.method === 'crc16'">
+                          <el-select 
+                            v-model="configForm.checksum.endianness" 
+                            placeholder="字节序"
+                            size="small"
+                            style="width: 80px;"
+                          >
+                            <el-option label="大端" value="big" />
+                            <el-option label="小端" value="little" />
+                          </el-select>
+                        </div>
                         <div class="checksum-params" v-if="configForm.checksum.method && configForm.checksum.method !== 'none'">
                           <el-input-number 
                             v-model="configForm.checksum.start_index" 
@@ -313,7 +324,6 @@
               size="default" 
               class="command-table" 
               stripe 
-              row-key="name"
             >
               <el-table-column width="50" align="center">
                 <template #header>
@@ -450,7 +460,6 @@
               size="default" 
               class="command-table" 
               stripe 
-              row-key="name"
             >
               <el-table-column width="50" align="center">
                 <template #header>
@@ -837,7 +846,7 @@ watch(messageStructure, () => {
 }, { deep: true })
 
 // 监听配置变化
-watch([() => configForm.header, () => configForm.checksum.method, () => configForm.checksum.start_index, () => configForm.addressLength, () => configForm.functionLength, () => configForm.dataEndianness, includeLength, lengthBytes, () => configForm.includeFunction, () => configForm.includeRegisterCount, () => configForm.registerCountLength, ()=>configForm.lengthLength], () => {
+watch([() => configForm.header, () => configForm.checksum.method, () => configForm.checksum.start_index, () => configForm.checksum.endianness, () => configForm.addressLength, () => configForm.functionLength, () => configForm.dataEndianness, includeLength, lengthBytes, () => configForm.includeFunction, () => configForm.includeRegisterCount, () => configForm.registerCountLength, ()=>configForm.lengthLength], () => {
   saveConfigToStorage()
   generateCommandPreview()
 }, { deep: true })
@@ -1235,8 +1244,8 @@ const updateDataValueWithDecimal = (cmd: any, index: number, value: string) => {
     // 检查是否为有效数字（支持整数和小数）
     if (/^-?(\d+\.?\d*|\.\d+)$/.test(trimmedValue)) {
       // 是有效数字，转换为十六进制
-      // 重要：8字节float32被分割成多个4字节的float32
-      const hexValue = decimalToHex(trimmedValue, 'float32')
+      // 使用指令的数据类型进行转换
+      const hexValue = decimalToHex(trimmedValue, cmd.dataType)
       dataArray[index] = hexValue
     } else {
       // 不是有效数字，使用默认值
@@ -1246,8 +1255,8 @@ const updateDataValueWithDecimal = (cmd: any, index: number, value: string) => {
   
   // 更新数据
   cmd.data = dataArray.join('')
-  // 同步更新dataInputs
-  dataInputs.value[getDataInputKey(cmd, index)] = value
+  // 同步更新decimalInputs，保持输入框显示
+  decimalInputs.value[getDataInputKey(cmd, index)] = value
 }
 
 // 处理读命令表格行拖拽排序
@@ -1481,6 +1490,7 @@ const loadConfig = (config: any) => {
     configForm.format = config.format
     configForm.checksum.method = config.checksum.method || 'sum'
     configForm.checksum.start_index = config.checksum.start_index ?? 2
+    configForm.checksum.endianness = config.checksum?.endianness || 'big'
     configForm.dataEndianness = config.dataEndianness || 'little'
     // 结束位字段已移除，不再使用
     configForm.includeFunction = config.includeFunction !== false
@@ -1635,8 +1645,8 @@ const initializeDecimalInputs = () => {
       dataArray.forEach((dataItem, index) => {
         const inputKey = getDataInputKey(cmd, index)
         if (dataItem && /^[0-9A-Fa-f]+$/.test(dataItem)) {
-          // 重要：8字节float32被分割成多个4字节的float32
-          decimalInputs.value[inputKey] = hexToDecimal(dataItem, 'float32')
+          // 使用指令的数据类型进行转换
+          decimalInputs.value[inputKey] = hexToDecimal(dataItem, cmd.dataType)
         } else {
           decimalInputs.value[inputKey] = '0'
         }
