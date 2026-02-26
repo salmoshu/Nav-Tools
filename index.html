@@ -6,6 +6,19 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-inline';" />
     <title>Nav-Tools</title>
+    <script>
+      // 异步设置窗口标题包含版本号
+      (async function() {
+        if (window.electronAPI && window.electronAPI.getAppVersion) {
+          try {
+            const version = await window.electronAPI.getAppVersion();
+            document.title = 'Nav-Tools ' + version;
+          } catch (e) {
+            console.error('Failed to get app version:', e);
+          }
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="app"></div>

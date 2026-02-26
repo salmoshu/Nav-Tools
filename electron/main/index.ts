@@ -1,13 +1,17 @@
 import { app, BrowserWindow, shell, ipcMain, Menu, powerSaveBlocker } from 'electron'
-// import { createRequire } from 'node:module'
+import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import os from 'node:os'
 import { appConfig } from '../../src/settings/config'
 import { eventsMap } from './events'
 
-// const require = createRequire(import.meta.url)
+const require = createRequire(import.meta.url)
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
+
+// 读取 package.json 获取版本号
+const pkg = require('../../package.json')
+const appVersion = pkg.version || 'unknown'
 
 // The built directory structure
 //
@@ -48,7 +52,7 @@ async function createWindow() {
   win = new BrowserWindow({
     width: 1200,
     height: 800,
-    title: 'Nav-Tools',
+    title: `Nav-Tools ${appVersion}`,
     icon: path.join(process.env.VITE_PUBLIC, 'favicon.ico'),
     webPreferences: {
       preload,
@@ -141,6 +145,11 @@ function createMenu() {
 app.whenReady().then(() => {
   createWindow()
   createMenu()
+  
+  // 注册获取版本号的 IPC 处理器
+  ipcMain.handle('get-app-version', () => {
+    return appVersion
+  })
   // 阻止系统因空闲而挂起 GPU/CPU
   powerSaveBlocker.start('prevent-app-suspension')
   app.commandLine.appendSwitch('disable-renderer-backgrounding')

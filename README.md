@@ -2,23 +2,23 @@
 
 <img src="https://raw.githubusercontent.com/salmoshu/Winchell-ImgBed/main/img/20251020-145700.jpg"/>
 
-🥳 Nav-Tools 是一款专为机器人开发者打造的**桌面级可视化工作台**，全面覆盖机器人复合应用与主流传感器。目前已集成通用数据流 Flow、GNSS 定位模块、超声波避障、PID 跟随仿真和电机驱动等功能，支持布局与数据字段的灵活自定义，极大提升调试效率与开发体验。更多请查看：
+Nav-Tools 是一个基于 Electron + Vue 3 开发的桌面端工具，主要用于机器人开发调试过程中的数据可视化。目前已实现通用数据流 Flow、GNSS 定位、超声波避障、PID 跟随仿真和电机驱动等功能模块。
 
 - 应用下载：https://github.com/salmoshu/Nav-Tools/releases
 - 在线文档：https://salmoshu.github.io/robot/Nav-Tools/01-overview.html
 
 ---
 
-## ✨ 核心特性
+## 特性
 
-- 🌱 **简洁可扩展**：目录结构清晰，支持快速添加新模块
-- 🖥 **多窗口支持**：轻松实现多窗口并行调试
-- 📊 **实时可视化**：支持时序图、轨迹图、控制台、仪表盘等多种展示方式
-- 🧩 **高度自定义**：支持字段扩展、滑窗、过滤、颜色配置、布局保存等高级功能
+- **模块化结构**：目录结构清晰，方便添加新模块
+- **多窗口支持**：支持多窗口并行调试
+- **数据可视化**：提供时序图、轨迹图、控制台、仪表盘等展示方式
+- **可配置**：支持字段扩展、滑窗、过滤、颜色配置、布局保存等功能
 
 ---
 
-## 🧪 支持模块与应用
+## 支持模块
 
 <table>
   <tr>
@@ -54,7 +54,7 @@
 
 ---
 
-## 🚀 快速开始
+## 快速开始
 
 ```bash
 # 克隆项目
@@ -72,7 +72,7 @@ pnpm approve-builds # for electron, esbuild
 pnpm run dev
 ```
 
-## 🛠 开发指南
+## 开发指南
 
 ### 1. 添加新模块
 
@@ -100,7 +100,7 @@ newModule: createModuleItem({
 
 在 `src/hooks/useDevice.ts` 中定义数据连接逻辑，支持文件、串口等多种通信方式
 
-## 📁 项目结构
+## 项目结构
 
 ```text
 ├─┬ electron
@@ -124,7 +124,7 @@ newModule: createModuleItem({
 └── vite.config.ts
 ```
 
-## 📈 可视化组件说明（按模块）
+## 可视化组件说明（按模块）
 
 ### Flow（机器人通用数据流）
 
@@ -156,7 +156,7 @@ newModule: createModuleItem({
 - **Data**：速度曲线（线速度、角速度）
 - **Config**：PID 参数调节面板
 
-## 🧩 技术栈
+## 技术栈
 
 - 前端框架：Vue 3 + TypeScript
 - 构建工具：Vite
