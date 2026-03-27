@@ -15,7 +15,7 @@
 
 import { Link, Typography } from "@mui/material";
 import { t } from "i18next";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Trans, useTranslation } from "react-i18next";
 
 import Logger from "@lichtblick/log";
@@ -94,6 +94,8 @@ import useBroadcast from "@lichtblick/suite-base/util/broadcast/useBroadcast";
 import isDesktopApp from "@lichtblick/suite-base/util/isDesktopApp";
 
 import { useWorkspaceActions } from "./context/Workspace/useWorkspaceActions";
+import { AppSelector } from "@lichtblick/suite-base/components/AppSelector";
+import { AppSelectorContext } from "@lichtblick/suite-base/context/AppSelectorContext/AppSelectorContext";
 
 const log = Logger.getLogger(__filename);
 
@@ -567,12 +569,60 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
     playUntil,
   });
 
+  // 应用选择器状态
+  const appSelectorContext = useContext(AppSelectorContext);
+  const [appSelectorState, setAppSelectorState] = useState(appSelectorContext?.getState());
+
+  useEffect(() => {
+    if (!appSelectorContext) {
+      return;
+    }
+    const unsubscribe = appSelectorContext.subscribe((state) => {
+      setAppSelectorState(state);
+    });
+    setAppSelectorState(appSelectorContext.getState());
+    return () => {
+      unsubscribe();
+    };
+  }, [appSelectorContext]);
+
+  const currentAppId = appSelectorState?.currentAppId;
+  const isAppSelectorOpen = appSelectorState?.isOpen ?? true;
+  const customApps = appSelectorState?.customApps ?? [];
+
+  const handleSelectApp = useCallback(
+    (appId: string) => {
+      appSelectorContext?.setState({
+        currentAppId: appId,
+        isOpen: false,
+      });
+    },
+    [appSelectorContext],
+  );
+
+  const handleCloseAppSelector = useCallback(() => {
+    // 如果已经选择了应用，只是关闭对话框；否则保持打开
+    if (currentAppId) {
+      appSelectorContext?.setState({
+        isOpen: false,
+      });
+    }
+  }, [appSelectorContext, currentAppId]);
+
   return (
     <PanelStateContextProvider>
       {dataSourceDialog.open && <DataSourceDialog />}
       <DocumentDropListener onDrop={dropHandler} allowedExtensions={allowedDropExtensions} />
       <SyncAdapters />
       <KeyListener global keyDownHandlers={keyDownHandlers} />
+      {/* 应用选择器 */}
+      <AppSelector
+        open={isAppSelectorOpen}
+        currentAppId={currentAppId}
+        customApps={customApps}
+        onSelectApp={handleSelectApp}
+        onClose={handleCloseAppSelector}
+      />
       <div className={classes.container} ref={containerRef} tabIndex={0}>
         {appBar}
         <Sidebars

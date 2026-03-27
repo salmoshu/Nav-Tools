@@ -34,6 +34,9 @@ class MockPanelCatalog implements PanelCatalog {
   public getPanels(): readonly PanelInfo[] {
     return defaultPanels;
   }
+  public getAllPanels(): readonly PanelInfo[] {
+    return defaultPanels;
+  }
   public getPanelByType(type: string): PanelInfo | undefined {
     return defaultPanels.find((panel) => panel.type === type);
   }

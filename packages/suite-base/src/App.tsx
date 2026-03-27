@@ -40,6 +40,7 @@ import { IDataSourceFactory } from "./context/PlayerSelectionContext";
 import CurrentLayoutProvider from "./providers/CurrentLayoutProvider";
 import ExtensionCatalogProvider from "./providers/ExtensionCatalogProvider/ExtensionCatalogProvider";
 import ExtensionMarketplaceProvider from "./providers/ExtensionMarketplaceProvider";
+import AppSelectorProvider from "./providers/AppSelectorProvider/AppSelectorProvider";
 import PanelCatalogProvider from "./providers/PanelCatalogProvider";
 import { LaunchPreference } from "./screens/LaunchPreference";
 import { IExtensionLoader } from "./services/extension/IExtensionLoader";
@@ -91,7 +92,6 @@ export function App(props: AppProps): React.JSX.Element {
     <UserScriptStateProvider />,
     <ExtensionMarketplaceProvider />,
     <ExtensionCatalogProvider loaders={extensionLoaders} />,
-    <PlayerManager playerSources={dataSources} />,
     <EventsProvider />,
     /* eslint-enable react/jsx-key */
   ];
@@ -110,7 +110,6 @@ export function App(props: AppProps): React.JSX.Element {
 
   // Alerts provider also must come before other, dependent contexts.
   providers.unshift(<AlertsContextProvider />);
-  providers.unshift(<CurrentLayoutProvider loaders={layoutLoaders} />);
   providers.unshift(<UserProfileLocalStorageProvider />);
   providers.unshift(<LayoutManagerProvider />);
 
@@ -139,23 +138,29 @@ export function App(props: AppProps): React.JSX.Element {
             <ErrorBoundary>
               <MaybeLaunchPreference>
                 <MultiProvider providers={providers}>
-                  <DocumentTitleAdapter />
-                  <SendNotificationToastAdapter />
                   <DndProvider backend={HTML5Backend}>
                     <Suspense fallback={<></>}>
-                      <PanelCatalogProvider>
-                        <Workspace
-                          deepLinks={deepLinks}
-                          appBarLeftInset={props.appBarLeftInset}
-                          onAppBarDoubleClick={props.onAppBarDoubleClick}
-                          showCustomWindowControls={props.showCustomWindowControls}
-                          isMaximized={props.isMaximized}
-                          onMinimizeWindow={props.onMinimizeWindow}
-                          onMaximizeWindow={props.onMaximizeWindow}
-                          onUnmaximizeWindow={props.onUnmaximizeWindow}
-                          onCloseWindow={props.onCloseWindow}
-                        />
-                      </PanelCatalogProvider>
+                      <AppSelectorProvider>
+                        <CurrentLayoutProvider loaders={layoutLoaders}>
+                          <PlayerManager playerSources={dataSources}>
+                            <PanelCatalogProvider>
+                              <DocumentTitleAdapter />
+                              <SendNotificationToastAdapter />
+                              <Workspace
+                                deepLinks={deepLinks}
+                                appBarLeftInset={props.appBarLeftInset}
+                                onAppBarDoubleClick={props.onAppBarDoubleClick}
+                                showCustomWindowControls={props.showCustomWindowControls}
+                                isMaximized={props.isMaximized}
+                                onMinimizeWindow={props.onMinimizeWindow}
+                                onMaximizeWindow={props.onMaximizeWindow}
+                                onUnmaximizeWindow={props.onUnmaximizeWindow}
+                                onCloseWindow={props.onCloseWindow}
+                              />
+                            </PanelCatalogProvider>
+                          </PlayerManager>
+                        </CurrentLayoutProvider>
+                      </AppSelectorProvider>
                     </Suspense>
                   </DndProvider>
                 </MultiProvider>

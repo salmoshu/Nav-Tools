@@ -7,7 +7,7 @@
 
 import * as _ from "lodash-es";
 import { useSnackbar } from "notistack";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { getNodeAtPath } from "react-mosaic-component";
 import { useAsync, useAsyncFn, useMountedState } from "react-use";
@@ -19,6 +19,7 @@ import Logger from "@lichtblick/log";
 import { VariableValue } from "@lichtblick/suite";
 import { useAnalytics } from "@lichtblick/suite-base/context/AnalyticsContext";
 import { useAppParameters } from "@lichtblick/suite-base/context/AppParametersContext";
+import { AppSelectorContext } from "@lichtblick/suite-base/context/AppSelectorContext/AppSelectorContext";
 import CurrentLayoutContext, {
   ICurrentLayout,
   LayoutID,
@@ -58,6 +59,7 @@ import { windowAppURLState } from "@lichtblick/suite-base/util/appURLState";
 import { getPanelTypeFromId } from "@lichtblick/suite-base/util/layout";
 
 import { IncompatibleLayoutVersionAlert } from "./IncompatibleLayoutVersionAlert";
+import { filterLayoutByAllowedPanels } from "./filterLayout";
 
 const log = Logger.getLogger(__filename);
 
@@ -228,6 +230,50 @@ export default function CurrentLayoutProvider({
     },
     [setLayoutState],
   );
+
+  // 监听应用选择器变化，自动过滤布局中的 panel
+  const appSelectorStore = useContext(AppSelectorContext);
+  useEffect(() => {
+    if (!appSelectorStore) {
+      return;
+    }
+
+    const unsubscribe = appSelectorStore.subscribe((state, prevState) => {
+      // 当应用切换时，过滤布局
+      if (state.currentAppId !== prevState.currentAppId) {
+        const currentLayout = layoutStateRef.current.selectedLayout;
+        if (currentLayout?.data == undefined || currentLayout.loading) {
+          return;
+        }
+
+        const currentApp = state.customApps.find((app) => app.id === state.currentAppId);
+        if (!currentApp) {
+          return;
+        }
+
+        // 过滤布局
+        const filteredData = filterLayoutByAllowedPanels(
+          currentLayout.data,
+          currentApp.allowedPanelTypes,
+        );
+
+        // 如果布局有变化，更新状态
+        if (filteredData !== currentLayout.data) {
+          setLayoutState({
+            selectedLayout: {
+              ...currentLayout,
+              data: filteredData ?? currentLayout.data,
+              edited: true,
+            },
+          });
+        }
+      }
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, [appSelectorStore, setLayoutState]);
 
   /**
    * Changes to the layout storage from external user actions need to trigger setLayoutState.

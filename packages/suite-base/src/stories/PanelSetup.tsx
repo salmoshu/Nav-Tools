@@ -125,6 +125,9 @@ function makeMockPanelCatalog(t: TFunction<"panels">): PanelCatalog {
     getPanels() {
       return visiblePanels;
     },
+    getAllPanels() {
+      return allPanels;
+    },
     getPanelByType(type: string) {
       return allPanels.find((panel) => panel.type === type);
     },

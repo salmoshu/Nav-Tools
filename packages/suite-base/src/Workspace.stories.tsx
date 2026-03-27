@@ -103,6 +103,9 @@ class MockPanelCatalog implements PanelCatalog {
       { title: "Tab", type: "Tab", module: async () => ({ default: Tab }) },
     ];
   }
+  public getAllPanels(): readonly PanelInfo[] {
+    return this.getPanels();
+  }
   public getPanelByType(type: string): PanelInfo | undefined {
     return this.getPanels().find((panel) => panel.type === type);
   }

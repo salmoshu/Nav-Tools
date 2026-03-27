@@ -148,13 +148,3 @@ sudo apt-get update && sudo apt-get install libgtk-3-0 libatk1.0-0 libatk-bridge
 ## 📝 开源协议
 
 Nav-Tools 采用开源核心许可模式。大部分功能在此仓库中可用，可以根据 [Mozilla Public License v2.0](/LICENSE) 的条款进行复制或修改。
-
-## 🤝 贡献
-
-欢迎贡献！Nav-Tools 主要使用 TypeScript 和 ReactJS 构建。所有潜在贡献者必须同意 [CONTRIBUTING.md](CONTRIBUTING.md) 中概述的贡献者许可协议。
-
-## ⭐ 鸣谢
-
-Nav-Tools 最初是 [Foxglove Studio](https://github.com/foxglove/studio) 的一个分支，这是由 [Foxglove](https://foxglove.dev/) 开发的开源项目。
-
-原项目 [Lichtblick](https://github.com/lichtblick-suite/lichtblick) 在此基础上继续发展，Nav-Tools V2.0 则是基于 Lichtblick 316dcfa74 分支进行二次开发的产物。

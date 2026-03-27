@@ -7,6 +7,8 @@
 
 export * from "./addPanel";
 export * from "./appBar";
+export * from "./appSelector";
+export * from "./appSelectorSettings";
 export * from "./appSettings";
 export * from "./dataSourceInfo";
 export * from "./desktopWindow";

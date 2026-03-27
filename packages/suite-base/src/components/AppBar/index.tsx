@@ -12,9 +12,10 @@ import {
   PanelRight24Filled,
   PanelRight24Regular,
   SlideAdd24Regular,
+  Apps24Regular,
 } from "@fluentui/react-icons";
 import { Avatar, IconButton, Tooltip } from "@mui/material";
-import { useState } from "react";
+import { useState, useCallback, useContext } from "react";
 import { useTranslation } from "react-i18next";
 import tc from "tinycolor2";
 import { makeStyles } from "tss-react/mui";
@@ -34,6 +35,7 @@ import {
 } from "@lichtblick/suite-base/context/Workspace/WorkspaceContext";
 import { useWorkspaceActions } from "@lichtblick/suite-base/context/Workspace/useWorkspaceActions";
 import { useAppConfigurationValue } from "@lichtblick/suite-base/hooks";
+import { AppSelectorContext } from "@lichtblick/suite-base/context/AppSelectorContext/AppSelectorContext";
 import { customTypography } from "@lichtblick/theme";
 
 import { AddPanelMenu } from "./AddPanelMenu";
@@ -45,7 +47,7 @@ import { DataSource } from "./DataSource";
 import { NetworkStatusIndicator } from "./NetworkStatusIndicator";
 import { SettingsMenu } from "./SettingsMenu";
 
-const useStyles = makeStyles<{ debugDragRegion?: boolean }, "avatar">()((
+const useStyles = makeStyles<{ debugDragRegion?: boolean }, "avatar">()( (
   theme,
   { debugDragRegion = false },
   classes,
@@ -199,6 +201,18 @@ export function AppBar(props: AppBarProps): React.JSX.Element {
   const userMenuOpen = Boolean(userAnchorEl);
   const panelMenuOpen = Boolean(panelAnchorEl);
 
+  // 获取应用选择器的 store
+  const appSelectorStore = useContext(AppSelectorContext);
+  const { t: tAppSelector } = useTranslation("appSelector");
+
+  const handleSwitchApp = useCallback(() => {
+    if (appSelectorStore) {
+      appSelectorStore.setState({
+        isOpen: true,
+      });
+    }
+  }, [appSelectorStore]);
+
   return (
     <>
       <AppBarContainer onDoubleClick={onDoubleClick} leftInset={leftInset}>
@@ -249,6 +263,16 @@ export function AppBar(props: AppBarProps): React.JSX.Element {
                 }}
               >
                 <SlideAdd24Regular />
+              </AppBarIconButton>
+              <AppBarIconButton
+                color="inherit"
+                id="switch-app-button"
+                data-testid="SwitchAppButton"
+                title={tAppSelector("switchApp")}
+                aria-label="Switch app button"
+                onClick={handleSwitchApp}
+              >
+                <Apps24Regular />
               </AppBarIconButton>
             </div>
           </div>
