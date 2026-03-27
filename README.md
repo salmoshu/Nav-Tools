@@ -1,124 +1,126 @@
-<h1 align="center">Lichtblick</h1>
+<h1 align="center">Nav-Tools V2.0</h1>
 
 <div align="center">
-  <a href="https://github.com/lichtblick-suite/lichtblick/stargazers"><img src="https://img.shields.io/github/stars/lichtblick-suite/lichtblick" alt="Stars Badge"/></a>
-  <a href="https://github.com/lichtblick-suite/lichtblick/network/members"><img src="https://img.shields.io/github/forks/lichtblick-suite/lichtblick" alt="Forks Badge"/></a>
-  <a href="https://github.com/lichtblick-suite/lichtblick/pulls"><img src="https://img.shields.io/github/issues-pr/lichtblick-suite/lichtblick" alt="Pull Requests Badge"/></a>
-  <a href="https://github.com/lichtblick-suite/lichtblick/issues"><img src="https://img.shields.io/github/issues/lichtblick-suite/lichtblick" alt="Issues Badge"/></a>
-  <a href="https://github.com/lichtblick-suite/lichtblick/issues"><img src="https://img.shields.io/github/package-json/v/lichtblick-suite/lichtblick" alt="Versions Badge"/></a>
-  <a href="https://github.com/lichtblick-suite/lichtblick/graphs/contributors"><img alt="GitHub contributors" src="https://img.shields.io/github/contributors/lichtblick-suite/lichtblick?color=2b9348"></a>
+  <p>
+    <strong>二次开发自 <a href="https://github.com/lichtblick-suite/lichtblick">lichtblick</a> 项目 316dcfa74 分支</strong>
+  </p>
+  <br />
+  <a href="https://github.com/salmoshu/Nav-Tools/stargazers"><img src="https://img.shields.io/github/stars/salmoshu/Nav-Tools" alt="Stars Badge"/></a>
+  <a href="https://github.com/salmoshu/Nav-Tools/network/members"><img src="https://img.shields.io/github/forks/salmoshu/Nav-Tools" alt="Forks Badge"/></a>
+  <a href="https://github.com/salmoshu/Nav-Tools/pulls"><img src="https://img.shields.io/github/issues-pr/salmoshu/Nav-Tools" alt="Pull Requests Badge"/></a>
+  <a href="https://github.com/salmoshu/Nav-Tools/issues"><img src="https://img.shields.io/github/issues/salmoshu/Nav-Tools" alt="Issues Badge"/></a>
   <a href="https://opensource.org/licenses/MPL-2.0"><img src="https://img.shields.io/badge/License-MPL_2.0-brightgreen.svg" alt="License: MPL 2.0"></a>
 
   <br />
-<p  align="center">
-Lichtblick is an integrated visualization and diagnosis tool for robotics, available in your browser or as a desktop app on Linux, Windows, and macOS.
+<p align="center">
+Nav-Tools 是一款面向机器人领域的集成化可视化与诊断工具，支持在浏览器中运行，也可作为桌面应用程序在 Linux、Windows 和 macOS 上使用。
 </p>
   <p align="center">
-    <img alt="Lichtblick screenshot" src="resources/screenshot.png">
+    <img alt="Nav-Tools screenshot" src="resources/screenshot.png">
   </p>
 </div>
 
-## :rocket: Try Lichtblick
+## 🚀 快速体验 Nav-Tools
 
-**[Try Lichtblick now in your browser!](https://lichtblick-suite.github.io/lichtblick/)**
+**[立即在浏览器中体验 Nav-Tools！](https://lichtblick-suite.github.io/lichtblick/)**
 
-No installation required - experience the full power of Lichtblick directly in your web browser!
+无需安装 - 直接在浏览器中体验 Nav-Tools 的完整功能！
 
-## :book: Documentation
+## 📖 文档
 
-Looking for guidance on using Lichtblick? Check out our [official documentation here!](https://lichtblick-suite.github.io/docs/)
+需要了解如何使用 Nav-Tools？查看 [官方文档](https://lichtblick-suite.github.io/docs/)
 
-We are actively updating our documentation with new features, stay tunned! :rocket:
+我们正在积极更新文档，添加新功能，敬请期待！🚀
 
-**Dependencies:**
+**依赖要求：**
 
 - [Node.js](https://nodejs.org/en/) v16.10+
 
 <hr/>
 
-## :rocket: Getting started
+## 🚀 快速开始
 
-### :whale: From Docker
+### 🐳 使用 Docker
 
-To run lichtblick via docker you can run:
+通过 Docker 运行 Nav-Tools：
 
 ```sh
 docker run --rm -p 8080:8080 ghcr.io/lichtblick-suite/lichtblick:latest
 ```
 
-And open in your browser: http://localhost:8080/
+然后在浏览器中打开：http://localhost:8080/
 
-### 📑 From source code
+### 📑 从源代码运行
 
-Clone the repository:
+克隆仓库：
 
 ```sh
-$ git clone https://github.com/lichtblick-suite/lichtblick.git
+$ git clone https://github.com/salmoshu/Nav-Tools.git
 ```
 
-Enable corepack:
+启用 corepack：
 
 ```sh
 $ corepack enable
 ```
 
-Install packages from `package.json`:
+安装 `package.json` 中的依赖包：
 
 ```sh
 $ yarn install
 ```
 
-- If you still get errors about corepack after running `corepack enable`, try uninstalling and reinstalling Node.js. Ensure that Yarn is not separately installed from another source, but is installed _via_ corepack.
+- 如果在运行 `corepack enable` 后仍然遇到 corepack 错误，请尝试卸载并重新安装 Node.js。确保 Yarn 不是从其他来源单独安装的，而是通过 corepack 安装的。
 
-Launch the development environment:
+启动开发环境：
 
 ```sh
-# To launch the desktop app (run scripts in different terminals):
-$ yarn desktop:serve        # start webpack dev server
-$ yarn desktop:start        # launch electron (make sure the desktop:serve finished to build)
+# 启动桌面应用程序（在不同终端中运行以下脚本）：
+$ yarn desktop:serve        # 启动 webpack 开发服务器
+$ yarn desktop:start        # 启动 electron（确保 desktop:serve 构建完成后再运行）
 
-# To launch the web app:
-$ yarn run web:serve        # it will be avaiable in http://localhost:8080
+# 启动 Web 应用程序：
+$ yarn run web:serve        # 服务将在 http://localhost:8080 可用
 ```
 
-:warning: Ubuntu users: the application may present some issues using GPU. In order to bypass the GPU and process it using directly the CPU (software), please run lichtblick using the variable `LIBGL_ALWAYS_SOFTWARE` set to `1`:
+⚠️ Ubuntu 用户：应用程序在使用 GPU 时可能会出现一些问题。为了绕过 GPU 直接使用 CPU 处理（软件渲染），请使用环境变量 `LIBGL_ALWAYS_SOFTWARE=1` 运行 Nav-Tools：
 
 ```sh
 $ LIBGL_ALWAYS_SOFTWARE=1 yarn desktop:start
 ```
 
-## :hammer_and_wrench: Building Lichtblick
+## 🔨 构建 Nav-Tools
 
-Build the application for production using these commands:
+使用以下命令构建生产版本的应用程序：
 
 ```sh
-# To build the desktop apps:
-$ yarn run desktop:build:prod   # compile necessary files
+# 构建桌面应用程序：
+$ yarn run desktop:build:prod   # 编译必要文件
 
-- yarn run package:win         # Package for windows
-- yarn run package:darwin      # Package for macOS
-- yarn run package:linux       # Package for linux
+- yarn run package:win         # 打包 Windows 版本
+- yarn run package:darwin      # 打包 macOS 版本
+- yarn run package:linux       # 打包 Linux 版本
 
-# To build the web app:
+# 构建 Web 应用程序：
 $ yarn run web:build:prod
 
-# To build and run the web app using docker:
-$ docker build . -t lichtblick
-$ docker run -p 8080:8080 lichtblick
+# 使用 Docker 构建并运行 Web 应用程序：
+$ docker build . -t nav-tools
+$ docker run -p 8080:8080 nav-tools
 
-# It is possible to clean up build files using the following command:
+# 可以使用以下命令清理构建文件：
 $ yarn run clean
 ```
 
-- The desktop builds are located in the `dist` directory, and the web builds are found in the `web/.webpack` directory.
+- 桌面版构建文件位于 `dist` 目录，Web 版构建文件位于 `web/.webpack` 目录。
 
-## :warning: Note on Linux dependencies (.tar.gz only)
+## ⚠️ Linux 依赖说明（仅限 .tar.gz 包）
 
-When installing the **`.tar.gz` package**, unlike the `.deb`, **system dependencies are not installed automatically**.
-In many cases, if you already have **Google Chrome** or another Chromium-based application installed, Lichtblick will run fine since these applications bring most of the required libraries.
+安装 **`.tar.gz` 包**时，与 `.deb` 不同，**系统依赖不会自动安装**。
+大多数情况下，如果您已经安装了 **Google Chrome** 或其他基于 Chromium 的应用程序，Nav-Tools 可以正常运行，因为这些应用程序已经包含了大部分必需的库。
 
-However, if you see errors about missing libraries when launching Lichtblick, you will need to install them manually.
-The most common missing dependencies are:
+但是，如果在启动 Nav-Tools 时看到缺少库的错误，您需要手动安装它们。
+最常见的缺失依赖包括：
 
 - `libgtk-3-0`
 - `libatk1.0-0`
@@ -135,22 +137,24 @@ The most common missing dependencies are:
 - `libgbm1`
 - `libxcb-dri3-0`
 
-Example (Debian/Ubuntu):
+示例（Debian/Ubuntu）：
 
 ```bash
 sudo apt-get update && sudo apt-get install libgtk-3-0 libatk1.0-0 libatk-bridge2.0-0 libatspi2.0-0 libnss3 libnspr4 libasound2 libcups2 libnotify4 libxtst6 xdg-utils libdrm2 libgbm1 libxcb-dri3-0
 ```
 
-👉 **Recommendation**: if using the `.tar.gz`, always check the error messages in the terminal. They will indicate which library is missing so you can install it manually.
+👉 **建议**：如果使用 `.tar.gz` 包，请始终检查终端中的错误信息。它们会指出缺少哪个库，以便您可以手动安装。
 
-## :pencil: License (Open Source)
+## 📝 开源协议
 
-Lichtblick follows an open core licensing model. Most functionality is available in this repository, and can be reproduced or modified per the terms of the [Mozilla Public License v2.0](/LICENSE).
+Nav-Tools 采用开源核心许可模式。大部分功能在此仓库中可用，可以根据 [Mozilla Public License v2.0](/LICENSE) 的条款进行复制或修改。
 
-## :handshake: Contributing
+## 🤝 贡献
 
-Contributions are welcome! Lichtblick is primarily built in TypeScript and ReactJS. All potential contributors must agree to the Contributor License Agreement outlined in [CONTRIBUTING.md](CONTRIBUTING.md).
+欢迎贡献！Nav-Tools 主要使用 TypeScript 和 ReactJS 构建。所有潜在贡献者必须同意 [CONTRIBUTING.md](CONTRIBUTING.md) 中概述的贡献者许可协议。
 
-## :star: Credits
+## ⭐ 鸣谢
 
-Lichtblick originally began as a fork of [Foxglove Studio](https://github.com/foxglove/studio), an open-source project developed by [Foxglove](https://foxglove.dev/).
+Nav-Tools 最初是 [Foxglove Studio](https://github.com/foxglove/studio) 的一个分支，这是由 [Foxglove](https://foxglove.dev/) 开发的开源项目。
+
+原项目 [Lichtblick](https://github.com/lichtblick-suite/lichtblick) 在此基础上继续发展，Nav-Tools V2.0 则是基于 Lichtblick 316dcfa74 分支进行二次开发的产物。
