@@ -17,7 +17,6 @@ import {
   IconButton,
   List,
   ListItem,
-  ListItemButton,
   ListItemIcon,
   ListItemText,
   Tooltip,
@@ -53,6 +52,12 @@ const useStyles = makeStyles()((theme) => ({
     borderRadius: theme.shape.borderRadius,
     marginBottom: theme.spacing(1),
     backgroundColor: theme.palette.background.paper,
+  },
+  appContent: {
+    display: "flex",
+    alignItems: "flex-start",
+    padding: theme.spacing(1, 2),
+    flex: 1,
   },
   panelChips: {
     display: "flex",
@@ -232,7 +237,7 @@ export function AppSelectorSettingsDialog(props: AppSelectorSettingsDialogProps)
                     </Box>
                   }
                 >
-                  <ListItemButton disabled>
+                  <Box className={classes.appContent}>
                     <ListItemIcon className={classes.appIcon}>{app.icon}</ListItemIcon>
                     <ListItemText
                       primary={
@@ -268,7 +273,7 @@ export function AppSelectorSettingsDialog(props: AppSelectorSettingsDialogProps)
                         </Box>
                       }
                     />
-                  </ListItemButton>
+                  </Box>
                 </ListItem>
               );
             })}

@@ -40,6 +40,10 @@ const useStyles = makeStyles()((theme) => ({
     alignItems: "flex-start",
     marginBottom: theme.spacing(1),
   },
+  gridContainer: {
+    paddingTop: theme.spacing(1),
+    paddingBottom: theme.spacing(1),
+  },
   appCard: {
     height: "100%",
     transition: "transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out",
@@ -122,6 +126,10 @@ export function AppSelector(props: AppSelectorProps): React.JSX.Element {
     setSelectedAppId(appId);
   }, []);
 
+  const handleAppDoubleClick = useCallback((appId: string) => {
+    onSelectApp(appId);
+  }, [onSelectApp]);
+
   const handleConfirm = useCallback(() => {
     if (selectedAppId) {
       onSelectApp(selectedAppId);
@@ -167,7 +175,7 @@ export function AppSelector(props: AppSelectorProps): React.JSX.Element {
         </DialogTitle>
         <DialogContent>
           {hasApps ? (
-            <Grid container spacing={2}>
+            <Grid container spacing={2} className={classes.gridContainer}>
               {allApps.map((app) => (
                 <Grid size={{ xs: 12, sm: 6, md: 4 }} key={app.id}>
                   <Card
@@ -175,7 +183,10 @@ export function AppSelector(props: AppSelectorProps): React.JSX.Element {
                       [classes.appCardSelected]: selectedAppId === app.id,
                     })}
                   >
-                    <CardActionArea onClick={() => handleAppClick(app.id)}>
+                    <CardActionArea
+                      onClick={() => handleAppClick(app.id)}
+                      onDoubleClick={() => handleAppDoubleClick(app.id)}
+                    >
                       <CardContent>
                         <div className={classes.iconContainer}>{app.icon}</div>
                         <Typography variant="h6" className={classes.appName}>

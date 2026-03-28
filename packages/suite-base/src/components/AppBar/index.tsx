@@ -14,7 +14,7 @@ import {
   SlideAdd24Regular,
   Apps24Regular,
 } from "@fluentui/react-icons";
-import { Avatar, IconButton, Tooltip } from "@mui/material";
+import { Avatar, Box, IconButton, Tooltip, Typography } from "@mui/material";
 import { useState, useCallback, useContext } from "react";
 import { useTranslation } from "react-i18next";
 import tc from "tinycolor2";
@@ -36,6 +36,7 @@ import {
 import { useWorkspaceActions } from "@lichtblick/suite-base/context/Workspace/useWorkspaceActions";
 import { useAppConfigurationValue } from "@lichtblick/suite-base/hooks";
 import { AppSelectorContext } from "@lichtblick/suite-base/context/AppSelectorContext/AppSelectorContext";
+import { useCurrentApp } from "@lichtblick/suite-base/hooks/useAppSelectorState";
 import { customTypography } from "@lichtblick/theme";
 
 import { AddPanelMenu } from "./AddPanelMenu";
@@ -87,6 +88,23 @@ const useStyles = makeStyles<{ debugDragRegion?: boolean }, "avatar">()( (
     },
     dropDownIcon: {
       fontSize: "12px !important",
+    },
+    appInfo: {
+      display: "flex",
+      alignItems: "center",
+      gap: theme.spacing(1),
+      padding: theme.spacing(0, 1.5),
+      marginLeft: theme.spacing(1),
+      borderLeft: `1px solid ${tc(theme.palette.common.white).setAlpha(0.2).toRgbString()}`,
+    },
+    appIcon: {
+      fontSize: "1.5rem",
+      lineHeight: 1,
+    },
+    appName: {
+      color: theme.palette.common.white,
+      fontWeight: 500,
+      fontSize: "0.875rem",
     },
     start: {
       gridArea: "start",
@@ -205,6 +223,9 @@ export function AppBar(props: AppBarProps): React.JSX.Element {
   const appSelectorStore = useContext(AppSelectorContext);
   const { t: tAppSelector } = useTranslation("appSelector");
 
+  // 获取当前应用信息
+  const currentApp = useCurrentApp();
+
   const handleSwitchApp = useCallback(() => {
     if (appSelectorStore) {
       appSelectorStore.setState({
@@ -274,6 +295,14 @@ export function AppBar(props: AppBarProps): React.JSX.Element {
               >
                 <Apps24Regular />
               </AppBarIconButton>
+              {currentApp && (
+                <Box className={classes.appInfo}>
+                  <span className={classes.appIcon}>{currentApp.icon}</span>
+                  <Typography className={classes.appName} variant="body2">
+                    {currentApp.name}
+                  </Typography>
+                </Box>
+              )}
             </div>
           </div>
 
