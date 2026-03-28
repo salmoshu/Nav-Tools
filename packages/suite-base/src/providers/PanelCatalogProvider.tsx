@@ -5,7 +5,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { PropsWithChildren, useContext, useMemo } from "react";
+import { PropsWithChildren, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 
 import Panel from "@lichtblick/suite-base/components/Panel";
@@ -14,12 +14,15 @@ import {
   AppConfig,
   DEFAULT_APPS,
 } from "@lichtblick/suite-base/components/AppSelector/types";
-import { AppSelectorContext } from "@lichtblick/suite-base/context/AppSelectorContext/AppSelectorContext";
 import { useExtensionCatalog } from "@lichtblick/suite-base/context/ExtensionCatalogContext";
 import PanelCatalogContext, {
   PanelCatalog,
   PanelInfo,
 } from "@lichtblick/suite-base/context/PanelCatalogContext";
+import {
+  useCurrentAppId,
+  useCustomApps,
+} from "@lichtblick/suite-base/hooks/useAppSelectorState";
 import * as panels from "@lichtblick/suite-base/panels";
 import { SaveConfig } from "@lichtblick/suite-base/types/panels";
 
@@ -47,12 +50,9 @@ export default function PanelCatalogProvider(props: PropsWithChildren): React.Re
 
   const extensionPanels = useExtensionCatalog((state) => state.installedPanels);
 
-  // 获取当前选择的应用
-  const appSelectorContext = useContext(AppSelectorContext);
-  
-  // 从 store 中获取当前应用ID和自定义应用
-  const currentAppId = appSelectorContext?.getState().currentAppId;
-  const customApps = appSelectorContext?.getState().customApps ?? [];
+  // 使用订阅方式获取应用选择器状态（确保状态变化时组件重新渲染）
+  const currentAppId = useCurrentAppId();
+  const customApps = useCustomApps();
 
   // 获取当前应用的配置
   const currentAppConfig = useMemo(() => {
