@@ -611,7 +611,8 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
 
   return (
     <PanelStateContextProvider>
-      {dataSourceDialog.open && <DataSourceDialog />}
+      {/* 应用选择器打开时不显示 startup 对话框 */}
+      {dataSourceDialog.open && !isAppSelectorOpen && <DataSourceDialog />}
       <DocumentDropListener onDrop={dropHandler} allowedExtensions={allowedDropExtensions} />
       <SyncAdapters />
       <KeyListener global keyDownHandlers={keyDownHandlers} />
