@@ -39,5 +39,5 @@
   "[ignore]": {
     "editor.defaultFormatter": "foxundermoon.shell-format"
   },
-  "kimi.executablePath": "C:\\Users\\mouxing\\.local\\bin\\kimi.exe"
+  "kimi.executablePath": "kimi.exe"
 }

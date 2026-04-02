@@ -98,8 +98,13 @@ const useStyles = makeStyles<{ debugDragRegion?: boolean }, "avatar">()( (
       borderLeft: `1px solid ${tc(theme.palette.common.white).setAlpha(0.2).toRgbString()}`,
     },
     appIcon: {
-      fontSize: "1.5rem",
+      fontSize: "24px",
       lineHeight: 1,
+      width: "24px",
+      height: "24px",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
     },
     appName: {
       color: theme.palette.common.white,
@@ -268,6 +273,16 @@ export function AppBar(props: AppBarProps): React.JSX.Element {
                 }}
               />
               <AppBarIconButton
+                color="inherit"
+                id="switch-app-button"
+                data-testid="SwitchAppButton"
+                title={tAppSelector("switchApp")}
+                aria-label="Switch app button"
+                onClick={handleSwitchApp}
+              >
+                <Apps24Regular />
+              </AppBarIconButton>
+              <AppBarIconButton
                 className={cx({ "Mui-selected": panelMenuOpen })}
                 color="inherit"
                 disabled={!hasCurrentLayout}
@@ -284,16 +299,6 @@ export function AppBar(props: AppBarProps): React.JSX.Element {
                 }}
               >
                 <SlideAdd24Regular />
-              </AppBarIconButton>
-              <AppBarIconButton
-                color="inherit"
-                id="switch-app-button"
-                data-testid="SwitchAppButton"
-                title={tAppSelector("switchApp")}
-                aria-label="Switch app button"
-                onClick={handleSwitchApp}
-              >
-                <Apps24Regular />
               </AppBarIconButton>
               {currentApp && (
                 <Box className={classes.appInfo}>

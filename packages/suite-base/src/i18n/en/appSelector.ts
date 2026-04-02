@@ -18,4 +18,5 @@ export const appSelector = {
   noAppsYet: "No Applications",
   createAppPrompt: "You haven't created any applications yet. Create your first application to get started.",
   createFirstApp: "Create First Application",
+  close: "Close",
 };

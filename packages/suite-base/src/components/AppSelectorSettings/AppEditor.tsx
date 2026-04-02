@@ -34,14 +34,28 @@ import { AppFormData, PanelOption } from "./types";
 
 // 常用图标列表
 const COMMON_ICONS = [
-  "📊", "📈", "📉", "📱", "💻", "🖥️", "⚙️", "🔧", "🔨", "🛠️",
-  "📡", "🛰️", "🚀", "✈️", "🚁", "🚗", "🚕", "🚙", "🚌", "🚎",
-  "🏠", "🏢", "🏭", "🏥", "🏫", "🏪", "🌐", "🌍", "🌎", "🌏",
-  "☀️", "🌙", "⭐", "☁️", "⚡", "🔥", "❄️", "🌊", "🌲", "🌿",
-  "🔴", "🟠", "🟡", "🟢", "🔵", "🟣", "⚫", "⚪", "🟤", "⬛",
-  "📦", "📋", "📄", "📑", "📂", "📁", "📚", "📖", "🔍", "🔎",
-  "🔒", "🔓", "🔑", "🗝️", "⚠️", "⛔", "🚫", "✅", "❌", "❓",
-  "💡", "🔦", "🕯️", "💰", "💵", "💎", "🏆", "🥇", "🥈", "🥉",
+  // 机器人类
+  "🤖", "🦾", "🦿",
+  // 传感器类
+  "📡", "📟", "📷", "📹", "🎥", "📸",
+  // 环境传感器
+  "🌡️", "💧", "💨", "☁️", "⚡",
+  // 定位导航类
+  "🧭", "📍", "🗺️", "🛰️",
+  // 电源/电气类
+  "🔋", "🔌", "💡",
+  // 工业/机械类
+  "⚙️", "🔧", "🔨", "🛠️", "🔩", "🏭",
+  // 数据/图表类
+  "📊", "📈", "📉",
+  // 设备类
+  "📱", "💻", "🖥️",
+  // 通信/航空类
+  "🚀", "✈️", "🚁",
+  // 车辆类
+  "🚗", "🚕", "🚙", "🚌", "🚎",
+  // 建筑/地点类
+  "🏠", "🏢", "🏥", "🏫",
 ];
 
 const useStyles = makeStyles()((theme) => ({
@@ -129,7 +143,7 @@ export function AppEditor(props: AppEditorProps): React.JSX.Element {
   const [formData, setFormData] = useState<AppFormData>({
     name: "",
     description: "",
-    icon: "📱",
+    icon: "🤖",
     allowedPanelTypes: [],
   });
 
@@ -149,7 +163,7 @@ export function AppEditor(props: AppEditorProps): React.JSX.Element {
         setFormData({
           name: "",
           description: "",
-          icon: "📱",
+          icon: "🤖",
           allowedPanelTypes: [],
         });
       }
@@ -276,7 +290,7 @@ export function AppEditor(props: AppEditorProps): React.JSX.Element {
                   helperText={errors.icon || t("appIconHelp")}
                   fullWidth
                   size="small"
-                  placeholder="📱"
+                  placeholder="🤖"
                 />
               </Grid>
               <Grid size={{ xs: 2 }}>
@@ -303,6 +317,13 @@ export function AppEditor(props: AppEditorProps): React.JSX.Element {
                 </Box>
               )}
               className={classes.panelSelect}
+              MenuProps={{
+                PaperProps: {
+                  style: {
+                    maxHeight: 168, // 原来的一半高度 (约 336px 的一半)
+                  },
+                },
+              }}
             >
               {panelOptions.map((panel) => (
                 <MenuItem key={panel.type} value={panel.type}>

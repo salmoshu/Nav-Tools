@@ -66,9 +66,10 @@ $ corepack enable
 
 安装 `package.json` 中的依赖包：
 
-```sh
-$ yarn install
-```
+````sh
+# 国内访问 GitHub/Electron 官方下载源不稳定导致的典型问题，建议使用镜像源，输入以下命令设置镜像源
+# $env:ELECTRON_MIRROR="https://npmmirror.com/mirrors/electron/"
+$ yarn i
 
 - 如果在运行 `corepack enable` 后仍然遇到 corepack 错误，请尝试卸载并重新安装 Node.js。确保 Yarn 不是从其他来源单独安装的，而是通过 corepack 安装的。
 
@@ -81,7 +82,7 @@ $ yarn desktop:start        # 启动 electron（确保 desktop:serve 构建完�
 
 # 启动 Web 应用程序：
 $ yarn run web:serve        # 服务将在 http://localhost:8080 可用
-```
+````
 
 ⚠️ Ubuntu 用户：应用程序在使用 GPU 时可能会出现一些问题。为了绕过 GPU 直接使用 CPU 处理（软件渲染），请使用环境变量 `LIBGL_ALWAYS_SOFTWARE=1` 运行 Nav-Tools：
 
