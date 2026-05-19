@@ -8,7 +8,7 @@ export interface Command {
   length: number
   dataType: 'int16' | 'float32'
   functionCode?: string // 功能码（可选）
-  registerCount?: string // 寄存器个数（可选）
+  registerCount?: number // 寄存器个数（可选）
   includeRegisterCount?: boolean // 是否包含寄存器个数
   includeLength?: boolean // 是否包含字节个数
 }
@@ -71,16 +71,16 @@ export function useMotorCmd() {
 
   // 读命令列表
   const readCommands = ref<ReadCommand[]>([
-    { name: 'GET_SPEED', address: '00', data: '0000', length: 4, dataType: 'int16', functionCode: '03', registerCount: '02', includeRegisterCount: true, includeLength: true, frequency: null, lastSentTime: 0 },
-    { name: 'GET_SPEED_M1', address: '01', data: '0000', length: 2, dataType: 'int16', functionCode: '03', registerCount: '01', includeRegisterCount: true, includeLength: true, frequency: null, lastSentTime: 0 },
-    { name: 'GET_SPEED_M2', address: '02', data: '0000', length: 2, dataType: 'int16', functionCode: '03', registerCount: '01', includeRegisterCount: true, includeLength: true, frequency: null, lastSentTime: 0 }
+    { name: 'GET_SPEED', address: '00', data: '0000', length: 4, dataType: 'int16', functionCode: '03', registerCount: 2, includeRegisterCount: true, includeLength: true, frequency: null, lastSentTime: 0 },
+    { name: 'GET_SPEED_M1', address: '01', data: '0000', length: 2, dataType: 'int16', functionCode: '03', registerCount: 1, includeRegisterCount: true, includeLength: true, frequency: null, lastSentTime: 0 },
+    { name: 'GET_SPEED_M2', address: '02', data: '0000', length: 2, dataType: 'int16', functionCode: '03', registerCount: 1, includeRegisterCount: true, includeLength: true, frequency: null, lastSentTime: 0 }
   ])
 
   // 写命令列表
   const writeCommands = ref<WriteCommand[]>([
-    { name: 'SET_SPEED', address: '00', data: '00000000', length: 4, dataType: 'float32', functionCode: '06', registerCount: '02', includeRegisterCount: true, includeLength: true },
-    { name: 'SET_SPEED_M1', address: '01', data: '0000', length: 2, dataType: 'int16', functionCode: '06', registerCount: '01', includeRegisterCount: true, includeLength: true },
-    { name: 'SET_SPEED_M2', address: '02', data: '0000', length: 2, dataType: 'int16', functionCode: '06', registerCount: '01', includeRegisterCount: true, includeLength: true }
+    { name: 'SET_SPEED', address: '00', data: '00000000', length: 4, dataType: 'float32', functionCode: '06', registerCount: 2, includeRegisterCount: true, includeLength: true },
+    { name: 'SET_SPEED_M1', address: '01', data: '0000', length: 2, dataType: 'int16', functionCode: '06', registerCount: 1, includeRegisterCount: true, includeLength: true },
+    { name: 'SET_SPEED_M2', address: '02', data: '0000', length: 2, dataType: 'int16', functionCode: '06', registerCount: 1, includeRegisterCount: true, includeLength: true }
   ])
 
   // ===== 数据转换工具函数 =====
@@ -423,7 +423,7 @@ export function useMotorCmd() {
         length: 0, 
         dataType: 'int16',
         functionCode: '03',  // 读指令默认功能码03
-        registerCount: '01',  // 默认寄存器个数01
+        registerCount: 1,  // 默认寄存器个数01
         includeRegisterCount: true,  // 默认启用寄存器个数复选框
         includeLength: true,  // 默认启用字节个数复选框
         frequency: null, 
@@ -437,7 +437,7 @@ export function useMotorCmd() {
         length: 2,
         dataType: 'int16',
         functionCode: '06',  // 写指令默认功能码06
-        registerCount: '01',  // 默认寄存器个数01
+        registerCount: 1,  // 默认寄存器个数01
         includeRegisterCount: true,  // 默认启用寄存器个数复选框
         includeLength: true  // 默认启用字节个数复选框
       })
@@ -524,12 +524,12 @@ export function useMotorCmd() {
           }
           break
         case 'registerCount':
-          if (config.includeRegisterCount && cmd.registerCount) {
+          if (config.includeRegisterCount && cmd.registerCount !== undefined) {
             // 寄存器个数始终可配，根据checkbox决定是否包含
             if (cmd.includeRegisterCount !== false) {
               const registerCountLength = config.registerCountLength || 1
-              const registerCountStr = cmd.registerCount.toString()
-              message += registerCountStr.padStart(registerCountLength * 2, '0')
+              const registerCount = cmd.registerCount.toString(16).padStart(registerCountLength * 2, '0').toUpperCase()
+              message += registerCount
             }
           }
           break
@@ -595,12 +595,12 @@ export function useMotorCmd() {
           }
           break
         case 'registerCount':
-          if (config.includeRegisterCount && cmd.registerCount) {
+          if (config.includeRegisterCount && cmd.registerCount !== undefined) {
             // 寄存器个数始终可配，根据checkbox决定是否包含
             if ((cmd as ReadCommand).includeRegisterCount !== false) {
               const registerCountLength = config.registerCountLength || 1
-              const registerCountStr = cmd.registerCount.toString()
-              message += registerCountStr.padStart(registerCountLength * 2, '0')
+              const registerCount = cmd.registerCount.toString(16).padStart(registerCountLength * 2, '0').toUpperCase()
+              message += registerCount
             }
           }
           break
@@ -694,8 +694,9 @@ export function useMotorCmd() {
       const matchedCmd = readCommands.value.find(cmd => cmd.address === address)
       
       // 如果启用了寄存器个数，验证寄存器个数是否匹配
-      if (configForm.includeRegisterCount && matchedCmd && matchedCmd.registerCount !== registerCount) {
-        console.warn(`寄存器个数不匹配：期望 ${matchedCmd.registerCount}，实际 ${registerCount}`)
+      const expectedRegisterCount = (matchedCmd?.registerCount !== undefined ? matchedCmd.registerCount : 0).toString(16).padStart(2, '0').toUpperCase()
+      if (configForm.includeRegisterCount && matchedCmd && expectedRegisterCount !== registerCount) {
+        console.warn(`寄存器个数不匹配：期望 ${expectedRegisterCount}，实际 ${registerCount}`)
         return ''
       }
       

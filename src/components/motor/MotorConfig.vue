@@ -324,6 +324,7 @@
               size="default" 
               class="command-table" 
               stripe 
+              border
             >
               <el-table-column width="50" align="center">
                 <template #header>
@@ -384,10 +385,10 @@
                       :disabled="activeReadCommands.has(scope.row.name)"
                     />
                     <el-input-number 
-                      v-model.number="scope.row.registerCount" 
+                      v-model="scope.row.registerCount" 
                       size="default" 
                       :min="0" 
-                      :max="32" 
+                      :max="255" 
                       controls-position="right" 
                       style="width: 100%;"
                       :disabled="activeReadCommands.has(scope.row.name) || !scope.row.includeRegisterCount"
@@ -460,6 +461,7 @@
               size="default" 
               class="command-table" 
               stripe 
+              border
             >
               <el-table-column width="50" align="center">
                 <template #header>
@@ -518,10 +520,10 @@
                       class="custom-checkbox"
                     />
                     <el-input-number 
-                      v-model.number="scope.row.registerCount" 
+                      v-model="scope.row.registerCount" 
                       size="default" 
                       :min="0" 
-                      :max="32" 
+                      :max="255" 
                       controls-position="right" 
                       style="width: 100%;"
                       :disabled="!scope.row.includeRegisterCount"
@@ -902,7 +904,7 @@ const saveConfig = () => {
 const generateCommandPreview = () => {
   const preview = [] as any
   let hexString = ''
-  const cmdPreview = { name: 'TEMPLATE', address: '00', data: '0000', length: 2, dataType: 'int16', functionCode: '00', registerCount: '00',  frequency: null, lastSentTime: 0 }
+  const cmdPreview = { name: 'TEMPLATE', address: '00', data: '0000', length: 2, dataType: 'int16', functionCode: '00', registerCount: 0,  frequency: null, lastSentTime: 0 }
   
   // 使用第一个指令作为预览示例
   const command = cmdPreview
@@ -955,8 +957,7 @@ const generateCommandPreview = () => {
       case 'registerCount':
         if (configForm.includeRegisterCount && command.registerCount !== undefined) {
           const registerCountLength = configForm.registerCountLength || 1
-          const registerCountStr = command.registerCount.toString()
-          const registerCountHex = registerCountStr.padStart(registerCountLength * 2, '0').toUpperCase()
+          const registerCountHex = command.registerCount.toString(16).padStart(registerCountLength * 2, '0').toUpperCase()
           preview.push({
             type: 'registerCount',
             label: '寄存器个数',
@@ -1448,15 +1449,15 @@ const resetConfig = () => {
     
     // 重置命令列表
     readCommands.value = [
-      { name: 'GET_SPEED', address: '00', data: '0000', length: 4, dataType: 'int16', functionCode: '03', registerCount: '01', frequency: null, lastSentTime: 0 },
-      { name: 'GET_SPEED_M1', address: '01', data: '0000', length: 2, dataType: 'int16', functionCode: '03', registerCount: '01', frequency: null, lastSentTime: 0 },
-      { name: 'GET_SPEED_M2', address: '02', data: '0000', length: 2, dataType: 'int16', functionCode: '03', registerCount: '01', frequency: null, lastSentTime: 0 }
+      { name: 'GET_SPEED', address: '00', data: '0000', length: 4, dataType: 'int16', functionCode: '03', registerCount: 1, frequency: null, lastSentTime: 0 },
+      { name: 'GET_SPEED_M1', address: '01', data: '0000', length: 2, dataType: 'int16', functionCode: '03', registerCount: 1, frequency: null, lastSentTime: 0 },
+      { name: 'GET_SPEED_M2', address: '02', data: '0000', length: 2, dataType: 'int16', functionCode: '03', registerCount: 1, frequency: null, lastSentTime: 0 }
     ]
     
     writeCommands.value = [
-      { name: 'SET_SPEED', address: '00', data: '00000000', length: 4, dataType: 'int16', functionCode: '06', registerCount: '01' },
-      { name: 'SET_SPEED_M1', address: '01', data: '0000', length: 2, dataType: 'int16', functionCode: '06', registerCount: '01' },
-      { name: 'SET_SPEED_M2', address: '02', data: '0000', length: 2, dataType: 'int16', functionCode: '06', registerCount: '01' }
+      { name: 'SET_SPEED', address: '00', data: '00000000', length: 4, dataType: 'int16', functionCode: '06', registerCount: 1 },
+      { name: 'SET_SPEED_M1', address: '01', data: '0000', length: 2, dataType: 'int16', functionCode: '06', registerCount: 1 },
+      { name: 'SET_SPEED_M2', address: '02', data: '0000', length: 2, dataType: 'int16', functionCode: '06', registerCount: 1 }
     ]
     
     ElMessage({
@@ -1541,7 +1542,7 @@ const loadConfig = (config: any) => {
         length: parseInt(cmd.length) || 0,
         dataType: cmd.dataType || 'int16',
         functionCode: cmd.functionCode || '03',
-        registerCount: cmd.registerCount || '01',
+        registerCount: parseInt(cmd.registerCount, 10) || 1,
         includeRegisterCount: cmd.includeRegisterCount !== false,
         includeLength: cmd.includeLength !== false,
         frequency: cmd.frequency || null,
@@ -1555,7 +1556,7 @@ const loadConfig = (config: any) => {
         length: parseInt(cmd.length) || 0,
         dataType: cmd.dataType || 'int16',
         functionCode: cmd.functionCode || '06',
-        registerCount: cmd.registerCount || '01',
+        registerCount: parseInt(cmd.registerCount, 10) || 1,
         includeRegisterCount: cmd.includeRegisterCount !== false,
         includeLength: cmd.includeLength !== false
       }))
@@ -1571,7 +1572,7 @@ const loadConfig = (config: any) => {
           length: 0,
           dataType: cmd.dataType || 'int16',
           functionCode: cmd.functionCode || '03',
-          registerCount: cmd.registerCount || '01',
+          registerCount: parseInt(cmd.registerCount, 10) || 1,
           includeRegisterCount: true,
           includeLength: true,
           frequency: cmd.frequency || null,
@@ -1586,7 +1587,7 @@ const loadConfig = (config: any) => {
           length: parseInt(cmd.length) || 2,
           dataType: cmd.dataType || 'int16',
           functionCode: cmd.functionCode || '06',
-          registerCount: cmd.registerCount || '01',
+          registerCount: parseInt(cmd.registerCount, 10) || 1,
           includeRegisterCount: true,
           includeLength: true
         })
@@ -1597,12 +1598,12 @@ const loadConfig = (config: any) => {
     // 如果没有命令，添加默认命令（仅在首次初始化时）
     if (readCommands.value.length === 0 && !config.hasBeenCustomized) {
       readCommands.value = [
-        { name: 'GET_SPEED', address: '00', data: '0000', length: 0, dataType: 'int16', functionCode: '03', registerCount: '01', includeRegisterCount: true, includeLength: true, frequency: null, lastSentTime: 0 }
+        { name: 'GET_SPEED', address: '00', data: '0000', length: 0, dataType: 'int16', functionCode: '03', registerCount: 1, includeRegisterCount: true, includeLength: true, frequency: null, lastSentTime: 0 }
       ]
     }
     if (writeCommands.value.length === 0) {
       writeCommands.value = [
-        { name: 'SET_SPEED', address: '00', data: '0000', length: 2, dataType: 'int16', functionCode: '06', registerCount: '01', includeRegisterCount: true, includeLength: true }
+        { name: 'SET_SPEED', address: '00', data: '0000', length: 2, dataType: 'int16', functionCode: '06', registerCount: 1, includeRegisterCount: true, includeLength: true }
       ]
     }
     
@@ -2171,6 +2172,12 @@ onUnmounted(() => {
   margin-bottom: 15px;
   padding: 10px 0;
   border-bottom: 1px solid #f0f0f0;
+}
+
+/* 缩小配置对话框中输入框 prepend (0x) 的宽度，防止挤占输入空间 */
+:deep(.motor-config-dialog .el-input-group__prepend) {
+  padding: 0 6px;
+  min-width: auto;
 }
 
 /* 命令表格样式 */
