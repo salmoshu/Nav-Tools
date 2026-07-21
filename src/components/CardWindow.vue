@@ -1,13 +1,15 @@
 <template>
   <div class="card-window">
-    <div class="title-bar">
-      <div class="title">{{ cardTitle }}</div>
-      <button @click="closeWindow">×</button>
-    </div>
     <component
+      v-if="cardComponent"
       :is="cardComponent"
       v-bind="cardProps"
     />
+    <div v-else-if="loadError" class="load-error">
+      <p class="message">组件加载失败</p>
+      <p class="detail">{{ loadError }}</p>
+      <button class="close-btn" @click="closeWindow">关闭窗口</button>
+    </div>
   </div>
 </template>
 
@@ -15,61 +17,97 @@
 import { markRaw, onMounted, ref } from 'vue'
 import type { Component } from 'vue'
 
+// 构建后动态 import 的路径会被打包成哈希文件名，
+// 因此用 import.meta.glob 预扫描所有组件，运行时按键查找
+const modules = import.meta.glob([
+  './panels/*.vue',
+  './flow/*.vue',
+  './gnss/*.vue',
+  './motor/*.vue',
+])
+
 const cardComponent = ref<Component | null>(null)
 const cardProps = ref<Record<string, any>>({})
 const cardTitle = ref('Card Window')
+const loadError = ref('')
 
 onMounted(async () => {
   const hash = window.location.hash.slice(1) // 移除 #
-  if (hash.startsWith('card/')) {
-    try {
-      const encodedData = hash.slice(5) // 移除 'card/'
-      const decodedData = JSON.parse(decodeURIComponent(encodedData))
-      const { componentName, props, title } = decodedData
+  if (!hash.startsWith('card/')) {
+    loadError.value = '无效的卡片窗口地址'
+    return
+  }
 
-      // 动态导入组件
-      const modulePath = `/src/components/${componentName}.vue`
-      const component = await import(/* @vite-ignore */ modulePath)
-      
-      if (component) {
-        cardComponent.value = markRaw(component.default || component)
-        cardProps.value = props || {}
-        cardTitle.value = title || 'Card Window'
-      }
-    } catch (error) {
-      console.error('Error loading card component:', error)
+  try {
+    const encodedData = hash.slice(5) // 移除 'card/'
+    const decodedData = JSON.parse(decodeURIComponent(encodedData))
+    const { componentName, props, title } = decodedData
+
+    // componentName 为面板类型名，组件实际位于对应的分类目录中。
+    const loader =
+      modules[`./${componentName}.vue`] ??
+      Object.entries(modules).find(([path]) =>
+        path.endsWith(`/${componentName}.vue`)
+      )?.[1]
+
+    if (!loader) {
+      loadError.value = `未找到组件: ${componentName}`
+      return
     }
+
+    const component = await loader()
+    cardComponent.value = markRaw((component as any).default || component)
+    cardProps.value = props || {}
+    cardTitle.value = title || 'Card Window'
+  } catch (error) {
+    console.error('Error loading card component:', error)
+    loadError.value = error instanceof Error ? error.message : String(error)
   }
 })
 
 function closeWindow() {
-  window.ipcRenderer.send('close-card-window')
+  void window.electronAPI?.closeWindow()
 }
 </script>
 
 <style scoped>
 .card-window {
   width: 100%;
-  height: 100vh;
+  height: 100%;
   overflow: auto;
-  background: white;
+  color: var(--app-text);
+  background: var(--app-surface);
 }
 
-.title-bar {
-  -webkit-app-region: drag;
-  height: 30px;
-  background: #f0f0f0;
+.load-error {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: space-between;
-  padding: 0 10px;
+  justify-content: center;
+  gap: 8px;
+  height: 100%;
+  color: var(--app-text-muted);
 }
 
-.title-bar button {
-  -webkit-app-region: no-drag;
-  background: none;
-  border: none;
+.load-error .message {
   font-size: 16px;
+  font-weight: 600;
+  color: #d4380d;
+}
+
+.load-error .detail {
+  font-size: 13px;
+  word-break: break-all;
+  padding: 0 20px;
+}
+
+.load-error .close-btn {
+  margin-top: 8px;
+  padding: 4px 16px;
+  border: 1px solid var(--app-border);
+  border-radius: 4px;
+  color: var(--app-text);
+  background: var(--app-surface);
   cursor: pointer;
 }
 </style>

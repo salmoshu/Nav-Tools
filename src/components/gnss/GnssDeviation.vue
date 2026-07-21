@@ -43,11 +43,13 @@ import { ScatterChart } from 'echarts/charts';
 import { GridComponent } from 'echarts/components';
 import { CanvasRenderer } from 'echarts/renderers';
 import { useDevice } from '@/hooks/useDevice'
+import { useTheme } from '@/composables/useTheme'
 
 echarts.use([ScatterChart, GridComponent, CanvasRenderer]);
 
 const { latestPosition, latestGgaPosition, enableWindow, plotData, clearData } = useNmea();
 const { deviceConnected } = useDevice()
+const { chartTheme, resolvedTheme } = useTheme()
 
 const chartRef = ref(null);
 const chartInstance = ref(null);
@@ -147,13 +149,18 @@ function initChart() {
     renderer: 'canvas',
     antialias: false,
   });
+  const colors = chartTheme.value;
 
   const option = {
     animation: false,
     hoverAnimation: false,
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    backgroundColor: colors.background,
+    textStyle: { color: colors.text },
     tooltip: {
       trigger: 'axis',
+      backgroundColor: colors.surface,
+      borderColor: colors.border,
+      textStyle: { color: colors.text },
       formatter: function(params) {
         const point = params[0].value;
         return `位置: (${point[0].toFixed(2)}, ${point[1].toFixed(2)}) m`;
@@ -189,6 +196,7 @@ function initChart() {
       nameLocation: 'middle',
       nameGap: 30,
       axisLabel: {
+        color: colors.textMuted,
         formatter: function(value) {
           return value.toFixed(2) + ' m';
         },
@@ -196,11 +204,12 @@ function initChart() {
       splitLine: {
         lineStyle: {
           type: 'dashed',
-          color: '#e0e0e0',
+          color: colors.grid,
         },
       },
       axisLine: {
         show: true,
+        lineStyle: { color: colors.border },
       },
       min: -padding.value,
       max: padding.value,
@@ -211,6 +220,7 @@ function initChart() {
       nameLocation: 'middle',
       nameGap: 40,
       axisLabel: {
+        color: colors.textMuted,
         formatter: function(value) {
           return value.toFixed(2) + ' m';
         },
@@ -218,11 +228,12 @@ function initChart() {
       splitLine: {
         lineStyle: {
           type: 'dashed',
-          color: '#e0e0e0',
+          color: colors.grid,
         },
       },
       axisLine: {
         show: true,
+        lineStyle: { color: colors.border },
       },
       min: -padding.value,
       max: padding.value,
@@ -629,6 +640,13 @@ onMounted(() => {
   window.addEventListener('keydown', handleKeyDown);
 });
 
+watch(resolvedTheme, () => {
+  nextTick(() => {
+    initChart();
+    handleNmeaUpdate();
+  });
+});
+
 onUnmounted(() => {
   if (chartInstance.value) {
     chartInstance.value.dispose();
@@ -650,17 +668,18 @@ onUnmounted(() => {
   flex-direction: column;
   height: 100%;
   width: 100%;
-  background-color: #f5f7fa;
+  color: var(--app-text);
+  background-color: var(--app-surface);
   border-radius: 8px;
   overflow: hidden;
-  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
+  box-shadow: 0 2px 12px 0 var(--app-shadow);
 }
 
 .control-panel {
   padding: 0px 12px;
   height: 50px;
-  background-color: #f8f9fa;
-  border-bottom: 1px solid #e9ecef;
+  background-color: var(--app-surface-muted);
+  border-bottom: 1px solid var(--app-border);
   flex-shrink: 0;
   display: flex; /* 添加flex布局 */
   align-items: center; /* 垂直居中 */
@@ -680,16 +699,16 @@ onUnmounted(() => {
 
 .switch-label {
   font-size: 12px;
-  color: #6b7280;
+  color: var(--app-text-muted);
   margin-right: 15px;
   line-height: 1; /* 确保标签文本垂直居中 */
 }
 
 .control-btn {
   padding: 6px 12px;
-  background-color: #f8f9fa;
-  color: #495057;
-  border: 1px solid #dee2e6;
+  background-color: var(--app-surface-raised);
+  color: var(--app-text-secondary);
+  border: 1px solid var(--app-border);
   border-radius: 4px;
   cursor: pointer;
   font-size: 12px;
@@ -743,7 +762,7 @@ onUnmounted(() => {
 }
 
 :deep(.el-slider__runway) {
-  background-color: #e4e7ed;
+  background-color: var(--app-border);
   border-radius: 4px;
 }
 

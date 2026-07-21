@@ -11,103 +11,23 @@
       </div>
     </div>
     
-    <!-- 配置内容区域 -->
     <div class="config-content">
-      <!-- 指令下发控制区域 -->
-      <div class="command-control">
-        <el-tabs v-model="activeControlTab" type="card" class="control-tabs">
-          <el-tab-pane name="read">
-            <template #label>
-              <span>
-                <el-icon><Position /></el-icon>
-                读指令
-                <el-tag size="small" type="info" v-if="readCommands.length > 0">{{ readCommands.length }}</el-tag>
-              </span>
-            </template>
-            <div class="command-list">
-              <div v-for="cmd in readCommands" :key="cmd.name" class="command-item">
-                <el-button 
-                  type="primary" 
-                  size="default"
-                  @click="sendReadCommand(cmd)"
-                  :disabled="!isConfigValid"
-                  :class="{ 'is-active': activeReadCommands.has(cmd.name), 'command-btn': true }"
-                >
-                  <el-icon><Position /></el-icon>
-                  {{ activeReadCommands.has(cmd.name) ? '停止' : cmd.name }}
-                </el-button>
-                <div class="frequency-input-wrapper">
-                  <el-input-number
-                    v-model="cmd.frequency"
-                    placeholder="频率"
-                    size="default"
-                    :min="0"
-                    :max="100"
-                    :disabled="!isConfigValid || activeReadCommands.has(cmd.name)"
-                    controls-position="right"
-                    style="width: 100px;"
-                  />
-                  <span class="frequency-label">Hz</span>
-                </div>
-              </div>
-              <el-empty v-if="readCommands.length === 0" description="暂无读指令配置" :image-size="48" />
-            </div>
-          </el-tab-pane>
-          
-          <el-tab-pane name="write">
-            <template #label>
-              <span>
-                <el-icon><Edit /></el-icon>
-                写指令
-                <el-tag size="small" type="info" v-if="writeCommands.length > 0">{{ writeCommands.length }}</el-tag>
-              </span>
-            </template>
-            <div class="command-list">
-              <div v-for="cmd in writeCommands" :key="cmd.name" class="command-item">
-                <el-button 
-                  type="success" 
-                  size="default"
-                  @click="sendWriteCommand(cmd)"
-                  :disabled="!isConfigValid"
-                  class="command-btn"
-                >
-                  <el-icon><Edit /></el-icon>
-                  {{ cmd.name }}
-                </el-button>
-                <div class="data-input-wrapper">
-                  <!-- 单个输入框模式（兼容旧数据） -->
-                  <div v-if="getDataCount(cmd) === 1" class="single-data-input">
-                    <el-input
-                      v-model="decimalInputs[cmd.name]"
-                      placeholder=""
-                      size="default"
-                      :disabled="!isConfigValid || cmd.length===0"
-                      @input="(value: string) => handleSingleDecimalInput(cmd, value)"
-                    />
-                    <span class="hex-display">{{ cmd.data }}</span>
-                  </div>
-                  <!-- 多个输入框模式 -->
-                  <div v-else class="multi-data-inputs">
-                    <div v-for="(dataItem, index) in splitData(cmd.data, getDataCount(cmd), cmd.dataType)" :key="index" class="multi-input-item">
-                      <el-input
-                        v-model="decimalInputs[getDataInputKey(cmd, index)]"
-                        placeholder=""
-                        size="default"
-                        :disabled="!isConfigValid"
-                        @input="(value: string) => updateDataValueWithDecimal(cmd, index, value)"
-                      />
-                      <span class="hex-display">{{ dataItem }}</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <el-empty v-if="writeCommands.length === 0" description="暂无写指令配置" :image-size="48" />
-            </div>
-          </el-tab-pane>
-        </el-tabs>
-      </div>
+      <MotorCommandPanel
+        v-model:active-tab="activeControlTab"
+        :read-commands="readCommands"
+        :write-commands="writeCommands"
+        :active-read-commands="activeReadCommands"
+        :decimal-inputs="decimalInputs"
+        :is-config-valid="isConfigValid"
+        :get-data-count="getDataCount"
+        :split-data="splitData"
+        :get-data-input-key="getDataInputKey"
+        @send-read="sendReadCommand"
+        @send-write="sendWriteCommand"
+        @single-input="handleSingleDecimalInput"
+        @multi-input="updateDataValueWithDecimal"
+      />
     </div>
-
     <!-- 配置对话框 -->
     <el-dialog
       v-model="configDialogVisible"
@@ -621,6 +541,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { useMotorCmd } from '@/composables/motor/useMotorCmd'
 import draggable from 'vuedraggable'
 import { useConsole } from '@/composables/flow/useConsole'
+import MotorCommandPanel from './MotorCommandPanel.vue'
 import { 
   Setting, 
   Key, 
@@ -1770,6 +1691,8 @@ onUnmounted(() => {
   height: 100%;
   display: flex;
   flex-direction: column;
+  color: var(--app-text);
+  background: var(--app-surface);
 }
 
 .controls {
@@ -1777,8 +1700,8 @@ onUnmounted(() => {
   justify-content: space-between;
   align-items: center;
   padding: 8px 12px;
-  background-color: #f8f9fa;
-  border-bottom: 1px solid #e9ecef;
+  background-color: var(--app-surface-muted);
+  border-bottom: 1px solid var(--app-border);
   height: 50px;
   box-sizing: border-box;
 }
@@ -1806,7 +1729,7 @@ onUnmounted(() => {
 }
 
 .control-tabs {
-  background-color: #fff;
+  background-color: var(--app-surface);
   border-radius: 8px;
   overflow: hidden;
 }
@@ -1945,7 +1868,7 @@ onUnmounted(() => {
 }
 
 :deep(.motor-config-dialog .el-dialog__header) {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: var(--el-color-primary);
   color: white;
   padding: 20px 24px;
   margin: 0;
@@ -1969,22 +1892,22 @@ onUnmounted(() => {
 
 :deep(.motor-config-dialog .el-dialog__body) {
   padding: 24px;
-  background-color: #f8fafc;
+  background-color: var(--app-surface-muted);
 }
 
 :deep(.motor-config-dialog .el-dialog__footer) {
   padding: 16px 24px;
-  background-color: white;
-  border-top: 1px solid #e6e8eb;
+  background-color: var(--app-surface);
+  border-top: 1px solid var(--app-border);
 }
 
 /* 配置表单样式 */
 .config-form {
-  background-color: #fafbfc;
+  background-color: var(--app-surface-muted);
   padding: 20px;
   border-radius: 8px;
   margin-bottom: 20px;
-  border: 1px solid #e6e8eb;
+  border: 1px solid var(--app-border);
 }
 
 /* 配置操作栏样式 */
@@ -1993,9 +1916,9 @@ onUnmounted(() => {
   gap: 12px;
   margin-bottom: 20px;
   padding: 15px;
-  background-color: #f8fafc;
+  background-color: var(--app-surface-muted);
   border-radius: 8px;
-  border: 1px solid #e6e8eb;
+  border: 1px solid var(--app-border);
 }
 
 .config-actions .el-button {
@@ -2005,9 +1928,9 @@ onUnmounted(() => {
 /* 拖拽式报文结构样式 */
 .message-structure-container {
   padding: 20px;
-  background-color: #fafbfc;
+  background-color: var(--app-surface-muted);
   border-radius: 8px;
-  border: 1px solid #e6e8eb;
+  border: 1px solid var(--app-border);
 }
 
 .message-fields-container {
@@ -2022,8 +1945,8 @@ onUnmounted(() => {
 }
 
 .message-field {
-  background: #ffffff;
-  border: 2px solid #e6e8eb;
+  background: var(--app-surface);
+  border: 2px solid var(--app-border);
   border-radius: 8px;
   padding: 15px;
   min-width: 120px;
@@ -2041,7 +1964,7 @@ onUnmounted(() => {
 
 .message-field.fixed-field {
   border-color: #b3d8ff;
-  background: #f0f9ff;
+  background: color-mix(in srgb, var(--el-color-primary) 10%, var(--app-surface));
   cursor: default;
 }
 
@@ -2057,7 +1980,7 @@ onUnmounted(() => {
   gap: 8px;
   margin-bottom: 12px;
   padding-bottom: 8px;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--app-border);
 }
 
 .drag-handle {
@@ -2073,7 +1996,7 @@ onUnmounted(() => {
 
 .field-title {
   font-weight: 600;
-  color: #303133;
+  color: var(--app-text);
   font-size: 14px;
   flex: 1;
 }
@@ -2109,7 +2032,7 @@ onUnmounted(() => {
 /* 拖拽时的样式 */
 .sortable-ghost {
   opacity: 0.5;
-  background: #f0f9ff;
+  background: color-mix(in srgb, var(--el-color-primary) 10%, var(--app-surface));
   border: 2px dashed #409eff;
 }
 
@@ -2143,7 +2066,7 @@ onUnmounted(() => {
 
 :deep(.el-form-item__label) {
   font-weight: 500;
-  color: #303133;
+  color: var(--app-text);
 }
 
 /* Tab 标签样式 */
@@ -2159,7 +2082,7 @@ onUnmounted(() => {
 
 /* 命令 Tab 样式 */
 .command-tabs {
-  background: #fff;
+  background: var(--app-surface);
   border-radius: 8px;
   overflow: hidden;
   box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.05);
@@ -2171,7 +2094,7 @@ onUnmounted(() => {
   align-items: center;
   margin-bottom: 15px;
   padding: 10px 0;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--app-border);
 }
 
 /* 缩小配置对话框中输入框 prepend (0x) 的宽度，防止挤占输入空间 */
@@ -2184,26 +2107,26 @@ onUnmounted(() => {
 .command-table {
   border-radius: 6px;
   overflow: hidden;
-  border: 1px solid #e6e8eb;
+  border: 1px solid var(--app-border);
 }
 
 .command-table :deep(.el-table__header-wrapper) {
-  background-color: #f8f9fa;
+  background-color: var(--app-surface-muted);
 }
 
 .command-table :deep(.el-table__header th) {
-  background-color: #f8f9fa;
-  color: #606266;
+  background-color: var(--app-surface-muted);
+  color: var(--app-text-secondary);
   font-weight: 600;
-  border-bottom: 2px solid #e6e8eb;
+  border-bottom: 2px solid var(--app-border);
 }
 
 .command-table :deep(.el-table__row:hover) {
-  background-color: #f5f7fa;
+  background-color: var(--app-hover);
 }
 
 .command-table :deep(.el-input__wrapper) {
-  box-shadow: 0 0 0 1px #dcdfe6 inset;
+  box-shadow: 0 0 0 1px var(--app-border) inset;
 }
 
 .command-table :deep(.el-input__wrapper:hover) {
@@ -2212,7 +2135,7 @@ onUnmounted(() => {
 
 .command-table :deep(.el-input-number__decrease),
 .command-table :deep(.el-input-number__increase) {
-  background-color: #f5f7fa;
+  background-color: var(--app-surface-muted);
 }
 
 /* 拖拽排序样式 */
@@ -2236,7 +2159,7 @@ onUnmounted(() => {
 /* 拖拽时的行样式 */
 :deep(.el-table__row.sortable-ghost) {
   opacity: 0.5;
-  background-color: #f0f9ff !important;
+  background-color: color-mix(in srgb, var(--el-color-primary) 12%, var(--app-surface)) !important;
   border: 2px dashed #409eff !important;
   transform: scale(1.02);
   transition: all 0.2s ease;
@@ -2246,14 +2169,14 @@ onUnmounted(() => {
   opacity: 0.8;
   transform: rotate(2deg);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
-  background-color: #e6f2ff !important;
+  background-color: color-mix(in srgb, var(--el-color-primary) 16%, var(--app-surface)) !important;
   border: 2px dashed #409eff;
   cursor: move;
 }
 
 /* 拖拽悬停时的行样式 */
 :deep(.el-table__row.drag-over) {
-  background-color: #e6f7ff !important;
+  background-color: color-mix(in srgb, var(--el-color-primary) 18%, var(--app-surface)) !important;
   border-top: 2px solid #409eff !important;
   border-bottom: 2px solid #409eff !important;
   transform: translateY(2px);
@@ -2280,11 +2203,11 @@ onUnmounted(() => {
 
 @keyframes sortSuccess {
   0% {
-    background-color: #f0f9ff;
+    background-color: color-mix(in srgb, var(--el-color-primary) 10%, var(--app-surface));
     transform: scale(1);
   }
   50% {
-    background-color: #e6f7ff;
+    background-color: color-mix(in srgb, var(--el-color-primary) 16%, var(--app-surface));
     transform: scale(1.02);
   }
   100% {
@@ -2366,7 +2289,7 @@ onUnmounted(() => {
   font-family: 'Courier New', monospace;
   font-size: 11px;         /* 使用.hex-display-small的字体大小 */
   color: #409eff;
-  background-color: #f0f9ff;
+  background-color: color-mix(in srgb, var(--el-color-primary) 10%, var(--app-surface));
   padding: 2px 6px;        /* 使用.hex-display-small的内边距 */
   border-radius: 3px;      /* 使用.hex-display-small的圆角 */
   border: 1px solid #b3d8ff;
@@ -2385,10 +2308,10 @@ onUnmounted(() => {
 
 /* 指令预览区域样式 */
 .command-preview-container {
-  background-color: #fafbfc;
+  background-color: var(--app-surface-muted);
   padding: 20px;
   border-radius: 8px;
-  border: 1px solid #e6e8eb;
+  border: 1px solid var(--app-border);
   margin-bottom: 20px;
 }
 
@@ -2396,9 +2319,9 @@ onUnmounted(() => {
   display: flex;
   gap: 4px;
   padding: 15px;
-  background-color: white;
+  background-color: var(--app-surface);
   border-radius: 6px;
-  border: 1px solid #e6e8eb;
+  border: 1px solid var(--app-border);
   flex-wrap: wrap;
   align-items: center;
   justify-content: center;
@@ -2419,9 +2342,9 @@ onUnmounted(() => {
   cursor: pointer;
   position: relative;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  background-color: #f5f7fa;
-  color: #606266;
-  border: 1px solid #e4e7ed;
+  background-color: var(--app-surface-muted);
+  color: var(--app-text-secondary);
+  border: 1px solid var(--app-border);
 }
 
 .preview-cell:hover {
@@ -2444,8 +2367,8 @@ onUnmounted(() => {
 
 /* 预览单元悬停效果 */
 .preview-cell:hover {
-  background-color: #e6e8eb;
-  border-color: #c0c4cc;
+  background-color: var(--app-hover);
+  border-color: var(--app-border-strong);
 }
 
 /* 单个数据输入框容器 */

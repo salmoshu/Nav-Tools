@@ -12,6 +12,9 @@ dist
 dist-ssr
 dist-electron
 release
+coverage
+playwright-report
+test-results
 *.local
 
 # Editor directories and files

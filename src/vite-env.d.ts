@@ -19,6 +19,18 @@ declare module 'vue-virtual-scroller' {
 
 interface Window {
   // expose in the `electron/preload/index.ts`
+  electronAPI: {
+    getAppVersion: () => Promise<string>
+    getPathForFile: (file: File) => string
+    getWindowState: () => Promise<{ maximized: boolean; alwaysOnTop: boolean }>
+    minimizeWindow: () => Promise<void>
+    toggleMaximizeWindow: () => Promise<boolean>
+    toggleAlwaysOnTop: () => Promise<boolean>
+    restoreDetachedPanel: () => Promise<boolean>
+    closeWindow: () => Promise<void>
+    startWindowResize: (edge: import('./core/window/WindowService').WindowResizeEdge) => Promise<void>
+    stopWindowResize: () => Promise<void>
+  }
   ipcRenderer: import('electron').IpcRenderer
 }
 

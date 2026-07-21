@@ -1,9 +1,8 @@
-import { app, BrowserWindow, shell, ipcMain, Menu, powerSaveBlocker } from 'electron'
+import { app, BrowserWindow, shell, ipcMain, Menu, powerSaveBlocker, screen } from 'electron'
 import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import os from 'node:os'
-import { appConfig } from '../../src/settings/config'
 import { eventsMap } from './events'
 
 const require = createRequire(import.meta.url)
@@ -48,10 +47,136 @@ let win: BrowserWindow | null = null
 const preload = path.join(__dirname, '../preload/index.mjs')
 const indexHtml = path.join(RENDERER_DIST, 'index.html')
 
+type WindowResizeEdge = 'top' | 'right' | 'bottom' | 'left' | 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right'
+const resizeIntervals = new Map<number, ReturnType<typeof setInterval>>()
+const detachedPanels = new Map<number, { originWebContentsId: number; windowId: string }>()
+
+function getWindowState(target: BrowserWindow) {
+  return {
+    maximized: target.isMaximized(),
+    alwaysOnTop: target.isAlwaysOnTop(),
+  }
+}
+
+function sendWindowState(target: BrowserWindow) {
+  if (!target.webContents.isDestroyed()) {
+    target.webContents.send('window-state-changed', getWindowState(target))
+  }
+}
+
+function configureWebTitleBar(target: BrowserWindow) {
+  target.on('maximize', () => sendWindowState(target))
+  target.on('unmaximize', () => sendWindowState(target))
+  target.on('enter-full-screen', () => sendWindowState(target))
+  target.on('leave-full-screen', () => sendWindowState(target))
+}
+
+function stopWindowResize(webContentsId: number) {
+  const interval = resizeIntervals.get(webContentsId)
+  if (interval) clearInterval(interval)
+  resizeIntervals.delete(webContentsId)
+}
+
+ipcMain.handle('window-get-state', event => {
+  const target = BrowserWindow.fromWebContents(event.sender)
+  return target ? getWindowState(target) : { maximized: false, alwaysOnTop: false }
+})
+
+ipcMain.handle('window-minimize', event => {
+  BrowserWindow.fromWebContents(event.sender)?.minimize()
+})
+
+ipcMain.handle('window-toggle-maximize', event => {
+  const target = BrowserWindow.fromWebContents(event.sender)
+  if (!target) return false
+  if (target.isMaximized()) target.unmaximize()
+  else target.maximize()
+  return target.isMaximized()
+})
+
+ipcMain.handle('window-toggle-always-on-top', event => {
+  const target = BrowserWindow.fromWebContents(event.sender)
+  if (!target || !detachedPanels.has(target.id)) return false
+  const next = !target.isAlwaysOnTop()
+  target.setAlwaysOnTop(next)
+  sendWindowState(target)
+  return next
+})
+
+ipcMain.handle('window-restore-detached-panel', event => {
+  const target = BrowserWindow.fromWebContents(event.sender)
+  if (!target) return false
+  const detachedPanel = detachedPanels.get(target.id)
+  if (!detachedPanel) return false
+
+  const origin = BrowserWindow.getAllWindows().find(
+    candidate => candidate.webContents.id === detachedPanel.originWebContentsId,
+  )
+  if (!origin || origin.isDestroyed()) return false
+  origin.webContents.send('restore-detached-panel', { windowId: detachedPanel.windowId })
+  origin.show()
+  origin.focus()
+  detachedPanels.delete(target.id)
+  target.close()
+  return true
+})
+
+ipcMain.handle('window-close', event => {
+  BrowserWindow.fromWebContents(event.sender)?.close()
+})
+
+ipcMain.handle('window-resize-start', (event, edge: WindowResizeEdge) => {
+  const target = BrowserWindow.fromWebContents(event.sender)
+  const allowedEdges: WindowResizeEdge[] = [
+    'top', 'right', 'bottom', 'left',
+    'top-left', 'top-right', 'bottom-left', 'bottom-right',
+  ]
+  if (!target || target.isMaximized() || !allowedEdges.includes(edge)) return
+
+  stopWindowResize(event.sender.id)
+  const initialBounds = target.getBounds()
+  const initialCursor = screen.getCursorScreenPoint()
+  const [minWidth, minHeight] = target.getMinimumSize()
+
+  const interval = setInterval(() => {
+    if (target.isDestroyed()) {
+      stopWindowResize(event.sender.id)
+      return
+    }
+
+    const cursor = screen.getCursorScreenPoint()
+    const deltaX = cursor.x - initialCursor.x
+    const deltaY = cursor.y - initialCursor.y
+    const fromLeft = edge.includes('left')
+    const fromRight = edge.includes('right')
+    const fromTop = edge.includes('top')
+    const fromBottom = edge.includes('bottom')
+    const width = Math.max(minWidth || 640, initialBounds.width + (fromRight ? deltaX : fromLeft ? -deltaX : 0))
+    const height = Math.max(minHeight || 480, initialBounds.height + (fromBottom ? deltaY : fromTop ? -deltaY : 0))
+
+    target.setBounds({
+      x: fromLeft ? initialBounds.x + initialBounds.width - width : initialBounds.x,
+      y: fromTop ? initialBounds.y + initialBounds.height - height : initialBounds.y,
+      width,
+      height,
+    })
+  }, 16)
+
+  resizeIntervals.set(event.sender.id, interval)
+})
+
+ipcMain.handle('window-resize-stop', event => {
+  stopWindowResize(event.sender.id)
+})
+
 async function createWindow() {
   win = new BrowserWindow({
     width: 1200,
     height: 800,
+    minWidth: 800,
+    minHeight: 600,
+    frame: false,
+    backgroundColor: '#f3f5f7',
     title: `Nav-Tools ${appVersion}`,
     icon: path.join(process.env.VITE_PUBLIC, 'favicon.ico'),
     webPreferences: {
@@ -64,6 +189,7 @@ async function createWindow() {
       // contextIsolation: false,
     },
   })
+  configureWebTitleBar(win)
 
   if (VITE_DEV_SERVER_URL) { // #298
     win.loadURL(VITE_DEV_SERVER_URL)
@@ -102,49 +228,9 @@ async function createWindow() {
   })
 }
 
-function createMenu() {
-  // 基础菜单模板
-  const template = [
-    {
-      label: 'SETTING',
-      submenu: [
-        { role: 'reload', label: '重新加载' },
-        { role: 'forceReload', label: '强制重新加载' },
-        { role: 'toggleDevTools', label: '开发者工具' },
-        { type: 'separator' },
-        { role: 'resetZoom', label: '重置缩放' },
-        { role: 'zoomIn', label: '放大' },
-        { role: 'zoomOut', label: '缩小' },
-        { type: 'separator' },
-        { role: 'togglefullscreen', label: '全屏' }
-      ]
-    },
-  ]
-
-  // 根据AppMap第一层内容自动生成菜单项
-  const appMenuItems = Object.entries(appConfig).map(([key, config]) => ({
-    label: key.toUpperCase(),
-    // click: () => {
-    //   win?.webContents.send(`open-${key}-view`)
-    // },
-    submenu: Object.entries((config as any)).map(([moduleKey, moduleConfig]) => ({
-      label: (moduleConfig as any).title,
-      click: () => {
-        win?.webContents.send(`open-${moduleKey}-view`)
-      }
-    }))
-  }))
-
-  // 合并基础模板和动态生成的App菜单
-  const finalTemplate = [...appMenuItems, ...template,]
-
-  const menu = Menu.buildFromTemplate(finalTemplate as any)
-  Menu.setApplicationMenu(menu)
-}
-
 app.whenReady().then(() => {
   createWindow()
-  createMenu()
+  Menu.setApplicationMenu(null)
   
   // 注册获取版本号的 IPC 处理器
   ipcMain.handle('get-app-version', () => {
@@ -180,25 +266,8 @@ app.on('activate', () => {
   }
 })
 
-// New window example arg: new windows url
-ipcMain.handle('open-win', (_, arg) => {
-  const childWindow = new BrowserWindow({
-    webPreferences: {
-      preload,
-      nodeIntegration: true,
-      contextIsolation: false,
-    },
-  })
-
-  if (VITE_DEV_SERVER_URL) {
-    childWindow.loadURL(`${VITE_DEV_SERVER_URL}#${arg}`)
-  } else {
-    childWindow.loadFile(indexHtml, { hash: arg })
-  }
-})
-
 // Open card in new window
-ipcMain.handle('open-card-window', async (_, serializedData) => {
+ipcMain.handle('open-card-window', async (event, serializedData) => {
   let cardData
   try {
     cardData = JSON.parse(serializedData)
@@ -212,7 +281,8 @@ ipcMain.handle('open-card-window', async (_, serializedData) => {
     width: cardData.width || 800,
     height: cardData.height || 600,
     frame: false,
-    transparent: true,
+    transparent: false,
+    backgroundColor: '#ffffff',
     resizable: true,
     webPreferences: {
       preload,
@@ -221,11 +291,14 @@ ipcMain.handle('open-card-window', async (_, serializedData) => {
       backgroundThrottling: false
     },
   })
-
-  ipcMain.on('close-card-window', (event) => {
-    const win = BrowserWindow.fromWebContents(event.sender)
-    win?.close()
-  })
+  configureWebTitleBar(cardWindow)
+  if (typeof cardData.windowId === 'string') {
+    detachedPanels.set(cardWindow.id, {
+      originWebContentsId: event.sender.id,
+      windowId: cardData.windowId,
+    })
+  }
+  cardWindow.once('closed', () => detachedPanels.delete(cardWindow.id))
 
   const params = encodeURIComponent(JSON.stringify(cardData))
   const hash = `card/${params}`
@@ -239,13 +312,49 @@ ipcMain.handle('open-card-window', async (_, serializedData) => {
   return cardWindow.id
 })
 
-ipcMain.on('update-follow-config', (event, newConfig) => {
-  const sendingWin = BrowserWindow.fromWebContents(event.sender)
-  BrowserWindow.getAllWindows().forEach(win => {
-    if (win !== sendingWin) {
-      win.webContents.send('follow-config-updated', newConfig)
-    }
+ipcMain.on('close-card-window', (event) => {
+  BrowserWindow.fromWebContents(event.sender)?.close()
+})
+
+// Open a renderer window for a user-defined application stored in renderer localStorage.
+ipcMain.handle('open-application-window', async (_, request) => {
+  if (!request || typeof request.id !== 'string' || typeof request.name !== 'string') return null
+  if (!/^[a-zA-Z0-9-]{1,80}$/.test(request.id) || request.name.length > 80) {
+    console.error('Invalid application window request')
+    return null
+  }
+
+  const appWindow = new BrowserWindow({
+    title: `Nav-Tools - ${request.name}`,
+    width: 1200,
+    height: 800,
+    minWidth: 800,
+    minHeight: 600,
+    frame: false,
+    backgroundColor: '#f3f5f7',
+    icon: path.join(process.env.VITE_PUBLIC, 'favicon.ico'),
+    webPreferences: {
+      preload,
+      nodeIntegration: false,
+      contextIsolation: true,
+    },
   })
+  configureWebTitleBar(appWindow)
+
+  // Make all links open with the browser, not with the application
+  appWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (url.startsWith('https:')) shell.openExternal(url)
+    return { action: 'deny' }
+  })
+
+  const hash = `app/${request.id}`
+  if (VITE_DEV_SERVER_URL) {
+    await appWindow.loadURL(`${VITE_DEV_SERVER_URL}#${hash}`)
+  } else {
+    await appWindow.loadFile(indexHtml, { hash })
+  }
+
+  return appWindow.id
 })
 
 ipcMain.on('console-to-node', eventsMap['console-to-node'])
@@ -257,3 +366,7 @@ ipcMain.handle('read-file-event', eventsMap['read-file-event'])
 ipcMain.on('send-serial-hex-data', eventsMap['send-serial-hex-data'])
 ipcMain.on('send-serial-ascii-data', eventsMap['send-serial-ascii-data'])
 ipcMain.on('serial-data-format', eventsMap['serial-data-format'])
+ipcMain.handle('open-network-connection', eventsMap['open-network-connection'])
+ipcMain.handle('close-network-connection', eventsMap['close-network-connection'])
+ipcMain.on('send-network-hex-data', eventsMap['send-network-hex-data'])
+ipcMain.on('send-network-ascii-data', eventsMap['send-network-ascii-data'])

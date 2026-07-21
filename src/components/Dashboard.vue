@@ -1,31 +1,23 @@
 <template>
-  <div 
-    class="dashboard" 
+  <div
+    class="dashboard"
     @dragover="device.handleDragOver"
     @dragenter="device.handleDragEnter"
     @dragleave="device.handleDragLeave"
     @drop="device.handleDrop"
   >
     <!-- 拖拽提示遮罩层 -->
-    <div 
-      v-if="device.isDragOver.value"
-      class="drag-overlay"
-    >
-    </div>
-    
+    <div v-if="device.isDragOver.value" class="drag-overlay"></div>
+
     <!-- 原有内容 -->
-    <ToolBar 
-      @positionChange="handleToolbarPositionChange"
-      @funcModeChange="handleFuncModeChange"
+    <ToolBar @positionChange="handleToolbarPositionChange" />
+
+    <StatusBar
+      @positionChange="handleStatusbarPositionChange"
+      v-if="showStatusBar && !fullScreenItem"
     />
 
-    <StatusBar @positionChange="handleStatusbarPositionChange" v-if="showStatusBar && !fullScreenItem" />
-
-    <div 
-      class="dashboard-content" 
-      :class="contentClasses"
-      :style="contentStyle"
-    >
+    <div class="dashboard-content" :class="contentClasses" :style="contentStyle">
       <!-- Grid Layout Plus 拖拽布局区域 -->
       <div class="dashboard-grid">
         <!-- use-css-transforms 需设置为 false，也即禁用 CSS 变换，否则会导致内层字体模糊 -->
@@ -57,30 +49,33 @@
             @moved="movedEvent"
           >
             <div class="layout-component" :id="`grid-item-${item.i}`">
-              <el-card class="box-card" shadow="always" :class="{ 'full-screen-card': fullScreenItem === item.i }">
+              <el-card
+                class="box-card"
+                shadow="never"
+                :class="{ 'full-screen-card': fullScreenItem === item.i }"
+              >
                 <template #header>
                   <div class="card-header" v-if="fullScreenItem !== item.i">
                     <span class="title">{{ item.titleName }}</span>
                     <div class="card-actions">
-                      <el-button 
-                        type="text" 
-                        v-if="item.componentName.indexOf('Config') !== -1"
-                        @click=""
+                      <el-button
+                        type="text"
+                        @click="detachItem(item)"
                         class="detach-btn"
                         title="分离到独立窗口"
                       >
                         <el-icon><Share /></el-icon>
                       </el-button>
-                      <el-button 
-                        type="text" 
+                      <el-button
+                        type="text"
                         @click="toggleCardFullScreen(item.i)"
                         class="fullscreen-btn"
                         title="全屏展示"
                       >
                         <el-icon><FullScreen /></el-icon>
                       </el-button>
-                      <el-button 
-                        type="text" 
+                      <el-button
+                        type="text"
                         @click="removeItem(item.i)"
                         class="remove-btn"
                         title="移除卡片"
@@ -91,8 +86,8 @@
                   </div>
                   <div v-else class="full-screen-header">
                     <span class="full-screen-title">{{ item.titleName }}</span>
-                    <el-button 
-                      type="text" 
+                    <el-button
+                      type="text"
                       @click="toggleCardFullScreen(null)"
                       class="exit-fullscreen-btn"
                       title="退出全屏"
@@ -110,12 +105,20 @@
         </grid-layout>
       </div>
     </div>
+
+    <ApplicationSelector
+      :open="isApplicationSelectorOpen"
+      @close="closeApplicationSelector"
+      @select="handleApplicationSelect"
+      @open-window="openApplicationWindow"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
 import ToolBar from './ToolBar.vue'
 import StatusBar from './StatusBar.vue'
+import ApplicationSelector from './ApplicationSelector.vue'
 import { ref, computed, onMounted, onUnmounted, provide } from 'vue'
 import { GridLayout, GridItem } from 'grid-layout-plus'
 import { ElButton, ElCard, ElIcon, ElMessage } from 'element-plus'
@@ -123,23 +126,71 @@ import { Close, Share, Expand, FullScreen } from '@element-plus/icons-vue'
 import emitter from '@/hooks/useMitt'
 import { useLayoutManager } from '@/composables/useLayoutManager'
 import { showStatusBar } from '@/composables/useStatusManager'
-import { appConfig, navMode } from '@/settings/config'
+import { windowCatalog } from '@/settings/config'
 import { useDevice } from '@/hooks/useDevice'
+import { useApplicationSelector } from '@/composables/useApplicationSelector'
+import { createBrowserIpcTransport } from '@/core/platform/IpcTransport'
+
+const props = defineProps<{
+  initialApplicationId?: string
+}>()
+
+const {
+  applications,
+  currentApplication,
+  currentApplicationId,
+  isApplicationSelectorOpen,
+  selectApplication,
+  openApplicationSelector,
+  closeApplicationSelector,
+} = useApplicationSelector()
+const ipc = createBrowserIpcTransport()
+let removeSaveListener: (() => void) | undefined
+let removeRestoreListener: (() => void) | undefined
+
+if (props.initialApplicationId) {
+  selectApplication(props.initialApplicationId, false)
+}
 
 // 初始化设备管理和文件拖放功能 - 移到这里！
 const device = useDevice()
 
-const { 
-  layoutDraggableList, 
-  initLayout, 
-  saveLayout, 
-  autoLayout, 
-  resetLayout, 
-  editLayout, 
-  addItem, 
-  removeItem, 
-  handleFuncModeChange 
+const {
+  layoutDraggableList,
+  initLayout,
+  saveLayout,
+  autoLayout,
+  resetLayout,
+  editLayout,
+  addItem,
+  removeItem,
+  handleApplicationChange,
 } = useLayoutManager()
+
+const handleApplicationSelect = async (applicationId: string) => {
+  const application = selectApplication(applicationId)
+  if (!application) return
+
+  await handleApplicationChange(application.id, true)
+}
+
+const openApplicationWindow = async (applicationId: string) => {
+  const application = applications.value.find((candidate) => candidate.id === applicationId)
+  if (!application) return
+
+  const windowId = await window.ipcRenderer.invoke('open-application-window', {
+    id: application.id,
+    name: application.name,
+  })
+  if (windowId === null) {
+    ElMessage({
+      message: '无法打开应用窗口',
+      type: 'error',
+      placement: 'bottom-right',
+      offset: 50,
+    })
+  }
+}
 
 // 工具栏和状态栏位置状态
 const toolbarPosition = ref<'top' | 'right' | 'bottom' | 'left'>('top')
@@ -198,7 +249,7 @@ const contentClasses = computed(() => {
     'toolbar-left': toolbarPosition.value === 'left',
     'toolbar-right': toolbarPosition.value === 'right',
     'statusbar-left': statusbarPosition.value === 'left',
-    'statusbar-right': statusbarPosition.value === 'right'
+    'statusbar-right': statusbarPosition.value === 'right',
   }
 })
 
@@ -262,7 +313,7 @@ const contentStyle = computed(() => {
     marginLeft: `${marginLeft}px`,
     marginRight: `${marginRight}px`,
     height: `calc(100vh - ${marginTop + marginBottom}px)`,
-    width: `calc(100vw - ${marginLeft + marginRight}px)`
+    width: `calc(100vw - ${marginLeft + marginRight}px)`,
   }
 })
 
@@ -289,45 +340,44 @@ const movedEvent = (i: string, newX: number, newY: number) => {
 }
 
 // 分离卡片到独立窗口
-const detachItem = (item: any) => {
+const detachItem = async (item: any) => {
   if (window.ipcRenderer && item.componentName) {
     console.log('Detaching item:', item)
     console.log('Props:', item.props)
-    
+
     const element = document.getElementById(`grid-item-${item.i}`)
     const width = element ? element.clientWidth : 800
     const height = element ? element.clientHeight : 600
-    
+
     const cardData = {
       componentName: item.componentName,
+      windowId: item.windowId,
       title: item.titleName,
       props: item.props,
       width,
-      height
+      height,
     }
-    
+
     console.log('cardData to send:', cardData)
-    
+
     try {
       const serializedData = JSON.stringify(cardData)
       console.log('Serialized data:', serializedData)
-      window.ipcRenderer.invoke('open-card-window', serializedData)
+      const windowId = await window.ipcRenderer.invoke('open-card-window', serializedData)
+      if (windowId) removeItem(item.i)
     } catch (error) {
       console.error('Error invoking open-card-window:', error)
     }
-    
-    // 从主窗口中移除该卡片
-    removeItem(item.i)
   }
 }
 
 // 生命周期
 onMounted(() => {
   // 监听主进程发送的保存请求
-  window.ipcRenderer.on('save-app-mode', () => {
-    // 保存当前的funcMode
-    localStorage.setItem('saved-app-mode', navMode.appMode)
-    localStorage.setItem('saved-func-mode', navMode.funcMode)
+  removeSaveListener = ipc.on('save-app-mode', () => {
+    if (currentApplication.value) {
+      localStorage.setItem('nav-tools:selected-application', currentApplication.value.id)
+    }
   })
 
   initLayout()
@@ -336,37 +386,28 @@ onMounted(() => {
   emitter.on('save', saveLayout)
   emitter.on('auto', autoLayout)
   emitter.on('reset', resetLayout)
-  
+  emitter.on('open-application-selector', openApplicationSelector)
+
   // 添加键盘事件监听
   window.addEventListener('keydown', handleKeyDown)
-  
-  // module mode
-  for (const [_, appCfg] of Object.entries(appConfig)) {
-    for (const [_, moduleCfg] of Object.entries((appCfg as any))) {
-      const moduleMsg = (moduleCfg as any).title.toLocaleLowerCase()
-      emitter.on(moduleMsg, () => {
-        if (navMode.funcMode !== (moduleCfg as any).funcMode) {
-          handleFuncModeChange((moduleCfg as any).funcMode)
-        }
-      })
-    }
-  }
 
-  // module action
-  for (const [_, appCfg] of Object.entries(appConfig)) {
-    for (const [_, moduleCfg] of Object.entries((appCfg as any))) {
-      const actionNames = (moduleCfg as any).templateNames
-      const actionButtons = (moduleCfg as any).actionButtons
-      for (const [name, button] of Array.from({ length: Math.min(actionNames.length, actionButtons.length) }, (_, i) => [actionNames[i], actionButtons[i]])) {
-        emitter.on(button.msg, () => {
-          addItem(name)
-        })
-      }
+  windowCatalog.forEach((windowDefinition) => {
+    emitter.on(windowDefinition.button.msg, () => addItem(windowDefinition.id))
+  })
+  removeRestoreListener = ipc.on('restore-detached-panel', (_event, payload) => {
+    if (
+      payload &&
+      typeof payload === 'object' &&
+      typeof (payload as { windowId?: unknown }).windowId === 'string'
+    ) {
+      void addItem((payload as { windowId: string }).windowId)
     }
-  }
+  })
 })
 
 onUnmounted(() => {
+  removeSaveListener?.()
+  removeRestoreListener?.()
   emitter.all.clear()
   // 移除键盘事件监听
   window.removeEventListener('keydown', handleKeyDown)
@@ -375,10 +416,10 @@ onUnmounted(() => {
 
 <style scoped>
 .dashboard {
-  width: 100vw;
-  height: 100vh;
+  width: 100%;
+  height: 100%;
   position: relative;
-  background-color: #F0F0F0;
+  background-color: var(--app-bg);
   overflow: hidden;
 }
 
@@ -410,8 +451,8 @@ onUnmounted(() => {
   height: 100%;
   display: flex;
   flex-direction: column;
-  border: 3px solid rgb(210, 210, 210);
-  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
+  border: 1px solid var(--app-border);
+  box-shadow: none;
   overflow: hidden;
   transition: all 0.3s ease;
 }
@@ -428,7 +469,7 @@ onUnmounted(() => {
   opacity: 1 !important;
   visibility: visible !important;
   pointer-events: auto !important;
-  background-color: #ffffff;
+  background-color: var(--app-surface);
   overflow: hidden;
 }
 
@@ -483,7 +524,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background-color: #409EFF;
+  background-color: var(--el-color-primary);
   color: white;
   height: 45px;
   padding: 0 20px;
@@ -492,7 +533,7 @@ onUnmounted(() => {
 }
 
 .full-screen-title {
-  font-family: "Helvetica Neue", Arial, sans-serif;
+  font-family: 'Helvetica Neue', Arial, sans-serif;
   font-size: 18px;
   font-weight: 600;
 }
@@ -543,7 +584,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  border-bottom: 2px solid rgb(210, 210, 210);
+  border-bottom: 1px solid var(--app-border);
   height: 40px; /* 固定高度，与设计保持一致 */
   margin: 0;
   padding: 0 20px; /* 水平内边距，垂直内边距为 0 */
@@ -555,10 +596,10 @@ onUnmounted(() => {
 }
 
 .title {
-  font-family: "Helvetica Neue", Arial, sans-serif;
+  font-family: 'Helvetica Neue', Arial, sans-serif;
   font-size: 16px;
   font-weight: 600;
-  color: #333;
+  color: var(--app-text);
 }
 
 .card-actions {
@@ -571,19 +612,19 @@ onUnmounted(() => {
 .remove-btn,
 .fullscreen-btn {
   padding: 0;
-  color: #909399;
+  color: var(--app-text-muted);
 }
 
 .detach-btn:hover {
-  color: #409EFF;
+  color: var(--el-color-primary);
 }
 
 .remove-btn:hover {
-  color: #F56C6C;
+  color: var(--el-color-danger);
 }
 
 .fullscreen-btn:hover {
-  color: #67C23A;
+  color: var(--el-color-success);
 }
 
 /* 调整 resizer 位置 */
@@ -613,8 +654,8 @@ onUnmounted(() => {
   left: 0;
   right: 0;
   bottom: 0;
-  background-color: rgba(64, 158, 255, 0.3);
-  border: 2px dashed #409EFF;
+  background-color: color-mix(in srgb, var(--el-color-primary) 24%, transparent);
+  border: 2px dashed var(--el-color-primary);
   display: flex;
   align-items: center;
   justify-content: center;

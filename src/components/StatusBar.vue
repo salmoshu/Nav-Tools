@@ -1,5 +1,5 @@
 <template>
-  <div 
+  <div
     class="statusbar"
     :class="[`statusbar-${position}`, { 'statusbar-dragging': isDragging }]"
     :style="statusbarStyle"
@@ -7,46 +7,53 @@
   >
     <div class="statusbar-handle">
       <span class="statusbar-title">Status View</span>
-      <el-button
-        type="text"
-        @click="showStatusBar = false"
-        class="remove-btn"
-        title="移除卡片"
-      >
+      <el-button type="text" @click="showStatusBar = false" class="remove-btn" title="移除卡片">
         <el-icon><Close /></el-icon>
       </el-button>
     </div>
     <div class="statusbar-content">
-      <div v-for="(statusValue, statusName) in getMonitorStatus()" :key="statusName" class="status-item">
+      <div v-for="(statusValue, statusName) in monitorStatus" :key="statusName" class="status-item">
         <div class="status-item-row">
           <!-- 为字段名添加点击进入编辑模式的功能 -->
-          <span 
-            class="status-label"
-            @click="showComputedStatusDialog(statusName)"
-          >{{ statusName }}</span>
-          <div style="display: flex; align-items: center; gap: 8px;">
+          <span class="status-label" @click="showComputedStatusDialog(statusName)">{{
+            statusName
+          }}</span>
+          <div style="display: flex; align-items: center; gap: 8px">
             <!-- 为值添加点击进入编辑模式的功能 -->
-            <span 
-              class="status-indicator" 
+            <span
+              class="status-indicator"
               :style="getStatusStyle(statusValue)"
               @click="showComputedStatusDialog(statusName)"
-            >{{ getStatusValue(statusValue) }}</span>
+              >{{ getStatusValue(statusValue) }}</span
+            >
             <!-- 只为自定义属性显示删除按钮 -->
-            <template v-if="showComputedStatus && 
-                          flowStore.customStatusConfigs.some(config => config.fieldName === statusName) &&
-                          (!flowData.value || typeof flowData.value !== 'object' || !('rawDataKeys' in flowData.value) || !Array.isArray(flowData.value.rawDataKeys) || !flowData.value.rawDataKeys.includes(statusName))">
-              <el-button 
-                type="text" 
-                size="small" 
+            <template
+              v-if="
+                showComputedStatus &&
+                flowStore.customStatusConfigs.some((config) => config.fieldName === statusName) &&
+                (!flowData.value ||
+                  typeof flowData.value !== 'object' ||
+                  !('rawDataKeys' in flowData.value) ||
+                  !Array.isArray(flowData.value.rawDataKeys) ||
+                  !flowData.value.rawDataKeys.includes(statusName))
+              "
+            >
+              <el-button
+                type="text"
+                size="small"
                 @click="deleteCustomStatus(statusName)"
                 title="删除"
-                style="color: #f56c6c; padding: 0; min-width: 20px;"
+                class="delete-status-btn"
               >
                 <el-icon><Delete /></el-icon>
               </el-button>
             </template>
           </div>
         </div>
+      </div>
+      <div v-if="!hasMonitorStatus" class="status-empty">
+        <span>暂无状态数据</span>
+        <small>连接数据源后将在此显示</small>
       </div>
       <div v-if="showComputedStatus">
         <div class="computed-section">
@@ -58,11 +65,10 @@
       </div>
     </div>
     <div class="statusbar-dock-zones" v-if="isDragging && activeDockZone">
-      <div 
+      <div
         :class="['dock-zone', `dock-zone-${activeDockZone}`]"
         :style="getDockZoneStyle(activeDockZone)"
-      >
-      </div>
+      ></div>
     </div>
   </div>
 
@@ -78,9 +84,9 @@
       <div class="available-fields">
         <h4>可用字段</h4>
         <div class="fields-list">
-          <div 
-            v-for="field in availableFields" 
-            :key="field" 
+          <div
+            v-for="field in availableFields"
+            :key="field"
             class="field-item"
             @click="selectField(field)"
           >
@@ -88,24 +94,24 @@
           </div>
         </div>
       </div>
-      
+
       <!-- 配置区域 -->
       <div class="config-section">
         <!-- 表单内容保持不变，但根据编辑模式使用不同的数据 -->
         <el-form :model="isEditMode ? editStatusConfig : newStatusConfig" label-width="80px">
           <el-form-item label="字段名" prop="fieldName" :disabled="isEditMode">
             <!-- 编辑模式 -->
-            <el-input 
-              v-if="isEditMode" 
-              v-model="editStatusConfig.fieldName" 
-              placeholder="选择或输入字段名" 
+            <el-input
+              v-if="isEditMode"
+              v-model="editStatusConfig.fieldName"
+              placeholder="选择或输入字段名"
               required
             ></el-input>
             <!-- 新增模式 -->
-            <el-input 
-              v-else 
-              v-model="newStatusConfig.fieldName" 
-              placeholder="选择或输入字段名" 
+            <el-input
+              v-else
+              v-model="newStatusConfig.fieldName"
+              placeholder="选择或输入字段名"
               :disabled="availableFields.length === 0"
               required
             ></el-input>
@@ -114,23 +120,23 @@
           <!-- 计算公式表单项 -->
           <el-form-item label="计算公式" prop="code">
             <!-- 编辑模式 -->
-            <el-input 
-              v-if="isEditMode" 
+            <el-input
+              v-if="isEditMode"
               v-show="false"
-              v-model="editStatusConfig.code" 
-              type="textarea" 
-              placeholder="请在下方编辑公式" 
+              v-model="editStatusConfig.code"
+              type="textarea"
+              placeholder="请在下方编辑公式"
               :rows="1"
               readonly
               required
             ></el-input>
             <!-- 新增模式 -->
-            <el-input 
-              v-else 
+            <el-input
+              v-else
               v-show="false"
-              v-model="newStatusConfig.code" 
-              type="textarea" 
-              placeholder="请在下方编辑公式" 
+              v-model="newStatusConfig.code"
+              type="textarea"
+              placeholder="请在下方编辑公式"
               :rows="1"
               :disabled="availableFields.length === 0"
               readonly
@@ -143,23 +149,23 @@
               说明：直接使用字段名访问数据（如camera_angle），支持常用数学函数或常量（如abs、sqrt、sin、cos、max、min、PI、E等）
             </div>
           </el-form-item>
-          
+
           <!-- 小数位数表单项 -->
           <el-form-item label="小数位数" prop="decimalPlaces">
             <!-- 编辑模式 -->
-            <el-input-number 
-              v-if="isEditMode" 
-              v-model="editStatusConfig.decimalPlaces" 
-              :min="0" 
-              :max="10" 
+            <el-input-number
+              v-if="isEditMode"
+              v-model="editStatusConfig.decimalPlaces"
+              :min="0"
+              :max="10"
               :step="1"
             ></el-input-number>
             <!-- 新增模式 -->
-            <el-input-number 
-              v-else 
-              v-model="newStatusConfig.decimalPlaces" 
-              :min="0" 
-              :max="10" 
+            <el-input-number
+              v-else
+              v-model="newStatusConfig.decimalPlaces"
+              :min="0"
+              :max="10"
               :step="1"
               :disabled="availableFields.length === 0"
             ></el-input-number>
@@ -169,24 +175,42 @@
           <!-- 颜色选择功能以后再增加 -->
           <el-form-item v-if="false" label="颜色" prop="color">
             <!-- 编辑模式 -->
-            <el-color-picker 
-              v-if="isEditMode" 
-              v-model="editStatusConfig.color" 
+            <el-color-picker
+              v-if="isEditMode"
+              v-model="editStatusConfig.color"
               show-alpha
-              :predefine="['#ff4500', '#ff8c00', '#ffd700', '#90ee90', '#00ced1', '#1e90ff', '#c71585', '#2c3e50']"
+              :predefine="[
+                '#ff4500',
+                '#ff8c00',
+                '#ffd700',
+                '#90ee90',
+                '#00ced1',
+                '#1e90ff',
+                '#c71585',
+                '#2c3e50',
+              ]"
             ></el-color-picker>
             <!-- 新增模式 -->
-            <el-color-picker 
-              v-else 
-              v-model="newStatusConfig.color" 
+            <el-color-picker
+              v-else
+              v-model="newStatusConfig.color"
               show-alpha
-              :predefine="['#ff4500', '#ff8c00', '#ffd700', '#90ee90', '#00ced1', '#1e90ff', '#c71585', '#2c3e50']"
+              :predefine="[
+                '#ff4500',
+                '#ff8c00',
+                '#ffd700',
+                '#90ee90',
+                '#00ced1',
+                '#1e90ff',
+                '#c71585',
+                '#2c3e50',
+              ]"
             ></el-color-picker>
           </el-form-item>
         </el-form>
       </div>
     </div>
-    
+
     <!-- 对话框底部的操作按钮 -->
     <template #footer>
       <span class="dialog-footer">
@@ -198,19 +222,41 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, inject, watch, type Ref } from 'vue' 
-import { editorRef, isEditMode, showStatusBar, newStatusConfig, editStatusConfig, getMonitorStatus, createCodeEditor } from '@/composables/useStatusManager'
-import { navMode } from '@/settings/config'
+import { ref, computed, onMounted, onUnmounted, inject, watch, type Ref } from 'vue'
+import {
+  editorRef,
+  isEditMode,
+  showStatusBar,
+  newStatusConfig,
+  editStatusConfig,
+  getMonitorStatus,
+  createCodeEditor,
+} from '@/composables/useStatusManager'
+import { useApplicationSelector } from '@/composables/useApplicationSelector'
 import { useFlow } from '@/composables/flow/useFlow'
 import { useFlowStore } from '@/stores/flow'
 // 4. 导入需要的图标
 import { Plus, Close, Delete } from '@element-plus/icons-vue'
-import { ElMessage, ElDialog, ElButton, ElInput, ElForm, ElFormItem, ElColorPicker, ElInputNumber, ElMessageBox } from 'element-plus'
+import {
+  ElMessage,
+  ElDialog,
+  ElButton,
+  ElInput,
+  ElForm,
+  ElFormItem,
+  ElColorPicker,
+  ElInputNumber,
+  ElMessageBox,
+} from 'element-plus'
+
+const { activeDataModes } = useApplicationSelector()
+const monitorStatus = computed(() => getMonitorStatus())
+const hasMonitorStatus = computed(() => Object.keys(monitorStatus.value).length > 0)
 
 // 添加编辑自定义状态的方法
 const editCustomStatus = (fieldName: string) => {
   // 查找对应的自定义配置
-  const config = flowStore.customStatusConfigs.find(c => c.fieldName === fieldName)
+  const config = flowStore.customStatusConfigs.find((c) => c.fieldName === fieldName)
   if (config) {
     // 复制配置到编辑对象
     editStatusConfig.value = { ...config }
@@ -220,16 +266,24 @@ const editCustomStatus = (fieldName: string) => {
 }
 
 const showComputedStatus = computed(() => {
-  return navMode.funcMode === 'flow'
+  return activeDataModes.value.includes('flow')
 })
 
-const showComputedStatusDialog = (statusName: string)=> {
-  return showComputedStatus && flowStore.customStatusConfigs.some(config => config.fieldName === statusName) && (!flowData.value || typeof flowData.value !== 'object' || !('rawDataKeys' in flowData.value) || !Array.isArray(flowData.value.rawDataKeys) || !flowData.value.rawDataKeys.includes(statusName)) ? editCustomStatus(statusName) : undefined
+const showComputedStatusDialog = (statusName: string) => {
+  return showComputedStatus.value &&
+    flowStore.customStatusConfigs.some((config) => config.fieldName === statusName) &&
+    (!flowData.value ||
+      typeof flowData.value !== 'object' ||
+      !('rawDataKeys' in flowData.value) ||
+      !Array.isArray(flowData.value.rawDataKeys) ||
+      !flowData.value.rawDataKeys.includes(statusName))
+    ? editCustomStatus(statusName)
+    : undefined
 }
 
 const commonStyle = {
   trueStyle: 'color: #00b894; background: rgba(0, 184, 148, 0.1); font-weight: 700;',
-  falseStyle: 'color: #ff6b6b; background: rgba(255, 107, 107, 0.1); font-weight: 700;'
+  falseStyle: 'color: #ff6b6b; background: rgba(255, 107, 107, 0.1); font-weight: 700;',
 }
 
 const getStatusStyle = (status: any) => {
@@ -258,13 +312,15 @@ const showAddDialog = ref(false)
 const availableFields = computed(() => {
   // 获取flowData中除了元数据外的所有数组字段
   const fields: string[] = []
-  Object.keys(flowData.value).forEach(key => {
-    if (key !== 'plotTime' && 
-        key !== 'timestamp' && 
-        key !== 'isBatchData' && 
-        key !== 'rawString' && 
-        key !== 'rawDataKeys' &&
-        Array.isArray(flowData.value[key])) {
+  Object.keys(flowData.value).forEach((key) => {
+    if (
+      key !== 'plotTime' &&
+      key !== 'timestamp' &&
+      key !== 'isBatchData' &&
+      key !== 'rawString' &&
+      key !== 'rawDataKeys' &&
+      Array.isArray(flowData.value[key])
+    ) {
       fields.push(key)
     }
   })
@@ -276,7 +332,7 @@ const selectField = (field: string) => {
 }
 
 const addNewStatus = () => {
-  let config;
+  let config
   if (isEditMode.value && editStatusConfig.value) {
     // 编辑模式
     config = editStatusConfig.value
@@ -304,7 +360,11 @@ const addNewStatus = () => {
       return
     }
 
-    if (flowData.value && flowData.value.rawDataKeys && flowData.value.rawDataKeys.includes(newStatusConfig.value.fieldName)) {
+    if (
+      flowData.value &&
+      flowData.value.rawDataKeys &&
+      flowData.value.rawDataKeys.includes(newStatusConfig.value.fieldName)
+    ) {
       ElMessage({
         message: `自定义字段名称与原始字段名重复`,
         type: 'error',
@@ -319,7 +379,7 @@ const addNewStatus = () => {
       decimalPlaces: newStatusConfig.value.decimalPlaces,
       color: newStatusConfig.value.color,
       isCodeDefinition: true,
-      code: newStatusConfig.value.code
+      code: newStatusConfig.value.code,
     }
   }
 
@@ -329,7 +389,7 @@ const addNewStatus = () => {
     decimalPlaces: config.decimalPlaces,
     color: config.color,
     isCodeDefinition: config.isCodeDefinition !== false,
-    code: config.code
+    code: config.code,
   })
 
   // 显示成功消息
@@ -339,7 +399,7 @@ const addNewStatus = () => {
     placement: 'bottom-right',
     offset: 50,
   })
-  
+
   // 关闭对话框并重置
   showAddDialog.value = false
   resetDialog()
@@ -355,7 +415,7 @@ const resetDialog = () => {
       fieldName: '',
       decimalPlaces: 2,
       color: '#2c3e50',
-      code: ''
+      code: '',
     }
   }
   showAddDialog.value = false
@@ -363,33 +423,31 @@ const resetDialog = () => {
 
 const deleteCustomStatus = (fieldName: string) => {
   // 弹出确认对话框
-  ElMessageBox.confirm(
-    `确定要删除自定义属性 "${fieldName}" 吗？`,
-    '确认删除',
-    {
-      confirmButtonText: '确定',
-      cancelButtonText: '取消',
-      type: 'warning'
-    }
-  ).then(() => {
-    // 调用store的方法删除配置
-    flowStore.removeCustomStatus(fieldName)
-    // 显示成功消息
-    ElMessage({
-      message: `自定义属性删除成功`,
-      type: 'success',
-      placement: 'bottom-right',
-      offset: 50,
-    })
-  }).catch(() => {
-    // 用户取消删除
-    ElMessage({
-      message: `已取消删除`,
-      type: 'info',
-      placement: 'bottom-right',
-      offset: 50,
-    })
+  ElMessageBox.confirm(`确定要删除自定义属性 "${fieldName}" 吗？`, '确认删除', {
+    confirmButtonText: '确定',
+    cancelButtonText: '取消',
+    type: 'warning',
   })
+    .then(() => {
+      // 调用store的方法删除配置
+      flowStore.removeCustomStatus(fieldName)
+      // 显示成功消息
+      ElMessage({
+        message: `自定义属性删除成功`,
+        type: 'success',
+        placement: 'bottom-right',
+        offset: 50,
+      })
+    })
+    .catch(() => {
+      // 用户取消删除
+      ElMessage({
+        message: `已取消删除`,
+        type: 'info',
+        placement: 'bottom-right',
+        offset: 50,
+      })
+    })
 }
 
 const dockWidth = 200
@@ -406,13 +464,13 @@ const emit = defineEmits<{
 const originalState = ref({
   x: 0,
   y: 0,
-  position: 'right' as const
+  position: 'right' as const,
 })
 
 const statusbarStyle = computed(() => {
   return {
     left: `${statusbarRect.value.x}px`,
-    top: `${statusbarRect.value.y}px`
+    top: `${statusbarRect.value.y}px`,
   }
 })
 
@@ -420,7 +478,7 @@ const getDockZoneStyle = (zone: 'left' | 'right') => {
   const windowWidth = window.innerWidth
   const windowHeight = window.innerHeight
   const toolbarWidth = toolbarSize?.value?.width || 40
-  
+
   switch (zone) {
     case 'left':
       // 当toolbar也在左边时，dock-zone应该从toolbar右侧开始
@@ -429,7 +487,7 @@ const getDockZoneStyle = (zone: 'left' | 'right') => {
         top: '0px',
         left: `${leftOffset}px`,
         width: `${dockWidth}px`,
-        height: `${windowHeight}px`
+        height: `${windowHeight}px`,
       }
     case 'right':
       // 当toolbar也在右边时，dock-zone应该从toolbar左侧开始
@@ -438,7 +496,7 @@ const getDockZoneStyle = (zone: 'left' | 'right') => {
         top: '0px',
         left: `${windowWidth - dockWidth - rightOffset}px`,
         width: `${dockWidth}px`,
-        height: `${windowHeight}px`
+        height: `${windowHeight}px`,
       }
     default:
       return {}
@@ -455,13 +513,13 @@ const startDrag = (event: MouseEvent) => {
   originalState.value = {
     x: statusbarRect.value.x,
     y: statusbarRect.value.y,
-    position: position.value as typeof originalState.value.position
+    position: position.value as typeof originalState.value.position,
   }
 
   const rect = (event.currentTarget as HTMLElement).getBoundingClientRect()
   dragOffset.value = {
     x: event.clientX - rect.left,
-    y: event.clientY - rect.top
+    y: event.clientY - rect.top,
   }
 
   document.addEventListener('mousemove', handleDrag)
@@ -472,7 +530,7 @@ const stopDrag = () => {
   if (!isDragging.value) return
 
   isDragging.value = false
-  
+
   const threshold = 50
   const windowWidth = window.innerWidth
   const x = statusbarRect.value.x
@@ -483,7 +541,7 @@ const stopDrag = () => {
   // 只考虑左右两侧的吸附
   const distances = [
     { zone: 'left' as const, distance: x },
-    { zone: 'right' as const, distance: windowWidth - x - dockWidth }
+    { zone: 'right' as const, distance: windowWidth - x - dockWidth },
   ]
 
   let minDistance = Infinity
@@ -502,7 +560,7 @@ const stopDrag = () => {
   } else {
     statusbarRect.value = {
       x: originalState.value.x,
-      y: originalState.value.y
+      y: originalState.value.y,
     }
     position.value = originalState.value.position
     emit('positionChange', originalState.value.position)
@@ -530,7 +588,7 @@ const handleDrag = (event: MouseEvent) => {
 
   const distances = [
     { zone: 'left', distance: x },
-    { zone: 'right', distance: windowWidth - x - dockWidth }
+    { zone: 'right', distance: windowWidth - x - dockWidth },
   ]
 
   distances.forEach(({ zone, distance }) => {
@@ -545,7 +603,7 @@ const handleDrag = (event: MouseEvent) => {
 
 // 注入工具栏位置信息
 const toolbarPosition = inject<Ref<'top' | 'right' | 'bottom' | 'left'>>('toolbarPosition')
-const toolbarSize = inject<Ref<{width: number, height: number}>>('toolbarSize')
+const toolbarSize = inject<Ref<{ width: number; height: number }>>('toolbarSize')
 
 // 计算状态栏高度（考虑工具栏位置）
 const statusbarHeight = computed(() => {
@@ -597,7 +655,7 @@ const snapToEdge = () => {
       }
       break
   }
-  
+
   emit('positionChange', position.value)
 }
 
@@ -606,7 +664,7 @@ const snapToEdge = () => {
  */
 import { addMonacoWords } from '@/composables/useStatusManager'
 watch(availableFields, (newFields) => {
-  newFields.forEach(field => {
+  newFields.forEach((field) => {
     addMonacoWords(field)
   })
 })
@@ -618,11 +676,15 @@ function createCodeEditor1() {
 onMounted(() => {
   snapToEdge()
   window.addEventListener('resize', snapToEdge)
-  
+
   // 监听工具栏位置变化
-  watch([toolbarPosition, toolbarSize], () => {
-    snapToEdge()
-  }, { immediate: true })
+  watch(
+    [toolbarPosition, toolbarSize],
+    () => {
+      snapToEdge()
+    },
+    { immediate: true },
+  )
 })
 
 onUnmounted(() => {
@@ -635,55 +697,54 @@ onUnmounted(() => {
 <style scoped>
 .statusbar {
   position: fixed;
-  background-color: #ffffff;
+  color: var(--app-text);
+  background-color: var(--app-surface);
   display: flex;
   flex-direction: column;
   align-items: center;
   z-index: 999;
-  border: 3px solid rgb(210, 210, 210);
-  border-top: 2px solid rgb(210, 210, 210);
+  border: 1px solid var(--app-border);
   border-radius: 0;
   padding: 0;
   margin: 0;
   width: 200px;
   height: 100vh;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-family:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   overflow: auto;
-  user-select: none;        /* 现代浏览器 */
-  -webkit-user-select: none;/* Safari */
-  -moz-user-select: none;   /* Firefox */
-  -ms-user-select: none;    /* IE11/Edge 旧版 */
-}
-
-.statusbar:hover {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+  user-select: none; /* 现代浏览器 */
+  -webkit-user-select: none; /* Safari */
+  -moz-user-select: none; /* Firefox */
+  -ms-user-select: none; /* IE11/Edge 旧版 */
 }
 
 .statusbar-left {
   left: 0;
   top: v-bind(statusbarTop);
   border-radius: 0;
-  height: v-bind(statusbarHeight);
+  height: calc(v-bind(statusbarHeight) - var(--app-header-height));
+  margin-top: var(--app-header-height);
 }
 
 .statusbar-right {
   right: 0;
   top: v-bind(statusbarTop);
   border-radius: 0;
-  height: v-bind(statusbarHeight);
+  height: calc(v-bind(statusbarHeight) - var(--app-header-height));
+  margin-top: var(--app-header-height);
 }
 
 .statusbar-handle {
-  font-family: "Helvetica Neue", Arial, sans-serif;
-  font-size: 16px;
+  font-family: 'Helvetica Neue', Arial, sans-serif;
+  font-size: 14px;
   font-weight: 600;
-  color: #333;
+  color: var(--app-text);
   cursor: grab;
   padding: 0 8px;
   margin: 0 auto;
   text-align: center;
-  background-color: #f8f9fa;
-  border-bottom: 2px solid #dee2e6;
+  background-color: var(--app-surface-muted);
+  border-bottom: 1px solid var(--app-border);
   width: 100%;
   height: 40px;
   box-sizing: border-box;
@@ -703,12 +764,31 @@ onUnmounted(() => {
   box-sizing: border-box;
 }
 
+.status-empty {
+  display: grid;
+  place-items: center;
+  gap: 4px;
+  min-height: 108px;
+  padding: 12px;
+  color: var(--app-text-muted);
+  text-align: center;
+}
+
+.status-empty span {
+  color: var(--app-text-secondary);
+  font-size: 13px;
+}
+
+.status-empty small {
+  font-size: 11px;
+}
+
 .statusbar-content h3 {
   margin: 0;
   padding: 4px 0;
   font-size: 12px;
   text-align: center;
-  border-bottom: 1px solid #34495e;
+  border-bottom: 1px solid var(--app-border-strong);
   margin-bottom: 4px;
 }
 
@@ -717,18 +797,16 @@ onUnmounted(() => {
   flex-direction: column;
   align-items: center;
   padding: 4px;
-  transition: all 0.3s ease;
+  transition: background-color 140ms ease;
   margin: 4px 0;
 }
 
 .status-item:hover {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
-  background: rgba(233, 236, 239, 0.8);
-  transform: translateY(-2px);
+  background: var(--app-hover);
 }
 
 .status-label {
-  color: #6c757d;
+  color: var(--app-text-muted);
   font-weight: 600;
   font-size: 12px;
   line-height: 1.5;
@@ -738,11 +816,10 @@ onUnmounted(() => {
 }
 
 .status-indicator {
-  color: #2c3e50;
+  color: var(--app-text);
   font-weight: 600;
   font-size: 14px;
   padding: 4px 8px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
   box-sizing: border-box;
   text-align: right;
   flex-grow: 1;
@@ -774,12 +851,12 @@ onUnmounted(() => {
 
 .dock-zone {
   position: fixed;
-  background: rgba(52, 152, 219, 0.2);
-  border: 2px dashed #3498db;
+  background: color-mix(in srgb, var(--el-color-primary) 18%, transparent);
+  border: 2px dashed var(--el-color-primary);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #3498db;
+  color: var(--el-color-primary);
   font-size: 12px;
   font-weight: bold;
   z-index: 999;
@@ -788,7 +865,7 @@ onUnmounted(() => {
 }
 
 .dock-zone:hover {
-  background: rgba(52, 152, 219, 0.4);
+  background: color-mix(in srgb, var(--el-color-primary) 30%, transparent);
 }
 
 .statusbar-title {
@@ -796,7 +873,13 @@ onUnmounted(() => {
 }
 
 .remove-btn {
-  color: #6c757d;
+  color: var(--app-text-muted);
+}
+
+.delete-status-btn {
+  min-width: 20px;
+  padding: 0;
+  color: var(--el-color-danger);
 }
 
 /* 计算属性区域样式 */
@@ -805,7 +888,7 @@ onUnmounted(() => {
   justify-content: space-between;
   align-items: center;
   padding: 8px;
-  background-color: #f8f9fa;
+  background-color: var(--app-surface-muted);
   border-radius: 4px;
   margin-top: 8px;
 }
@@ -837,14 +920,14 @@ onUnmounted(() => {
   max-height: 200px;
   overflow-y: auto;
   padding: 8px;
-  background-color: #f8f9fa;
+  background-color: var(--app-surface-muted);
   border-radius: 4px;
 }
 
 .field-item {
   padding: 6px 12px;
-  background-color: #fff;
-  border: 1px solid #dee2e6;
+  background-color: var(--app-surface);
+  border: 1px solid var(--app-border);
   border-radius: 4px;
   cursor: pointer;
   transition: all 0.2s;
@@ -852,7 +935,7 @@ onUnmounted(() => {
 }
 
 .field-item:hover {
-  background-color: #e3f2fd;
+  background-color: color-mix(in srgb, var(--el-color-primary) 12%, var(--app-surface));
   border-color: #3498db;
 }
 
@@ -863,7 +946,7 @@ onUnmounted(() => {
 .code-editor-container {
   width: 100%;
   height: 100px;
-  border: 1px solid #dcdfe6;
+  border: 1px solid var(--app-border);
   border-radius: 4px;
   margin-top: 10px;
   padding-left: 10px;

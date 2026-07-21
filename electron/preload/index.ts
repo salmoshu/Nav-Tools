@@ -1,18 +1,37 @@
-import { ipcRenderer, contextBridge } from 'electron'
+import { ipcRenderer, contextBridge, webUtils } from 'electron'
 
 // --------- Expose some API to the Renderer process ---------
 contextBridge.exposeInMainWorld('electronAPI', {
   getAppVersion: () => ipcRenderer.invoke('get-app-version'),
+  getPathForFile: (file: File) => webUtils.getPathForFile(file),
+  getWindowState: () => ipcRenderer.invoke('window-get-state'),
+  minimizeWindow: () => ipcRenderer.invoke('window-minimize'),
+  toggleMaximizeWindow: () => ipcRenderer.invoke('window-toggle-maximize'),
+  toggleAlwaysOnTop: () => ipcRenderer.invoke('window-toggle-always-on-top'),
+  restoreDetachedPanel: () => ipcRenderer.invoke('window-restore-detached-panel'),
+  closeWindow: () => ipcRenderer.invoke('window-close'),
+  startWindowResize: (edge: string) => ipcRenderer.invoke('window-resize-start', edge),
+  stopWindowResize: () => ipcRenderer.invoke('window-resize-stop'),
 })
+const listenerMap = new Map<string, Map<Function, (...args: unknown[]) => void>>()
 
 contextBridge.exposeInMainWorld('ipcRenderer', {
   on(...args: Parameters<typeof ipcRenderer.on>) {
     const [channel, listener] = args
-    return ipcRenderer.on(channel, (event, ...args) => listener(event, ...args))
+    const wrapped = (event: unknown, ...listenerArgs: unknown[]) => listener(event as never, ...listenerArgs)
+    const channelListeners = listenerMap.get(channel) ?? new Map()
+    channelListeners.set(listener, wrapped)
+    listenerMap.set(channel, channelListeners)
+    ipcRenderer.on(channel, wrapped)
   },
   off(...args: Parameters<typeof ipcRenderer.off>) {
-    const [channel, ...omit] = args
-    return ipcRenderer.off(channel, ...omit)
+    const [channel, listener] = args
+    const channelListeners = listenerMap.get(channel)
+    const wrapped = channelListeners?.get(listener)
+    if (wrapped) {
+      ipcRenderer.off(channel, wrapped)
+      channelListeners?.delete(listener)
+    }
   },
   send(...args: Parameters<typeof ipcRenderer.send>) {
     const [channel, ...omit] = args

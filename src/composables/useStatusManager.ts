@@ -1,10 +1,11 @@
-import { ref } from "vue";
+import { nextTick, ref, watch } from "vue";
 import { useGnssStore } from "@/stores/gnss";
-import { useFollowStore as useFollowsimStore } from "@/stores/followsim";
-import { useUltrasonicStore } from "@/stores/ultrasonic";
-import { navMode } from "@/settings/config";
-// import { useDemo1Store } from "@/stores/demo1";
 import { useFlowStore } from "@/stores/flow";
+import { useApplicationSelector } from '@/composables/useApplicationSelector'
+import { useTheme } from '@/composables/useTheme'
+
+const { activeDataModes } = useApplicationSelector()
+const { resolvedTheme } = useTheme()
 
 /**
  * 1. 状态管理
@@ -20,44 +21,31 @@ const newStatusConfig = ref({
 });
 
 function getMonitorStatus() {
-  const funcMode = navMode.funcMode
-  const result = ref<Record<string, any>>({})
-  switch (funcMode) {
-    case 'flow':
-      const flowStore = useFlowStore();
-      result.value = flowStore.status
-      break;
-    case 'ultrasonic':
-      const ultrasonicStore = useUltrasonicStore()
-      result.value = ultrasonicStore.status
-      break;
-    case 'gnss':
-      const gnssStore = useGnssStore()
-      result.value = gnssStore.status
-      break;
-    case 'followsim':
-      const followsimStore = useFollowsimStore();
-      result.value = followsimStore.status
-      break;
-    case 'motor':
-      result.value = useFlowStore().status
-      break;
-    // case 'demo1':
-    //   const demo1Store = useDemo1Store();
-    //   result.value = demo1Store.status
-    //   break;
-    default:
-      result.value = {}
-      break;
+  const modes = activeDataModes.value
+  const uniqueStatusSources = [
+    ...(modes.some(mode => mode === 'flow' || mode === 'motor')
+      ? [{ label: 'Flow', status: useFlowStore().status }]
+      : []),
+    ...(modes.includes('gnss')
+      ? [{ label: 'GNSS', status: useGnssStore().status }]
+      : []),
+  ]
+
+  if (uniqueStatusSources.length === 1) {
+    return uniqueStatusSources[0].status
   }
-  return result.value
+
+  return Object.fromEntries(
+    uniqueStatusSources.flatMap(source =>
+      Object.entries(source.status).map(([key, value]) => [`${source.label}.${key}`, value]),
+    ),
+  )
 }
 
 /**
  * 2. 公式编辑
  */
 import * as monaco from 'monaco-editor'
-import { nextTick } from "vue";
 
 const editorRef = ref<HTMLDivElement>()   // 容器
 let editor: monaco.editor.IStandaloneCodeEditor | null = null
@@ -206,6 +194,7 @@ async function createCodeEditor() {
     scrollBeyondLastLine: false,
     lineNumbers: 'on',
     lineNumbersMinChars: 1,
+    theme: resolvedTheme.value === 'dark' ? 'vs-dark' : 'vs',
   })
   editor.setValue(initValue)
 
@@ -219,6 +208,10 @@ async function createCodeEditor() {
     }
   })
 }
+
+watch(resolvedTheme, theme => {
+  monaco.editor.setTheme(theme === 'dark' ? 'vs-dark' : 'vs')
+})
 
 export { 
   editorRef,

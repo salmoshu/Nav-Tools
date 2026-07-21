@@ -215,10 +215,11 @@ function filterConstellation(value, row) {
   flex-direction: column;
   height: 100%;
   width: 100%;
-  background-color: #f5f7fa;
+  color: var(--app-text);
+  background-color: var(--app-surface);
   border-radius: 8px;
   overflow: hidden;
-  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
+  box-shadow: 0 2px 12px 0 var(--app-shadow);
 }
 
 .snr-content {
@@ -231,7 +232,7 @@ function filterConstellation(value, row) {
 
 .snr-table-container {
   flex: 1;
-  background-color: #fff;
+  background-color: var(--app-surface);
   border-radius: 4px;
   overflow: hidden;
 }
@@ -248,11 +249,11 @@ function filterConstellation(value, row) {
 }
 
 :deep(.el-table__header-wrapper) {
-  background-color: #f8f9fa;
+  background-color: var(--app-surface-muted);
 }
 
 :deep(.el-table__row:hover) {
-  background-color: #f5f7fa;
+  background-color: var(--app-hover);
 }
 
 /* 全屏模式下表格样式优化 */

@@ -1,42 +1,83 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
+import AppHeader from './components/AppHeader.vue'
+import WindowResizeHandles from './components/WindowResizeHandles.vue'
 import Dashboard from './components/Dashboard.vue'
 import CardWindow from './components/CardWindow.vue'
+import emitter from '@/hooks/useMitt'
 
-const isCardWindow = computed(() => {
-  return window.location.hash.startsWith('#card/')
+const maximized = ref(false)
+const isCardWindow = computed(() => window.location.hash.startsWith('#card/'))
+
+const applicationId = computed(() => {
+  const match = window.location.hash.match(/^#app\/([^/?]+)/)
+  return match ? decodeURIComponent(match[1]) : undefined
 })
+
+const contextTitle = computed(() => {
+  if (isCardWindow.value) {
+    try {
+      const payload = JSON.parse(decodeURIComponent(window.location.hash.slice('#card/'.length)))
+      return typeof payload.title === 'string' ? payload.title : 'Panel'
+    } catch {
+      return 'Panel'
+    }
+  }
+
+  if (applicationId.value) {
+    try {
+      const applications = JSON.parse(localStorage.getItem('nav-tools:custom-applications') ?? '[]')
+      return (
+        applications.find((application: { id?: string }) => application.id === applicationId.value)
+          ?.name ?? 'Application'
+      )
+    } catch {
+      return 'Application'
+    }
+  }
+  return undefined
+})
+
+const openApplicationSelector = () => emitter.emit('open-application-selector')
 </script>
 
 <template>
-  <CardWindow v-if="isCardWindow" />
-  <Dashboard v-else />
+  <div class="app-shell">
+    <WindowResizeHandles v-if="!maximized" />
+    <AppHeader
+      :context-title="contextTitle"
+      :show-application-selector="!isCardWindow"
+      :show-detached-controls="isCardWindow"
+      @open-application-selector="openApplicationSelector"
+      @maximized-change="maximized = $event"
+    />
+    <main class="app-content">
+      <CardWindow v-if="isCardWindow" />
+      <Dashboard v-else :initial-application-id="applicationId" />
+    </main>
+  </div>
 </template>
 
 <style>
-/* Hello World */
-/* .flex-center {
+:root {
+  --app-header-height: 38px;
+}
+
+.app-shell {
   display: flex;
-  align-items: center;
-  justify-content: center;
+  flex-direction: column;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  color: var(--app-text);
+  background: var(--app-bg);
 }
 
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: filter 300ms;
+.app-content {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
 }
-
-.logo.electron:hover {
-  filter: drop-shadow(0 0 2em #9FEAF9);
-}
-
-.logo:hover {
-  filter: drop-shadow(0 0 2em #646cffaa);
-}
-
-.logo.vue:hover {
-  filter: drop-shadow(0 0 2em #42b883aa);
-} */
 </style>

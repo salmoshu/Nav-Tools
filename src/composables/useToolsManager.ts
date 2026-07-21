@@ -1,24 +1,13 @@
-import { NavMode, appConfig, ButtonItem } from '@/settings/config'
+import { getWindowsByIds, type ButtonItem } from '@/settings/config'
 import { toolBarIcon } from '@/settings/icons'
 import emitter from '@/hooks/useMitt'
 import { ElMessage } from 'element-plus'
 
-type AppName = keyof typeof appConfig
-
-function createButtonList(appName: string, funcModeName: string) {
-  const appCfg = appConfig[appName as AppName]
-  if (!appCfg) return []
-
-  const moduleCfg = (appCfg as any)[funcModeName]
-  if (!moduleCfg) return []
-
-  // 直接使用AppMap中的actionButtons
-  return moduleCfg.actionButtons || []
-}
-
-const getButtonList = (navMode: NavMode) => {
-  return createButtonList(navMode.appMode, navMode.funcMode)
-}
+const getWindowButtonList = (windowIds: readonly string[]): ButtonItem[] =>
+  getWindowsByIds(windowIds).map(windowDefinition => ({
+    ...windowDefinition.button,
+    title: windowDefinition.title,
+  }))
 
 function upAndDown(position: string): boolean {
   if (position === 'top' || position === 'bottom') {
@@ -105,7 +94,7 @@ const handleIo = (action: string) => {
 }
 
 export {
-    getButtonList,
+    getWindowButtonList,
     upAndDown,
     getButtonText,
     getLayoutList,

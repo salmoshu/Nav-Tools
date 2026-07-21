@@ -40,9 +40,11 @@
 import { ref, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import * as echarts from 'echarts'
 import { useNmea } from '@/composables/gnss/useNmea'
+import { useTheme } from '@/composables/useTheme'
 
 // 获取卫星数据
 const { satelliteSnrData } = useNmea()
+const { chartTheme, resolvedTheme } = useTheme()
 
 // 组件状态
 const chartRef = ref(null)
@@ -120,6 +122,7 @@ function initChart() {
     // 使用nextTick确保DOM已经更新
     nextTick(() => {
       chartInstance.value = echarts.init(chartRef.value, null, { renderer: 'svg' })
+      const colors = chartTheme.value
 
       // 设置图表选项
       const option = {
@@ -130,25 +133,25 @@ function initChart() {
             const prefix = constellationPrefixes[data.constellation] || 'U'
             const color = constellationColors[data.constellation] || '#757575'
             return `
-              <div style="background-color: rgba(255, 255, 255, 0.95); border: 1px solid #e0e0e0; border-radius: 8px; padding: 12px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1); min-width: 100px; text-align: left;">
-                <div style="font-size: 16px; font-weight: bold; color: #333; margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px solid #f0f0f0;">
+              <div style="background-color: ${colors.surface}; border: 1px solid ${colors.border}; border-radius: 8px; padding: 12px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.24); min-width: 100px; text-align: left; color: ${colors.text};">
+                <div style="font-size: 16px; font-weight: bold; color: ${colors.text}; margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px solid ${colors.border};">
                   <div style="display: flex; align-items: center; margin-bottom: 5px;">
                     <div style="width: 10px; height: 10px; border-radius: 50%; background-color: ${color}; margin-right: 8px;"></div>
-                    <span style="color: #333;">${data.constellation}</span>
-                    <span style="color: #666;">(${prefix}${data.prn})</span>
+                    <span style="color: ${colors.text};">${data.constellation}</span>
+                    <span style="color: ${colors.textMuted};">(${prefix}${data.prn})</span>
                   </div>
                 </div>
                 <div style="display: flex; margin-bottom: 5px;">
-                  <span style="font-weight: 500; width: 68px; color: #555;">仰角:</span>
-                  <span style="color: #333;">${data.elevation}°</span>
+                  <span style="font-weight: 500; width: 68px; color: ${colors.textMuted};">仰角:</span>
+                  <span style="color: ${colors.text};">${data.elevation}°</span>
                 </div>
                 <div style="display: flex; margin-bottom: 5px;">
-                  <span style="font-weight: 500; width: 68px; color: #555;">方位角:</span>
-                  <span style="color: #333;">${data.azimuth}°</span>
+                  <span style="font-weight: 500; width: 68px; color: ${colors.textMuted};">方位角:</span>
+                  <span style="color: ${colors.text};">${data.azimuth}°</span>
                 </div>
                 <div style="display: flex;">
-                  <span style="font-weight: 500; width: 68px; color: #555;">SNR:</span>
-                  <span style="color: #333;">${data.snr} dB</span>
+                  <span style="font-weight: 500; width: 68px; color: ${colors.textMuted};">SNR:</span>
+                  <span style="color: ${colors.text};">${data.snr} dB</span>
                 </div>
               </div>
             `
@@ -161,7 +164,7 @@ function initChart() {
           data: [{
             name: 'sky view',
             icon: 'circle',
-            textStyle: { color: '#333' }
+            textStyle: { color: colors.text }
           }],
           bottom: 10,
           show: false,
@@ -186,12 +189,12 @@ function initChart() {
               if (value === 270) return 'W'
               return ''
             },
-            color: '#666',
+            color: colors.textMuted,
             fontSize: 12
           },
           splitLine: {
             lineStyle: {
-              color: 'rgba(211, 211, 211, 0.8)'
+              color: colors.grid
             }
           }
         },
@@ -203,18 +206,18 @@ function initChart() {
           interval: 30,
           axisLabel: {
             formatter: '{value}°',
-            color: '#666',
+            color: colors.textMuted,
             fontSize: 12
           },
           splitLine: {
             lineStyle: {
-              color: 'rgba(211, 211, 211, 0.8)'
+              color: colors.grid
             }
           },
           splitArea: {
             show: true,
             areaStyle: {
-              color: ['rgba(255, 255, 255, 0.9)', 'rgba(235, 238, 245, 0.8)']
+              color: [colors.background, colors.surfaceMuted]
             }
           }
         },
@@ -231,14 +234,14 @@ function initChart() {
               const prefix = constellationPrefixes[params.data.constellation] || 'U'
               return `${prefix}${params.data.prn}`
             },
-            color: '#333',
+            color: colors.text,
             fontSize: Math.max(6, satelliteSize.value / 3),
           },
           itemStyle: {
             color: function(params) {
               return constellationColors[params.data.constellation] || '#757575'
             },
-            borderColor: '#fff',
+            borderColor: colors.background,
             borderWidth: 1,
             opacity: 1.0
           },
@@ -328,6 +331,8 @@ watch(satelliteSnrData, () => {
   updateChart();
 }, { deep: true });
 
+watch(resolvedTheme, () => initChart())
+
 // 组件挂载时
 onMounted(() => {
   setTimeout(() => {
@@ -361,12 +366,14 @@ onUnmounted(() => {
   height: 100%;
   width: 100%;
   overflow: hidden;
+  color: var(--app-text);
+  background: var(--app-surface);
 }
 
 .control-panel {
   width: 25%;
   padding: 20px;
-  border-right: 2px solid #e6e9f0;
+  border-right: 2px solid var(--app-border);
   display: flex;
   flex-direction: column;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
@@ -377,7 +384,7 @@ onUnmounted(() => {
   width: 100%;
   min-height: 0px;
   padding: 15px;
-  background-color: #fff;
+  background-color: var(--app-surface);
 }
 
 .controls {
@@ -400,7 +407,7 @@ onUnmounted(() => {
   margin-bottom: 10px;
   font-size: 14px;
   font-weight: 500;
-  color: #333;
+  color: var(--app-text);
 }
 
 /* 滑块样式 */
@@ -410,7 +417,7 @@ onUnmounted(() => {
 }
 
 :deep(.el-slider__runway) {
-  background-color: #e4e7ed;
+  background-color: var(--app-border);
   border-radius: 4px;
 }
 
@@ -446,12 +453,12 @@ onUnmounted(() => {
 }
 
 :deep(.el-select) {
-  --el-select-border-color: #dcdfe6;
+  --el-select-border-color: var(--app-border);
   --el-select-font-size: 14px;
 }
 
 :deep(.el-select .el-input__wrapper) {
-  background-color: #fff;
+  background-color: var(--app-surface-raised);
   border: 1px solid var(--el-select-border-color);
   border-radius: 6px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
@@ -465,7 +472,7 @@ onUnmounted(() => {
 
 :deep(.el-select .el-input__inner) {
   font-size: var(--el-select-font-size);
-  color: #333;
+  color: var(--app-text);
 }
 
 :deep(.el-select .el-input__suffix) {
@@ -474,7 +481,7 @@ onUnmounted(() => {
 
 :deep(.el-select-dropdown__item) {
   font-size: 14px;
-  color: #333;
+  color: var(--app-text);
   padding: 8px 20px;
 }
 
@@ -495,7 +502,7 @@ onUnmounted(() => {
   .control-panel {
     width: 100%;
     border-right: none;
-    border-bottom: 1px solid #e6e9f0;
+    border-bottom: 1px solid var(--app-border);
   }
   .controls {
     flex-direction: column;

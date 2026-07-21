@@ -1,5 +1,6 @@
 import { ref, computed } from "vue";
 import type { Ref } from "vue";
+import { activeDataTransport } from '@/core/device/ActiveDataTransport'
 
 // 消息类型定义
 export interface ConsoleMessage {
@@ -407,8 +408,12 @@ export function useConsole(useGlobal: boolean = true): ConsoleState {
         }
       }
 
-      // 发送到主进程
-      window.ipcRenderer.send(`send-serial-${format}-data`, sendData);
+      const sendChannel = activeDataTransport.sendChannel(format)
+      if (!sendChannel) {
+        console.error('没有可用的数据连接')
+        return
+      }
+      window.ipcRenderer.send(sendChannel, sendData)
       
       // 在控制台显示发送的消息
       const timestamp = generateTimestamp();

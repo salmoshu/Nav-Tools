@@ -1,5 +1,5 @@
 <template>
-  <div 
+  <div
     class="toolbar"
     :class="[`toolbar-${position}`, { 'toolbar-dragging': isDragging }]"
     :style="toolbarStyle"
@@ -7,96 +7,108 @@
   >
     <div class="toolbar-handle">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-        <path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/>
+        <path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z" />
       </svg>
     </div>
     <div class="toolbar-content">
-      <!-- Modules: Follow/Tree/GNSS... -->
-
       <!-- IO: Input/Output -->
       <div class="toggle-switch-container">
-        <div 
-          class="toggle-switch" 
+        <div
+          class="toggle-switch"
           :class="{ 'toggle-on': deviceConnected }"
           @click="handleDeviceConnected"
           :title="deviceConnected ? '断开连接' : '连接设备'"
         >
           <div class="toggle-slider">
-            <span class="slider-icon" v-html="deviceConnected ? toolBarIcon.connected : toolBarIcon.disconnected"></span>
+            <span
+              class="slider-icon"
+              v-html="deviceConnected ? toolBarIcon.connected : toolBarIcon.disconnected"
+            ></span>
           </div>
         </div>
       </div>
-      <button 
-        v-for="item in ioList" 
+      <button
+        v-for="item in ioList"
         :key="item.msg"
-        class="toolbar-btn" 
-        @click="handleIo(item.msg); ($event.currentTarget as HTMLElement)?.blur()"
+        class="toolbar-btn"
+        @click="
+          handleIo(item.msg)
+          ;($event.currentTarget as HTMLElement)?.blur()
+        "
         :title="item.title"
-        v-html="item.icon+getButtonText(item.title, position)"
-      >
-      </button>
+        v-html="item.icon"
+      ></button>
 
-      <span v-if="upAndDown(position)" class="divider">|</span>
-      <span v-else class="divider">一</span>
-      
+      <span class="divider" aria-hidden="true"></span>
+
       <!-- Actions: Draw/Data/Config... -->
       <button
         class="toolbar-btn"
-        @click="handleStatus(); ($event.currentTarget as HTMLElement)?.blur()"
+        @click="
+          handleStatus()
+          ;($event.currentTarget as HTMLElement)?.blur()
+        "
         :title="statusBtn.title"
-        v-html="statusBtn.icon+getButtonText(statusBtn.title, position)"
-      >
-      </button>
-      <button 
-        v-for="item in handleList" 
+        v-html="statusBtn.icon"
+      ></button>
+      <button
+        v-for="item in handleList"
         :key="item.msg"
-        class="toolbar-btn" 
-        @click="handleAction(item.msg); ($event.currentTarget as HTMLElement)?.blur()" 
+        class="toolbar-btn"
+        @click="
+          handleAction(item.msg)
+          ;($event.currentTarget as HTMLElement)?.blur()
+        "
         :title="item.title"
-        v-html="item.icon+getButtonText(item.title, position)"
-      >
-      </button>
+        v-html="item.icon"
+      ></button>
 
-      <span v-if="upAndDown(position)" class="divider">|</span>
-      <span v-else class="divider">一</span>
+      <span class="divider" aria-hidden="true"></span>
 
       <!-- Layout: Edit/Save/Reset -->
       <button
         v-if="showSaveButton"
         class="toolbar-btn"
-        @click="handleLayout('save'); ($event.currentTarget as HTMLElement)?.blur()"
+        @click="
+          handleLayout('save')
+          ;($event.currentTarget as HTMLElement)?.blur()
+        "
         :title="layoutList[1].title"
-        v-html="layoutList[1].icon+getButtonText(layoutList[1].title, position)"
-      >
-      </button>
+        v-html="layoutList[1].icon"
+      ></button>
       <button
         class="toolbar-btn"
-        @click="handleLayout('auto'); ($event.currentTarget as HTMLElement)?.blur()"
+        @click="
+          handleLayout('auto')
+          ;($event.currentTarget as HTMLElement)?.blur()
+        "
         :title="layoutList[2].title"
-        v-html="layoutList[2].icon+getButtonText(layoutList[2].title, position)"
-      >
-      </button>
+        v-html="layoutList[2].icon"
+      ></button>
       <button
         class="toolbar-btn"
-        @click="handleLayout('reset'); ($event.currentTarget as HTMLElement)?.blur()"
+        @click="
+          handleLayout('reset')
+          ;($event.currentTarget as HTMLElement)?.blur()
+        "
         :title="layoutList[3].title"
-        v-html="layoutList[3].icon+getButtonText(layoutList[3].title, position)"
-      >
-      </button>
-
+        v-html="layoutList[3].icon"
+      ></button>
     </div>
     <div class="toolbar-dock-zones" v-if="isDragging && activeDockZone">
-      <div 
-        :class="['dock-zone', `dock-zone-${activeDockZone}`]" 
+      <div
+        :class="['dock-zone', `dock-zone-${activeDockZone}`]"
         :style="getDockZoneStyle(activeDockZone)"
-      >
-      </div>
+      ></div>
     </div>
   </div>
   <el-dialog
-    title="输入"
+    title="数据接入"
     v-model="showInputDialog"
-    width="30%"
+    class="data-input-dialog"
+    width="min(520px, calc(100vw - 32px))"
+    :close-on-click-modal="false"
+    align-center
   >
     <el-tabs v-model="activeTab">
       <el-tab-pane label="串口连接" name="serial">
@@ -110,7 +122,7 @@
           <el-select
             v-model="serialPort"
             placeholder="请选择串口"
-            style="flex: 1;"
+            style="flex: 1"
             @click="searchSerialPorts"
           >
             <el-option v-for="port in serialPorts" :key="port" :label="port" :value="port" />
@@ -123,33 +135,38 @@
             placeholder="请选择或输入波特率"
             filterable
             allow-create
-            style="flex: 1;"
+            style="flex: 1"
           >
             <el-option v-for="rate in baudRates" :key="rate" :label="rate" :value="rate" />
           </el-select>
         </div>
         <div class="input-group" v-if="serialAdvanced">
           <span class="input-label">数据位:</span>
-          <el-select v-model="serialDataBits" placeholder="请选择数据位" style="flex: 1;">
+          <el-select v-model="serialDataBits" placeholder="请选择数据位" style="flex: 1">
             <!-- 默认为8 -->
             <el-option v-for="bit in dataBits" :key="bit" :label="bit" :value="bit" />
           </el-select>
         </div>
         <div class="input-group" v-if="serialAdvanced">
           <span class="input-label">停止位:</span>
-          <el-select v-model="serialStopBits" placeholder="请选择停止位" style="flex: 1;">
+          <el-select v-model="serialStopBits" placeholder="请选择停止位" style="flex: 1">
             <el-option v-for="bit in stopBits" :key="bit" :label="bit" :value="bit" />
           </el-select>
         </div>
         <div class="input-group" v-if="serialAdvanced">
           <span class="input-label">校验位:</span>
-          <el-select v-model="serialParity" placeholder="请选择校验位" style="flex: 1;">
-            <el-option v-for="parity in parities" :key="parity.value" :label="parity.label" :value="parity.value" />
+          <el-select v-model="serialParity" placeholder="请选择校验位" style="flex: 1">
+            <el-option
+              v-for="parity in parities"
+              :key="parity.value"
+              :label="parity.label"
+              :value="parity.value"
+            />
           </el-select>
         </div>
         <div class="input-group">
           <span class="input-label">高级选项:</span>
-          <el-checkbox v-model="serialAdvanced" ></el-checkbox>
+          <el-checkbox v-model="serialAdvanced"></el-checkbox>
         </div>
       </el-tab-pane>
 
@@ -161,38 +178,75 @@
         </div>
       </el-tab-pane>
 
-      <el-tab-pane label="网络连接" name="network" v-if="false" :disabled="true">
+      <el-tab-pane label="网络连接" name="network">
         <div class="input-group">
-          <span class="input-label">网络地址:</span>
-          <el-input v-model="networkIp" placeholder="请输入网络连接指令" />
+          <span class="input-label">协议:</span>
+          <el-select v-model="networkProtocol" style="flex: 1">
+            <el-option label="TCP" value="tcp" />
+            <el-option label="UDP" value="udp" />
+          </el-select>
+        </div>
+        <div class="input-group">
+          <span class="input-label">{{
+            networkProtocol === 'tcp' ? '远端地址:' : '监听地址:'
+          }}</span>
+          <el-input
+            v-model="networkIp"
+            :placeholder="networkProtocol === 'tcp' ? '127.0.0.1' : '0.0.0.0'"
+          />
         </div>
         <div class="input-group">
           <span class="input-label">网络端口:</span>
-          <el-input v-model="networkPort" placeholder="请输入网络端口" />
+          <el-input-number
+            v-model="networkPort"
+            :min="1"
+            :max="65535"
+            :controls="false"
+            placeholder="请输入端口"
+            style="flex: 1; width: 100%"
+          />
         </div>
       </el-tab-pane>
-      
     </el-tabs>
     <template #footer>
+      <el-button @click="showInputDialog = false">取消</el-button>
       <el-button type="primary" @click="handleInputSubmit">确定</el-button>
     </template>
   </el-dialog>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, onUnmounted, watch, inject, type Ref } from 'vue'
-import { navMode, ButtonItem } from '@/settings/config'
+import { ref, computed, onMounted, onUnmounted, watch, inject, type Ref } from 'vue'
+import { ButtonItem } from '@/settings/config'
 import { toolBarIcon } from '@/settings/icons'
-import { getButtonList, upAndDown, getButtonText, getLayoutList, getIoList, handleIo } from '@/composables/useToolsManager'
+import {
+  getWindowButtonList,
+  getLayoutList,
+  getIoList,
+  handleIo,
+} from '@/composables/useToolsManager'
 import { showStatusBar } from '@/composables/useStatusManager'
 
 import emitter from '@/hooks/useMitt'
-import { ElDialog, ElTabs, ElTabPane, ElButton, ElSelect, ElOption, ElInput, ElCheckbox, ElIcon } from 'element-plus'
+import {
+  ElDialog,
+  ElTabs,
+  ElTabPane,
+  ElButton,
+  ElSelect,
+  ElOption,
+  ElInput,
+  ElInputNumber,
+  ElCheckbox,
+  ElIcon,
+} from 'element-plus'
 import { Refresh } from '@element-plus/icons-vue'
+import { useApplicationSelector } from '@/composables/useApplicationSelector'
 
 const ipcRenderer = window.ipcRenderer
 const position = ref<'top' | 'right' | 'bottom' | 'left'>('bottom')
 const showSaveButton = ref(false)
+const { currentApplication, currentApplicationId } = useApplicationSelector()
 
 import { useDevice } from '@/hooks/useDevice'
 
@@ -213,6 +267,7 @@ const {
   filePath,
   networkIp,
   networkPort,
+  networkProtocol,
   serialPorts,
   baudRates,
   dataBits,
@@ -220,13 +275,18 @@ const {
   parities,
   inputDialog,
   searchSerialPorts,
-  handleInputSubmit
-} = useDevice()
+  handleInputSubmit,
+} = deviceInstance
 
 // 添加triggerFileSelection函数，注意这里是const而不是sconst
 const triggerFileSelection = () => {
   selectTargetFile()
 }
+
+watch(networkProtocol, (protocol) => {
+  if (protocol === 'udp' && networkIp.value === '127.0.0.1') networkIp.value = '0.0.0.0'
+  if (protocol === 'tcp' && networkIp.value === '0.0.0.0') networkIp.value = '127.0.0.1'
+})
 
 const handleDeviceConnected = () => {
   if (deviceConnected.value === true) {
@@ -235,7 +295,7 @@ const handleDeviceConnected = () => {
     if (deviceInstance.globalDevice.value.connected === null) {
       // 如果没有设备配置，打开输入对话框
       showInputDialog.value = true
-      searchSerialPorts()
+      searchSerialPorts(true)
     } else {
       deviceInstance.openCurrDevice()
     }
@@ -251,50 +311,44 @@ const statusBtn: ButtonItem = {
   title: 'Status',
   icon: toolBarIcon.status,
   template: '', // 补充 template 属性
-  text: '',     // 补充 text 属性
+  text: '', // 补充 text 属性
 }
 
-const handleList: ButtonItem[] = reactive(
-  getButtonList(navMode) || []
-)
+const handleList = computed(() => getWindowButtonList(currentApplication.value?.windowIds ?? []))
 
 // 使用computed属性替代原来的reactive数组
 const layoutList = computed(() => getLayoutList(position.value))
 const ioList = computed(() => getIoList(position.value))
 
-watch(() => navMode.funcMode, (oldMode, newMode) => {
-  if (oldMode !== newMode) {
-    showSaveButton.value = false
-    const buttonList = getButtonList(navMode)
-  
-    ipcRenderer.send('console-to-node', ['watch:funcMode', navMode.appMode, navMode.funcMode])
-  
-    if (buttonList) {
-      handleList.splice(0, handleList.length, ...buttonList)
-    } else {
-      handleList.splice(0, handleList.length)
-    }
+watch(currentApplicationId, (newApplicationId, oldApplicationId) => {
+  if (newApplicationId === oldApplicationId) return
 
-    deviceInstance.removeCurrDevice()
-  }
+  showSaveButton.value = false
+  ipcRenderer.send('console-to-node', ['watch:application', newApplicationId])
+  deviceInstance.removeCurrDevice()
 })
 
 // 扩展事件定义
 const emit = defineEmits<{
   action: [action: string]
   positionChange: [position: 'top' | 'right' | 'bottom' | 'left']
-  funcModeChange: [mode: string] // 添加funcModeChange事件声明
 }>()
 
 const isDragging = ref(false)
 const dragOffset = ref({ x: 0, y: 0 })
 const toolbarRect = ref({ x: 0, y: 0 })
 const activeDockZone = ref<'top' | 'right' | 'bottom' | 'left' | null>(null)
+const toolbarSize = 40
+
+const getHeaderHeight = () => {
+  const value = getComputedStyle(document.documentElement).getPropertyValue('--app-header-height')
+  return Number.parseFloat(value) || 0
+}
 
 const toolbarStyle = computed(() => {
   return {
     left: `${toolbarRect.value.x}px`,
-    top: `${toolbarRect.value.y}px`
+    top: `${toolbarRect.value.y}px`,
   }
 })
 
@@ -302,44 +356,42 @@ const toolbarStyle = computed(() => {
 const getDockZoneStyle = (zone: 'top' | 'right' | 'bottom' | 'left') => {
   const windowWidth = window.innerWidth
   const windowHeight = window.innerHeight
-  const dockHeight = 40
-  const dockWidth = 40
-  const statusbarWidth = statusbarSize?.value?.width || 60
-  
+  const headerHeight = getHeaderHeight()
+
   switch (zone) {
     case 'top':
       return {
-        top: '0px',
+        top: `${headerHeight}px`,
         left: '0px',
         width: `${windowWidth}px`,
-        height: `${dockHeight}px`
+        height: `${toolbarSize}px`,
       }
     case 'right':
       // 当statusbar在右边时，dock-zone应该避开statusbar
       // const rightOffset = statusbarPosition?.value === 'right' ? statusbarWidth : 0
       return {
-        top: '0px',
+        top: `${headerHeight}px`,
         // left: `${windowWidth - dockWidth - rightOffset}px`,
-        left: `${windowWidth - dockWidth}px`,
-        width: `${dockWidth}px`,
-        height: `${windowHeight}px`
+        left: `${windowWidth - toolbarSize}px`,
+        width: `${toolbarSize}px`,
+        height: `${windowHeight - headerHeight}px`,
       }
     case 'bottom':
       return {
-        top: `${windowHeight - dockHeight}px`,
+        top: `${windowHeight - toolbarSize}px`,
         left: '0px',
         width: `${windowWidth}px`,
-        height: `${dockHeight}px`
+        height: `${toolbarSize}px`,
       }
     case 'left':
       // 当statusbar在左边时，dock-zone应该避开statusbar
       // const leftOffset = statusbarPosition?.value === 'left' ? statusbarWidth : 0
       return {
-        top: '0px',
+        top: `${headerHeight}px`,
         // left: `${leftOffset}px`,
         left: `0px`,
-        width: `${dockWidth}px`,
-        height: `${windowHeight}px`
+        width: `${toolbarSize}px`,
+        height: `${windowHeight - headerHeight}px`,
       }
     default:
       return {}
@@ -350,7 +402,7 @@ const getDockZoneStyle = (zone: 'top' | 'right' | 'bottom' | 'left') => {
 const originalState = ref({
   x: 0,
   y: 0,
-  position: 'top' as const
+  position: 'top' as const,
 })
 
 // 修改startDrag函数
@@ -365,13 +417,13 @@ const startDrag = (event: MouseEvent) => {
   originalState.value = {
     x: toolbarRect.value.x,
     y: toolbarRect.value.y,
-    position: position.value as typeof originalState.value.position
+    position: position.value as typeof originalState.value.position,
   }
 
   const rect = (event.currentTarget as HTMLElement).getBoundingClientRect()
   dragOffset.value = {
     x: event.clientX - rect.left,
-    y: event.clientY - rect.top
+    y: event.clientY - rect.top,
   }
 
   document.addEventListener('mousemove', handleDrag)
@@ -382,10 +434,11 @@ const stopDrag = () => {
   if (!isDragging.value) return
 
   isDragging.value = false
-  
+
   const threshold = 50
   const windowWidth = window.innerWidth
   const windowHeight = window.innerHeight
+  const headerHeight = getHeaderHeight()
   const x = toolbarRect.value.x
   const y = toolbarRect.value.y
 
@@ -394,10 +447,10 @@ const stopDrag = () => {
 
   // 计算最近的边缘
   const distances = [
-    { zone: 'top' as const, distance: y },
-    { zone: 'bottom' as const, distance: windowHeight - y - 50 },
-    { zone: 'left' as const, distance: x },
-    { zone: 'right' as const, distance: windowWidth - x - 50 }
+    { zone: 'top' as const, distance: Math.abs(y - headerHeight) },
+    { zone: 'bottom' as const, distance: Math.abs(windowHeight - y - toolbarSize) },
+    { zone: 'left' as const, distance: Math.abs(x) },
+    { zone: 'right' as const, distance: Math.abs(windowWidth - x - toolbarSize) },
   ]
 
   let minDistance = Infinity
@@ -416,9 +469,9 @@ const stopDrag = () => {
     snapToEdge()
   } else {
     // 恢复到拖动前的状态
-    toolbarRect.value = { 
-      x: originalState.value.x, 
-      y: originalState.value.y 
+    toolbarRect.value = {
+      x: originalState.value.x,
+      y: originalState.value.y,
     }
     position.value = originalState.value.position
     emit('positionChange', originalState.value.position)
@@ -442,15 +495,16 @@ const handleDrag = (event: MouseEvent) => {
   const threshold = 50
   const windowWidth = window.innerWidth
   const windowHeight = window.innerHeight
+  const headerHeight = getHeaderHeight()
 
   let nearestZone: 'top' | 'right' | 'bottom' | 'left' | null = null
   let minDistance = Infinity
 
   const distances = [
-    { zone: 'top', distance: y },
-    { zone: 'bottom', distance: windowHeight - y - 50 },
-    { zone: 'left', distance: x },
-    { zone: 'right', distance: windowWidth - x - 50 }
+    { zone: 'top', distance: Math.abs(y - headerHeight) },
+    { zone: 'bottom', distance: Math.abs(windowHeight - y - toolbarSize) },
+    { zone: 'left', distance: Math.abs(x) },
+    { zone: 'right', distance: Math.abs(windowWidth - x - toolbarSize) },
   ]
 
   distances.forEach(({ zone, distance }) => {
@@ -487,55 +541,59 @@ const handleLayout = (action: string) => {
 
 // 注入状态栏位置信息
 const statusbarPosition = inject<Ref<'left' | 'right'>>('statusbarPosition')
-const statusbarSize = inject<Ref<{width: number, height: number}>>('statusbarSize')
+const statusbarSize = inject<Ref<{ width: number; height: number }>>('statusbarSize')
 
 const snapToEdge = () => {
   const windowWidth = window.innerWidth
   const windowHeight = window.innerHeight
-  const statusbarWidth = statusbarSize?.value?.width || 60
+  const headerHeight = getHeaderHeight()
 
   switch (position.value) {
     case 'top':
-      toolbarRect.value = { x: 0, y: 0 }
+      toolbarRect.value = { x: 0, y: headerHeight }
       break
     case 'right':
       // 当ToolBar在右边时，紧贴屏幕右边缘
-      toolbarRect.value = { x: windowWidth - 40, y: 0 }
+      toolbarRect.value = { x: windowWidth - toolbarSize, y: headerHeight }
       break
     case 'bottom':
-      toolbarRect.value = { x: 0, y: windowHeight - 40 }
+      toolbarRect.value = { x: 0, y: windowHeight - toolbarSize }
       break
     case 'left':
       // 当ToolBar在左边时，紧贴屏幕左边缘
-      toolbarRect.value = { x: 0, y: 0 }
+      toolbarRect.value = { x: 0, y: headerHeight }
       break
   }
-  
+
   emit('positionChange', position.value)
 }
 
 function handleDeviceEvent(event: KeyboardEvent) {
   // 处理Ctrl+F快捷键 - 打开搜索框
   if ((event.ctrlKey || event.metaKey) && event.key === 'd') {
-    event.preventDefault();
-    event.stopPropagation();
+    event.preventDefault()
+    event.stopPropagation()
     handleDeviceConnected()
   }
 }
 
 onMounted(() => {
-  searchSerialPorts()
+  searchSerialPorts(true)
   emitter.on('input-event', inputDialog)
 
   snapToEdge()
   window.addEventListener('resize', snapToEdge)
   window.addEventListener('keyup', handleDeviceEvent)
-  
+
   // 监听状态栏位置变化
-  watch([statusbarPosition, statusbarSize], () => {
-    snapToEdge()
-  }, { immediate: true })
-  
+  watch(
+    [statusbarPosition, statusbarSize],
+    () => {
+      snapToEdge()
+    },
+    { immediate: true },
+  )
+
   // 添加布局更改监听
   emitter.on('layout-changed', () => {
     showSaveButton.value = true
@@ -547,7 +605,7 @@ onUnmounted(() => {
   document.removeEventListener('mouseup', stopDrag)
   window.removeEventListener('resize', snapToEdge)
   window.removeEventListener('keyup', handleDeviceEvent)
-  
+
   // 移除布局更改监听
   emitter.off('layout-changed')
 })
@@ -556,28 +614,30 @@ onUnmounted(() => {
 <style scoped>
 .toolbar {
   position: fixed;
-  background: #2c3e50;
+  color: var(--app-text-secondary);
+  background: var(--app-surface);
   display: flex;
   align-items: center;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--app-border);
+  box-shadow: 0 2px 10px var(--app-shadow);
   z-index: 1000;
   transition: none;
   padding: 0;
   margin: 0;
-  border: none;
-  user-select: none;        /* 现代浏览器 */
-  -webkit-user-select: none;/* Safari */
-  -moz-user-select: none;   /* Firefox */
-  -ms-user-select: none;    /* IE11/Edge 旧版 */
+  user-select: none; /* 现代浏览器 */
+  -webkit-user-select: none; /* Safari */
+  -moz-user-select: none; /* Firefox */
+  -ms-user-select: none; /* IE11/Edge 旧版 */
 }
 
 .toolbar-top {
-  top: 0;
+  top: var(--app-header-height, 0px);
   left: 0;
   width: 100%;
   height: 40px;
   transform: none;
   border-radius: 0;
+  border-width: 0 0 1px;
   flex-direction: row;
   padding: 0;
   margin: 0;
@@ -590,37 +650,40 @@ onUnmounted(() => {
   height: 40px;
   transform: none;
   border-radius: 0;
+  border-width: 1px 0 0;
   flex-direction: row;
   padding: 0;
   margin: 0;
 }
 
 .toolbar-left {
-  top: 0;
+  top: var(--app-header-height, 0px);
   left: 0;
   width: 40px;
-  height: 100%;
+  height: calc(100vh - var(--app-header-height, 0px));
   transform: none;
   border-radius: 0;
+  border-width: 0 1px 0 0;
   flex-direction: column;
   padding: 0;
   margin: 0;
 }
 
 .toolbar-right {
-  top: 0;
+  top: var(--app-header-height, 0px);
   right: 0;
   width: 40px;
-  height: 100%;
+  height: calc(100vh - var(--app-header-height, 0px));
   transform: none;
   border-radius: 0;
+  border-width: 0 0 0 1px;
   flex-direction: column;
   padding: 0;
   margin: 0;
 }
 
 .toolbar-handle {
-  color: #ecf0f1;
+  color: var(--app-text-muted);
   cursor: grab;
   padding: 4px;
   margin: 8px 4px;
@@ -641,9 +704,23 @@ onUnmounted(() => {
 
 .toolbar-content {
   display: flex;
+  min-width: 0;
   gap: 4px;
   font-size: 12px;
-  font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif
+  font-family: inherit;
+  align-items: center;
+}
+
+.toolbar-top .toolbar-content,
+.toolbar-bottom .toolbar-content {
+  flex: 1;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.toolbar-top .toolbar-content::-webkit-scrollbar,
+.toolbar-bottom .toolbar-content::-webkit-scrollbar {
+  display: none;
 }
 
 .toolbar-left .toolbar-content,
@@ -652,25 +729,51 @@ onUnmounted(() => {
 }
 
 .toolbar-btn {
-  background: #34495e;
+  width: 32px;
+  height: 32px;
+  background: transparent;
   border: none;
   border-radius: 4px;
-  color: #ecf0f1;
-  padding: 6px;
+  color: var(--app-text-secondary);
+  padding: 5px;
   cursor: pointer;
-  transition: all 0.2s;
+  transition:
+    color 140ms ease,
+    background-color 140ms ease;
   display: flex;
   align-items: center;
   justify-content: center;
   overflow: hidden;
 }
 
+.toolbar-btn :deep(svg) {
+  display: block;
+  width: 18px !important;
+  height: 18px !important;
+  color: inherit;
+}
+
+.toolbar-btn :deep(svg path),
+.toolbar-btn :deep(svg circle),
+.toolbar-btn :deep(svg rect),
+.toolbar-btn :deep(svg polygon),
+.toolbar-btn :deep(svg polyline) {
+  fill: currentColor !important;
+  opacity: 1;
+}
+
+.toolbar-btn :deep(svg [fill='none']) {
+  fill: none !important;
+  stroke: currentColor !important;
+}
+
 .divider {
-  border: none;
-  border-radius: 4px;
-  color: #ecf0f1;
-  padding: 6px;
-  cursor: pointer;
+  width: 1px;
+  height: 20px;
+  padding: 0;
+  border-left: 1px solid var(--app-border);
+  color: transparent;
+  cursor: default;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -678,14 +781,14 @@ onUnmounted(() => {
 
 .toolbar-left .toolbar-btn,
 .toolbar-right .toolbar-btn {
-  padding: 12px 6px;
+  padding: 5px;
   font-size: 12px;
   flex: none;
 }
 
 .toolbar-btn:hover {
-  background: #3498db;
-  transform: scale(1.1);
+  color: var(--app-text);
+  background: var(--app-hover);
 }
 
 .toolbar-dock-zones {
@@ -707,13 +810,13 @@ onUnmounted(() => {
 
 .dock-zone {
   position: fixed;
-  background: rgba(52, 152, 219, 0.2);
-  border: 2px dashed #3498db;
+  background: color-mix(in srgb, var(--el-color-primary) 18%, transparent);
+  border: 2px dashed var(--el-color-primary);
   border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #3498db;
+  color: var(--el-color-primary);
   font-size: 12px;
   font-weight: bold;
   z-index: 999;
@@ -722,7 +825,7 @@ onUnmounted(() => {
 }
 
 .dock-zone:hover {
-  background: rgba(52, 152, 219, 0.4);
+  background: color-mix(in srgb, var(--el-color-primary) 30%, transparent);
 }
 /* 更新滑块容器样式 */
 .toggle-switch-container {
@@ -739,22 +842,23 @@ onUnmounted(() => {
   align-items: center;
   cursor: pointer;
   padding: 2px;
-  width: 60px; /* 从70px减小到60px */
-  height: 24px; /* 从28px减小到24px */
+  width: 44px;
+  height: 24px;
+  box-sizing: border-box;
   border-radius: 12px; /* 从14px减小到12px */
-  background-color: #3b4c5f;
+  border: 1px solid var(--app-border-strong);
+  background-color: var(--app-surface-muted);
   transition: background-color 0.3s;
 }
 
 /* 更新滑块样式 */
 .toggle-slider {
   position: absolute;
-  width: 20px; /* 从24px减小到20px */
-  height: 20px; /* 从24px减小到20px */
-  /* border-radius: 50%; */
-  /* background-color: white; */
-  left: 4px;
-  top: 4px;
+  width: 18px;
+  height: 18px;
+  left: 3px;
+  top: 2px;
+  transform: none;
   transition: transform 0.3s;
   display: flex;
   align-items: center;
@@ -763,7 +867,7 @@ onUnmounted(() => {
 
 /* 更新滑块激活状态的移动距离 */
 .toggle-switch.toggle-on .toggle-slider {
-  transform: translateX(36px); /* 从42px调整为36px (60-24) */
+  transform: translateX(18px);
 }
 
 /* 更新滑块图标大小 */
@@ -773,19 +877,29 @@ onUnmounted(() => {
 }
 
 /* 更新垂直工具栏的滑轨样式 */
-.toolbar-left .toggle-switch, .toolbar-right .toggle-switch {
+.toolbar-left .toggle-switch,
+.toolbar-right .toggle-switch {
   flex-direction: column;
-  width: 24px; /* 从28px减小到24px */
-  height: 60px; /* 从70px减小到60px */
+  width: 24px;
+  height: 44px;
   border-radius: 12px; /* 从14px减小到12px */
 }
 
-/* 更新垂直工具栏的滑块激活状态移动距离 */
-.toolbar-left .toggle-switch.toggle-on .toggle-slider, .toolbar-right .toggle-switch.toggle-on .toggle-slider {
-  transform: translateY(36px); /* 从42px调整为36px (60-24) */
+.toolbar-left .toggle-slider,
+.toolbar-right .toggle-slider {
+  top: 3px;
+  left: 2px;
+  transform: none;
 }
 
-.toolbar-left .toggle-content, .toolbar-right .toggle-content {
+/* 更新垂直工具栏的滑块激活状态移动距离 */
+.toolbar-left .toggle-switch.toggle-on .toggle-slider,
+.toolbar-right .toggle-switch.toggle-on .toggle-slider {
+  transform: translateY(18px);
+}
+
+.toolbar-left .toggle-content,
+.toolbar-right .toggle-content {
   writing-mode: vertical-rl;
   transform: rotate(180deg);
   height: 100%;
@@ -797,21 +911,53 @@ onUnmounted(() => {
 .input-group {
   display: flex;
   align-items: center;
-  margin-bottom: 16px;
+  min-height: 32px;
+  margin-bottom: 14px;
 }
 
 .input-label {
-  min-width: 80px;
+  min-width: 94px;
   text-align: right;
   margin-right: 12px;
   font-size: 14px;
-  color: #606266;
+  color: var(--app-text-secondary);
 }
 
 /* 添加输入框和按钮之间的间距 */
 .input-group .el-input {
   flex: 1;
   margin-right: 8px; /* 在输入框右侧添加间距 */
+}
+
+.input-group :deep(.el-select),
+.input-group :deep(.el-input-number) {
+  flex: 1;
+}
+
+:global(.data-input-dialog .el-input-number .el-input__inner) {
+  text-align: left !important;
+}
+
+:global(.data-input-dialog .el-dialog__body) {
+  padding: 8px 22px 10px;
+}
+
+:global(.data-input-dialog .el-tabs__header) {
+  margin-bottom: 20px;
+}
+
+@media (max-width: 560px) {
+  .input-group {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .input-label {
+    min-width: 0;
+    margin-right: 0;
+    text-align: left;
+  }
 }
 
 /* 优化文件选择按钮的样式 */
@@ -838,11 +984,11 @@ onUnmounted(() => {
   display: inline-block !important;
   align-items: center !important;
   justify-content: center !important;
-  color: #606266 !important;
+  color: var(--app-text-secondary) !important;
 }
 
 .icon-only-refresh:hover {
-  background: rgba(0, 0, 0, 0.05) !important;
+  background: var(--app-hover) !important;
   color: #4096ff !important;
 }
 

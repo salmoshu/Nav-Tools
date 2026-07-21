@@ -49,116 +49,12 @@
   </div>
 
   <!-- 视图配置对话框 -->
-  <el-dialog
+  <DeviationConfigDialog
     v-model="viewConfigDialogVisible"
-    :width="'710px'"
-    destroy-on-close
-    title="轨迹配置"
-  >
-    <div class="dialog-content">
-      <div class="chart-config-grid">
-        <!-- 轨迹1配置 -->
-        <div class="chart-config-section">
-          <div style="display: flex; align-items: center; justify-content: center; margin-bottom: 15px;">
-            <h4 style="color: #303133; margin: 0;">轨迹1</h4>
-            <el-color-picker v-model="deviationConfig.track1Color.value" placeholder="选择颜色" style="margin-left: 10px;"></el-color-picker>
-          </div>
-          <div class="source-selectors">
-            <div style="display: flex; align-items: center; margin-bottom: 12px;">
-              <span style="display: inline-block; width: 80px; font-size: 14px; color: #606266;">X轴：</span>
-              <el-select v-model="deviationConfig.track1X.value" placeholder="选择X轴字段" style="width: 200px;">
-                <el-option label="<None>" value=""></el-option>
-                <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
-              </el-select>
-            </div>
-            <div style="display: flex; align-items: center;">
-              <span style="display: inline-block; width: 80px; font-size: 14px; color: #606266;">Y轴：</span>
-              <el-select v-model="deviationConfig.track1Y.value" placeholder="选择Y轴字段" style="width: 200px;">
-                <el-option label="<None>" value=""></el-option>
-                <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
-              </el-select>
-            </div>
-          </div>
-        </div>
-
-        <!-- 轨迹2配置 -->
-        <div class="chart-config-section">
-          <div style="display: flex; align-items: center; justify-content: center; margin-bottom: 15px;">
-            <h4 style="color: #303133; margin: 0;">轨迹2</h4>
-            <el-color-picker v-model="deviationConfig.track2Color.value" placeholder="选择颜色" style="margin-left: 10px;"></el-color-picker>
-          </div>
-          <div class="source-selectors">
-            <div style="display: flex; align-items: center; margin-bottom: 12px;">
-              <span style="display: inline-block; width: 80px; font-size: 14px; color: #606266;">X轴：</span>
-              <el-select v-model="deviationConfig.track2X.value" placeholder="选择X轴字段" style="width: 200px;">
-                <el-option label="<None>" value=""></el-option>
-                <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
-              </el-select>
-            </div>
-            <div style="display: flex; align-items: center;">
-              <span style="display: inline-block; width: 80px; font-size: 14px; color: #606266;">Y轴：</span>
-              <el-select v-model="deviationConfig.track2Y.value" placeholder="选择Y轴字段" style="width: 200px;">
-                <el-option label="<None>" value=""></el-option>
-                <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
-              </el-select>
-            </div>
-          </div>
-        </div>
-
-        <!-- 轨迹3配置 -->
-        <div class="chart-config-section">
-          <div style="display: flex; align-items: center; justify-content: center; margin-bottom: 15px;">
-            <h4 style="color: #303133; margin: 0;">轨迹3</h4>
-            <el-color-picker v-model="deviationConfig.track3Color.value" placeholder="选择颜色" style="margin-left: 10px;"></el-color-picker>
-          </div>
-          <div class="source-selectors">
-            <div style="display: flex; align-items: center; margin-bottom: 12px;">
-              <span style="display: inline-block; width: 80px; font-size: 14px; color: #606266;">X轴：</span>
-              <el-select v-model="deviationConfig.track3X.value" placeholder="选择X轴字段" style="width: 200px;">
-                <el-option label="<None>" value=""></el-option>
-                <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
-              </el-select>
-            </div>
-            <div style="display: flex; align-items: center;">
-              <span style="display: inline-block; width: 80px; font-size: 14px; color: #606266;">Y轴：</span>
-              <el-select v-model="deviationConfig.track3Y.value" placeholder="选择Y轴字段" style="width: 200px;">
-                <el-option label="<None>" value=""></el-option>
-                <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
-              </el-select>
-            </div>
-          </div>
-        </div>
-
-        <!-- 轨迹4配置 -->
-        <div class="chart-config-section">
-          <div style="display: flex; align-items: center; justify-content: center; margin-bottom: 15px;">
-            <h4 style="color: #303133; margin: 0;">轨迹4</h4>
-            <el-color-picker v-model="deviationConfig.track4Color.value" placeholder="选择颜色" style="margin-left: 10px;"></el-color-picker>
-          </div>
-          <div class="source-selectors">
-            <div style="display: flex; align-items: center; margin-bottom: 12px;">
-              <span style="display: inline-block; width: 80px; font-size: 14px; color: #606266;">X轴：</span>
-              <el-select v-model="deviationConfig.track4X.value" placeholder="选择X轴字段" style="width: 200px;">
-                <el-option label="<None>" value=""></el-option>
-                <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
-              </el-select>
-            </div>
-            <div style="display: flex; align-items: center;">
-              <span style="display: inline-block; width: 80px; font-size: 14px; color: #606266;">Y轴：</span>
-              <el-select v-model="deviationConfig.track4Y.value" placeholder="选择Y轴字段" style="width: 200px;">
-                <el-option label="<None>" value=""></el-option>
-                <el-option v-for="source in availableSources" :key="source" :label="source" :value="source"></el-option>
-              </el-select>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-    <template #footer>
-      <el-button @click="viewConfigDialogVisible = false">取消</el-button>
-      <el-button type="primary" @click="applyViewConfig">确定</el-button>
-    </template>
-  </el-dialog>
+    :available-sources="availableSources"
+    :config="deviationConfig"
+    @apply="applyViewConfig"
+  />
 </template>
 
 <script setup>
@@ -172,6 +68,8 @@ import { CanvasRenderer } from 'echarts/renderers';
 import { ElMessage } from 'element-plus';
 import { useDataConfig } from '@/composables/flow/useDataConfig';
 import { useConsole } from '@/composables/flow/useConsole';
+import { useTheme } from '@/composables/useTheme';
+import DeviationConfigDialog from '@/components/deviation/DeviationConfigDialog.vue';
 
 const { deviationConfig } = useDataConfig();
 
@@ -181,6 +79,7 @@ const { searchQuery } = useConsole(true);
 // 注册ECharts组件
 const { plotData, toggleSlideWindow, enableWindow } = useFlow();
 const { deviceConnected } = useDevice()
+const { chartTheme, resolvedTheme } = useTheme();
 
 echarts.use([ScatterChart, GridComponent, CanvasRenderer]);
 
@@ -396,11 +295,13 @@ function initChart() {
     renderer: 'canvas',
     antialias: false,
   });
+  const colors = chartTheme.value;
 
   const option = {
     animation: false,
     hoverAnimation: false,
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    backgroundColor: colors.background,
+    textStyle: { color: colors.text },
     graphic: [{
       type: 'text',
       left: 10,
@@ -409,13 +310,16 @@ function initChart() {
       style: {
         text: '',
         font: '14px Microsoft YaHei',
-        fill: '#000',
-        backgroundColor: '#fff',
+        fill: colors.text,
+        backgroundColor: colors.surfaceMuted,
         padding: [6, 10]
       }
     }],
     tooltip: {
       trigger: 'item',
+      backgroundColor: colors.surface,
+      borderColor: colors.border,
+      textStyle: { color: colors.text },
       axisPointer: {
         type: 'cross',
         label: {
@@ -459,6 +363,7 @@ function initChart() {
       nameLocation: 'middle',
       nameGap: 30,
       axisLabel: {
+        color: colors.textMuted,
         formatter: function(value) {
           return value.toFixed(2);
         },
@@ -466,11 +371,12 @@ function initChart() {
       splitLine: {
         lineStyle: {
           type: 'dashed',
-          color: '#e0e0e0',
+          color: colors.grid,
         },
       },
       axisLine: {
         show: true,
+        lineStyle: { color: colors.border },
       },
       min: -padding.value,
       max: padding.value,
@@ -481,6 +387,7 @@ function initChart() {
       nameLocation: 'middle',
       nameGap: 40,
       axisLabel: {
+        color: colors.textMuted,
         formatter: function(value) {
           return value.toFixed(2);
         },
@@ -488,11 +395,12 @@ function initChart() {
       splitLine: {
         lineStyle: {
           type: 'dashed',
-          color: '#e0e0e0',
+          color: colors.grid,
         },
       },
       axisLine: {
         show: true,
+        lineStyle: { color: colors.border },
       },
       min: -padding.value,
       max: padding.value,
@@ -519,7 +427,7 @@ function initChart() {
         itemStyle: {
           color: '#ff4d4f',
           borderWidth: 2,
-          borderColor: '#fff',
+          borderColor: colors.background,
           shadowBlur: 2,
           shadowColor: 'rgba(0, 0, 0, 0.3)',
         },
@@ -1877,6 +1785,13 @@ onMounted(() => {
   window.addEventListener('keydown', handleKeyDown);
 });
 
+watch(resolvedTheme, () => {
+  nextTick(() => {
+    initChart();
+    updateFlowData();
+  });
+});
+
 // 组件卸载时清理资源
 onUnmounted(() => {
   if (chartInstance.value) {
@@ -1915,10 +1830,11 @@ onUnmounted(() => {
   flex-direction: column;
   height: 100%;
   width: 100%;
-  /* background-color: #f5f7fa; */
+  color: var(--app-text);
+  background-color: var(--app-surface);
   border-radius: 8px;
   overflow: hidden;
-  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
+  box-shadow: 0 2px 12px 0 var(--app-shadow);
 }
 
 .control-panel {
@@ -1926,8 +1842,8 @@ onUnmounted(() => {
   justify-content: space-between;
   align-items: center;
   padding: 8px 12px;
-  background-color: #f8f9fa;
-  border-bottom: 1px solid #e9ecef;
+  background-color: var(--app-surface-muted);
+  border-bottom: 1px solid var(--app-border);
   height: 50px;
   box-sizing: border-box;
 }
@@ -1942,7 +1858,7 @@ onUnmounted(() => {
 
 .switch-label {
   font-size: 12px;
-  color: #6b7280;
+  color: var(--app-text-muted);
   margin-right: 5px;
   line-height: 1;
 }
@@ -1985,7 +1901,7 @@ onUnmounted(() => {
 .size-label {
   margin-right: 5px;
   font-size: 12px;
-  color: #6b7280;
+  color: var(--app-text-muted);
   line-height: 1;
 }
 
@@ -2007,7 +1923,7 @@ onUnmounted(() => {
 }
 
 :deep(.el-slider__runway) {
-  background-color: #e4e7ed;
+  background-color: var(--app-border);
   border-radius: 4px;
 }
 
@@ -2055,15 +1971,15 @@ onUnmounted(() => {
 .chart-config-section {
   margin-bottom: 15px;
   padding: 15px;
-  background-color: #f9f9f9;
+  background-color: var(--app-surface-muted);
   border-radius: 8px;
-  border: 1px solid #e4e7ed;
+  border: 1px solid var(--app-border);
   transition: all 0.3s ease;
 }
 
 .chart-config-section:hover {
-  background-color: #f5f7fa;
-  border-color: #c0c4cc;
+  background-color: var(--app-hover);
+  border-color: var(--app-border-strong);
 }
 
 .source-selectors {
@@ -2087,7 +2003,7 @@ onUnmounted(() => {
 :deep(.el-dialog__title) {
   font-size: 16px;
   font-weight: 600;
-  color: #303133;
+  color: var(--app-text);
 }
 
 /* 选择器样式优化 */

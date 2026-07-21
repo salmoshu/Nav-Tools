@@ -1,0 +1,6 @@
+node_modules
+dist
+dist-electron
+release
+coverage
+pnpm-lock.yaml

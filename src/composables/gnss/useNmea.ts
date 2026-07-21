@@ -1,5 +1,6 @@
 import { ref, computed } from 'vue'
 import { useGnssStore } from '@/stores/gnss'
+import { NmeaStreamParser, validateNmeaChecksum } from '@/core/data/NmeaStreamParser'
 
 const MAX_NMEA_DATA = 12*3600    // 12h
 const MAX_SNR_DATA = 50*3
@@ -7,7 +8,6 @@ const MAX_SNR_DATA = 50*3
 // 使用环形缓冲区管理nmeaData
 let nmeaDataIndex = 0
 let satelliteSnrIndex = 0
-const nmeaRegex = /\$(?:[^*]*)\*[0-9A-F]{2}/gi;
 const nmeaDataBuffer = Array(MAX_NMEA_DATA).fill(null)
 const nmeaData = ref<NmeaData[]>([])
 const satelliteSnrBuffer = Array(MAX_SNR_DATA).fill(null)
@@ -279,8 +279,7 @@ export function numberToQuality (num: number) {
 }
 
 export function useNmea() {
-  // 添加数据缓冲区
-  const buffer = ref('')
+  const streamParser = new NmeaStreamParser()
   let firstLLh: any = null
 
   // 计算属性：信号质量
@@ -296,49 +295,6 @@ export function useNmea() {
     return currentData.value.status === 'A' ? '已定位' : '未定位'
   })
 
-  // 工具函数：计算校验和
-  function calculateChecksum(sentence: string): string {
-    let checksum = 0
-    // 从索引1开始（跳过$），到*之前结束
-    const asteriskIndex = sentence.indexOf('*')
-    const endIndex = asteriskIndex !== -1 ? asteriskIndex : sentence.length
-    
-    for (let i = 1; i < endIndex; i++) {
-      checksum ^= sentence.charCodeAt(i)
-    }
-    return checksum.toString(16).toUpperCase().padStart(2, '0')
-  }
-  
-  // 工具函数：验证校验和
-  function validateChecksum(sentence: string): boolean {
-    // 检查是否以$开头
-    if (!sentence.startsWith('$')) {
-      return false
-    }
-    
-    const asteriskIndex = sentence.indexOf('*')
-    if (asteriskIndex === -1 || asteriskIndex >= sentence.length - 1) {
-      return false
-    }
-    
-    // 提取校验和（仅取*后两位）
-    const checksum = sentence.substring(asteriskIndex + 1, asteriskIndex + 3).toUpperCase()
-    
-    // 验证校验和格式是否为两位十六进制数
-    if (!/^[0-9A-F]{2}$/.test(checksum)) {
-      return false
-    }
-    
-    // 计算校验和
-    const calculatedChecksum = calculateChecksum(sentence)
-    
-    // 开发环境下输出详细信息
-    if (import.meta.env.DEV && calculatedChecksum !== checksum) {
-      console.warn(`校验和不匹配: 计算值=${calculatedChecksum}, 实际值=${checksum}, 语句=${sentence}`)
-    }
-    
-    return calculatedChecksum === checksum
-  }
 
   // 解析GGA语句
   function parseGga(sentence: string): Partial<NmeaData> {
@@ -582,7 +538,7 @@ export function useNmea() {
       return NmeaType.UNKNOWN
     }
 
-    if (!validateChecksum(sentence)) {
+    if (!validateNmeaChecksum(sentence)) {
       console.warn('Invalid checksum:', sentence)
       // return { ...currentData.value, raw: sentence }
       return NmeaType.UNKNOWN
@@ -702,63 +658,12 @@ export function useNmea() {
 
   // 添加处理原始数据的函数
   function processRawData(rawData: string): void {
-    // 将新数据追加到缓冲区
-    buffer.value += rawData;
-
-    // 限制缓冲区大小，防止内存泄漏
-    if (buffer.value.length > 50000) {
-      buffer.value = buffer.value.substring(buffer.value.length - 10000)
-    }
-
-    // 查找第一个 $ 的位置
-    const firstDollarIndex = buffer.value.indexOf('$');
-    if (firstDollarIndex > 0) {
-      // 丢弃 $ 之前的无效数据
-      buffer.value = buffer.value.substring(firstDollarIndex);
-    } else if (firstDollarIndex === -1) {
-      // 如果缓冲区中没有 $，清空缓冲区
-      buffer.value = '';
-      return;
-    }
-
-    const completeSentences: string[] = [];
-
-    // 提取所有完整的 NMEA 语句
-    let lastMatchEnd = 0
-    const matches = Array.from(buffer.value.matchAll(nmeaRegex));
-    for (const match of matches) {
-      completeSentences.push(match[0]);
-      lastMatchEnd = match.index + match[0].length;
-    }
-
-    // 更新缓冲区，丢弃已处理的完整语句及无法构成完整语句的片段
-    if (completeSentences.length > 0) {
-      // 保留最后一个完整语句结束后的内容
-      buffer.value = buffer.value.substring(lastMatchEnd);
-    } else {
-      // 如果没有找到完整语句，检查缓冲区中是否有可能是完整语句的开头
-      const lastDollarIndex = buffer.value.lastIndexOf('$');
-      if (lastDollarIndex > 0) {
-        // 保留最后一个 $ 之后的内容，丢弃之前的数据
-        buffer.value = buffer.value.substring(lastDollarIndex);
-      } else if (lastDollarIndex === -1 && buffer.value.length > 0) {
-        // 如果没有 $，清空缓冲区
-        buffer.value = '';
-      }
-    }
-
-    for (const sentence of completeSentences) {
-      const type = parseNmea(sentence.trim());
-      // 打印时间戳
-      // const now = new Date();
-      // const timestamp = now.toLocaleTimeString() + '.' + now.getMilliseconds().toString().padStart(3, '0');
-      // console.log(timestamp, type)
-    }
+    for (const sentence of streamParser.push(rawData)) parseNmea(sentence.trim())
   }
 
   // 添加清除缓冲区的函数
   function clearBuffer(): void {
-    buffer.value = ''
+    streamParser.clear()
   }
   
   // 根据Talker ID判断星座类型

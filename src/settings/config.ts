@@ -1,80 +1,15 @@
 import { reactive } from 'vue'
+import {
+  getPanelById,
+  getPanelsByIds,
+  normalizePanelId,
+  normalizePanelIds,
+  panelRegistry,
+  type ApplicationIcon,
+  type PanelDefinition,
+  type UserApplication,
+} from '@/core/panels/registry'
 import { toolBarIcon } from './icons'
-
-const appConfig: any = {
-  robot: {
-    flow: createModuleItem({
-      title: 'Flow',
-      icon: toolBarIcon.default,
-      action: ['data', 'console', 'deviation'],
-      props: {}
-    }),
-  },
-  perc: {
-    ultrasonic: createModuleItem({
-      title: 'Ultrasonic',
-      icon: toolBarIcon.ultrasonic,
-      action: ['data', 'console'],
-      props: {}
-    }),
-  },
-  pos: {
-    gnss: createModuleItem({
-      title: 'Gnss',
-      icon: toolBarIcon.gnss,
-      action: ['console', 'deviation', 'signal', 'sky'],
-      props: {}
-    }),
-  },
-  pnc: {
-    motor: createModuleItem({
-      title: 'Motor',
-      icon: toolBarIcon.motor,
-      action: ['data', 'config', 'console'],
-      props: {}
-    }),
-    followsim: createModuleItem({
-      title: 'FollowSim',
-      icon: toolBarIcon.follow,
-      action: ['dashboard', 'data', 'config'],
-      props: {}
-    }),
-  },
-  // example: {
-  //   demo1: createModuleItem({
-  //     title: 'Demo1',
-  //     icon: toolBarIcon.default,
-  //     // demo1/Demo1Draw.vue
-  //     // demo1/Demo1Data.vue
-  //     // demo1/Demo1Config.vue
-  //     action: ['draw', 'data', 'config'],
-  //     props: {
-  //       status: {
-  //         str: 'Nav-Tools',
-  //         num: 2,
-  //       },
-  //       config: {
-  //         'Shirt': 5,
-  //         'Wool Sweater': 20,
-  //         'Pants': 10,
-  //         'High Hells': 10,
-  //         'Socks': 20,
-  //       },
-  //     }
-  //   }),
-  // },
-} as const
-
-interface ModuleItem {
-  title: string
-  icon: string
-  action: readonly string[]
-  props: Record<string, any> // status or config
-  readonly funcMode: string
-  readonly template: string[]
-  readonly templateNames: string[]
-  readonly actionButtons: ButtonItem[]
-}
 
 interface ButtonItem {
   title: string
@@ -82,138 +17,79 @@ interface ButtonItem {
   template: string
   icon: string
   text: string
-  [key: string]: any
+  [key: string]: unknown
 }
 
-// 创建模块的工厂函数
-function createModuleItem(config: Omit<ModuleItem, 'funcMode' | 'template' | 'templateNames' | 'actionButtons'>): ModuleItem {
+export interface WindowDefinition extends PanelDefinition {
+  button: ButtonItem
+}
+
+function createButton(panel: PanelDefinition): ButtonItem {
   return {
-    ...config,
-    get funcMode() {
-      return config.title.toLowerCase()
-    },
-    get template() {
-      return getTemplatePaths(this.title, [...this.action])
-    },
-    get templateNames() {
-      return getTemplateNames(this.title, [...this.action])
-    },
-    get actionButtons() {
-      return getActionButtons(this.title, [...this.action])
-    },
+    title: panel.title,
+    msg: `panel-${panel.action}`,
+    template: panel.componentName,
+    icon: toolBarIcon[panel.action as keyof typeof toolBarIcon] || toolBarIcon.default,
+    text: `&nbsp;${panel.title}`,
   }
 }
 
-function getTemplateNames (title: string, actions: string[]) {
-  const name = title
-  const templateList: string[] = []
+const windowCatalog: readonly WindowDefinition[] = panelRegistry.map(panel => ({
+  ...panel,
+  button: createButton(panel),
+}))
 
-  for (let i = 0; i < actions.length; i++) {
-    const action = actions[i]
-    templateList.push(
-      name.charAt(0).toUpperCase() + name.slice(1) +
-      action.charAt(0).toUpperCase() + action.slice(1)
-    )
-  }
-  return templateList
+function normalizeWindowId(id: string): string {
+  return normalizePanelId(id)
 }
 
-function getTemplatePaths (title: string, actions: string[]) {
-  const name = title
-  const templateList: string[] = []
-  for (let i = 0; i < actions.length; i++) {
-    const action = actions[i]
-    templateList.push(
-      '@/components/' +
-      name.toLowerCase() + '/' +
-      name +
-      action.charAt(0).toUpperCase() + action.slice(1) +
-      '.vue'
-    )
-  }
-  return templateList
+function normalizeWindowIds(ids: readonly string[]): string[] {
+  return normalizePanelIds(ids)
 }
 
-function getActionButtons (title: string, actions: string[]) {
-  // for example:
-  // {
-  //   title: 'Draw',
-  //   msg: 'follow-draw',
-  //   icon: toolBarIcon.draw,
-  //   text: '&nbsp;Draw', 
-  // },
-  const buttonList: ButtonItem[] = []
-  for (let i = 0; i < actions.length; i++) {
-    const action = actions[i]
-    buttonList.push(
-      {
-        title: action.charAt(0).toUpperCase() + action.slice(1),
-        msg: (title + '-' + action).toLowerCase(),
-        template: title + action.charAt(0).toUpperCase() + action.slice(1),
-        icon: toolBarIcon[action as keyof typeof toolBarIcon] || toolBarIcon.default,
-        text: '&nbsp;' + action.charAt(0).toUpperCase() + action.slice(1),
-      }
-    )
-  }
-  return buttonList
+function getWindowById(id: string): WindowDefinition | undefined {
+  const panel = getPanelById(id)
+  return panel ? windowCatalog.find(item => item.id === panel.id) : undefined
 }
 
-// 自动初始化逻辑，自动获取第一个app的第一个module
-function getInitialModeFromAppMap() {
-  const appKeys = Object.keys(appConfig) as Array<keyof typeof appConfig>
-  if (appKeys.length === 0) {
-    console.error('Current appConfig is empty; an error occurred while Electron was loading the application!!!');
-    return {
-      appMode: 'none',
-      funcMode: 'none',
-    }
-  }
-
-  const firstAppKey = appKeys[0]
-  const firstApp = appConfig[firstAppKey]
-  
-  const moduleKeys = Object.keys(firstApp) as Array<keyof typeof firstApp>
-  if (moduleKeys.length === 0) {
-    console.error('Current appConfig is empty; an error occurred while Electron was loading the application!!!');
-    return {
-      appMode: String(firstAppKey).toLowerCase(),
-      funcMode: 'none',
-    }
-  }
-
-  const firstModuleKey = moduleKeys[0]
-  const firstModule = firstApp[firstModuleKey]
-  
-  return {
-    appMode: String(firstAppKey).toLowerCase(),
-    funcMode: (firstModule as any).funcMode,
-  }
+function getWindowsByIds(ids: readonly string[]): WindowDefinition[] {
+  const panelIds = new Set(getPanelsByIds(ids).map(panel => panel.id))
+  return windowCatalog.filter(panel => panelIds.has(panel.id))
 }
 
-// 修改NavMode类，使用自动获取的初始值
 class NavMode {
-  private currMode = reactive(getInitialModeFromAppMap())
+  private currMode = reactive({ appMode: 'workspace', funcMode: 'general' })
 
-  get appMode()  { 
-    return this.currMode.appMode 
+  get appMode() {
+    return this.currMode.appMode
   }
-  set appMode(m: string)  { 
-    this.currMode.appMode = m
+
+  set appMode(mode: string) {
+    this.currMode.appMode = mode
   }
-  get funcMode() { 
+
+  get funcMode() {
     return this.currMode.funcMode
   }
-  set funcMode(m: string) { 
-    this.currMode.funcMode = m
+
+  set funcMode(mode: string) {
+    this.currMode.funcMode = mode
   }
-  get currentMode() { 
-    return this.currMode 
+
+  get currentMode() {
+    return this.currMode
   }
 }
 
 export const navMode = new NavMode()
-export { 
+export {
+  type ApplicationIcon,
   type ButtonItem,
+  type UserApplication,
   NavMode,
-  appConfig,
+  windowCatalog,
+  normalizeWindowId,
+  normalizeWindowIds,
+  getWindowById,
+  getWindowsByIds,
 }

@@ -2,7 +2,7 @@
 
 <img src="https://raw.githubusercontent.com/salmoshu/Winchell-ImgBed/main/img/20251020-145700.jpg"/>
 
-Nav-Tools 是一个基于 Electron + Vue 3 开发的桌面端工具，主要用于机器人开发调试过程中的数据可视化。目前已实现通用数据流 Flow、GNSS 定位、超声波避障、PID 跟随仿真和电机驱动等功能模块。
+Nav-Tools 是一个基于 Electron + Vue 3 开发的桌面端工具，主要用于机器人开发调试过程中的数据可视化。目前已实现通用数据流 Flow、GNSS 定位和电机驱动等功能模块。
 
 - 应用下载：https://github.com/salmoshu/Nav-Tools/releases
 - 在线文档：https://salmoshu.github.io/robot/Nav-Tools/01-overview.html
@@ -12,6 +12,7 @@ Nav-Tools 是一个基于 Electron + Vue 3 开发的桌面端工具，主要用�
 ## 特性
 
 - **模块化结构**：目录结构清晰，方便添加新模块
+- **应用选择器**：用户可创建应用并自由组合 Flow、GNSS、Motor 的任意窗口
 - **多窗口支持**：支持多窗口并行调试
 - **数据可视化**：提供时序图、轨迹图、控制台、仪表盘等展示方式
 - **可配置**：支持字段扩展、滑窗、过滤、颜色配置、布局保存等功能
@@ -32,23 +33,14 @@ Nav-Tools 是一个基于 Electron + Vue 3 开发的桌面端工具，主要用�
     <td>通用数据流可视化（时序图、轨迹图、控制台）</td>
   </tr>
   <tr>
-    <td>PERC</td>
-    <td>Ultrasonic</td>
-    <td>超声波避障数据可视化（滤波、障碍物检测）</td>
-  </tr>
-  <tr>
     <td>POS</td>
     <td>GNSS</td>
     <td>卫星定位模块（轨迹、信号、星空图）</td>
   </tr>
   <tr>
-    <td rowspan="2">PNC</td>
+    <td>PNC</td>
     <td>Motor</td>
     <td>电机驱动的控制下发与数据可视化</td>
-  </tr>
-  <tr>
-    <td>FollowSim</td>
-    <td>PID 跟随仿真（仪表盘、速度曲线、参数配置）</td>
   </tr>
 </table>
 
@@ -72,25 +64,34 @@ pnpm approve-builds # for electron, esbuild
 pnpm run dev
 ```
 
+启动后会先显示应用选择器。新建应用时可自由选择窗口；点击应用卡片进入对应工作区，点击卡片右侧的新窗口按钮可同时打开多个应用。工作区内的任意面板也可通过标题栏的分离按钮单独打开。
+
 ## 开发指南
 
-### 1. 添加新模块
+### 1. 添加新窗口
 
-在 `src/types/config.ts` 的 `appConfig` 中添加模块配置：
+窗口和业务模块相互独立。先在 `src/settings/config.ts` 的 `windowCatalog` 中注册一次：
 
 ```ts
-newModule: createModuleItem({
-  title: 'NewModule',
-  icon: toolBarIcon.default,
-  action: ['draw', 'data', 'config'],
-})
+{
+  id: 'map',
+  moduleId: 'general',
+  appMode: 'workspace',
+  funcMode: 'general',
+  action: 'map',
+  title: 'Map',
+  description: '显示定位轨迹',
+  componentName: 'Map',
+  componentPath: '@/components/panels/Map.vue',
+  button: createButton('Map', 'map', 'Map'),
+}
 ```
 
 ### 2. 创建组件与逻辑
 
-- 组件：`src/components/newModule/NewModuleDraw.vue`、`NewModuleData.vue`、`NewModuleConfig.vue`
-- 逻辑：`src/composables/newModule/useNewModuleProps.ts`
-- 状态管理：`src/stores/newModule.ts`
+- 通用窗口：`src/components/panels/Map.vue`
+- 领域专用窗口：放入 `src/components/flow`、`gnss` 或 `motor`
+- 每种能力只注册一个窗口，不要为不同模块创建转发包装组件
 
 ### 4. 状态显示
 
@@ -132,11 +133,6 @@ newModule: createModuleItem({
 - **Data**：时序图（支持双轴、滑窗、字段选择）
 - **Deviation**：轨迹图（支持多轨迹、跟踪、缩放）
 
-### Ultrasonic（超声波避障）
-
-- **Console**：日志输出
-- **Data**：滤波后的距离曲线（支持中值滤波、障碍物检测）
-
 ### GNSS（卫星定位）
 
 - **Console**：NMEA 日志
@@ -149,12 +145,6 @@ newModule: createModuleItem({
 - **Console**：日志输出
 - **Data**：电机数据可视化（速度、角度）
 - **Config**：电机参数调节面板（读指令、写指令）
-
-### FollowSim（PID 跟随仿真）
-
-- **Dashboard**：二维动画展示
-- **Data**：速度曲线（线速度、角速度）
-- **Config**：PID 参数调节面板
 
 ## 技术栈
 

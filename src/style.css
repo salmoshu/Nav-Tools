@@ -1,94 +1,154 @@
 :root {
-  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
-  line-height: 1.5;
-  font-weight: 400;
-
-  color-scheme: light dark;
-  color: rgba(255, 255, 255, 0.87);
-  background-color: #242424;
-
+  font-family: Inter, "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, Arial, sans-serif;
+  color-scheme: light;
+  color: #1f2937;
+  background: #f3f5f7;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   -webkit-text-size-adjust: 100%;
+
+  --app-bg: #f3f5f7;
+  --app-surface: #ffffff;
+  --app-surface-muted: #f8fafc;
+  --app-surface-raised: #ffffff;
+  --app-hover: #e9edf2;
+  --app-border: #d6dbe3;
+  --app-border-strong: #c6ccd6;
+  --app-text: #172033;
+  --app-text-secondary: #465164;
+  --app-text-muted: #6b7585;
+  --app-toolbar: #2c3e50;
+  --app-toolbar-control: #34495e;
+  --app-shadow: rgba(15, 23, 42, 0.14);
 }
 
-a {
-  font-weight: 500;
-  color: #646cff;
-  text-decoration: inherit;
+:root.dark {
+  color-scheme: dark;
+  color: #d2d6dc;
+  background: #14161b;
+
+  --app-bg: #14161b;
+  --app-surface: #1d2027;
+  --app-surface-muted: #242832;
+  --app-surface-raised: #292e38;
+  --app-hover: #303641;
+  --app-border: #363b46;
+  --app-border-strong: #474e5b;
+  --app-text: #d2d6dc;
+  --app-text-secondary: #b7bdc7;
+  --app-text-muted: #9aa1ab;
+  --app-toolbar: #181b21;
+  --app-toolbar-control: #292e38;
+  --app-shadow: rgba(0, 0, 0, 0.36);
 }
-a:hover {
-  color: #535bf2;
+
+html,
+body,
+#app {
+  width: 100%;
+  height: 100%;
 }
 
 body {
-  margin: 0;
-  padding: 0;
-  width: 100vw;
-  height: 100vh;
-  display: flex;
-  place-items: center;
   min-width: 320px;
   min-height: 100vh;
+  margin: 0;
   overflow: hidden;
+  color: var(--app-text);
+  background: var(--app-bg);
 }
 
-h1 {
-  font-size: 3.2em;
-  line-height: 1.1;
+button,
+input,
+textarea,
+select {
+  font: inherit;
 }
 
 button {
-  border-radius: 8px;
-  border: 1px solid transparent;
-  padding: 0.6em 1.2em;
-  font-size: 1em;
-  font-weight: 500;
-  font-family: inherit;
-  background-color: #1a1a1a;
   cursor: pointer;
-  transition: border-color 0.25s;
 }
-button:hover {
-  border-color: #646cff;
-}
-button:focus,
-button:focus-visible {
-  outline: 4px auto -webkit-focus-ring-color;
+
+a {
+  color: var(--el-color-primary);
+  text-decoration: none;
 }
 
 code {
-  background-color: #1a1a1a;
   padding: 2px 4px;
-  margin: 0 4px;
   border-radius: 4px;
-}
-
-.card {
-  padding: 2em;
+  background: var(--app-surface-muted);
 }
 
 #app {
-  max-width: none;
   margin: 0;
   padding: 0;
   text-align: center;
 }
 
-@media (prefers-color-scheme: light) {
-  :root {
-    color: #213547;
-    background-color: #ffffff;
-  }
-  a:hover {
-    color: #747bff;
-  }
-  button {
-    background-color: #f9f9f9;
-  }
-  code {
-    background-color: #f9f9f9;
-  }
+/* Compatibility layer for panels that still contain legacy fixed light colors. */
+.dark .el-card,
+.dark .full-screen-card,
+.dark .card-window,
+.dark .flow-console-virtual,
+.dark .console-content-virtual,
+.dark .scroller,
+.dark .statusbar,
+.dark .selector-header,
+.dark .application-card,
+.dark .icon-option {
+  color: var(--app-text);
+  background: var(--app-surface);
+  border-color: var(--app-border);
+}
+
+.dark .console-header,
+.dark .console-footer,
+.dark .console-input-bar,
+.dark .statusbar-handle,
+.dark .computed-section,
+.dark .fields-list,
+.dark .panel-list span {
+  color: var(--app-text-secondary);
+  background: var(--app-surface-muted);
+  border-color: var(--app-border);
+}
+
+.dark .selector-panel {
+  color: var(--app-text);
+  background: var(--app-surface-muted);
+  border-color: var(--app-border);
+}
+
+.dark .selector-header h1,
+.dark .empty-state h2,
+.dark .application-title-row h2,
+.dark .title,
+.dark .statusbar-handle,
+.dark .status-indicator {
+  color: var(--app-text);
+}
+
+.dark .selector-header p,
+.dark .empty-state p,
+.dark .application-copy p,
+.dark .application-actions,
+.dark .status-label,
+.dark .remove-btn {
+  color: var(--app-text-muted);
+}
+
+.dark .message-line {
+  border-color: var(--app-border);
+}
+
+.dark .message-line:hover,
+.dark .status-item:hover {
+  background: var(--app-hover);
+}
+
+.dark .search-bar .el-button {
+  color: var(--app-text-muted) !important;
 }
