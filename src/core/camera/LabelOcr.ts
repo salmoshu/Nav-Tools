@@ -1,24 +1,36 @@
-import { LABEL_GLYPHS } from './labelGlyphs'
+import { recognizeStripImage } from './PaddleRec'
 
 export interface CameraLabel {
-  /** 识别出的文本(已做语法修正) */
+  /** 识别出的文本 */
   text: string
-  /** 平均匹配得分 0~1 */
+  /** 模型平均置信度 0~1 */
   score: number
   /** 标签在帧中的左上角坐标 */
   x: number
   y: number
 }
 
-interface GlyphBitmap {
-  rows: string[]
-  width: number
-  height: number
-}
+/**
+ * 数字标签格式化(该设备标签格式为 `A,B,C`:A 两位小数、B 三位小数、C 整数)。
+ * 模型可能丢失/混淆分隔符,这里在结构强匹配时重建标点;不确定时返回清理后的原文。
+ */
+export function formatNumericLabel(text: string): string {
+  const cleaned = text.replace(/[^\d.,-]/g, '')
+  // 已接近标准格式:统一为逗号分隔
+  const wellFormed = cleaned.match(/^(-?\d+\.\d{2})[.,\s](\d+\.\d{3})[.,\s](\d+)$/)
+  if (wellFormed) return `${wellFormed[1]},${wellFormed[2]},${wellFormed[3]}`
 
-/** 归一化尺寸(匹配的相位/尺寸容忍核心) */
-const NORMALIZED_WIDTH = 8
-const NORMALIZED_HEIGHT = 12
+  // 分隔符缺失/错误:按"整数.两位,整数.三位,整数"结构尝试重排
+  const parts = cleaned.split(/[.,]/).filter((part) => part.length > 0)
+  const negative = cleaned.startsWith('-')
+  if (parts.length === 4) {
+    const [aInt, aDec, bPart, c] = parts
+    if (aDec.length === 2 && bPart.length === 4 && c.length >= 1 && c.length <= 3) {
+      return `${negative ? '-' : ''}${aInt}.${aDec},${bPart[0]}.${bPart.slice(1)},${c}`
+    }
+  }
+  return cleaned.replace(/^[.,-]+|[.,-]+$/g, '')
+}
 
 interface BoxTop {
   y: number
@@ -28,217 +40,49 @@ interface BoxTop {
 
 /** 标签识别配置 */
 const CONFIG = {
+  /** 绿框判定:g 显著高于 r/b */
+  greenThreshold: 140,
+  greenDominance: 40,
   /** 框顶边最小长度与缺口容忍 */
   boxMinLength: 20,
   boxGapTolerance: 4,
   /** 同一行上断裂框顶候选的合并间隙 */
   boxMergeGap: 20,
-  /** 标签条带尺寸 */
+  /** 标签条带:左余量与扫描窗口宽度(标签左对齐绘制,溢出总是向右) */
+  stripLeftPad: 4,
+  stripScanWidth: 160,
   stripAbove: 13,
   stripBelow: 14,
-  stripWidth: 140,
-  /** 匹配阈值 */
-  minGlyphScore: 0.35,
+  /** 标签最短文本与最低置信度 */
+  minTextLength: 4,
+  minConfidence: 0.5,
+  /** 红字判定:r 显著高于 g/b */
+  redThreshold: 100,
+  redDominance: 30,
+  /** 红色文字紧致裁剪所需的最低像素数/宽度 */
+  minRedPixels: 6,
+  minRedWidth: 8,
 }
 
-type Grid = number[][]
-
-function normalizeBitmap(rows: string[]): Grid {
-  const height = rows.length
-  const width = rows[0]?.length ?? 1
-  const out: Grid = Array.from({ length: NORMALIZED_HEIGHT }, () => Array(NORMALIZED_WIDTH).fill(0))
-  for (let y = 0; y < height; y++) {
-    for (let x = 0; x < width; x++) {
-      if (rows[y][x] !== '#') continue
-      const ty = Math.min(NORMALIZED_HEIGHT - 1, Math.floor((y / height) * NORMALIZED_HEIGHT))
-      const tx = Math.min(NORMALIZED_WIDTH - 1, Math.floor((x / width) * NORMALIZED_WIDTH))
-      out[ty][tx] = 1
-    }
-  }
-  return out
+function isGreenPixel(rgb: Uint8Array, width: number, x: number, y: number): boolean {
+  const i = (y * width + x) * 3
+  const r = rgb[i]
+  const g = rgb[i + 1]
+  const b = rgb[i + 2]
+  return g > CONFIG.greenThreshold && g > r + CONFIG.greenDominance && g > b + CONFIG.greenDominance
 }
 
-function shiftGrid(grid: Grid, dx: number, dy: number): Grid {
-  const out: Grid = Array.from({ length: NORMALIZED_HEIGHT }, () => Array(NORMALIZED_WIDTH).fill(0))
-  for (let y = 0; y < NORMALIZED_HEIGHT; y++) {
-    for (let x = 0; x < NORMALIZED_WIDTH; x++) {
-      const sy = y - dy
-      const sx = x - dx
-      if (sy >= 0 && sy < NORMALIZED_HEIGHT && sx >= 0 && sx < NORMALIZED_WIDTH) {
-        out[y][x] = grid[sy][sx]
-      }
-    }
-  }
-  return out
+/** 红字判定:r 显著高于 g/b */
+function isRedPixel(rgb: Uint8Array, width: number, x: number, y: number): boolean {
+  const i = (y * width + x) * 3
+  const r = rgb[i]
+  const g = rgb[i + 1]
+  const b = rgb[i + 2]
+  return r > CONFIG.redThreshold && r > g + CONFIG.redDominance && r > b + CONFIG.redDominance
 }
 
-function jaccard(a: Grid, b: Grid): number {
-  let inter = 0
-  let union = 0
-  for (let y = 0; y < NORMALIZED_HEIGHT; y++) {
-    for (let x = 0; x < NORMALIZED_WIDTH; x++) {
-      if (a[y][x] || b[y][x]) union++
-      if (a[y][x] && b[y][x]) inter++
-    }
-  }
-  return union === 0 ? 0 : inter / union
-}
-
-interface TemplateEntry {
-  char: string
-  width: number
-  height: number
-  norm: Grid
-}
-
-let cachedTemplates: TemplateEntry[] | undefined
-
-function getTemplates(): TemplateEntry[] {
-  if (!cachedTemplates) {
-    cachedTemplates = []
-    for (const [char, bitmaps] of Object.entries(LABEL_GLYPHS)) {
-      for (const bitmap of bitmaps) {
-        cachedTemplates.push({
-          char,
-          width: bitmap[0]?.length ?? 0,
-          height: bitmap.length,
-          norm: normalizeBitmap(bitmap),
-        })
-      }
-    }
-  }
-  return cachedTemplates
-}
-
-/** 数字槽位纠偏:O→0、I/l/|→1(仅用于 ID: 前缀之后) */
-function grammarFix(text: string): string {
-  const match = text.match(/^(-?I[D0]:)(.*)$/)
-  if (!match) return text
-  const body = match[2].replace(/[OIl|]/g, (char) => {
-    if (char === 'O') return '0'
-    return '1'
-  })
-  return match[1] + body
-}
-
-function matchGlyph(rows: string[]): { char: string; score: number } {
-  const height = rows.length
-  const width = rows[0]?.length ?? 0
-  const norm = normalizeBitmap(rows)
-  let best = { char: '?', score: 0 }
-  for (const template of getTemplates()) {
-    if (Math.abs(template.width - width) > 3 || Math.abs(template.height - height) > 4) continue
-    for (let dy = -1; dy <= 1; dy++) {
-      for (let dx = -1; dx <= 1; dx++) {
-        const score = jaccard(norm, shiftGrid(template.norm, dx, dy))
-        if (score > best.score) best = { char: template.char, score }
-      }
-    }
-  }
-  return best
-}
-
-interface Span {
-  minX: number
-  maxX: number
-}
-
-/** 谷底切分:超宽 span(相位变化导致字符相连)在墨量最低的内部分列处递归切分 */
-function splitWideSpan(span: Span, colInk: number[], maxWidth: number): Span[] {
-  if (span.maxX - span.minX + 1 <= maxWidth) return [span]
-  let bestX = -1
-  let bestInk = Infinity
-  for (let x = span.minX + 2; x < span.maxX - 1; x++) {
-    if (colInk[x] < bestInk) {
-      bestInk = colInk[x]
-      bestX = x
-    }
-  }
-  if (bestX < 0) return [span]
-  return [
-    ...splitWideSpan({ minX: span.minX, maxX: bestX - 1 }, colInk, maxWidth),
-    ...splitWideSpan({ minX: bestX, maxX: span.maxX }, colInk, maxWidth),
-  ]
-}
-
-/**
- * 条带文字识别:列投影切分字符(相位变化导致的笔划内部空列先合并、字符粘连先谷底切分),
- * 再对每个字符位图做模板匹配。
- */
-function recognizeStrip(
-  isRed: (x: number, y: number) => boolean,
-  x0: number,
-  y0: number,
-  x1: number,
-  y1: number,
-): { text: string; score: number } | undefined {
-  const stripWidth = x1 - x0
-  const colInk: number[] = Array.from({ length: stripWidth }, () => 0)
-  for (let x = x0; x < x1; x++) {
-    for (let y = y0; y < y1; y++) if (isRed(x, y)) colInk[x - x0]++
-  }
-
-  const rawSpans: Span[] = []
-  let current: Span | null = null
-  for (let i = 0; i < colInk.length; i++) {
-    if (colInk[i] > 0) {
-      if (!current) current = { minX: i, maxX: i }
-      else current.maxX = i
-    } else if (current && i - current.maxX >= 2) {
-      rawSpans.push(current)
-      current = null
-    }
-  }
-  if (current) rawSpans.push(current)
-
-  // 先谷底切分超宽 span(字符相连),再合并小间隙碎片(笔划内部空列)
-  const spans: Span[] = []
-  for (const raw of rawSpans) {
-    for (const piece of splitWideSpan(raw, colInk, 10)) {
-      const last = spans[spans.length - 1]
-      if (last && piece.minX - last.maxX - 1 <= 2 && piece.maxX - last.minX + 1 <= 10) {
-        last.maxX = Math.max(last.maxX, piece.maxX)
-      } else {
-        spans.push({ ...piece })
-      }
-    }
-  }
-
-  const items: { char: string; score: number }[] = []
-  for (const span of spans) {
-    let minY = Infinity
-    let maxY = -1
-    let pixels = 0
-    for (let y = y0; y < y1; y++) {
-      for (let x = x0 + span.minX; x <= x0 + span.maxX; x++) {
-        if (isRed(x, y)) {
-          minY = Math.min(minY, y)
-          maxY = Math.max(maxY, y)
-          pixels++
-        }
-      }
-    }
-    if (pixels < 2 || maxY < 0) continue
-    const height = maxY - minY + 1
-    const width = span.maxX - span.minX + 1
-    if (height < 2 || height > 16 || width > 14) continue
-    const rows: string[] = []
-    for (let y = minY; y <= maxY; y++) {
-      let row = ''
-      for (let x = x0 + span.minX; x <= x0 + span.maxX; x++) row += isRed(x, y) ? '#' : '.'
-      rows.push(row)
-    }
-    const match = matchGlyph(rows)
-    if (match.score >= CONFIG.minGlyphScore) items.push(match)
-  }
-  if (items.length < 4) return undefined
-
-  const text = items.map((item) => (item.score >= 0.5 ? item.char : '?')).join('')
-  const score = items.reduce((sum, item) => sum + item.score, 0) / items.length
-  return { text, score }
-}
-
-function findBoxTops(isGreen: (x: number, y: number) => boolean, width: number, height: number): BoxTop[] {
+function findBoxTops(rgb: Uint8Array, width: number, height: number): BoxTop[] {
+  const isGreen = (x: number, y: number) => isGreenPixel(rgb, width, x, y)
   const candidates: BoxTop[] = []
   for (let y = 0; y < height; y++) {
     let run: { x0: number; x1: number } | null = null
@@ -269,49 +113,98 @@ function findBoxTops(isGreen: (x: number, y: number) => boolean, width: number, 
   const merged: BoxTop[] = []
   for (const candidate of candidates) {
     const last = merged[merged.length - 1]
-    if (
-      last &&
-      Math.abs(candidate.y - last.y) <= 3 &&
-      candidate.x0 - last.x1 <= CONFIG.boxMergeGap
-    ) {
+    if (last && Math.abs(candidate.y - last.y) <= 3 && candidate.x0 - last.x1 <= CONFIG.boxMergeGap) {
       last.x1 = Math.max(last.x1, candidate.x1)
       continue
     }
     merged.push({ ...candidate })
   }
-
-  // 丢弃落在其他候选条带内的候选(避免条带内重复检测)
-  return merged.filter(
-    (candidate, index) =>
-      !merged.some(
-        (other, otherIndex) =>
-          otherIndex !== index &&
-          Math.abs(other.y - candidate.y) <= 6 &&
-          candidate.x0 >= other.x0 &&
-          candidate.x0 <= other.x0 + CONFIG.stripWidth,
-      ),
-  )
+  return merged
 }
 
 /**
- * 从掩码帧中识别 bbox 标签文字。
- * rgb: rgb24 掩码帧(与 CameraStreamService 的 geq 输出一致):
- *   R 通道 = 红字掩码(0 = 文字),G 通道 = 绿框掩码(0 = 框线),B 通道恒为 255。
- * 帧尺寸需与 width/height 一致。
+ * 从 rgb24 原始帧中识别 bbox 标签文字(PP-OCR rec 模型)。
+ * 流程:绿框顶边检测 → 每个框取"框宽 + 水平扩展"条带(右端裁到相邻框左缘)
+ * → 模型推理 → CTC 解码。
  */
-export function recognizeLabels(rgb: Uint8Array, width: number, height: number): CameraLabel[] {
-  const isRed = (x: number, y: number) => rgb[(y * width + x) * 3] < 128
-  const isGreen = (x: number, y: number) => rgb[(y * width + x) * 3 + 1] < 128
+export async function recognizeLabels(
+  rgb: Uint8Array,
+  width: number,
+  height: number,
+): Promise<CameraLabel[]> {
+  // 条带参数按帧宽自适应(源设计基于 640px 宽帧)
+  const scale = width / 640
+  const stripAbove = Math.round(CONFIG.stripAbove * scale)
+  const stripBelow = Math.round(CONFIG.stripBelow * scale)
+  const stripScanWidth = Math.round(CONFIG.stripScanWidth * scale)
+  const stripLeftPad = Math.round(CONFIG.stripLeftPad * scale)
+  const minRedPixels = Math.round(CONFIG.minRedPixels * scale * scale)
+  const minRedWidth = Math.round(CONFIG.minRedWidth * scale)
 
+  const boxes = findBoxTops(rgb, width, height)
   const labels: CameraLabel[] = []
-  for (const box of findBoxTops(isGreen, width, height)) {
-    const stripX0 = Math.max(0, box.x0 - 2)
-    const stripX1 = Math.min(width, box.x0 + CONFIG.stripWidth)
-    const stripY0 = Math.max(0, box.y - CONFIG.stripAbove)
-    const stripY1 = Math.min(height, box.y + CONFIG.stripBelow)
-    const result = recognizeStrip(isRed, stripX0, stripY0, stripX1, stripY1)
-    if (!result) continue
-    labels.push({ text: grammarFix(result.text), score: result.score, x: stripX0, y: stripY0 })
+
+  for (let index = 0; index < boxes.length; index++) {
+    const box = boxes[index]
+    // 扫描区域:框左缘起固定宽度窗口,右端裁到相邻框左缘,防止隔壁标签串入
+    const neighbor = boxes.find(
+      (other, otherIndex) =>
+        otherIndex !== index && Math.abs(other.y - box.y) <= 6 && other.x0 > box.x0,
+    )
+    const stripX0 = Math.max(0, box.x0 - stripLeftPad)
+    const stripX1 = Math.min(
+      width,
+      box.x0 + stripScanWidth,
+      neighbor ? neighbor.x0 - 2 : width,
+    )
+    const stripY0 = Math.max(0, box.y - stripAbove)
+    const stripY1 = Math.min(height, box.y + stripBelow)
+    const regionW = stripX1 - stripX0
+    const regionH = stripY1 - stripY0
+    if (regionW < 20 || regionH < 6) continue
+
+    // 在条带区域内紧致裁剪红色文字,给模型干净的输入
+    let minRX = Infinity
+    let maxRX = -1
+    let minRY = Infinity
+    let maxRY = -1
+    let redPixels = 0
+    for (let y = stripY0; y < stripY1; y++) {
+      for (let x = stripX0; x < stripX1; x++) {
+        if (!isRedPixel(rgb, width, x, y)) continue
+        minRX = Math.min(minRX, x)
+        maxRX = Math.max(maxRX, x)
+        minRY = Math.min(minRY, y)
+        maxRY = Math.max(maxRY, y)
+        redPixels++
+      }
+    }
+    const redWidth = maxRX - minRX + 1
+    if (redPixels < minRedPixels || redWidth < minRedWidth) continue
+
+    const cropX0 = Math.max(0, minRX - 2)
+    const cropY0 = Math.max(0, minRY - 1)
+    const cropX1 = Math.min(width, maxRX + 3)
+    const cropY1 = Math.min(height, maxRY + 2)
+    const stripW = cropX1 - cropX0
+    const stripH = cropY1 - cropY0
+    const strip = new Uint8Array(stripW * stripH * 3)
+    for (let y = 0; y < stripH; y++) {
+      const srcStart = ((cropY0 + y) * width + cropX0) * 3
+      strip.set(rgb.subarray(srcStart, srcStart + stripW * 3), y * stripW * 3)
+    }
+
+    const result = await recognizeStripImage(strip, stripW, stripH)
+    if (process.env.OCR_DEBUG) {
+      console.log(
+        `[ocr] box@${box.x0}-${box.x1},${box.y} strip=[${cropX0},${cropY0}]-[${cropX1},${cropY1}] red=[${minRX}-${maxRX}]/[${minRY}-${maxRY}] =>`,
+        JSON.stringify(result),
+      )
+    }
+    const text = formatNumericLabel(result.text.trim())
+    if (text.length < CONFIG.minTextLength || result.confidence < CONFIG.minConfidence) continue
+
+    labels.push({ text, score: result.confidence, x: cropX0, y: cropY0 })
   }
   return labels
 }
@@ -323,52 +216,83 @@ interface VotedLabel {
 }
 
 /**
- * 时序投票:按位置分桶保留最近的高分结果,平滑单帧识别错误。
- * 每帧 push 一次,getStable() 返回各位置当前最可信的标签文本。
+ * 时序投票:按位置分桶保留最近若干帧结果,逐字符多数投票。
+ * 单帧识别错误是随机的(如 6↔8、0↔1),同一标签跨帧多数派能有效抑制。
+ * 分桶按标签 x 坐标,人物移动跨过桶时旧桶会自然过期。
  */
 export class LabelVoter {
   private readonly buckets = new Map<number, VotedLabel[]>()
 
   constructor(
     private readonly bucketSize = 40,
-    private readonly maxAge = 8,
-    private readonly agePenalty = 0.04,
+    private readonly historySize = 6,
+    private readonly maxAge = 3,
   ) {}
 
   push(labels: CameraLabel[]): void {
+    // 先老化既有条目,再写入本帧结果
+    for (const history of this.buckets.values()) {
+      for (const entry of history) entry.age++
+    }
     const used = new Set<number>()
     for (const label of labels) {
       const bucket = Math.round(label.x / this.bucketSize)
       used.add(bucket)
       const history = this.buckets.get(bucket) ?? []
       history.push({ text: label.text, score: label.score, age: 0 })
-      if (history.length > this.maxAge) history.shift()
+      if (history.length > this.historySize) history.shift()
       this.buckets.set(bucket, history)
     }
     for (const [bucket, history] of this.buckets) {
-      for (const entry of history) entry.age++
       if (!used.has(bucket) && history.every((entry) => entry.age > this.maxAge)) {
         this.buckets.delete(bucket)
       }
     }
   }
 
-  /** 每个位置返回近期最有效得分(score - agePenalty * age)最高的文本(仅展示高置信结果) */
+  /** 逐字符多数投票:对齐左端,按条目置信度加权 */
+  private voteChars(entries: VotedLabel[]): string {
+    const maxLen = Math.max(...entries.map((entry) => entry.text.length))
+    let result = ''
+    for (let i = 0; i < maxLen; i++) {
+      const votes = new Map<string, number>()
+      let total = 0
+      let freshChar = ''
+      for (const entry of entries) {
+        const char = entry.text[i]
+        if (!char) continue
+        // 置信度为主,年龄仅轻微衰减(保证多数派生效)
+        const weight = entry.score * Math.max(0.5, 1 - entry.age * 0.1)
+        votes.set(char, (votes.get(char) ?? 0) + weight)
+        total += weight
+        if (entry.age === 0 && !freshChar) freshChar = char
+      }
+      if (total === 0) continue
+      let best = freshChar
+      let bestWeight = -1
+      for (const [char, weight] of votes) {
+        if (weight > bestWeight) {
+          bestWeight = weight
+          best = char
+        }
+      }
+      result += best
+    }
+    return result
+  }
+
+  /** 每个位置返回逐字符投票后的标签文本 */
   getStable(): string[] {
     const result: string[] = []
     const ordered = [...this.buckets.keys()].sort((a, b) => a - b)
     for (const bucket of ordered) {
       const history = this.buckets.get(bucket)!
-      let best: VotedLabel | undefined
-      let bestValue = -1
-      for (const entry of history) {
-        const value = entry.score - entry.age * this.agePenalty
-        if (value > bestValue) {
-          bestValue = value
-          best = entry
-        }
-      }
-      if (best && best.score >= 0.72) result.push(best.text)
+      const fresh = history.filter((entry) => entry.age === 0)
+      if (fresh.length === 0) continue
+      const candidates = history.filter((entry) => entry.text.length >= 4)
+      if (candidates.length === 0) continue
+      const text = this.voteChars(candidates).trim()
+      if (text.length >= 4) result.push(text)
     }
     return result
   }
