@@ -38,20 +38,25 @@
       </div>
     </div>
 
+    <div v-if="labels.length" class="label-hints" aria-label="识别到的标签信息">
+      <span class="hints-title">识别标签</span>
+      <span v-for="(label, index) in labels" :key="index" class="label-chip">{{ label }}</span>
+    </div>
+
     <div class="camera-controls">
-      <el-input
-        v-model="streamUrl"
-        class="stream-input"
-        aria-label="RTSP 视频地址"
-        placeholder="rtsp://192.168.3.14:8554/rgbstream"
-        :disabled="isActive"
-        clearable
-        @keyup.enter="startStream"
+      <button
+        class="source-reference"
+        type="button"
+        title="在 Input 中配置 Camera RTSP 数据源"
+        @click="openCameraSourceSettings"
       >
-        <template #prefix
-          ><el-icon><Link /></el-icon
-        ></template>
-      </el-input>
+        <el-icon :size="16"><Link /></el-icon>
+        <span class="source-reference-copy">
+          <small>Camera RTSP</small>
+          <strong>{{ streamUrl }}</strong>
+        </span>
+        <span class="source-config-action">配置</span>
+      </button>
       <el-button
         v-if="!isActive"
         type="primary"
@@ -70,17 +75,20 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Link, Loading, VideoCamera, VideoPause, VideoPlay } from '@element-plus/icons-vue'
+import { normalizeRtspUrl } from '@/core/data/DataSourceStorage'
+import { useDataSourceManager } from '@/composables/useDataSourceManager'
+import emitter from '@/hooks/useMitt'
 
 type StreamStatus = 'idle' | 'connecting' | 'playing' | 'stopped' | 'error' | 'unavailable'
 type StreamStatusPayload = { status?: StreamStatus; message?: string }
 
-const STORAGE_KEY = 'nav-tools:camera-stream-url'
-const DEFAULT_STREAM_URL = 'rtsp://192.168.3.14:8554/rgbstream'
-
-const streamUrl = ref(localStorage.getItem(STORAGE_KEY) || DEFAULT_STREAM_URL)
+const { settings: dataSourceSettings } = useDataSourceManager()
+const streamUrl = computed(() => dataSourceSettings.camera.url)
 const status = ref<StreamStatus>('idle')
 const statusMessage = ref('等待播放')
 const frameUrl = ref('')
+/** 主进程标签识别结果(模板匹配 + 时序投票) */
+const labels = ref<string[]>([])
 
 // 缩放/平移:滚轮以光标为中心缩放,左键拖拽平移,双击复位
 const zoomLevel = ref(1)
@@ -143,7 +151,7 @@ const statusText = computed(() => statusMessage.value || status.value)
 const placeholderTitle = computed(() => (status.value === 'error' ? '视频连接失败' : '相机画面'))
 const placeholderHint = computed(() => {
   if (status.value === 'error' || status.value === 'unavailable') return statusMessage.value
-  return '输入 RTSP 地址后点击播放'
+  return '在 Input 中配置 RTSP 数据源后点击播放'
 })
 
 function revokeFrameUrl() {
@@ -151,17 +159,8 @@ function revokeFrameUrl() {
   frameUrl.value = ''
 }
 
-function validateUrl(value: string): string | undefined {
-  try {
-    const parsed = new URL(value.trim())
-    return parsed.protocol === 'rtsp:' && parsed.hostname ? parsed.toString() : undefined
-  } catch {
-    return undefined
-  }
-}
-
 async function startStream() {
-  const url = validateUrl(streamUrl.value)
+  const url = normalizeRtspUrl(streamUrl.value)
   if (!url) {
     ElMessage.warning('请输入以 rtsp:// 开头的有效视频地址')
     return
@@ -173,8 +172,6 @@ async function startStream() {
     return
   }
 
-  localStorage.setItem(STORAGE_KEY, url)
-  streamUrl.value = url
   revokeFrameUrl()
   status.value = 'connecting'
   statusMessage.value = '正在连接…'
@@ -189,9 +186,14 @@ async function startStream() {
   }
 }
 
+function openCameraSourceSettings() {
+  emitter.emit('input-event', { tab: 'camera' })
+}
+
 async function pauseStream() {
   await window.electronAPI?.stopCameraStream?.()
   revokeFrameUrl()
+  labels.value = []
   status.value = 'stopped'
   statusMessage.value = '已暂停'
 }
@@ -211,17 +213,27 @@ const statusListener = (_event: unknown, payload: StreamStatusPayload) => {
   if (!payload || typeof payload !== 'object') return
   if (payload.status) status.value = payload.status
   if (payload.message) statusMessage.value = payload.message
-  if (payload.status === 'error') revokeFrameUrl()
+  if (payload.status === 'error') {
+    revokeFrameUrl()
+    labels.value = []
+  }
+}
+
+const labelListener = (_event: unknown, payload: { labels?: unknown }) => {
+  if (!payload || !Array.isArray(payload.labels)) return
+  labels.value = payload.labels.filter((item): item is string => typeof item === 'string')
 }
 
 onMounted(() => {
   window.ipcRenderer?.on('camera-stream-frame', frameListener)
   window.ipcRenderer?.on('camera-stream-status', statusListener)
+  window.ipcRenderer?.on('camera-stream-labels', labelListener)
 })
 
 onUnmounted(() => {
   window.ipcRenderer?.off('camera-stream-frame', frameListener)
   window.ipcRenderer?.off('camera-stream-status', statusListener)
+  window.ipcRenderer?.off('camera-stream-labels', labelListener)
   void window.electronAPI?.stopCameraStream?.()
   revokeFrameUrl()
 })
@@ -248,9 +260,83 @@ onUnmounted(() => {
   background: var(--app-surface-muted);
 }
 
-.stream-input {
+.label-hints {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 6px 10px;
+  border-top: 1px solid var(--app-border);
+  background: var(--app-surface);
+}
+
+.hints-title {
+  font-size: 12px;
+  color: var(--app-text-muted);
+}
+
+.label-chip {
+  padding: 2px 8px;
+  border: 1px solid var(--app-border);
+  border-radius: 999px;
+  background: var(--app-surface-muted);
+  color: var(--el-color-danger);
+  font-size: 12px;
+  font-family: 'Courier New', monospace;
+  font-weight: 600;
+}
+
+.source-reference {
+  display: flex;
   flex: 1;
+  align-items: center;
+  gap: 9px;
   min-width: 120px;
+  min-height: 34px;
+  padding: 5px 8px;
+  border: 1px solid var(--app-border);
+  border-radius: 6px;
+  color: var(--app-text-secondary);
+  background: var(--app-surface);
+  text-align: left;
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.source-reference:hover,
+.source-reference:focus-visible {
+  border-color: var(--el-color-primary);
+  outline: none;
+}
+
+.source-reference-copy {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  gap: 1px;
+}
+
+.source-reference-copy small {
+  color: var(--app-text-muted);
+  font-size: 10px;
+}
+
+.source-reference-copy strong {
+  overflow: hidden;
+  color: var(--app-text-secondary);
+  font-family: 'Consolas', 'Monaco', monospace;
+  font-size: 11px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.source-config-action {
+  flex: none;
+  color: var(--el-color-primary);
+  font-size: 12px;
 }
 
 .video-stage {
@@ -366,7 +452,7 @@ onUnmounted(() => {
     flex-wrap: wrap;
   }
 
-  .stream-input {
+  .source-reference {
     flex-basis: 100%;
   }
 }

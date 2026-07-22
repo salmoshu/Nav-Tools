@@ -1,5 +1,6 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { JpegStreamParser } from '../../../src/core/camera/JpegStreamParser'
+import { LabelVoter, recognizeLabels } from '../../../src/core/camera/LabelOcr'
 
 export type CameraStreamStatus = 'connecting' | 'playing' | 'stopped' | 'error'
 
@@ -20,11 +21,33 @@ interface CameraStreamSession {
   receivedFrame: boolean
   stopping: boolean
   watchdog?: NodeJS.Timeout
+  /** 标签识别:原始 rgb24 帧缓冲与帧尺寸(取自首帧 JPEG SOF) */
+  voter: LabelVoter
+  ocrBuffer: Buffer
+  frameWidth: number
+  frameHeight: number
+  lastLabelsKey: string
 }
 
 export interface CameraStreamStartResult {
   ok: boolean
   message?: string
+}
+
+/** 红字掩码(黑=文字)与绿框掩码(黑=框线)表达式,供 ffmpeg geq 使用 */
+const RED_MASK_EXPR = 'if(gt(r(X,Y),100)*gt(r(X,Y),g(X,Y)+30)*gt(r(X,Y),b(X,Y)+30),0,255)'
+const GREEN_MASK_EXPR = 'if(gt(g(X,Y),140)*gt(g(X,Y),r(X,Y)+40)*gt(g(X,Y),b(X,Y)+40),0,255)'
+
+/** 从 JPEG 数据中解析帧尺寸(SOF0~SOF15,排除 DHT/DAC/RST) */
+function parseJpegSize(frame: Uint8Array): { width: number; height: number } | undefined {
+  for (let i = 0; i + 9 < frame.length; i++) {
+    if (frame[i] !== 0xff) continue
+    const marker = frame[i + 1]
+    if (marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc) {
+      return { height: (frame[i + 5] << 8) | frame[i + 6], width: (frame[i + 7] << 8) | frame[i + 8] }
+    }
+  }
+  return undefined
 }
 
 export class CameraStreamService {
@@ -47,6 +70,7 @@ export class CameraStreamService {
 
   private attempt(id: number, url: string, target: CameraStreamTarget, transportIndex: number): void {
     const transport = CameraStreamService.transports[transportIndex]
+    // 两路输出:pipe:1 = MJPEG 显示流;pipe:3 = 红/绿掩码 rgb24 裸帧,供标签识别
     const process = spawn(this.ffmpegExecutable, [
       '-hide_banner',
       '-loglevel', 'warning',
@@ -55,12 +79,18 @@ export class CameraStreamService {
       '-flags', 'low_delay',
       '-i', url,
       '-an',
-      '-vf', 'fps=15',
+      '-filter_complex',
+      `[0:v]split=2[va][vb];[va]fps=15[outv];[vb]fps=2,format=rgb24,geq=r='${RED_MASK_EXPR}':g='${GREEN_MASK_EXPR}':b='255'[outm]`,
+      '-map', '[outv]',
       '-q:v', '2',
       '-f', 'image2pipe',
       '-vcodec', 'mjpeg',
       'pipe:1',
-    ], { windowsHide: true })
+      '-map', '[outm]',
+      '-f', 'rawvideo',
+      '-pix_fmt', 'rgb24',
+      'pipe:3',
+    ], { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe', 'pipe'] })
 
     const session: CameraStreamSession = {
       process,
@@ -71,6 +101,11 @@ export class CameraStreamService {
       errorOutput: '',
       receivedFrame: false,
       stopping: false,
+      voter: new LabelVoter(),
+      ocrBuffer: Buffer.alloc(0),
+      frameWidth: 0,
+      frameHeight: 0,
+      lastLabelsKey: '',
     }
     this.sessions.set(id, session)
     this.sendStatus(session, 'connecting', '正在连接相机…')
@@ -89,7 +124,37 @@ export class CameraStreamService {
           if (session.watchdog) clearTimeout(session.watchdog)
           this.sendStatus(session, 'playing', '直播中')
         }
+        if (!session.frameWidth) {
+          const size = parseJpegSize(frame)
+          if (size) {
+            session.frameWidth = size.width
+            session.frameHeight = size.height
+          }
+        }
         target.send('camera-stream-frame', frame)
+      }
+    })
+
+    const ocrStream = process.stdio[3]
+    ocrStream?.on('data', (chunk: Buffer) => {
+      if (this.sessions.get(id) !== session || target.isDestroyed()) return
+      const { frameWidth: width, frameHeight: height } = session
+      if (!width || !height) return
+
+      session.ocrBuffer = session.ocrBuffer.length ? Buffer.concat([session.ocrBuffer, chunk]) : chunk
+      const frameSize = width * height * 3
+      while (session.ocrBuffer.length >= frameSize) {
+        const frame = session.ocrBuffer.subarray(0, frameSize)
+        session.ocrBuffer = session.ocrBuffer.subarray(frameSize)
+
+        const labels = recognizeLabels(new Uint8Array(frame.buffer, frame.byteOffset, frameSize), width, height)
+        session.voter.push(labels)
+        const stable = session.voter.getStable()
+        const key = stable.join('|')
+        if (key !== session.lastLabelsKey) {
+          session.lastLabelsKey = key
+          target.send('camera-stream-labels', { labels: stable })
+        }
       }
     })
 
