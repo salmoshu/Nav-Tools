@@ -13,6 +13,9 @@ export function getBrowserWindowService(): WindowService {
       toggleAlwaysOnTop: async () => false,
       restoreDetachedPanel: async () => false,
       closeWindow: async () => undefined,
+      startWindowDrag: async () => undefined,
+      moveWindowDrag: async () => undefined,
+      stopWindowDrag: async () => undefined,
       startWindowResize: async () => undefined,
       stopWindowResize: async () => undefined,
     }

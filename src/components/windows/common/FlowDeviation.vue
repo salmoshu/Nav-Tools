@@ -58,18 +58,15 @@
 </template>
 
 <script setup>
-import * as echarts from 'echarts';
 import { ref, watch, onMounted, onUnmounted, nextTick, computed, reactive } from 'vue';
 import { useFlow } from '@/composables/flow/useFlow';
 import { useDevice } from '@/hooks/useDevice'
-import { ScatterChart } from 'echarts/charts';
-import { GridComponent } from 'echarts/components';
-import { CanvasRenderer } from 'echarts/renderers';
 import { ElMessage } from 'element-plus';
 import { useDataConfig } from '@/composables/flow/useDataConfig';
 import { useConsole } from '@/composables/flow/useConsole';
 import { useTheme } from '@/composables/useTheme';
-import DeviationConfigDialog from '@/components/deviation/DeviationConfigDialog.vue';
+import DeviationConfigDialog from './DeviationConfigDialog.vue';
+import { useDeviationChart } from './deviation/useDeviationChart';
 
 const { deviationConfig } = useDataConfig();
 
@@ -80,8 +77,6 @@ const { searchQuery } = useConsole(true);
 const { plotData, toggleSlideWindow, enableWindow } = useFlow();
 const { deviceConnected } = useDevice()
 const { chartTheme, resolvedTheme } = useTheme();
-
-echarts.use([ScatterChart, GridComponent, CanvasRenderer]);
 
 // 颜色处理辅助函数
 function getValidColor(color, defaultColor) {
@@ -100,13 +95,21 @@ function hexToRgba(color, alpha = 1) {
 }
 
 // DOM引用和响应式变量
-const chartRef = ref(null);
-const chartInstance = ref(null);
-const chartContainerRef = ref(null); // 添加容器引用
-const isTracking = ref(false);
-const padding = ref(10000); // 默认正负10km
-const pointSize = ref(10); // 初始值与图表配置一致
-const chartDom = ref(null); // 添加chartDom引用
+const {
+  chartRef,
+  chartInstance,
+  chartContainerRef,
+  isTracking,
+  padding,
+  pointSize,
+  createChart,
+  setupResizeObserver,
+  disconnectResizeObserver,
+  getDataZoomConfig,
+  maintainEqualAxisScale,
+  bindWheelHandler,
+  unbindWheelHandler,
+} = useDeviationChart({ initialTracking: false });
 const highlightTimeout = ref(null); // 添加高亮超时定时器
 // 移除squareSize变量
 
@@ -145,7 +148,6 @@ const latestPointInfo = reactive({
 });
 // let firstPosition = null;
 // const maxTrackPoints = 3600 * 12;
-let resizeObserver = null;
 // const minPadding = 10000; // 最小范围正负10km
 
 // 显示视图配置对话框
@@ -214,87 +216,9 @@ function applyViewConfig() {
   updateFlowData();
 }
 
-// 设置调整大小观察器
-function setupResizeObserver() {
-  if (!chartRef.value) return;
-  resizeObserver = new ResizeObserver(() => {
-    nextTick(() => {
-      if (chartInstance.value && chartInstance.value.getDom()) {
-        // 在resize前确保坐标系配置正确
-        const option = chartInstance.value.getOption();
-        if (option && option.series) {
-          // 确保series中没有错误的coordinateSystem配置
-          option.series = option.series.map(series => ({
-            ...series,
-            coordinateSystem: "cartesian2d"
-          }));
-          chartInstance.value.setOption(option, false);
-        }
-        
-        // 计算并设置等宽坐标轴
-        maintainEqualAxisScale();
-        
-        chartInstance.value.resize();
-      }
-    });
-  });
-  const parentElement = chartRef.value.parentElement;
-  if (parentElement) {
-    resizeObserver.observe(parentElement);
-  }
-  // 同时观察容器元素
-  if (chartContainerRef.value) {
-    resizeObserver.observe(chartContainerRef.value);
-  }
-  updateFlowData();
-}
-
-// 获取数据缩放配置
-function getDataZoomConfig(xStart, xEnd, yStart, yEnd) {
-  const initXConfig = {
-    type: 'inside',
-    xAxisIndex: 0,
-    zoomOnMouseWheel: false,
-    moveOnMouseWheel: !isTracking.value,
-    moveOnMouseMove: !isTracking.value,
-  }
-
-  const initYConfig = {
-    type: 'inside',
-    yAxisIndex: 0,
-    zoomOnMouseWheel: false,
-    moveOnMouseWheel: !isTracking.value,
-    moveOnMouseMove: !isTracking.value,
-  }
-
-  if (xStart && xEnd && yStart && yEnd) {
-    return [
-      {
-        ...initXConfig,
-        startValue: xStart,
-        endValue: xEnd,
-      },
-      {
-        ...initYConfig,
-        startValue: yStart,
-        endValue: yEnd,
-      },
-    ];
-  } else {
-    return [initXConfig, initYConfig];
-  }
-}
-
 // 初始化图表
 function initChart() {
-  if (!chartRef.value) return;
-  if (chartInstance.value) {
-    chartInstance.value.dispose();
-  }
-  chartInstance.value = echarts.init(chartRef.value, null, {
-    renderer: 'canvas',
-    antialias: false,
-  });
+  if (!createChart()) return;
   const colors = chartTheme.value;
 
   const option = {
@@ -446,14 +370,11 @@ function initChart() {
   // 添加legend点击事件监听
   chartInstance.value.on('legendselectchanged', handleLegendSelectChanged);
   
-  setupResizeObserver();
+  setupResizeObserver(maintainEqualAxisScale);
+  updateFlowData();
 
   // 直接在DOM元素上绑定事件监听器
-  chartDom.value = chartInstance.value.getDom();
-  if (chartDom.value) {
-    chartDom.value.addEventListener('mousewheel', handleWheel, { passive: false, capture: true });
-    chartDom.value.addEventListener('wheel', handleWheel, { passive: false, capture: true });
-  }
+  bindWheelHandler(handleWheel);
 }
 
 // 处理滚轮事件
@@ -1419,59 +1340,6 @@ function handleLegendSelectChanged(params) {
   updateFlowData();
 }
 
-// 新增：保持坐标轴等宽的函数
-function maintainEqualAxisScale() {
-  if (!chartInstance.value || !chartContainerRef.value) return;
-  
-  const chartOption = chartInstance.value.getOption();
-  const containerWidth = chartContainerRef.value.clientWidth;
-  const containerHeight = chartContainerRef.value.clientHeight;
-  
-  // 考虑图表内边距，获取实际绘图区域的宽高
-  const grid = chartOption.grid[0];
-  const gridLeft = typeof grid.left === 'string' ? parseInt(grid.left) : grid.left;
-  const gridRight = typeof grid.right === 'string' ? parseInt(grid.right) : grid.right;
-  const gridTop = typeof grid.top === 'string' ? parseInt(grid.top) : grid.top;
-  const gridBottom = typeof grid.bottom === 'string' ? parseInt(grid.bottom) : grid.bottom;
-  
-  const plotWidth = containerWidth - gridLeft - gridRight;
-  const plotHeight = containerHeight - gridTop - gridBottom;
-  
-  // 获取当前坐标轴范围
-  const xMin = chartOption.xAxis[0].min || -padding.value;
-  const xMax = chartOption.xAxis[0].max || padding.value;
-  const yMin = chartOption.yAxis[0].min || -padding.value;
-  const yMax = chartOption.yAxis[0].max || padding.value;
-  
-  const xRange = xMax - xMin;
-  const yRange = yMax - yMin;
-  
-  // 计算每单位数据对应的像素数
-  const xPixelPerUnit = plotWidth / xRange;
-  const yPixelPerUnit = plotHeight / yRange;
-  
-  // 找出较小的值，确保等宽
-  const minPixelPerUnit = Math.min(xPixelPerUnit, yPixelPerUnit);
-  
-  // 计算新的范围，保持中心点不变
-  const xCenter = (xMin + xMax) / 2;
-  const yCenter = (yMin + yMax) / 2;
-  
-  const newXRange = plotWidth / minPixelPerUnit;
-  const newYRange = plotHeight / minPixelPerUnit;
-  
-  const newXMin = xCenter - newXRange / 2;
-  const newXMax = xCenter + newXRange / 2;
-  const newYMin = yCenter - newYRange / 2;
-  const newYMax = yCenter + newYRange / 2;
-  
-  // 应用新的范围设置
-  chartInstance.value.setOption({
-    xAxis: { min: newXMin, max: newXMax },
-    yAxis: { min: newYMin, max: newYMax }
-  });
-}
-
 let handleKeyDown = null;
 let dataUpdateInterval = null;
 
@@ -1804,9 +1672,7 @@ onUnmounted(() => {
     
     chartInstance.value.dispose();
   }
-  if (resizeObserver) {
-    resizeObserver.disconnect();
-  }
+  disconnectResizeObserver();
   if (dataUpdateInterval) {
     clearInterval(dataUpdateInterval);
   }
@@ -1816,10 +1682,7 @@ onUnmounted(() => {
     highlightTimeout.value = null;
   }
   // 清理滚轮事件监听器
-  if (chartDom.value) {
-    chartDom.value.removeEventListener('mousewheel', handleWheel, { capture: true });
-    chartDom.value.removeEventListener('wheel', handleWheel, { capture: true });
-  }
+  unbindWheelHandler(handleWheel);
   window.removeEventListener('keydown', handleKeyDown);
 });
 </script>

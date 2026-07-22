@@ -38,6 +38,17 @@
     "clean": "rimraf node_modules dist dist-electron release",
     "rebuild": "npm run clean && npm ci"
   },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@serialport/bindings-cpp",
+      "electron",
+      "esbuild",
+      "vue-demi"
+    ],
+    "overrides": {
+      "node-abi": "^3.94.0"
+    }
+  },
   "devDependencies": {
     "@playwright/test": "^1.55.1",
     "@typescript-eslint/eslint-plugin": "^8.46.2",

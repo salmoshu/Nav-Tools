@@ -1,4 +1,4 @@
-import { app, BrowserWindow, shell, ipcMain, Menu, powerSaveBlocker, screen } from 'electron'
+import { app, BrowserWindow, shell, ipcMain, Menu, powerSaveBlocker, screen, type Point, type Rectangle } from 'electron'
 import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
@@ -49,6 +49,7 @@ const indexHtml = path.join(RENDERER_DIST, 'index.html')
 
 type WindowResizeEdge = 'top' | 'right' | 'bottom' | 'left' | 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right'
 const resizeIntervals = new Map<number, ReturnType<typeof setInterval>>()
+const dragStates = new Map<number, { initialBounds: Rectangle; initialCursor: Point }>()
 const detachedPanels = new Map<number, { originWebContentsId: number; windowId: string }>()
 
 function getWindowState(target: BrowserWindow) {
@@ -75,6 +76,10 @@ function stopWindowResize(webContentsId: number) {
   const interval = resizeIntervals.get(webContentsId)
   if (interval) clearInterval(interval)
   resizeIntervals.delete(webContentsId)
+}
+
+function stopWindowDrag(webContentsId: number) {
+  dragStates.delete(webContentsId)
 }
 
 ipcMain.handle('window-get-state', event => {
@@ -167,6 +172,34 @@ ipcMain.handle('window-resize-start', (event, edge: WindowResizeEdge) => {
 
 ipcMain.handle('window-resize-stop', event => {
   stopWindowResize(event.sender.id)
+})
+
+ipcMain.handle('window-drag-start', (event, cursor?: { x?: unknown; y?: unknown }) => {
+  const target = BrowserWindow.fromWebContents(event.sender)
+  if (!target || target.isMaximized() || target.isFullScreen()) return
+
+  const x = typeof cursor?.x === 'number' ? cursor.x : screen.getCursorScreenPoint().x
+  const y = typeof cursor?.y === 'number' ? cursor.y : screen.getCursorScreenPoint().y
+  dragStates.set(event.sender.id, {
+    initialBounds: target.getBounds(),
+    initialCursor: { x, y },
+  })
+})
+
+ipcMain.handle('window-drag-move', (event, cursor?: { x?: unknown; y?: unknown }) => {
+  const target = BrowserWindow.fromWebContents(event.sender)
+  const state = dragStates.get(event.sender.id)
+  if (!target || !state || target.isDestroyed() || target.isMaximized() || target.isFullScreen()) return
+  if (typeof cursor?.x !== 'number' || typeof cursor?.y !== 'number') return
+
+  target.setPosition(
+    state.initialBounds.x + cursor.x - state.initialCursor.x,
+    state.initialBounds.y + cursor.y - state.initialCursor.y,
+  )
+})
+
+ipcMain.handle('window-drag-stop', event => {
+  stopWindowDrag(event.sender.id)
 })
 
 async function createWindow() {
@@ -314,6 +347,17 @@ ipcMain.handle('open-card-window', async (event, serializedData) => {
 
 ipcMain.on('close-card-window', (event) => {
   BrowserWindow.fromWebContents(event.sender)?.close()
+})
+
+// 主窗口收到的实时数据广播给所有独立卡片窗口
+ipcMain.on('broadcast-incoming-data', (_event, data: unknown) => {
+  if (typeof data !== 'string') return
+  for (const windowId of detachedPanels.keys()) {
+    const target = BrowserWindow.fromId(windowId)
+    if (target && !target.isDestroyed()) {
+      target.webContents.send('incoming-data', data)
+    }
+  }
 })
 
 // Open a renderer window for a user-defined application stored in renderer localStorage.

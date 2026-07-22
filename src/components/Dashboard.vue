@@ -1,6 +1,8 @@
 <template>
   <div
     class="dashboard"
+    :class="{ 'dashboard-resizing': isGridResizing }"
+    @pointerdown.capture="handleDashboardPointerDown"
     @dragover="device.handleDragOver"
     @dragenter="device.handleDragEnter"
     @dragleave="device.handleDragLeave"
@@ -46,6 +48,7 @@
             :maxW="item.maxW || 12"
             :maxH="item.maxH || 12"
             @resize="resizeEvent"
+            @resized="resizedEvent"
             @moved="movedEvent"
           >
             <div class="layout-component" :id="`grid-item-${item.i}`">
@@ -200,6 +203,7 @@ const statusbarSize = ref({ width: 200, height: 60 })
 
 // 全屏相关状态
 const fullScreenItem = ref<string | null>(null)
+const isGridResizing = ref(false)
 
 // 提供工具栏和状态栏位置的响应式引用
 provide('toolbarPosition', toolbarPosition)
@@ -312,14 +316,28 @@ const contentStyle = computed(() => {
     marginBottom: `${marginBottom}px`,
     marginLeft: `${marginLeft}px`,
     marginRight: `${marginRight}px`,
-    height: `calc(100vh - ${marginTop + marginBottom}px)`,
-    width: `calc(100vw - ${marginLeft + marginRight}px)`,
+    height: `calc(100% - ${marginTop + marginBottom}px)`,
+    width: `calc(100% - ${marginLeft + marginRight}px)`,
   }
 })
 
-// 事件处理函数
-const resizeEvent = (i: string, newH: number, newW: number, newHPx: number, newWPx: number) => {
-  // 强制触发重绘，确保内容区域正确计算高度
+function clearTextSelection() {
+  window.getSelection()?.removeAllRanges()
+}
+
+function beginGridResize() {
+  isGridResizing.value = true
+  document.documentElement.classList.add('dashboard-resizing')
+  clearTextSelection()
+}
+
+function endGridResize() {
+  isGridResizing.value = false
+  document.documentElement.classList.remove('dashboard-resizing')
+  clearTextSelection()
+}
+
+function refreshCardBodyHeight(i: string) {
   setTimeout(() => {
     const gridItem = document.getElementById(`grid-item-${i}`)
     if (gridItem) {
@@ -333,6 +351,24 @@ const resizeEvent = (i: string, newH: number, newW: number, newHPx: number, newW
       }
     }
   }, 0)
+}
+
+const handleDashboardPointerDown = (event: PointerEvent) => {
+  const target = event.target as HTMLElement | null
+  if (target?.closest('.el-overlay, .el-dialog, .data-input-dialog')) return
+  if (target?.closest('.vgl-item__resizer')) beginGridResize()
+}
+
+// 事件处理函数
+const resizeEvent = (i: string, newH: number, newW: number, newHPx: number, newWPx: number) => {
+  beginGridResize()
+  // 强制触发重绘，确保内容区域正确计算高度
+  refreshCardBodyHeight(i)
+}
+
+const resizedEvent = (i: string) => {
+  refreshCardBodyHeight(i)
+  endGridResize()
 }
 
 const movedEvent = (i: string, newX: number, newY: number) => {
@@ -390,6 +426,9 @@ onMounted(() => {
 
   // 添加键盘事件监听
   window.addEventListener('keydown', handleKeyDown)
+  window.addEventListener('pointerup', endGridResize)
+  window.addEventListener('pointercancel', endGridResize)
+  window.addEventListener('blur', endGridResize)
 
   windowCatalog.forEach((windowDefinition) => {
     emitter.on(windowDefinition.button.msg, () => addItem(windowDefinition.id))
@@ -411,6 +450,10 @@ onUnmounted(() => {
   emitter.all.clear()
   // 移除键盘事件监听
   window.removeEventListener('keydown', handleKeyDown)
+  window.removeEventListener('pointerup', endGridResize)
+  window.removeEventListener('pointercancel', endGridResize)
+  window.removeEventListener('blur', endGridResize)
+  document.documentElement.classList.remove('dashboard-resizing')
 })
 </script>
 
@@ -423,6 +466,23 @@ onUnmounted(() => {
   overflow: hidden;
 }
 
+.dashboard.dashboard-resizing,
+.dashboard.dashboard-resizing * {
+  cursor: se-resize !important;
+  user-select: none !important;
+  -webkit-user-select: none !important;
+}
+
+:global(html.dashboard-resizing),
+:global(html.dashboard-resizing body),
+:global(html.dashboard-resizing #app),
+:global(html.dashboard-resizing .dashboard),
+:global(html.dashboard-resizing .dashboard *) {
+  cursor: se-resize !important;
+  user-select: none !important;
+  -webkit-user-select: none !important;
+}
+
 .dashboard-content {
   width: 100%;
   height: 100%;
@@ -433,7 +493,9 @@ onUnmounted(() => {
 
 .dashboard-grid {
   padding: 10px;
-  height: calc(100% - 60px);
+  min-height: 100%;
+  box-sizing: border-box;
+  padding-bottom: 24px;
 }
 
 .grid-layout {
@@ -451,6 +513,7 @@ onUnmounted(() => {
   height: 100%;
   display: flex;
   flex-direction: column;
+  box-sizing: border-box;
   border: 1px solid var(--app-border);
   box-shadow: none;
   overflow: hidden;
@@ -473,50 +536,54 @@ onUnmounted(() => {
   overflow: hidden;
 }
 
-/* 全屏模式下，根据Toolbar位置调整全屏卡片的位置和大小 */
+/* 全屏模式下，根据Header和Toolbar位置调整全屏卡片的位置和大小 */
 .toolbar-top .full-screen-card {
-  top: 40px; /* Toolbar的高度 */
+  top: calc(var(--app-header-height, 38px) + var(--app-toolbar-size));
   left: 0;
   right: 0;
   bottom: 0;
-  height: calc(100vh - 40px);
+  height: calc(100vh - var(--app-header-height, 38px) - var(--app-toolbar-size));
 }
 
 .toolbar-bottom .full-screen-card {
-  top: 0;
+  top: var(--app-header-height, 38px);
   left: 0;
   right: 0;
-  bottom: 40px; /* Toolbar的高度 */
-  height: calc(100vh - 40px);
+  bottom: var(--app-toolbar-size);
+  height: calc(100vh - var(--app-header-height, 38px) - var(--app-toolbar-size));
 }
 
 .toolbar-left .full-screen-card {
-  top: 0;
-  left: 40px; /* Toolbar的宽度 */
+  top: var(--app-header-height, 38px);
+  left: var(--app-toolbar-size);
   right: 0;
   bottom: 0;
-  width: calc(100vw - 40px);
+  width: calc(100vw - var(--app-toolbar-size));
+  height: calc(100vh - var(--app-header-height, 38px));
 }
 
 .toolbar-right .full-screen-card {
-  top: 0;
+  top: var(--app-header-height, 38px);
   left: 0;
-  right: 40px; /* Toolbar的宽度 */
+  right: var(--app-toolbar-size);
   bottom: 0;
-  width: calc(100vw - 40px);
+  width: calc(100vw - var(--app-toolbar-size));
+  height: calc(100vh - var(--app-header-height, 38px));
 }
 
 /* 全屏模式下，同时有上下或左右Toolbar的情况 */
 .toolbar-top.toolbar-bottom .full-screen-card {
-  top: 40px;
-  bottom: 40px;
-  height: calc(100vh - 80px);
+  top: calc(var(--app-header-height, 38px) + var(--app-toolbar-size));
+  bottom: var(--app-toolbar-size);
+  height: calc(100vh - var(--app-header-height, 38px) - 2 * var(--app-toolbar-size));
 }
 
 .toolbar-left.toolbar-right .full-screen-card {
-  left: 40px;
-  right: 40px;
-  width: calc(100vw - 80px);
+  top: var(--app-header-height, 38px);
+  left: var(--app-toolbar-size);
+  right: var(--app-toolbar-size);
+  width: calc(100vw - 2 * var(--app-toolbar-size));
+  height: calc(100vh - var(--app-header-height, 38px));
 }
 
 /* 全屏头部样式 */
@@ -556,7 +623,7 @@ onUnmounted(() => {
 
 /* 全屏模式下的内容区域 */
 .full-screen-card :deep(.el-card__body) {
-  height: calc(100% - 60px);
+  height: calc(100% - 45px);
   overflow: auto;
 }
 
@@ -630,14 +697,22 @@ onUnmounted(() => {
 /* 调整 resizer 位置 */
 :deep(.vgl-item__resizer) {
   position: absolute;
-  right: -2px; /* 移到 el-card 边框外部 */
-  bottom: -8px; /* 移到 el-card 边框外部 */
+  right: 0;
+  bottom: 0;
   width: 15px; /* 增大锚点尺寸，便于点击 */
   height: 15px;
   border-radius: 50%; /* 圆形锚点 */
   cursor: se-resize;
   z-index: 20; /* 确保锚点在卡片上层 */
   box-sizing: border-box;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+}
+
+:deep(.vgl-item__resizer::before) {
+  right: 0;
+  bottom: 0;
 }
 
 /* 确保 grid-item 无内边距或边框干扰 */

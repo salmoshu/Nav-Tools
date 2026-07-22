@@ -58,6 +58,8 @@ body {
   overflow: hidden;
   color: var(--app-text);
   background: var(--app-bg);
+  /* Electron frameless windows default everything to no-drag; only the title bar is draggable. */
+  -webkit-app-region: no-drag;
 }
 
 button,
@@ -65,6 +67,32 @@ input,
 textarea,
 select {
   font: inherit;
+}
+
+/* Ensure the data-input dialog and its teleported overlay/popups are never treated as drag regions. */
+.data-input-overlay,
+.data-input-overlay *,
+.data-input-overlay .el-overlay-dialog,
+.data-input-dialog,
+.data-input-dialog *,
+.data-input-dialog .el-input__wrapper,
+.data-input-dialog .el-input__inner,
+.data-input-dialog input,
+.data-input-dialog textarea,
+.data-input-dialog .el-select,
+.data-input-dialog .el-button,
+.el-popper,
+.el-select-dropdown,
+.el-select-dropdown * {
+  -webkit-app-region: no-drag !important;
+}
+
+.data-input-dialog .el-input__inner,
+.data-input-dialog input,
+.data-input-dialog textarea {
+  user-select: text;
+  -webkit-user-select: text;
+  pointer-events: auto;
 }
 
 button {

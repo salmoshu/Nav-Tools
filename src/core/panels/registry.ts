@@ -32,7 +32,7 @@ export const panelRegistry: readonly PanelDefinition[] = [
     title: 'Plot',
     description: '绘制数值数据随时间的变化',
     componentName: 'Plot',
-    componentPath: '@/components/panels/Plot.vue',
+    componentPath: '@/components/windows/common/Plot.vue',
   },
   {
     id: 'raw-messages',
@@ -43,7 +43,7 @@ export const panelRegistry: readonly PanelDefinition[] = [
     title: 'Raw Messages',
     description: '查看、筛选并发送原始消息',
     componentName: 'RawMessages',
-    componentPath: '@/components/panels/RawMessages.vue',
+    componentPath: '@/components/windows/common/RawMessages.vue',
   },
   {
     id: 'flow-deviation',
@@ -54,7 +54,7 @@ export const panelRegistry: readonly PanelDefinition[] = [
     title: 'Flow Deviation',
     description: '分析 Flow 轨迹与偏差',
     componentName: 'FlowDeviation',
-    componentPath: '@/components/flow/FlowDeviation.vue',
+    componentPath: '@/components/windows/common/FlowDeviation.vue',
   },
   {
     id: 'gnss-deviation',
@@ -65,7 +65,7 @@ export const panelRegistry: readonly PanelDefinition[] = [
     title: 'GNSS Deviation',
     description: '分析 GNSS 定位偏差',
     componentName: 'GnssDeviation',
-    componentPath: '@/components/gnss/GnssDeviation.vue',
+    componentPath: '@/components/windows/gnss/GnssDeviation.vue',
   },
   {
     id: 'gnss-signals',
@@ -76,7 +76,7 @@ export const panelRegistry: readonly PanelDefinition[] = [
     title: 'GNSS Signals',
     description: '查看卫星信号强度与状态',
     componentName: 'GnssSignal',
-    componentPath: '@/components/gnss/GnssSignal.vue',
+    componentPath: '@/components/windows/gnss/GnssSignal.vue',
   },
   {
     id: 'sky-plot',
@@ -87,7 +87,7 @@ export const panelRegistry: readonly PanelDefinition[] = [
     title: 'Sky Plot',
     description: '查看卫星方位角与高度角',
     componentName: 'GnssSky',
-    componentPath: '@/components/gnss/GnssSky.vue',
+    componentPath: '@/components/windows/gnss/GnssSky.vue',
   },
   {
     id: 'motor-parameters',
@@ -98,7 +98,7 @@ export const panelRegistry: readonly PanelDefinition[] = [
     title: 'Motor Parameters',
     description: '读取和配置电机参数',
     componentName: 'MotorConfig',
-    componentPath: '@/components/motor/MotorConfig.vue',
+    componentPath: '@/components/windows/motor/MotorConfig.vue',
   },
 ]
 

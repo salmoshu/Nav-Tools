@@ -61,6 +61,7 @@ const openApplicationSelector = () => emitter.emit('open-application-selector')
 <style>
 :root {
   --app-header-height: 38px;
+  --app-toolbar-size: 40px;
 }
 
 .app-shell {

@@ -36,34 +36,36 @@
 </template>
 
 <script setup>
-import * as echarts from 'echarts';
-import { ref, onMounted, onUnmounted, watch, nextTick } from 'vue';
-import { useNmea } from '../../composables/gnss/useNmea';
-import { ScatterChart } from 'echarts/charts';
-import { GridComponent } from 'echarts/components';
-import { CanvasRenderer } from 'echarts/renderers';
+import { onMounted, onUnmounted, watch, nextTick } from 'vue';
+import { useNmea } from '@/composables/gnss/useNmea';
 import { useDevice } from '@/hooks/useDevice'
 import { useTheme } from '@/composables/useTheme'
-
-echarts.use([ScatterChart, GridComponent, CanvasRenderer]);
+import { useDeviationChart } from '../common/deviation/useDeviationChart';
 
 const { latestPosition, latestGgaPosition, enableWindow, plotData, clearData } = useNmea();
 const { deviceConnected } = useDevice()
 const { chartTheme, resolvedTheme } = useTheme()
 
-const chartRef = ref(null);
-const chartInstance = ref(null);
-const isTracking = ref(true);
+const {
+  chartRef,
+  chartInstance,
+  chartContainerRef,
+  isTracking,
+  padding,
+  pointSize,
+  createChart,
+  setupResizeObserver,
+  disconnectResizeObserver,
+  getDataZoomConfig,
+  maintainEqualAxisScale,
+  bindWheelHandler,
+  unbindWheelHandler,
+} = useDeviationChart({ initialTracking: true });
 // const deviation = ref('');
-const padding = ref(10000); // 默认正负10km
-const pointSize = ref(10); // 初始值与图表配置一致
-const chartDom = ref(null); // 添加chartDom引用
-const chartContainerRef = ref(null); // 添加容器引用
 
 // let trackData = [];
 let firstPosition = null;
 // const maxTrackPoints = 3600*12;
-let resizeObserver = null;
 const minPadding = 10000; // 最小范围正负10km
 const MAX_LARGE_THRESHOLD = 5*60    // 5min 先存储5分钟数据以规避系统崩溃的问题
 
@@ -72,83 +74,8 @@ function toggleSlideWindow() {
   handleNmeaUpdate();
 }
 
-function setupResizeObserver() {
-  if (!chartRef.value) return;
-  resizeObserver = new ResizeObserver(() => {
-    nextTick(() => {
-      if (chartInstance.value && chartInstance.value.getDom()) {
-        // 在resize前确保坐标系配置正确
-        const option = chartInstance.value.getOption();
-        if (option && option.series) {
-          // 确保series中没有错误的coordinateSystem配置
-          option.series = option.series.map(series => ({
-            ...series,
-            // 移除可能导致问题的coordinateSystem配置，让ECharts自动处理
-            coordinateSystem: "cartesian2d"
-          }));
-          chartInstance.value.setOption(option, false);
-        }
-        
-        // 计算并设置等宽坐标轴
-        maintainEqualAxisScale();
-        chartInstance.value.resize();
-      }
-    });
-  });
-  const parentElement = chartRef.value.parentElement;
-  if (parentElement) {
-    resizeObserver.observe(parentElement);
-  }
-  // 同时观察容器元素
-  if (chartContainerRef.value) {
-    resizeObserver.observe(chartContainerRef.value);
-  }
-}
-
-function getDataZoomConfig(xStart, xEnd, yStart, yEnd) {
-  const initXConfig = {
-    type: 'inside',
-    xAxisIndex: 0,
-    zoomOnMouseWheel: false,
-    moveOnMouseWheel: !isTracking.value,
-    moveOnMouseMove: !isTracking.value,
-  }
-
-  const initYConfig = {
-    type: 'inside',
-    yAxisIndex: 0,
-    zoomOnMouseWheel: false,
-    moveOnMouseWheel: !isTracking.value,
-    moveOnMouseMove: !isTracking.value,
-  }
-
-  if (xStart && xEnd && yStart && yEnd) {
-    return [
-      {
-        ...initXConfig,
-        startValue: xStart,
-        endValue: xEnd,
-      },
-      {
-        ...initYConfig,
-        startValue: yStart,
-        endValue: yEnd,
-      },
-    ];
-  } else {
-    return [initXConfig, initYConfig];
-  }
-}
-
 function initChart() {
-  if (!chartRef.value) return;
-  if (chartInstance.value) {
-    chartInstance.value.dispose();
-  }
-  chartInstance.value = echarts.init(chartRef.value, null, {
-    renderer: 'canvas',
-    antialias: false,
-  });
+  if (!createChart()) return;
   const colors = chartTheme.value;
 
   const option = {
@@ -271,7 +198,7 @@ function initChart() {
   };
 
   chartInstance.value.setOption(option);
-  setupResizeObserver();
+  setupResizeObserver(maintainEqualAxisScale);
 
   chartInstance.value.on('datazoom', () => {
     nextTick(() => {
@@ -315,12 +242,7 @@ function initChart() {
   });
 
   // 直接在DOM元素上绑定事件监听器
-  chartDom.value = chartInstance.value.getDom();
-  if (chartDom.value) {
-    // GnssDeviation: 滚轮事件监听器已直接绑定到DOM元素（捕获阶段）
-    chartDom.value.addEventListener('mousewheel', handleWheel, { passive: false, capture: true });
-    chartDom.value.addEventListener('wheel', handleWheel, { passive: false, capture: true });
-  }
+  bindWheelHandler(handleWheel);
 }
 
 function handleWheel(e) {
@@ -560,59 +482,6 @@ function updatePointSize() {
   }
 }
 
-// 新增：保持坐标轴等宽的函数
-function maintainEqualAxisScale() {
-  if (!chartInstance.value || !chartContainerRef.value) return;
-  
-  const chartOption = chartInstance.value.getOption();
-  const containerWidth = chartContainerRef.value.clientWidth;
-  const containerHeight = chartContainerRef.value.clientHeight;
-  
-  // 考虑图表内边距，获取实际绘图区域的宽高
-  const grid = chartOption.grid[0];
-  const gridLeft = typeof grid.left === 'string' ? parseInt(grid.left) : grid.left;
-  const gridRight = typeof grid.right === 'string' ? parseInt(grid.right) : grid.right;
-  const gridTop = typeof grid.top === 'string' ? parseInt(grid.top) : grid.top;
-  const gridBottom = typeof grid.bottom === 'string' ? parseInt(grid.bottom) : grid.bottom;
-  
-  const plotWidth = containerWidth - gridLeft - gridRight;
-  const plotHeight = containerHeight - gridTop - gridBottom;
-  
-  // 获取当前坐标轴范围
-  const xMin = chartOption.xAxis[0].min || -padding.value;
-  const xMax = chartOption.xAxis[0].max || padding.value;
-  const yMin = chartOption.yAxis[0].min || -padding.value;
-  const yMax = chartOption.yAxis[0].max || padding.value;
-  
-  const xRange = xMax - xMin;
-  const yRange = yMax - yMin;
-  
-  // 计算每单位数据对应的像素数
-  const xPixelPerUnit = plotWidth / xRange;
-  const yPixelPerUnit = plotHeight / yRange;
-  
-  // 找出较小的值，确保等宽
-  const minPixelPerUnit = Math.min(xPixelPerUnit, yPixelPerUnit);
-  
-  // 计算新的范围，保持中心点不变
-  const xCenter = (xMin + xMax) / 2;
-  const yCenter = (yMin + yMax) / 2;
-  
-  const newXRange = plotWidth / minPixelPerUnit;
-  const newYRange = plotHeight / minPixelPerUnit;
-  
-  const newXMin = xCenter - newXRange / 2;
-  const newXMax = xCenter + newXRange / 2;
-  const newYMin = yCenter - newYRange / 2;
-  const newYMax = yCenter + newYRange / 2;
-  
-  // 应用新的范围设置
-  chartInstance.value.setOption({
-    xAxis: { min: newXMin, max: newXMax },
-    yAxis: { min: newYMin, max: newYMax }
-  });
-}
-
 let stopWatch = null;
 let handleKeyDown = null;
 
@@ -651,14 +520,9 @@ onUnmounted(() => {
   if (chartInstance.value) {
     chartInstance.value.dispose();
   }
-  if (resizeObserver) {
-    resizeObserver.disconnect();
-  }
+  disconnectResizeObserver();
   // 清理滚轮事件监听器
-  if (chartDom.value) {
-    chartDom.value.removeEventListener('mousewheel', handleWheel, { capture: true });
-    chartDom.value.removeEventListener('wheel', handleWheel, { capture: true });
-  }
+  unbindWheelHandler(handleWheel);
 });
 </script>
 

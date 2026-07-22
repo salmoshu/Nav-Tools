@@ -6,6 +6,13 @@ test('opens the user application selector in the renderer', async ({ page }) => 
   await page.goto('/')
   await expect(page.getByText('Nav-Tools', { exact: true })).toBeVisible()
   await expect(page.getByText('选择应用', { exact: true })).toBeVisible()
+  await expect(page.getByText('GNSS', { exact: true })).toBeVisible()
+  await expect(page.getByText('Motor', { exact: true })).toBeVisible()
+  await page.getByRole('button', { name: '重置应用' }).click()
+  await expect(page.locator('.selector-backdrop > .el-overlay.is-message-box')).toBeVisible()
+  await expect(page.getByText('只保留默认的 GNSS 和 Motor 应用')).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(page.getByText('只保留默认的 GNSS 和 Motor 应用')).toBeHidden()
   await page.screenshot({ path: 'test-results/ui-audit-selector.png' })
 
   await page.getByRole('button', { name: '新建应用' }).click()
@@ -68,8 +75,29 @@ test('offers TCP and UDP network inputs in a compact dialog', async ({ page }) =
 
   await page.getByTitle('Input').click()
   await expect(page.getByText('数据接入', { exact: true })).toBeVisible()
+  await page.getByRole('tab', { name: '文件输入' }).click()
+  const filePathInput = page.getByPlaceholder('请输入文件路径')
+  await expect(filePathInput).toHaveCSS('-webkit-app-region', 'no-drag')
+  await filePathInput.click()
+  await expect.poll(() => filePathInput.evaluate((el) => el === document.activeElement)).toBe(true)
+  await page.keyboard.type('C:\\data\\sample.log')
+  await expect(filePathInput).toHaveValue('C:\\data\\sample.log')
   await page.getByRole('tab', { name: '网络连接' }).click()
   const dialog = page.getByRole('dialog')
+  await expect(page.locator('.data-input-overlay')).toHaveCSS('-webkit-app-region', 'no-drag')
+  const hostInput = dialog.getByPlaceholder('127.0.0.1')
+  await expect(hostInput).toHaveCSS('-webkit-app-region', 'no-drag')
+  await hostInput.click()
+  await expect.poll(() => hostInput.evaluate((el) => el === document.activeElement)).toBe(true)
+  await hostInput.evaluate((el) => el.select())
+  await page.keyboard.type('192.168.1.10')
+  await expect(hostInput).toHaveValue('192.168.1.10')
+  const portInput = dialog.getByPlaceholder('请输入端口')
+  await expect(portInput).toHaveCSS('-webkit-app-region', 'no-drag')
+  await portInput.click()
+  await expect.poll(() => portInput.evaluate((el) => el === document.activeElement)).toBe(true)
+  await page.keyboard.type('8080')
+  await expect(portInput).toHaveValue('8080')
   const selectedProtocol = dialog.getByText('TCP', { exact: true }).first()
   await expect(selectedProtocol).toBeVisible()
   await selectedProtocol.click()
@@ -168,6 +196,130 @@ test('keeps the connection toggle centered and re-docks the toolbar around the h
     verticalToggleBounds!.x + verticalToggleBounds!.width / 2,
     0,
   )
+})
+
+test('scrolls the dashboard to the bottom when many windows are present', async ({ page }) => {
+  const application = {
+    id: 'scroll-audit',
+    name: 'Scroll Audit',
+    description: '',
+    icon: 'grid',
+    accent: '#3b82f6',
+    windowIds: [
+      'plot',
+      'raw-messages',
+      'flow-deviation',
+      'gnss-deviation',
+      'gnss-signals',
+      'sky-plot',
+      'motor-parameters',
+    ],
+  }
+  await page.addInitScript((value) => {
+    localStorage.setItem('nav-tools:custom-applications', JSON.stringify([value]))
+    localStorage.setItem('nav-tools:selected-application', value.id)
+  }, application)
+
+  await page.goto('/#app/scroll-audit')
+  const content = page.locator('.dashboard-content')
+  const gridItems = page.locator('.vgl-item:not(.vgl-item--placeholder)')
+  await expect(content).toBeVisible()
+  await expect(gridItems).toHaveCount(application.windowIds.length)
+
+  await content.evaluate((element) => {
+    element.scrollTop = element.scrollHeight
+  })
+
+  const contentBounds = await content.boundingBox()
+  const itemBounds = await gridItems.last().boundingBox()
+  expect(contentBounds).not.toBeNull()
+  expect(itemBounds).not.toBeNull()
+  expect(itemBounds!.y + itemBounds!.height).toBeLessThanOrEqual(
+    contentBounds!.y + contentBounds!.height,
+  )
+})
+
+test('aligns each card resize handle with the card bottom-right corner', async ({ page }) => {
+  const application = {
+    id: 'resize-handle-audit',
+    name: 'Resize Handle Audit',
+    description: '',
+    icon: 'grid',
+    accent: '#3b82f6',
+    windowIds: ['plot', 'raw-messages', 'gnss-deviation'],
+  }
+  await page.addInitScript((value) => {
+    localStorage.setItem('nav-tools:custom-applications', JSON.stringify([value]))
+    localStorage.setItem('nav-tools:selected-application', value.id)
+  }, application)
+
+  await page.goto('/#app/resize-handle-audit')
+  const gridItems = page.locator('.vgl-item:not(.vgl-item--placeholder)')
+  await expect(gridItems).toHaveCount(application.windowIds.length)
+
+  for (let index = 0; index < application.windowIds.length; index += 1) {
+    const item = gridItems.nth(index)
+    const card = item.locator('.box-card')
+    const resizer = item.locator('.vgl-item__resizer')
+    const cardBounds = await card.boundingBox()
+    const resizerBounds = await resizer.boundingBox()
+
+    expect(cardBounds).not.toBeNull()
+    expect(resizerBounds).not.toBeNull()
+    expect(resizerBounds!.x + resizerBounds!.width).toBeCloseTo(
+      cardBounds!.x + cardBounds!.width,
+      0,
+    )
+    expect(resizerBounds!.y + resizerBounds!.height).toBeCloseTo(
+      cardBounds!.y + cardBounds!.height,
+      0,
+    )
+    await expect(resizer).toHaveCSS('right', '0px')
+    await expect(resizer).toHaveCSS('bottom', '0px')
+    const pseudoOffset = await resizer.evaluate((element) => {
+      const style = getComputedStyle(element, '::before')
+      return { right: style.right, bottom: style.bottom }
+    })
+    expect(pseudoOffset).toEqual({ right: '0px', bottom: '0px' })
+  }
+})
+
+test('prevents text selection in adjacent cards while resizing', async ({ page }) => {
+  const application = {
+    id: 'resize-selection-audit',
+    name: 'Resize Selection Audit',
+    description: '',
+    icon: 'grid',
+    accent: '#3b82f6',
+    windowIds: ['plot', 'raw-messages'],
+  }
+  await page.addInitScript((value) => {
+    localStorage.setItem('nav-tools:custom-applications', JSON.stringify([value]))
+    localStorage.setItem('nav-tools:selected-application', value.id)
+  }, application)
+
+  await page.goto('/#app/resize-selection-audit')
+  const firstItem = page.locator('.vgl-item:not(.vgl-item--placeholder)').first()
+  const secondTitle = page.getByText('Raw Messages', { exact: true })
+  const resizerBounds = await firstItem.locator('.vgl-item__resizer').boundingBox()
+  const titleBounds = await secondTitle.boundingBox()
+  expect(resizerBounds).not.toBeNull()
+  expect(titleBounds).not.toBeNull()
+
+  await page.mouse.move(
+    resizerBounds!.x + resizerBounds!.width - 2,
+    resizerBounds!.y + resizerBounds!.height - 2,
+  )
+  await page.mouse.down()
+  await expect(page.locator('html')).toHaveClass(/dashboard-resizing/)
+  await page.mouse.move(titleBounds!.x + titleBounds!.width / 2, titleBounds!.y + 8, {
+    steps: 12,
+  })
+
+  expect(await page.evaluate(() => window.getSelection()?.toString() ?? '')).toBe('')
+  await page.mouse.up()
+  await expect(page.locator('html')).not.toHaveClass(/dashboard-resizing/)
+  expect(await page.evaluate(() => window.getSelection()?.toString() ?? '')).toBe('')
 })
 
 test('shows restore and always-on-top controls for detached panels', async ({ page }) => {

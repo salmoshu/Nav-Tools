@@ -834,7 +834,7 @@ onUnmounted(() => {
   opacity: 0;
   transition: opacity 0.3s;
   pointer-events: none;
-  z-index: 998;
+  z-index: 9000;
 }
 
 .statusbar-dragging .statusbar-dock-zones {

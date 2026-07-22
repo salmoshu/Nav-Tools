@@ -110,7 +110,7 @@
 
 <script setup>
 import { computed } from 'vue';
-import { useNmea } from '../../composables/gnss/useNmea';
+import { useNmea } from '@/composables/gnss/useNmea';
 
 // 初始化NMEA解析器
 const { satelliteSnrData } = useNmea();

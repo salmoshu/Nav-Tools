@@ -88,6 +88,24 @@ export function useApplicationSelector() {
     }
   }
 
+  const resetApplications = () => {
+    applications.value = applicationStorage.resetApplicationsToDefaults()
+    const currentApplication = applications.value.find(
+      application => application.id === currentApplicationId.value,
+    )
+
+    if (currentApplication) {
+      applyDataMode(currentApplication)
+      applicationStorage.saveSelectedApplicationId(currentApplication.id)
+    } else {
+      currentApplicationId.value = undefined
+      applicationStorage.saveSelectedApplicationId(undefined)
+      isApplicationSelectorOpen.value = true
+    }
+
+    return applications.value
+  }
+
   const openApplicationSelector = () => {
     isApplicationSelectorOpen.value = true
   }
@@ -109,6 +127,7 @@ export function useApplicationSelector() {
     selectApplication,
     saveApplication,
     deleteApplication,
+    resetApplications,
     openApplicationSelector,
     closeApplicationSelector,
   }

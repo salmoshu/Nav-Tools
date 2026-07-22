@@ -17,6 +17,9 @@
           <el-button v-if="applications.length > 0" :icon="Plus" @click="openEditor()">
             新建应用
           </el-button>
+          <el-button v-if="applications.length > 0" :icon="Refresh" @click="confirmReset">
+            重置应用
+          </el-button>
           <el-button
             v-if="currentApplicationId"
             text
@@ -131,6 +134,7 @@ import {
   Grid,
   Location,
   Plus,
+  Refresh,
   SetUp,
   TrendCharts,
 } from '@element-plus/icons-vue'
@@ -148,7 +152,14 @@ const emit = defineEmits<{
   'open-window': [applicationId: string]
 }>()
 
-const { applications, windowCatalog, currentApplicationId, saveApplication, deleteApplication } =
+const {
+  applications,
+  windowCatalog,
+  currentApplicationId,
+  saveApplication,
+  deleteApplication,
+  resetApplications,
+} =
   useApplicationSelector()
 
 const iconComponents: Record<ApplicationIcon, Component> = {
@@ -160,6 +171,7 @@ const iconComponents: Record<ApplicationIcon, Component> = {
 
 const editorOpen = ref(false)
 const editingApplication = ref<UserApplication | undefined>(undefined)
+const selectorMessageBoxTarget = '.selector-backdrop'
 
 const applicationWindows = (application: UserApplication) => {
   const requestedIds = new Set(application.windowIds)
@@ -177,12 +189,34 @@ const handleSave = (form: Omit<UserApplication, 'id'> & { id?: string }) => {
   emit('select', savedApplication.id)
 }
 
+const confirmReset = async () => {
+  try {
+    await ElMessageBox.confirm(
+      '该操作会删除所有自定义应用和对应用的编辑，只保留默认的 GNSS 和 Motor 应用。重置后不可恢复，确定继续吗？',
+      '重置应用',
+      {
+        appendTo: selectorMessageBoxTarget,
+        type: 'warning',
+        confirmButtonText: '重置应用',
+        cancelButtonText: '取消',
+      },
+    )
+  } catch {
+    return
+  }
+
+  editorOpen.value = false
+  editingApplication.value = undefined
+  resetApplications()
+}
+
 const confirmDelete = async (application: UserApplication) => {
   try {
     await ElMessageBox.confirm(
       `删除后不可恢复，确定删除应用「${application.name}」吗？`,
       '删除应用',
       {
+        appendTo: selectorMessageBoxTarget,
         type: 'warning',
         confirmButtonText: '删除',
         cancelButtonText: '取消',
@@ -199,7 +233,7 @@ const confirmDelete = async (application: UserApplication) => {
 .selector-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 3000;
+  z-index: 8000;
   display: grid;
   place-items: center;
   padding: 24px;
@@ -351,6 +385,7 @@ const confirmDelete = async (application: UserApplication) => {
   color: var(--app-text-muted);
   font-size: 13px;
   line-height: 1.55;
+  text-align: left;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;

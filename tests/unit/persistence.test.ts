@@ -21,6 +21,51 @@ class MemoryStorage implements StorageLike {
 }
 
 describe('panel and application persistence', () => {
+  it('seeds editable GNSS and Motor applications on first launch', () => {
+    const memory = new MemoryStorage()
+    const applications = new ApplicationStorage(new JsonStorage(memory)).loadApplications()
+
+    expect(applications.map((application) => application.name)).toEqual(['GNSS', 'Motor'])
+    expect(applications[0]).toMatchObject({
+      id: 'gnss',
+      icon: 'position',
+      windowIds: ['raw-messages', 'gnss-deviation', 'gnss-signals', 'sky-plot'],
+    })
+    expect(applications[1]).toMatchObject({
+      id: 'motor',
+      icon: 'motor',
+      windowIds: ['plot', 'raw-messages', 'motor-parameters'],
+    })
+    expect(memory.getItem('nav-tools:custom-applications')).not.toBeNull()
+  })
+
+  it('does not recreate default applications after the user saves an empty list', () => {
+    const memory = new MemoryStorage()
+    memory.setItem('nav-tools:custom-applications', JSON.stringify([]))
+
+    expect(new ApplicationStorage(new JsonStorage(memory)).loadApplications()).toEqual([])
+  })
+
+  it('resets saved applications back to only GNSS and Motor defaults', () => {
+    const memory = new MemoryStorage()
+    const storage = new ApplicationStorage(new JsonStorage(memory))
+    storage.saveApplications([
+      {
+        id: 'custom',
+        name: 'Custom',
+        description: '',
+        icon: 'grid',
+        accent: '#1677ff',
+        windowIds: ['plot'],
+      },
+    ])
+
+    const applications = storage.resetApplicationsToDefaults()
+
+    expect(applications.map((application) => application.id)).toEqual(['gnss', 'motor'])
+    expect(storage.loadApplications().map((application) => application.id)).toEqual(['gnss', 'motor'])
+  })
+
   it('migrates legacy panel ids and filters unknown panels', () => {
     expect(normalizePanelIds(['flow.data', 'plot', 'missing'])).toEqual(['plot', 'missing'])
     const memory = new MemoryStorage()

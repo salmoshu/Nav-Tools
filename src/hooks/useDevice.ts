@@ -7,6 +7,7 @@ import { useConsole } from '@/composables/flow/useConsole'
 import { useMotorCmd } from '@/composables/motor/useMotorCmd'
 import { IncomingDataRouter } from '@/core/data/IncomingDataRouter'
 import { activeDataTransport } from '@/core/device/ActiveDataTransport'
+import { getWindowsByIds } from '@/settings/config'
 import {
   NetworkService,
   validateNetworkOptions,
@@ -132,6 +133,22 @@ function routeIncomingData(data: string): void {
     activeDataModes: activeDataModes.value,
     activeWindowIds: currentWindows.value.map((windowDefinition) => windowDefinition.id),
     displayFormat: flowDisplayFormat.value === 'hex' ? 'hex' : 'ascii',
+  })
+  // 只有持有已配置设备的渲染进程（即主窗口）才把原始数据广播给独立窗口
+  if (globalDevice.value.connected !== null) {
+    ipc.send('broadcast-incoming-data', data)
+  }
+}
+
+/**
+ * 将数据路由到指定独立窗口（用于 detached card window）
+ */
+export function routeDataToWindow(data: string, windowId: string): void {
+  const windowDefinition = getWindowsByIds([windowId])[0]
+  dataRouter.route(data, {
+    activeDataModes: [windowDefinition?.funcMode ?? 'general'],
+    activeWindowIds: [windowId],
+    displayFormat: 'ascii',
   })
 }
 

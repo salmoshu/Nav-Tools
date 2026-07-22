@@ -16,6 +16,9 @@ export interface WindowPlatform {
   toggleAlwaysOnTop(): Promise<boolean>
   restoreDetachedPanel(): Promise<boolean>
   closeWindow(): Promise<void>
+  startWindowDrag(cursor: { x: number; y: number }): Promise<void>
+  moveWindowDrag(cursor: { x: number; y: number }): Promise<void>
+  stopWindowDrag(): Promise<void>
   startWindowResize(edge: WindowResizeEdge): Promise<void>
   stopWindowResize(): Promise<void>
 }
@@ -44,6 +47,18 @@ export class WindowService {
 
   public close(): Promise<void> {
     return this.platform.closeWindow()
+  }
+
+  public startDrag(cursor: { x: number; y: number }): Promise<void> {
+    return this.platform.startWindowDrag(cursor)
+  }
+
+  public moveDrag(cursor: { x: number; y: number }): Promise<void> {
+    return this.platform.moveWindowDrag(cursor)
+  }
+
+  public stopDrag(): Promise<void> {
+    return this.platform.stopWindowDrag()
   }
 
   public toggleAlwaysOnTop(): Promise<boolean> {

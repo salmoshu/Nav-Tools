@@ -14,21 +14,22 @@
 </template>
 
 <script setup lang="ts">
-import { markRaw, onMounted, ref } from 'vue'
+import { markRaw, onMounted, onUnmounted, ref } from 'vue'
 import type { Component } from 'vue'
+import { routeDataToWindow } from '@/hooks/useDevice'
 
 // 构建后动态 import 的路径会被打包成哈希文件名，
 // 因此用 import.meta.glob 预扫描所有组件，运行时按键查找
 const modules = import.meta.glob([
-  './panels/*.vue',
-  './flow/*.vue',
-  './gnss/*.vue',
-  './motor/*.vue',
+  './windows/common/*.vue',
+  './windows/gnss/*.vue',
+  './windows/motor/*.vue',
 ])
 
 const cardComponent = ref<Component | null>(null)
 const cardProps = ref<Record<string, any>>({})
 const cardTitle = ref('Card Window')
+const cardWindowId = ref<string | undefined>(undefined)
 const loadError = ref('')
 
 onMounted(async () => {
@@ -41,7 +42,8 @@ onMounted(async () => {
   try {
     const encodedData = hash.slice(5) // 移除 'card/'
     const decodedData = JSON.parse(decodeURIComponent(encodedData))
-    const { componentName, props, title } = decodedData
+    const { componentName, props, title, windowId } = decodedData
+    cardWindowId.value = windowId
 
     // componentName 为面板类型名，组件实际位于对应的分类目录中。
     const loader =
@@ -63,6 +65,17 @@ onMounted(async () => {
     console.error('Error loading card component:', error)
     loadError.value = error instanceof Error ? error.message : String(error)
   }
+})
+
+// 接收主窗口广播的实时数据并路由到当前独立窗口的组件
+const incomingDataListener = (_event: unknown, data: unknown) => {
+  if (typeof data === 'string' && cardWindowId.value) {
+    routeDataToWindow(data, cardWindowId.value)
+  }
+}
+window.ipcRenderer?.on('incoming-data', incomingDataListener)
+onUnmounted(() => {
+  window.ipcRenderer?.off('incoming-data', incomingDataListener)
 })
 
 function closeWindow() {

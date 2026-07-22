@@ -27,10 +27,9 @@ export interface LayoutItem {
 const componentCache = new Map<string, any>()
 const layoutStorage = new LayoutStorage(new JsonStorage(localStorage))
 const modules = import.meta.glob<DefineComponent>([
-  '../components/panels/*.vue',
-  '../components/flow/*.vue',
-  '../components/gnss/*.vue',
-  '../components/motor/*.vue',
+  '../components/windows/common/*.vue',
+  '../components/windows/gnss/*.vue',
+  '../components/windows/motor/*.vue',
 ])
 
 function loadComponent(componentPath: string) {

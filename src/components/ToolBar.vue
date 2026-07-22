@@ -108,7 +108,15 @@
     class="data-input-dialog"
     width="min(520px, calc(100vw - 32px))"
     :close-on-click-modal="false"
+    :append-to-body="true"
+    modal-class="data-input-overlay"
+    :z-index="8000"
     align-center
+    @mousedown.stop
+    @pointerdown.stop
+    @click.stop
+    @keydown.stop
+    @keyup.stop
   >
     <el-tabs v-model="activeTab">
       <el-tab-pane label="串口连接" name="serial">
@@ -123,6 +131,7 @@
             v-model="serialPort"
             placeholder="请选择串口"
             style="flex: 1"
+            :teleported="false"
             @click="searchSerialPorts"
           >
             <el-option v-for="port in serialPorts" :key="port" :label="port" :value="port" />
@@ -136,26 +145,42 @@
             filterable
             allow-create
             style="flex: 1"
+            :teleported="false"
           >
             <el-option v-for="rate in baudRates" :key="rate" :label="rate" :value="rate" />
           </el-select>
         </div>
         <div class="input-group" v-if="serialAdvanced">
           <span class="input-label">数据位:</span>
-          <el-select v-model="serialDataBits" placeholder="请选择数据位" style="flex: 1">
+          <el-select
+            v-model="serialDataBits"
+            placeholder="请选择数据位"
+            style="flex: 1"
+            :teleported="false"
+          >
             <!-- 默认为8 -->
             <el-option v-for="bit in dataBits" :key="bit" :label="bit" :value="bit" />
           </el-select>
         </div>
         <div class="input-group" v-if="serialAdvanced">
           <span class="input-label">停止位:</span>
-          <el-select v-model="serialStopBits" placeholder="请选择停止位" style="flex: 1">
+          <el-select
+            v-model="serialStopBits"
+            placeholder="请选择停止位"
+            style="flex: 1"
+            :teleported="false"
+          >
             <el-option v-for="bit in stopBits" :key="bit" :label="bit" :value="bit" />
           </el-select>
         </div>
         <div class="input-group" v-if="serialAdvanced">
           <span class="input-label">校验位:</span>
-          <el-select v-model="serialParity" placeholder="请选择校验位" style="flex: 1">
+          <el-select
+            v-model="serialParity"
+            placeholder="请选择校验位"
+            style="flex: 1"
+            :teleported="false"
+          >
             <el-option
               v-for="parity in parities"
               :key="parity.value"
@@ -180,8 +205,8 @@
 
       <el-tab-pane label="网络连接" name="network">
         <div class="input-group">
-          <span class="input-label">协议:</span>
-          <el-select v-model="networkProtocol" style="flex: 1">
+          <span class="input-label">网络协议:</span>
+          <el-select v-model="networkProtocol" style="flex: 1" :teleported="false">
             <el-option label="TCP" value="tcp" />
             <el-option label="UDP" value="udp" />
           </el-select>
@@ -197,11 +222,10 @@
         </div>
         <div class="input-group">
           <span class="input-label">网络端口:</span>
-          <el-input-number
-            v-model="networkPort"
-            :min="1"
-            :max="65535"
-            :controls="false"
+          <el-input
+            v-model="networkPortText"
+            inputmode="numeric"
+            maxlength="5"
             placeholder="请输入端口"
             style="flex: 1; width: 100%"
           />
@@ -216,7 +240,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch, inject, type Ref } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, inject, nextTick, type Ref } from 'vue'
 import { ButtonItem } from '@/settings/config'
 import { toolBarIcon } from '@/settings/icons'
 import {
@@ -236,7 +260,6 @@ import {
   ElSelect,
   ElOption,
   ElInput,
-  ElInputNumber,
   ElCheckbox,
   ElIcon,
 } from 'element-plus'
@@ -286,6 +309,20 @@ const triggerFileSelection = () => {
 watch(networkProtocol, (protocol) => {
   if (protocol === 'udp' && networkIp.value === '127.0.0.1') networkIp.value = '0.0.0.0'
   if (protocol === 'tcp' && networkIp.value === '0.0.0.0') networkIp.value = '127.0.0.1'
+})
+
+const networkPortText = computed({
+  get: () => (networkPort.value === undefined ? '' : String(networkPort.value)),
+  set: (value: string) => {
+    const digits = value.replace(/\D/g, '').slice(0, 5)
+    if (!digits) {
+      networkPort.value = undefined
+      return
+    }
+
+    const port = Number(digits)
+    networkPort.value = port > 65535 ? 65535 : port
+  },
 })
 
 const handleDeviceConnected = () => {
@@ -522,6 +559,93 @@ const handleAction = (action: string) => {
   emitter.emit(action)
 }
 
+const dataInputNoDragSelector = [
+  '.data-input-overlay',
+  '.data-input-overlay *',
+  '.data-input-dialog',
+  '.data-input-dialog *',
+  '.el-popper',
+  '.el-select-dropdown',
+  '.el-select-dropdown *',
+].join(',')
+
+let dataInputMutationObserver: MutationObserver | undefined
+let lastPointerInput: HTMLInputElement | HTMLTextAreaElement | undefined
+let lastPointerInputUntil = 0
+
+function forceNoDragOnDataInputDialog() {
+  document.body.style.setProperty('-webkit-app-region', 'no-drag', 'important')
+  document.querySelectorAll<HTMLElement>(dataInputNoDragSelector).forEach((element) => {
+    element.style.setProperty('-webkit-app-region', 'no-drag', 'important')
+  })
+  document
+    .querySelectorAll<HTMLElement>(
+      '.data-input-dialog input, .data-input-dialog textarea, .data-input-dialog .el-input__inner',
+    )
+    .forEach((element) => {
+      element.style.setProperty('pointer-events', 'auto', 'important')
+      element.style.setProperty('user-select', 'text', 'important')
+      element.style.setProperty('-webkit-user-select', 'text', 'important')
+    })
+}
+
+function resolveDialogTextInput(target: EventTarget | null) {
+  if (!(target instanceof HTMLElement)) return undefined
+  if (!target.closest('.data-input-dialog')) return undefined
+  if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) return target
+
+  return (
+    target.closest('.el-input')?.querySelector<HTMLInputElement | HTMLTextAreaElement>('input, textarea') ??
+    undefined
+  )
+}
+
+function restorePointerInputFocus() {
+  const input = lastPointerInput
+  if (!input || Date.now() > lastPointerInputUntil || !document.contains(input)) return
+  if (document.activeElement !== input) input.focus({ preventScroll: true })
+}
+
+function handleDataInputPointer(event: Event) {
+  if (!showInputDialog.value) return
+  forceNoDragOnDataInputDialog()
+
+  const input = resolveDialogTextInput(event.target)
+  if (!input) {
+    lastPointerInput = undefined
+    lastPointerInputUntil = 0
+    return
+  }
+
+  lastPointerInput = input
+  lastPointerInputUntil = Date.now() + 300
+  requestAnimationFrame(restorePointerInputFocus)
+  window.setTimeout(restorePointerInputFocus, 0)
+  window.setTimeout(restorePointerInputFocus, 60)
+  window.setTimeout(restorePointerInputFocus, 160)
+}
+
+watch(showInputDialog, async (visible) => {
+  if (!visible) {
+    dataInputMutationObserver?.disconnect()
+    dataInputMutationObserver = undefined
+    lastPointerInput = undefined
+    lastPointerInputUntil = 0
+    return
+  }
+
+  await nextTick()
+  forceNoDragOnDataInputDialog()
+  dataInputMutationObserver?.disconnect()
+  dataInputMutationObserver = new MutationObserver(forceNoDragOnDataInputDialog)
+  dataInputMutationObserver.observe(document.body, {
+    childList: true,
+    subtree: true,
+    attributes: true,
+    attributeFilter: ['class', 'style'],
+  })
+})
+
 // 修改handleLayout函数
 const handleLayout = (action: string) => {
   switch (action) {
@@ -580,6 +704,10 @@ function handleDeviceEvent(event: KeyboardEvent) {
 onMounted(() => {
   searchSerialPorts(true)
   emitter.on('input-event', inputDialog)
+  document.addEventListener('pointerdown', handleDataInputPointer, true)
+  document.addEventListener('mousedown', handleDataInputPointer, true)
+  document.addEventListener('click', handleDataInputPointer, true)
+  document.addEventListener('focusout', restorePointerInputFocus, true)
 
   snapToEdge()
   window.addEventListener('resize', snapToEdge)
@@ -601,8 +729,13 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  dataInputMutationObserver?.disconnect()
   document.removeEventListener('mousemove', handleDrag)
   document.removeEventListener('mouseup', stopDrag)
+  document.removeEventListener('pointerdown', handleDataInputPointer, true)
+  document.removeEventListener('mousedown', handleDataInputPointer, true)
+  document.removeEventListener('click', handleDataInputPointer, true)
+  document.removeEventListener('focusout', restorePointerInputFocus, true)
   window.removeEventListener('resize', snapToEdge)
   window.removeEventListener('keyup', handleDeviceEvent)
 
@@ -800,7 +933,7 @@ onUnmounted(() => {
   opacity: 0;
   transition: opacity 0.3s;
   pointer-events: none;
-  z-index: 998;
+  z-index: 9000;
 }
 
 .toolbar-dragging .toolbar-dock-zones {
@@ -857,8 +990,8 @@ onUnmounted(() => {
   width: 18px;
   height: 18px;
   left: 3px;
-  top: 2px;
-  transform: none;
+  top: 50%;
+  transform: translateY(-50%);
   transition: transform 0.3s;
   display: flex;
   align-items: center;
@@ -867,13 +1000,24 @@ onUnmounted(() => {
 
 /* 更新滑块激活状态的移动距离 */
 .toggle-switch.toggle-on .toggle-slider {
-  transform: translateX(18px);
+  transform: translate(18px, -50%);
 }
 
 /* 更新滑块图标大小 */
 .slider-icon {
   font-size: 12px; /* 从14px减小到12px */
-  line-height: 1;
+  line-height: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.slider-icon :deep(svg) {
+  display: block;
+  width: 18px !important;
+  height: 18px !important;
 }
 
 /* 更新垂直工具栏的滑轨样式 */
@@ -940,6 +1084,29 @@ onUnmounted(() => {
 
 :global(.data-input-dialog .el-dialog__body) {
   padding: 8px 22px 10px;
+}
+
+:global(.data-input-overlay),
+:global(.data-input-overlay *),
+:global(.data-input-overlay .el-overlay-dialog),
+:global(.data-input-dialog),
+:global(.data-input-dialog *),
+:global(.data-input-dialog .el-input__wrapper),
+:global(.data-input-dialog .el-input__inner),
+:global(.data-input-dialog .el-select),
+:global(.data-input-dialog .el-button),
+:global(.el-popper),
+:global(.el-select-dropdown),
+:global(.el-select-dropdown *) {
+  -webkit-app-region: no-drag !important;
+}
+
+:global(.data-input-dialog .el-input__inner),
+:global(.data-input-dialog input),
+:global(.data-input-dialog textarea) {
+  user-select: text;
+  -webkit-user-select: text;
+  pointer-events: auto;
 }
 
 :global(.data-input-dialog .el-tabs__header) {

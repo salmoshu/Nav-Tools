@@ -1,5 +1,5 @@
 <template>
-  <header class="app-header" @dblclick="toggleMaximize">
+  <header class="app-header" @mousedown="startDrag" @dblclick="toggleMaximize">
     <div class="brand">
       <img src="/logo.svg" alt="" class="brand-logo" />
       <span class="brand-name">Nav-Tools</span>
@@ -10,6 +10,7 @@
         type="button"
         title="选择应用"
         aria-label="选择应用"
+        @mousedown.stop
         @dblclick.stop
         @click="$emit('open-application-selector')"
       >
@@ -18,7 +19,7 @@
       <span v-if="contextTitle" class="context-title">{{ contextTitle }}</span>
     </div>
 
-    <div class="header-controls" @dblclick.stop>
+    <div class="header-controls" @mousedown.stop @dblclick.stop>
       <button
         v-if="showDetachedControls"
         class="header-button"
@@ -132,6 +133,7 @@ const alwaysOnTop = ref(false)
 const { themeMode, setTheme } = useTheme()
 const windowService = getBrowserWindowService()
 let removeWindowStateListener: (() => void) | undefined
+let isDragging = false
 const themeLabel = computed(
   () =>
     ({
@@ -164,6 +166,27 @@ async function close() {
   await windowService.close()
 }
 
+async function startDrag(event: MouseEvent) {
+  if (event.button !== 0 || event.detail > 1 || maximized.value) return
+  const target = event.target as HTMLElement | null
+  if (target?.closest('button, .header-controls, .el-dropdown')) return
+
+  event.preventDefault()
+  isDragging = true
+  await windowService.startDrag({ x: event.screenX, y: event.screenY })
+}
+
+function moveDrag(event: MouseEvent) {
+  if (!isDragging) return
+  void windowService.moveDrag({ x: event.screenX, y: event.screenY })
+}
+
+async function stopDrag() {
+  if (!isDragging) return
+  isDragging = false
+  await windowService.stopDrag()
+}
+
 async function toggleAlwaysOnTop() {
   alwaysOnTop.value = await windowService.toggleAlwaysOnTop()
 }
@@ -180,10 +203,17 @@ onMounted(async () => {
   version.value = appVersion?.replace(/^v/i, '') ?? ''
   applyWindowState(state)
   removeWindowStateListener = windowService.onStateChanged((state) => applyWindowState(state))
+  window.addEventListener('mousemove', moveDrag)
+  window.addEventListener('mouseup', stopDrag)
+  window.addEventListener('blur', stopDrag)
 })
 
 onUnmounted(() => {
   removeWindowStateListener?.()
+  window.removeEventListener('mousemove', moveDrag)
+  window.removeEventListener('mouseup', stopDrag)
+  window.removeEventListener('blur', stopDrag)
+  void stopDrag()
 })
 </script>
 
@@ -203,7 +233,7 @@ onUnmounted(() => {
   background: var(--app-surface);
   box-sizing: border-box;
   user-select: none;
-  -webkit-app-region: drag;
+  -webkit-app-region: no-drag;
 }
 
 .brand {
@@ -244,7 +274,6 @@ onUnmounted(() => {
 .application-button {
   width: 38px;
   margin-left: 1px;
-  -webkit-app-region: no-drag;
 }
 
 .context-title {
@@ -262,7 +291,6 @@ onUnmounted(() => {
 .header-controls {
   display: flex;
   align-self: stretch;
-  -webkit-app-region: no-drag;
 }
 
 .header-controls :deep(.el-dropdown) {
