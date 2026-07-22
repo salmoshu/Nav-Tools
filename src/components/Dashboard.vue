@@ -59,7 +59,14 @@
               >
                 <template #header>
                   <div class="card-header" v-if="fullScreenItem !== item.i">
-                    <span class="title">{{ item.titleName }}</span>
+                    <span class="title">
+                      <el-icon class="panel-title-icon" :size="15">
+                        <component
+                          :is="getPanelIconComponent(getWindowById(item.windowId)?.action)"
+                        />
+                      </el-icon>
+                      <span>{{ item.titleName }}</span>
+                    </span>
                     <div class="card-actions">
                       <el-button
                         type="text"
@@ -88,7 +95,14 @@
                     </div>
                   </div>
                   <div v-else class="full-screen-header">
-                    <span class="full-screen-title">{{ item.titleName }}</span>
+                    <span class="full-screen-title">
+                      <el-icon class="panel-title-icon" :size="17">
+                        <component
+                          :is="getPanelIconComponent(getWindowById(item.windowId)?.action)"
+                        />
+                      </el-icon>
+                      <span>{{ item.titleName }}</span>
+                    </span>
                     <el-button
                       type="text"
                       @click="toggleCardFullScreen(null)"
@@ -129,7 +143,8 @@ import { Close, Share, Expand, FullScreen } from '@element-plus/icons-vue'
 import emitter from '@/hooks/useMitt'
 import { useLayoutManager } from '@/composables/useLayoutManager'
 import { showStatusBar } from '@/composables/useStatusManager'
-import { windowCatalog } from '@/settings/config'
+import { getWindowById, windowCatalog } from '@/settings/config'
+import { getPanelIconComponent } from '@/settings/panelIcons'
 import { useDevice } from '@/hooks/useDevice'
 import { useApplicationSelector } from '@/composables/useApplicationSelector'
 import { createBrowserIpcTransport } from '@/core/platform/IpcTransport'
@@ -332,6 +347,7 @@ function beginGridResize() {
 }
 
 function endGridResize() {
+  if (!isGridResizing.value) return
   isGridResizing.value = false
   document.documentElement.classList.remove('dashboard-resizing')
   clearTextSelection()
@@ -600,6 +616,9 @@ onUnmounted(() => {
 }
 
 .full-screen-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
   font-family: 'Helvetica Neue', Arial, sans-serif;
   font-size: 18px;
   font-weight: 600;
@@ -663,10 +682,23 @@ onUnmounted(() => {
 }
 
 .title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   font-family: 'Helvetica Neue', Arial, sans-serif;
-  font-size: 16px;
+  font-size: 13px;
   font-weight: 600;
+  line-height: 20px;
   color: var(--app-text);
+}
+
+.panel-title-icon {
+  flex: none;
+  color: var(--el-color-primary);
+}
+
+.full-screen-title .panel-title-icon {
+  color: currentColor;
 }
 
 .card-actions {
