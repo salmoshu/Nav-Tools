@@ -37,6 +37,8 @@
   <el-dialog
     v-model="messageDialogVisible"
     width="600px"
+    :close-on-click-modal="true"
+    :close-on-press-escape="true"
   >
     <div class="dialog-content, message-content">
       <p><strong>数据说明：</strong></p>

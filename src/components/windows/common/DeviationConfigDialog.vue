@@ -4,6 +4,8 @@
     title="轨迹配置"
     width="710px"
     destroy-on-close
+    :close-on-click-modal="true"
+    :close-on-press-escape="true"
     @update:model-value="$emit('update:modelValue', $event)"
   >
     <div class="chart-config-grid">

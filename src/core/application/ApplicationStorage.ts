@@ -3,6 +3,7 @@ import { JsonStorage } from '../storage/JsonStorage'
 
 const APPLICATIONS_KEY = 'nav-tools:custom-applications'
 const SELECTED_APPLICATION_KEY = 'nav-tools:selected-application'
+const CAMERA_DEFAULT_MIGRATION_KEY = 'nav-tools:migration:camera-default-v1'
 
 export const DEFAULT_APPLICATIONS: readonly UserApplication[] = [
   {
@@ -21,6 +22,14 @@ export const DEFAULT_APPLICATIONS: readonly UserApplication[] = [
     accent: '#f97316',
     windowIds: ['plot', 'raw-messages', 'motor-parameters'],
   },
+  {
+    id: 'camera',
+    name: 'Camera',
+    description: 'RTSP camera live video workspace',
+    icon: 'camera',
+    accent: '#14b8a6',
+    windowIds: ['camera-video'],
+  },
 ]
 
 export class ApplicationStorage {
@@ -30,6 +39,7 @@ export class ApplicationStorage {
     if (this.storage.readRaw(APPLICATIONS_KEY) === null) {
       const defaults = cloneApplications(DEFAULT_APPLICATIONS)
       this.saveApplications(defaults)
+      this.storage.writeRaw(CAMERA_DEFAULT_MIGRATION_KEY, '1')
       return defaults
     }
 
@@ -38,6 +48,13 @@ export class ApplicationStorage {
       ...application,
       windowIds: sanitizePanelIds(application.windowIds),
     }))
+    if (this.storage.readRaw(CAMERA_DEFAULT_MIGRATION_KEY) === null) {
+      const cameraDefault = DEFAULT_APPLICATIONS.find(application => application.id === 'camera')
+      if (applications.length > 0 && cameraDefault && !applications.some(({ id }) => id === 'camera')) {
+        applications.push(cloneApplications([cameraDefault])[0])
+      }
+      this.storage.writeRaw(CAMERA_DEFAULT_MIGRATION_KEY, '1')
+    }
     this.saveApplications(applications)
     return applications
   }
@@ -49,6 +66,7 @@ export class ApplicationStorage {
   public resetApplicationsToDefaults(): UserApplication[] {
     const defaults = cloneApplications(DEFAULT_APPLICATIONS)
     this.saveApplications(defaults)
+    this.storage.writeRaw(CAMERA_DEFAULT_MIGRATION_KEY, '1')
     return defaults
   }
 

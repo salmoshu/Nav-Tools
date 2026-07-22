@@ -8,27 +8,72 @@ test('opens the user application selector in the renderer', async ({ page }) => 
   await expect(page.getByText('选择应用', { exact: true })).toBeVisible()
   await expect(page.getByText('GNSS', { exact: true })).toBeVisible()
   await expect(page.getByText('Motor', { exact: true })).toBeVisible()
+  await expect(page.getByText('Camera', { exact: true })).toBeVisible()
   await page.getByRole('button', { name: '重置应用' }).click()
   await expect(page.locator('.selector-backdrop > .el-overlay.is-message-box')).toBeVisible()
-  await expect(page.getByText('只保留默认的 GNSS 和 Motor 应用')).toBeVisible()
+  await expect(page.getByText('只保留默认的 GNSS、Motor 和 Camera 应用')).toBeVisible()
   await page.keyboard.press('Escape')
-  await expect(page.getByText('只保留默认的 GNSS 和 Motor 应用')).toBeHidden()
+  await expect(page.getByText('只保留默认的 GNSS、Motor 和 Camera 应用')).toBeHidden()
   await page.screenshot({ path: 'test-results/ui-audit-selector.png' })
 
   await page.getByRole('button', { name: '新建应用' }).click()
   const editor = page.getByRole('dialog', { name: '新建应用' })
+  await expect(editor).toBeVisible()
+  await expect(editor.getByRole('radiogroup', { name: '应用图标' }).locator('button')).toHaveCount(
+    20,
+  )
+
+  await editor.locator('.el-color-picker__trigger').click()
+  await expect(editor.locator('.application-color-picker-popper')).toBeVisible()
+  expect(
+    Number(
+      await editor
+        .locator('.application-color-picker-popper')
+        .evaluate((element) => getComputedStyle(element).zIndex),
+    ),
+  ).toBeGreaterThan(8000)
+  await page.waitForTimeout(300)
+  await page.screenshot({ path: 'test-results/ui-audit-color-picker.png' })
+  await page.keyboard.press('Escape')
+  await expect(editor.locator('.application-color-picker-popper')).toBeHidden()
+  await editor.getByRole('button', { name: '取消' }).click()
+  await expect(editor).toBeHidden()
+
+  await page.getByRole('button', { name: '新建应用' }).click()
+  await expect(editor).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(editor).toBeHidden()
+
+  await page.getByRole('button', { name: '新建应用' }).click()
   await expect(editor).toBeVisible()
   await page.waitForTimeout(300)
   const windowSelect = editor.getByRole('combobox').last()
   await windowSelect.click({ force: true })
   const firstWindowOption = page.getByRole('option').first()
   await expect(firstWindowOption).toBeVisible()
+  await expect(firstWindowOption.locator('.window-option-icon')).toBeVisible()
+  await expect(firstWindowOption.locator('.window-option-subtitle')).not.toHaveText('')
+  expect(
+    Number(
+      await editor
+        .locator('.application-window-popper')
+        .first()
+        .evaluate((element) => getComputedStyle(element).zIndex),
+    ),
+  ).toBeGreaterThan(8000)
+  await page.waitForTimeout(300)
+  await page.screenshot({ path: 'test-results/ui-audit-window-options.png' })
   await firstWindowOption.click()
   await editor.getByText('新建应用', { exact: true }).click()
   await expect(firstWindowOption).toBeHidden()
   await page.screenshot({ path: 'test-results/ui-audit-application-editor.png' })
   await editor.getByRole('button', { name: '取消' }).click()
   await expect(editor).toBeHidden()
+
+  await page.keyboard.press('Escape')
+  await expect(page.getByText('选择应用', { exact: true })).toBeHidden()
+  await page.getByTitle('选择应用').click()
+  await expect(page.getByText('选择应用', { exact: true })).toBeVisible()
 
   await page.setViewportSize({ width: 390, height: 844 })
   await expect(page.getByText('选择应用', { exact: true })).toBeVisible()
@@ -37,7 +82,52 @@ test('opens the user application selector in the renderer', async ({ page }) => 
   await expect(editor).toBeVisible()
   await page.waitForTimeout(300)
   await page.screenshot({ path: 'test-results/ui-audit-application-editor-mobile.png' })
+  await editor.click({ position: { x: 4, y: 4 } })
+  await expect(editor).toBeHidden()
   expect(pageErrors).toEqual([])
+})
+
+test('uses native window dragging without turning header controls into drag regions', async ({
+  page,
+}) => {
+  await page.goto('/')
+
+  await expect(page.locator('.app-header')).toHaveCSS('-webkit-app-region', 'drag')
+  await expect(page.locator('.header-controls')).toHaveCSS('-webkit-app-region', 'no-drag')
+  await expect(page.getByRole('button', { name: '最小化窗口' })).toHaveCSS(
+    '-webkit-app-region',
+    'no-drag',
+  )
+})
+
+test('opens the default Camera application and its RTSP player', async ({ page }) => {
+  await page.goto('/')
+  await page.locator('.application-card').filter({ hasText: 'Camera' }).click()
+
+  await expect(page.getByText('Camera Video', { exact: true })).toBeVisible()
+  await expect(page.locator('.context-title')).toHaveText('Camera')
+  const toolbarCameraIcon = page.getByTitle('Camera Video').locator('svg')
+  const titleCameraIcon = page.locator('.card-header .panel-title-icon svg')
+  await expect(toolbarCameraIcon).toBeVisible()
+  await expect(titleCameraIcon).toBeVisible()
+  expect(await toolbarCameraIcon.locator('path').first().getAttribute('d')).toBe(
+    await titleCameraIcon.locator('path').first().getAttribute('d'),
+  )
+  const videoStage = page.locator('.video-stage')
+  const cameraControls = page.locator('.camera-controls')
+  const [stageBox, controlsBox] = await Promise.all([
+    videoStage.boundingBox(),
+    cameraControls.boundingBox(),
+  ])
+  expect(stageBox).not.toBeNull()
+  expect(controlsBox).not.toBeNull()
+  expect(controlsBox!.y).toBeGreaterThanOrEqual(stageBox!.y + stageBox!.height - 1)
+  const address = page.getByRole('textbox', { name: 'RTSP 视频地址' })
+  await expect(address).toHaveValue('rtsp://192.168.3.14:8554/rgbstream')
+  await expect(page.getByText('输入 RTSP 地址后点击播放')).toBeVisible()
+
+  await page.getByRole('button', { name: '播放' }).click()
+  await expect(page.getByText('RTSP 播放仅支持 Nav-Tools 桌面版').first()).toBeVisible()
 })
 
 test('offers TCP and UDP network inputs in a compact dialog', async ({ page }) => {
@@ -114,6 +204,13 @@ test('offers TCP and UDP network inputs in a compact dialog', async ({ page }) =
   expect(dialogBounds!.x).toBeGreaterThanOrEqual(0)
   expect(dialogBounds!.x + dialogBounds!.width).toBeLessThanOrEqual(390)
   await page.screenshot({ path: 'test-results/ui-audit-network-mobile.png' })
+  await page.keyboard.press('Escape')
+  await expect(dialog).toBeHidden()
+
+  await page.getByTitle('Input').click()
+  await expect(dialog).toBeVisible()
+  await dialog.click({ position: { x: 4, y: 4 } })
+  await expect(dialog).toBeHidden()
 
   await page.setViewportSize({ width: 1280, height: 720 })
   await page.evaluate(() => localStorage.setItem('nav-tools:theme', 'dark'))
@@ -331,6 +428,8 @@ test('shows restore and always-on-top controls for detached panels', async ({ pa
     }),
   )
   await page.goto(`/#card/${payload}`)
+  await expect(page.locator('.brand-name')).toHaveText('Raw Messages')
+  await expect(page.locator('.context-title')).toHaveCount(0)
   await expect(page.getByTitle('还原到主窗口')).toBeVisible()
   await expect(page.getByTitle('保持置顶')).toBeVisible()
   await expect(page.locator('.lucide-panel-top-open')).toBeVisible()

@@ -1,8 +1,8 @@
 <template>
-  <header class="app-header" @mousedown="startDrag" @dblclick="toggleMaximize">
+  <header class="app-header">
     <div class="brand">
       <img src="/logo.svg" alt="" class="brand-logo" />
-      <span class="brand-name">Nav-Tools</span>
+      <span class="brand-name">{{ brandTitle || 'Nav-Tools' }}</span>
       <span v-if="version" class="brand-version">V{{ version }}</span>
       <button
         v-if="showApplicationSelector"
@@ -117,6 +117,7 @@ import { getBrowserWindowService } from '@/core/window/browserWindowService'
 import ThemeModeIcon from './ThemeModeIcon.vue'
 
 defineProps<{
+  brandTitle?: string
   contextTitle?: string
   showApplicationSelector?: boolean
   showDetachedControls?: boolean
@@ -133,7 +134,6 @@ const alwaysOnTop = ref(false)
 const { themeMode, setTheme } = useTheme()
 const windowService = getBrowserWindowService()
 let removeWindowStateListener: (() => void) | undefined
-let isDragging = false
 const themeLabel = computed(
   () =>
     ({
@@ -166,27 +166,6 @@ async function close() {
   await windowService.close()
 }
 
-async function startDrag(event: MouseEvent) {
-  if (event.button !== 0 || event.detail > 1 || maximized.value) return
-  const target = event.target as HTMLElement | null
-  if (target?.closest('button, .header-controls, .el-dropdown')) return
-
-  event.preventDefault()
-  isDragging = true
-  await windowService.startDrag({ x: event.screenX, y: event.screenY })
-}
-
-function moveDrag(event: MouseEvent) {
-  if (!isDragging) return
-  void windowService.moveDrag({ x: event.screenX, y: event.screenY })
-}
-
-async function stopDrag() {
-  if (!isDragging) return
-  isDragging = false
-  await windowService.stopDrag()
-}
-
 async function toggleAlwaysOnTop() {
   alwaysOnTop.value = await windowService.toggleAlwaysOnTop()
 }
@@ -203,17 +182,10 @@ onMounted(async () => {
   version.value = appVersion?.replace(/^v/i, '') ?? ''
   applyWindowState(state)
   removeWindowStateListener = windowService.onStateChanged((state) => applyWindowState(state))
-  window.addEventListener('mousemove', moveDrag)
-  window.addEventListener('mouseup', stopDrag)
-  window.addEventListener('blur', stopDrag)
 })
 
 onUnmounted(() => {
   removeWindowStateListener?.()
-  window.removeEventListener('mousemove', moveDrag)
-  window.removeEventListener('mouseup', stopDrag)
-  window.removeEventListener('blur', stopDrag)
-  void stopDrag()
 })
 </script>
 
@@ -233,7 +205,7 @@ onUnmounted(() => {
   background: var(--app-surface);
   box-sizing: border-box;
   user-select: none;
-  -webkit-app-region: no-drag;
+  -webkit-app-region: drag;
 }
 
 .brand {
@@ -254,21 +226,21 @@ onUnmounted(() => {
 .brand-name {
   display: inline-flex;
   flex: none;
+  align-self: center;
   align-items: center;
-  height: 20px;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 700;
-  line-height: 20px;
+  line-height: 1;
   white-space: nowrap;
 }
 
 .brand-version {
   display: inline-flex;
+  align-self: center;
   align-items: center;
-  height: 20px;
   color: var(--app-text-muted);
   font-size: 11px;
-  line-height: 20px;
+  line-height: 1;
 }
 
 .application-button {
@@ -282,7 +254,7 @@ onUnmounted(() => {
   padding-left: 12px;
   border-left: 1px solid var(--app-border);
   color: var(--app-text-muted);
-  font-size: 12px;
+  font-size: 13px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -291,6 +263,7 @@ onUnmounted(() => {
 .header-controls {
   display: flex;
   align-self: stretch;
+  -webkit-app-region: no-drag;
 }
 
 .header-controls :deep(.el-dropdown) {
@@ -317,6 +290,7 @@ onUnmounted(() => {
   color: var(--app-text-secondary);
   background: transparent;
   outline: none;
+  -webkit-app-region: no-drag;
 }
 
 .header-button:hover,

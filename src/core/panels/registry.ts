@@ -1,4 +1,24 @@
-export type ApplicationIcon = 'grid' | 'trend' | 'position' | 'motor'
+export type ApplicationIcon =
+  | 'grid'
+  | 'trend'
+  | 'position'
+  | 'motor'
+  | 'camera'
+  | 'robot'
+  | 'satellite'
+  | 'compass'
+  | 'data'
+  | 'monitor'
+  | 'settings'
+  | 'connection'
+  | 'power'
+  | 'vehicle'
+  | 'tools'
+  | 'cpu'
+  | 'map'
+  | 'target'
+  | 'gauge'
+  | 'chart'
 export type PanelDataMode = 'general' | 'flow' | 'gnss' | 'motor'
 
 export interface UserApplication {
@@ -44,6 +64,17 @@ export const panelRegistry: readonly PanelDefinition[] = [
     description: '查看、筛选并发送原始消息',
     componentName: 'RawMessages',
     componentPath: '@/components/windows/common/RawMessages.vue',
+  },
+  {
+    id: 'camera-video',
+    moduleId: 'general',
+    appMode: 'workspace',
+    funcMode: 'general',
+    action: 'camera',
+    title: 'Camera Video',
+    description: '播放 RTSP 相机实时视频画面',
+    componentName: 'CameraVideo',
+    componentPath: '@/components/windows/common/CameraVideo.vue',
   },
   {
     id: 'flow-deviation',

@@ -10,11 +10,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   toggleAlwaysOnTop: () => ipcRenderer.invoke('window-toggle-always-on-top'),
   restoreDetachedPanel: () => ipcRenderer.invoke('window-restore-detached-panel'),
   closeWindow: () => ipcRenderer.invoke('window-close'),
-  startWindowDrag: (cursor: { x: number; y: number }) => ipcRenderer.invoke('window-drag-start', cursor),
-  moveWindowDrag: (cursor: { x: number; y: number }) => ipcRenderer.invoke('window-drag-move', cursor),
-  stopWindowDrag: () => ipcRenderer.invoke('window-drag-stop'),
   startWindowResize: (edge: string) => ipcRenderer.invoke('window-resize-start', edge),
   stopWindowResize: () => ipcRenderer.invoke('window-resize-stop'),
+  startCameraStream: (url: string) => ipcRenderer.invoke('camera-stream-start', url),
+  stopCameraStream: () => ipcRenderer.invoke('camera-stream-stop'),
 })
 const listenerMap = new Map<string, Map<Function, (...args: unknown[]) => void>>()
 

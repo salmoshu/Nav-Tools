@@ -34,7 +34,8 @@
       title="电机驱动指令配置（16进制）"
       width="70%"
       top="3vh"
-      :close-on-click-modal="false"
+      :close-on-click-modal="true"
+      :close-on-press-escape="true"
       custom-class="motor-config-dialog"
     >
       <div class="dialog-content">
@@ -1359,6 +1360,8 @@ const resetConfig = () => {
       confirmButtonText: '确定',
       cancelButtonText: '取消',
       type: 'warning',
+      closeOnClickModal: true,
+      closeOnPressEscape: true,
     }
   ).then(() => {
     // 重置表单数据

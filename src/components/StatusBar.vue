@@ -75,6 +75,8 @@
   <el-dialog
     v-model="showAddDialog"
     width="600px"
+    :close-on-click-modal="true"
+    :close-on-press-escape="true"
     @opened="createCodeEditor1"
     @close="resetDialog"
     :title="isEditMode ? '编辑自定义属性' : '添加自定义属性'"
@@ -427,6 +429,8 @@ const deleteCustomStatus = (fieldName: string) => {
     confirmButtonText: '确定',
     cancelButtonText: '取消',
     type: 'warning',
+    closeOnClickModal: true,
+    closeOnPressEscape: true,
   })
     .then(() => {
       // 调用store的方法删除配置

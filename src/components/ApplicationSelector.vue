@@ -54,7 +54,7 @@
         >
           <div class="application-icon" aria-hidden="true">
             <el-icon :size="24">
-              <component :is="iconComponents[application.icon] ?? Grid" />
+              <component :is="applicationIconComponents[application.icon] ?? Grid" />
             </el-icon>
           </div>
           <div class="application-copy">
@@ -122,7 +122,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, type Component } from 'vue'
+import { onMounted, onUnmounted, ref } from 'vue'
 import { ElMessageBox } from 'element-plus'
 import {
   CircleCheckFilled,
@@ -132,17 +132,15 @@ import {
   Edit,
   FolderAdd,
   Grid,
-  Location,
   Plus,
   Refresh,
-  SetUp,
-  TrendCharts,
 } from '@element-plus/icons-vue'
-import type { ApplicationIcon, UserApplication } from '@/settings/config'
+import type { UserApplication } from '@/settings/config'
 import { useApplicationSelector } from '@/composables/useApplicationSelector'
+import { applicationIconComponents } from '@/settings/applicationIcons'
 import ApplicationEditor from './ApplicationEditor.vue'
 
-defineProps<{
+const props = defineProps<{
   open: boolean
 }>()
 
@@ -159,15 +157,7 @@ const {
   saveApplication,
   deleteApplication,
   resetApplications,
-} =
-  useApplicationSelector()
-
-const iconComponents: Record<ApplicationIcon, Component> = {
-  grid: Grid,
-  trend: TrendCharts,
-  position: Location,
-  motor: SetUp,
-}
+} = useApplicationSelector()
 
 const editorOpen = ref(false)
 const editingApplication = ref<UserApplication | undefined>(undefined)
@@ -192,13 +182,15 @@ const handleSave = (form: Omit<UserApplication, 'id'> & { id?: string }) => {
 const confirmReset = async () => {
   try {
     await ElMessageBox.confirm(
-      '该操作会删除所有自定义应用和对应用的编辑，只保留默认的 GNSS 和 Motor 应用。重置后不可恢复，确定继续吗？',
+      '该操作会删除所有自定义应用和对应用的编辑，只保留默认的 GNSS、Motor 和 Camera 应用。重置后不可恢复，确定继续吗？',
       '重置应用',
       {
         appendTo: selectorMessageBoxTarget,
         type: 'warning',
         confirmButtonText: '重置应用',
         cancelButtonText: '取消',
+        closeOnClickModal: true,
+        closeOnPressEscape: true,
       },
     )
   } catch {
@@ -220,6 +212,8 @@ const confirmDelete = async (application: UserApplication) => {
         type: 'warning',
         confirmButtonText: '删除',
         cancelButtonText: '取消',
+        closeOnClickModal: true,
+        closeOnPressEscape: true,
       },
     )
   } catch {
@@ -227,6 +221,15 @@ const confirmDelete = async (application: UserApplication) => {
   }
   deleteApplication(application.id)
 }
+
+const handleEscape = (event: KeyboardEvent) => {
+  if (event.key !== 'Escape' || !props.open || editorOpen.value) return
+  if (document.querySelector('.selector-backdrop > .el-overlay.is-message-box')) return
+  emit('close')
+}
+
+onMounted(() => window.addEventListener('keydown', handleEscape, { capture: true }))
+onUnmounted(() => window.removeEventListener('keydown', handleEscape, { capture: true }))
 </script>
 
 <style scoped>
@@ -267,12 +270,14 @@ const confirmDelete = async (application: UserApplication) => {
   font-size: 22px;
   line-height: 1.3;
   letter-spacing: 0;
+  text-align: left;
 }
 
 .selector-header p {
   margin: 6px 0 0;
   color: var(--app-text-muted);
   font-size: 14px;
+  text-align: left;
 }
 
 .header-actions {

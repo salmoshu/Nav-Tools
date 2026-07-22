@@ -43,6 +43,7 @@
       "@serialport/bindings-cpp",
       "electron",
       "esbuild",
+      "ffmpeg-static",
       "vue-demi"
     ],
     "overrides": {
@@ -78,6 +79,7 @@
     "echarts": "^6.0.0",
     "element-plus": "^2.11.2",
     "element-resize-detector": "^1.2.4",
+    "ffmpeg-static": "^5.2.0",
     "grid-layout-plus": "^1.1.0",
     "mathjs": "^14.7.0",
     "mitt": "^3.0.1",

@@ -28,11 +28,10 @@ interface Window {
     toggleAlwaysOnTop: () => Promise<boolean>
     restoreDetachedPanel: () => Promise<boolean>
     closeWindow: () => Promise<void>
-    startWindowDrag: (cursor: { x: number; y: number }) => Promise<void>
-    moveWindowDrag: (cursor: { x: number; y: number }) => Promise<void>
-    stopWindowDrag: () => Promise<void>
     startWindowResize: (edge: import('./core/window/WindowService').WindowResizeEdge) => Promise<void>
     stopWindowResize: () => Promise<void>
+    startCameraStream: (url: string) => Promise<{ ok: boolean; message?: string }>
+    stopCameraStream: () => Promise<void>
   }
   ipcRenderer: import('electron').IpcRenderer
 }

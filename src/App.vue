@@ -5,9 +5,11 @@ import WindowResizeHandles from './components/WindowResizeHandles.vue'
 import Dashboard from './components/Dashboard.vue'
 import CardWindow from './components/CardWindow.vue'
 import emitter from '@/hooks/useMitt'
+import { useApplicationSelector } from '@/composables/useApplicationSelector'
 
 const maximized = ref(false)
 const isCardWindow = computed(() => window.location.hash.startsWith('#card/'))
+const { currentApplication } = useApplicationSelector()
 
 const applicationId = computed(() => {
   const match = window.location.hash.match(/^#app\/([^/?]+)/)
@@ -24,18 +26,7 @@ const contextTitle = computed(() => {
     }
   }
 
-  if (applicationId.value) {
-    try {
-      const applications = JSON.parse(localStorage.getItem('nav-tools:custom-applications') ?? '[]')
-      return (
-        applications.find((application: { id?: string }) => application.id === applicationId.value)
-          ?.name ?? 'Application'
-      )
-    } catch {
-      return 'Application'
-    }
-  }
-  return undefined
+  return currentApplication.value?.name
 })
 
 const openApplicationSelector = () => emitter.emit('open-application-selector')
@@ -45,7 +36,8 @@ const openApplicationSelector = () => emitter.emit('open-application-selector')
   <div class="app-shell">
     <WindowResizeHandles v-if="!maximized" />
     <AppHeader
-      :context-title="contextTitle"
+      :brand-title="isCardWindow ? contextTitle : 'Nav-Tools'"
+      :context-title="isCardWindow ? undefined : contextTitle"
       :show-application-selector="!isCardWindow"
       :show-detached-controls="isCardWindow"
       @open-application-selector="openApplicationSelector"

@@ -4,6 +4,8 @@
     :width="viewLayout === 'double' || yAxisConfig === 'double' ? '710px' : '400px'"
     destroy-on-close
     title="Plot 配置"
+    :close-on-click-modal="true"
+    :close-on-press-escape="true"
     @update:model-value="$emit('update:modelValue', $event)"
   >
     <div class="mode-row">

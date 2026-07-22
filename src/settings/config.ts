@@ -17,6 +17,7 @@ interface ButtonItem {
   template: string
   icon: string
   text: string
+  action?: string
   [key: string]: unknown
 }
 
@@ -31,10 +32,11 @@ function createButton(panel: PanelDefinition): ButtonItem {
     template: panel.componentName,
     icon: toolBarIcon[panel.action as keyof typeof toolBarIcon] || toolBarIcon.default,
     text: `&nbsp;${panel.title}`,
+    action: panel.action,
   }
 }
 
-const windowCatalog: readonly WindowDefinition[] = panelRegistry.map(panel => ({
+const windowCatalog: readonly WindowDefinition[] = panelRegistry.map((panel) => ({
   ...panel,
   button: createButton(panel),
 }))
@@ -49,12 +51,12 @@ function normalizeWindowIds(ids: readonly string[]): string[] {
 
 function getWindowById(id: string): WindowDefinition | undefined {
   const panel = getPanelById(id)
-  return panel ? windowCatalog.find(item => item.id === panel.id) : undefined
+  return panel ? windowCatalog.find((item) => item.id === panel.id) : undefined
 }
 
 function getWindowsByIds(ids: readonly string[]): WindowDefinition[] {
-  const panelIds = new Set(getPanelsByIds(ids).map(panel => panel.id))
-  return windowCatalog.filter(panel => panelIds.has(panel.id))
+  const panelIds = new Set(getPanelsByIds(ids).map((panel) => panel.id))
+  return windowCatalog.filter((panel) => panelIds.has(panel.id))
 }
 
 class NavMode {

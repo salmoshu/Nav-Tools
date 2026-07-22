@@ -3,8 +3,9 @@
     :model-value="open"
     :title="application ? '编辑应用' : '新建应用'"
     class="application-editor-dialog"
-    width="min(560px, calc(100vw - 32px))"
-    :close-on-click-modal="false"
+    width="min(640px, calc(100vw - 32px))"
+    :close-on-click-modal="true"
+    :close-on-press-escape="true"
     :z-index="3100"
     @close="handleCancel"
   >
@@ -40,13 +41,20 @@
             :aria-pressed="form.icon === option.value"
             @click="form.icon = option.value"
           >
-            <el-icon :size="20"><component :is="iconComponents[option.value]" /></el-icon>
+            <el-icon :size="20"
+              ><component :is="applicationIconComponents[option.value]"
+            /></el-icon>
           </button>
         </div>
       </el-form-item>
 
       <el-form-item label="主题色" prop="accent">
-        <el-color-picker v-model="form.accent" :predefine="accentPresets" />
+        <el-color-picker
+          v-model="form.accent"
+          :predefine="accentPresets"
+          :teleported="false"
+          popper-class="application-color-picker-popper"
+        />
       </el-form-item>
 
       <el-form-item label="包含窗口（至少 1 个）" prop="windowIds">
@@ -60,6 +68,7 @@
           :teleported="false"
           placeholder="选择要包含的窗口"
           class="window-select"
+          popper-class="application-window-popper"
         >
           <el-option-group
             v-for="group in windowGroups"
@@ -72,8 +81,20 @@
               :value="windowDefinition.id"
               :label="windowDefinition.title"
             >
-              <span class="window-option-title">{{ windowDefinition.title }}</span>
-              <span class="window-option-subtitle">{{ windowDefinition.description }}</span>
+              <div class="window-option">
+                <span class="window-option-icon" :class="`mode-${windowDefinition.funcMode}`">
+                  <el-icon :size="18">
+                    <component :is="getPanelIconComponent(windowDefinition.action)" />
+                  </el-icon>
+                </span>
+                <span class="window-option-copy">
+                  <span class="window-option-title">{{ windowDefinition.title }}</span>
+                  <span class="window-option-subtitle">{{ windowDefinition.description }}</span>
+                </span>
+                <span class="window-option-mode">{{
+                  formatFuncMode(windowDefinition.funcMode)
+                }}</span>
+              </div>
             </el-option>
           </el-option-group>
         </el-select>
@@ -97,11 +118,13 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref, watch, type Component } from 'vue'
-import { Check, Grid, Location, SetUp, TrendCharts } from '@element-plus/icons-vue'
+import { computed, reactive, ref, watch } from 'vue'
+import { Check } from '@element-plus/icons-vue'
 import type { FormInstance, FormItemRule, FormRules } from 'element-plus'
-import type { ApplicationIcon, UserApplication, WindowDefinition } from '@/settings/config'
+import type { UserApplication, WindowDefinition } from '@/settings/config'
 import { useApplicationSelector } from '@/composables/useApplicationSelector'
+import { applicationIconComponents, applicationIconOptions } from '@/settings/applicationIcons'
+import { getPanelIconComponent } from '@/settings/panelIcons'
 
 type ApplicationForm = Omit<UserApplication, 'id'> & { id?: string }
 
@@ -126,20 +149,7 @@ const form = reactive<ApplicationForm>({
   windowIds: [],
 })
 
-const iconComponents: Record<ApplicationIcon, Component> = {
-  grid: Grid,
-  trend: TrendCharts,
-  position: Location,
-  motor: SetUp,
-}
-
-const iconOptions: { value: ApplicationIcon; label: string }[] = [
-  { value: 'grid', label: '网格' },
-  { value: 'trend', label: '趋势' },
-  { value: 'position', label: '定位' },
-  { value: 'motor', label: '电机' },
-]
-
+const iconOptions = applicationIconOptions
 const accentPresets = [
   '#3b82f6',
   '#0ea5e9',
@@ -230,8 +240,17 @@ const handleSave = async () => {
 
 <style scoped>
 .icon-options {
-  display: flex;
-  gap: 8px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, 40px);
+  gap: 7px;
+  width: 100%;
+  max-height: 142px;
+  padding: 8px;
+  overflow-y: auto;
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  background: var(--app-surface-muted);
+  box-sizing: border-box;
 }
 
 .icon-option {
@@ -265,13 +284,102 @@ const handleSave = async () => {
   width: 100%;
 }
 
+.window-option {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 56px;
+  padding: 6px 2px;
+  box-sizing: border-box;
+}
+
+.window-option-icon {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  color: #64748b;
+  background: #eef2f7;
+}
+
+.window-option-icon.mode-flow {
+  color: #0f8f80;
+  background: #e5f7f3;
+}
+.window-option-icon.mode-gnss {
+  color: #0284c7;
+  background: #e6f5fc;
+}
+.window-option-icon.mode-motor {
+  color: #ea580c;
+  background: #fff0e8;
+}
+
+.window-option-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  line-height: 1.35;
+  text-align: left;
+}
+
 .window-option-title {
-  float: left;
+  color: var(--app-text);
+  font-size: 13px;
+  font-weight: 600;
 }
 
 .window-option-subtitle {
-  float: right;
   color: var(--app-text-muted);
-  font-size: 12px;
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.window-option-mode {
+  padding: 2px 7px;
+  border: 1px solid var(--app-border);
+  border-radius: 999px;
+  color: var(--app-text-muted);
+  background: var(--app-surface);
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+:deep(.application-window-popper .el-select-dropdown__item) {
+  height: auto;
+  min-height: 62px;
+  padding: 2px 12px;
+}
+
+:deep(.application-window-popper) {
+  z-index: 9001 !important;
+  border-color: var(--app-border);
+  background: var(--app-surface-raised);
+  box-shadow: 0 14px 34px var(--app-shadow);
+}
+
+:deep(.application-window-popper .el-select-dropdown) {
+  background: var(--app-surface-raised);
+}
+
+:deep(.application-window-popper .el-select-group__title) {
+  height: 30px;
+  padding-top: 7px;
+  color: var(--app-text-muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+:deep(.application-color-picker-popper) {
+  z-index: 9001 !important;
 }
 </style>

@@ -21,11 +21,11 @@ class MemoryStorage implements StorageLike {
 }
 
 describe('panel and application persistence', () => {
-  it('seeds editable GNSS and Motor applications on first launch', () => {
+  it('seeds editable GNSS, Motor, and Camera applications on first launch', () => {
     const memory = new MemoryStorage()
     const applications = new ApplicationStorage(new JsonStorage(memory)).loadApplications()
 
-    expect(applications.map((application) => application.name)).toEqual(['GNSS', 'Motor'])
+    expect(applications.map((application) => application.name)).toEqual(['GNSS', 'Motor', 'Camera'])
     expect(applications[0]).toMatchObject({
       id: 'gnss',
       icon: 'position',
@@ -35,6 +35,11 @@ describe('panel and application persistence', () => {
       id: 'motor',
       icon: 'motor',
       windowIds: ['plot', 'raw-messages', 'motor-parameters'],
+    })
+    expect(applications[2]).toMatchObject({
+      id: 'camera',
+      icon: 'camera',
+      windowIds: ['camera-video'],
     })
     expect(memory.getItem('nav-tools:custom-applications')).not.toBeNull()
   })
@@ -46,7 +51,27 @@ describe('panel and application persistence', () => {
     expect(new ApplicationStorage(new JsonStorage(memory)).loadApplications()).toEqual([])
   })
 
-  it('resets saved applications back to only GNSS and Motor defaults', () => {
+  it('adds Camera once when upgrading an existing application list', () => {
+    const memory = new MemoryStorage()
+    memory.setItem(
+      'nav-tools:custom-applications',
+      JSON.stringify([{
+        id: 'custom',
+        name: 'Custom',
+        description: '',
+        icon: 'grid',
+        accent: '#1677ff',
+        windowIds: ['plot'],
+      }]),
+    )
+    const storage = new ApplicationStorage(new JsonStorage(memory))
+
+    expect(storage.loadApplications().map(({ id }) => id)).toEqual(['custom', 'camera'])
+    storage.saveApplications(storage.loadApplications().filter(({ id }) => id !== 'camera'))
+    expect(storage.loadApplications().map(({ id }) => id)).toEqual(['custom'])
+  })
+
+  it('resets saved applications back to GNSS, Motor, and Camera defaults', () => {
     const memory = new MemoryStorage()
     const storage = new ApplicationStorage(new JsonStorage(memory))
     storage.saveApplications([
@@ -62,8 +87,12 @@ describe('panel and application persistence', () => {
 
     const applications = storage.resetApplicationsToDefaults()
 
-    expect(applications.map((application) => application.id)).toEqual(['gnss', 'motor'])
-    expect(storage.loadApplications().map((application) => application.id)).toEqual(['gnss', 'motor'])
+    expect(applications.map((application) => application.id)).toEqual(['gnss', 'motor', 'camera'])
+    expect(storage.loadApplications().map((application) => application.id)).toEqual([
+      'gnss',
+      'motor',
+      'camera',
+    ])
   })
 
   it('migrates legacy panel ids and filters unknown panels', () => {

@@ -60,8 +60,11 @@
           ;($event.currentTarget as HTMLElement)?.blur()
         "
         :title="item.title"
-        v-html="item.icon"
-      ></button>
+      >
+        <el-icon class="toolbar-window-icon" :size="18">
+          <component :is="getPanelIconComponent(item.action)" />
+        </el-icon>
+      </button>
 
       <span class="divider" aria-hidden="true"></span>
 
@@ -107,16 +110,12 @@
     v-model="showInputDialog"
     class="data-input-dialog"
     width="min(520px, calc(100vw - 32px))"
-    :close-on-click-modal="false"
+    :close-on-click-modal="true"
+    :close-on-press-escape="true"
     :append-to-body="true"
     modal-class="data-input-overlay"
     :z-index="8000"
     align-center
-    @mousedown.stop
-    @pointerdown.stop
-    @click.stop
-    @keydown.stop
-    @keyup.stop
   >
     <el-tabs v-model="activeTab">
       <el-tab-pane label="串口连接" name="serial">
@@ -265,6 +264,7 @@ import {
 } from 'element-plus'
 import { Refresh } from '@element-plus/icons-vue'
 import { useApplicationSelector } from '@/composables/useApplicationSelector'
+import { getPanelIconComponent } from '@/settings/panelIcons'
 
 const ipcRenderer = window.ipcRenderer
 const position = ref<'top' | 'right' | 'bottom' | 'left'>('bottom')
@@ -361,7 +361,7 @@ watch(currentApplicationId, (newApplicationId, oldApplicationId) => {
   if (newApplicationId === oldApplicationId) return
 
   showSaveButton.value = false
-  ipcRenderer.send('console-to-node', ['watch:application', newApplicationId])
+  ipcRenderer?.send('console-to-node', ['watch:application', newApplicationId])
   deviceInstance.removeCurrDevice()
 })
 
@@ -701,6 +701,12 @@ function handleDeviceEvent(event: KeyboardEvent) {
   }
 }
 
+function handleInputDialogEscape(event: KeyboardEvent) {
+  if (event.key !== 'Escape' || !showInputDialog.value) return
+  event.preventDefault()
+  showInputDialog.value = false
+}
+
 onMounted(() => {
   searchSerialPorts(true)
   emitter.on('input-event', inputDialog)
@@ -712,6 +718,7 @@ onMounted(() => {
   snapToEdge()
   window.addEventListener('resize', snapToEdge)
   window.addEventListener('keyup', handleDeviceEvent)
+  window.addEventListener('keydown', handleInputDialogEscape, { capture: true })
 
   // 监听状态栏位置变化
   watch(
@@ -738,6 +745,7 @@ onUnmounted(() => {
   document.removeEventListener('focusout', restorePointerInputFocus, true)
   window.removeEventListener('resize', snapToEdge)
   window.removeEventListener('keyup', handleDeviceEvent)
+  window.removeEventListener('keydown', handleInputDialogEscape, { capture: true })
 
   // 移除布局更改监听
   emitter.off('layout-changed')

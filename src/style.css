@@ -95,6 +95,17 @@ select {
   pointer-events: auto;
 }
 
+/* Application editor poppers must stay above the custom selector backdrop (z-index: 8000). */
+.application-window-popper,
+.application-color-picker-popper {
+  z-index: 9001 !important;
+}
+
+.application-window-popper,
+.application-window-popper .el-select-dropdown {
+  background: var(--app-surface-raised) !important;
+}
+
 button {
   cursor: pointer;
 }
