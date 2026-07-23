@@ -5,11 +5,11 @@
       <div class="console-controls">
         <!-- 左侧按钮组 -->
         <div class="left-controls">
-          <el-select class="custom-select" v-model="dataFormat" placeholder="选择格式" size="small" style="width: 72px;">
-            <el-option label="NONE" value="none"></el-option>
-            <el-option label="JSON" value="json"></el-option>
-            <el-option label="NMEA" value="nmea"></el-option>
-          </el-select>
+          <div class="data-parser-badge" title="数据解析方式请在数据接入中配置">
+            <el-icon><DataAnalysis /></el-icon>
+            <span>解析</span>
+            <strong>{{ parserLabel(activeDataParser) }}</strong>
+          </div>
           
           <el-button @click="toggleFilter" :type="dataFilter ? 'success' : 'default'" size="small" :title="dataFilter?'取消过滤':'启用过滤'" :disabled="dataFormat === 'none'">
             <el-icon><Filter /></el-icon>
@@ -196,12 +196,14 @@ import {
   Edit,
   Position,
   Document,
-  Coin
+  Coin,
+  DataAnalysis
 } from '@element-plus/icons-vue'
 import { useConsole } from '@/composables/flow/useConsole'
 import { useDevice } from '@/hooks/useDevice'
 import { useApplicationSelector } from '@/composables/useApplicationSelector'
 import { DynamicScroller, DynamicScrollerItem } from 'vue-virtual-scroller'
+import { parserLabel } from '@/composables/useDataSourceManager'
 
 // DOM引用
 const consoleRoot = ref<HTMLDivElement | null>(null)
@@ -239,7 +241,7 @@ const {
 } = useConsole(true) // 使用全局实例
 
 // 获取设备连接状态
-const { deviceConnected } = useDevice()
+const { deviceConnected, activeDataParser } = useDevice()
 const { activeDataModes } = useApplicationSelector()
 
 // 输入框状态
@@ -609,14 +611,26 @@ onUnmounted(() => {
   align-items: center;
 }
 
-/* 自定义选择框样式 - 浅色主题 */
-.custom-select {
+/* 解析方式由 Input 数据源统一配置。 */
+.data-parser-badge {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 5px;
   margin-right: 10px;
+  padding: 5px 8px;
+  border: 1px solid var(--app-border);
+  border-radius: 5px;
+  color: var(--app-text-muted);
+  background: var(--app-surface);
+  font-size: 11px;
+  white-space: nowrap;
 }
 
-.custom-select :deep(.el-input__wrapper) {
-  background: var(--app-surface);
-  box-shadow: 0 0 0 1px var(--app-border) inset;
+.data-parser-badge strong {
+  color: var(--el-color-primary);
+  font-size: 12px;
+  font-weight: 600;
 }
 
 /* 搜索框样式 - 浅色主题 */

@@ -1,4 +1,4 @@
-import { computed, ref } from 'vue'
+import { computed, ref, toRef, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useApplicationSelector } from '@/composables/useApplicationSelector'
 import { useNmea } from '@/composables/gnss/useNmea'
@@ -24,12 +24,15 @@ import {
   type SerialStopBits,
 } from '@/core/serial/SerialService'
 import emitter from '@/hooks/useMitt'
+import { useDataSourceManager } from '@/composables/useDataSourceManager'
+import { normalizeRtspUrl, type TextDataParser } from '@/core/data/DataSourceStorage'
 
 const { processRawData: addGnssData } = useNmea()
 const { addRawData: addFlowData, initRawData: initFlowData } = useFlow()
 const {
   addMessages: initFlowConsole,
   addMessage: addFlowConsole,
+  dataFormat: flowDataFormat,
   displayFormat: flowDisplayFormat,
 } = useConsole(true) // 使用全局实例
 const { convertByteArrayToJson } = useMotorCmd()
@@ -43,6 +46,8 @@ const dataRouter = new IncomingDataRouter({
   appendPlot: addFlowData,
   decodeMotorHex: convertByteArrayToJson,
 })
+const { settings: dataSourceSettings, saveSettings: saveDataSourceSettings } =
+  useDataSourceManager()
 
 const isWindowActive = (windowId: string) =>
   currentWindows.value.some((windowDefinition) => windowDefinition.id === windowId)
@@ -61,20 +66,21 @@ const loadTextIntoActiveWindows = (content: string) => {
 }
 
 // 串口配置
-const serialPort = ref('')
-const serialBaudRate = ref('115200')
-const serialDataBits = ref('8')
-const serialStopBits = ref('1')
-const serialParity = ref('none')
-const serialAdvanced = ref(false)
+const serialPort = toRef(dataSourceSettings.serial, 'port')
+const serialBaudRate = toRef(dataSourceSettings.serial, 'baudRate')
+const serialDataBits = toRef(dataSourceSettings.serial, 'dataBits')
+const serialStopBits = toRef(dataSourceSettings.serial, 'stopBits')
+const serialParity = toRef(dataSourceSettings.serial, 'parity')
+const serialAdvanced = toRef(dataSourceSettings.serial, 'advanced')
 
 // 网络配置
-const networkProtocol = ref<NetworkProtocol>('tcp')
-const networkIp = ref('127.0.0.1')
-const networkPort = ref<number | undefined>()
+const networkProtocol = toRef(dataSourceSettings.network, 'protocol')
+const networkIp = toRef(dataSourceSettings.network, 'host')
+const networkPort = toRef(dataSourceSettings.network, 'port')
 
 // 文件配置
-const filePath = ref('')
+const filePath = toRef(dataSourceSettings.file, 'path')
+const cameraStreamUrl = toRef(dataSourceSettings.camera, 'url')
 const serialPorts = ref<string[]>([])
 // const fileContent = ref("");
 
@@ -95,6 +101,21 @@ const globalDevice = ref<{
 const deviceConnected = computed(() => {
   return globalDevice.value.connected === true
 })
+
+const activeDataParser = computed<TextDataParser>(() => {
+  if (globalDevice.value.type === 'serial') return dataSourceSettings.serial.parser
+  if (globalDevice.value.type === 'network') return dataSourceSettings.network.parser
+  if (globalDevice.value.type === 'file') return dataSourceSettings.file.parser
+  return 'raw'
+})
+
+watch(
+  activeDataParser,
+  (parser) => {
+    flowDataFormat.value = parser === 'raw' ? 'none' : parser
+  },
+  { immediate: true },
+)
 
 function currentSerialOptions(): SerialPortOptions | undefined {
   const device = globalDevice.value
@@ -199,7 +220,50 @@ export function useDevice() {
 
   // 对话框状态
   const showInputDialog = ref(false)
-  const activeTab = ref('serial')
+  const activeTab = ref<'serial' | 'file' | 'network' | 'camera'>('serial')
+  let dataSourceSnapshot: typeof dataSourceSettings | undefined
+  let dataSourceChangesCommitted = false
+
+  const snapshotDataSourceSettings = (): typeof dataSourceSettings => ({
+    version: 1,
+    serial: { ...dataSourceSettings.serial },
+    file: { ...dataSourceSettings.file },
+    network: { ...dataSourceSettings.network },
+    camera: { ...dataSourceSettings.camera },
+  })
+
+  const restoreDataSourceSnapshot = () => {
+    if (!dataSourceSnapshot) return
+    Object.assign(dataSourceSettings.serial, dataSourceSnapshot.serial)
+    Object.assign(dataSourceSettings.file, dataSourceSnapshot.file)
+    Object.assign(dataSourceSettings.network, dataSourceSnapshot.network)
+    Object.assign(dataSourceSettings.camera, dataSourceSnapshot.camera)
+  }
+
+  watch(showInputDialog, (open) => {
+    if (open) {
+      dataSourceSnapshot = snapshotDataSourceSettings()
+      dataSourceChangesCommitted = false
+      return
+    }
+
+    if (!dataSourceChangesCommitted) restoreDataSourceSnapshot()
+    dataSourceSnapshot = undefined
+  })
+
+  const sourceParser = computed<TextDataParser>({
+    get: () => {
+      if (activeTab.value === 'serial') return dataSourceSettings.serial.parser
+      if (activeTab.value === 'file') return dataSourceSettings.file.parser
+      if (activeTab.value === 'network') return dataSourceSettings.network.parser
+      return 'raw'
+    },
+    set: (parser) => {
+      if (activeTab.value === 'serial') dataSourceSettings.serial.parser = parser
+      if (activeTab.value === 'file') dataSourceSettings.file.parser = parser
+      if (activeTab.value === 'network') dataSourceSettings.network.parser = parser
+    },
+  })
 
   // 下拉框选项数据
   const baudRates = ['9600', '19200', '38400', '57600', '115200', '230400', '460800', '921600']
@@ -319,7 +383,26 @@ export function useDevice() {
   /**
    * 打开输入对话框
    */
-  const inputDialog = () => {
+  const inputDialog = (request?: unknown) => {
+    const requestedTab =
+      typeof request === 'string'
+        ? request
+        : request && typeof request === 'object' && 'tab' in request
+          ? (request as { tab?: unknown }).tab
+          : undefined
+    if (
+      requestedTab === 'serial' ||
+      requestedTab === 'file' ||
+      requestedTab === 'network' ||
+      requestedTab === 'camera'
+    ) {
+      activeTab.value = requestedTab
+    } else if (
+      currentWindows.value.length === 1 &&
+      currentWindows.value[0]?.id === 'camera-video'
+    ) {
+      activeTab.value = 'camera'
+    }
     showInputDialog.value = true
     searchSerialPorts(true)
   }
@@ -380,6 +463,8 @@ export function useDevice() {
       connected: false,
     }
 
+    saveDataSourceSettings()
+
     // 调用 openCurrDevice 函数打开设备
     openCurrDevice()
 
@@ -415,6 +500,7 @@ export function useDevice() {
       port: options.port,
       connected: false,
     }
+    saveDataSourceSettings()
     openCurrDevice()
     return globalDevice.value.path ?? ''
   }
@@ -466,6 +552,7 @@ export function useDevice() {
       path: fileCmd,
       connected: false, // 仅实时数据能修改globalDevice为true
     }
+    saveDataSourceSettings()
 
     if (!selectedFile.value && !fileCmd) {
       ElMessage({
@@ -522,6 +609,29 @@ export function useDevice() {
     }
 
     return fileCmd
+  }
+
+  const handleCameraSubmit = (): string => {
+    const url = normalizeRtspUrl(cameraStreamUrl.value)
+    if (!url) {
+      ElMessage({
+        message: '请输入以 rtsp:// 开头的有效视频地址',
+        type: 'warning',
+        placement: 'bottom-right',
+        offset: 50,
+      })
+      return ''
+    }
+
+    cameraStreamUrl.value = url
+    saveDataSourceSettings()
+    ElMessage({
+      message: 'Camera RTSP 数据源已保存',
+      type: 'success',
+      placement: 'bottom-right',
+      offset: 50,
+    })
+    return url
   }
 
   const openCurrDevice = () => {
@@ -587,20 +697,11 @@ export function useDevice() {
         serialService.close(options).then(() => {
           activeDataTransport.clear('serial')
           globalDevice.value = { connected: null }
-          serialPort.value = ''
-          serialBaudRate.value = '115200'
-          serialDataBits.value = '8'
-          serialStopBits.value = '1'
-          serialParity.value = 'none'
-          serialAdvanced.value = false
         })
       } else if (globalDevice.value.type === 'network') {
         networkService.close().then(() => {
           activeDataTransport.clear('network')
           globalDevice.value = { connected: null }
-          networkProtocol.value = 'tcp'
-          networkIp.value = '127.0.0.1'
-          networkPort.value = undefined
         })
       }
     }
@@ -642,11 +743,13 @@ export function useDevice() {
       case 'file':
         command = handleFileSubmit()
         break
+      case 'camera':
+        command = handleCameraSubmit()
+        break
     }
 
-    if (command || activeTab.value === 'file') {
-      // 对于文件类型，即使没有返回command也关闭对话框
-      // 因为文件选择是通过新的对话框进行的
+    if (command) {
+      dataSourceChangesCommitted = true
       if (activeTab.value !== 'file') {
         console.log('输入的指令:', command)
       }
@@ -675,6 +778,9 @@ export function useDevice() {
     networkIp,
     networkPort,
     networkProtocol,
+    sourceParser,
+    activeDataParser,
+    cameraStreamUrl,
     serialPorts,
     baudRates,
     dataBits,

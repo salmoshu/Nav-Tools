@@ -2,13 +2,23 @@
   <el-dialog
     :model-value="open"
     :title="application ? '编辑应用' : '新建应用'"
-    class="application-editor-dialog"
+    class="app-dialog application-editor-dialog"
     width="min(640px, calc(100vw - 32px))"
     :close-on-click-modal="true"
     :close-on-press-escape="true"
     :z-index="3100"
     @close="handleCancel"
   >
+    <template #header>
+      <AppDialogTitle
+        :icon="EditPen"
+        :title="application ? '编辑应用' : '新建应用'"
+        :description="
+          application ? '调整应用外观和包含窗口' : '创建一组可快速打开的窗口布局'
+        "
+      />
+    </template>
+
     <el-form ref="formRef" :model="form" :rules="rules" label-position="top" @submit.prevent>
       <el-form-item label="名称" prop="name">
         <el-input
@@ -119,8 +129,9 @@
 
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
-import { Check } from '@element-plus/icons-vue'
+import { Check, EditPen } from '@element-plus/icons-vue'
 import type { FormInstance, FormItemRule, FormRules } from 'element-plus'
+import AppDialogTitle from '@/components/AppDialogTitle.vue'
 import type { UserApplication, WindowDefinition } from '@/settings/config'
 import { useApplicationSelector } from '@/composables/useApplicationSelector'
 import { applicationIconComponents, applicationIconOptions } from '@/settings/applicationIcons'
@@ -302,20 +313,20 @@ const handleSave = async () => {
   height: 34px;
   border-radius: 8px;
   color: #64748b;
-  background: #eef2f7;
+  background: color-mix(in srgb, #64748b 12%, var(--app-surface));
 }
 
 .window-option-icon.mode-flow {
   color: #0f8f80;
-  background: #e5f7f3;
+  background: color-mix(in srgb, #14b8a6 13%, var(--app-surface));
 }
 .window-option-icon.mode-gnss {
   color: #0284c7;
-  background: #e6f5fc;
+  background: color-mix(in srgb, #0ea5e9 13%, var(--app-surface));
 }
 .window-option-icon.mode-motor {
   color: #ea580c;
-  background: #fff0e8;
+  background: color-mix(in srgb, #f97316 13%, var(--app-surface));
 }
 
 .window-option-copy {
@@ -381,5 +392,9 @@ const handleSave = async () => {
 
 :deep(.application-color-picker-popper) {
   z-index: 9001 !important;
+}
+
+:global(.application-editor-dialog .el-form-item:last-child) {
+  margin-bottom: 0;
 }
 </style>

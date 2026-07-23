@@ -11,7 +11,14 @@ test('opens the user application selector in the renderer', async ({ page }) => 
   await expect(page.getByText('Camera', { exact: true })).toBeVisible()
   await page.getByRole('button', { name: '重置应用' }).click()
   await expect(page.locator('.selector-backdrop > .el-overlay.is-message-box')).toBeVisible()
+  await expect(page.locator('.selector-backdrop > .el-overlay.is-message-box')).toHaveCSS(
+    'z-index',
+    '9000',
+  )
+  await expect(page.locator('.app-message-box')).toBeVisible()
   await expect(page.getByText('只保留默认的 GNSS、Motor 和 Camera 应用')).toBeVisible()
+  await page.waitForTimeout(300)
+  await page.screenshot({ path: 'test-results/ui-audit-confirmation-dialog.png' })
   await page.keyboard.press('Escape')
   await expect(page.getByText('只保留默认的 GNSS、Motor 和 Camera 应用')).toBeHidden()
   await page.screenshot({ path: 'test-results/ui-audit-selector.png' })
@@ -77,6 +84,11 @@ test('opens the user application selector in the renderer', async ({ page }) => 
 
   await page.setViewportSize({ width: 390, height: 844 })
   await expect(page.getByText('选择应用', { exact: true })).toBeVisible()
+  const mobileSelectorTitle = page.locator('.selector-header h1')
+  const mobileSelectorHeader = page.locator('.selector-header')
+  await expect(mobileSelectorTitle).toHaveCSS('white-space', 'nowrap')
+  await expect(mobileSelectorHeader).toHaveCSS('flex-direction', 'column')
+  expect((await mobileSelectorTitle.boundingBox())!.height).toBeLessThan(32)
   await page.screenshot({ path: 'test-results/ui-audit-selector-mobile.png' })
   await page.getByRole('button', { name: '新建应用' }).click()
   await expect(editor).toBeVisible()
@@ -105,7 +117,7 @@ test('opens the default Camera application and its RTSP player', async ({ page }
   await page.locator('.application-card').filter({ hasText: 'Camera' }).click()
 
   await expect(page.getByText('Camera Video', { exact: true })).toBeVisible()
-  await expect(page.locator('.context-title')).toHaveText('Camera')
+  await expect(page.locator('.context-app-name')).toHaveText('Camera')
   const toolbarCameraIcon = page.getByTitle('Camera Video').locator('svg')
   const titleCameraIcon = page.locator('.card-header .panel-title-icon svg')
   await expect(toolbarCameraIcon).toBeVisible()
@@ -122,12 +134,63 @@ test('opens the default Camera application and its RTSP player', async ({ page }
   expect(stageBox).not.toBeNull()
   expect(controlsBox).not.toBeNull()
   expect(controlsBox!.y).toBeGreaterThanOrEqual(stageBox!.y + stageBox!.height - 1)
-  const address = page.getByRole('textbox', { name: 'RTSP 视频地址' })
-  await expect(address).toHaveValue('rtsp://192.168.3.14:8554/rgbstream')
-  await expect(page.getByText('输入 RTSP 地址后点击播放')).toBeVisible()
+  const cameraSource = page.getByTitle('在 Input 中配置 Camera RTSP 数据源')
+  await expect(cameraSource).toContainText('rtsp://192.168.3.14:8554/rgbstream')
+  await expect(page.getByText('在 Input 中配置 RTSP 数据源后点击播放')).toBeVisible()
+
+  await cameraSource.click()
+  const dataSourceDialog = page.getByRole('dialog')
+  await expect(dataSourceDialog).toBeVisible()
+  await expect(page.getByRole('tab', { name: 'Camera RTSP' })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  )
+  await expect(dataSourceDialog.getByRole('textbox', { name: 'RTSP 视频地址' })).toHaveValue(
+    'rtsp://192.168.3.14:8554/rgbstream',
+  )
+  await page.screenshot({ path: 'test-results/ui-audit-camera-source.png' })
+  await dataSourceDialog.getByRole('button', { name: '保存数据源' }).click()
+  await expect(dataSourceDialog).toBeHidden()
+
+  await page.getByTitle('全屏展示').click()
+  await expect(page.locator('.full-screen-header')).toHaveCount(0)
+  await expect(page.locator('.full-screen-card .el-card__header')).toHaveCount(0)
+  await expect(page.locator('.app-header .context-app-name')).toHaveText('Camera')
+  await expect(page.locator('.app-header .context-panel-title')).toHaveText('Camera Video')
+  await expect(page.locator('.app-header .context-title-icon svg')).toBeVisible()
+  await expect(page.getByRole('button', { name: '退出组件全屏' })).toBeVisible()
+  await page.screenshot({ path: 'test-results/ui-audit-fullscreen-header.png' })
+  await page.getByRole('button', { name: '退出组件全屏' }).click()
+  await expect(page.locator('.app-header .context-app-name')).toHaveText('Camera')
+  await expect(page.locator('.app-header .context-panel-title')).toHaveCount(0)
+  await expect(page.locator('.full-screen-card')).toHaveCount(0)
 
   await page.getByRole('button', { name: '播放' }).click()
   await expect(page.getByText('RTSP 播放仅支持 Nav-Tools 桌面版').first()).toBeVisible()
+
+  await page.getByTitle('全屏展示').click()
+  await expect(page.locator('.full-screen-card')).toBeVisible()
+  await page.getByTitle('Camera Video').click()
+  await expect(page.locator('.full-screen-card')).toHaveCount(0)
+  await expect(page.locator('.app-header .context-panel-title')).toHaveCount(0)
+  await expect(page.locator('.card-header .title').filter({ hasText: 'Camera Video' })).toHaveCount(
+    2,
+  )
+
+  await page.getByTitle('全屏展示').first().click()
+  await page.getByTitle('Auto').click()
+  await expect(page.locator('.full-screen-card')).toHaveCount(0)
+  await expect(page.locator('.card-header .title').filter({ hasText: 'Camera Video' })).toHaveCount(
+    2,
+  )
+
+  await page.getByTitle('全屏展示').first().click()
+  await page.getByTitle('Reset').click()
+  await expect(page.locator('.full-screen-card')).toHaveCount(0)
+  await expect(page.locator('.app-header .context-panel-title')).toHaveCount(0)
+  await expect(page.locator('.card-header .title').filter({ hasText: 'Camera Video' })).toHaveCount(
+    1,
+  )
 })
 
 test('offers TCP and UDP network inputs in a compact dialog', async ({ page }) => {
@@ -174,6 +237,12 @@ test('offers TCP and UDP network inputs in a compact dialog', async ({ page }) =
   await expect(filePathInput).toHaveValue('C:\\data\\sample.log')
   await page.getByRole('tab', { name: '网络连接' }).click()
   const dialog = page.getByRole('dialog')
+  const parserSelect = dialog.getByRole('combobox', { name: '数据解析方式' })
+  await expect(parserSelect).toBeVisible()
+  await dialog.locator('.parser-select:visible').click()
+  await page.getByRole('option', { name: 'NMEA' }).click()
+  await expect(dialog.getByText('NMEA', { exact: true }).last()).toBeVisible()
+  await expect(page.locator('.data-parser-badge')).toContainText('Raw')
   await expect(page.locator('.data-input-overlay')).toHaveCSS('-webkit-app-region', 'no-drag')
   const hostInput = dialog.getByPlaceholder('127.0.0.1')
   await expect(hostInput).toHaveCSS('-webkit-app-region', 'no-drag')
@@ -213,6 +282,23 @@ test('offers TCP and UDP network inputs in a compact dialog', async ({ page }) =
   await expect(dialog).toBeHidden()
 
   await page.setViewportSize({ width: 1280, height: 720 })
+  await page.getByTitle('Input').click()
+  await page.getByRole('tab', { name: '文件输入' }).click()
+  await filePathInput.fill('C:\\data\\sample.log')
+  await dialog.locator('.parser-select:visible').click()
+  await page.getByRole('option', { name: 'JSON' }).click()
+  await dialog.getByRole('button', { name: '加载文件' }).click()
+  await expect(dialog).toBeHidden()
+  await expect(page.locator('.data-parser-badge')).toContainText('JSON')
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const raw = localStorage.getItem('nav-tools:data-source-settings')
+        return raw ? JSON.parse(raw).file.parser : undefined
+      }),
+    )
+    .toBe('json')
+
   await page.evaluate(() => localStorage.setItem('nav-tools:theme', 'dark'))
   await page.reload()
   await expect(page.locator('html')).toHaveClass(/dark/)
@@ -293,6 +379,38 @@ test('keeps the connection toggle centered and re-docks the toolbar around the h
     verticalToggleBounds!.x + verticalToggleBounds!.width / 2,
     0,
   )
+
+  const [leftContentBounds, leftHandleBounds, leftButtonBounds, leftDividerBounds] =
+    await Promise.all([
+      toolbar.locator('.toolbar-content').boundingBox(),
+      toolbar.locator('.toolbar-handle').boundingBox(),
+      toolbar.locator('.toolbar-btn').first().boundingBox(),
+      toolbar.locator('.divider').first().boundingBox(),
+    ])
+  const toolbarCenterX = leftContentBounds!.x + leftContentBounds!.width / 2
+  expect(leftHandleBounds!.x + leftHandleBounds!.width / 2).toBeCloseTo(toolbarCenterX, 0)
+  expect(verticalToggleBounds!.x + verticalToggleBounds!.width / 2).toBeCloseTo(toolbarCenterX, 0)
+  expect(leftButtonBounds!.x + leftButtonBounds!.width / 2).toBeCloseTo(toolbarCenterX, 0)
+  expect(leftDividerBounds!.x + leftDividerBounds!.width / 2).toBeCloseTo(toolbarCenterX, 0)
+  expect(leftDividerBounds!.width).toBeCloseTo(20, 0)
+  expect(leftDividerBounds!.height).toBeCloseTo(1, 0)
+
+  await dragToolbar(1260, 220)
+  await expect(page.locator('.dock-zone-right')).toBeVisible()
+  await page.mouse.up()
+  await expect(toolbar).toHaveClass(/toolbar-right/)
+  const rightToolbarBounds = await toolbar.boundingBox()
+  const [rightContentBounds, rightButtonBounds, rightDividerBounds] = await Promise.all([
+    toolbar.locator('.toolbar-content').boundingBox(),
+    toolbar.locator('.toolbar-btn').first().boundingBox(),
+    toolbar.locator('.divider').first().boundingBox(),
+  ])
+  const rightToolbarCenterX = rightContentBounds!.x + rightContentBounds!.width / 2
+  expect(rightToolbarBounds!.x + rightToolbarBounds!.width).toBeCloseTo(1280, 0)
+  expect(rightButtonBounds!.x + rightButtonBounds!.width / 2).toBeCloseTo(rightToolbarCenterX, 0)
+  expect(rightDividerBounds!.x + rightDividerBounds!.width / 2).toBeCloseTo(rightToolbarCenterX, 0)
+  expect(rightDividerBounds!.width).toBeCloseTo(20, 0)
+  expect(rightDividerBounds!.height).toBeCloseTo(1, 0)
 })
 
 test('scrolls the dashboard to the bottom when many windows are present', async ({ page }) => {

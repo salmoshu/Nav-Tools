@@ -74,18 +74,36 @@
 
   <el-dialog
     v-model="showAddDialog"
-    width="600px"
+    class="app-dialog status-property-dialog"
+    width="min(600px, calc(100vw - 24px))"
+    :append-to-body="true"
+    :z-index="8000"
+    align-center
     :close-on-click-modal="true"
     :close-on-press-escape="true"
     @opened="createCodeEditor1"
     @close="resetDialog"
     :title="isEditMode ? '编辑自定义属性' : '添加自定义属性'"
   >
+    <template #header>
+      <AppDialogTitle
+        :icon="isEditMode ? Edit : Plus"
+        :title="isEditMode ? '编辑自定义属性' : '添加自定义属性'"
+        description="从数据字段创建状态栏显示项"
+      />
+    </template>
+
     <!-- 可用字段列表 -->
     <div class="dialog-content">
       <div class="available-fields">
-        <h4>可用字段</h4>
-        <div class="fields-list">
+        <div class="status-section-heading">
+          <div>
+            <h4>可用字段</h4>
+            <p>点击字段即可快速填入名称</p>
+          </div>
+          <el-tag size="small" type="info">{{ availableFields.length }} 项</el-tag>
+        </div>
+        <div v-if="availableFields.length > 0" class="fields-list">
           <div
             v-for="field in availableFields"
             :key="field"
@@ -95,12 +113,20 @@
             {{ field }}
           </div>
         </div>
+        <div v-else class="fields-empty">
+          <el-icon><InfoFilled /></el-icon>
+          <span>连接数据源后，可在这里快速选择字段</span>
+        </div>
       </div>
 
       <!-- 配置区域 -->
       <div class="config-section">
         <!-- 表单内容保持不变，但根据编辑模式使用不同的数据 -->
-        <el-form :model="isEditMode ? editStatusConfig : newStatusConfig" label-width="80px">
+        <el-form
+          :model="isEditMode ? editStatusConfig : newStatusConfig"
+          label-position="top"
+          @submit.prevent
+        >
           <el-form-item label="字段名" prop="fieldName" :disabled="isEditMode">
             <!-- 编辑模式 -->
             <el-input
@@ -217,7 +243,9 @@
     <template #footer>
       <span class="dialog-footer">
         <el-button @click="resetDialog">取消</el-button>
-        <el-button type="primary" @click="addNewStatus">确认</el-button>
+        <el-button type="primary" @click="addNewStatus">
+          {{ isEditMode ? '保存修改' : '添加属性' }}
+        </el-button>
       </span>
     </template>
   </el-dialog>
@@ -238,7 +266,8 @@ import { useApplicationSelector } from '@/composables/useApplicationSelector'
 import { useFlow } from '@/composables/flow/useFlow'
 import { useFlowStore } from '@/stores/flow'
 // 4. 导入需要的图标
-import { Plus, Close, Delete } from '@element-plus/icons-vue'
+import { Plus, Close, Delete, Edit, InfoFilled } from '@element-plus/icons-vue'
+import AppDialogTitle from '@/components/AppDialogTitle.vue'
 import {
   ElMessage,
   ElDialog,
@@ -427,8 +456,10 @@ const deleteCustomStatus = (fieldName: string) => {
   // 弹出确认对话框
   ElMessageBox.confirm(`确定要删除自定义属性 "${fieldName}" 吗？`, '确认删除', {
     confirmButtonText: '确定',
+    confirmButtonClass: 'el-button--danger',
     cancelButtonText: '取消',
     type: 'warning',
+    customClass: 'app-message-box',
     closeOnClickModal: true,
     closeOnPressEscape: true,
   })
@@ -907,32 +938,65 @@ onUnmounted(() => {
 .dialog-content {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 18px;
 }
 
 .available-fields h4,
 .config-section h4 {
-  margin: 0 0 10px 0;
+  margin: 0;
   font-size: 14px;
   font-weight: 600;
+}
+
+.status-section-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.status-section-heading p {
+  margin: 3px 0 0;
+  color: var(--app-text-muted);
+  font-size: 12px;
+  line-height: 1.4;
 }
 
 .fields-list {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  max-height: 200px;
+  max-height: 132px;
   overflow-y: auto;
-  padding: 8px;
+  padding: 10px;
   background-color: var(--app-surface-muted);
-  border-radius: 4px;
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+}
+
+.fields-empty {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 11px 12px;
+  border: 1px dashed var(--app-border);
+  border-radius: 8px;
+  color: var(--app-text-muted);
+  background: var(--app-surface-muted);
+  font-size: 12px;
+}
+
+.fields-empty .el-icon {
+  flex: none;
+  color: var(--el-color-primary);
 }
 
 .field-item {
   padding: 6px 12px;
   background-color: var(--app-surface);
   border: 1px solid var(--app-border);
-  border-radius: 4px;
+  border-radius: 6px;
   cursor: pointer;
   transition: all 0.2s;
   font-size: 12px;
@@ -940,20 +1004,21 @@ onUnmounted(() => {
 
 .field-item:hover {
   background-color: color-mix(in srgb, var(--el-color-primary) 12%, var(--app-surface));
-  border-color: #3498db;
+  border-color: var(--el-color-primary);
 }
 
 .config-section {
-  margin-top: 10px;
+  padding-top: 2px;
 }
 
 .code-editor-container {
   width: 100%;
   height: 100px;
   border: 1px solid var(--app-border);
-  border-radius: 4px;
-  margin-top: 10px;
-  padding-left: 10px;
+  overflow: hidden;
+  border-radius: 7px;
+  margin-top: 4px;
+  padding-left: 8px;
   font-size: 14px;
   transition: border-color 0.2s cubic-bezier(0.645, 0.045, 0.355, 1);
   box-sizing: border-box;
@@ -974,12 +1039,27 @@ onUnmounted(() => {
 }
 
 .code-hint {
-  margin-top: 5px;
+  margin-top: 7px;
   font-size: 12px;
   color: #909399;
   font-style: italic;
   text-align: left;
   line-height: 1.5;
+}
+
+:global(.status-property-dialog .el-form-item) {
+  margin-bottom: 16px;
+}
+
+:global(.status-property-dialog .el-form-item:last-child) {
+  margin-bottom: 0;
+}
+
+:global(.status-property-dialog .el-form-item__label) {
+  height: auto;
+  margin-bottom: 7px;
+  color: var(--app-text-secondary);
+  line-height: 1.35;
 }
 
 :deep(.monaco-editor .view-lines) {

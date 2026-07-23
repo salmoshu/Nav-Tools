@@ -43,7 +43,7 @@
             <div class="data-input-wrapper">
               <div v-if="getDataCount(command) === 1" class="data-input">
                 <el-input
-                  v-model="decimalInputs[command.name]"
+                  :model-value="decimalInputs[command.name]"
                   :disabled="!isConfigValid || command.length === 0"
                   @input="$emit('singleInput', command, String($event))"
                 />
@@ -52,7 +52,7 @@
               <div v-else class="multi-data-inputs">
                 <div v-for="(dataItem, index) in splitData(command.data, getDataCount(command), command.dataType)" :key="index" class="data-input">
                   <el-input
-                    v-model="decimalInputs[getDataInputKey(command, index)]"
+                    :model-value="decimalInputs[getDataInputKey(command, index)]"
                     :disabled="!isConfigValid"
                     @input="$emit('multiInput', command, index, String($event))"
                   />

@@ -108,8 +108,8 @@
   <el-dialog
     title="数据接入"
     v-model="showInputDialog"
-    class="data-input-dialog"
-    width="min(520px, calc(100vw - 32px))"
+    class="app-dialog data-input-dialog"
+    width="min(760px, calc(100vw - 32px))"
     :close-on-click-modal="true"
     :close-on-press-escape="true"
     :append-to-body="true"
@@ -117,123 +117,282 @@
     :z-index="8000"
     align-center
   >
-    <el-tabs v-model="activeTab">
+    <template #header>
+      <div class="data-source-dialog-title">
+        <span class="dialog-title-icon"><Connection :size="20" /></span>
+        <div>
+          <strong>数据接入</strong>
+          <span>统一管理连接地址、传输参数和解析方式</span>
+        </div>
+      </div>
+    </template>
+
+    <el-tabs
+      v-model="activeTab"
+      :tab-position="inputTabPosition"
+      :stretch="inputTabPosition === 'top'"
+      class="data-source-tabs"
+    >
       <el-tab-pane label="串口连接" name="serial">
-        <div class="input-group">
-          <span class="input-label">
-            <el-button @click="searchSerialPorts" class="icon-only-refresh">
-              <el-icon><Refresh /></el-icon>
-            </el-button>
-            端口:
+        <template #label>
+          <span class="source-tab-label">
+            <el-icon><Connection /></el-icon>
+            <span class="source-tab-copy">
+              <strong
+                ><span class="tab-name-full">串口连接</span
+                ><span class="tab-name-compact">串口</span></strong
+              >
+              <small>Serial</small>
+            </span>
           </span>
-          <el-select
-            v-model="serialPort"
-            placeholder="请选择串口"
-            style="flex: 1"
-            :teleported="false"
-            @click="searchSerialPorts"
-          >
-            <el-option v-for="port in serialPorts" :key="port" :label="port" :value="port" />
-          </el-select>
+        </template>
+        <div class="source-panel-heading">
+          <strong>串口数据源</strong>
+          <span>接入串口设备输出的实时文本或二进制数据。</span>
         </div>
-        <div class="input-group">
-          <span class="input-label">波特率:</span>
-          <el-select
-            v-model="serialBaudRate"
-            placeholder="请选择或输入波特率"
-            filterable
-            allow-create
-            style="flex: 1"
-            :teleported="false"
-          >
-            <el-option v-for="rate in baudRates" :key="rate" :label="rate" :value="rate" />
-          </el-select>
-        </div>
-        <div class="input-group" v-if="serialAdvanced">
-          <span class="input-label">数据位:</span>
-          <el-select
-            v-model="serialDataBits"
-            placeholder="请选择数据位"
-            style="flex: 1"
-            :teleported="false"
-          >
-            <!-- 默认为8 -->
-            <el-option v-for="bit in dataBits" :key="bit" :label="bit" :value="bit" />
-          </el-select>
-        </div>
-        <div class="input-group" v-if="serialAdvanced">
-          <span class="input-label">停止位:</span>
-          <el-select
-            v-model="serialStopBits"
-            placeholder="请选择停止位"
-            style="flex: 1"
-            :teleported="false"
-          >
-            <el-option v-for="bit in stopBits" :key="bit" :label="bit" :value="bit" />
-          </el-select>
-        </div>
-        <div class="input-group" v-if="serialAdvanced">
-          <span class="input-label">校验位:</span>
-          <el-select
-            v-model="serialParity"
-            placeholder="请选择校验位"
-            style="flex: 1"
-            :teleported="false"
-          >
-            <el-option
-              v-for="parity in parities"
-              :key="parity.value"
-              :label="parity.label"
-              :value="parity.value"
-            />
-          </el-select>
-        </div>
-        <div class="input-group">
-          <span class="input-label">高级选项:</span>
-          <el-checkbox v-model="serialAdvanced"></el-checkbox>
+        <div class="source-config-card">
+          <div class="input-group">
+            <span class="input-label">
+              <el-button @click="searchSerialPorts" class="icon-only-refresh">
+                <el-icon><Refresh /></el-icon>
+              </el-button>
+              端口
+            </span>
+            <el-select
+              v-model="serialPort"
+              placeholder="请选择串口"
+              style="flex: 1"
+              :teleported="false"
+              @click="searchSerialPorts"
+            >
+              <el-option v-for="port in serialPorts" :key="port" :label="port" :value="port" />
+            </el-select>
+          </div>
+          <div class="input-group">
+            <span class="input-label">波特率</span>
+            <el-select
+              v-model="serialBaudRate"
+              placeholder="请选择或输入波特率"
+              filterable
+              allow-create
+              style="flex: 1"
+              :teleported="false"
+            >
+              <el-option v-for="rate in baudRates" :key="rate" :label="rate" :value="rate" />
+            </el-select>
+          </div>
+          <div class="input-group" v-if="serialAdvanced">
+            <span class="input-label">数据位</span>
+            <el-select
+              v-model="serialDataBits"
+              placeholder="请选择数据位"
+              style="flex: 1"
+              :teleported="false"
+            >
+              <el-option v-for="bit in dataBits" :key="bit" :label="bit" :value="bit" />
+            </el-select>
+          </div>
+          <div class="input-group" v-if="serialAdvanced">
+            <span class="input-label">停止位</span>
+            <el-select
+              v-model="serialStopBits"
+              placeholder="请选择停止位"
+              style="flex: 1"
+              :teleported="false"
+            >
+              <el-option v-for="bit in stopBits" :key="bit" :label="bit" :value="bit" />
+            </el-select>
+          </div>
+          <div class="input-group" v-if="serialAdvanced">
+            <span class="input-label">校验位</span>
+            <el-select
+              v-model="serialParity"
+              placeholder="请选择校验位"
+              style="flex: 1"
+              :teleported="false"
+            >
+              <el-option
+                v-for="parity in parities"
+                :key="parity.value"
+                :label="parity.label"
+                :value="parity.value"
+              />
+            </el-select>
+          </div>
+          <div class="input-group compact-input-group">
+            <span class="input-label">高级选项</span>
+            <el-checkbox v-model="serialAdvanced">显示完整串口参数</el-checkbox>
+          </div>
+          <div class="parser-card">
+            <div class="parser-copy">
+              <strong>数据解析方式</strong>
+              <span>{{ activeParserDescription }}</span>
+            </div>
+            <el-select
+              v-model="sourceParser"
+              aria-label="数据解析方式"
+              class="parser-select"
+              :teleported="false"
+            >
+              <el-option
+                v-for="option in textDataParserOptions"
+                :key="option.value"
+                :label="option.label"
+                :value="option.value"
+              />
+            </el-select>
+          </div>
         </div>
       </el-tab-pane>
 
       <el-tab-pane label="文件输入" name="file">
-        <div class="input-group">
-          <span class="input-label">文件路径:</span>
-          <el-input v-model="filePath" placeholder="请输入文件路径" />
-          <el-button type="default" @click="triggerFileSelection">选择文件</el-button>
+        <template #label>
+          <span class="source-tab-label">
+            <el-icon><FolderOpened /></el-icon>
+            <span class="source-tab-copy">
+              <strong
+                ><span class="tab-name-full">文件输入</span
+                ><span class="tab-name-compact">文件</span></strong
+              >
+              <small>File</small>
+            </span>
+          </span>
+        </template>
+        <div class="source-panel-heading">
+          <strong>文件数据源</strong>
+          <span>加载日志、文本或 DAT 文件并投递给当前应用组件。</span>
+        </div>
+        <div class="source-config-card">
+          <div class="input-group">
+            <span class="input-label">文件路径</span>
+            <el-input v-model="filePath" placeholder="请输入文件路径" />
+            <el-button type="default" @click="triggerFileSelection">选择文件</el-button>
+          </div>
+          <div class="parser-card">
+            <div class="parser-copy">
+              <strong>数据解析方式</strong>
+              <span>{{ activeParserDescription }}</span>
+            </div>
+            <el-select
+              v-model="sourceParser"
+              aria-label="数据解析方式"
+              class="parser-select"
+              :teleported="false"
+            >
+              <el-option
+                v-for="option in textDataParserOptions"
+                :key="option.value"
+                :label="option.label"
+                :value="option.value"
+              />
+            </el-select>
+          </div>
         </div>
       </el-tab-pane>
 
       <el-tab-pane label="网络连接" name="network">
-        <div class="input-group">
-          <span class="input-label">网络协议:</span>
-          <el-select v-model="networkProtocol" style="flex: 1" :teleported="false">
-            <el-option label="TCP" value="tcp" />
-            <el-option label="UDP" value="udp" />
-          </el-select>
+        <template #label>
+          <span class="source-tab-label">
+            <el-icon><Monitor /></el-icon>
+            <span class="source-tab-copy">
+              <strong
+                ><span class="tab-name-full">网络连接</span
+                ><span class="tab-name-compact">网络</span></strong
+              >
+              <small>TCP / UDP</small>
+            </span>
+          </span>
+        </template>
+        <div class="source-panel-heading">
+          <strong>网络数据源</strong>
+          <span>通过 TCP 客户端或 UDP 监听接收实时数据。</span>
         </div>
-        <div class="input-group">
-          <span class="input-label">{{
-            networkProtocol === 'tcp' ? '远端地址:' : '监听地址:'
-          }}</span>
-          <el-input
-            v-model="networkIp"
-            :placeholder="networkProtocol === 'tcp' ? '127.0.0.1' : '0.0.0.0'"
-          />
+        <div class="source-config-card">
+          <div class="input-group">
+            <span class="input-label">网络协议</span>
+            <el-select v-model="networkProtocol" style="flex: 1" :teleported="false">
+              <el-option label="TCP" value="tcp" />
+              <el-option label="UDP" value="udp" />
+            </el-select>
+          </div>
+          <div class="input-group">
+            <span class="input-label">{{
+              networkProtocol === 'tcp' ? '远端地址' : '监听地址'
+            }}</span>
+            <el-input
+              v-model="networkIp"
+              :placeholder="networkProtocol === 'tcp' ? '127.0.0.1' : '0.0.0.0'"
+            />
+          </div>
+          <div class="input-group">
+            <span class="input-label">网络端口</span>
+            <el-input
+              v-model="networkPortText"
+              inputmode="numeric"
+              maxlength="5"
+              placeholder="请输入端口"
+              style="flex: 1; width: 100%"
+            />
+          </div>
+          <div class="parser-card">
+            <div class="parser-copy">
+              <strong>数据解析方式</strong>
+              <span>{{ activeParserDescription }}</span>
+            </div>
+            <el-select
+              v-model="sourceParser"
+              aria-label="数据解析方式"
+              class="parser-select"
+              :teleported="false"
+            >
+              <el-option
+                v-for="option in textDataParserOptions"
+                :key="option.value"
+                :label="option.label"
+                :value="option.value"
+              />
+            </el-select>
+          </div>
         </div>
-        <div class="input-group">
-          <span class="input-label">网络端口:</span>
-          <el-input
-            v-model="networkPortText"
-            inputmode="numeric"
-            maxlength="5"
-            placeholder="请输入端口"
-            style="flex: 1; width: 100%"
-          />
+      </el-tab-pane>
+
+      <el-tab-pane label="Camera RTSP" name="camera">
+        <template #label>
+          <span class="source-tab-label">
+            <el-icon><VideoCamera /></el-icon>
+            <span class="source-tab-copy">
+              <strong
+                ><span class="tab-name-full">Camera</span
+                ><span class="tab-name-compact">相机</span></strong
+              >
+              <small>RTSP</small>
+            </span>
+          </span>
+        </template>
+        <div class="source-panel-heading">
+          <strong>Camera 视频源</strong>
+          <span>保存 RTSP 视频地址，Camera Video 将使用此处的统一配置。</span>
+        </div>
+        <div class="source-config-card">
+          <div class="input-group">
+            <span class="input-label">视频地址</span>
+            <el-input
+              v-model="cameraStreamUrl"
+              aria-label="RTSP 视频地址"
+              placeholder="rtsp://192.168.3.14:8554/rgbstream"
+              clearable
+            />
+          </div>
+          <div class="source-info-card">
+            <span>传输协议</span><strong>RTSP</strong> <span>输出类型</span
+            ><strong>实时视频帧</strong> <span>使用组件</span><strong>Camera Video</strong>
+          </div>
         </div>
       </el-tab-pane>
     </el-tabs>
     <template #footer>
       <el-button @click="showInputDialog = false">取消</el-button>
-      <el-button type="primary" @click="handleInputSubmit">确定</el-button>
+      <el-button type="primary" @click="handleInputSubmit">{{ inputSubmitLabel }}</el-button>
     </template>
   </el-dialog>
 </template>
@@ -262,12 +421,18 @@ import {
   ElCheckbox,
   ElIcon,
 } from 'element-plus'
-import { Refresh } from '@element-plus/icons-vue'
+import { Connection, FolderOpened, Monitor, Refresh, VideoCamera } from '@element-plus/icons-vue'
 import { useApplicationSelector } from '@/composables/useApplicationSelector'
 import { getPanelIconComponent } from '@/settings/panelIcons'
+import { textDataParserOptions } from '@/composables/useDataSourceManager'
 
 const ipcRenderer = window.ipcRenderer
 const position = ref<'top' | 'right' | 'bottom' | 'left'>('bottom')
+const viewportWidth = ref(window.innerWidth)
+const inputTabPosition = computed(() => (viewportWidth.value <= 560 ? 'top' : 'left'))
+const updateViewportWidth = () => {
+  viewportWidth.value = window.innerWidth
+}
 const showSaveButton = ref(false)
 const { currentApplication, currentApplicationId } = useApplicationSelector()
 
@@ -291,6 +456,8 @@ const {
   networkIp,
   networkPort,
   networkProtocol,
+  sourceParser,
+  cameraStreamUrl,
   serialPorts,
   baudRates,
   dataBits,
@@ -300,6 +467,16 @@ const {
   searchSerialPorts,
   handleInputSubmit,
 } = deviceInstance
+
+const activeParserDescription = computed(
+  () =>
+    textDataParserOptions.find((option) => option.value === sourceParser.value)?.description ?? '',
+)
+const inputSubmitLabel = computed(() => {
+  if (activeTab.value === 'camera') return '保存数据源'
+  if (activeTab.value === 'file') return '加载文件'
+  return '连接数据源'
+})
 
 // 添加triggerFileSelection函数，注意这里是const而不是sconst
 const triggerFileSelection = () => {
@@ -595,8 +772,9 @@ function resolveDialogTextInput(target: EventTarget | null) {
   if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) return target
 
   return (
-    target.closest('.el-input')?.querySelector<HTMLInputElement | HTMLTextAreaElement>('input, textarea') ??
-    undefined
+    target
+      .closest('.el-input')
+      ?.querySelector<HTMLInputElement | HTMLTextAreaElement>('input, textarea') ?? undefined
   )
 }
 
@@ -717,6 +895,7 @@ onMounted(() => {
 
   snapToEdge()
   window.addEventListener('resize', snapToEdge)
+  window.addEventListener('resize', updateViewportWidth)
   window.addEventListener('keyup', handleDeviceEvent)
   window.addEventListener('keydown', handleInputDialogEscape, { capture: true })
 
@@ -744,6 +923,7 @@ onUnmounted(() => {
   document.removeEventListener('click', handleDataInputPointer, true)
   document.removeEventListener('focusout', restorePointerInputFocus, true)
   window.removeEventListener('resize', snapToEdge)
+  window.removeEventListener('resize', updateViewportWidth)
   window.removeEventListener('keyup', handleDeviceEvent)
   window.removeEventListener('keydown', handleInputDialogEscape, { capture: true })
 
@@ -755,6 +935,7 @@ onUnmounted(() => {
 <style scoped>
 .toolbar {
   position: fixed;
+  box-sizing: border-box;
   color: var(--app-text-secondary);
   background: var(--app-surface);
   display: flex;
@@ -838,8 +1019,13 @@ onUnmounted(() => {
 
 .toolbar-left .toolbar-handle,
 .toolbar-right .toolbar-handle {
-  margin-right: 0;
-  margin-bottom: 8px;
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  margin: 4px 0 6px;
+  padding: 0;
   transform: rotate(90deg);
 }
 
@@ -866,7 +1052,17 @@ onUnmounted(() => {
 
 .toolbar-left .toolbar-content,
 .toolbar-right .toolbar-content {
+  width: 100%;
   flex-direction: column;
+  align-items: center;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+
+.toolbar-left .toolbar-content::-webkit-scrollbar,
+.toolbar-right .toolbar-content::-webkit-scrollbar {
+  display: none;
 }
 
 .toolbar-btn {
@@ -909,19 +1105,25 @@ onUnmounted(() => {
 }
 
 .divider {
+  flex: none;
   width: 1px;
   height: 20px;
   padding: 0;
-  border-left: 1px solid var(--app-border);
+  border: 0;
+  background: var(--app-border);
   color: transparent;
   cursor: default;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+}
+
+.toolbar-left .divider,
+.toolbar-right .divider {
+  width: 20px;
+  height: 1px;
 }
 
 .toolbar-left .toolbar-btn,
 .toolbar-right .toolbar-btn {
+  margin: 0 auto;
   padding: 5px;
   font-size: 12px;
   flex: none;
@@ -1040,7 +1242,8 @@ onUnmounted(() => {
 .toolbar-left .toggle-slider,
 .toolbar-right .toggle-slider {
   top: 3px;
-  left: 2px;
+  left: 50%;
+  margin-left: -9px;
   transform: none;
 }
 
@@ -1060,6 +1263,151 @@ onUnmounted(() => {
   justify-content: center;
 }
 /* 输入对话框样式 */
+.data-source-dialog-title {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+}
+
+.data-source-dialog-title > div,
+.source-panel-heading,
+.parser-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.data-source-dialog-title strong {
+  color: var(--app-text);
+  font-size: 16px;
+  line-height: 1.2;
+}
+
+.data-source-dialog-title span {
+  color: var(--app-text-muted);
+  font-size: 11px;
+}
+
+.dialog-title-icon {
+  display: grid;
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  color: var(--el-color-primary) !important;
+  background: color-mix(in srgb, var(--el-color-primary) 11%, var(--app-surface));
+  place-items: center;
+}
+
+.source-panel-heading strong,
+.parser-copy strong {
+  color: var(--app-text);
+  font-size: 13px;
+}
+
+.source-panel-heading span,
+.parser-copy span {
+  color: var(--app-text-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.source-tab-label {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  gap: 10px;
+}
+
+.source-tab-label > .el-icon {
+  flex: none;
+  font-size: 17px;
+}
+
+.source-tab-copy {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+  gap: 1px;
+  line-height: 1.2;
+}
+
+.source-tab-copy strong {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.source-tab-copy small {
+  color: var(--app-text-muted);
+  font-size: 10px;
+  font-weight: 400;
+}
+
+.tab-name-compact {
+  display: none;
+}
+
+.data-source-tabs {
+  min-height: 290px;
+}
+
+.source-panel-heading {
+  margin: 2px 2px 13px;
+}
+
+.source-panel-heading strong {
+  font-size: 15px;
+}
+
+.source-config-card {
+  padding: 5px 2px 0;
+}
+
+.source-info-card {
+  display: grid;
+  grid-template-columns: minmax(80px, auto) 1fr;
+  gap: 8px 16px;
+  margin: 3px 0 14px 106px;
+  padding: 12px 14px;
+  border: 1px solid var(--app-border);
+  border-radius: 7px;
+  background: var(--app-surface-muted);
+  font-size: 12px;
+}
+
+.source-info-card span {
+  color: var(--app-text-muted);
+}
+
+.source-info-card strong {
+  color: var(--app-text-secondary);
+  font-weight: 600;
+}
+
+.parser-card {
+  display: flex;
+  align-items: stretch;
+  flex-direction: column;
+  gap: 9px;
+  margin-top: 2px;
+  padding: 13px 0 12px;
+  border-top: 1px solid var(--app-border);
+}
+
+.parser-copy {
+  min-width: 0;
+}
+
+.parser-select {
+  width: calc(100% - 106px);
+  margin-left: 106px;
+}
+
+.compact-input-group {
+  margin-bottom: 12px;
+}
+
 .input-group {
   display: flex;
   align-items: center;
@@ -1081,6 +1429,10 @@ onUnmounted(() => {
   margin-right: 8px; /* 在输入框右侧添加间距 */
 }
 
+.input-group > .el-input:last-child {
+  margin-right: 0;
+}
+
 .input-group :deep(.el-select),
 .input-group :deep(.el-input-number) {
   flex: 1;
@@ -1091,7 +1443,37 @@ onUnmounted(() => {
 }
 
 :global(.data-input-dialog .el-dialog__body) {
-  padding: 8px 22px 10px;
+  padding: 16px 20px 10px;
+}
+
+:global(.data-input-dialog .el-dialog__header) {
+  margin-right: 0;
+  padding: 16px 20px 14px;
+  border-bottom: 1px solid var(--app-border);
+}
+
+:global(.data-input-dialog .el-dialog__headerbtn) {
+  top: 12px;
+  right: 13px;
+}
+
+:global(.data-input-dialog .el-dialog__close) {
+  font-size: 18px;
+}
+
+:global(.data-input-dialog .el-dialog__footer) {
+  display: flex;
+  justify-content: flex-end;
+  padding: 13px 20px 15px;
+  border-top: 1px solid var(--app-border);
+}
+
+:global(.data-input-dialog .el-dialog__footer .el-button) {
+  min-height: 34px;
+}
+
+:global(.data-input-dialog .el-dialog__footer .el-button--primary) {
+  min-width: 110px;
 }
 
 :global(.data-input-overlay),
@@ -1117,11 +1499,87 @@ onUnmounted(() => {
   pointer-events: auto;
 }
 
+:global(.data-input-dialog .el-input__inner) {
+  color: var(--app-text);
+}
+
+:global(.data-input-dialog .el-input__inner::placeholder) {
+  color: var(--app-text-muted);
+}
+
 :global(.data-input-dialog .el-tabs__header) {
-  margin-bottom: 20px;
+  width: 148px;
+  margin-right: 20px;
+  padding: 8px;
+  border: 1px solid var(--app-border);
+  border-radius: 9px;
+  background: var(--app-surface-muted);
+}
+
+:global(.data-input-dialog .el-tabs__nav-wrap.is-left) {
+  margin-right: 0;
+  padding-right: 0;
+}
+
+:global(.data-input-dialog .el-tabs__nav-wrap::after),
+:global(.data-input-dialog .el-tabs__active-bar) {
+  display: none;
+}
+
+:global(.data-input-dialog .el-tabs__item.is-left) {
+  justify-content: flex-start;
+  width: 130px;
+  height: 58px;
+  margin-bottom: 3px;
+  padding: 0 11px;
+  border-radius: 7px;
+  color: var(--app-text-secondary);
+  transition:
+    color 140ms ease,
+    background-color 140ms ease;
+}
+
+:global(.data-input-dialog .el-tabs__item.is-left:hover) {
+  color: var(--app-text);
+  background: var(--app-hover);
+}
+
+:global(.data-input-dialog .el-tabs__item.is-left.is-active) {
+  color: var(--el-color-primary);
+  background: color-mix(in srgb, var(--el-color-primary) 11%, var(--app-surface));
+}
+
+:global(.data-input-dialog .el-tabs__content) {
+  min-width: 0;
+  min-height: 290px;
 }
 
 @media (max-width: 560px) {
+  .data-source-dialog-title span {
+    display: none;
+  }
+
+  .data-source-tabs {
+    min-height: 410px;
+  }
+
+  .parser-card {
+    gap: 8px;
+  }
+
+  .parser-select {
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .source-info-card {
+    margin-left: 0;
+  }
+
+  .source-config-card {
+    padding: 2px 0 1px;
+  }
+
   .input-group {
     align-items: stretch;
     flex-direction: column;
@@ -1132,6 +1590,59 @@ onUnmounted(() => {
     min-width: 0;
     margin-right: 0;
     text-align: left;
+  }
+
+  :global(.data-input-dialog .el-dialog__body) {
+    padding-right: 14px;
+    padding-left: 14px;
+  }
+
+  :global(.data-input-dialog .el-tabs__header.is-top) {
+    width: auto;
+    margin: 0 0 14px;
+    padding: 4px;
+  }
+
+  :global(.data-input-dialog .el-tabs__item.is-top) {
+    flex: 1;
+    min-width: 0;
+    height: 44px;
+    padding: 0 5px;
+    border-radius: 6px;
+  }
+
+  :global(.data-input-dialog .el-tabs__item.is-top.is-active) {
+    color: var(--el-color-primary);
+    background: color-mix(in srgb, var(--el-color-primary) 11%, var(--app-surface));
+  }
+
+  :global(.data-input-dialog .el-tabs__content) {
+    min-height: 330px;
+  }
+
+  .source-tab-label {
+    justify-content: center;
+    gap: 6px;
+  }
+
+  .source-tab-copy small {
+    display: none;
+  }
+
+  .tab-name-full {
+    display: none;
+  }
+
+  .tab-name-compact {
+    display: inline;
+  }
+
+  :global(.data-input-dialog .el-dialog__footer .el-button) {
+    min-height: 40px;
+  }
+
+  :global(.data-input-dialog .el-dialog__footer .el-button--primary) {
+    flex: 1;
   }
 }
 

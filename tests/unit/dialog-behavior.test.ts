@@ -17,6 +17,7 @@ describe('dialog interaction policy', () => {
     const source = readFileSync(path, 'utf8')
     expect(source).toContain(':close-on-click-modal="true"')
     expect(source).toContain(':close-on-press-escape="true"')
+    expect(source).toMatch(/class="[^"]*app-dialog[^"]*"/)
   })
 
   it('keeps confirmation dialogs dismissible too', () => {
@@ -29,6 +30,7 @@ describe('dialog interaction policy', () => {
       const confirmationCount = source.match(/ElMessageBox\.confirm\(/g)?.length ?? 0
       expect(source.match(/closeOnClickModal: true/g)).toHaveLength(confirmationCount)
       expect(source.match(/closeOnPressEscape: true/g)).toHaveLength(confirmationCount)
+      expect(source.match(/customClass: 'app-message-box'/g)).toHaveLength(confirmationCount)
     }
   })
 
@@ -40,5 +42,16 @@ describe('dialog interaction policy', () => {
     const toolbar = readFileSync('src/components/ToolBar.vue', 'utf8')
     expect(toolbar).not.toContain('@keydown.stop')
     expect(toolbar).toContain('handleInputDialogEscape')
+  })
+
+  it('separates motor configuration tools from dialog submission actions', () => {
+    const source = readFileSync('src/components/windows/motor/MotorConfig.vue', 'utf8')
+    const footer = source.match(/<template #footer>([\s\S]*?)<\/template>\s*<\/el-dialog>/)?.[1]
+
+    expect(source).toContain('class="config-tool-card"')
+    expect(source).toContain(':before-close="handleDialogBeforeClose"')
+    expect(footer).toContain('取消')
+    expect(footer).toContain('确定')
+    expect(footer).not.toMatch(/载入配置|导出配置|恢复默认/)
   })
 })

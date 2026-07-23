@@ -7,7 +7,14 @@ import CardWindow from './components/CardWindow.vue'
 import emitter from '@/hooks/useMitt'
 import { useApplicationSelector } from '@/composables/useApplicationSelector'
 
+interface FullscreenPanelContext {
+  title: string
+  action?: string
+}
+
 const maximized = ref(false)
+const dashboardRef = ref<InstanceType<typeof Dashboard> | null>(null)
+const fullscreenPanel = ref<FullscreenPanelContext>()
 const isCardWindow = computed(() => window.location.hash.startsWith('#card/'))
 const { currentApplication } = useApplicationSelector()
 
@@ -30,6 +37,10 @@ const contextTitle = computed(() => {
 })
 
 const openApplicationSelector = () => emitter.emit('open-application-selector')
+const exitPanelFullscreen = () => dashboardRef.value?.exitFullScreen()
+const handleFullscreenPanelChange = (panel?: FullscreenPanelContext) => {
+  fullscreenPanel.value = panel
+}
 </script>
 
 <template>
@@ -38,14 +49,23 @@ const openApplicationSelector = () => emitter.emit('open-application-selector')
     <AppHeader
       :brand-title="isCardWindow ? contextTitle : 'Nav-Tools'"
       :context-title="isCardWindow ? undefined : contextTitle"
+      :context-panel-title="fullscreenPanel?.title"
+      :context-icon-action="fullscreenPanel?.action"
       :show-application-selector="!isCardWindow"
       :show-detached-controls="isCardWindow"
+      :show-panel-fullscreen-exit="Boolean(fullscreenPanel)"
       @open-application-selector="openApplicationSelector"
+      @exit-panel-fullscreen="exitPanelFullscreen"
       @maximized-change="maximized = $event"
     />
     <main class="app-content">
       <CardWindow v-if="isCardWindow" />
-      <Dashboard v-else :initial-application-id="applicationId" />
+      <Dashboard
+        v-else
+        ref="dashboardRef"
+        :initial-application-id="applicationId"
+        @fullscreen-panel-change="handleFullscreenPanelChange"
+      />
     </main>
   </div>
 </template>

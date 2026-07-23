@@ -2,8 +2,10 @@
   <header class="app-header">
     <div class="brand">
       <img src="/logo.svg" alt="" class="brand-logo" />
-      <span class="brand-name">{{ brandTitle || 'Nav-Tools' }}</span>
-      <span v-if="version" class="brand-version">V{{ version }}</span>
+      <span class="brand-copy">
+        <span class="brand-name">{{ brandTitle || 'Nav-Tools' }}</span>
+        <span v-if="version" class="brand-version">V{{ version }}</span>
+      </span>
       <button
         v-if="showApplicationSelector"
         class="header-button application-button"
@@ -16,7 +18,16 @@
       >
         <el-icon><Grid /></el-icon>
       </button>
-      <span v-if="contextTitle" class="context-title">{{ contextTitle }}</span>
+      <span v-if="contextTitle || contextPanelTitle" class="context-title">
+        <span v-if="contextTitle" class="context-app-name">{{ contextTitle }}</span>
+        <span v-if="contextPanelTitle" class="context-panel">
+          <el-icon class="context-hierarchy-icon" :size="12"><ArrowRight /></el-icon>
+          <el-icon class="context-title-icon" :size="15">
+            <component :is="getPanelIconComponent(contextIconAction)" />
+          </el-icon>
+          <span class="context-panel-title">{{ contextPanelTitle }}</span>
+        </span>
+      </span>
     </div>
 
     <div class="header-controls" @mousedown.stop @dblclick.stop>
@@ -41,6 +52,16 @@
         @click="toggleAlwaysOnTop"
       >
         <Pin :size="16" :stroke-width="1.8" aria-hidden="true" />
+      </button>
+      <button
+        v-if="showPanelFullscreenExit"
+        class="header-button panel-fullscreen-exit"
+        type="button"
+        title="退出组件全屏"
+        aria-label="退出组件全屏"
+        @click="$emit('exit-panel-fullscreen')"
+      >
+        <el-icon><ScaleToOriginal /></el-icon>
       </button>
       <el-dropdown
         v-if="!showDetachedControls"
@@ -110,21 +131,35 @@
 
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
-import { Check, Close, CopyDocument, FullScreen, Grid, Minus } from '@element-plus/icons-vue'
+import {
+  ArrowRight,
+  Check,
+  Close,
+  CopyDocument,
+  FullScreen,
+  Grid,
+  Minus,
+  ScaleToOriginal,
+} from '@element-plus/icons-vue'
 import { PanelTopOpen, Pin } from '@lucide/vue'
 import { useTheme, type ThemeMode } from '@/composables/useTheme'
 import { getBrowserWindowService } from '@/core/window/browserWindowService'
+import { getPanelIconComponent } from '@/settings/panelIcons'
 import ThemeModeIcon from './ThemeModeIcon.vue'
 
 defineProps<{
   brandTitle?: string
   contextTitle?: string
+  contextPanelTitle?: string
+  contextIconAction?: string
   showApplicationSelector?: boolean
   showDetachedControls?: boolean
+  showPanelFullscreenExit?: boolean
 }>()
 
 const emit = defineEmits<{
   'open-application-selector': []
+  'exit-panel-fullscreen': []
   'maximized-change': [maximized: boolean]
 }>()
 
@@ -223,11 +258,17 @@ onUnmounted(() => {
   object-fit: contain;
 }
 
+.brand-copy {
+  display: inline-flex;
+  flex: none;
+  align-items: flex-end;
+  height: 14px;
+  gap: 7px;
+}
+
 .brand-name {
   display: inline-flex;
   flex: none;
-  align-self: center;
-  align-items: center;
   font-size: 14px;
   font-weight: 700;
   line-height: 1;
@@ -236,8 +277,6 @@ onUnmounted(() => {
 
 .brand-version {
   display: inline-flex;
-  align-self: center;
-  align-items: center;
   color: var(--app-text-muted);
   font-size: 11px;
   line-height: 1;
@@ -249,15 +288,56 @@ onUnmounted(() => {
 }
 
 .context-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   max-width: min(36vw, 360px);
   margin-left: 8px;
   padding-left: 12px;
   border-left: 1px solid var(--app-border);
-  color: var(--app-text-muted);
   font-size: 13px;
+  min-width: 0;
+}
+
+.context-app-name {
+  max-width: min(18vw, 180px);
+  color: var(--app-text);
+  font-size: 13px;
+  font-weight: 600;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.context-panel {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: var(--app-text);
+  font-weight: 600;
+}
+
+.context-hierarchy-icon {
+  flex: none;
+  color: var(--app-text-muted);
+}
+
+.context-title-icon {
+  flex: none;
+  color: var(--el-color-primary);
+}
+
+.context-panel-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.panel-fullscreen-exit {
+  color: var(--el-color-primary);
+  background: color-mix(in srgb, var(--el-color-primary) 9%, transparent);
 }
 
 .header-controls {

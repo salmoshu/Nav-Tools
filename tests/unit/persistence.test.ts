@@ -3,6 +3,11 @@ import { ApplicationStorage } from '@/core/application/ApplicationStorage'
 import { LayoutStorage } from '@/core/layout/LayoutStorage'
 import { normalizePanelIds } from '@/core/panels/registry'
 import { JsonStorage, type StorageLike } from '@/core/storage/JsonStorage'
+import {
+  DATA_SOURCE_SETTINGS_KEY,
+  DataSourceStorage,
+  LEGACY_CAMERA_STREAM_URL_KEY,
+} from '@/core/data/DataSourceStorage'
 
 class MemoryStorage implements StorageLike {
   private values = new Map<string, string>()
@@ -55,14 +60,16 @@ describe('panel and application persistence', () => {
     const memory = new MemoryStorage()
     memory.setItem(
       'nav-tools:custom-applications',
-      JSON.stringify([{
-        id: 'custom',
-        name: 'Custom',
-        description: '',
-        icon: 'grid',
-        accent: '#1677ff',
-        windowIds: ['plot'],
-      }]),
+      JSON.stringify([
+        {
+          id: 'custom',
+          name: 'Custom',
+          description: '',
+          icon: 'grid',
+          accent: '#1677ff',
+          windowIds: ['plot'],
+        },
+      ]),
     )
     const storage = new ApplicationStorage(new JsonStorage(memory))
 
@@ -136,5 +143,44 @@ describe('LayoutStorage', () => {
     const storage = new LayoutStorage(new JsonStorage(memory))
     expect(storage.load('demo')).toEqual({ version: 1, items: [item], showStatusBar: false })
     expect(memory.getItem('nav-tools:layout:demo')).not.toBeNull()
+  })
+})
+
+describe('DataSourceStorage', () => {
+  it('migrates the legacy Camera URL into unified data-source settings', () => {
+    const memory = new MemoryStorage()
+    memory.setItem(LEGACY_CAMERA_STREAM_URL_KEY, 'rtsp://10.0.0.8:8554/camera')
+
+    const settings = new DataSourceStorage(new JsonStorage(memory)).load()
+
+    expect(settings.camera.url).toBe('rtsp://10.0.0.8:8554/camera')
+    expect(settings.serial.parser).toBe('raw')
+    expect(memory.getItem(DATA_SOURCE_SETTINGS_KEY)).not.toBeNull()
+  })
+
+  it('persists connection parameters and normalizes unsupported parsers', () => {
+    const memory = new MemoryStorage()
+    memory.setItem(
+      DATA_SOURCE_SETTINGS_KEY,
+      JSON.stringify({
+        version: 1,
+        serial: { port: 'COM7', baudRate: '921600', parser: 'nmea' },
+        file: { path: 'sample.log', parser: 'json' },
+        network: { protocol: 'udp', host: '0.0.0.0', port: 9000, parser: 'unknown' },
+        camera: { url: 'invalid' },
+      }),
+    )
+
+    const settings = new DataSourceStorage(new JsonStorage(memory)).load()
+
+    expect(settings.serial).toMatchObject({ port: 'COM7', baudRate: '921600', parser: 'nmea' })
+    expect(settings.file).toMatchObject({ path: 'sample.log', parser: 'json' })
+    expect(settings.network).toMatchObject({
+      protocol: 'udp',
+      host: '0.0.0.0',
+      port: 9000,
+      parser: 'raw',
+    })
+    expect(settings.camera.url).toBe('rtsp://192.168.3.14:8554/rgbstream')
   })
 })

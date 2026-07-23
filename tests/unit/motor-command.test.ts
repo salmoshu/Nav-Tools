@@ -1,0 +1,91 @@
+import { describe, expect, it, vi } from 'vitest'
+import {
+  createMotorCmdManager,
+  type MotorMessageFieldId,
+} from '@/composables/motor/useMotorCmd'
+
+describe('motor command configuration', () => {
+  it('keeps byte length, value type, data size, and register count linked', () => {
+    const manager = createMotorCmdManager()
+    const command = manager.writeCommands.value[1]
+
+    manager.updateCommandLength(command, 3, 'write')
+    expect(command).toMatchObject({ length: 4, registerCount: 2 })
+    expect(command.data).toHaveLength(8)
+
+    manager.updateCommandDataType(command, 'float32', 'write')
+    expect(command).toMatchObject({ dataType: 'float32', length: 4, registerCount: 2 })
+    expect(command.data).toHaveLength(8)
+
+    manager.updateCommandRegisterCount(command, 1, 'write')
+    expect(command).toMatchObject({ length: 4, registerCount: 2 })
+    expect(command.data).toHaveLength(8)
+  })
+
+  it('encodes write data once and preserves its value when endianness changes', () => {
+    const manager = createMotorCmdManager()
+    const command = manager.writeCommands.value[1]
+    manager.configForm.checksum.method = 'none'
+
+    command.data = manager.decimalToHex('4660', 'int16', 'little')
+    expect(command.data).toBe('3412')
+    expect(manager.buildWriteCommandMessage(command, manager.configForm)).toBe(
+      'A501060100023412',
+    )
+
+    manager.reencodeWriteCommandData('little', 'big')
+    manager.configForm.dataEndianness = 'big'
+    expect(command.data).toBe('1234')
+    expect(manager.buildWriteCommandMessage(command, manager.configForm)).toBe(
+      'A501060100021234',
+    )
+  })
+
+  it('normalizes integer input and implements the configured checksum methods', () => {
+    const manager = createMotorCmdManager()
+
+    expect(manager.decimalToHex('1.9', 'int16', 'little')).toBe('0100')
+    expect(manager.calculateChecksum('313233343536373839', 'crc8', 0)).toBe('F4')
+    expect(manager.calculateChecksum('313233343536373839', 'crc16', 0, 'big')).toBe(
+      '4B37',
+    )
+    expect(manager.calculateChecksum('313233343536373839', 'crc16', 0, 'little')).toBe(
+      '374B',
+    )
+  })
+
+  it('parses responses with the active field order and rejects a bad checksum', () => {
+    const manager = createMotorCmdManager()
+    const order: MotorMessageFieldId[] = [
+      'header',
+      'function',
+      'address',
+      'length',
+      'registerCount',
+      'data',
+      'checksum',
+    ]
+    manager.messageFieldOrder.value = order
+    manager.initializeCommandStatusCache()
+
+    const payload = 'A5030000040201000200'
+    const checksum = manager.calculateChecksum(payload, 'crc16', 0, 'big')
+    const result = manager.convertByteArrayToJson(`${payload}${checksum}`)
+
+    expect(JSON.parse(result)).toMatchObject({ GET_SPEED_1: 1, GET_SPEED_2: 2 })
+    const warning = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    expect(manager.convertByteArrayToJson(`${payload}0000`)).toBe('')
+    warning.mockRestore()
+  })
+
+  it('reports ambiguous read mappings before commands can be sent', () => {
+    const manager = createMotorCmdManager()
+    manager.readCommands.value[1].address = manager.readCommands.value[0].address
+    manager.readCommands.value[1].functionCode = manager.readCommands.value[0].functionCode
+
+    expect(manager.isConfigValid.value).toBe(false)
+    expect(manager.configurationIssues.value).toContain(
+      '读指令 2与其他读指令使用了相同的地址和功能码，接收数据时无法区分',
+    )
+  })
+})

@@ -4,7 +4,14 @@
       <div class="file-controls">
         <!-- 左侧按钮 -->
         <div class="left-buttons">
-          <el-button type="default" size="small" @click="showConfigDialog" class="config-btn">
+          <el-button
+            type="default"
+            size="small"
+            class="config-btn"
+            :disabled="activeReadCommands.size > 0"
+            :title="activeReadCommands.size > 0 ? '请先停止周期读指令' : '配置电机指令'"
+            @click="showConfigDialog"
+          >
             <el-icon><Setting /></el-icon>&nbsp;配置
           </el-button>
         </div>
@@ -32,14 +39,64 @@
     <el-dialog
       v-model="configDialogVisible"
       title="电机驱动指令配置（16进制）"
-      width="70%"
-      top="3vh"
+      class="app-dialog motor-config-dialog"
+      width="min(1180px, calc(100vw - 32px))"
+      :append-to-body="true"
+      :z-index="8000"
+      align-center
       :close-on-click-modal="true"
       :close-on-press-escape="true"
-      custom-class="motor-config-dialog"
+      :destroy-on-close="true"
+      :before-close="handleDialogBeforeClose"
     >
+      <template #header>
+        <AppDialogTitle
+          :icon="Setting"
+          title="电机驱动指令配置"
+          description="定义指令结构、校验和与读写命令（16 进制）"
+        />
+      </template>
+
       <div class="dialog-content">
-        <!-- 配置操作栏 -->
+        <section class="config-tool-card" aria-label="配置工具">
+          <div class="config-tool-copy">
+            <div class="config-tool-icon">
+              <el-icon><Setting /></el-icon>
+            </div>
+            <div>
+              <div class="config-tool-title">配置工具</div>
+              <div class="config-tool-description">载入、导出或恢复电机指令配置</div>
+            </div>
+          </div>
+          <div class="config-tool-actions">
+            <el-upload
+              ref="uploadRef"
+              action="#"
+              :auto-upload="false"
+              :show-file-list="false"
+              accept=".json"
+              :on-change="handleFileLoad"
+            >
+              <template #trigger>
+                <el-button :icon="Upload" size="default">载入配置</el-button>
+              </template>
+            </el-upload>
+            <el-button :icon="Download" size="default" @click="downloadConfig">
+              导出配置
+            </el-button>
+            <span class="config-tool-separator" aria-hidden="true"></span>
+            <el-button
+              type="warning"
+              plain
+              :icon="Refresh"
+              size="default"
+              @click="resetConfig"
+            >
+              恢复默认
+            </el-button>
+          </div>
+        </section>
+
         <!-- 指令预览区域 -->
         <div class="command-preview-container">
           <div class="message-preview">
@@ -54,6 +111,22 @@
             </div>
           </div>
         </div>
+
+        <el-alert
+          v-if="configurationIssues.length"
+          class="config-validation-alert"
+          type="warning"
+          :closable="false"
+          show-icon
+        >
+          <template #title>当前配置还有 {{ configurationIssues.length }} 项需要处理</template>
+          <div class="config-validation-list">
+            <span v-for="issue in configurationIssues.slice(0, 4)" :key="issue">{{ issue }}</span>
+            <span v-if="configurationIssues.length > 4">
+              另有 {{ configurationIssues.length - 4 }} 项，请继续检查命令表格
+            </span>
+          </div>
+        </el-alert>
 
         <el-divider />
 
@@ -94,7 +167,8 @@
                       <!-- 报头字段 -->
                       <div v-if="element.id === 'header'" class="field-config">
                         <el-input 
-                          v-model="configForm.header" 
+                          :model-value="configForm.header"
+                          @input="handleHeaderInput"
                           placeholder="例如: AACC"
                           size="small"
                           style="width: 110px;"
@@ -113,6 +187,7 @@
                           placeholder="字节长度"
                           size="small"
                           style="width: 80px; margin-left: 8px;"
+                          @change="normalizeAllCommands"
                         >
                           <el-option label="1字节" :value="1" />
                           <el-option label="2字节" :value="2" />
@@ -128,6 +203,7 @@
                           size="small"
                           style="width: 80px; margin-left: 8px;"
                           :disabled="!configForm.includeFunction"
+                          @change="normalizeAllCommands"
                         >
                           <el-option label="1字节" :value="1" />
                           <el-option label="2字节" :value="2" />
@@ -136,13 +212,19 @@
                       
                       <!-- 寄存器个数字段 -->
                       <div v-else-if="element.id === 'registerCount'" class="field-config">
-                        <el-switch v-model="configForm.includeRegisterCount" size="small" active-text="启用" />
+                        <el-switch
+                          v-model="configForm.includeRegisterCount"
+                          size="small"
+                          active-text="启用"
+                          @change="handleGlobalRegisterCountChange"
+                        />
                         <el-select 
                           v-model="configForm.registerCountLength" 
                           placeholder="字节长度"
                           size="small"
                           style="width: 80px; margin-left: 8px;"
                           :disabled="!configForm.includeRegisterCount"
+                          @change="handleRegisterCountWidthChange"
                         >
                           <el-option label="1字节" :value="1" />
                           <el-option label="2字节" :value="2" />
@@ -167,7 +249,8 @@
                       <div v-else-if="element.id === 'data'" class="field-config">
                         <el-switch :model-value="true" size="small" active-text="启用" disabled />
                         <el-select 
-                          v-model="configForm.dataEndianness" 
+                          :model-value="configForm.dataEndianness"
+                          @change="handleDataEndiannessChange"
                           placeholder="字节序" 
                           size="small"
                           style="width: 80px; margin-left: 8px;"
@@ -234,7 +317,7 @@
             
             <div class="command-header">
               <el-text type="info" size="small">读取电机状态的相关命令（数据长度和数据类型用以决定应答数据，下发指令则不包含）</el-text>
-              <el-button type="primary" size="small" @click="addCommand('read')" :icon="Plus" :disabled="activeReadCommands.size > 0">
+              <el-button type="primary" size="small" @click="addMotorCommand('read')" :icon="Plus" :disabled="activeReadCommands.size > 0">
                 添加读命令
               </el-button>
             </div>
@@ -276,7 +359,7 @@
               </el-table-column>
               <el-table-column prop="name" label="命令名称" min-width="120">
                 <template #default="scope">
-                  <el-input v-model="scope.row.name" size="default" :disabled="activeReadCommands.has(scope.row.name)">
+                  <el-input v-model="scope.row.name" size="default" :disabled="activeReadCommands.has(scope.row.name)" @blur="normalizeCommand(scope.row, 'read')">
                     <template #prefix>
                       <el-icon><Position /></el-icon>
                     </template>
@@ -285,14 +368,30 @@
               </el-table-column>
               <el-table-column v-if="configForm.includeFunction" prop="functionCode" label="功能码" width="110">
                 <template #default="scope">
-                  <el-input v-model="scope.row.functionCode" size="default" placeholder="00" :disabled="activeReadCommands.has(scope.row.name)">
+                  <el-input
+                    :model-value="scope.row.functionCode"
+                    size="default"
+                    placeholder="00"
+                    :maxlength="(configForm.functionLength || 1) * 2"
+                    :disabled="activeReadCommands.has(scope.row.name)"
+                    @input="handleCommandHexInput(scope.row, 'functionCode', String($event), 'read')"
+                    @blur="normalizeCommand(scope.row, 'read')"
+                  >
                     <template #prepend>0x</template>
                   </el-input>
                 </template>
               </el-table-column>
               <el-table-column prop="address" label="寄存器地址" width="120">
                 <template #default="scope">
-                  <el-input v-model="scope.row.address" size="default" placeholder="00" :disabled="activeReadCommands.has(scope.row.name)">
+                  <el-input
+                    :model-value="scope.row.address"
+                    size="default"
+                    placeholder="00"
+                    :maxlength="(configForm.addressLength || 1) * 2"
+                    :disabled="activeReadCommands.has(scope.row.name)"
+                    @input="handleCommandHexInput(scope.row, 'address', String($event), 'read')"
+                    @blur="normalizeCommand(scope.row, 'read')"
+                  >
                     <template #prepend>0x</template>
                   </el-input>
                 </template>
@@ -304,15 +403,18 @@
                       v-model="scope.row.includeRegisterCount" 
                       class="custom-checkbox"
                       :disabled="activeReadCommands.has(scope.row.name)"
+                      @change="handleRegisterCountToggle(scope.row, Boolean($event), 'read')"
                     />
                     <el-input-number 
-                      v-model="scope.row.registerCount" 
+                      :model-value="scope.row.registerCount"
                       size="default" 
                       :min="0" 
-                      :max="255" 
+                      :max="registerCountMax"
+                      :step="scope.row.dataType === 'float32' ? 2 : 1"
                       controls-position="right" 
                       style="width: 100%;"
                       :disabled="activeReadCommands.has(scope.row.name) || !scope.row.includeRegisterCount"
+                      @change="handleCommandRegisterCount(scope.row, $event, 'read')"
                     />
                   </div>
                 </template>
@@ -326,13 +428,15 @@
                       :disabled="activeReadCommands.has(scope.row.name)"
                     />
                     <el-input-number 
-                      v-model="scope.row.length" 
+                      :model-value="scope.row.length"
                       size="default" 
                       :min="0" 
                       :max="32" 
+                      :step="scope.row.dataType === 'float32' ? 4 : 2"
                       controls-position="right" 
                       style="width: 100%;"
                       :disabled="activeReadCommands.has(scope.row.name) || !scope.row.includeLength"
+                      @change="handleCommandLength(scope.row, $event, 'read')"
                     >
                       <template #prepend>0x</template>
                     </el-input-number>
@@ -340,7 +444,7 @@
                 </template>
               </el-table-column>
               <el-table-column prop="data" label="数据内容" width="180">
-                <template #default="scope">
+                <template #default>
                   <el-input size="default" placeholder="" disabled>
                     <template #prefix>
                       <el-icon><DataAnalysis /></el-icon>
@@ -351,7 +455,12 @@
               </el-table-column>
               <el-table-column prop="dataType" label="数据类型" width="100">
                 <template #default="scope">
-                  <el-select v-model="scope.row.dataType" size="default" :disabled="activeReadCommands.has(scope.row.name)">
+                  <el-select
+                    :model-value="scope.row.dataType"
+                    size="default"
+                    :disabled="activeReadCommands.has(scope.row.name)"
+                    @change="handleCommandDataType(scope.row, $event, 'read')"
+                  >
                     <el-option label="int16" value="int16" />
                     <el-option label="float32" value="float32" />
                   </el-select>
@@ -371,7 +480,7 @@
             
             <div class="command-header">
               <el-text type="info" size="small">控制电机运行的相关命令</el-text>
-              <el-button type="primary" size="small" @click="addCommand('write')" :icon="Plus">
+              <el-button type="primary" size="small" @click="addMotorCommand('write')" :icon="Plus">
                 添加写命令
               </el-button>
             </div>
@@ -412,7 +521,7 @@
               </el-table-column>
               <el-table-column prop="name" label="命令名称" min-width="120">
                 <template #default="scope">
-                  <el-input v-model="scope.row.name" size="default">
+                  <el-input v-model="scope.row.name" size="default" @blur="normalizeCommand(scope.row, 'write')">
                     <template #prefix>
                       <el-icon><Edit /></el-icon>
                     </template>
@@ -421,14 +530,28 @@
               </el-table-column>
               <el-table-column v-if="configForm.includeFunction" prop="functionCode" label="功能码" width="110">
                 <template #default="scope">
-                  <el-input v-model="scope.row.functionCode" size="default" placeholder="00">
+                  <el-input
+                    :model-value="scope.row.functionCode"
+                    size="default"
+                    placeholder="00"
+                    :maxlength="(configForm.functionLength || 1) * 2"
+                    @input="handleCommandHexInput(scope.row, 'functionCode', String($event), 'write')"
+                    @blur="normalizeCommand(scope.row, 'write')"
+                  >
                     <template #prepend>0x</template>
                   </el-input>
                 </template>
               </el-table-column>
               <el-table-column prop="address" label="寄存器地址" width="120">
                 <template #default="scope">
-                  <el-input v-model="scope.row.address" size="default" placeholder="00">
+                  <el-input
+                    :model-value="scope.row.address"
+                    size="default"
+                    placeholder="00"
+                    :maxlength="(configForm.addressLength || 1) * 2"
+                    @input="handleCommandHexInput(scope.row, 'address', String($event), 'write')"
+                    @blur="normalizeCommand(scope.row, 'write')"
+                  >
                     <template #prepend>0x</template>
                   </el-input>
                 </template>
@@ -439,15 +562,18 @@
                     <el-checkbox 
                       v-model="scope.row.includeRegisterCount" 
                       class="custom-checkbox"
+                      @change="handleRegisterCountToggle(scope.row, Boolean($event), 'write')"
                     />
                     <el-input-number 
-                      v-model="scope.row.registerCount" 
+                      :model-value="scope.row.registerCount"
                       size="default" 
                       :min="0" 
-                      :max="255" 
+                      :max="registerCountMax"
+                      :step="scope.row.dataType === 'float32' ? 2 : 1"
                       controls-position="right" 
                       style="width: 100%;"
                       :disabled="!scope.row.includeRegisterCount"
+                      @change="handleCommandRegisterCount(scope.row, $event, 'write')"
                     />
                   </div>
                 </template>
@@ -460,13 +586,15 @@
                       class="custom-checkbox"
                     />
                     <el-input-number 
-                      v-model="scope.row.length" 
+                      :model-value="scope.row.length"
                       size="default" 
                       :min="0" 
                       :max="32" 
+                      :step="scope.row.dataType === 'float32' ? 4 : 2"
                       controls-position="right" 
                       style="width: 100%;"
                       :disabled="!scope.row.includeLength"
+                      @change="handleCommandLength(scope.row, $event, 'write')"
                     >
                       <template #prepend>0x</template>
                     </el-input-number>
@@ -476,10 +604,13 @@
               <el-table-column prop="data" label="数据内容" width="180">
                 <template #default="scope">
                   <el-input 
-                    v-model="scope.row.data" 
+                    :model-value="scope.row.data"
                     :disabled="scope.row.length===0"
                     size="default" 
                     placeholder="十进制或十六进制"
+                    :maxlength="scope.row.length * 2"
+                    @input="handleWriteDataHexInput(scope.row, String($event))"
+                    @blur="normalizeCommand(scope.row, 'write')"
                   >
                     <template #prepend>0x</template>
                     <template #prefix>
@@ -490,7 +621,11 @@
               </el-table-column>
               <el-table-column prop="dataType" label="数据类型" width="100">
                 <template #default="scope">
-                  <el-select v-model="scope.row.dataType" size="default">
+                  <el-select
+                    :model-value="scope.row.dataType"
+                    size="default"
+                    @change="handleCommandDataType(scope.row, $event, 'write')"
+                  >
                     <el-option label="int16" value="int16" />
                     <el-option label="float32" value="float32" />
                   </el-select>
@@ -502,34 +637,10 @@
       </div>
       <template #footer>
         <div class="dialog-footer">
-          <div class="footer-left-actions">
-            <el-upload
-              ref="uploadRef"
-              action="#"
-              :auto-upload="false"
-              :show-file-list="false"
-              accept=".json"
-              :on-change="handleFileLoad"
-            >
-              <template #trigger>
-                <el-button type="primary" :icon="Upload" size="default">
-                  载入配置
-                </el-button>
-              </template>
-            </el-upload>
-            
-            <el-button type="success" :icon="Download" size="default" @click="downloadConfig">
-              下载配置
-            </el-button>
-            
-            <el-button type="warning" :icon="Refresh" size="default" @click="resetConfig">
-              重置配置
-            </el-button>
-          </div>
-          <div class="footer-right-actions">
-            <el-button @click="configDialogVisible = false" :icon="Close">取消</el-button>
-            <el-button type="primary" @click="saveConfig" :icon="Check">确定</el-button>
-          </div>
+          <el-button @click="cancelConfig" :icon="Close">取消</el-button>
+          <el-button type="primary" @click="saveConfig" :icon="Check" :disabled="!isConfigValid">
+            确定
+          </el-button>
         </div>
       </template>
     </el-dialog>
@@ -539,10 +650,24 @@
 <script lang="ts" setup>
 import { ref, onMounted, onUnmounted, watch, computed, reactive } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { useMotorCmd } from '@/composables/motor/useMotorCmd'
+import {
+  DEFAULT_MOTOR_MESSAGE_FIELD_ORDER,
+  fitHexToBytes,
+  maxUnsignedValue,
+  sanitizeHex,
+  useMotorCmd,
+  type Command,
+  type MotorCommandKind,
+  type MotorDataType,
+  type MotorEndianness,
+  type MotorMessageFieldId,
+  type ReadCommand,
+  type WriteCommand,
+} from '@/composables/motor/useMotorCmd'
 import draggable from 'vuedraggable'
 import { useConsole } from '@/composables/flow/useConsole'
 import MotorCommandPanel from './MotorCommandPanel.vue'
+import AppDialogTitle from '@/components/AppDialogTitle.vue'
 import { 
   Setting, 
   Key, 
@@ -568,9 +693,18 @@ const {
   currentConfig,
   formattedConfig,
   isConfigValid,
+  configurationIssues,
+  messageFieldOrder,
   addCommand,
   removeCommand,
   moveCommand,
+  normalizeCommand,
+  normalizeAllCommands,
+  updateCommandLength,
+  updateCommandRegisterCount,
+  updateCommandDataType,
+  reencodeWriteCommandData,
+  resetConfiguration,
   // 数据转换函数
   getDataCount,
   splitData,
@@ -591,29 +725,21 @@ const configDialogVisible = ref(false)
 const activeTab = ref('structure')
 const activeControlTab = ref('read')
 const uploadRef = ref()
-const dataInputs = ref<Record<string, string>>({})
 const decimalInputs = ref<Record<string, string>>({}) // 存储十进制输入值
-
-// 监听writeCommands变化，确保输入框同步更新
-watch(
-  () => writeCommands.value,
-  () => {
-    initializeDecimalInputs()
-  },
-  { deep: true }
-)
-
-// 拖拽式报文结构配置
-const addressLength = ref(1) // 地址字段长度（字节）
-const includeLength = ref(true) // 是否包含长度字段（默认可变）
-const lengthBytes = ref(1) // 长度字段字节数
-const functionBytes = ref(1) // 功能码字段字节数
 
 // 指令预览相关
 const previewMessage = ref<Array<{type: string, label: string, value: string, color: string}>>([])
 
+interface MessageField {
+  id: MotorMessageFieldId
+  title: string
+  tag: string
+  tagType: 'info' | 'success' | 'warning'
+  fixed: boolean
+}
+
 // 报文字段配置
-const messageFields = reactive([
+const messageFields = reactive<MessageField[]>([
   { 
     id: 'header', 
     title: '报头', 
@@ -666,7 +792,7 @@ const messageFields = reactive([
 ])
 
 // 拖拽排序后的字段列表
-const messageStructure = computed({
+const messageStructure = computed<MessageField[]>({
   get() {
     // 确保报头始终在最前，校验和始终在最后
     const headerField = messageFields.find(f => f.id === 'header')
@@ -676,7 +802,7 @@ const messageStructure = computed({
     const middleFields = messageFields.filter(f => f.id !== 'header' && f.id !== 'checksum')
     
     // 根据用户拖拽排序中间字段
-    return [headerField, ...middleFields, checksumField]
+    return [headerField!, ...middleFields, checksumField!]
   },
   set(newValue) {
     // 更新字段顺序（保持报头和校验和的固定位置）
@@ -688,6 +814,10 @@ const messageStructure = computed({
     })
   }
 })
+
+const applyMessageFieldOrder = (order: MotorMessageFieldId[]) => {
+  messageFields.sort((left, right) => order.indexOf(left.id) - order.indexOf(right.id))
+}
 
 // IPC事件监听器引用
 const serialSuccessListener = (event: any, result: any) => {
@@ -707,6 +837,19 @@ const serialErrorListener = (event: any, error: any) => {
 
 // localStorage键名
 const STORAGE_KEY = 'motor-config'
+
+type MotorConfigSnapshot = ReturnType<typeof createConfigSnapshot>
+let dialogSnapshot: MotorConfigSnapshot | null = null
+
+function createConfigSnapshot() {
+  return JSON.parse(
+    JSON.stringify({
+      ...currentConfig.value,
+      messageStructure: messageStructure.value,
+      hasBeenCustomized: true,
+    }),
+  )
+}
 
 // 从localStorage加载配置
 const loadConfigFromStorage = () => {
@@ -744,18 +887,8 @@ const saveConfigToStorage = () => {
 const globalTimer = ref<number | null>(null)
 const activeReadCommands = ref<Set<string>>(new Set())
 
-// 监听写指令数据变化，更新多输入框
-watch(writeCommands, (newCommands) => {
-  newCommands.forEach(cmd => {
-    const count = getDataCount(cmd)
-    if (count > 1) {
-      const dataArray = splitData(cmd.data, count)
-      for (let i = 0; i < count; i++) {
-        const key = getDataInputKey(cmd, i)
-        dataInputs.value[key] = dataArray[i] || ''
-      }
-    }
-  })
+// 草稿变化只刷新预览；只有点击“确定”时才持久化。
+watch(writeCommands, () => {
   generateCommandPreview()
 }, { deep: true })
 
@@ -765,13 +898,17 @@ watch(readCommands, () => {
 }, { deep: true })
 
 // 监听拖拽结构变化
-watch(messageStructure, () => {
-  generateCommandPreview()
-}, { deep: true })
+watch(
+  messageStructure,
+  structure => {
+    messageFieldOrder.value = structure.map(field => field.id)
+    generateCommandPreview()
+  },
+  { deep: true },
+)
 
 // 监听配置变化
-watch([() => configForm.header, () => configForm.checksum.method, () => configForm.checksum.start_index, () => configForm.checksum.endianness, () => configForm.addressLength, () => configForm.functionLength, () => configForm.dataEndianness, includeLength, lengthBytes, () => configForm.includeFunction, () => configForm.includeRegisterCount, () => configForm.registerCountLength, ()=>configForm.lengthLength], () => {
-  saveConfigToStorage()
+watch([() => configForm.header, () => configForm.checksum.method, () => configForm.checksum.start_index, () => configForm.checksum.endianness, () => configForm.addressLength, () => configForm.functionLength, () => configForm.dataEndianness, () => configForm.includeFunction, () => configForm.includeRegisterCount, () => configForm.registerCountLength, () => configForm.lengthLength], () => {
   generateCommandPreview()
 }, { deep: true })
 
@@ -782,7 +919,24 @@ watch(activeTab, () => {
 
 // 方法
 const showConfigDialog = () => {
+  dialogSnapshot = createConfigSnapshot()
   configDialogVisible.value = true
+}
+
+const restoreDialogSnapshot = () => {
+  if (!dialogSnapshot) return
+  loadConfig(dialogSnapshot)
+  dialogSnapshot = null
+}
+
+const cancelConfig = () => {
+  restoreDialogSnapshot()
+  configDialogVisible.value = false
+}
+
+const handleDialogBeforeClose = (done: () => void) => {
+  restoreDialogSnapshot()
+  done()
 }
 
 // 处理报文结构变化
@@ -800,9 +954,16 @@ const handleStructureChange = (event: any) => {
 // 保存配置
 const saveConfig = () => {
   try {
-    // 保存到localStorage（已包含所有配置）
+    normalizeAllCommands()
+    if (!isConfigValid.value) {
+      ElMessage.warning(configurationIssues.value[0] || '请先修正配置中的关联问题')
+      return
+    }
+
     saveConfigToStorage()
-    
+    initializeDecimalInputs()
+    initializeCommandStatusCache()
+    dialogSnapshot = null
     configDialogVisible.value = false
     ElMessage({
       message: '配置保存成功',
@@ -822,196 +983,182 @@ const saveConfig = () => {
   }
 }
 
-// 生成指令预览（通用版本）
-const generateCommandPreview = () => {
-  const preview = [] as any
-  let hexString = ''
-  const cmdPreview = { name: 'TEMPLATE', address: '00', data: '0000', length: 2, dataType: 'int16', functionCode: '00', registerCount: 0,  frequency: null, lastSentTime: 0 }
-  
-  // 使用第一个指令作为预览示例
-  const command = cmdPreview
-  
-  // 按照messageStructure的顺序构建预览
-  messageStructure.value.forEach(field => {
-    if (!field) return
-    
-    switch (field.id) {
-      case 'header':
-        if (configForm.header) {
-          preview.push({
-            type: 'header',
-            label: '报头',
-            value: configForm.header,
-            color: '#667eea'
-          })
-          hexString += configForm.header + ' '
-        }
-        break
-        
-      case 'address':
-        if (command.address !== undefined) {
-          const addressLength = configForm.addressLength || 2
-          const addressHex = command.address.padStart(addressLength * 2, '0')
-          preview.push({
-            type: 'address',
-            label: '寄存器地址',
-            value: addressHex,
-            color: '#f093fb'
-          })
-          hexString += addressHex + ' '
-        }
-        break
-        
-      case 'function':
-        if (configForm.includeFunction && command.functionCode !== undefined) {
-          const functionLength = configForm.functionLength || 2
-          const functionHex = command.functionCode.padStart(functionLength * 2, '0').toUpperCase()
-          preview.push({
-            type: 'function',
-            label: '功能码',
-            value: functionHex,
-            color: '#4facfe'
-          })
-          hexString += functionHex + ' '
-        }
-        break
-        
-      case 'registerCount':
-        if (configForm.includeRegisterCount && command.registerCount !== undefined) {
-          const registerCountLength = configForm.registerCountLength || 1
-          const registerCountHex = command.registerCount.toString(16).padStart(registerCountLength * 2, '0').toUpperCase()
-          preview.push({
-            type: 'registerCount',
-            label: '寄存器个数',
-            value: registerCountHex,
-            color: '#ff6b6b'
-          })
-          hexString += registerCountHex + ' '
-        }
-        break
-        
-      case 'length':
-        if (includeLength.value && command.length !== undefined) {
-          const lengthLength = configForm.lengthLength || 1
-          const lengthHex = '00'.padStart(lengthLength * 2, '0').toUpperCase()
-          preview.push({  
-            type: 'length',
-            label: '字节个数',
-            value: lengthHex,
-            color: '#43e97b'
-          })
-          hexString += lengthHex + ' '
-        }
-        break
-        
-      case 'data':
-        if (command.data) {
-          preview.push({
-            type: 'data',
-            label: '数据内容',
-            value: command.data,
-            color: '#fa709a'
-          })
-          hexString += command.data + ' '
-        }
-        break
-        
-      case 'checksum':
-        if (configForm.checksum.method && configForm.checksum.method !== 'none') {
-          const checksum = configForm.checksum.method === 'crc16' ? 'XXXX' : 'XX'
-          preview.push({
-            type: 'checksum',
-            label: '校验',
-            value: checksum,
-            color: '#a8edea'
-          })
-          hexString += checksum + ' '
-        }
-        break
-    }
-  })
-  
-  previewMessage.value = preview
+const registerCountMax = computed(() =>
+  maxUnsignedValue(configForm.registerCountLength ?? 1),
+)
+
+const handleHeaderInput = (value: string) => {
+  configForm.header = sanitizeHex(value).slice(0, 32)
 }
 
-// 生成指定指令的报文（用于实际发送）
-const generateCommandMessage = (command: any, isWrite: boolean = false) => {
+const handleCommandHexInput = (
+  command: Command,
+  field: 'address' | 'functionCode',
+  value: string,
+  kind: MotorCommandKind,
+) => {
+  const byteLength =
+    field === 'address' ? configForm.addressLength ?? 1 : configForm.functionLength ?? 1
+  command[field] = sanitizeHex(value).slice(0, byteLength * 2)
+  if (command[field]?.length === byteLength * 2) normalizeCommand(command, kind)
+}
+
+const handleWriteDataHexInput = (command: WriteCommand, value: string) => {
+  command.data = sanitizeHex(value).slice(0, command.length * 2)
+}
+
+const handleCommandLength = (
+  command: Command,
+  value: number | undefined,
+  kind: MotorCommandKind,
+) => {
+  updateCommandLength(command, value, kind)
+  initializeDecimalInputs()
+}
+
+const handleCommandRegisterCount = (
+  command: Command,
+  value: number | undefined,
+  kind: MotorCommandKind,
+) => {
+  updateCommandRegisterCount(command, value, kind)
+  initializeDecimalInputs()
+}
+
+const handleCommandDataType = (
+  command: Command,
+  value: MotorDataType,
+  kind: MotorCommandKind,
+) => {
+  updateCommandDataType(command, value, kind)
+  initializeDecimalInputs()
+}
+
+const handleRegisterCountToggle = (
+  command: Command,
+  enabled: boolean,
+  kind: MotorCommandKind,
+) => {
+  command.includeRegisterCount = enabled
+  if (enabled) updateCommandLength(command, command.length, kind)
+}
+
+const handleGlobalRegisterCountChange = (enabled: string | number | boolean) => {
+  if (!enabled) return
+  readCommands.value.forEach(command => {
+    if (command.includeRegisterCount !== false) {
+      updateCommandLength(command, command.length, 'read')
+    }
+  })
+  writeCommands.value.forEach(command => {
+    if (command.includeRegisterCount !== false) {
+      updateCommandLength(command, command.length, 'write')
+    }
+  })
+}
+
+const handleRegisterCountWidthChange = () => {
+  normalizeAllCommands()
+}
+
+const handleDataEndiannessChange = (nextEndianness: MotorEndianness) => {
+  const previousEndianness = configForm.dataEndianness || 'little'
+  reencodeWriteCommandData(previousEndianness, nextEndianness)
+  configForm.dataEndianness = nextEndianness
+  initializeDecimalInputs()
+}
+
+const addMotorCommand = (kind: MotorCommandKind) => {
+  addCommand(kind)
+  initializeDecimalInputs()
+}
+
+
+const previewLabels: Record<MotorMessageFieldId, string> = {
+  header: '报头',
+  address: '寄存器地址',
+  function: '功能码',
+  registerCount: '寄存器个数',
+  length: '字节个数',
+  data: '数据内容',
+  checksum: '校验',
+}
+
+// 使用当前标签页中的真实命令生成预览，确保预览与实际下发报文一致。
+const generateCommandPreview = () => {
+  const preferRead = activeTab.value === 'read'
+  const command: Command | undefined = preferRead
+    ? readCommands.value[0] || writeCommands.value[0]
+    : writeCommands.value[0] || readCommands.value[0]
+  if (!command) {
+    previewMessage.value = []
+    return
+  }
+
+  const isWriteCommand = writeCommands.value.includes(command as WriteCommand)
   let message = ''
-  
-  // 按照messageStructure的顺序构建报文
+  const preview: Array<{ type: string; label: string; value: string; color: string }> = []
+  const append = (field: MotorMessageFieldId, value: string) => {
+    if (!value) return
+    message += value
+    preview.push({ type: field, label: previewLabels[field], value, color: '' })
+  }
+
   messageStructure.value.forEach(field => {
-    if (!field) return
-    
     switch (field.id) {
       case 'header':
-        message += configForm.header
+        append(field.id, sanitizeHex(configForm.header))
         break
-        
       case 'address':
-        if (command.address !== undefined) {
-          const addressLength = configForm.addressLength || 2
-          message += command.address.padStart(addressLength * 2, '0')
-        }
+        append(field.id, fitHexToBytes(command.address, configForm.addressLength ?? 1))
         break
-        
       case 'function':
-        if (configForm.includeFunction && command.functionCode !== undefined) {
-          const functionLength = configForm.functionLength || 2
-          message += command.functionCode.padStart(functionLength * 2, '0').toUpperCase()
+        if (configForm.includeFunction) {
+          append(
+            field.id,
+            fitHexToBytes(command.functionCode, configForm.functionLength ?? 1),
+          )
         }
         break
-        
       case 'registerCount':
-        if (configForm.includeRegisterCount && command.registerCount !== undefined) {
-          const shouldInclude = command.includeRegisterCount
-          if (shouldInclude) {
-            const registerCountLength = configForm.registerCountLength || 1
-            const registerCountStr = command.registerCount.toString()
-            message += registerCountStr.padStart(registerCountLength * 2, '0').toUpperCase()
-          }
+        if (configForm.includeRegisterCount && command.includeRegisterCount !== false) {
+          append(
+            field.id,
+            fitHexToBytes(
+              (command.registerCount ?? 0).toString(16),
+              configForm.registerCountLength ?? 1,
+            ),
+          )
         }
         break
-        
       case 'length':
-        if (command.length !== undefined) {
-          // 如果可配开关开启，根据checkbox决定是否包含；如果关闭，则默认包含
-          const shouldIncludeLength = command.includeLength
-          if (shouldIncludeLength) {
-            const lengthLength = configForm.lengthLength || 1
-            message += decimalToHex(command.length.toString(), 'int16').substring(0, lengthLength * 2).toUpperCase()
-          }
+        if (command.includeLength !== false) {
+          append(
+            field.id,
+            fitHexToBytes(command.length.toString(16), configForm.lengthLength ?? 1),
+          )
         }
         break
-        
       case 'data':
-        if (isWrite && command.data) {
-          let data = command.data.padStart(4, '0')
-          
-          // 根据配置的字节序调整数据顺序（对于int16类型）
-          if (command.dataType === 'int16' && configForm.dataEndianness) {
-            // 确保数据是4位十六进制数
-            data = data.padStart(4, '0')
-            if (configForm.dataEndianness === 'little') {
-              // 小端：低字节在前，高字节在后
-              data = data.slice(2, 4) + data.slice(0, 2)
-            } else {
-              // 大端：高字节在前，低字节在后（不需要调整）
-            }
-          }
-          
-          message += data
+        if (isWriteCommand && command.length > 0) {
+          append(field.id, fitHexToBytes(command.data, command.length, 'end'))
         }
         break
-        
       case 'checksum':
-        // 校验码需要基于前面的内容计算
-        const checksum = calculateChecksum(message, configForm.checksum.method)
-        message += checksum
+        append(
+          field.id,
+          calculateChecksum(
+            message,
+            configForm.checksum.method,
+            configForm.checksum.start_index,
+            configForm.checksum.endianness || 'big',
+          ),
+        )
         break
     }
   })
-  
-  return message
+
+  previewMessage.value = preview
 }
 
 // 发送读指令
@@ -1122,6 +1269,7 @@ const handleDecimalInput = (cmd: any, value: string) => {
 
 // 处理单个输入框的十进制输入（主界面）
 const handleSingleDecimalInput = (cmd: any, value: string) => {
+  decimalInputs.value[cmd.name] = value
   if (!value || value.trim() === '') {
     // 根据数据长度（字节数）设置默认值
     if (cmd.length === 2 || cmd.dataType === 'int16') {
@@ -1324,9 +1472,9 @@ const updateGlobalTimer = () => {
   
   if (activeFrequencies.length === 0) return
   
-  // 找到最小频率（最大间隔）
-  const minFrequency = Math.min(...activeFrequencies.filter(f => f !== null) as number[])
-  const baseInterval = 1000 / minFrequency
+  // 以最高频率作为调度基准，避免高频命令被低频命令拖慢。
+  const maxFrequency = Math.max(...activeFrequencies.filter(f => f !== null) as number[])
+  const baseInterval = 1000 / maxFrequency
   
   // 创建新的定时器
   globalTimer.value = window.setInterval(() => {
@@ -1339,8 +1487,11 @@ const updateGlobalTimer = () => {
         if (!command.lastSentTime || 
             (currentTime - command.lastSentTime) >= sendInterval) {
           
-          // 使用generateCommandMessage构建具体指令的报文，支持动态顺序
-          const cmdMessage = generateCommandMessage(command, false)
+          const cmdMessage = buildReadCommandMessage(
+            command,
+            configForm,
+            messageStructure.value,
+          )
           
           sendDataToSerial(cmdMessage)
           
@@ -1354,49 +1505,29 @@ const updateGlobalTimer = () => {
 // 重置为默认配置
 const resetConfig = () => {
   ElMessageBox.confirm(
-    '确定要重置为默认配置吗？当前配置将被清空。',
-    '重置确认',
+    '确定恢复内置默认值吗？点击“取消”或关闭配置窗口仍可撤销本次更改。',
+    '恢复默认配置',
     {
       confirmButtonText: '确定',
+      confirmButtonClass: 'el-button--warning',
       cancelButtonText: '取消',
       type: 'warning',
+      customClass: 'app-message-box',
       closeOnClickModal: true,
       closeOnPressEscape: true,
     }
   ).then(() => {
-    // 重置表单数据
-    configForm.header = 'AACC'
-    configForm.format = 'hex'
-    configForm.checksum.method = 'sum'
-    configForm.checksum.start_index = 2
-    // 结束位字段已移除，不再使用
-    
-    // 重置命令列表
-    readCommands.value = [
-      { name: 'GET_SPEED', address: '00', data: '0000', length: 4, dataType: 'int16', functionCode: '03', registerCount: 1, frequency: null, lastSentTime: 0 },
-      { name: 'GET_SPEED_M1', address: '01', data: '0000', length: 2, dataType: 'int16', functionCode: '03', registerCount: 1, frequency: null, lastSentTime: 0 },
-      { name: 'GET_SPEED_M2', address: '02', data: '0000', length: 2, dataType: 'int16', functionCode: '03', registerCount: 1, frequency: null, lastSentTime: 0 }
-    ]
-    
-    writeCommands.value = [
-      { name: 'SET_SPEED', address: '00', data: '00000000', length: 4, dataType: 'int16', functionCode: '06', registerCount: 1 },
-      { name: 'SET_SPEED_M1', address: '01', data: '0000', length: 2, dataType: 'int16', functionCode: '06', registerCount: 1 },
-      { name: 'SET_SPEED_M2', address: '02', data: '0000', length: 2, dataType: 'int16', functionCode: '06', registerCount: 1 }
-    ]
-    
+    resetConfiguration()
+    applyMessageFieldOrder(messageFieldOrder.value)
+    initializeDecimalInputs()
+    generateCommandPreview()
     ElMessage({
-      message: '已重置为默认配置',
+      message: '已恢复默认值，点击“确定”后保存',
       type: 'success',
       duration: 1000,
       placement: 'bottom-right',
       offset: 50,
     })
-    
-    // 保存重置后的配置到localStorage
-    saveConfigToStorage()
-    
-    // 初始化decimalInputs，确保输入框显示正确的十进制值
-    initializeDecimalInputs()
   }).catch(() => {
     // 用户取消重置
   })
@@ -1410,46 +1541,53 @@ const loadConfig = (config: any) => {
       throw new Error('配置格式不完整')
     }
     
+    const byteWidth = (value: unknown) => (Number(value) === 2 ? 2 : 1)
+    const checksumMethods = ['none', 'sum', 'xor', 'crc8', 'crc16'] as const
+    const checksumMethod = checksumMethods.includes(config.checksum.method)
+      ? config.checksum.method
+      : 'sum'
+
     // 载入基础配置
-    configForm.header = config.header
-    configForm.format = config.format
-    configForm.checksum.method = config.checksum.method || 'sum'
-    configForm.checksum.start_index = config.checksum.start_index ?? 2
-    configForm.checksum.endianness = config.checksum?.endianness || 'big'
-    configForm.dataEndianness = config.dataEndianness || 'little'
-    // 结束位字段已移除，不再使用
+    configForm.header = sanitizeHex(config.header)
+    configForm.format = config.format === 'ascii' ? 'ascii' : 'hex'
+    configForm.checksum.method = checksumMethod
+    configForm.checksum.start_index = Math.max(
+      0,
+      Math.trunc(Number(config.checksum.start_index) || 0),
+    )
+    configForm.checksum.end_index = Number(config.checksum.end_index) || -1
+    configForm.checksum.endianness = config.checksum?.endianness === 'little' ? 'little' : 'big'
+    configForm.dataEndianness = config.dataEndianness === 'big' ? 'big' : 'little'
     configForm.includeFunction = config.includeFunction !== false
-    configForm.addressLength = config.addressLength || 1
-    configForm.functionLength = config.functionLength || 1
+    configForm.addressLength = byteWidth(config.addressLength)
+    configForm.functionLength = byteWidth(config.functionLength)
     configForm.includeRegisterCount = config.includeRegisterCount !== false
-    configForm.registerCountLength = config.registerCountLength || 1
-    configForm.lengthLength = config.lengthLength || 1
-    
-    // 载入拖拽式报文结构配置
-    addressLength.value = config.addressLength || 1
-    includeLength.value = config.includeLength !== false
-    lengthBytes.value = config.lengthBytes || 1
-    configForm.includeFunction = config.includeFunction !== false
-    functionBytes.value = config.functionLength || 1
+    configForm.registerCountLength = byteWidth(config.registerCountLength)
+    configForm.lengthLength = byteWidth(config.lengthLength)
     
     // 载入拖拽顺序配置
     if (config.messageStructure && Array.isArray(config.messageStructure)) {
-      // 根据保存的顺序重新排列messageFields
-      const savedOrder = config.messageStructure.map((field: any) => field.id)
-      
-      // 创建一个新的排序后的数组
-      const sortedFields = [...messageFields].sort((a, b) => {
-        const aIndex = savedOrder.indexOf(a.id)
-        const bIndex = savedOrder.indexOf(b.id)
-        // 如果字段不在保存的顺序中，保持原位置
-        if (aIndex === -1 && bIndex === -1) return 0
-        if (aIndex === -1) return 1
-        if (bIndex === -1) return -1
-        return aIndex - bIndex
-      })
-      
-      // 清空原数组并重新填充
-      messageFields.splice(0, messageFields.length, ...sortedFields)
+      const validIds = new Set<MotorMessageFieldId>(DEFAULT_MOTOR_MESSAGE_FIELD_ORDER)
+      const savedOrder = config.messageStructure
+        .map((field: any) => field?.id)
+        .filter((id: unknown): id is MotorMessageFieldId => validIds.has(id as MotorMessageFieldId))
+      const completedOrder = [
+        ...new Set([
+          'header' as MotorMessageFieldId,
+          ...savedOrder.filter(
+            (id: MotorMessageFieldId) => id !== 'header' && id !== 'checksum',
+          ),
+          ...DEFAULT_MOTOR_MESSAGE_FIELD_ORDER.filter(
+            id => id !== 'header' && id !== 'checksum' && !savedOrder.includes(id),
+          ),
+          'checksum' as MotorMessageFieldId,
+        ]),
+      ]
+      applyMessageFieldOrder(completedOrder)
+      messageFieldOrder.value = completedOrder
+    } else {
+      applyMessageFieldOrder(DEFAULT_MOTOR_MESSAGE_FIELD_ORDER)
+      messageFieldOrder.value = [...DEFAULT_MOTOR_MESSAGE_FIELD_ORDER]
     }
     
     // 清空现有命令
@@ -1460,29 +1598,29 @@ const loadConfig = (config: any) => {
     if (config.readCommands && Array.isArray(config.readCommands) && config.writeCommands && Array.isArray(config.writeCommands)) {
       // 新格式处理
       readCommands.value = config.readCommands.map((cmd: any) => ({
-        name: cmd.name || 'UNKNOWN_CMD',
-        address: cmd.address || '00',
-        data: cmd.data || '0000',
-        length: parseInt(cmd.length) || 0,
-        dataType: cmd.dataType || 'int16',
-        functionCode: cmd.functionCode || '03',
-        registerCount: parseInt(cmd.registerCount, 10) || 1,
+        name: String(cmd.name || 'UNKNOWN_CMD'),
+        address: sanitizeHex(cmd.address || '00'),
+        data: sanitizeHex(cmd.data || '0000'),
+        length: Math.max(0, Math.trunc(Number(cmd.length) || 0)),
+        dataType: cmd.dataType === 'float32' ? 'float32' : 'int16',
+        functionCode: sanitizeHex(cmd.functionCode || '03'),
+        registerCount: Math.max(0, Math.trunc(Number(cmd.registerCount) || 0)),
         includeRegisterCount: cmd.includeRegisterCount !== false,
         includeLength: cmd.includeLength !== false,
-        frequency: cmd.frequency || null,
-        lastSentTime: cmd.lastSentTime || 0
+        frequency: Number(cmd.frequency) > 0 ? Number(cmd.frequency) : null,
+        lastSentTime: 0,
       }))
       
       writeCommands.value = config.writeCommands.map((cmd: any) => ({
-        name: cmd.name || 'UNKNOWN_CMD',
-        address: cmd.address || '00',
-        data: cmd.data || '0000',
-        length: parseInt(cmd.length) || 0,
-        dataType: cmd.dataType || 'int16',
-        functionCode: cmd.functionCode || '06',
-        registerCount: parseInt(cmd.registerCount, 10) || 1,
+        name: String(cmd.name || 'UNKNOWN_CMD'),
+        address: sanitizeHex(cmd.address || '00'),
+        data: sanitizeHex(cmd.data || '0000'),
+        length: Math.max(0, Math.trunc(Number(cmd.length) || 0)),
+        dataType: cmd.dataType === 'float32' ? 'float32' : 'int16',
+        functionCode: sanitizeHex(cmd.functionCode || '06'),
+        registerCount: Math.max(0, Math.trunc(Number(cmd.registerCount) || 0)),
         includeRegisterCount: cmd.includeRegisterCount !== false,
-        includeLength: cmd.includeLength !== false
+        includeLength: cmd.includeLength !== false,
       }))
     } else if (config.command && typeof config.command === 'object') {
       // 旧格式处理（兼容旧配置文件）
@@ -1493,8 +1631,8 @@ const loadConfig = (config: any) => {
           name,
           address: cmd.address || '00',
           data: cmd.data || '0000',
-          length: 0,
-          dataType: cmd.dataType || 'int16',
+          length: cmd.dataType === 'float32' ? 4 : 2,
+          dataType: cmd.dataType === 'float32' ? 'float32' : 'int16',
           functionCode: cmd.functionCode || '03',
           registerCount: parseInt(cmd.registerCount, 10) || 1,
           includeRegisterCount: true,
@@ -1522,14 +1660,18 @@ const loadConfig = (config: any) => {
     // 如果没有命令，添加默认命令（仅在首次初始化时）
     if (readCommands.value.length === 0 && !config.hasBeenCustomized) {
       readCommands.value = [
-        { name: 'GET_SPEED', address: '00', data: '0000', length: 0, dataType: 'int16', functionCode: '03', registerCount: 1, includeRegisterCount: true, includeLength: true, frequency: null, lastSentTime: 0 }
+        { name: 'GET_SPEED', address: '00', data: '0000', length: 2, dataType: 'int16', functionCode: '03', registerCount: 1, includeRegisterCount: true, includeLength: true, frequency: null, lastSentTime: 0 }
       ]
     }
-    if (writeCommands.value.length === 0) {
+    if (writeCommands.value.length === 0 && !config.hasBeenCustomized) {
       writeCommands.value = [
         { name: 'SET_SPEED', address: '00', data: '0000', length: 2, dataType: 'int16', functionCode: '06', registerCount: 1, includeRegisterCount: true, includeLength: true }
       ]
     }
+
+    normalizeAllCommands()
+    messageFieldOrder.value = messageStructure.value.map(field => field.id)
+    initializeCommandStatusCache()
     
   } catch (error) {
     ElMessage({
@@ -1602,7 +1744,17 @@ const handleFileLoad = (uploadFile: any) => {
         placement: 'bottom-right',
         offset: 50,
       })
+    } finally {
+      uploadRef.value?.clearFiles?.()
     }
+  }
+  reader.onerror = () => {
+    uploadRef.value?.clearFiles?.()
+    ElMessage.error('配置文件读取失败')
+  }
+  if (!uploadFile.raw) {
+    ElMessage.error('未读取到配置文件')
+    return
   }
   reader.readAsText(uploadFile.raw)
 }
@@ -1610,6 +1762,11 @@ const handleFileLoad = (uploadFile: any) => {
 // 下载配置
 const downloadConfig = () => {
   try {
+    normalizeAllCommands()
+    if (!isConfigValid.value) {
+      ElMessage.warning(configurationIssues.value[0] || '请先修正配置后再导出')
+      return
+    }
     const configData = JSON.stringify({
       ...JSON.parse(formattedConfig.value),
       messageStructure: messageStructure.value,
@@ -1617,6 +1774,7 @@ const downloadConfig = () => {
       functionLength: configForm.functionLength,
       includeRegisterCount: configForm.includeRegisterCount,
       registerCountLength: configForm.registerCountLength,
+      hasBeenCustomized: true,
     }, null, 2)
     const blob = new Blob([configData], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
@@ -1628,7 +1786,7 @@ const downloadConfig = () => {
     document.body.removeChild(link)
     URL.revokeObjectURL(url)
     ElMessage({
-      message: '配置下载成功',
+      message: '配置导出成功',
       type: 'success',
       duration: 1000,
       placement: 'bottom-right',
@@ -1636,7 +1794,7 @@ const downloadConfig = () => {
     })
   } catch (error) {
     ElMessage({
-      message: '配置下载失败',
+      message: '配置导出失败',
       type: 'error',
       duration: 1000,
       placement: 'bottom-right',
@@ -1658,7 +1816,13 @@ watch(() => readCommands.value.map(cmd => ({name: cmd.name, frequency: cmd.frequ
 
 // 组件挂载时加载配置
 onMounted(() => {
-  loadConfigFromStorage()
+  const restored = loadConfigFromStorage()
+  if (!restored) {
+    applyMessageFieldOrder(messageFieldOrder.value)
+    normalizeAllCommands()
+    initializeDecimalInputs()
+  }
+  messageFieldOrder.value = messageStructure.value.map(field => field.id)
   initializeCommandStatusCache()
 
   // 监听串口发送结果
@@ -1826,7 +1990,7 @@ onUnmounted(() => {
 }
 
 .dialog-content {
-  padding: 20px 0;
+  padding: 0;
 }
 
 :deep(.el-textarea__inner) {
@@ -1836,8 +2000,8 @@ onUnmounted(() => {
 
 /* 对话框样式 */
 .dialog-content {
-  max-height: 600px;
-  overflow-y: auto;
+  max-height: none;
+  overflow: visible;
   scroll-behavior: smooth;
 }
 
@@ -1866,40 +2030,40 @@ onUnmounted(() => {
 
 /* 对话框自定义样式 */
 :deep(.motor-config-dialog) {
-  border-radius: 12px;
+  border-radius: 10px;
   overflow: hidden;
 }
 
 :deep(.motor-config-dialog .el-dialog__header) {
-  background: var(--el-color-primary);
-  color: white;
-  padding: 20px 24px;
+  background: var(--app-surface);
+  color: var(--app-text);
+  padding: 16px 20px 14px;
   margin: 0;
 }
 
 :deep(.motor-config-dialog .el-dialog__title) {
-  color: white;
-  font-size: 18px;
+  color: var(--app-text);
+  font-size: 16px;
   font-weight: 600;
 }
 
 :deep(.motor-config-dialog .el-dialog__headerbtn) {
-  top: 20px;
-  right: 20px;
+  top: 12px;
+  right: 12px;
 }
 
 :deep(.motor-config-dialog .el-dialog__headerbtn .el-dialog__close) {
-  color: white;
+  color: var(--app-text-muted);
   font-size: 18px;
 }
 
 :deep(.motor-config-dialog .el-dialog__body) {
-  padding: 24px;
-  background-color: var(--app-surface-muted);
+  padding: 18px 20px;
+  background-color: var(--app-surface);
 }
 
 :deep(.motor-config-dialog .el-dialog__footer) {
-  padding: 16px 24px;
+  padding: 13px 20px 15px;
   background-color: var(--app-surface);
   border-top: 1px solid var(--app-border);
 }
@@ -1913,19 +2077,87 @@ onUnmounted(() => {
   border: 1px solid var(--app-border);
 }
 
-/* 配置操作栏样式 */
-.config-actions {
+/* 配置工具区：与底部提交操作保持明确的层级分离。 */
+.config-tool-card {
   display: flex;
-  gap: 12px;
-  margin-bottom: 20px;
-  padding: 15px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 16px;
+  padding: 14px 16px;
   background-color: var(--app-surface-muted);
-  border-radius: 8px;
+  border-radius: 10px;
   border: 1px solid var(--app-border);
 }
 
-.config-actions .el-button {
+.config-tool-copy,
+.config-tool-actions {
+  display: flex;
+  align-items: center;
+}
+
+.config-tool-copy {
+  gap: 11px;
+  min-width: 240px;
+}
+
+.config-tool-icon {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  color: var(--el-color-primary);
+  background: color-mix(in srgb, var(--el-color-primary) 12%, var(--app-surface));
+  border: 1px solid color-mix(in srgb, var(--el-color-primary) 25%, var(--app-border));
+  border-radius: 9px;
+}
+
+.config-tool-title {
+  color: var(--app-text);
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.4;
+}
+
+.config-tool-description {
+  margin-top: 2px;
+  color: var(--app-text-muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.config-tool-actions {
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.config-tool-actions :deep(.el-upload) {
+  display: inline-flex;
+}
+
+.config-tool-actions .el-button {
   margin: 0;
+}
+
+.config-tool-separator {
+  width: 1px;
+  height: 24px;
+  margin: 0 2px;
+  background: var(--app-border-strong);
+}
+
+.config-validation-alert {
+  margin: -4px 0 16px;
+}
+
+.config-validation-list {
+  display: grid;
+  gap: 3px;
+  margin-top: 5px;
+  color: var(--app-text-secondary);
+  font-size: 12px;
 }
 
 /* 拖拽式报文结构样式 */
@@ -2233,58 +2465,58 @@ onUnmounted(() => {
 /* 对话框底部样式 */
 .dialog-footer {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-end;
   align-items: center;
   gap: 10px;
   padding: 0;
 }
 
-.footer-left-actions {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-}
-
-/* 修复 el-upload 导致的额外间距 */
-.footer-left-actions .el-upload {
-  display: inline-flex;
-  margin: 0 !important;
-  padding: 0 !important;
-}
-
-.footer-left-actions .el-upload .el-button {
+.dialog-footer .el-button {
   margin: 0 !important;
 }
 
-/* 确保所有直接子元素无额外 margin */
-.footer-left-actions > * {
-  margin: 0 !important;
+@media (max-width: 820px) {
+  .config-tool-card {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .config-tool-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .config-tool-description {
+    max-width: none;
+  }
 }
 
-/* 确保右侧按钮间距一致 */
-.footer-right-actions > * {
-  margin: 0 !important;
-}
+@media (max-width: 520px) {
+  :deep(.motor-config-dialog .el-dialog__body) {
+    padding: 14px;
+  }
 
-.footer-right-actions {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-}
+  .config-tool-copy {
+    min-width: 0;
+  }
 
-/* 修复el-upload组件导致的间距问题 */
-.footer-left-actions .el-upload {
-  display: inline-block;
-  vertical-align: top;
-}
+  .config-tool-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
 
-.footer-left-actions .el-upload .el-button {
-  margin: 0;
-}
+  .config-tool-actions :deep(.el-upload),
+  .config-tool-actions .el-button {
+    width: 100%;
+  }
 
-/* 确保右侧按钮无额外间距 */
-.footer-right-actions .el-button {
-  margin: 0 !important;
+  .config-tool-separator {
+    display: none;
+  }
+
+  .config-tool-actions > :last-child {
+    grid-column: 1 / -1;
+  }
 }
 
 /* 十六进制显示样式 */

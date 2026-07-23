@@ -127,6 +127,140 @@ code {
   text-align: center;
 }
 
+/* Shared dialog shell: responsive sizing, predictable scrolling, and consistent hierarchy. */
+.el-dialog.app-dialog {
+  display: flex;
+  height: fit-content;
+  max-height: calc(100vh - 32px);
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--app-border);
+  border-radius: 10px;
+  color: var(--app-text);
+  background: var(--app-surface);
+  box-shadow: 0 20px 52px var(--app-shadow);
+}
+
+.app-dialog .el-dialog__header {
+  flex: none;
+  margin-right: 0;
+  padding: 16px 20px 14px;
+  border-bottom: 1px solid var(--app-border);
+  text-align: left;
+}
+
+.app-dialog .el-dialog__headerbtn {
+  top: 12px;
+  right: 12px;
+  width: 38px;
+  height: 38px;
+  border-radius: 8px;
+}
+
+.app-dialog .el-dialog__headerbtn:hover {
+  background: var(--app-hover);
+}
+
+.app-dialog .el-dialog__close {
+  color: var(--app-text-muted);
+  font-size: 18px;
+}
+
+.app-dialog .el-dialog__body {
+  min-height: 0;
+  flex: 0 1 auto;
+  overflow: auto;
+  padding: 18px 20px;
+  color: var(--app-text-secondary);
+  text-align: left;
+}
+
+.app-dialog .el-dialog__footer {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 13px 20px 15px;
+  border-top: 1px solid var(--app-border);
+  background: var(--app-surface);
+  text-align: right;
+}
+
+.app-dialog .el-dialog__footer .el-button + .el-button {
+  margin-left: 0;
+}
+
+.el-message-box.app-message-box {
+  width: min(430px, calc(100vw - 24px));
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--app-border);
+  border-radius: 10px;
+  color: var(--app-text);
+  background: var(--app-surface);
+  box-shadow: 0 20px 52px var(--app-shadow);
+}
+
+.el-overlay.is-message-box {
+  z-index: 9000 !important;
+}
+
+.app-message-box .el-message-box__header {
+  padding: 18px 20px 10px;
+  text-align: left;
+}
+
+.app-message-box .el-message-box__title {
+  color: var(--app-text);
+  font-size: 16px;
+  font-weight: 650;
+}
+
+.app-message-box .el-message-box__content {
+  padding: 8px 20px 18px;
+  color: var(--app-text-secondary);
+  line-height: 1.65;
+  text-align: left;
+}
+
+.app-message-box .el-message-box__btns {
+  gap: 8px;
+  padding: 13px 20px 15px;
+  border-top: 1px solid var(--app-border);
+}
+
+.app-message-box .el-message-box__btns .el-button + .el-button {
+  margin-left: 0;
+}
+
+@media (max-width: 680px) {
+  .el-dialog.app-dialog {
+    width: calc(100vw - 24px) !important;
+    max-height: calc(100vh - 24px);
+    margin-top: 12px !important;
+    margin-bottom: 12px !important;
+  }
+
+  .app-dialog .el-dialog__header {
+    padding: 14px 16px 13px;
+  }
+
+  .app-dialog .el-dialog__headerbtn {
+    top: 10px;
+    right: 9px;
+  }
+
+  .app-dialog .el-dialog__body {
+    padding: 16px;
+  }
+
+  .app-dialog .el-dialog__footer {
+    flex-wrap: wrap;
+    padding: 12px 16px 14px;
+  }
+}
+
 /* Compatibility layer for panels that still contain legacy fixed light colors. */
 .dark .el-card,
 .dark .full-screen-card,

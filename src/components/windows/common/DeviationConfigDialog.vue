@@ -2,12 +2,24 @@
   <el-dialog
     :model-value="modelValue"
     title="轨迹配置"
-    width="710px"
+    class="app-dialog deviation-config-dialog"
+    width="min(710px, calc(100vw - 24px))"
     destroy-on-close
+    :append-to-body="true"
+    :z-index="8000"
+    align-center
     :close-on-click-modal="true"
     :close-on-press-escape="true"
     @update:model-value="$emit('update:modelValue', $event)"
   >
+    <template #header>
+      <AppDialogTitle
+        :icon="Aim"
+        title="轨迹配置"
+        description="为四条轨迹选择 X / Y 字段与颜色"
+      />
+    </template>
+
     <div class="chart-config-grid">
       <section v-for="track in 4" :key="track" class="chart-config-section">
         <header>
@@ -49,6 +61,9 @@
 </template>
 
 <script setup lang="ts">
+import { Aim } from '@element-plus/icons-vue'
+import AppDialogTitle from '@/components/AppDialogTitle.vue'
+
 type DeviationConfig = Record<string, { value: unknown }>
 
 const props = defineProps<{
@@ -86,7 +101,8 @@ function setValue(track: number, field: 'X' | 'Y' | 'Color', value: unknown): vo
 .chart-config-section {
   padding: 14px;
   border: 1px solid var(--app-border);
-  border-radius: 6px;
+  border-radius: 8px;
+  background: var(--app-surface-muted);
 }
 
 header,
@@ -97,7 +113,7 @@ label {
 }
 
 header {
-  justify-content: center;
+  justify-content: space-between;
   margin-bottom: 14px;
 }
 
@@ -117,5 +133,11 @@ label span {
 
 label :deep(.el-select) {
   flex: 1;
+}
+
+@media (max-width: 680px) {
+  .chart-config-grid {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

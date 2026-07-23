@@ -1,13 +1,29 @@
 <template>
   <el-dialog
     :model-value="modelValue"
-    :width="viewLayout === 'double' || yAxisConfig === 'double' ? '710px' : '400px'"
+    class="app-dialog plot-config-dialog"
+    :width="
+      viewLayout === 'double' || yAxisConfig === 'double'
+        ? 'min(710px, calc(100vw - 24px))'
+        : 'min(440px, calc(100vw - 24px))'
+    "
     destroy-on-close
     title="Plot 配置"
+    :append-to-body="true"
+    :z-index="8000"
+    align-center
     :close-on-click-modal="true"
     :close-on-press-escape="true"
     @update:model-value="$emit('update:modelValue', $event)"
   >
+    <template #header>
+      <AppDialogTitle
+        :icon="Setting"
+        title="Plot 配置"
+        description="选择布局、Y 轴和曲线数据源"
+      />
+    </template>
+
     <div class="mode-row">
       <span>布局方式：</span>
       <el-radio-group :model-value="viewLayout" @update:model-value="$emit('update:viewLayout', $event)">
@@ -23,7 +39,7 @@
       </el-radio-group>
     </div>
 
-    <div class="chart-config-grid">
+    <div class="chart-config-grid" :class="{ 'is-single': activeGroups.length === 1 }">
       <section v-for="group in activeGroups" :key="group.prefix" class="chart-config-section">
         <h4>{{ group.title }}（最多4个）</h4>
         <div v-for="index in 4" :key="index" class="source-row">
@@ -50,11 +66,23 @@
     </div>
 
     <template #footer>
-      <input ref="fileInput" type="file" accept=".json" hidden @change="handleConfigFileUpload" />
-      <el-button type="primary" @click="fileInput?.click()">载入</el-button>
-      <el-button type="primary" @click="exportConfigFile">导出</el-button>
-      <el-button type="primary" @click="$emit('apply')">确定</el-button>
-      <el-button @click="$emit('update:modelValue', false)">取消</el-button>
+      <div class="config-dialog-footer">
+        <div class="config-dialog-footer__secondary">
+          <input
+            ref="fileInput"
+            type="file"
+            accept=".json"
+            hidden
+            @change="handleConfigFileUpload"
+          />
+          <el-button @click="fileInput?.click()">导入配置</el-button>
+          <el-button @click="exportConfigFile">导出配置</el-button>
+        </div>
+        <div class="config-dialog-footer__primary">
+          <el-button @click="$emit('update:modelValue', false)">取消</el-button>
+          <el-button type="primary" @click="$emit('apply')">应用配置</el-button>
+        </div>
+      </div>
     </template>
   </el-dialog>
 </template>
@@ -62,6 +90,8 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { ElMessage } from 'element-plus'
+import { Setting } from '@element-plus/icons-vue'
+import AppDialogTitle from '@/components/AppDialogTitle.vue'
 
 type LayoutMode = 'single' | 'double'
 type AxisMode = 'single' | 'double'
@@ -144,7 +174,11 @@ function handleConfigFileUpload(event: Event): void {
   display: flex;
   align-items: center;
   gap: 12px;
-  margin-bottom: 20px;
+  margin-bottom: 14px;
+  padding: 10px 12px;
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  background: var(--app-surface-muted);
 }
 
 .mode-row > span {
@@ -155,13 +189,19 @@ function handleConfigFileUpload(event: Event): void {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 14px;
+  margin-top: 18px;
+}
+
+.chart-config-grid.is-single {
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .chart-config-section {
   min-width: 0;
   padding: 12px;
   border: 1px solid var(--app-border);
-  border-radius: 6px;
+  border-radius: 8px;
+  background: var(--app-surface-muted);
 }
 
 .chart-config-section h4 {
@@ -177,9 +217,69 @@ function handleConfigFileUpload(event: Event): void {
   margin-bottom: 8px;
 }
 
+.source-row:last-child {
+  margin-bottom: 0;
+}
+
+.config-dialog-footer {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.config-dialog-footer__secondary,
+.config-dialog-footer__primary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.config-dialog-footer .el-button + .el-button {
+  margin-left: 0;
+}
+
 @media (max-width: 680px) {
+  .mode-row {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .mode-row > span {
+    width: auto;
+  }
+
+  .mode-row :deep(.el-radio-group) {
+    display: flex;
+  }
+
+  .mode-row :deep(.el-radio-button) {
+    flex: 1;
+  }
+
+  .mode-row :deep(.el-radio-button__inner) {
+    width: 100%;
+  }
+
   .chart-config-grid {
     grid-template-columns: 1fr;
+  }
+
+  .config-dialog-footer {
+    align-items: stretch;
+    flex-direction: column-reverse;
+  }
+
+  .config-dialog-footer__secondary,
+  .config-dialog-footer__primary {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .config-dialog-footer .el-button {
+    width: 100%;
   }
 }
 </style>

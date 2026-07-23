@@ -188,7 +188,9 @@ const confirmReset = async () => {
         appendTo: selectorMessageBoxTarget,
         type: 'warning',
         confirmButtonText: '重置应用',
+        confirmButtonClass: 'el-button--danger',
         cancelButtonText: '取消',
+        customClass: 'app-message-box',
         closeOnClickModal: true,
         closeOnPressEscape: true,
       },
@@ -211,7 +213,9 @@ const confirmDelete = async (application: UserApplication) => {
         appendTo: selectorMessageBoxTarget,
         type: 'warning',
         confirmButtonText: '删除',
+        confirmButtonClass: 'el-button--danger',
         cancelButtonText: '取消',
+        customClass: 'app-message-box',
         closeOnClickModal: true,
         closeOnPressEscape: true,
       },
@@ -245,11 +249,13 @@ onUnmounted(() => window.removeEventListener('keydown', handleEscape, { capture:
 }
 
 .selector-panel {
+  display: flex;
   width: min(860px, 100%);
   max-height: min(680px, calc(100vh - 48px));
-  overflow: auto;
+  flex-direction: column;
+  overflow: hidden;
   border: 1px solid var(--app-border);
-  border-radius: 8px;
+  border-radius: 10px;
   background: var(--app-surface-muted);
   box-shadow: 0 20px 50px var(--app-shadow);
 }
@@ -262,6 +268,7 @@ onUnmounted(() => window.removeEventListener('keydown', handleEscape, { capture:
   padding: 24px 26px 18px;
   border-bottom: 1px solid var(--app-border);
   background: var(--app-surface);
+  flex: none;
 }
 
 .selector-header h1 {
@@ -294,6 +301,7 @@ onUnmounted(() => window.removeEventListener('keydown', handleEscape, { capture:
   gap: 10px;
   padding: 56px 24px;
   text-align: center;
+  overflow-y: auto;
 }
 
 .empty-state-icon {
@@ -317,6 +325,8 @@ onUnmounted(() => window.removeEventListener('keydown', handleEscape, { capture:
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   gap: 12px;
   padding: 20px;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .application-card {
@@ -439,7 +449,34 @@ onUnmounted(() => window.removeEventListener('keydown', handleEscape, { capture:
   }
 
   .selector-header {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 14px;
     padding: 18px;
+  }
+
+  .selector-header h1 {
+    font-size: 20px;
+    white-space: nowrap;
+  }
+
+  .selector-header p {
+    margin-top: 4px;
+    line-height: 1.45;
+  }
+
+  .header-actions {
+    width: 100%;
+    gap: 8px;
+  }
+
+  .header-actions > .el-button {
+    margin-left: 0;
+  }
+
+  .header-actions > .el-button:not(.is-circle) {
+    min-width: 0;
+    flex: 1;
   }
 }
 </style>

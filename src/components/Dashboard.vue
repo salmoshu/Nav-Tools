@@ -57,8 +57,8 @@
                 shadow="never"
                 :class="{ 'full-screen-card': fullScreenItem === item.i }"
               >
-                <template #header>
-                  <div class="card-header" v-if="fullScreenItem !== item.i">
+                <template v-if="fullScreenItem !== item.i" #header>
+                  <div class="card-header">
                     <span class="title">
                       <el-icon class="panel-title-icon" :size="15">
                         <component
@@ -94,24 +94,6 @@
                       </el-button>
                     </div>
                   </div>
-                  <div v-else class="full-screen-header">
-                    <span class="full-screen-title">
-                      <el-icon class="panel-title-icon" :size="17">
-                        <component
-                          :is="getPanelIconComponent(getWindowById(item.windowId)?.action)"
-                        />
-                      </el-icon>
-                      <span>{{ item.titleName }}</span>
-                    </span>
-                    <el-button
-                      type="text"
-                      @click="toggleCardFullScreen(null)"
-                      class="exit-fullscreen-btn"
-                      title="退出全屏"
-                    >
-                      <el-icon><Expand /></el-icon>
-                    </el-button>
-                  </div>
                 </template>
                 <div class="card-content">
                   <component :is="item.component" />
@@ -136,10 +118,10 @@
 import ToolBar from './ToolBar.vue'
 import StatusBar from './StatusBar.vue'
 import ApplicationSelector from './ApplicationSelector.vue'
-import { ref, computed, onMounted, onUnmounted, provide } from 'vue'
+import { ref, computed, nextTick, onMounted, onUnmounted, provide } from 'vue'
 import { GridLayout, GridItem } from 'grid-layout-plus'
 import { ElButton, ElCard, ElIcon, ElMessage } from 'element-plus'
-import { Close, Share, Expand, FullScreen } from '@element-plus/icons-vue'
+import { Close, Share, FullScreen } from '@element-plus/icons-vue'
 import emitter from '@/hooks/useMitt'
 import { useLayoutManager } from '@/composables/useLayoutManager'
 import { showStatusBar } from '@/composables/useStatusManager'
@@ -151,6 +133,10 @@ import { createBrowserIpcTransport } from '@/core/platform/IpcTransport'
 
 const props = defineProps<{
   initialApplicationId?: string
+}>()
+
+const emit = defineEmits<{
+  'fullscreen-panel-change': [panel?: { title: string; action?: string }]
 }>()
 
 const {
@@ -189,6 +175,7 @@ const handleApplicationSelect = async (applicationId: string) => {
   const application = selectApplication(applicationId)
   if (!application) return
 
+  exitFullScreen()
   await handleApplicationChange(application.id, true)
 }
 
@@ -235,23 +222,50 @@ const handleStatusbarPositionChange = (position: 'left' | 'right') => {
   statusbarPosition.value = position
 }
 
+const exitFullScreen = () => {
+  if (fullScreenItem.value === null) return
+
+  fullScreenItem.value = null
+  emit('fullscreen-panel-change', undefined)
+}
+
 // 切换卡片全屏状态
 const toggleCardFullScreen = (itemId: string | null) => {
-  if (fullScreenItem.value === null) {
-    // 进入全屏
-    fullScreenItem.value = itemId
-    ElMessage({
-      message: '按Esc键或点击按钮退出全屏',
-      type: 'success',
-      duration: 1000,
-      placement: 'bottom-right',
-      offset: 50,
-    })
-  } else {
-    // 退出全屏
-    fullScreenItem.value = null
+  if (itemId === null || fullScreenItem.value === itemId) {
+    exitFullScreen()
+    return
   }
+
+  const item = layoutDraggableList.value.find((candidate) => candidate.i === itemId)
+  if (!item) return
+
+  fullScreenItem.value = itemId
+  emit('fullscreen-panel-change', {
+    title: item.titleName,
+    action: getWindowById(item.windowId)?.action,
+  })
+  ElMessage({
+    message: '按 Esc 键或点击主标题栏按钮退出全屏',
+    type: 'success',
+    duration: 1000,
+    placement: 'bottom-right',
+    offset: 50,
+  })
 }
+
+defineExpose({ exitFullScreen })
+
+const runAfterExitingFullScreen = async (action: () => void | Promise<void>) => {
+  if (fullScreenItem.value !== null) {
+    exitFullScreen()
+    await nextTick()
+  }
+
+  await action()
+}
+
+const openPanelFromToolbar = (windowId: string) =>
+  runAfterExitingFullScreen(() => addItem(windowId))
 
 // 处理键盘事件
 const handleKeyDown = (event: KeyboardEvent) => {
@@ -436,8 +450,12 @@ onMounted(() => {
 
   emitter.on('edit', editLayout)
   emitter.on('save', saveLayout)
-  emitter.on('auto', autoLayout)
-  emitter.on('reset', resetLayout)
+  emitter.on('auto', () => {
+    void runAfterExitingFullScreen(autoLayout)
+  })
+  emitter.on('reset', () => {
+    void runAfterExitingFullScreen(resetLayout)
+  })
   emitter.on('open-application-selector', openApplicationSelector)
 
   // 添加键盘事件监听
@@ -447,7 +465,9 @@ onMounted(() => {
   window.addEventListener('blur', endGridResize)
 
   windowCatalog.forEach((windowDefinition) => {
-    emitter.on(windowDefinition.button.msg, () => addItem(windowDefinition.id))
+    emitter.on(windowDefinition.button.msg, () => {
+      void openPanelFromToolbar(windowDefinition.id)
+    })
   })
   removeRestoreListener = ipc.on('restore-detached-panel', (_event, payload) => {
     if (
@@ -602,36 +622,6 @@ onUnmounted(() => {
   height: calc(100vh - var(--app-header-height, 38px));
 }
 
-/* 全屏头部样式 */
-.full-screen-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  background-color: var(--el-color-primary);
-  color: white;
-  height: 45px;
-  padding: 0 20px;
-  box-sizing: border-box;
-  user-select: none;
-}
-
-.full-screen-title {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  font-family: 'Helvetica Neue', Arial, sans-serif;
-  font-size: 18px;
-  font-weight: 600;
-}
-
-.exit-fullscreen-btn {
-  color: white;
-}
-
-.exit-fullscreen-btn:hover {
-  color: #f0f0f0;
-}
-
 /* 确保 el-card 的内容区域正确计算高度 - 使用更精确的选择器 */
 .box-card :deep(.el-card__body) {
   flex: 1;
@@ -642,8 +632,12 @@ onUnmounted(() => {
 
 /* 全屏模式下的内容区域 */
 .full-screen-card :deep(.el-card__body) {
-  height: calc(100% - 45px);
+  height: 100%;
   overflow: auto;
+}
+
+.full-screen-card :deep(.el-card__header) {
+  display: none;
 }
 
 /* 确保其他样式保持不变 */
@@ -695,10 +689,6 @@ onUnmounted(() => {
 .panel-title-icon {
   flex: none;
   color: var(--el-color-primary);
-}
-
-.full-screen-title .panel-title-icon {
-  color: currentColor;
 }
 
 .card-actions {

@@ -36,11 +36,23 @@
   <!-- 消息格式对话框 -->
   <el-dialog
     v-model="messageDialogVisible"
-    width="600px"
+    class="app-dialog plot-message-dialog"
+    title="数据格式说明"
+    width="min(600px, calc(100vw - 24px))"
+    :append-to-body="true"
+    :z-index="8000"
+    align-center
     :close-on-click-modal="true"
     :close-on-press-escape="true"
   >
-    <div class="dialog-content, message-content">
+    <template #header>
+      <AppDialogTitle
+        :icon="InfoFilled"
+        title="数据格式说明"
+        description="JSON 数据结构与输入约定"
+      />
+    </template>
+    <div class="dialog-content message-content">
       <p><strong>数据说明：</strong></p>
       <p>数据主要采用JSON格式，并以换行符分隔。每行一个JSON对象，每个JSON对象可以灵活配置字段。</p>
       <el-divider></el-divider>
@@ -84,10 +96,12 @@ import type { LineSeriesOption } from 'echarts';
 import { useFlow } from '@/composables/flow/useFlow'
 import { useDataConfig } from '@/composables/flow/useDataConfig'
 import { ElMessage } from 'element-plus'
+import { InfoFilled } from '@element-plus/icons-vue'
 import { useConsole } from '@/composables/flow/useConsole'
 import { useDevice } from '@/hooks/useDevice'
 import { useTheme } from '@/composables/useTheme'
 import PlotConfigDialog from './plot/PlotConfigDialog.vue'
+import AppDialogTitle from '@/components/AppDialogTitle.vue'
 
 // 初始化数据流处理
 const { flowData, plotData, enableWindow, toggleSlideWindow, clearRawData } = useFlow()
@@ -1497,16 +1511,29 @@ watch(resolvedTheme, () => createChart())
 /* 示例代码样式 */
 .example-code {
   background-color: var(--app-surface-muted);
-  padding: 10px;
-  border-radius: 4px;
+  padding: 12px;
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
   overflow-x: auto;
   font-size: 12px;
-  line-height: 1.5;
+  line-height: 1.6;
 }
 
 /* 对话框内容样式 */
 .message-content {
-  text-align: left; /* 添加这一行，使所有内容左对齐 */
+  color: var(--app-text-secondary);
+  text-align: left;
+}
+
+.message-content p {
+  margin: 0 0 10px;
+  line-height: 1.65;
+}
+
+.message-content ul {
+  margin: 0;
+  color: var(--app-text-secondary);
+  line-height: 1.8;
 }
 
 .dialog-content > div {
