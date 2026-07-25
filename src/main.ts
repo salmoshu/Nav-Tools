@@ -3,7 +3,7 @@ import { createPinia } from 'pinia'
 import App from './App.vue'
 import './style.css'
 import './hooks/useIpc'
-import ElementPlus from 'element-plus'
+import ElementPlus, { messageConfig } from 'element-plus'
 import 'element-plus/dist/index.css'
 import 'element-plus/theme-chalk/dark/css-vars.css'
 import * as ElementPlusIconsVue from '@element-plus/icons-vue'
@@ -14,6 +14,13 @@ import VirtualScroller from 'vue-virtual-scroller'
 const app = createApp(App)
 const pinia = createPinia()
 const { removeCurrDevice } = useDevice()
+const APP_HEADER_HEIGHT = 38
+const MESSAGE_HEADER_GAP = 12
+const MESSAGE_TOP_OFFSET = APP_HEADER_HEIGHT + MESSAGE_HEADER_GAP
+
+// Command-style messages (ElMessage.error/success/...) use this singleton
+// instead of the plugin's injected configuration.
+messageConfig.offset = MESSAGE_TOP_OFFSET
 
 // 使用Pinia
 app.use(pinia)
@@ -22,7 +29,11 @@ app.use(pinia)
 app.use(VirtualScroller)
 
 // 使用ElementPlus
-app.use(ElementPlus)
+app.use(ElementPlus, {
+  message: {
+    offset: MESSAGE_TOP_OFFSET,
+  },
+})
 for (const [key, component] of Object.entries(ElementPlusIconsVue)) {
   app.component(key, component)
 }

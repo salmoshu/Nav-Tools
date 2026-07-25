@@ -23,7 +23,9 @@ jobs:
       matrix:
         # 先不构建macos应用
         # os: [macos-latest, ubuntu-latest, windows-latest]
-        os: [ubuntu-latest, windows-latest]
+        # windows 固定 2022：windows-latest(2025 镜像) 的 VS2026 无法被
+        # node-gyp@9 (@electron/rebuild 依赖) 识别，导致 serialport 原生模块编译失败
+        os: [ubuntu-latest, windows-2022]
       fail-fast: false  # 避免一个平台失败影响其他平台
 
     steps:

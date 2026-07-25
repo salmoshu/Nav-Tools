@@ -124,23 +124,10 @@ const constellationFilters = [
   { text: 'OTHER', value: 'OTHER' }
 ];
 
-// 获取最新的卫星数据（每个PRN只保留最新的一条）
-// 修改 getLatestSatelliteData 函数，确保数据按星座和PRN排序
+// 获取卫星数据（useNmea 已按 constellation-prn 去重，这里只做星座+PRN 排序，
+// 避免每次更新都做时间戳解析排序和 Map 去重的重复开销）
 function getLatestSatelliteData() {
-  const latestMap = new Map();
-  
-  // 按时间戳排序，确保最新的数据在后面
-  const sortedData = [...satelliteSnrData.value].sort((a, b) => 
-    new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
-  );
-  
-  // 对于每个PRN，只保留最新的数据
-  sortedData.forEach(sat => {
-    latestMap.set(sat.prn, sat);
-  });
-  
-  // 返回按星座和PRN升序排序的数据
-  return Array.from(latestMap.values()).sort((a, b) => {
+  return [...satelliteSnrData.value].sort((a, b) => {
     // 首先按星座升序排序
     if (a.constellation !== b.constellation) {
       return a.constellation.localeCompare(b.constellation);

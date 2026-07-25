@@ -14,13 +14,21 @@ contextBridge.exposeInMainWorld('electronAPI', {
   stopWindowResize: () => ipcRenderer.invoke('window-resize-stop'),
   startCameraStream: (url: string) => ipcRenderer.invoke('camera-stream-start', url),
   stopCameraStream: () => ipcRenderer.invoke('camera-stream-stop'),
+  sendCameraCommand: (request: {
+    host: string
+    port: number
+    subCommand: string
+    content: string
+    contentFormat: 'text' | 'hex'
+  }) => ipcRenderer.invoke('camera-command-send', request),
 })
 const listenerMap = new Map<string, Map<Function, (...args: unknown[]) => void>>()
 
 contextBridge.exposeInMainWorld('ipcRenderer', {
   on(...args: Parameters<typeof ipcRenderer.on>) {
     const [channel, listener] = args
-    const wrapped = (event: unknown, ...listenerArgs: unknown[]) => listener(event as never, ...listenerArgs)
+    const wrapped = (event: unknown, ...listenerArgs: unknown[]) =>
+      listener(event as never, ...listenerArgs)
     const channelListeners = listenerMap.get(channel) ?? new Map()
     channelListeners.set(listener, wrapped)
     listenerMap.set(channel, channelListeners)
@@ -49,7 +57,7 @@ contextBridge.exposeInMainWorld('ipcRenderer', {
 })
 
 // --------- Preload scripts loading ---------
-function domReady(condition: DocumentReadyState[] = ['complete', 'interactive']) {
+function domReady(condition: string[] = ['complete', 'interactive']) {
   return new Promise((resolve) => {
     if (condition.includes(document.readyState)) {
       resolve(true)
@@ -65,12 +73,12 @@ function domReady(condition: DocumentReadyState[] = ['complete', 'interactive'])
 
 const safeDOM = {
   append(parent: HTMLElement, child: HTMLElement) {
-    if (!Array.from(parent.children).find(e => e === child)) {
+    if (!Array.from(parent.children).find((e) => e === child)) {
       return parent.appendChild(child)
     }
   },
   remove(parent: HTMLElement, child: HTMLElement) {
-    if (Array.from(parent.children).find(e => e === child)) {
+    if (Array.from(parent.children).find((e) => e === child)) {
       return parent.removeChild(child)
     }
   },

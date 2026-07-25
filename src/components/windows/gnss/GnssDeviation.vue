@@ -3,8 +3,13 @@
     <div class="control-panel">
       <div class="controls">
         <span class="switch-label">跟踪:</span>
-        <el-switch v-model="isTracking" @change="toggleTracking" class="tracking-switch" />
-        <!-- 添加轨迹点尺寸调节滑块 -->
+        <el-switch
+          v-model="isTracking"
+          aria-label="跟踪"
+          title="跟踪"
+          @change="toggleTracking"
+          class="tracking-switch"
+        />
         <div class="point-size-control">
           <span class="size-label">尺寸:</span>
           <el-slider
@@ -19,511 +24,618 @@
         </div>
 
         <div class="right-buttons">
-          <el-button :disabled="deviceConnected" type="default" size="small" @click="toggleSlideWindow">
-            <el-icon v-if="enableWindow"><CircleClose /></el-icon>
-            <el-icon v-else><CircleCheck /></el-icon>
-            &nbsp;{{enableWindow?"关闭滑窗":"启用滑窗"}}
-          </el-button>
           <el-button type="primary" size="small" @click="resetZoom" class="control-btn zoom-btn"><el-icon><RefreshLeft /></el-icon>&nbsp;重置布局</el-button>
           <el-button type="primary" size="small" @click="clearTrack" class="control-btn clear-btn"><el-icon><Delete /></el-icon>&nbsp;清除</el-button>
         </div>
       </div>
     </div>
     <div class="chart-container" ref="chartContainerRef">
-      <div ref="chartRef" class="chart"></div>
+      <canvas ref="canvasRef" class="chart"></canvas>
+      <canvas ref="axisCanvasRef" class="axis-layer"></canvas>
+      <div
+        ref="tooltipRef"
+        class="deviation-tooltip"
+        :style="tooltipStyle"
+        v-show="tooltipVisible"
+      >
+        {{ tooltipText }}
+      </div>
     </div>
   </div>
 </template>
 
-<script setup>
-import { onMounted, onUnmounted, watch, nextTick } from 'vue';
-import { useNmea } from '@/composables/gnss/useNmea';
-import { useDevice } from '@/hooks/useDevice'
+<script setup lang="ts">
+import { computed, onMounted, onUnmounted, ref, watch, nextTick } from 'vue'
+import { useNmea, numberToQuality } from '@/composables/gnss/useNmea'
 import { useTheme } from '@/composables/useTheme'
-import { useDeviationChart } from '../common/deviation/useDeviationChart';
+import { createTrajectoryRenderer } from '@/core/render/createTrajectoryRenderer'
+import type { TrajectoryRenderer } from '@/core/render/TrajectoryRenderer'
+import {
+  clampVisibleSpan,
+  fitDeviationPoints,
+  fitDeviationPointsAroundCenter,
+  GNSS_MIN_VISIBLE_SPAN_METERS,
+} from '@/core/deviation/DeviationViewport'
 
-const { latestPosition, latestGgaPosition, enableWindow, plotData, clearData } = useNmea();
-const { deviceConnected } = useDevice()
+const { nmeaData, latestPosition, latestGgaPosition, clearData } = useNmea()
 const { chartTheme, resolvedTheme } = useTheme()
 
-const {
-  chartRef,
-  chartInstance,
-  chartContainerRef,
-  isTracking,
-  padding,
-  pointSize,
-  createChart,
-  setupResizeObserver,
-  disconnectResizeObserver,
-  getDataZoomConfig,
-  maintainEqualAxisScale,
-  bindWheelHandler,
-  unbindWheelHandler,
-} = useDeviationChart({ initialTracking: true });
-// const deviation = ref('');
+const LIMIT_METERS = 10000
+const RENDER_INTERVAL_MS = 200
 
-// let trackData = [];
-let firstPosition = null;
-// const maxTrackPoints = 3600*12;
-const minPadding = 10000; // 最小范围正负10km
-const MAX_LARGE_THRESHOLD = 5*60    // 5min 先存储5分钟数据以规避系统崩溃的问题
+const plotData = computed<Array<[number, number, number]>>(() => {
+  return nmeaData.value
+    .filter((item) => item.enuE !== null && item.enuN !== null)
+    .map((item) => [
+      Number(item.enuE),
+      Number(item.enuN),
+      Number(item.quality ?? 0),
+    ]) as Array<[number, number, number]>
+})
 
-function toggleSlideWindow() {
-  enableWindow.value = !enableWindow.value;
-  handleNmeaUpdate();
+const canvasRef = ref<HTMLCanvasElement | null>(null)
+const axisCanvasRef = ref<HTMLCanvasElement | null>(null)
+const chartContainerRef = ref<HTMLDivElement | null>(null)
+const tooltipRef = ref<HTMLDivElement | null>(null)
+
+let renderer: TrajectoryRenderer | null = null
+let axisCtx: CanvasRenderingContext2D | null = null
+
+let axisDpr = 1
+let axisCssWidth = 0
+let axisCssHeight = 0
+
+const isTracking = ref(true)
+const pointSize = ref(10)
+const tooltipVisible = ref(false)
+const tooltipText = ref('')
+const tooltipStyle = ref<Record<string, string>>({})
+
+const viewport = ref({
+  xMin: -10,
+  xMax: 10,
+  yMin: -10,
+  yMax: 10,
+})
+
+let trackingXHalfSpan = 10
+let trackingYHalfSpan = 10
+
+let previousPlotData: Array<[number, number, number]> = []
+
+let nmeaUpdateTimer: number | null = null
+let nmeaUpdateFrame: number | null = null
+
+let resizeObserver: ResizeObserver | null = null
+let resizeFrame: number | null = null
+
+let stopWatch: (() => void) | null = null
+let stopThemeWatch: (() => void) | null = null
+
+const DRAG_THRESHOLD_PX = 3
+let isDragging = false
+let dragStartClientX = 0
+let dragStartClientY = 0
+let dragLastClientX = 0
+let dragLastClientY = 0
+let dragHasMoved = false
+
+function formatDistance(value: number): string {
+  const numericValue = Number(value)
+  if (Math.abs(numericValue) < 0.01) return `${(numericValue * 100).toFixed(2)} cm`
+  return `${numericValue.toFixed(2)} m`
 }
 
-function initChart() {
-  if (!createChart()) return;
-  const colors = chartTheme.value;
-
-  const option = {
-    animation: false,
-    hoverAnimation: false,
-    backgroundColor: colors.background,
-    textStyle: { color: colors.text },
-    tooltip: {
-      trigger: 'axis',
-      backgroundColor: colors.surface,
-      borderColor: colors.border,
-      textStyle: { color: colors.text },
-      formatter: function(params) {
-        const point = params[0].value;
-        return `位置: (${point[0].toFixed(2)}, ${point[1].toFixed(2)}) m`;
-      },
-      show: false,
-    },
-    legend: {
-      data: [
-        {
-          name: '历史轨迹',
-          itemStyle: {
-            color: 'grey',
-          },
-        },
-        {
-          name: '当前位置',
-        },
-      ],
-      right: 10,
-      top: 10,
-    },
-    grid: {
-      left: '3%',
-      right: '4%',
-      bottom: '8%',
-      top: '15%',
-      containLabel: true,
-    },
-    dataZoom: getDataZoomConfig(-10, 10, -10, 10),
-    xAxis: {
-      type: 'value',
-      name: '',
-      nameLocation: 'middle',
-      nameGap: 30,
-      axisLabel: {
-        color: colors.textMuted,
-        formatter: function(value) {
-          return value.toFixed(2) + ' m';
-        },
-      },
-      splitLine: {
-        lineStyle: {
-          type: 'dashed',
-          color: colors.grid,
-        },
-      },
-      axisLine: {
-        show: true,
-        lineStyle: { color: colors.border },
-      },
-      min: -padding.value,
-      max: padding.value,
-    },
-    yAxis: {
-      type: 'value',
-      name: '',
-      nameLocation: 'middle',
-      nameGap: 40,
-      axisLabel: {
-        color: colors.textMuted,
-        formatter: function(value) {
-          return value.toFixed(2) + ' m';
-        },
-      },
-      splitLine: {
-        lineStyle: {
-          type: 'dashed',
-          color: colors.grid,
-        },
-      },
-      axisLine: {
-        show: true,
-        lineStyle: { color: colors.border },
-      },
-      min: -padding.value,
-      max: padding.value,
-    },
-    series: [
-      {
-        name: '历史轨迹',
-        type: 'scatter',
-        data: [],
-        coordinateSystem: 'cartesian2d',
-        symbolSize: pointSize.value,
-        symbol: 'circle',
-        itemStyle: {
-          color: '#4e6ef2',
-          opacity: 0.6,
-        },
-        sampling: 'lttb',
-        large: true,
-        largeThreshold: MAX_LARGE_THRESHOLD,
-      },
-      {
-        name: '当前位置',
-        type: 'scatter',
-        data: [],
-        coordinateSystem: 'cartesian2d',
-        symbolSize: pointSize.value,
-        itemStyle: {
-          color: '#ff4d4f',
-        },
-        sampling: 'lttb',
-        large: true,
-        largeThreshold: MAX_LARGE_THRESHOLD,
-      },
-    ],
-  };
-
-  chartInstance.value.setOption(option);
-  setupResizeObserver(maintainEqualAxisScale);
-
-  chartInstance.value.on('datazoom', () => {
-    nextTick(() => {
-      const opt = chartInstance.value.getOption();
-      let xMin = opt.xAxis[0].min;
-      let xMax = opt.xAxis[0].max;
-      let yMin = opt.yAxis[0].min;
-      let yMax = opt.yAxis[0].max;
-
-      // 计算并更新 padding
-      const xRange = xMax - xMin;
-      const yRange = yMax - yMin;
-      padding.value = Math.max(minPadding, (xRange + yRange) / 4); // 取平均范围的一半
-
-      // 强制居中
-      const xCenter = (xMin + xMax) / 2;
-      const xShift = xCenter - 0;
-      xMin -= xShift;
-      xMax -= xShift;
-
-      const yCenter = (yMin + yMax) / 2;
-      const yShift = yCenter - 0;
-      yMin -= yShift;
-      yMax -= yShift;
-
-      // 确保最小范围
-      if (xMax - xMin < minPadding * 2) {
-        xMin = -padding.value;
-        xMax = padding.value;
-      }
-      if (yMax - yMin < minPadding * 2) {
-        yMin = -padding.value;
-        yMax = padding.value;
-      }
-
-      chartInstance.value.setOption({
-        xAxis: { min: xMin, max: xMax },
-        yAxis: { min: yMin, max: yMax },
-      });
-    });
-  });
-
-  // 直接在DOM元素上绑定事件监听器
-  bindWheelHandler(handleWheel);
+function qualityToRgb(quality: number): [number, number, number] {
+  switch (quality) {
+    case 0:
+      return [128 / 255, 128 / 255, 128 / 255]
+    case 1:
+      return [1, 0, 0]
+    case 2:
+      return [0, 0, 1]
+    case 4:
+      return [0, 128 / 255, 0]
+    case 5:
+      return [1, 165 / 255, 0]
+    default:
+      return [128 / 255, 128 / 255, 128 / 255]
+  }
 }
 
-function handleWheel(e) {
-  e.preventDefault();
-  e.stopPropagation();
-  
-  // RTKLIB的逻辑：
-  // ds=pow(2.0,-WheelDelta/1200.0)
-  // GraphT->GetScale(xs,ys);
-  // GraphT->SetScale(xs*ds,ys*ds);
-  const wheelDelta = -e.deltaY; // 转换为与RTKLIB相似的WheelDelta值
-  const zoomRatio = Math.pow(2.0, -wheelDelta / 1200.0);
+function qualityToColor(quality: number): [number, number, number, number] {
+  const [r, g, b] = qualityToRgb(quality)
+  return [r, g, b, 1]
+}
 
-  const opt = chartInstance.value.getOption();
-  const xStart = opt.dataZoom[0].startValue;
-  const xEnd = opt.dataZoom[0].endValue;
-  const yStart = opt.dataZoom[1].startValue;
-  const yEnd = opt.dataZoom[1].endValue;
-  
-  const limit = 10000;
-  const xSpan = (xEnd - xStart) * zoomRatio;
-  const ySpan = (yEnd - yStart) * zoomRatio;
+function dataToScreenX(x: number): number {
+  if (axisCssWidth <= 0) return 0
+  const { xMin, xMax } = viewport.value
+  return ((x - xMin) / (xMax - xMin)) * axisCssWidth
+}
 
-  let newXStart = xStart;
-  let newXEnd = xEnd;
-  let newYStart = yStart;
-  let newYEnd = yEnd;
+function dataToScreenY(y: number): number {
+  if (axisCssHeight <= 0) return 0
+  const { yMin, yMax } = viewport.value
+  return axisCssHeight - ((y - yMin) / (yMax - yMin)) * axisCssHeight
+}
+
+function niceTickStep(span: number): number {
+  if (!Number.isFinite(span) || span <= 0) return 1
+  const targetTicks = 6
+  const rough = span / targetTicks
+  const exp = Math.floor(Math.log10(rough))
+  const fraction = rough / Math.pow(10, exp)
+  let step = 10
+  if (fraction <= 2) step = 2
+  else if (fraction <= 5) step = 5
+  return step * Math.pow(10, exp)
+}
+
+function drawAxisLayer(): void {
+  if (!axisCtx || !axisCanvasRef.value) return
+
+  const width = axisCssWidth
+  const height = axisCssHeight
+  const colors = chartTheme.value
+  const ctx = axisCtx
+
+  ctx.save()
+  ctx.setTransform(axisDpr, 0, 0, axisDpr, 0, 0)
+  ctx.clearRect(0, 0, width, height)
+
+  const { xMin, xMax, yMin, yMax } = viewport.value
+  const xStep = niceTickStep(xMax - xMin)
+  const yStep = niceTickStep(yMax - yMin)
+
+  const xStart = Math.ceil(xMin / xStep) * xStep
+  const xEnd = Math.floor(xMax / xStep) * xStep
+  const yStart = Math.ceil(yMin / yStep) * yStep
+  const yEnd = Math.floor(yMax / yStep) * yStep
+
+  ctx.strokeStyle = colors.grid
+  ctx.lineWidth = 1
+  ctx.setLineDash([4, 4])
+  ctx.font = '12px sans-serif'
+  ctx.fillStyle = colors.textMuted
+
+  // Vertical grid lines and x-axis labels at the bottom edge.
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'top'
+  for (let x = xStart; x <= xEnd + 1e-9; x += xStep) {
+    const sx = dataToScreenX(x)
+    ctx.beginPath()
+    ctx.moveTo(sx, 0)
+    ctx.lineTo(sx, height)
+    ctx.stroke()
+    ctx.fillText(formatDistance(x), sx, height - 18)
+  }
+
+  // Horizontal grid lines and y-axis labels at the left edge.
+  ctx.textAlign = 'left'
+  ctx.textBaseline = 'middle'
+  for (let y = yStart; y <= yEnd + 1e-9; y += yStep) {
+    const sy = dataToScreenY(y)
+    ctx.beginPath()
+    ctx.moveTo(0, sy)
+    ctx.lineTo(width, sy)
+    ctx.stroke()
+    ctx.fillText(formatDistance(y), 8, sy)
+  }
+
+  // Origin cross lines (solid, slightly thicker).
+  ctx.setLineDash([])
+  ctx.strokeStyle = colors.border
+  ctx.lineWidth = 1.5
+  if (xMin <= 0 && xMax >= 0) {
+    const sx = dataToScreenX(0)
+    ctx.beginPath()
+    ctx.moveTo(sx, 0)
+    ctx.lineTo(sx, height)
+    ctx.stroke()
+  }
+  if (yMin <= 0 && yMax >= 0) {
+    const sy = dataToScreenY(0)
+    ctx.beginPath()
+    ctx.moveTo(0, sy)
+    ctx.lineTo(width, sy)
+    ctx.stroke()
+  }
+
+  ctx.restore()
+}
+
+function drawCurrentPosition(): void {
+  if (!axisCtx || axisCssWidth <= 0 || axisCssHeight <= 0 || plotData.value.length === 0) return
+
+  const [x, y, q] = plotData.value[plotData.value.length - 1]
+  const sx = dataToScreenX(x)
+  const sy = dataToScreenY(y)
+  const radius = (pointSize.value * 1.2) / 2
+  const [r, g, b] = qualityToRgb(q)
+
+  const ctx = axisCtx
+  ctx.save()
+  ctx.setTransform(axisDpr, 0, 0, axisDpr, 0, 0)
+  ctx.fillStyle = `rgba(${Math.round(r * 255)}, ${Math.round(g * 255)}, ${Math.round(b * 255)}, 1)`
+  ctx.strokeStyle = '#ffffff'
+  ctx.lineWidth = 2
+  ctx.beginPath()
+  ctx.arc(sx, sy, Math.max(2, radius), 0, Math.PI * 2)
+  ctx.fill()
+  ctx.stroke()
+  ctx.restore()
+}
+
+function updateViewport(xMin: number, xMax: number, yMin: number, yMax: number): void {
+  viewport.value = { xMin, xMax, yMin, yMax }
+  renderer?.setViewport(xMin, xMax, yMin, yMax)
+  drawAxisLayer()
+  drawCurrentPosition()
+}
+
+function syncRendererData(): void {
+  if (!renderer) return
+
+  const points = plotData.value
+  const firstChanged =
+    points.length > 0 &&
+    previousPlotData.length > 0 &&
+    (points[0][0] !== previousPlotData[0][0] ||
+      points[0][1] !== previousPlotData[0][1] ||
+      points[0][2] !== previousPlotData[0][2])
+  const resetNeeded = firstChanged || points.length < previousPlotData.length
+
+  if (resetNeeded) {
+    renderer.clear()
+    if (points.length > 0) {
+      renderer.addPointsBatch(points)
+    }
+  } else {
+    for (let i = previousPlotData.length; i < points.length; i++) {
+      const [x, y, q] = points[i]
+      renderer.addPoint(x, y, q)
+    }
+  }
+
+  previousPlotData = points.slice()
+}
+
+function handleNmeaUpdate(): void {
+  if (!renderer) return
+  const latest = latestGgaPosition.value
+  if (!latest) return
+
+  const points = plotData.value
+  const latestTrackPoint = points[points.length - 1]
+  if (!latestTrackPoint) return
+
+  syncRendererData()
 
   if (isTracking.value) {
-    newXStart = Math.max(-limit, -xSpan / 2);
-    newXEnd = Math.min(limit, xSpan / 2);
-    newYStart = Math.max(-limit, -ySpan / 2);
-    newYEnd = Math.min(limit, ySpan / 2);
+    updateViewport(
+      latestTrackPoint[0] - trackingXHalfSpan,
+      latestTrackPoint[0] + trackingXHalfSpan,
+      latestTrackPoint[1] - trackingYHalfSpan,
+      latestTrackPoint[1] + trackingYHalfSpan,
+    )
   } else {
-    const xCenter = (xStart + xEnd) / 2;
-    const yCenter = (yStart + yEnd) / 2;
-    newXStart = Math.max(-limit, xCenter - xSpan / 2);
-    newXEnd = Math.min(limit, xCenter + xSpan / 2);
-    newYStart = Math.max(-limit, yCenter - ySpan / 2);
-    newYEnd = Math.min(limit, yCenter + ySpan / 2);
-  }
-
-  chartInstance.value.dispatchAction({
-    type: 'dataZoom',
-    dataZoomIndex: 0,
-    startValue: newXStart,
-    endValue: newXEnd,
-  });
-  chartInstance.value.dispatchAction({
-    type: 'dataZoom',
-    dataZoomIndex: 1,
-    startValue: newYStart,
-    endValue: newYEnd,
-  });
-  return false;
-};
-
-function qualityToColor (num) {
-  // 0：无效解；1：单点定位解；2：伪距差分；4：固定解；5：浮动解。
-  switch (num) {
-    case 0:
-      return 'grey'
-    case 1:
-      return 'red'
-    case 2:
-      return 'blue'
-    case 4:
-      return 'green'
-    case 5:
-      return 'orange'
-    default:
-      return 'grey'
+    renderer.render()
+    drawAxisLayer()
+    drawCurrentPosition()
   }
 }
 
-function handleNmeaUpdate() {
-  const latest = latestGgaPosition.value;
-  if (!latest || !latest.latitude || !latest.longitude) return;
-
-  if (!firstPosition) {
-    firstPosition = {
-      latitude: latest.latitude,
-      longitude: latest.longitude,
-    };
-  }
-
-  const x = (latest.longitude - firstPosition.longitude) * 111320 * Math.cos(firstPosition.latitude * Math.PI / 180);
-  const y = (latest.latitude - firstPosition.latitude) * 110574;
-  const roundedX = Math.round(x * 1000) / 1000;
-  const roundedY = Math.round(y * 1000) / 1000;
-
-  // deviation.value = Math.sqrt(x * x + y * y).toFixed(2);
-  // trackData.push([roundedX, roundedY, Number(latest.quality)]);
-
-  // if (trackData.length > maxTrackPoints) {
-  //   trackData.shift();
-  // }
-
-  let displayTrackData = [...plotData.value];
-  let currentDisplayPoint = [roundedX, roundedY, Number(latest.quality)];
-
-  if (isTracking.value && plotData.value.length > 0) {
-    const latestPoint = plotData.value[plotData.value.length - 1];
-    const offsetX = latestPoint[0];
-    const offsetY = latestPoint[1];
-    displayTrackData = plotData.value.map(point => [point[0] - offsetX, point[1] - offsetY, point[2]]);
-    currentDisplayPoint = [0, 0, Number(latest.quality)];
-  }
-
-  chartInstance.value.setOption({
-    series: [
-      {
-        name: '历史轨迹',
-        data: displayTrackData,
-        symbolSize: pointSize.value,
-        itemStyle: {
-          color: function(params) {
-            // 直接从当前数据点获取quality信息
-            const quality = params.data[2] || 0;
-            return qualityToColor(quality);
-          }
-        },
-      },
-      {
-        name: '当前位置',
-        data: [currentDisplayPoint],
-        symbolSize: pointSize.value * 1.2,
-        itemStyle: {
-          color: qualityToColor(Number(latest.quality)), // 内部填充色
-          borderWidth: 2,   // 边框总宽度
-          borderColor: '#fff', // 外层边框颜色
-          borderType: 'solid',
-          shadowColor: 'rgba(100, 100, 100, 0.2)', // 内层边框颜色
-          shadowOffsetX: 0,
-          shadowOffsetY: 0,
-          shadowBlur: 2
-        },
-      },
-    ],
-  });
+function scheduleNmeaUpdate(): void {
+  if (document.hidden) return
+  if (nmeaUpdateTimer !== null || nmeaUpdateFrame !== null) return
+  nmeaUpdateTimer = window.setTimeout(() => {
+    nmeaUpdateTimer = null
+    nmeaUpdateFrame = requestAnimationFrame(() => {
+      nmeaUpdateFrame = null
+      handleNmeaUpdate()
+    })
+  }, RENDER_INTERVAL_MS)
 }
 
-function toggleTracking() {
-  if (isTracking.value && plotData.value.length > 0) {
-    const latestPoint = plotData.value[plotData.value.length - 1];
-    const offsetX = latestPoint[0];
-    const offsetY = latestPoint[1];
-    const displayTrackData = plotData.value.map(point => [point[0] - offsetX, point[1] - offsetY, point[2]]);
-    const currentDisplayPoint = [0, 0];
-
-    const opt = chartInstance.value.getOption();
-    const xStart = opt.dataZoom[0].startValue;
-    const xEnd = opt.dataZoom[0].endValue;
-    const yStart = opt.dataZoom[1].startValue;
-    const yEnd = opt.dataZoom[1].endValue;
-    const xSpan = (xEnd - xStart)/2;
-    const ySpan = (yEnd - yStart)/2;
-
-    chartInstance.value.setOption({
-      series: [
-        {
-          name: '历史轨迹',
-          data: displayTrackData,
-        },
-        {
-          name: '当前位置',
-          data: [currentDisplayPoint],
-        },
-      ],
-      dataZoom: getDataZoomConfig(-xSpan, xSpan, -ySpan, ySpan),
-    });
-    // handleWheel()
-  } else if (plotData.value.length > 0) {
-    const latestPoint = plotData.value[plotData.value.length - 1];
-
-    const offsetX = latestPoint[0];
-    const offsetY = latestPoint[1];
-
-    const opt = chartInstance.value.getOption();
-    const xStart = opt.dataZoom[0].startValue + offsetX;
-    const xEnd = opt.dataZoom[0].endValue + offsetX;
-    const yStart = opt.dataZoom[1].startValue + offsetY;
-    const yEnd = opt.dataZoom[1].endValue + offsetY;
-
-    chartInstance.value.setOption({
-      series: [
-        {
-          name: '历史轨迹',
-          data: [...plotData.value],
-        },
-        {
-          name: '当前位置',
-          data: [latestPoint],
-        },
-      ],
-      dataZoom: getDataZoomConfig(xStart, xEnd, yStart, yEnd),
-    });
-    // handleWheel()
+function cancelScheduledNmeaUpdate(): void {
+  if (nmeaUpdateTimer !== null) {
+    clearTimeout(nmeaUpdateTimer)
+    nmeaUpdateTimer = null
+  }
+  if (nmeaUpdateFrame !== null) {
+    cancelAnimationFrame(nmeaUpdateFrame)
+    nmeaUpdateFrame = null
   }
 }
 
-function resetZoom() {
-  if (!chartInstance.value) return;
-  initChart();
-}
+function toggleTracking(): void {
+  if (!renderer || plotData.value.length === 0) return
+  const latestPoint = plotData.value[plotData.value.length - 1]
 
-function clearTrack() {
-  // trackData = [];
-  firstPosition = null;
-  // deviation.value = '0.00';
-  clearData();
-
-  chartInstance.value.setOption({
-    series: [
-      {
-        name: '历史轨迹',
-        data: [],
-      },
-      {
-        name: '当前位置',
-        data: [],
-      },
-    ],
-  });
-}
-
-function updatePointSize() {
-  if (chartInstance.value) {
-    chartInstance.value.setOption({
-      series: [
-        {
-          name: '历史轨迹',
-          symbolSize: pointSize.value
-        }
-      ]
-    });
+  if (isTracking.value) {
+    const xSpan = viewport.value.xMax - viewport.value.xMin
+    const ySpan = viewport.value.yMax - viewport.value.yMin
+    trackingXHalfSpan = xSpan / 2
+    trackingYHalfSpan = ySpan / 2
+    updateViewport(
+      latestPoint[0] - trackingXHalfSpan,
+      latestPoint[0] + trackingXHalfSpan,
+      latestPoint[1] - trackingYHalfSpan,
+      latestPoint[1] + trackingYHalfSpan,
+    )
   }
 }
 
-let stopWatch = null;
-let handleKeyDown = null;
+function resetZoom(): void {
+  if (!renderer || !chartContainerRef.value) return
+  const points = plotData.value
+
+  const width = chartContainerRef.value.clientWidth
+  const height = chartContainerRef.value.clientHeight
+  const aspectRatio = width / height
+
+  const newViewport =
+    isTracking.value && points.length > 0
+      ? fitDeviationPointsAroundCenter(
+          points,
+          points[points.length - 1][0],
+          points[points.length - 1][1],
+          aspectRatio,
+          GNSS_MIN_VISIBLE_SPAN_METERS,
+        )
+      : fitDeviationPoints(points, aspectRatio, GNSS_MIN_VISIBLE_SPAN_METERS)
+
+  if (!newViewport) {
+    trackingXHalfSpan = 10
+    trackingYHalfSpan = 10
+    updateViewport(-10, 10, -10, 10)
+    return
+  }
+
+  trackingXHalfSpan = (newViewport.xMax - newViewport.xMin) / 2
+  trackingYHalfSpan = (newViewport.yMax - newViewport.yMin) / 2
+  updateViewport(newViewport.xMin, newViewport.xMax, newViewport.yMin, newViewport.yMax)
+}
+
+function clearTrack(): void {
+  cancelScheduledNmeaUpdate()
+  renderer?.clear()
+  previousPlotData = []
+  updateViewport(-10, 10, -10, 10)
+  clearData()
+}
+
+function updatePointSize(): void {
+  renderer?.setPointSize(pointSize.value)
+  drawAxisLayer()
+  drawCurrentPosition()
+}
+
+function handleWheel(e: WheelEvent): void {
+  e.preventDefault()
+  e.stopPropagation()
+
+  if (!renderer || !canvasRef.value) return
+
+  const { xMin, xMax, yMin, yMax } = viewport.value
+  const xRange = xMax - xMin
+  const yRange = yMax - yMin
+
+  // 与 canvas(ECharts) 版一致的 RTKLIB 缩放：以视图中心为锚点
+  const zoomRatio = Math.pow(2.0, e.deltaY / 1200.0)
+  const xSpan = clampVisibleSpan(xRange * zoomRatio, GNSS_MIN_VISIBLE_SPAN_METERS, LIMIT_METERS * 2)
+  const ySpan = clampVisibleSpan(yRange * zoomRatio, GNSS_MIN_VISIBLE_SPAN_METERS, LIMIT_METERS * 2)
+
+  const xCenter = (xMin + xMax) / 2
+  const yCenter = (yMin + yMax) / 2
+  const newXMin = Math.max(-LIMIT_METERS, xCenter - xSpan / 2)
+  const newXMax = Math.min(LIMIT_METERS, xCenter + xSpan / 2)
+  const newYMin = Math.max(-LIMIT_METERS, yCenter - ySpan / 2)
+  const newYMax = Math.min(LIMIT_METERS, yCenter + ySpan / 2)
+
+  trackingXHalfSpan = (newXMax - newXMin) / 2
+  trackingYHalfSpan = (newYMax - newYMin) / 2
+  updateViewport(newXMin, newXMax, newYMin, newYMax)
+}
+
+function handleMouseMove(e: MouseEvent): void {
+  if (isDragging) {
+    hideTooltip()
+    return
+  }
+  if (!renderer || !canvasRef.value) return
+  const rect = canvasRef.value.getBoundingClientRect()
+  const x = e.clientX - rect.left
+  const y = e.clientY - rect.top
+  const picked = renderer.pickPoint(x, y)
+  if (picked) {
+    tooltipVisible.value = true
+    tooltipText.value = `位置: (${formatDistance(picked.x)}, ${formatDistance(picked.y)})\n质量: ${numberToQuality(picked.quality)}`
+    tooltipStyle.value = {
+      left: `${x + 12}px`,
+      top: `${y + 12}px`,
+    }
+  } else {
+    tooltipVisible.value = false
+  }
+}
+
+function hideTooltip(): void {
+  tooltipVisible.value = false
+}
+
+function handleMouseDown(e: MouseEvent): void {
+  if (e.button !== 0 || !canvasRef.value) return
+  isDragging = true
+  dragHasMoved = false
+  dragStartClientX = e.clientX
+  dragStartClientY = e.clientY
+  dragLastClientX = e.clientX
+  dragLastClientY = e.clientY
+  window.addEventListener('mousemove', handleWindowMouseMove)
+  window.addEventListener('mouseup', handleWindowMouseUp)
+}
+
+function handleWindowMouseMove(e: MouseEvent): void {
+  if (!isDragging || !canvasRef.value) return
+  const dx = e.clientX - dragLastClientX
+  const dy = e.clientY - dragLastClientY
+  const totalDx = e.clientX - dragStartClientX
+  const totalDy = e.clientY - dragStartClientY
+  dragLastClientX = e.clientX
+  dragLastClientY = e.clientY
+  if (!dragHasMoved && Math.hypot(totalDx, totalDy) >= DRAG_THRESHOLD_PX) {
+    dragHasMoved = true
+    hideTooltip()
+  }
+  if (!dragHasMoved) return
+
+  const rect = canvasRef.value.getBoundingClientRect()
+  const { xMin, xMax, yMin, yMax } = viewport.value
+  const xRange = xMax - xMin
+  const yRange = yMax - yMin
+
+  // 内容跟随鼠标：屏幕 Y 向下而数据 Y 向上，X 取反、Y 取正
+  const dataDx = -(dx / rect.width) * xRange
+  const dataDy = (dy / rect.height) * yRange
+
+  let newXMin = xMin + dataDx
+  let newXMax = xMax + dataDx
+  let newYMin = yMin + dataDy
+  let newYMax = yMax + dataDy
+
+  const xSpan = newXMax - newXMin
+  const ySpan = newYMax - newYMin
+
+  if (newXMin < -LIMIT_METERS) {
+    newXMin = -LIMIT_METERS
+    newXMax = -LIMIT_METERS + xSpan
+  } else if (newXMax > LIMIT_METERS) {
+    newXMax = LIMIT_METERS
+    newXMin = LIMIT_METERS - xSpan
+  }
+
+  if (newYMin < -LIMIT_METERS) {
+    newYMin = -LIMIT_METERS
+    newYMax = -LIMIT_METERS + ySpan
+  } else if (newYMax > LIMIT_METERS) {
+    newYMax = LIMIT_METERS
+    newYMin = LIMIT_METERS - ySpan
+  }
+
+  trackingXHalfSpan = (newXMax - newXMin) / 2
+  trackingYHalfSpan = (newYMax - newYMin) / 2
+  updateViewport(newXMin, newXMax, newYMin, newYMax)
+}
+
+function handleWindowMouseUp(): void {
+  if (!isDragging) return
+  isDragging = false
+  window.removeEventListener('mousemove', handleWindowMouseMove)
+  window.removeEventListener('mouseup', handleWindowMouseUp)
+}
+
+function resizeAxisCanvas(cssWidth: number, cssHeight: number): void {
+  if (!axisCanvasRef.value || !axisCtx) return
+  axisDpr = window.devicePixelRatio || 1
+  axisCssWidth = cssWidth
+  axisCssHeight = cssHeight
+  axisCanvasRef.value.width = cssWidth * axisDpr
+  axisCanvasRef.value.height = cssHeight * axisDpr
+  axisCanvasRef.value.style.width = `${cssWidth}px`
+  axisCanvasRef.value.style.height = `${cssHeight}px`
+}
+
+function setupResizeObserver(): void {
+  if (!chartContainerRef.value) return
+  teardownResizeObserver()
+  resizeObserver = new ResizeObserver(() => {
+    if (resizeFrame !== null) cancelAnimationFrame(resizeFrame)
+    resizeFrame = requestAnimationFrame(() => {
+      resizeFrame = null
+      if (!chartContainerRef.value || !canvasRef.value || !axisCanvasRef.value) return
+      const width = chartContainerRef.value.clientWidth
+      const height = chartContainerRef.value.clientHeight
+      renderer?.onResize(width, height)
+      resizeAxisCanvas(width, height)
+      drawAxisLayer()
+      drawCurrentPosition()
+    })
+  })
+  resizeObserver.observe(chartContainerRef.value)
+}
+
+function teardownResizeObserver(): void {
+  if (resizeObserver) {
+    resizeObserver.disconnect()
+    resizeObserver = null
+  }
+  if (resizeFrame !== null) {
+    cancelAnimationFrame(resizeFrame)
+    resizeFrame = null
+  }
+}
+
+function initRenderer(): void {
+  if (!canvasRef.value || !axisCanvasRef.value || !chartContainerRef.value) return
+  renderer = createTrajectoryRenderer(canvasRef.value)
+  axisCtx = axisCanvasRef.value.getContext('2d')
+
+  const width = chartContainerRef.value.clientWidth
+  const height = chartContainerRef.value.clientHeight
+  renderer.onResize(width, height)
+  resizeAxisCanvas(width, height)
+
+  renderer.setPointSize(pointSize.value)
+  renderer.setColorMapper(qualityToColor)
+  updateViewport(-10, 10, -10, 10)
+
+  canvasRef.value.addEventListener('wheel', handleWheel, { passive: false, capture: true })
+  canvasRef.value.addEventListener('mousemove', handleMouseMove)
+  canvasRef.value.addEventListener('mouseleave', hideTooltip)
+  canvasRef.value.addEventListener('mousedown', handleMouseDown)
+}
 
 onMounted(() => {
-  setTimeout(() => {
-    initChart();
-  }, 100);
-
-  watch(deviceConnected, () => {
-    if (deviceConnected.value) {
-      enableWindow.value = true;
-    }
-  });
-
-  stopWatch = watch(
-    latestPosition,
-    (newVal) => {
-      if (newVal && chartInstance.value) {
-        handleNmeaUpdate();
-      }
-    },
-    { immediate: true },
-  );
-
-  window.addEventListener('keydown', handleKeyDown);
-});
-
-watch(resolvedTheme, () => {
   nextTick(() => {
-    initChart();
-    handleNmeaUpdate();
-  });
-});
+    initRenderer()
+    setupResizeObserver()
+
+    stopWatch = watch(
+      latestPosition,
+      (newVal) => {
+        if (newVal) scheduleNmeaUpdate()
+      },
+      { immediate: true },
+    )
+
+    stopThemeWatch = watch(resolvedTheme, () => {
+      nextTick(() => {
+        drawAxisLayer()
+        drawCurrentPosition()
+      })
+    })
+  })
+})
 
 onUnmounted(() => {
-  if (chartInstance.value) {
-    chartInstance.value.dispose();
+  cancelScheduledNmeaUpdate()
+  stopWatch?.()
+  stopThemeWatch?.()
+  teardownResizeObserver()
+  if (canvasRef.value) {
+    canvasRef.value.removeEventListener('wheel', handleWheel)
+    canvasRef.value.removeEventListener('mousemove', handleMouseMove)
+    canvasRef.value.removeEventListener('mouseleave', hideTooltip)
+    canvasRef.value.removeEventListener('mousedown', handleMouseDown)
   }
-  disconnectResizeObserver();
-  // 清理滚轮事件监听器
-  unbindWheelHandler(handleWheel);
-});
+  window.removeEventListener('mousemove', handleWindowMouseMove)
+  window.removeEventListener('mouseup', handleWindowMouseUp)
+  renderer?.dispose()
+  renderer = null
+  axisCtx = null
+})
 </script>
 
 <style scoped>
@@ -532,6 +644,7 @@ onUnmounted(() => {
   flex-direction: column;
   height: 100%;
   width: 100%;
+  container-type: inline-size;
   color: var(--app-text);
   background-color: var(--app-surface);
   border-radius: 8px;
@@ -545,16 +658,16 @@ onUnmounted(() => {
   background-color: var(--app-surface-muted);
   border-bottom: 1px solid var(--app-border);
   flex-shrink: 0;
-  display: flex; /* 添加flex布局 */
-  align-items: center; /* 垂直居中 */
+  display: flex;
+  align-items: center;
 }
 
 .controls {
   display: flex;
-  align-items: center; /* 垂直居中 */
-  justify-content: flex-start; /* 改为左对齐 */
-  width: 100%; /* 确保占满整个控制面板宽度 */
-  position: relative; /* 为绝对定位的子元素提供参考 */
+  align-items: center;
+  justify-content: flex-start;
+  width: 100%;
+  position: relative;
 }
 
 .tracking-switch {
@@ -565,7 +678,7 @@ onUnmounted(() => {
   font-size: 12px;
   color: var(--app-text-muted);
   margin-right: 15px;
-  line-height: 1; /* 确保标签文本垂直居中 */
+  line-height: 1;
 }
 
 .control-btn {
@@ -577,8 +690,8 @@ onUnmounted(() => {
   cursor: pointer;
   font-size: 12px;
   transition: all 0.2s ease;
-  line-height: 1; /* 确保按钮文本垂直居中 */
-  display: flex; /* 确保按钮内容垂直居中 */
+  line-height: 1;
+  display: flex;
   align-items: center;
 }
 
@@ -586,15 +699,43 @@ onUnmounted(() => {
   flex: 1;
   position: relative;
   overflow: hidden;
-  min-height: 0; /* 允许flex子项收缩到小于内容大小 */
+  min-height: 0;
 }
 
 .chart {
+  position: absolute;
+  top: 0;
+  left: 0;
   width: 100%;
   height: 100%;
-  min-height: 0; /* 移除固定最小高度，允许完全自适应 */
+  min-height: 0;
   touch-action: none;
   overscroll-behavior: none;
+}
+
+.axis-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  min-height: 0;
+}
+
+.deviation-tooltip {
+  position: absolute;
+  pointer-events: none;
+  padding: 6px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  line-height: 1.4;
+  white-space: pre-line;
+  background-color: var(--app-surface);
+  color: var(--app-text);
+  border: 1px solid var(--app-border);
+  box-shadow: 0 2px 8px 0 var(--app-shadow);
+  z-index: 10;
 }
 
 .point-size-control {
@@ -619,10 +760,9 @@ onUnmounted(() => {
   font-size: 12px;
 }
 
-/* 添加参考GnssSky.vue的滑块样式 */
 :deep(.el-slider) {
-  --el-slider-height: 5px; /* 轨道高度 */
-  --el-slider-button-size: 22px; /* 滑块按钮大小 */
+  --el-slider-height: 5px;
+  --el-slider-button-size: 22px;
 }
 
 :deep(.el-slider__runway) {
@@ -631,14 +771,14 @@ onUnmounted(() => {
 }
 
 :deep(.el-slider__bar) {
-  background: #6E6E6E;
+  background: #6e6e6e;
   border-radius: 4px;
 }
 
 :deep(.el-slider__button) {
   width: var(--el-slider-button-size);
   height: var(--el-slider-button-size);
-  background-image: url("data:image/svg+xml;charset=utf-8;base64,PHN2ZyBjbGFzcz0iaWNvbiIgdmlld0JveD0iMCAwIDEwMjQgMTAyNCIgdmVyc2lvbj0iMS4xIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHN0eWxlPSJoZWlnaHQ6IDE2cHg7IHdpZHRoOiAxNnB4OyI+PHBhdGggZD0iTTUxMiA2NGE0NDggNDQ4IDAgMCAxIDEzMC4yNCAxOS4yMzJjLTM3LjQwOCAxNDIuNzItMTUuMDQgMjM0LjQgNzUuODQgMjY0LjcwNGwxNy4yOCA1Ljg4OCAxNi40OCA1Ljg4OGMxMDUuNTM2IDM4Ljk3NiAxMjkuMzc2IDcxLjc0NCAxMDQuNjQgMTQ1Ljk4NC0xMS4yIDMzLjYtMzQuOTQ0IDQ5LjgyNC0xMDEuNjk2IDczLjE1MmwtMzUuODQgMTIuMjI0LTE3LjQ0IDYuMzA0Yy03Mi40NDggMjcuMTA0LTEwNC40MTYgNTIuMTI4LTEyMi41NiAxMDYuNTYtMjYuMTQ0IDc4LjM2OCA4LjY0IDE1My4zNzYgOTguMTc2IDIyNC42MDhBNDQ1Ljc5MiA0NDUuNzkyIDAgMCAxIDUxMiA5NjBjLTMyLjg2NCAwLTY0Ljg5Ni0zLjUyLTk1Ljc0NC0xMC4yNCA1Ni4wOTYtNDMuMDcyIDY2LjA0OC0xMDguOCAyNC44LTE5MS4yOTYtMjYuODgtNTMuNjk2LTY5LjI0OC04My4xMzYtMTI5LjkyLTEwMS4zNDRhNDgwLjk2IDQ4MC45NiAwIDAgMC0xOS43NDQtNS40NGwtMzMuNDA4LTcuOTM2Yy0zNC4yNC04LjEyOC00OC40OC0xMy45NTItNTQuNTI4LTIxLjYzMi02LjQtOC4xNi02LjM2OC0yNS45ODQgNi41OTItNjAuMzJsMi41Ni02LjY1NmM1My44MjQtMTM0LjU2IDE1LjEwNC0yMTkuMDcyLTEwNi40NjQtMjMzLjA4OEMxNzcuNjMyIDE2OS42IDMzMi40OCA2NCA1MTIgNjR6TTgyLjQ2NCAzODQuMjU2Yzg5LjYgMy42NDggMTEwLjYyNCA0My4wNCA3My41MDQgMTQwLjA2NGwtMi43ODQgNy4wNGMtMjMuMDQgNTcuNjk2LTI0LjEyOCA5OS42NDgtMC4wNjQgMTMwLjI3MiAxNy40MDggMjIuMjA4IDM4Ljg0OCAzMS43NzYgODIuNTYgNDIuNTZsMzMuMjggNy44NzJjOS4wMjQgMi4yMDggMTYuNjQgNC4yMjQgMjMuNzc2IDYuMzY4IDQ1LjI0OCAxMy41NjggNzMuMjQ4IDMzLjAyNCA5MS4wNzIgNjguNjcyIDM1LjIgNzAuMzY4IDIxLjQ0IDExMS4zNi01MS44NCAxMzUuMjMyQzE3NC4xNzYgODUzLjAyNCA2NCA2OTUuMzYgNjQgNTEyYzAtNDQuMzg0IDYuNDY0LTg3LjI2NCAxOC40NjQtMTI3Ljc0NHogbTYxOS44MDgtMjc3Ljk1MkM4NTQuNTYgMTc3LjgyNCA5NjAgMzMyLjYwOCA5NjAgNTEyYzAgMTYzLjUyLTg3LjYxNiAzMDYuNjI0LTIxOC40OTYgMzg0LjgzMi04OC4zMi02MS44MjQtMTE5LjY4LTExOS4xNjgtMTAxLjg1Ni0xNzIuNjQgMTEuMTY4LTMzLjUzNiAzNC44OC00OS43NiAxMDEuMzQ0LTczLjAyNGwxNy4xODQtNS44NTZjOTguNzItMzIuODk2IDEzOC4wNDgtNTYuNTEyIDE1OS4wNC0xMTkuMzYgNDIuMTc2LTEyNi41OTItMTUuNTUyLTE4NC4zMi0xNzguODgtMjM4LjcyLTQ3LjItMTUuNzQ0LTYyLjQ5Ni02OS42MzItMzguNzUyLTE3MC4wOGwyLjY4OC0xMC44OHogbS0yMzEuMTM2IDMyMy41MmMwIDM0LjY1NiA0MS4wODggODIuMTc2IDEyMy4yMzIgODIuMTc2IDgyLjE3NiAwIDgyLjE3Ni04Mi4xNDQgMC0xMjMuMjMyLTgyLjE0NC00MS4wODgtMTIzLjIgNi40MzItMTIzLjIgNDEuMDg4eiIgZmlsbD0iIzVDNUM1QyI+PC9wYXRoPjwvc3ZnPg==");
+  background-image: url("data:image/svg+xml;charset=utf-8;base64,PHN2ZyBjbGFzcz0iaWNvbiIgdmlld0JveD0iMCAwIDEwMjQgMTAyNCIgdmVyc2lvbj0iMS4xIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHN0eWxlPSJoZWlnaHQ6IDE2cHg7IHdpZHRoOiAxNnB4OyI+PHBhdGggZD0iTTUxMiA2NGE0NDggNDQ4IDAgMCAxIDEzMC4yNCAxOS4yMzJjLTM3LjQwOCAxNDIuNzItMTUuMDQgMjM0LjQgNzUuODQgMjY0LjcwNGwxNy4yOCA1Ljg4OCAxNi40OCA1Ljg4OGMxMDUuNTM2IDM4Ljk3NiAxMjkuMzc2IDcxLjc0NCAxMDQuNjQgMTQ1Ljk4NC0xMS4yIDMzLjYtMzQuOTQ0IDQ5LjgyNC0xMDEuNjk2IDczLjE1MmwtMzUuODQgMTIuMjI0LTE3LjQ0IDYuMzA0Yy03Mi40NDggMjcuMTA0LTEwNC40MTYgNTIuMTI4LTEyMi41NiAxMDYuNTYtMjYuMTQ0IDc4LjM2OCA4LjY0IDE1My4zNzYgOTguMTc2IDIyNC42MDhBNDQ1Ljc5MiA0NDUuNzkyIDAgMCAxIDUxMiA5NjBjLTMyLjg2NCAwLTY0Ljg5Ni0zLjUyLTk1Ljc0NC0xMC4yNCA1Ni4wOTYtNDMuMDcyIDY2LjA0OC0xMDguOCAyNC44LTE5MS4yOTYtMjYuODgtNTMuNjk2LTY5LjI0OC04My4xMzYtMTI5LjkyLTEwMS4zNDRhNDgwLjk2IDQ4MC45NiAwIDAgMC0xOS43NDQtNS40NGwtMzMuNDA4LTcuOTM2Yy0zNC4yNC04LjEyOC00OC40OC0xMy45NTItNTQuNTI4LTIxLjYzMi02LjQtOC4xNi02LjM2OC0yNS45ODQgNi41OTItNjAuMzJsMi41Ni02LjY1NmM1My44MjQtMTM0LjU2IDE1LjEwNC0yMTkuMDcyLTEwNi40NjQtMjMzLjA4OEMxNzcuNjMyIDE2OS42IDMzMi40OCA2NCA1MTIgNjR6TTgyLjQ2NCAzODQuMjU2Yzg5LjYgMy42NDggMTEwLjYyNCA0My4wNCA3My41MDQgMTQwLjA2NGwtMi43ODQgNy4wNGMtMjMuMDQgNTcuNjk2LTI0LjEyOCA5OS42NDgtMC4wNjQgMTMwLjI3MiAxNy40MDggMjIuMjA4IDM4Ljg0OCAzMS43NzYgODIuNTYgNDIuNTZsMzMuMjggNy44NzJjOS4wMjQgMi4yMDggMTYuNjQgNC4yMjQgMjMuNzc2IDYuMzY4IDQ1LjI0OCAxMy41NjggNzMuMjQ4IDMzLjAyNCA5MS4wNzIgNjguNjcyIDM1LjIgNzAuMzY4IDIxLjQ0IDExMS4zNi01MS44NCAxMzUuMjMyQzE3NC4xNzYgODUzLjAyNCA2NCA2OTUuMzYgNjQgNTEyYzAtNDQuMzg0IDYuNDY0LTg3LjI2NCAxOC40NjQtMTI3Ljc0NHogbTYxOS44MDgtMjc3Ljk1MkM4NTQuNTYgMTc3LjgyNCA5NjAgMzMyLjYwOCA5NjAgNTEyYzAgMTYzLjUyLTg3LjYxNiAzMDYuNjI0LTIxOC40OTYgMzg0LjgzMi04OC4zMi02MS44MjQtMTE5LjY4LTExOS4xNjgtMTAxLjg1Ni0xNzIuNjQgMTEuMTY4LTMzLjUzNiAzNC44OC00OS43NiAxMDEuMzQ0LTczLjAyNGwxNy4xODQtNS44NTZjOTguNzItMzIuODk2IDEzOC4wNDgtNTYuNTEyIDE1OS4wNC0xMTkuMzYgNDIuMTc2LTEyNi41OTItMTUuNTUyLTE4NC4zMi0xNzguODgtMjM4LjcyLTQ3LjItMTUuNzQ0LTYyLjQ5Ni02OS42MzItMzguNzUyLTE3MC4w");
   background-size: contain;
   background-position: center;
   background-repeat: no-repeat;
@@ -659,6 +799,17 @@ onUnmounted(() => {
 .right-buttons {
   display: flex;
   align-items: center;
-  margin-left: auto; /* 自动占据剩余空间，将按钮推到右侧 */
+  margin-left: auto;
+}
+
+@container (max-width: 680px) {
+  .switch-label,
+  .size-label {
+    display: none;
+  }
+
+  .point-size-control {
+    margin-left: 4px;
+  }
 }
 </style>

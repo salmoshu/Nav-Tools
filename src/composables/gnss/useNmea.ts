@@ -1,18 +1,57 @@
-import { ref, computed } from 'vue'
+import { ref, shallowRef, triggerRef, computed } from 'vue'
 import { useGnssStore } from '@/stores/gnss'
 import { NmeaStreamParser, validateNmeaChecksum } from '@/core/data/NmeaStreamParser'
 
 const MAX_NMEA_DATA = 12*3600    // 12h
-const MAX_SNR_DATA = 50*3
-
-// 使用环形缓冲区管理nmeaData
-let nmeaDataIndex = 0
-let satelliteSnrIndex = 0
-const nmeaDataBuffer = Array(MAX_NMEA_DATA).fill(null)
-const nmeaData = ref<NmeaData[]>([])
-const satelliteSnrBuffer = Array(MAX_SNR_DATA).fill(null)
-const satelliteSnrData = ref<SatelliteSnrData[]>([])
+const HISTORY_TRIM_SIZE = 3600
+const SATELLITE_TTL_MS = 3000
+const nmeaData = shallowRef<NmeaData[]>([])
+const ggaData = shallowRef<GgaData[]>([])
+const satelliteSnrData = shallowRef<SatelliteSnrData[]>([])
+const latestSatelliteData = new Map<string, SatelliteSnrData>()
 const utcTime = [0, 0, 0, 0, 0, 0]
+let firstLLh: [number | null, number | null, number | null] | null = null
+let batchDepth = 0
+let nmeaDataDirty = false
+let ggaDataDirty = false
+let satelliteDataDirty = false
+
+function trimHistory<T>(records: T[]): void {
+  if (records.length > MAX_NMEA_DATA) {
+    records.splice(0, Math.min(HISTORY_TRIM_SIZE, records.length - MAX_NMEA_DATA + HISTORY_TRIM_SIZE))
+  }
+}
+
+function publishPendingData(): void {
+  if (batchDepth > 0) return
+
+  if (nmeaDataDirty) {
+    nmeaDataDirty = false
+    triggerRef(nmeaData)
+  }
+  if (ggaDataDirty) {
+    ggaDataDirty = false
+    triggerRef(ggaData)
+  }
+  if (satelliteDataDirty) {
+    satelliteDataDirty = false
+    const cutoff = Date.now() - SATELLITE_TTL_MS
+    for (const [key, item] of latestSatelliteData) {
+      if (Date.parse(item.timestamp) <= cutoff) latestSatelliteData.delete(key)
+    }
+    satelliteSnrData.value = [...latestSatelliteData.values()]
+  }
+}
+
+function runInBatch<T>(callback: () => T): T {
+  batchDepth += 1
+  try {
+    return callback()
+  } finally {
+    batchDepth -= 1
+    publishPendingData()
+  }
+}
 
 function llhToEnu(latitude: number, longitude: number, firstLatitude: number, firstLongitude: number) {
   const enuE = (longitude - firstLongitude) * 111320 * Math.cos(firstLatitude * Math.PI / 180);
@@ -22,23 +61,18 @@ function llhToEnu(latitude: number, longitude: number, firstLatitude: number, fi
   return [roundedE, roundedN]
 }
 
-// 优化parseNmea函数中的数组操作
 function addNmeaData(data: NmeaData) {
-  nmeaDataBuffer[nmeaDataIndex] = data
-  nmeaDataIndex = (nmeaDataIndex + 1) % MAX_NMEA_DATA
-
-  // 更新响应式数据
-  // nmeaData.value = nmeaDataBuffer.filter(item => item !== null)
-  nmeaData.value = nmeaDataBuffer.slice(0, nmeaDataIndex)
+  nmeaData.value.push(data)
+  trimHistory(nmeaData.value)
+  nmeaDataDirty = true
+  publishPendingData()
 }
 
-let ggaDataIndex = 0
-const ggaData = ref<GgaData[]>([])
-const ggaDataBuffer = Array(MAX_NMEA_DATA).fill(null)
 function addGgaData(data: GgaData) {
-  ggaDataBuffer[ggaDataIndex] = data
-  ggaDataIndex = (ggaDataIndex + 1) % MAX_NMEA_DATA
-  ggaData.value = ggaDataBuffer.slice(0, ggaDataIndex)
+  ggaData.value.push(data)
+  trimHistory(ggaData.value)
+  ggaDataDirty = true
+  publishPendingData()
 }
 
 function timeArrToString (time: any) {
@@ -47,7 +81,7 @@ function timeArrToString (time: any) {
 }
 
 function addSatelliteSnrData(data: SatelliteSnrData) {
-  satelliteSnrBuffer[satelliteSnrIndex] = {
+  const item = {
     prn: data.prn,
     elevation: parseFloat(String(data.elevation)) || 0,
     azimuth: parseFloat(String(data.azimuth)) || 0,
@@ -55,12 +89,9 @@ function addSatelliteSnrData(data: SatelliteSnrData) {
     constellation: data.constellation,
     timestamp: new Date().toISOString()
   }
-
-  // 通常不会超过50*3，为了进行异常处理，则覆盖前面的卫星信息
-  satelliteSnrIndex = (satelliteSnrIndex + 1) % MAX_SNR_DATA
-
-  // 更新响应式数据，保留最新3s内的数据
-  satelliteSnrData.value = satelliteSnrBuffer.filter(item => item !== null && item.timestamp > new Date(Date.now() - 3000).toISOString())
+  latestSatelliteData.set(`${item.constellation}-${item.prn}`, item)
+  satelliteDataDirty = true
+  publishPendingData()
 }
 
 enum NmeaType {
@@ -70,6 +101,7 @@ enum NmeaType {
   RMC = 'RMC',
   VTG = 'VTG',
   GSV = 'GSV',
+  GST = 'GST',
   UNKNOWN = 'UNKNOWN',
 }
 
@@ -167,6 +199,18 @@ interface GsvData {
   }>
 }
 
+// GST语句结构（定位误差统计）
+interface GstData {
+  time: string
+  rms: string
+  stdMajor: string
+  stdMinor: string
+  orient: string
+  stdLat: string
+  stdLon: string
+  stdAlt: string
+}
+
 // 添加卫星SNR数据接口
 interface SatelliteSnrData {
   prn: string
@@ -230,24 +274,6 @@ const latestPosition = computed(() => {
 })
 
 const enableWindow = ref(false);
-const plotData = computed(() => {
-  if (enableWindow.value) {
-    if (Array.isArray(nmeaData.value)) {
-      const res = [];
-      for (let d of nmeaData.value.slice(-100)) {
-        res.push([d.enuE, d.enuN, d.quality])
-      }
-      return res;
-    }
-    return [];
-  } else {
-    const res = [];
-    for (let d of nmeaData.value) {
-      res.push([d.enuE, d.enuN, d.quality])
-    }
-    return res;
-  }
-});
 
 const latestGgaPosition = computed(() => {
   // 从后往前遍历，找到第一个有效位置
@@ -278,10 +304,9 @@ export function numberToQuality (num: number) {
   }
 }
 
-export function useNmea() {
-  const streamParser = new NmeaStreamParser()
-  let firstLLh: any = null
+const streamParser = new NmeaStreamParser()
 
+export function useNmea() {
   // 计算属性：信号质量
   const signalQuality = computed(() => {
     if (!currentData.value.satellites || !currentData.value.hdop) return '无信号'
@@ -341,18 +366,12 @@ export function useNmea() {
 
     gnssStore.status.utcTime = data.time
     gnssStore.status.fixMode = numberToQuality(parseInt(data.quality))
-    gnssStore.status.TTFF = 'Invalid'
     gnssStore.status.longitude = parseFloat(lonRes.toFixed(6))
     gnssStore.status.latitude = parseFloat(latRes.toFixed(6))
     gnssStore.status.altitude = parseFloat(data.altitude)
     gnssStore.status.altitudeMsl = parseFloat((parseFloat(data.altitude) + parseFloat(data.geoidHeight)).toFixed(2))
-    gnssStore.status.velocity = 'Invalid'
-    gnssStore.status.threeDAcc = 'Invalid'
-    gnssStore.status.twoDAcc = 'Invalid'
-    gnssStore.status.PDOP = 'Invalid'
     gnssStore.status.HDOP = data.hdop
     gnssStore.status.satsUsed = data.satellites
-    gnssStore.status.satsVisible = 'Invalid'
     
     return {
       time: data.time,
@@ -369,6 +388,7 @@ export function useNmea() {
 
   // 解析GSV语句
   function parseGsv(sentence: string): Partial<NmeaData> {
+    const gnssStore = useGnssStore()
     const parts = sentence.split(',')
     if (parts.length < 8) return {}
     
@@ -417,10 +437,7 @@ export function useNmea() {
       }
     }
     
-    // 限制SNR数据数量
-    if (satelliteSnrData.value.length > MAX_SNR_DATA) {
-      satelliteSnrData.value.shift()
-    }
+    gnssStore.status.satsVisible = data.satellitesInView
     
     return {
       satellites: parseInt(data.satellitesInView) || null,
@@ -430,6 +447,7 @@ export function useNmea() {
 
   // 解析RMC语句
   function parseRmc(sentence: string): Partial<NmeaData> {
+    const gnssStore = useGnssStore()
     const parts = sentence.split(',')
     if (parts.length < 12) return {}
     
@@ -451,6 +469,7 @@ export function useNmea() {
     // 计算速度（节转km/h）
     const speedKnots = parseFloat(data.speed) || 0
     const speedKmh = speedKnots * 1.852
+    gnssStore.status.velocity = speedKmh.toFixed(2)
 
     const timeParts = data.time // Hhmmss.ss
     const dateParts = data.date // ddmmyy
@@ -483,6 +502,7 @@ export function useNmea() {
 
   // 解析VTG语句
   function parseVtg(sentence: string): Partial<NmeaData> {
+    const gnssStore = useGnssStore()
     const parts = sentence.split(',')
     if (parts.length < 9) return {}
     
@@ -499,6 +519,7 @@ export function useNmea() {
     }
     
     const speedKmh = parseFloat(data.speedKmh) || 0
+    gnssStore.status.velocity = speedKmh.toFixed(2)
     
     return {
       speed: speedKmh,
@@ -531,8 +552,40 @@ export function useNmea() {
     }
   }
 
+  // 解析GST语句（定位误差统计）
+  function parseGst(sentence: string): Partial<NmeaData> {
+    const gnssStore = useGnssStore()
+    const parts = sentence.split(',')
+    if (parts.length < 9) return {}
+
+    const data: GstData = {
+      time: parts[1],
+      rms: parts[2],
+      stdMajor: parts[3],
+      stdMinor: parts[4],
+      orient: parts[5],
+      stdLat: parts[6],
+      stdLon: parts[7],
+      stdAlt: parts[8].split('*')[0],
+    }
+
+    const stdLat = parseFloat(data.stdLat) || 0
+    const stdLon = parseFloat(data.stdLon) || 0
+    const stdAlt = parseFloat(data.stdAlt) || 0
+
+    const twoDAcc = Math.hypot(stdLat, stdLon)
+    const threeDAcc = Math.hypot(stdLat, stdLon, stdAlt)
+
+    gnssStore.status.twoDAcc = twoDAcc.toFixed(2)
+    gnssStore.status.threeDAcc = threeDAcc.toFixed(2)
+
+    return {
+      raw: sentence,
+    }
+  }
+
   // 主解析函数
-  function parseNmea(sentence: string): NmeaType {
+  function parseNmeaInternal(sentence: string): NmeaType {
     if (!sentence || !sentence.startsWith('$')) {
       // return { ...currentData.value, raw: sentence }
       return NmeaType.UNKNOWN
@@ -585,9 +638,16 @@ export function useNmea() {
     } else if (sentence.includes('GSA')) {
       parsedData = parseGsa(sentence)
       return NmeaType.GSA
+    } else if (sentence.includes('GST')) {
+      parsedData = parseGst(sentence)
+      return NmeaType.GST
     } else {
       return NmeaType.UNKNOWN
     }
+  }
+
+  function parseNmea(sentence: string): NmeaType {
+    return runInBatch(() => parseNmeaInternal(sentence))
   }
 
   // 批量解析函数
@@ -613,6 +673,14 @@ export function useNmea() {
 
   // 清除数据
   function clearData() {
+    batchDepth = 0
+    nmeaDataDirty = false
+    ggaDataDirty = false
+    satelliteDataDirty = false
+    firstLLh = null
+    latestSatelliteData.clear()
+    utcTime.fill(0)
+    streamParser.clear()
     nmeaData.value = []
     ggaData.value = []
     satelliteSnrData.value = []  // 确保清除卫星数据
@@ -658,7 +726,9 @@ export function useNmea() {
 
   // 添加处理原始数据的函数
   function processRawData(rawData: string): void {
-    for (const sentence of streamParser.push(rawData)) parseNmea(sentence.trim())
+    runInBatch(() => {
+      for (const sentence of streamParser.push(rawData)) parseNmeaInternal(sentence.trim())
+    })
   }
 
   // 添加清除缓冲区的函数
@@ -709,7 +779,6 @@ export function useNmea() {
       signalQuality,
       fixStatus,
       enableWindow,
-      plotData,
       // toggleSlideWindow,
       parseNmea,
       parseNmeaBatch,

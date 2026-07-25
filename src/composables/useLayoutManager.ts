@@ -70,6 +70,8 @@ export function useLayoutManager() {
   const layoutApplicationId = ref<string | undefined>()
   const layoutDraggableList = ref<LayoutItem[]>([])
   const originalLayout = ref<LayoutItem[]>([])
+  // 用户主动移除的窗口，恢复布局时不再作为“缺失窗口”自动补回
+  const removedWindowIds = new Set<string>()
 
   const currentApplication = computed(() =>
     applications.value.find(application => application.id === layoutApplicationId.value),
@@ -117,6 +119,7 @@ export function useLayoutManager() {
       layoutApplicationId.value,
       layoutToSave as PersistedLayoutItem[],
       showStatusBar.value !== false,
+      [...removedWindowIds],
     )
   }
 
@@ -142,7 +145,8 @@ export function useLayoutManager() {
     })
 
     const missing = allowedWindows.value
-      .filter(windowDefinition => !restoredWindowIds.has(windowDefinition.id))
+      .filter(windowDefinition =>
+        !restoredWindowIds.has(windowDefinition.id) && !removedWindowIds.has(windowDefinition.id))
       .map((windowDefinition, index) => createLayoutItem(windowDefinition, restored.length + index))
 
     layoutDraggableList.value = [...restored, ...missing]
@@ -156,6 +160,7 @@ export function useLayoutManager() {
 
   async function initLayout(applicationId = currentApplicationId.value) {
     layoutApplicationId.value = applicationId
+    removedWindowIds.clear()
     if (!applicationId || !currentApplication.value) {
       layoutDraggableList.value = []
       backupCurrentLayout()
@@ -168,6 +173,7 @@ export function useLayoutManager() {
 
     const savedLayout = layoutStorage.load(applicationId)
     showStatusBar.value = savedLayout?.showStatusBar ?? true
+    savedLayout?.removedWindowIds?.forEach(id => removedWindowIds.add(id))
 
     if (!savedLayout) {
       await createDefaultLayout()
@@ -204,6 +210,7 @@ export function useLayoutManager() {
 
   async function resetLayout() {
     if (layoutApplicationId.value) layoutStorage.remove(layoutApplicationId.value)
+    removedWindowIds.clear()
     await createDefaultLayout()
   }
 
@@ -236,6 +243,7 @@ export function useLayoutManager() {
       return
     }
 
+    removedWindowIds.delete(windowDefinition.id)
     layoutDraggableList.value.unshift({
       ...createLayoutItem(windowDefinition, layoutDraggableList.value.length),
       i: `${windowDefinition.id}-${Date.now()}`,
@@ -246,7 +254,10 @@ export function useLayoutManager() {
 
   function removeItem(id: string) {
     const index = layoutDraggableList.value.findIndex(item => item.i === id)
-    if (index !== -1) layoutDraggableList.value.splice(index, 1)
+    if (index === -1) return
+
+    removedWindowIds.add(layoutDraggableList.value[index].windowId)
+    layoutDraggableList.value.splice(index, 1)
   }
 
   async function handleApplicationChange(applicationId: string, forceReload = false) {

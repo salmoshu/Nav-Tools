@@ -492,32 +492,23 @@ const handleSendMessage = () => {
   }
 }
 
-// 滚动到底部函数 - 精确版本
+// 滚动到底部函数 - rAF 节流版本，避免高频消息下的强制布局风暴
+let scrollScheduled = false;
 const handleScrollToBottom = () => {
-  if (scrollerRef.value && filteredMessages.value.length > 0) {
-    nextTick(() => {
-      // 方法1：先滚动到最后一项
+  if (scrollScheduled) return;
+  if (!scrollerRef.value || filteredMessages.value.length === 0) return;
+  scrollScheduled = true;
+  requestAnimationFrame(() => {
+    scrollScheduled = false;
+    if (!scrollerRef.value) return;
+    const el = scrollerRef.value.$el;
+    const distanceFromBottom = el.scrollHeight - (el.scrollTop + el.clientHeight);
+    if (distanceFromBottom > 2) { // 允许2px的误差
       scrollerRef.value.scrollToItem(filteredMessages.value.length - 1);
-      
-      // 方法2：再微调到底部（处理边距和padding）
-      setTimeout(() => {
-        if (scrollerRef.value) {
-          const el = scrollerRef.value.$el;
-          const currentScrollTop = el.scrollTop;
-          const scrollHeight = el.scrollHeight;
-          const clientHeight = el.clientHeight;
-          
-          // 如果还有距离，手动滚动到底部
-          const distanceFromBottom = scrollHeight - (currentScrollTop + clientHeight);
-          if (distanceFromBottom > 2) { // 允许2px的误差
-            el.scrollTop = scrollHeight - clientHeight;
-          }
-          
-          isAtBottom.value = true;
-        }
-      }, 50); // 给DOM足够的稳定时间
-    });
-  }
+      el.scrollTop = el.scrollHeight - el.clientHeight;
+    }
+    isAtBottom.value = true;
+  });
 };
 
 // 监听搜索查询变化

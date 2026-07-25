@@ -24,6 +24,7 @@ export function useDeviationChart(options: UseDeviationChartOptions = {}) {
   const chartDom = ref<HTMLElement | null>(null);
 
   let resizeObserver: ResizeObserver | null = null;
+  let resizeFrame: number | null = null;
 
   function createChart() {
     if (!chartRef.value) return null;
@@ -44,6 +45,10 @@ export function useDeviationChart(options: UseDeviationChartOptions = {}) {
       resizeObserver.disconnect();
       resizeObserver = null;
     }
+    if (resizeFrame !== null) {
+      cancelAnimationFrame(resizeFrame);
+      resizeFrame = null;
+    }
   }
 
   function setupResizeObserver(onResize: () => void) {
@@ -51,21 +56,14 @@ export function useDeviationChart(options: UseDeviationChartOptions = {}) {
 
     disconnectResizeObserver();
     resizeObserver = new ResizeObserver(() => {
-      nextTick(() => {
+      if (resizeFrame !== null) cancelAnimationFrame(resizeFrame);
+      resizeFrame = requestAnimationFrame(() => {
+        resizeFrame = null;
         const chart = chartInstance.value;
         if (!chart || !chart.getDom()) return;
 
-        const option = chart.getOption();
-        if (option && option.series) {
-          option.series = option.series.map((series: any) => ({
-            ...series,
-            coordinateSystem: 'cartesian2d',
-          }));
-          chart.setOption(option, false);
-        }
-
-        onResize();
         chart.resize();
+        nextTick(onResize);
       });
     });
 
@@ -84,7 +82,7 @@ export function useDeviationChart(options: UseDeviationChartOptions = {}) {
       xAxisIndex: 0,
       zoomOnMouseWheel: false,
       moveOnMouseWheel: !isTracking.value,
-      moveOnMouseMove: !isTracking.value,
+      moveOnMouseMove: true,
     };
 
     const initYConfig = {
@@ -92,7 +90,7 @@ export function useDeviationChart(options: UseDeviationChartOptions = {}) {
       yAxisIndex: 0,
       zoomOnMouseWheel: false,
       moveOnMouseWheel: !isTracking.value,
-      moveOnMouseMove: !isTracking.value,
+      moveOnMouseMove: true,
     };
 
     if (xStart !== undefined && xEnd !== undefined && yStart !== undefined && yEnd !== undefined) {
@@ -162,7 +160,7 @@ export function useDeviationChart(options: UseDeviationChartOptions = {}) {
     chartDom.value = chartInstance.value?.getDom() ?? null;
     if (!chartDom.value) return;
 
-    const listener = handler as EventListener;
+    const listener = handler as unknown as (event: Event) => void;
     chartDom.value.addEventListener('mousewheel', listener, { passive: false, capture: true });
     chartDom.value.addEventListener('wheel', listener, { passive: false, capture: true });
   }
@@ -170,7 +168,7 @@ export function useDeviationChart(options: UseDeviationChartOptions = {}) {
   function unbindWheelHandler(handler: WheelHandler) {
     if (!chartDom.value) return;
 
-    const listener = handler as EventListener;
+    const listener = handler as unknown as (event: Event) => void;
     chartDom.value.removeEventListener('mousewheel', listener, { capture: true });
     chartDom.value.removeEventListener('wheel', listener, { capture: true });
     chartDom.value = null;

@@ -2,53 +2,79 @@
   <div class="deviation-container">
     <div class="control-panel">
       <div class="controls">
-        <!-- 视图配置按钮 -->
         <el-button type="default" size="small" @click="showViewConfig" class="control-btn config-btn">
           <el-icon><Setting /></el-icon>&nbsp;配置
         </el-button>
-        
-        <!-- 滑窗开关按钮 -->
-        <el-button :disabled="deviceConnected" type="default" size="small" @click="toggleSlideWindow">
-          <el-icon v-if="enableWindow"><CircleClose /></el-icon>
-          <el-icon v-else><CircleCheck /></el-icon>
-          &nbsp;{{enableWindow?"关闭滑窗":"启用滑窗"}}
+
+        <el-button
+          type="default"
+          size="small"
+          title="跟踪"
+          aria-label="跟踪"
+          class="tracking-button"
+          @click="toggleTracking"
+        >
+          <el-icon><Aim /></el-icon>
+          <span class="tracking-text">&nbsp;{{ isTracking ? "关闭跟踪" : "启用跟踪" }}</span>
         </el-button>
 
-        <el-button type="default" size="small" @click="toggleTracking">
-          <el-icon><Aim /></el-icon>
-          &nbsp;{{isTracking?"关闭跟踪":"启用跟踪"}}
-        </el-button>
-        
-        <!-- 添加轨迹点尺寸调节滑块 -->
         <div class="point-size-control">
           <span class="size-label">尺寸:</span>
           <el-slider
             v-model="pointSize"
             :min="5"
             :max="20"
-            :step="1" 
+            :step="1"
             class="point-slider"
             @change="updatePointSize"
           />
           <span class="size-value">{{ pointSize }}</span>
         </div>
 
-        <!-- 将重置、清除按钮放在右侧 -->
+        <div class="legend-panel">
+          <div
+            v-for="track in [1, 2, 3, 4]"
+            :key="track"
+            class="legend-item"
+            :class="{ disabled: !legendVisible[track - 1] }"
+            @click="toggleLegend(track)"
+          >
+            <span
+              class="legend-color"
+              :style="{ backgroundColor: getTrackColor(track) }"
+            ></span>
+            <span class="legend-label">轨迹{{ track }}</span>
+          </div>
+        </div>
+
         <div class="right-buttons">
-          <!-- 重置布局按钮 -->
           <el-button type="text" size="small" @click="resetZoom" class="zoom-btn" style="margin: 0px 0px;">
             <el-icon><Refresh /></el-icon>
+          </el-button>
+          <el-button type="text" size="small" @click="clearTrack" class="clear-btn" style="margin: 0px 0px;">
+            <el-icon><Delete /></el-icon>
           </el-button>
         </div>
       </div>
     </div>
+
     <div class="chart-container" ref="chartContainerRef">
-      <!-- 移除正方形包装器，让图表直接填充容器 -->
-      <div ref="chartRef" class="chart"></div>
+      <canvas ref="canvasRef" class="chart"></canvas>
+      <canvas ref="axisCanvasRef" class="axis-layer"></canvas>
+      <div
+        ref="tooltipRef"
+        class="deviation-tooltip"
+        :style="tooltipStyle"
+        v-show="tooltipVisible"
+      >
+        {{ tooltipText }}
+      </div>
+      <div ref="infoBarRef" class="info-bar" v-show="infoBarVisible">
+        {{ infoBarText }}
+      </div>
     </div>
   </div>
 
-  <!-- 视图配置对话框 -->
   <DeviationConfigDialog
     v-model="viewConfigDialogVisible"
     :available-sources="availableSources"
@@ -57,1634 +83,965 @@
   />
 </template>
 
-<script setup>
-import { ref, watch, onMounted, onUnmounted, nextTick, computed, reactive } from 'vue';
-import { useFlow } from '@/composables/flow/useFlow';
+<script setup lang="ts">
+import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch, type Ref } from 'vue'
+import { ElMessage } from 'element-plus'
+import { useFlow } from '@/composables/flow/useFlow'
 import { useDevice } from '@/hooks/useDevice'
-import { ElMessage } from 'element-plus';
-import { useDataConfig } from '@/composables/flow/useDataConfig';
-import { useConsole } from '@/composables/flow/useConsole';
-import { useTheme } from '@/composables/useTheme';
-import DeviationConfigDialog from './DeviationConfigDialog.vue';
-import { useDeviationChart } from './deviation/useDeviationChart';
+import { useDataConfig } from '@/composables/flow/useDataConfig'
+import { useConsole } from '@/composables/flow/useConsole'
+import { useTheme } from '@/composables/useTheme'
+import DeviationConfigDialog from './DeviationConfigDialog.vue'
+import { createMultiSeriesTrajectoryRenderer } from '@/core/render/createMultiSeriesTrajectoryRenderer'
+import type {
+  MultiSeriesTrajectoryRenderer,
+  PickedPoint,
+} from '@/core/render/MultiSeriesTrajectoryRenderer'
+import {
+  clampVisibleSpan,
+  fitDeviationPoints,
+  fitDeviationPointsAroundCenter,
+  GNSS_MIN_VISIBLE_SPAN_METERS,
+} from '@/core/deviation/DeviationViewport'
 
-const { deviationConfig } = useDataConfig();
-
-// 导入搜索功能
-const { searchQuery } = useConsole(true);
-
-// 注册ECharts组件
-const { plotData, toggleSlideWindow, enableWindow } = useFlow();
+const { flowData } = useFlow()
 const { deviceConnected } = useDevice()
-const { chartTheme, resolvedTheme } = useTheme();
+const { deviationConfig } = useDataConfig(flowData)
+const { searchQuery } = useConsole(true)
+const { chartTheme, resolvedTheme } = useTheme()
 
-// 颜色处理辅助函数
-function getValidColor(color, defaultColor) {
-  if (!color || color === '' || !color.startsWith('#')) {
-    return defaultColor;
-  }
-  return color;
+const LIMIT_METERS = 10000
+const TRACK_IDS = ['track1', 'track2', 'track3', 'track4'] as const
+
+type TrackId = (typeof TRACK_IDS)[number]
+type TimeIndexEntry = { track1?: number; track2?: number; track3?: number; track4?: number }
+
+const plotData = computed<Record<string, unknown>>(() => flowData.value)
+
+const canvasRef = ref<HTMLCanvasElement | null>(null)
+const axisCanvasRef = ref<HTMLCanvasElement | null>(null)
+const chartContainerRef = ref<HTMLDivElement | null>(null)
+
+let renderer: MultiSeriesTrajectoryRenderer | null = null
+let axisCtx: CanvasRenderingContext2D | null = null
+
+let axisDpr = 1
+let axisCssWidth = 0
+let axisCssHeight = 0
+
+const isTracking = ref(false)
+const pointSize = ref(10)
+const tooltipVisible = ref(false)
+const tooltipText = ref('')
+const tooltipStyle = ref<Record<string, string>>({})
+const infoBarVisible = ref(false)
+const infoBarText = ref('')
+
+const DRAG_THRESHOLD_PX = 3
+let isDragging = false
+let dragStartClientX = 0
+let dragStartClientY = 0
+let dragLastClientX = 0
+let dragLastClientY = 0
+let dragHasMoved = false
+
+const viewport = ref({
+  xMin: -10,
+  xMax: 10,
+  yMin: -10,
+  yMax: 10,
+})
+let trackingXHalfSpan = 10
+let trackingYHalfSpan = 10
+
+const legendVisible = ref([true, true, true, true])
+
+const trackData: Array<[number, number][]> = [[], [], [], []]
+const trackToRawIndex: number[][] = [[], [], [], []]
+const timeIndexMap = new Map<number, TimeIndexEntry>()
+
+interface TrackAppendState {
+  xRef: number[] | null
+  yRef: number[] | null
+  processed: number
 }
 
-function hexToRgba(color, alpha = 1) {
-  const validColor = getValidColor(color, '#5470c6');
-  const r = parseInt(validColor.slice(1, 3), 16);
-  const g = parseInt(validColor.slice(3, 5), 16);
-  const b = parseInt(validColor.slice(5, 7), 16);
-  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-}
+const trackAppendState: TrackAppendState[] = [
+  { xRef: null, yRef: null, processed: 0 },
+  { xRef: null, yRef: null, processed: 0 },
+  { xRef: null, yRef: null, processed: 0 },
+  { xRef: null, yRef: null, processed: 0 },
+]
 
-// DOM引用和响应式变量
-const {
-  chartRef,
-  chartInstance,
-  chartContainerRef,
-  isTracking,
-  padding,
-  pointSize,
-  createChart,
-  setupResizeObserver,
-  disconnectResizeObserver,
-  getDataZoomConfig,
-  maintainEqualAxisScale,
-  bindWheelHandler,
-  unbindWheelHandler,
-} = useDeviationChart({ initialTracking: false });
-const highlightTimeout = ref(null); // 添加高亮超时定时器
-// 移除squareSize变量
+let lastOffsetX = 0
+let lastOffsetY = 0
+let trackOffsetX = 0
+let trackOffsetY = 0
+let lastFlowRenderKey = ''
+let flowUpdateFrame: number | null = null
+let isPaused = true
 
-// 视图配置相关变量
-const viewConfigDialogVisible = ref(false);
+const latestPointInfo = reactive<{
+  track: number | null
+  index: number
+  data: [number, number] | null
+}>({
+  track: null,
+  index: -1,
+  data: null,
+})
 
-// 计算可用数据源
+let resizeObserver: ResizeObserver | null = null
+let resizeFrame: number | null = null
+
+const viewConfigDialogVisible = ref(false)
+
 const availableSources = computed(() => {
-  if (!plotData.value || !plotData.value.plotTime) return [];
+  if (!plotData.value || !plotData.value.plotTime) return []
   return Object.keys(plotData.value).filter(
-    key => key !== 'plotTime' && 
-    key !== 'timestamp' && 
-    key !== 'startTime' && 
-    key !== 'rawDataKeys' &&
-    plotData.value[key].length > 0
-  );
-});
+    (key) =>
+      key !== 'plotTime' &&
+      key !== 'timestamp' &&
+      key !== 'startTime' &&
+      key !== 'rawDataKeys' &&
+      Array.isArray(plotData.value[key]) &&
+      (plotData.value[key] as unknown[]).length > 0,
+  )
+})
 
-let trackOffsetX = 0;
-let trackOffsetY = 0;
-// 数据存储变量
-let track1Data = [];
-let track2Data = [];
-let track3Data = [];
-let track4Data = [];
-// 索引映射
-let track1ToRawIndex = [];
-let track2ToRawIndex = [];
-let track3ToRawIndex = [];
-let track4ToRawIndex = [];
-// 最新点信息，用于高亮显示
-const latestPointInfo = reactive({
-  track: null, // 1, 2, 或 3
-  index: -1,   // 在对应轨迹中的索引
-  data: null   // [x, y] 坐标
-});
-// let firstPosition = null;
-// const maxTrackPoints = 3600 * 12;
-// const minPadding = 10000; // 最小范围正负10km
-
-// 显示视图配置对话框
-function showViewConfig() {
-  viewConfigDialogVisible.value = true;
+function getValidColor(color: string | undefined, defaultColor: string): string {
+  if (!color || color === '' || !color.startsWith('#')) return defaultColor
+  return color
 }
 
-// 应用视图配置
-function applyViewConfig() {
-  // 验证是否至少配置了一条轨迹
-  if (!deviationConfig.track1X.value && !deviationConfig.track2X.value && !deviationConfig.track3X.value && !deviationConfig.track4X.value) {
+function hexToRgba(color: string, alpha = 1): string {
+  const validColor = getValidColor(color, '#5470c6')
+  const r = parseInt(validColor.slice(1, 3), 16)
+  const g = parseInt(validColor.slice(3, 5), 16)
+  const b = parseInt(validColor.slice(5, 7), 16)
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`
+}
+
+function hexToRendererColor(color: string, alpha = 1): [number, number, number, number] {
+  const validColor = getValidColor(color, '#5470c6')
+  const r = parseInt(validColor.slice(1, 3), 16) / 255
+  const g = parseInt(validColor.slice(3, 5), 16) / 255
+  const b = parseInt(validColor.slice(5, 7), 16) / 255
+  return [r, g, b, alpha]
+}
+
+function getTrackColor(track: number): string {
+  const key = `track${track}Color` as keyof typeof deviationConfig
+  return (deviationConfig[key] as { value: string }).value
+}
+
+function dataToScreenX(x: number): number {
+  if (axisCssWidth <= 0) return 0
+  return ((x - viewport.value.xMin) / (viewport.value.xMax - viewport.value.xMin)) * axisCssWidth
+}
+
+function dataToScreenY(y: number): number {
+  if (axisCssHeight <= 0) return 0
+  return (
+    axisCssHeight -
+    ((y - viewport.value.yMin) / (viewport.value.yMax - viewport.value.yMin)) * axisCssHeight
+  )
+}
+
+function niceTickStep(span: number): number {
+  if (!Number.isFinite(span) || span <= 0) return 1
+  const targetTicks = 6
+  const rough = span / targetTicks
+  const exp = Math.floor(Math.log10(rough))
+  const fraction = rough / Math.pow(10, exp)
+  let step = 10
+  if (fraction <= 2) step = 2
+  else if (fraction <= 5) step = 5
+  return step * Math.pow(10, exp)
+}
+
+function getAxisName(axis: 'X' | 'Y'): string {
+  for (let i = 1; i <= 4; i++) {
+    const key = `track${i}${axis}` as keyof typeof deviationConfig
+    const val = (deviationConfig[key] as { value: string }).value
+    if (val) return val
+  }
+  return ''
+}
+
+function drawAxisLayer(): void {
+  if (!axisCtx || !axisCanvasRef.value) return
+
+  const width = axisCssWidth
+  const height = axisCssHeight
+  const colors = chartTheme.value
+  const ctx = axisCtx
+
+  ctx.save()
+  ctx.setTransform(axisDpr, 0, 0, axisDpr, 0, 0)
+  ctx.clearRect(0, 0, width, height)
+
+  const { xMin, xMax, yMin, yMax } = viewport.value
+  const xStep = niceTickStep(xMax - xMin)
+  const yStep = niceTickStep(yMax - yMin)
+
+  const xStart = Math.ceil(xMin / xStep) * xStep
+  const xEnd = Math.floor(xMax / xStep) * xStep
+  const yStart = Math.ceil(yMin / yStep) * yStep
+  const yEnd = Math.floor(yMax / yStep) * yStep
+
+  ctx.strokeStyle = colors.grid
+  ctx.lineWidth = 1
+  ctx.setLineDash([4, 4])
+  ctx.font = '12px sans-serif'
+  ctx.fillStyle = colors.textMuted
+
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'top'
+  for (let x = xStart; x <= xEnd + 1e-9; x += xStep) {
+    const sx = dataToScreenX(x)
+    ctx.beginPath()
+    ctx.moveTo(sx, 0)
+    ctx.lineTo(sx, height)
+    ctx.stroke()
+    ctx.fillText(x.toFixed(2), sx, height - 18)
+  }
+
+  ctx.textAlign = 'left'
+  ctx.textBaseline = 'middle'
+  for (let y = yStart; y <= yEnd + 1e-9; y += yStep) {
+    const sy = dataToScreenY(y)
+    ctx.beginPath()
+    ctx.moveTo(0, sy)
+    ctx.lineTo(width, sy)
+    ctx.stroke()
+    ctx.fillText(y.toFixed(2), 8, sy)
+  }
+
+  ctx.setLineDash([])
+  ctx.strokeStyle = colors.border
+  ctx.lineWidth = 1.5
+  if (xMin <= 0 && xMax >= 0) {
+    const sx = dataToScreenX(0)
+    ctx.beginPath()
+    ctx.moveTo(sx, 0)
+    ctx.lineTo(sx, height)
+    ctx.stroke()
+  }
+  if (yMin <= 0 && yMax >= 0) {
+    const sy = dataToScreenY(0)
+    ctx.beginPath()
+    ctx.moveTo(0, sy)
+    ctx.lineTo(width, sy)
+    ctx.stroke()
+  }
+
+  const xAxisName = getAxisName('X')
+  const yAxisName = getAxisName('Y')
+  if (xAxisName) {
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'bottom'
+    ctx.fillStyle = colors.text
+    ctx.fillText(xAxisName, width / 2, height - 4)
+  }
+  if (yAxisName) {
+    ctx.save()
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'top'
+    ctx.fillStyle = colors.text
+    ctx.translate(14, height / 2)
+    ctx.rotate(-Math.PI / 2)
+    ctx.fillText(yAxisName, 0, 0)
+    ctx.restore()
+  }
+
+  ctx.restore()
+}
+
+function drawCurrentPositions(): void {
+  if (!axisCtx || !axisCanvasRef.value) return
+
+  const ctx = axisCtx
+  ctx.save()
+  ctx.setTransform(axisDpr, 0, 0, axisDpr, 0, 0)
+  for (let i = 0; i < 4; i++) {
+    if (!legendVisible.value[i]) continue
+    const data = trackData[i]
+    if (data.length === 0) continue
+    const [x, y] = data[data.length - 1]
+    const sx = dataToScreenX(x)
+    const sy = dataToScreenY(y)
+    const radius = Math.max(2, (pointSize.value * 1.2) / 2)
+    const color = hexToRgba(getTrackColor(i + 1), 1)
+
+    ctx.fillStyle = color
+    ctx.strokeStyle = '#ffffff'
+    ctx.lineWidth = 2
+    ctx.beginPath()
+    ctx.arc(sx, sy, radius, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.stroke()
+  }
+  ctx.restore()
+}
+
+function drawHighlights(entry?: TimeIndexEntry): void {
+  drawAxisLayer()
+  drawCurrentPositions()
+  if (!entry || !axisCtx || !axisCanvasRef.value) return
+
+  const ctx = axisCtx
+  ctx.save()
+  ctx.setTransform(axisDpr, 0, 0, axisDpr, 0, 0)
+  for (let i = 0; i < 4; i++) {
+    if (!legendVisible.value[i]) continue
+    const idx = entry[`track${i + 1}` as keyof TimeIndexEntry]
+    if (idx === undefined) continue
+    const point = trackData[i][idx]
+    if (!point) continue
+    const [x, y] = point
+    const sx = dataToScreenX(x)
+    const sy = dataToScreenY(y)
+    const radius = Math.max(3, (pointSize.value * 1.5) / 2)
+    const color = hexToRgba(getTrackColor(i + 1), 1)
+
+    ctx.fillStyle = color
+    ctx.strokeStyle = '#ffffff'
+    ctx.lineWidth = 2
+    ctx.beginPath()
+    ctx.arc(sx, sy, radius, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.stroke()
+  }
+  ctx.restore()
+}
+
+function updateViewport(xMin: number, xMax: number, yMin: number, yMax: number): void {
+  viewport.value = { xMin, xMax, yMin, yMax }
+  renderer?.setViewport(xMin, xMax, yMin, yMax)
+  drawAxisLayer()
+  drawCurrentPositions()
+}
+
+function resetTrackAppendState(): void {
+  for (const state of trackAppendState) {
+    state.xRef = null
+    state.yRef = null
+    state.processed = 0
+  }
+}
+
+function determineTrackingTarget(sourceData: Record<string, unknown>): {
+  track: number | null
+  data: [number, number] | null
+  index: number
+} {
+  for (let i = 0; i < 4; i++) {
+    const n = i + 1
+    const xField = (deviationConfig[`track${n}X` as keyof typeof deviationConfig] as { value: string }).value
+    const yField = (deviationConfig[`track${n}Y` as keyof typeof deviationConfig] as { value: string }).value
+    if (!xField || !yField) continue
+    const xData = sourceData[xField] as number[] | undefined
+    const yData = sourceData[yField] as number[] | undefined
+    if (!xData || !yData || xData.length === 0 || yData.length === 0) continue
+    const last = xData.length - 1
+    return { track: n, data: [Number(xData[last]), Number(yData[last])], index: last }
+  }
+  return { track: null, data: null, index: -1 }
+}
+
+function syncRendererData(): void {
+  if (!renderer) return
+
+  const sourceData = plotData.value
+  const configuredFields = [
+    deviationConfig.track1X.value,
+    deviationConfig.track1Y.value,
+    deviationConfig.track2X.value,
+    deviationConfig.track2Y.value,
+    deviationConfig.track3X.value,
+    deviationConfig.track3Y.value,
+    deviationConfig.track4X.value,
+    deviationConfig.track4Y.value,
+  ]
+
+  const renderKey = [
+    isTracking.value,
+    ...configuredFields.map((field) => {
+      const values = field ? sourceData[field] : undefined
+      if (!Array.isArray(values) || values.length === 0) return `${field ?? ''}:0`
+      return `${field}:${values.length}:${values[0]}:${values[values.length - 1]}`
+    }),
+  ].join('|')
+
+  if (renderKey === lastFlowRenderKey) return
+  lastFlowRenderKey = renderKey
+
+  const target = determineTrackingTarget(sourceData)
+
+  let offsetX = 0
+  let offsetY = 0
+  if (isTracking.value && target.data) {
+    offsetX = target.data[0]
+    offsetY = target.data[1]
+  } else if (!isTracking.value) {
+    const xField = deviationConfig.track1X.value
+    const yField = deviationConfig.track1Y.value
+    if (xField && yField) {
+      const xData = sourceData[xField] as number[] | undefined
+      const yData = sourceData[yField] as number[] | undefined
+      if (xData && yData && xData.length > 0 && yData.length > 0) {
+        offsetX = Number(xData[0])
+        offsetY = Number(yData[0])
+      }
+    }
+  }
+
+  if (target.track !== null && target.index >= 0) {
+    latestPointInfo.track = target.track
+    latestPointInfo.index = target.index
+    latestPointInfo.data = target.data
+  } else {
+    latestPointInfo.track = null
+    latestPointInfo.index = -1
+    latestPointInfo.data = null
+  }
+
+  trackOffsetX = offsetX
+  trackOffsetY = offsetY
+
+  const trackSources = [
+    [deviationConfig.track1X.value, deviationConfig.track1Y.value],
+    [deviationConfig.track2X.value, deviationConfig.track2Y.value],
+    [deviationConfig.track3X.value, deviationConfig.track3Y.value],
+    [deviationConfig.track4X.value, deviationConfig.track4Y.value],
+  ].map(([xField, yField]) => {
+    if (!xField || !yField) return null
+    const xData = sourceData[xField] as number[] | undefined
+    const yData = sourceData[yField] as number[] | undefined
+    if (!xData || !yData || xData.length === 0 || yData.length === 0) return null
+    return { xData, yData }
+  })
+
+  const offsetUnchanged = offsetX === lastOffsetX && offsetY === lastOffsetY
+  const canAppend =
+    offsetUnchanged &&
+    trackSources.every((source, index) => {
+      const state = trackAppendState[index]
+      if (!source) return state.processed === 0
+      return state.xRef === source.xData && state.yRef === source.yData
+    })
+
+  if (!canAppend) {
+    for (let i = 0; i < 4; i++) {
+      trackData[i].length = 0
+      trackToRawIndex[i].length = 0
+      renderer.clearSeries(TRACK_IDS[i])
+    }
+    timeIndexMap.clear()
+    resetTrackAppendState()
+  }
+
+  lastOffsetX = offsetX
+  lastOffsetY = offsetY
+
+  const timestamps = sourceData.timestamp as number[] | undefined
+
+  for (let i = 0; i < 4; i++) {
+    const source = trackSources[i]
+    if (!source) continue
+
+    const xData = source.xData
+    const yData = source.yData
+    const state = trackAppendState[i]
+    const len = Math.min(xData.length, yData.length)
+    const start = canAppend ? Math.min(state.processed, len) : 0
+
+    const batch: Array<[number, number, number]> = []
+    for (let j = start; j < len; j++) {
+      const x = Number(xData[j])
+      const y = Number(yData[j])
+      if (Number.isFinite(x) && Number.isFinite(y)) {
+        const rx = Math.round((x - offsetX) * 1000) / 1000
+        const ry = Math.round((y - offsetY) * 1000) / 1000
+        trackData[i].push([rx, ry])
+        trackToRawIndex[i].push(j)
+        if (timestamps) {
+          const time = timestamps[j]
+          let entry = timeIndexMap.get(time)
+          if (!entry) {
+            entry = {}
+            timeIndexMap.set(time, entry)
+          }
+          const key = `track${i + 1}` as keyof TimeIndexEntry
+          if (entry[key] === undefined) entry[key] = trackData[i].length - 1
+        }
+        batch.push([rx, ry, 0])
+      }
+    }
+
+    if (batch.length > 0) {
+      if (canAppend) {
+        renderer.appendSeriesDataBatch(TRACK_IDS[i], batch)
+      } else {
+        renderer.setSeriesData(TRACK_IDS[i], batch)
+      }
+    }
+
+    state.xRef = xData
+    state.yRef = yData
+    state.processed = len
+  }
+}
+
+function handleFlowUpdate(): void {
+  if (!renderer) return
+  syncRendererData()
+
+  if (isTracking.value) {
+    updateViewport(
+      -trackingXHalfSpan,
+      trackingXHalfSpan,
+      -trackingYHalfSpan,
+      trackingYHalfSpan,
+    )
+  } else {
+    renderer.render()
+    drawAxisLayer()
+    drawCurrentPositions()
+  }
+}
+
+function scheduleFlowDataUpdate(): void {
+  if (document.hidden) return
+  if (flowUpdateFrame !== null) return
+  flowUpdateFrame = requestAnimationFrame(() => {
+    flowUpdateFrame = null
+    handleFlowUpdate()
+  })
+}
+
+function cancelScheduledFlowUpdate(): void {
+  if (flowUpdateFrame !== null) {
+    cancelAnimationFrame(flowUpdateFrame)
+    flowUpdateFrame = null
+  }
+}
+
+function pauseDataUpdate(): void {
+  isPaused = true
+}
+
+function resumeDataUpdate(): void {
+  isPaused = false
+  scheduleFlowDataUpdate()
+}
+
+function showViewConfig(): void {
+  viewConfigDialogVisible.value = true
+}
+
+function applyViewConfig(): void {
+  if (
+    !deviationConfig.track1X.value &&
+    !deviationConfig.track2X.value &&
+    !deviationConfig.track3X.value &&
+    !deviationConfig.track4X.value
+  ) {
     ElMessage({
-      message: `请至少配置一条轨迹的X轴和Y轴字段`,
+      message: '请至少配置一条轨迹的X轴和Y轴字段',
       type: 'warning',
       placement: 'bottom-right',
       offset: 50,
-    });
-    return;
+    })
+    return
   }
-  
-  // 更新图表轴名称（使用第一个配置的轨迹）
-  let xAxisName = '';
-  let yAxisName = '';
-  
-  if (deviationConfig.track1X.value) {
-    xAxisName = deviationConfig.track1X.value;
-  } else if (deviationConfig.track2X.value) {
-    xAxisName = deviationConfig.track2X.value;
-  } else if (deviationConfig.track3X.value) {
-    xAxisName = deviationConfig.track3X.value;
-  } else if (deviationConfig.track4X.value) {
-    xAxisName = deviationConfig.track4X.value;
-  }
-  
-  if (deviationConfig.track1Y.value) {
-    yAxisName = deviationConfig.track1Y.value;
-  } else if (deviationConfig.track2Y.value) {
-    yAxisName = deviationConfig.track2Y.value;
-  } else if (deviationConfig.track3Y.value) {
-    yAxisName = deviationConfig.track3Y.value;
-  } else if (deviationConfig.track4Y.value) {
-    yAxisName = deviationConfig.track4Y.value;
-  }
-  
-  // 根据跟踪模式调整轴名称
-  if (!isTracking.value && xAxisName) {
-    xAxisName = `${xAxisName}`;
-  }
-  if (!isTracking.value && yAxisName) {
-    yAxisName = `${yAxisName}`;
-  }
-  
-  if (chartInstance.value) {
-    chartInstance.value.setOption({
-      xAxis: {
-        name: xAxisName || 'X轴'
-      },
-      yAxis: {
-        name: yAxisName || 'Y轴'
-      }
-    });
-  }
-  
-  viewConfigDialogVisible.value = false;
-
-  updateFlowData();
+  viewConfigDialogVisible.value = false
+  lastFlowRenderKey = ''
+  handleFlowUpdate()
 }
 
-// 初始化图表
-function initChart() {
-  if (!createChart()) return;
-  const colors = chartTheme.value;
-
-  const option = {
-    animation: false,
-    hoverAnimation: false,
-    backgroundColor: colors.background,
-    textStyle: { color: colors.text },
-    graphic: [{
-      type: 'text',
-      left: 10,
-      top: 10,
-      z: 99,
-      style: {
-        text: '',
-        font: '14px Microsoft YaHei',
-        fill: colors.text,
-        backgroundColor: colors.surfaceMuted,
-        padding: [6, 10]
-      }
-    }],
-    tooltip: {
-      trigger: 'item',
-      backgroundColor: colors.surface,
-      borderColor: colors.border,
-      textStyle: { color: colors.text },
-      axisPointer: {
-        type: 'cross',
-        label: {
-          show: true,
-          formatter: function(params) {
-            // params.value 包含当前坐标值
-            let result = params.value;
-            if (params.axisDimension === 'x') {
-              result += trackOffsetX;
-            } else if (params.axisDimension === 'y') {
-              result += trackOffsetY;
-            }
-
-            return result.toFixed(2);
-          },
-          backgroundColor: '#333',
-          color: '#fff',
-          padding: [3, 5],
-          borderRadius: 3
-        }
-      },
-      show: true,
-      formatter: {}
-    },
-    legend: {
-      data: [], // 初始为空，后续动态更新
-      right: 10,
-      top: 10,
-    },
-    grid: {
-      left: '3%',
-      right: '4%',
-      bottom: '8%',
-      top: '15%',
-      containLabel: true,
-    },
-    dataZoom: getDataZoomConfig(-10, 10, -10, 10),
-    xAxis: {
-      type: 'value',
-      name: isTracking.value ? 'X轴' : 'X轴',
-      nameLocation: 'middle',
-      nameGap: 30,
-      axisLabel: {
-        color: colors.textMuted,
-        formatter: function(value) {
-          return value.toFixed(2);
-        },
-      },
-      splitLine: {
-        lineStyle: {
-          type: 'dashed',
-          color: colors.grid,
-        },
-      },
-      axisLine: {
-        show: true,
-        lineStyle: { color: colors.border },
-      },
-      min: -padding.value,
-      max: padding.value,
-    },
-    yAxis: {
-      type: 'value',
-      name: isTracking.value ? 'Y轴' : 'Y轴',
-      nameLocation: 'middle',
-      nameGap: 40,
-      axisLabel: {
-        color: colors.textMuted,
-        formatter: function(value) {
-          return value.toFixed(2);
-        },
-      },
-      splitLine: {
-        lineStyle: {
-          type: 'dashed',
-          color: colors.grid,
-        },
-      },
-      axisLine: {
-        show: true,
-        lineStyle: { color: colors.border },
-      },
-      min: -padding.value,
-      max: padding.value,
-    },
-    series: [
-      {
-        name: '历史轨迹',
-        type: 'scatter',
-        data: [],
-        coordinateSystem: 'cartesian2d',
-        symbolSize: pointSize.value,
-        symbol: 'circle',
-        itemStyle: {
-          color: '#4e6ef2',
-          opacity: 0.6,
-        },
-      },
-      {
-        name: '当前位置',
-        type: 'scatter',
-        data: [],
-        coordinateSystem: 'cartesian2d',
-        symbolSize: pointSize.value * 1.2,
-        itemStyle: {
-          color: '#ff4d4f',
-          borderWidth: 2,
-          borderColor: colors.background,
-          shadowBlur: 2,
-          shadowColor: 'rgba(0, 0, 0, 0.3)',
-        },
-      },
-    ],
-  };
-
-  chartInstance.value.setOption(option);
-  
-  // 添加鼠标事件监听
-  chartInstance.value.on('mouseover', handleMouseOver);
-  chartInstance.value.on('mouseout', handleMouseOut);
-  chartInstance.value.on('globalout', handleMouseOut); // 添加全局鼠标移出事件
-  chartInstance.value.on('dblclick', handleChartDblClick); // 添加双击事件监听
-  
-  // 添加legend点击事件监听
-  chartInstance.value.on('legendselectchanged', handleLegendSelectChanged);
-  
-  setupResizeObserver(maintainEqualAxisScale);
-  updateFlowData();
-
-  // 直接在DOM元素上绑定事件监听器
-  bindWheelHandler(handleWheel);
-}
-
-// 处理滚轮事件
-function handleWheel(e) {
-  e.preventDefault();
-  e.stopPropagation();
-  
-  // RTKLIB的逻辑
-  const wheelDelta = -e.deltaY; // 转换为与RTKLIB相似的WheelDelta值
-  const zoomRatio = Math.pow(2.0, -wheelDelta / 1200.0);
-
-  const opt = chartInstance.value.getOption();
-  const xStart = opt.dataZoom[0].startValue;
-  const xEnd = opt.dataZoom[0].endValue;
-  const yStart = opt.dataZoom[1].startValue;
-  const yEnd = opt.dataZoom[1].endValue;
-  
-  const limit = 10000;
-  const xSpan = (xEnd - xStart) * zoomRatio;
-  const ySpan = (yEnd - yStart) * zoomRatio;
-
-  let newXStart = xStart;
-  let newXEnd = xEnd;
-  let newYStart = yStart;
-  let newYEnd = yEnd;
-
+function toggleTracking(): void {
+  isTracking.value = !isTracking.value
+  lastFlowRenderKey = ''
   if (isTracking.value) {
-    // 跟踪模式下保持中心在原点
-    newXStart = Math.max(-limit, -xSpan / 2);
-    newXEnd = Math.min(limit, xSpan / 2);
-    newYStart = Math.max(-limit, -ySpan / 2);
-    newYEnd = Math.min(limit, ySpan / 2);
+    syncRendererData()
+    const xSpan = viewport.value.xMax - viewport.value.xMin
+    const ySpan = viewport.value.yMax - viewport.value.yMin
+    trackingXHalfSpan = xSpan / 2
+    trackingYHalfSpan = ySpan / 2
+    updateViewport(-trackingXHalfSpan, trackingXHalfSpan, -trackingYHalfSpan, trackingYHalfSpan)
   } else {
-    // 非跟踪模式下，以当前视图中心进行缩放（参考GnssDeviation的实现）
-    const xCenter = (xStart + xEnd) / 2;
-    const yCenter = (yStart + yEnd) / 2;
-    newXStart = Math.max(-limit, xCenter - xSpan / 2);
-    newXEnd = Math.min(limit, xCenter + xSpan / 2);
-    newYStart = Math.max(-limit, yCenter - ySpan / 2);
-    newYEnd = Math.min(limit, yCenter + ySpan / 2);
+    resetZoom()
+  }
+}
+
+function resetZoom(): void {
+  if (!renderer || !chartContainerRef.value) return
+  syncRendererData()
+
+  const allPoints: [number, number][] = []
+  for (let i = 0; i < 4; i++) {
+    allPoints.push(...trackData[i])
   }
 
-  chartInstance.value.dispatchAction({
-    type: 'dataZoom',
-    dataZoomIndex: 0,
-    startValue: newXStart,
-    endValue: newXEnd,
-  });
-  chartInstance.value.dispatchAction({
-    type: 'dataZoom',
-    dataZoomIndex: 1,
-    startValue: newYStart,
-    endValue: newYEnd,
-  });
-  return false;
-};
+  const width = chartContainerRef.value.clientWidth || 1
+  const height = chartContainerRef.value.clientHeight || 1
+  const newViewport = isTracking.value
+    ? fitDeviationPointsAroundCenter(allPoints, 0, 0, width / height, GNSS_MIN_VISIBLE_SPAN_METERS)
+    : fitDeviationPoints(allPoints, width / height, GNSS_MIN_VISIBLE_SPAN_METERS)
 
-// 更新数据点 - 支持三条平级轨迹
-function updateFlowData() {
-  // 清空所有轨迹数据和时间索引
-  track1Data.splice(0, track1Data.length);
-  track2Data.splice(0, track2Data.length);
-  track3Data.splice(0, track3Data.length);
-  track4Data.splice(0, track4Data.length);
-  track1ToRawIndex.splice(0, track1ToRawIndex.length);
-  track2ToRawIndex.splice(0, track2ToRawIndex.length);
-  track3ToRawIndex.splice(0, track3ToRawIndex.length);
-  track4ToRawIndex.splice(0, track4ToRawIndex.length);
-  trackOffsetX = 0;
-  trackOffsetY = 0;
-
-  // 确定跟踪目标：优先顺序为轨迹1 > 轨迹2 > 轨迹3 > 轨迹4
-  let trackingTrack = null;
-  let trackingData = null;
-  let latestPointIndex = -1;
-  
-  if (deviationConfig.track1X.value && deviationConfig.track1Y.value && plotData.value[deviationConfig.track1X.value] && plotData.value[deviationConfig.track1Y.value]) {
-    const track1XData = plotData.value[deviationConfig.track1X.value];
-    const track1YData = plotData.value[deviationConfig.track1Y.value];
-    if (track1XData && track1YData && track1XData.length > 0 && track1YData.length > 0) {
-      trackingTrack = 1;
-      trackingData = [track1XData[track1XData.length - 1], track1YData[track1YData.length - 1]];
-      latestPointIndex = track1XData.length - 1;
-    }
-  }
-  if (!trackingTrack && deviationConfig.track2X.value && deviationConfig.track2Y.value && plotData.value[deviationConfig.track2X.value] && plotData.value[deviationConfig.track2Y.value]) {
-    const track2XData = plotData.value[deviationConfig.track2X.value];
-    const track2YData = plotData.value[deviationConfig.track2Y.value];
-    if (track2XData && track2YData && track2XData.length > 0 && track2YData.length > 0) {
-      trackingTrack = 2;
-      trackingData = [track2XData[track2XData.length - 1], track2YData[track2YData.length - 1]];
-      latestPointIndex = track2XData.length - 1;
-    }
-  }
-  if (!trackingTrack && deviationConfig.track3X.value && deviationConfig.track3Y.value && plotData.value[deviationConfig.track3X.value] && plotData.value[deviationConfig.track3Y.value]) {
-    const track3XData = plotData.value[deviationConfig.track3X.value];
-    const track3YData = plotData.value[deviationConfig.track3Y.value];
-    if (track3XData && track3YData && track3XData.length > 0 && track3YData.length > 0) {
-      trackingTrack = 3;
-      trackingData = [track3XData[track3XData.length - 1], track3YData[track3YData.length - 1]];
-      latestPointIndex = track3XData.length - 1;
-    }
-  }
-  if (!trackingTrack && deviationConfig.track4X.value && deviationConfig.track4Y.value && plotData.value[deviationConfig.track4X.value] && plotData.value[deviationConfig.track4Y.value]) {
-    const track4XData = plotData.value[deviationConfig.track4X.value];
-    const track4YData = plotData.value[deviationConfig.track4Y.value];
-    if (track4XData && track4YData && track4XData.length > 0 && track4YData.length > 0) {
-      trackingTrack = 4;
-      trackingData = [track4XData[track4XData.length - 1], track4YData[track4YData.length - 1]];
-      latestPointIndex = track4XData.length - 1;
-    }
+  if (!newViewport) {
+    trackingXHalfSpan = 10
+    trackingYHalfSpan = 10
+    updateViewport(-10, 10, -10, 10)
+    return
   }
 
-  // 计算跟踪偏移量
-  let offsetX = 0;
-  let offsetY = 0;
-  if (isTracking.value && trackingTrack && trackingData) {
-    offsetX = trackingData[0];
-    offsetY = trackingData[1];
-  } else if (!isTracking.value) {
-    // 非跟踪模式下，将第一条轨迹的第一个点作为(0,0)参考点
-    if (deviationConfig.track1X.value && deviationConfig.track1Y.value && plotData.value[deviationConfig.track1X.value] && plotData.value[deviationConfig.track1Y.value]) {
-      const track1XData = plotData.value[deviationConfig.track1X.value];
-      const track1YData = plotData.value[deviationConfig.track1Y.value];
-      if (track1XData && track1YData && track1XData.length > 0 && track1YData.length > 0) {
-        offsetX = track1XData[0];  // 第一条轨迹的第一个点的X坐标
-        offsetY = track1YData[0];  // 第一条轨迹的第一个点的Y坐标
-      }
-    }
+  trackingXHalfSpan = (newViewport.xMax - newViewport.xMin) / 2
+  trackingYHalfSpan = (newViewport.yMax - newViewport.yMin) / 2
+  updateViewport(newViewport.xMin, newViewport.xMax, newViewport.yMin, newViewport.yMax)
+}
+
+function clearTrack(): void {
+  cancelScheduledFlowUpdate()
+  renderer?.clear()
+  for (let i = 0; i < 4; i++) {
+    trackData[i].length = 0
+    trackToRawIndex[i].length = 0
+    renderer?.clearSeries(TRACK_IDS[i])
+  }
+  timeIndexMap.clear()
+  resetTrackAppendState()
+  lastFlowRenderKey = ''
+  updateViewport(-10, 10, -10, 10)
+}
+
+function updatePointSize(): void {
+  renderer?.setPointSize(pointSize.value)
+  drawAxisLayer()
+  drawCurrentPositions()
+}
+
+function toggleLegend(track: number): void {
+  const idx = track - 1
+  legendVisible.value[idx] = !legendVisible.value[idx]
+  renderer?.setSeriesVisible(TRACK_IDS[idx], legendVisible.value[idx])
+  drawAxisLayer()
+  drawCurrentPositions()
+}
+
+function handleWheel(e: WheelEvent): void {
+  e.preventDefault()
+  e.stopPropagation()
+
+  if (!renderer || !canvasRef.value) return
+
+  const { xMin, xMax, yMin, yMax } = viewport.value
+  const xRange = xMax - xMin
+  const yRange = yMax - yMin
+
+  // 与 canvas(ECharts) 版一致的 RTKLIB 缩放：以视图中心为锚点
+  const zoomRatio = Math.pow(2.0, e.deltaY / 1200.0)
+  const xSpan = clampVisibleSpan(xRange * zoomRatio, GNSS_MIN_VISIBLE_SPAN_METERS, LIMIT_METERS * 2)
+  const ySpan = clampVisibleSpan(yRange * zoomRatio, GNSS_MIN_VISIBLE_SPAN_METERS, LIMIT_METERS * 2)
+
+  const xCenter = (xMin + xMax) / 2
+  const yCenter = (yMin + yMax) / 2
+  const newXMin = Math.max(-LIMIT_METERS, xCenter - xSpan / 2)
+  const newXMax = Math.min(LIMIT_METERS, xCenter + xSpan / 2)
+  const newYMin = Math.max(-LIMIT_METERS, yCenter - ySpan / 2)
+  const newYMax = Math.min(LIMIT_METERS, yCenter + ySpan / 2)
+
+  trackingXHalfSpan = (newXMax - newXMin) / 2
+  trackingYHalfSpan = (newYMax - newYMin) / 2
+  updateViewport(newXMin, newXMax, newYMin, newYMax)
+}
+
+function seriesIdToTrackNumber(seriesId: TrackId): number {
+  return TRACK_IDS.indexOf(seriesId) + 1
+}
+
+function showHover(picked: PickedPoint, sx: number, sy: number): void {
+  const trackNum = seriesIdToTrackNumber(picked.seriesId as TrackId)
+  const rawIndex = trackToRawIndex[trackNum - 1][picked.pointIndex]
+  const time = (plotData.value.timestamp as number[] | undefined)?.[rawIndex]
+  if (time === undefined) {
+    hideHover()
+    return
   }
 
-  // 更新最新点信息
-  if (trackingTrack && latestPointIndex >= 0) {
-    latestPointInfo.track = trackingTrack;
-    latestPointInfo.index = latestPointIndex;
-    latestPointInfo.data = trackingData;
+  const xField = (deviationConfig[`track${trackNum}X` as keyof typeof deviationConfig] as { value: string }).value
+  const yField = (deviationConfig[`track${trackNum}Y` as keyof typeof deviationConfig] as { value: string }).value
+  const originX = Number((plotData.value[xField] as number[] | undefined)?.[rawIndex])
+  const originY = Number((plotData.value[yField] as number[] | undefined)?.[rawIndex])
+
+  tooltipVisible.value = true
+  tooltipText.value = `(${picked.x.toFixed(3)}, ${picked.y.toFixed(3)})`
+  tooltipStyle.value = {
+    left: `${sx + 12}px`,
+    top: `${sy + 12}px`,
+  }
+
+  infoBarText.value = `轨迹${trackNum} 🕐time: ${time.toFixed(3)} 📍${xField}:${originX.toFixed(3)}, ${yField}:${originY.toFixed(3)}`
+  infoBarVisible.value = true
+
+  drawHighlights(timeIndexMap.get(time))
+}
+
+function hideHover(): void {
+  tooltipVisible.value = false
+  infoBarVisible.value = false
+  drawAxisLayer()
+  drawCurrentPositions()
+}
+
+function handleMouseMove(e: MouseEvent): void {
+  if (isDragging) {
+    hideHover()
+    return
+  }
+  if (!renderer || !canvasRef.value) return
+  const rect = canvasRef.value.getBoundingClientRect()
+  const sx = e.clientX - rect.left
+  const sy = e.clientY - rect.top
+  const picked = renderer.pickPoint(sx, sy)
+  if (picked) {
+    showHover(picked, sx, sy)
   } else {
-    latestPointInfo.track = null;
-    latestPointInfo.index = -1;
-    latestPointInfo.data = null;
-  }
-
-  trackOffsetX = offsetX;
-  trackOffsetY = offsetY;
-
-  // 处理轨迹1数据
-  if (deviationConfig.track1X.value && deviationConfig.track1Y.value) {
-    const track1XData = plotData.value[deviationConfig.track1X.value];
-    const track1YData = plotData.value[deviationConfig.track1Y.value];
-    
-    if (track1XData && track1YData && track1XData.length > 0 && track1YData.length > 0) {
-      const track1DataLength = Math.min(track1XData.length, track1YData.length);
-      for (let i = 0; i < track1DataLength; i++) {
-        const x = track1XData[i];
-        const y = track1YData[i];
-        if (typeof x === 'number' && typeof y === 'number' && !isNaN(x) && !isNaN(y)) {
-          const roundedX = Math.round((x - offsetX) * 1000) / 1000;
-          const roundedY = Math.round((y - offsetY) * 1000) / 1000;
-          track1Data.push([roundedX, roundedY]);
-          track1ToRawIndex.push(i);
-        }
-      }
-    }
-  }
-
-  // 处理轨迹2数据
-  if (deviationConfig.track2X.value && deviationConfig.track2Y.value) {
-    const track2XData = plotData.value[deviationConfig.track2X.value];
-    const track2YData = plotData.value[deviationConfig.track2Y.value];
-    
-    if (track2XData && track2YData && track2XData.length > 0 && track2YData.length > 0) {
-      const track2DataLength = Math.min(track2XData.length, track2YData.length);
-      for (let i = 0; i < track2DataLength; i++) {
-        const x = track2XData[i];
-        const y = track2YData[i];
-        if (typeof x === 'number' && typeof y === 'number' && !isNaN(x) && !isNaN(y)) {
-          const roundedX = Math.round((x - offsetX) * 1000) / 1000;
-          const roundedY = Math.round((y - offsetY) * 1000) / 1000;
-          track2Data.push([roundedX, roundedY]);
-          track2ToRawIndex.push(i);
-        }
-      }
-    }
-  }
-
-  // 处理轨迹3数据
-  if (deviationConfig.track3X.value && deviationConfig.track3Y.value) {
-    const track3XData = plotData.value[deviationConfig.track3X.value];
-    const track3YData = plotData.value[deviationConfig.track3Y.value];
-    
-    if (track3XData && track3YData && track3XData.length > 0 && track3YData.length > 0) {
-      const track3DataLength = Math.min(track3XData.length, track3YData.length);
-      for (let i = 0; i < track3DataLength; i++) {
-        const x = track3XData[i];
-        const y = track3YData[i];
-        if (typeof x === 'number' && typeof y === 'number' && !isNaN(x) && !isNaN(y)) {
-          const roundedX = Math.round((x - offsetX) * 1000) / 1000;
-          const roundedY = Math.round((y - offsetY) * 1000) / 1000;
-          track3Data.push([roundedX, roundedY]);
-          track3ToRawIndex.push(i);
-        }
-      }
-    }
-  }
-
-  // 处理轨迹4数据
-  if (deviationConfig.track4X.value && deviationConfig.track4Y.value) {
-    const track4XData = plotData.value[deviationConfig.track4X.value];
-    const track4YData = plotData.value[deviationConfig.track4Y.value];
-    
-    if (track4XData && track4YData && track4XData.length > 0 && track4YData.length > 0) {
-      const track4DataLength = Math.min(track4XData.length, track4YData.length);
-      for (let i = 0; i < track4DataLength; i++) {
-        const x = track4XData[i];
-        const y = track4YData[i];
-        track4ToRawIndex.push(i);
-        if (typeof x === 'number' && typeof y === 'number' && !isNaN(x) && !isNaN(y)) {
-          const roundedX = Math.round((x - offsetX) * 1000) / 1000;
-          const roundedY = Math.round((y - offsetY) * 1000) / 1000;
-          track4Data.push([roundedX, roundedY]);
-        }
-      }
-    }
-  }
-
-  // 更新图表显示
-  updateChartDisplay();
-}
-
-// 更新图表显示 - 三条平级轨迹
-function updateChartDisplay() {
-  if (!chartInstance.value) return;
-  
-  // 构建系列数据
-  const series = [];
-
-  // 添加轨迹1
-  if (deviationConfig.track1X.value && deviationConfig.track1Y.value && track1Data.length > 0) {
-    const isLatestTrack = latestPointInfo.track === 1;
-    series.push({
-      name: '轨迹1',
-      type: 'scatter',
-      data: track1Data,
-      coordinateSystem: 'cartesian2d',
-      symbolSize: function(params, paramsIndex) {
-        // 在非跟踪模式下高亮最新点
-        if (!isTracking.value && isLatestTrack && paramsIndex === latestPointInfo.index) {
-          return pointSize.value * 1.5;
-        }
-        return pointSize.value;
-      },
-      symbol: 'circle',
-      itemStyle: {
-        color: function(params, paramsIndex) {
-          // 在非跟踪模式下高亮最新点
-          if (!isTracking.value && isLatestTrack && paramsIndex === latestPointInfo.index) {
-            return deviationConfig.track1Color.value;
-          }
-          return deviationConfig.track1Color.value;
-        },
-        opacity: function(params, paramsIndex) {
-          // 在非跟踪模式下高亮最新点
-          if (!isTracking.value && isLatestTrack && paramsIndex === latestPointInfo.index) {
-            return 1;
-          }
-          return 0.6;
-        },
-        borderWidth: function(params, paramsIndex) {
-          // 在非跟踪模式下高亮最新点
-          if (!isTracking.value && isLatestTrack && paramsIndex === latestPointInfo.index) {
-            return 3;
-          }
-          return 0;
-        },
-        borderColor: function(params, paramsIndex) {
-          // 在非跟踪模式下高亮最新点
-          if (!isTracking.value && isLatestTrack && paramsIndex === latestPointInfo.index) {
-            return '#fff';
-          }
-          return 'transparent';
-        },
-        shadowBlur: function(params, paramsIndex) {
-          // 在非跟踪模式下高亮最新点
-          if (!isTracking.value && isLatestTrack && paramsIndex === latestPointInfo.index) {
-            return 10;
-          }
-          return 0;
-        },
-        shadowColor: function(params, paramsIndex) {
-          // 在非跟踪模式下高亮最新点
-          if (!isTracking.value && isLatestTrack && paramsIndex === latestPointInfo.index) {
-            return hexToRgba(deviationConfig.track1Color.value, 0.5);
-          }
-          return 'transparent';
-        }
-      },
-      emphasis: {
-        itemStyle: {
-          color: deviationConfig.track1Color.value,
-          opacity: 1,
-          borderColor: '#fff',
-          borderWidth: 2,
-          shadowBlur: 10,
-          shadowColor: hexToRgba(deviationConfig.track1Color.value, 0.5)
-        },
-        scale: 1.5
-      },
-    });
-  }
-
-  // 添加轨迹2
-  if (deviationConfig.track2X.value && deviationConfig.track2Y.value && track2Data.length > 0) {
-    const isLatestTrack = latestPointInfo.track === 2;
-    series.push({
-      name: '轨迹2',
-      type: 'scatter',
-      data: track2Data,
-      coordinateSystem: 'cartesian2d',
-      symbolSize: function(params, paramsIndex) {
-        // 在非跟踪模式下高亮最新点
-        if (!isTracking.value && isLatestTrack && paramsIndex === latestPointInfo.index) {
-          return pointSize.value * 1.5;
-        }
-        return pointSize.value;
-      },
-      symbol: 'circle',
-      itemStyle: {
-        color: function(params, paramsIndex) {
-          // 在非跟踪模式下高亮最新点
-          if (!isTracking.value && isLatestTrack && paramsIndex === latestPointInfo.index) {
-            return deviationConfig.track2Color.value;
-          }
-          return deviationConfig.track2Color.value;
-        },
-        opacity: function(params, paramsIndex) {
-          // 在非跟踪模式下高亮最新点
-          if (!isTracking.value && isLatestTrack && paramsIndex === latestPointInfo.index) {
-            return 1;
-          }
-          return 0.6;
-        },
-        borderWidth: function(params, paramsIndex) {
-          // 在非跟踪模式下高亮最新点
-          if (!isTracking.value && isLatestTrack && paramsIndex === latestPointInfo.index) {
-            return 3;
-          }
-          return 0;
-        },
-        borderColor: function(params, paramsIndex) {
-          // 在非跟踪模式下高亮最新点
-          if (!isTracking.value && isLatestTrack && paramsIndex === latestPointInfo.index) {
-            return '#fff';
-          }
-          return 'transparent';
-        },
-        shadowBlur: function(params, paramsIndex) {
-          // 在非跟踪模式下高亮最新点
-          if (!isTracking.value && isLatestTrack && paramsIndex === latestPointInfo.index) {
-            return 10;
-          }
-          return 0;
-        },
-        shadowColor: function(params, paramsIndex) {
-          // 在非跟踪模式下高亮最新点
-          if (!isTracking.value && isLatestTrack && paramsIndex === latestPointInfo.index) {
-            return hexToRgba(deviationConfig.track2Color.value, 0.5);
-          }
-          return 'transparent';
-        }
-      },
-      emphasis: {
-        itemStyle: {
-          color: deviationConfig.track2Color.value,
-          opacity: 1,
-          borderColor: '#fff',
-          borderWidth: 2,
-          shadowBlur: 10,
-          shadowColor: hexToRgba(deviationConfig.track2Color.value, 0.5)
-        },
-        scale: 1.5
-      },
-    });
-  }
-
-  // 添加轨迹3
-  if (deviationConfig.track3X.value && deviationConfig.track3Y.value && track3Data.length > 0) {
-    const isLatestTrack = latestPointInfo.track === 3;
-    series.push({
-      name: '轨迹3',
-      type: 'scatter',
-      data: track3Data,
-      coordinateSystem: 'cartesian2d',
-      symbolSize: function(params, paramsIndex) {
-        // 在非跟踪模式下高亮最新点
-        if (!isTracking.value && isLatestTrack && paramsIndex === latestPointInfo.index) {
-          return pointSize.value * 1.5;
-        }
-        return pointSize.value;
-      },
-      symbol: 'circle',
-      itemStyle: {
-        color: function(params, paramsIndex) {
-          // 在非跟踪模式下高亮最新点
-          if (!isTracking.value && isLatestTrack && paramsIndex === latestPointInfo.index) {
-            return deviationConfig.track3Color.value;
-          }
-          return deviationConfig.track3Color.value;
-        },
-        opacity: function(params, paramsIndex) {
-          // 在非跟踪模式下高亮最新点
-          if (!isTracking.value && isLatestTrack && paramsIndex === latestPointInfo.index) {
-            return 1;
-          }
-          return 0.6;
-        },
-        borderWidth: function(params, paramsIndex) {
-          // 在非跟踪模式下高亮最新点
-          if (!isTracking.value && isLatestTrack && paramsIndex === latestPointInfo.index) {
-            return 3;
-          }
-          return 0;
-        },
-        borderColor: function(params, paramsIndex) {
-          // 在非跟踪模式下高亮最新点
-          if (!isTracking.value && isLatestTrack && paramsIndex === latestPointInfo.index) {
-            return '#fff';
-          }
-          return 'transparent';
-        },
-        shadowBlur: function(params, paramsIndex) {
-          // 在非跟踪模式下高亮最新点
-          if (!isTracking.value && isLatestTrack && paramsIndex === latestPointInfo.index) {
-            return 10;
-          }
-          return 0;
-        },
-        shadowColor: hexToRgba(deviationConfig.track3Color.value, 0.5)
-      },
-      emphasis: {
-        itemStyle: {
-          color: deviationConfig.track3Color.value,
-          opacity: 1,
-          borderColor: '#fff',
-          borderWidth: 2,
-          shadowBlur: 10,
-          shadowColor: hexToRgba(deviationConfig.track3Color.value, 0.5)
-        },
-        scale: 1.5
-      },
-    });
-  }
-
-  // 添加轨迹4
-  if (deviationConfig.track4X.value && deviationConfig.track4Y.value && track4Data.length > 0) {
-    const isLatestTrack = latestPointInfo.track === 4;
-    series.push({
-      name: '轨迹4',
-      type: 'scatter',
-      data: track4Data,
-      coordinateSystem: 'cartesian2d',
-      symbolSize: function(params, paramsIndex) {
-        // 在非跟踪模式下高亮最新点
-        if (!isTracking.value && isLatestTrack && paramsIndex === latestPointInfo.index) {
-          return pointSize.value * 1.5;
-        }
-        return pointSize.value;
-      },
-      symbol: 'circle',
-      itemStyle: {
-        color: function(params, paramsIndex) {
-          // 在非跟踪模式下高亮最新点
-          if (!isTracking.value && isLatestTrack && paramsIndex === latestPointInfo.index) {
-            return deviationConfig.track4Color.value;
-          }
-          return deviationConfig.track4Color.value;
-        },
-        opacity: function(params, paramsIndex) {
-          // 在非跟踪模式下高亮最新点
-          if (!isTracking.value && isLatestTrack && paramsIndex === latestPointInfo.index) {
-            return 1;
-          }
-          return 0.6;
-        },
-        borderWidth: function(params, paramsIndex) {
-          // 在非跟踪模式下高亮最新点
-          if (!isTracking.value && isLatestTrack && paramsIndex === latestPointInfo.index) {
-            return 3;
-          }
-          return 0;
-        },
-        borderColor: function(params, paramsIndex) {
-          // 在非跟踪模式下高亮最新点
-          if (!isTracking.value && isLatestTrack && paramsIndex === latestPointInfo.index) {
-            return '#fff';
-          }
-          return 'transparent';
-        },
-        shadowBlur: function(params, paramsIndex) {
-          // 在非跟踪模式下高亮最新点
-          if (!isTracking.value && isLatestTrack && paramsIndex === latestPointInfo.index) {
-            return 10;
-          }
-          return 0;
-        },
-        shadowColor: hexToRgba(deviationConfig.track4Color.value, 0.5)
-      },
-      emphasis: {
-        itemStyle: {
-          color: deviationConfig.track4Color.value,
-          opacity: 1,
-          borderColor: '#fff',
-          borderWidth: 2,
-          shadowBlur: 10,
-          shadowColor: hexToRgba(deviationConfig.track4Color.value, 0.5)
-        },
-        scale: 1.5
-      },
-    });
-  }
-
-  // 为每条轨迹添加独立的当前位置系列（不在legend中显示）
-  // 跟踪模式下：所有轨迹都显示当前位置，但只有轨迹1的当前位置固定在中心
-  if (isTracking.value) {
-    // 轨迹1当前位置（固定在中心）
-    if (deviationConfig.track1X.value && deviationConfig.track1Y.value && track1Data.length > 0) {
-      series.push({
-        name: '当前位置1',
-        type: 'scatter',
-        data: [[0, 0]], // 跟踪模式下轨迹1固定在中心
-        coordinateSystem: 'cartesian2d',
-        symbolSize: pointSize.value * 1.2,
-        itemStyle: {
-          color: deviationConfig.track1Color.value,
-          borderWidth: 2,
-          borderColor: '#fff',
-          shadowBlur: 2,
-          shadowColor: 'rgba(0, 0, 0, 0.3)',
-        },
-        emphasis: {
-          itemStyle: {
-            color: deviationConfig.track1Color.value,
-            opacity: 1,
-            borderColor: '#fff',
-            borderWidth: 2,
-            shadowBlur: 10,
-            shadowColor: hexToRgba(deviationConfig.track1Color.value, 0.5)
-          },
-          scale: 1.5
-        },
-      });
-    }
-
-    // 轨迹2当前位置（显示在真实位置）
-    if (deviationConfig.track2X.value && deviationConfig.track2Y.value && track2Data.length > 0) {
-      const lastPoint2 = track2Data[track2Data.length - 1];
-      series.push({
-        name: '当前位置2',
-        type: 'scatter',
-        data: [lastPoint2],
-        coordinateSystem: 'cartesian2d',
-        symbolSize: pointSize.value * 1.2,
-        itemStyle: {
-          color: deviationConfig.track2Color.value,
-          borderWidth: 2,
-          borderColor: '#fff',
-          shadowBlur: 2,
-          shadowColor: 'rgba(0, 0, 0, 0.3)',
-        },
-        emphasis: {
-          itemStyle: {
-            color: deviationConfig.track2Color.value,
-            opacity: 1,
-            borderColor: '#fff',
-            borderWidth: 2,
-            shadowBlur: 10,
-            shadowColor: hexToRgba(deviationConfig.track2Color.value, 0.5)
-          },
-          scale: 1.5
-        },
-      });
-    }
-
-    // 轨迹3当前位置（显示在真实位置）
-    if (deviationConfig.track3X.value && deviationConfig.track3Y.value && track3Data.length > 0) {
-      const lastPoint3 = track3Data[track3Data.length - 1];
-      series.push({
-        name: '当前位置3',
-        type: 'scatter',
-        data: [lastPoint3],
-        coordinateSystem: 'cartesian2d',
-        symbolSize: pointSize.value * 1.2,
-        itemStyle: {
-          color: deviationConfig.track3Color.value,
-          borderWidth: 2,
-          borderColor: '#fff',
-          shadowBlur: 2,
-          shadowColor: 'rgba(0, 0, 0, 0.3)',
-        },
-        emphasis: {
-          itemStyle: {
-            color: deviationConfig.track3Color.value,
-            opacity: 1,
-            borderColor: '#fff',
-            borderWidth: 2,
-            shadowBlur: 10,
-            shadowColor: hexToRgba(deviationConfig.track3Color.value, 0.5)
-          },
-          scale: 1.5
-        },
-      });
-    }
-
-    // 轨迹4当前位置（显示在真实位置）
-    if (deviationConfig.track4X.value && deviationConfig.track4Y.value && track4Data.length > 0) {
-      const lastPoint4 = track4Data[track4Data.length - 1];
-      series.push({
-        name: '当前位置4',
-        type: 'scatter',
-        data: [lastPoint4],
-        coordinateSystem: 'cartesian2d',
-        symbolSize: pointSize.value * 1.2,
-        itemStyle: {
-          color: deviationConfig.track4Color.value,
-          borderWidth: 2,
-          borderColor: '#fff',
-          shadowBlur: 2,
-          shadowColor: 'rgba(0, 0, 0, 0.3)',
-        },
-        emphasis: {
-          itemStyle: {
-            color: deviationConfig.track4Color.value,
-            opacity: 1,
-            borderColor: '#fff',
-            borderWidth: 2,
-            shadowBlur: 10,
-            shadowColor: hexToRgba(deviationConfig.track4Color.value, 0.5)
-          },
-          scale: 1.5
-        },
-      });
-    }
-  } else {
-    // 非跟踪模式下，显示所有轨迹的当前位置
-    // 轨迹1当前位置
-    if (deviationConfig.track1X.value && deviationConfig.track1Y.value && track1Data.length > 0) {
-      const lastPoint1 = track1Data[track1Data.length - 1];
-      series.push({
-        name: '当前位置1',
-        type: 'scatter',
-        data: [lastPoint1],
-        coordinateSystem: 'cartesian2d',
-        symbolSize: pointSize.value * 1.2,
-        itemStyle: {
-          color: deviationConfig.track1Color.value,
-          borderWidth: 2,
-          borderColor: '#fff',
-          shadowBlur: 2,
-          shadowColor: 'rgba(0, 0, 0, 0.3)',
-        },
-        emphasis: {
-          itemStyle: {
-            color: deviationConfig.track1Color.value,
-            opacity: 1,
-            borderColor: '#fff',
-            borderWidth: 2,
-            shadowBlur: 10,
-            shadowColor: hexToRgba(deviationConfig.track1Color.value, 0.5)
-          },
-          scale: 1.5
-        },
-      });
-    }
-
-    // 轨迹2当前位置
-    if (deviationConfig.track2X.value && deviationConfig.track2Y.value && track2Data.length > 0) {
-      const lastPoint2 = track2Data[track2Data.length - 1];
-      series.push({
-        name: '当前位置2',
-        type: 'scatter',
-        data: [lastPoint2],
-        coordinateSystem: 'cartesian2d',
-        symbolSize: pointSize.value * 1.2,
-        itemStyle: {
-          color: deviationConfig.track2Color.value,
-          borderWidth: 2,
-          borderColor: '#fff',
-          shadowBlur: 2,
-          shadowColor: 'rgba(0, 0, 0, 0.3)',
-        },
-        emphasis: {
-          itemStyle: {
-            color: deviationConfig.track2Color.value,
-            opacity: 1,
-            borderColor: '#fff',
-            borderWidth: 2,
-            shadowBlur: 10,
-            shadowColor: hexToRgba(deviationConfig.track2Color.value, 0.5)
-          },
-          scale: 1.5
-        },
-      });
-    }
-
-    // 轨迹3当前位置
-    if (deviationConfig.track3X.value && deviationConfig.track3Y.value && track3Data.length > 0) {
-      const lastPoint3 = track3Data[track3Data.length - 1];
-      series.push({
-        name: '当前位置3',
-        type: 'scatter',
-        data: [lastPoint3],
-        coordinateSystem: 'cartesian2d',
-        symbolSize: pointSize.value * 1.2,
-        itemStyle: {
-          color: deviationConfig.track3Color.value,
-          borderWidth: 2,
-          borderColor: '#fff',
-          shadowBlur: 2,
-          shadowColor: 'rgba(0, 0, 0, 0.3)',
-        },
-        emphasis: {
-          itemStyle: {
-            color: deviationConfig.track3Color.value,
-            opacity: 1,
-            borderColor: '#fff',
-            borderWidth: 2,
-            shadowBlur: 10,
-            shadowColor: hexToRgba(deviationConfig.track3Color.value, 0.5)
-          },
-          scale: 1.5
-        },
-      });
-    }
-
-    // 轨迹4当前位置
-    if (deviationConfig.track4X.value && deviationConfig.track4Y.value && track4Data.length > 0) {
-      const lastPoint4 = track4Data[track4Data.length - 1];
-      series.push({
-        name: '当前位置4',
-        type: 'scatter',
-        data: [lastPoint4],
-        coordinateSystem: 'cartesian2d',
-        symbolSize: pointSize.value * 1.2,
-        itemStyle: {
-          color: deviationConfig.track4Color.value,
-          borderWidth: 2,
-          borderColor: '#fff',
-          shadowBlur: 2,
-          shadowColor: 'rgba(0, 0, 0, 0.3)',
-        },
-        emphasis: {
-          itemStyle: {
-            color: deviationConfig.track4Color.value,
-            opacity: 1,
-            borderColor: '#fff',
-            borderWidth: 2,
-            shadowBlur: 10,
-            shadowColor: hexToRgba(deviationConfig.track4Color.value, 0.5)
-          },
-          scale: 1.5
-        },
-      });
-    }
-  }
-
-  // 更新图例（过滤掉所有当前位置系列）
-  const legendData = series.filter(s => !s.name.startsWith('当前位置')).map(s => {
-    // 获取系列的颜色 - 处理函数和直接值的情况
-    let seriesColor;
-    if (typeof s.itemStyle.color === 'function') {
-      // 如果是函数，获取默认颜色（非高亮状态）
-      seriesColor = s.itemStyle.color({}, 0); // 传入索引0获取默认颜色
-    } else {
-      // 如果是直接的颜色值
-      seriesColor = s.itemStyle.color;
-    }
-    
-    return {
-      name: s.name,
-      itemStyle: { color: seriesColor }
-    };
-  });
-
-  chartInstance.value.setOption({
-    legend: {
-      data: legendData,
-      right: 10,
-      top: 10,
-    },
-    series: series
-  }, {
-    replaceMerge: ['series'],
-    silent: false
-  });
-}
-
-// 切换追踪模式
-function toggleTracking() {
-  isTracking.value = !isTracking.value;
-
-  if (isTracking.value) {
-    // 开启跟踪模式：以最新轨迹点为中心
-    updateFlowData(); // 重新计算偏移量
-    
-    if (chartInstance.value) {
-      // 使用maintainEqualAxisScale来保持坐标轴等比例关系
-      maintainEqualAxisScale();
-    }
-  } else {
-    // 关闭跟踪模式：将第一条轨迹的第一个点作为(0,0)参考点
-    updateFlowData(); // 重新计算，设置新的偏移量
-    
-    if (chartInstance.value) {
-      // 非跟踪模式下，使用maintainEqualAxisScale来保持坐标轴等比例关系
-      maintainEqualAxisScale();
-    }
-  }
-  
-  // 更新数据缩放配置以响应跟踪模式的变化
-  if (chartInstance.value) {
-    // 更新坐标轴名称
-    let xAxisName = '';
-    let yAxisName = '';
-    
-    if (deviationConfig.track1X.value) {
-      xAxisName = deviationConfig.track1X.value;
-    } else if (deviationConfig.track2X.value) {
-      xAxisName = deviationConfig.track2X.value;
-    } else if (deviationConfig.track3X.value) {
-      xAxisName = deviationConfig.track3X.value;
-    } else if (deviationConfig.track4X.value) {
-      xAxisName = deviationConfig.track4X.value;
-    }
-    
-    if (deviationConfig.track1Y.value) {
-      yAxisName = deviationConfig.track1Y.value;
-    } else if (deviationConfig.track2Y.value) {
-      yAxisName = deviationConfig.track2Y.value;
-    } else if (deviationConfig.track3Y.value) {
-      yAxisName = deviationConfig.track3Y.value;
-    } else if (deviationConfig.track4Y.value) {
-      yAxisName = deviationConfig.track4Y.value;
-    }
-    
-    // 根据跟踪模式调整轴名称
-    if (!isTracking.value && xAxisName) {
-      xAxisName = `${xAxisName}`;
-    }
-    if (!isTracking.value && yAxisName) {
-      yAxisName = `${yAxisName}`;
-    }
-    
-    chartInstance.value.setOption({
-      xAxis: {
-        name: xAxisName || 'X轴',
-        moveOnMouseWheel: !isTracking.value,
-        moveOnMouseMove: !isTracking.value
-      },
-      yAxis: {
-        name: yAxisName || 'Y轴',
-        moveOnMouseWheel: !isTracking.value,
-        moveOnMouseMove: !isTracking.value
-      }
-    });
+    hideHover()
   }
 }
 
-// 重置缩放
-function resetZoom() {
-  if (!chartInstance.value) return;
-  initChart();
-  updateFlowData();
+function handleDblClick(e: MouseEvent): void {
+  if (!renderer || !canvasRef.value) return
+  const rect = canvasRef.value.getBoundingClientRect()
+  const sx = e.clientX - rect.left
+  const sy = e.clientY - rect.top
+  const picked = renderer.pickPoint(sx, sy)
+  if (!picked) return
+
+  const trackNum = seriesIdToTrackNumber(picked.seriesId as TrackId)
+  const rawIndex = trackToRawIndex[trackNum - 1][picked.pointIndex]
+  const rawTime = (plotData.value.timestamp as number[] | undefined)?.[rawIndex]
+  if (rawTime === undefined) return
+
+  const parts = rawTime.toString().split('.')
+  const targetTime = parts[0] + (parts[1] ? '.' + parts[1].substring(0, 2) : '.00')
+  searchQuery.value = '"time":' + targetTime
 }
 
-// 更新点大小
-function updatePointSize() {
-  if (chartInstance.value) {
-    // 获取当前图表配置
-    const option = chartInstance.value.getOption();
-    if (option && option.series) {
-      // 更新所有系列的点大小，当前位置系列使用1.2倍大小
-      const updatedSeries = option.series.map(series => {
-        if (series.name === '当前位置' || series.name.startsWith('当前位置')) {
-          return {
-            ...series,
-            symbolSize: pointSize.value * 1.2
-          };
-        } else {
-          return {
-            ...series,
-            symbolSize: pointSize.value
-          };
-        }
-      });
-      
-      chartInstance.value.setOption({
-        series: updatedSeries
-      });
-    }
-  }
+function handleMouseDown(e: MouseEvent): void {
+  if (e.button !== 0 || !canvasRef.value) return
+  isDragging = true
+  dragHasMoved = false
+  dragStartClientX = e.clientX
+  dragStartClientY = e.clientY
+  dragLastClientX = e.clientX
+  dragLastClientY = e.clientY
+  window.addEventListener('mousemove', handleWindowMouseMove)
+  window.addEventListener('mouseup', handleWindowMouseUp)
 }
 
-// 处理legend点击事件
-function handleLegendSelectChanged(params) {
-  // 获取当前图表配置
-  const selected = params.selected;
-  
-  // 当点击轨迹1时，同步控制当前位置1的显示状态
-  if (params.name === '轨迹1') {
-    // 获取轨迹1的选中状态
-    const track1Selected = selected['轨迹1'];
-    
-    // 同步设置当前位置1的选中状态
-    if (track1Selected !== undefined) {
-      chartInstance.value.dispatchAction({
-        type: 'legendToggleSelect',
-        name: '当前位置1'
-      });
-    }
+function handleWindowMouseMove(e: MouseEvent): void {
+  if (!isDragging || !canvasRef.value) return
+  const dx = e.clientX - dragLastClientX
+  const dy = e.clientY - dragLastClientY
+  const totalDx = e.clientX - dragStartClientX
+  const totalDy = e.clientY - dragStartClientY
+  dragLastClientX = e.clientX
+  dragLastClientY = e.clientY
+  if (!dragHasMoved && Math.hypot(totalDx, totalDy) >= DRAG_THRESHOLD_PX) {
+    dragHasMoved = true
+    hideHover()
   }
-  
-  // 当点击轨迹2时，同步控制当前位置2的显示状态
-  if (params.name === '轨迹2') {
-    // 获取轨迹2的选中状态
-    const track2Selected = selected['轨迹2'];
-    
-    // 同步设置当前位置2的选中状态
-    if (track2Selected !== undefined) {
-      chartInstance.value.dispatchAction({
-        type: 'legendToggleSelect',
-        name: '当前位置2'
-      });
-    }
-  }
-  
-  // 当点击轨迹3时，同步控制当前位置3的显示状态
-  if (params.name === '轨迹3') {
-    // 获取轨迹3的选中状态
-    const track3Selected = selected['轨迹3'];
-    
-    // 同步设置当前位置3的选中状态
-    if (track3Selected !== undefined) {
-      chartInstance.value.dispatchAction({
-        type: 'legendToggleSelect',
-        name: '当前位置3'
-      });
-    }
+  if (!dragHasMoved) return
+
+  const rect = canvasRef.value.getBoundingClientRect()
+  const { xMin, xMax, yMin, yMax } = viewport.value
+  const xRange = xMax - xMin
+  const yRange = yMax - yMin
+
+  // 内容跟随鼠标：屏幕 Y 向下而数据 Y 向上，X 取反、Y 取正
+  const dataDx = -(dx / rect.width) * xRange
+  const dataDy = (dy / rect.height) * yRange
+
+  let newXMin = xMin + dataDx
+  let newXMax = xMax + dataDx
+  let newYMin = yMin + dataDy
+  let newYMax = yMax + dataDy
+
+  const xSpan = newXMax - newXMin
+  const ySpan = newYMax - newYMin
+
+  if (newXMin < -LIMIT_METERS) {
+    newXMin = -LIMIT_METERS
+    newXMax = -LIMIT_METERS + xSpan
+  } else if (newXMax > LIMIT_METERS) {
+    newXMax = LIMIT_METERS
+    newXMin = LIMIT_METERS - xSpan
   }
 
-  // 当点击轨迹4时，同步控制当前位置4的显示状态
-  if (params.name === '轨迹4') {
-    // 获取轨迹4的选中状态
-    const track4Selected = selected['轨迹4'];
-    
-    // 同步设置当前位置4的选中状态
-    if (track4Selected !== undefined) {
-      chartInstance.value.dispatchAction({
-        type: 'legendToggleSelect',
-        name: '当前位置4'
-      });
-    }
+  if (newYMin < -LIMIT_METERS) {
+    newYMin = -LIMIT_METERS
+    newYMax = -LIMIT_METERS + ySpan
+  } else if (newYMax > LIMIT_METERS) {
+    newYMax = LIMIT_METERS
+    newYMin = LIMIT_METERS - ySpan
   }
 
-  updateFlowData();
+  trackingXHalfSpan = (newXMax - newXMin) / 2
+  trackingYHalfSpan = (newYMax - newYMin) / 2
+  updateViewport(newXMin, newXMax, newYMin, newYMax)
 }
 
-let handleKeyDown = null;
-let dataUpdateInterval = null;
-
-function pauseDataUpdate() {
-  if (dataUpdateInterval) {
-    clearInterval(dataUpdateInterval);
-    dataUpdateInterval = null;
-  }
+function handleWindowMouseUp(): void {
+  if (!isDragging) return
+  isDragging = false
+  window.removeEventListener('mousemove', handleWindowMouseMove)
+  window.removeEventListener('mouseup', handleWindowMouseUp)
 }
 
-function resumeDataUpdate() {
-  if (!dataUpdateInterval) {
-    dataUpdateInterval = setInterval(() => {
-      updateFlowData();
-    }, 100);
-  }
+function resizeAxisCanvas(cssWidth: number, cssHeight: number): void {
+  if (!axisCanvasRef.value || !axisCtx) return
+  axisDpr = window.devicePixelRatio || 1
+  axisCssWidth = cssWidth
+  axisCssHeight = cssHeight
+  axisCanvasRef.value.width = cssWidth * axisDpr
+  axisCanvasRef.value.height = cssHeight * axisDpr
+  axisCanvasRef.value.style.width = `${cssWidth}px`
+  axisCanvasRef.value.style.height = `${cssHeight}px`
 }
 
-const isDataUpdating = ref(true);
-
-function toggleDataUpdate() {
-  isDataUpdating.value = !isDataUpdating.value;
-  if (isDataUpdating.value) {
-    resumeDataUpdate();
-  } else {
-    pauseDataUpdate();
-  }
+function setupResizeObserver(): void {
+  if (!chartContainerRef.value) return
+  teardownResizeObserver()
+  resizeObserver = new ResizeObserver(() => {
+    if (resizeFrame !== null) cancelAnimationFrame(resizeFrame)
+    resizeFrame = requestAnimationFrame(() => {
+      resizeFrame = null
+      if (!chartContainerRef.value || !canvasRef.value || !axisCanvasRef.value) return
+      const width = chartContainerRef.value.clientWidth
+      const height = chartContainerRef.value.clientHeight
+      renderer?.onResize(width, height)
+      resizeAxisCanvas(width, height)
+      drawAxisLayer()
+      drawCurrentPositions()
+    })
+  })
+  resizeObserver.observe(chartContainerRef.value)
 }
 
-function handleChartDblClick(params) {
-  // params 包含了双击事件的相关信息，如坐标、数据等
-  if (params.componentType === 'series') {
-    const dataIndex = params.dataIndex;
-    const seriesName = params.seriesName;
-    let rawTime = null;
-    
-    // 根据系列名称获取对应的时间戳
-    if (seriesName === '轨迹1' && track1ToRawIndex[dataIndex] !== undefined) {
-      rawTime = plotData.value.timestamp[track1ToRawIndex[dataIndex]];
-    } else if (seriesName === '轨迹2' && track2ToRawIndex[dataIndex] !== undefined) {
-      rawTime = plotData.value.timestamp[track2ToRawIndex[dataIndex]];
-    } else if (seriesName === '轨迹3' && track3ToRawIndex[dataIndex] !== undefined) {
-      rawTime = plotData.value.timestamp[track3ToRawIndex[dataIndex]];
-    } else if (seriesName === '轨迹4' && track4ToRawIndex[dataIndex] !== undefined) {
-      rawTime = plotData.value.timestamp[track4ToRawIndex[dataIndex]];
-    } else if (seriesName === '当前位置1' && track1ToRawIndex.length > 0) {
-      // 当前位置1使用轨迹1的最后一个时间戳
-      rawTime = plotData.value.timestamp[track1ToRawIndex[track1ToRawIndex.length - 1]];
-    } else if (seriesName === '当前位置2' && track2ToRawIndex.length > 0) {
-      // 当前位置2使用轨迹2的最后一个时间戳
-      rawTime = plotData.value.timestamp[track2ToRawIndex[track2ToRawIndex.length - 1]];
-    } else if (seriesName === '当前位置3' && track3ToRawIndex.length > 0) {
-      // 当前位置3使用轨迹3的最后一个时间戳
-      rawTime = plotData.value.timestamp[track3ToRawIndex[track3ToRawIndex.length - 1]];
-    } else if (seriesName === '当前位置4' && track4ToRawIndex.length > 0) {
-      // 当前位置4使用轨迹4的最后一个时间戳
-      rawTime = plotData.value.timestamp[track4ToRawIndex[track4ToRawIndex.length - 1]];
-    }
-    
-    if (rawTime !== null) {
-      const parts = rawTime.toString().split('.');
-      const targetTime = parts[0] + (parts[1] ? '.' + parts[1].substring(0, 2) : '.00');
-
-      searchQuery.value = '"time":' + targetTime;
-    }
+function teardownResizeObserver(): void {
+  if (resizeObserver) {
+    resizeObserver.disconnect()
+    resizeObserver = null
+  }
+  if (resizeFrame !== null) {
+    cancelAnimationFrame(resizeFrame)
+    resizeFrame = null
   }
 }
 
-// 鼠标悬停事件处理函数
-const handleMouseOver = function(params) {
-  if (!chartInstance.value) return;
-  
-  // 清除之前的高亮超时定时器
-  if (highlightTimeout.value) {
-    clearTimeout(highlightTimeout.value);
-    highlightTimeout.value = null;
-  }
-  
-  const seriesName = params.seriesName;
-  const dataIndex = params.dataIndex;
-  let targetTime = null;
-  
-  // 获取当前悬停点的时间
-  if (seriesName === '轨迹1' && track1ToRawIndex[dataIndex] !== undefined) {
-    targetTime = plotData.value.timestamp[track1ToRawIndex[dataIndex]];
-  } else if (seriesName === '轨迹2' && track2ToRawIndex[dataIndex] !== undefined) {
-    targetTime = plotData.value.timestamp[track2ToRawIndex[dataIndex]];
-  } else if (seriesName === '轨迹3' && track3ToRawIndex[dataIndex] !== undefined) {
-    targetTime = plotData.value.timestamp[track3ToRawIndex[dataIndex]];
-  } else if (seriesName === '轨迹4' && track4ToRawIndex[dataIndex] !== undefined) {
-    targetTime = plotData.value.timestamp[track4ToRawIndex[dataIndex]];
-  } else if (seriesName === '当前位置1' && track1ToRawIndex.length > 0) {
-    targetTime = plotData.value.timestamp[track1ToRawIndex[track1ToRawIndex.length - 1]];
-  } else if (seriesName === '当前位置2' && track2ToRawIndex.length > 0) {
-    targetTime = plotData.value.timestamp[track2ToRawIndex[track2ToRawIndex.length - 1]];
-  } else if (seriesName === '当前位置3' && track3ToRawIndex.length > 0) {
-    targetTime = plotData.value.timestamp[track3ToRawIndex[track3ToRawIndex.length - 1]];
-  } else if (seriesName === '当前位置4' && track4ToRawIndex.length > 0) {
-    targetTime = plotData.value.timestamp[track4ToRawIndex[track4ToRawIndex.length - 1]];
-  }
-  
-  if (targetTime === null) return;
-  
-  // 首先清理之前的高亮状态
-  handleMouseOut();
-  
-  // 找到所有轨迹中相同时间的点并高亮（包括当前轨迹）
-  const highlightData = [];
-  const series = chartInstance.value.getOption().series;
-  
-  // 检查轨迹1中是否有相同时间的点
-  for (let i = 0; i < track1ToRawIndex.length; i++) {
-    if (plotData.value.timestamp[track1ToRawIndex[i]] === targetTime) {
-      const seriesIndex = series.findIndex(s => s.name === '轨迹1');
-      if (seriesIndex !== -1) {
-        highlightData.push({
-          seriesIndex: seriesIndex,
-          dataIndex: i
-        });
-      }
-      break;
-    }
-  }
-  
-  // 检查轨迹2中是否有相同时间的点
-  for (let i = 0; i < track2ToRawIndex.length; i++) {
-    if (plotData.value.timestamp[track2ToRawIndex[i]] === targetTime) {
-      const seriesIndex = series.findIndex(s => s.name === '轨迹2');
-      if (seriesIndex !== -1) {
-        highlightData.push({
-          seriesIndex: seriesIndex,
-          dataIndex: i
-        });
-      }
-      break;
-    }
-  }
-  
-  // 检查轨迹3中是否有相同时间的点
-  for (let i = 0; i < track3ToRawIndex.length; i++) {
-    if (plotData.value.timestamp[track3ToRawIndex[i]] === targetTime) {
-      const seriesIndex = series.findIndex(s => s.name === '轨迹3');
-      if (seriesIndex !== -1) {
-        highlightData.push({
-          seriesIndex: seriesIndex,
-          dataIndex: i
-        });
-      }
-      break;
-    }
-  }
-  
-  // 检查轨迹4中是否有相同时间的点
-  for (let i = 0; i < track4ToRawIndex.length; i++) {
-    if (plotData.value.timestamp[track4ToRawIndex[i]] === targetTime) {
-      const seriesIndex = series.findIndex(s => s.name === '轨迹4');
-      if (seriesIndex !== -1) {
-        highlightData.push({
-          seriesIndex: seriesIndex,
-          dataIndex: i
-        });
-      }
-      break;
-    }
-  }
-  
-  // 高亮显示所有相同时间的点
-  if (highlightData.length > 0) {
-    chartInstance.value.dispatchAction({
-      type: 'highlight',
-      seriesIndex: highlightData.map(h => h.seriesIndex),
-      dataIndex: highlightData.map(h => h.dataIndex)
-    });
-  }
+function initRenderer(): void {
+  if (!canvasRef.value || !axisCanvasRef.value || !chartContainerRef.value) return
+  renderer = createMultiSeriesTrajectoryRenderer(canvasRef.value)
+  axisCtx = axisCanvasRef.value.getContext('2d')
 
-  // 显示graphic的内容
-  let dataIndexModifed = 0;
-  let xField = 'X';
-  let yField = 'Y';
-  let currentTime = null;
-  let originX = params.value[0];
-  let originY = params.value[1];
-  
-  // 根据系列名称选择对应的轴字段和时间
-  if (seriesName === '轨迹1' && deviationConfig.track1X.value && deviationConfig.track1Y.value) {
-    xField = deviationConfig.track1X.value;
-    yField = deviationConfig.track1Y.value;
-    dataIndexModifed = track1ToRawIndex[params.dataIndex];
-    currentTime = plotData.value.timestamp[dataIndexModifed];
-    originX = plotData.value[deviationConfig.track1X.value][dataIndexModifed];
-    originY = plotData.value[deviationConfig.track1Y.value][dataIndexModifed];
-  } else if (seriesName === '轨迹2' && deviationConfig.track2X.value && deviationConfig.track2Y.value) {
-    xField = deviationConfig.track2X.value;
-    yField = deviationConfig.track2Y.value;
-    dataIndexModifed = track2ToRawIndex[params.dataIndex];
-    currentTime = plotData.value.timestamp[dataIndexModifed];
-    originX = plotData.value[deviationConfig.track2X.value][dataIndexModifed];
-    originY = plotData.value[deviationConfig.track2Y.value][dataIndexModifed];
-  } else if (seriesName === '轨迹3' && deviationConfig.track3X.value && deviationConfig.track3Y.value) {
-    xField = deviationConfig.track3X.value;
-    yField = deviationConfig.track3Y.value;
-    dataIndexModifed = track3ToRawIndex[params.dataIndex];
-    currentTime = plotData.value.timestamp[dataIndexModifed];
-    originX = plotData.value[deviationConfig.track3X.value][dataIndexModifed];
-    originY = plotData.value[deviationConfig.track3Y.value][dataIndexModifed];
-  } else if (seriesName === '轨迹4' && deviationConfig.track4X.value && deviationConfig.track4Y.value) {
-    xField = deviationConfig.track4X.value;
-    yField = deviationConfig.track4Y.value;
-    dataIndexModifed = track4ToRawIndex[params.dataIndex];
-    currentTime = plotData.value.timestamp[dataIndexModifed];
-    originX = plotData.value[deviationConfig.track4X.value][dataIndexModifed];
-    originY = plotData.value[deviationConfig.track4Y.value][dataIndexModifed];
-  } else if (seriesName === '当前位置1' && deviationConfig.track1X.value && deviationConfig.track1Y.value) {
-    // 当前位置1使用轨迹1的字段和时间
-    xField = deviationConfig.track1X.value;
-    yField = deviationConfig.track1Y.value;
-    dataIndexModifed = track1ToRawIndex[track1Data.length - 1];
-    currentTime = plotData.value.timestamp[dataIndexModifed];
-    originX = plotData.value[deviationConfig.track1X.value][dataIndexModifed];
-    originY = plotData.value[deviationConfig.track1Y.value][dataIndexModifed];
-  } else if (seriesName === '当前位置2' && deviationConfig.track2X.value && deviationConfig.track2Y.value) {
-    // 当前位置2使用轨迹2的字段和时间
-    xField = deviationConfig.track2X.value;
-    yField = deviationConfig.track2Y.value;
-    dataIndexModifed = track2ToRawIndex[track2Data.length - 1];
-    currentTime = plotData.value.timestamp[dataIndexModifed];
-    originX = plotData.value[deviationConfig.track2X.value][dataIndexModifed];
-    originY = plotData.value[deviationConfig.track2Y.value][dataIndexModifed];
-  } else if (seriesName === '当前位置3' && deviationConfig.track3X.value && deviationConfig.track3Y.value) {
-    // 当前位置3使用轨迹3的字段和时间
-    xField = deviationConfig.track3X.value;
-    yField = deviationConfig.track3Y.value;
-    dataIndexModifed = track3ToRawIndex[track3Data.length - 1];
-    currentTime = plotData.value.timestamp[dataIndexModifed];
-    originX = plotData.value[deviationConfig.track3X.value][dataIndexModifed];
-    originY = plotData.value[deviationConfig.track3Y.value][dataIndexModifed];
-  } else if (seriesName === '当前位置4' && deviationConfig.track4X.value && deviationConfig.track4Y.value) {
-    // 当前位置4使用轨迹4的字段和时间
-    xField = deviationConfig.track4X.value;
-    yField = deviationConfig.track4Y.value;
-    dataIndexModifed = track4ToRawIndex[track4Data.length - 1];
-    currentTime = plotData.value.timestamp[dataIndexModifed];
-    originX = plotData.value[deviationConfig.track4X.value][dataIndexModifed];
-    originY = plotData.value[deviationConfig.track4Y.value][dataIndexModifed];
+  const width = chartContainerRef.value.clientWidth
+  const height = chartContainerRef.value.clientHeight
+  renderer.onResize(width, height)
+  resizeAxisCanvas(width, height)
+
+  for (let i = 0; i < 4; i++) {
+    renderer.addSeries(TRACK_IDS[i], hexToRendererColor(getTrackColor(i + 1)))
+    renderer.setSeriesVisible(TRACK_IDS[i], legendVisible.value[i])
   }
+  renderer.setPointSize(pointSize.value)
+  updateViewport(-10, 10, -10, 10)
 
-  const option = chartInstance.value.getOption();
-  if (!option) return;
-  const text = `${params.seriesName} 🕐time: ${currentTime.toFixed(3)} 📍${xField}:${originX.toFixed(3)}, ${yField}:${originY.toFixed(3)}`;
-  chartInstance.value.setOption({ graphic: [{ style: { text } }] });
-};
+  canvasRef.value.addEventListener('wheel', handleWheel, { passive: false, capture: true })
+  canvasRef.value.addEventListener('mousemove', handleMouseMove)
+  canvasRef.value.addEventListener('mouseleave', hideHover)
+  canvasRef.value.addEventListener('dblclick', handleDblClick)
+  canvasRef.value.addEventListener('mousedown', handleMouseDown)
+}
 
-// 鼠标移出事件处理函数
-const handleMouseOut = function() {
-  if (!chartInstance.value) return;
-  
-  // 获取当前图表配置
-  const option = chartInstance.value.getOption();
-  if (!option || !option.series) return;
-  
-  // 取消所有系列的高亮状态
-  option.series.forEach((series, index) => {
-    if (series.data && series.data.length > 0) {
-      // 为每个数据点执行downplay操作
-      for (let i = 0; i < series.data.length; i++) {
-        chartInstance.value.dispatchAction({
-          type: 'downplay',
-          seriesIndex: index,
-          dataIndex: i
-        });
-      }
-    }
-  });
-
-  // 显示graphic的内容
-  chartInstance.value.setOption({ graphic: [{ style: { text: '' } }] });
-};
-
-// 组件挂载时初始化
 onMounted(() => {
-  // 修复：使用nextTick确保DOM完全渲染后再初始化图表
   nextTick(() => {
-    // 确保chartRef.value存在且有尺寸后再初始化图表
-    if (chartRef.value && chartRef.value.clientWidth > 0 && chartRef.value.clientHeight > 0) {
-      initChart();
-    } else {
-      // 如果DOM还没有尺寸，添加一个小延迟再次尝试
-      setTimeout(() => {
-        if (chartRef.value) {
-          initChart();
+    initRenderer()
+    setupResizeObserver()
+
+    watch(
+      deviceConnected,
+      () => {
+        if (deviceConnected.value) {
+          resumeDataUpdate()
+        } else {
+          pauseDataUpdate()
         }
-      }, 300);
+      },
+      { immediate: true },
+    )
+
+    watch(
+      () => (plotData.value.timestamp as number[] | undefined)?.length,
+      () => {
+        if (!isPaused) scheduleFlowDataUpdate()
+      },
+    )
+
+    watch(
+      [
+        deviationConfig.track1X,
+        deviationConfig.track1Y,
+        deviationConfig.track2X,
+        deviationConfig.track2Y,
+        deviationConfig.track3X,
+        deviationConfig.track3Y,
+        deviationConfig.track4X,
+        deviationConfig.track4Y,
+      ],
+      () => {
+        lastFlowRenderKey = ''
+        scheduleFlowDataUpdate()
+      },
+    )
+
+    for (let i = 0; i < 4; i++) {
+      watch(
+        deviationConfig[`track${i + 1}Color` as keyof typeof deviationConfig] as Ref<string>,
+        (color) => {
+          renderer?.setSeriesColor(TRACK_IDS[i], hexToRendererColor(color))
+        },
+      )
     }
-  });
 
-  watch(deviceConnected, () => {
-    if (deviceConnected.value) {
-      enableWindow.value = true;
-      // 每100ms更新一次数据
-      resumeDataUpdate();
-    } else {
-      pauseDataUpdate();
-    }
-  });
+    watch(resolvedTheme, () => {
+      nextTick(() => {
+        drawAxisLayer()
+        drawCurrentPositions()
+      })
+    })
+  })
+})
 
-  watch(enableWindow, () => {
-    updateFlowData();
-  });
-
-
-  window.addEventListener('keydown', handleKeyDown);
-});
-
-watch(resolvedTheme, () => {
-  nextTick(() => {
-    initChart();
-    updateFlowData();
-  });
-});
-
-// 组件卸载时清理资源
 onUnmounted(() => {
-  if (chartInstance.value) {
-    // 移除事件监听
-    chartInstance.value.off('mouseover', handleMouseOver);
-    chartInstance.value.off('mouseout', handleMouseOut);
-    chartInstance.value.off('globalout', handleMouseOut);
-    chartInstance.value.off('dblclick', handleChartDblClick); // 移除双击事件监听
-    chartInstance.value.off('legendselectchanged', handleLegendSelectChanged); // 移除图例点击事件监听
-    
-    chartInstance.value.dispose();
+  cancelScheduledFlowUpdate()
+  teardownResizeObserver()
+  if (canvasRef.value) {
+    canvasRef.value.removeEventListener('wheel', handleWheel)
+    canvasRef.value.removeEventListener('mousemove', handleMouseMove)
+    canvasRef.value.removeEventListener('mouseleave', hideHover)
+    canvasRef.value.removeEventListener('dblclick', handleDblClick)
+    canvasRef.value.removeEventListener('mousedown', handleMouseDown)
   }
-  disconnectResizeObserver();
-  if (dataUpdateInterval) {
-    clearInterval(dataUpdateInterval);
-  }
-  // 清理高亮超时定时器
-  if (highlightTimeout.value) {
-    clearTimeout(highlightTimeout.value);
-    highlightTimeout.value = null;
-  }
-  // 清理滚轮事件监听器
-  unbindWheelHandler(handleWheel);
-  window.removeEventListener('keydown', handleKeyDown);
-});
+  window.removeEventListener('mousemove', handleWindowMouseMove)
+  window.removeEventListener('mouseup', handleWindowMouseUp)
+  renderer?.dispose()
+  renderer = null
+  axisCtx = null
+})
 </script>
 
 <style scoped>
@@ -1693,6 +1050,7 @@ onUnmounted(() => {
   flex-direction: column;
   height: 100%;
   width: 100%;
+  container-type: inline-size;
   color: var(--app-text);
   background-color: var(--app-surface);
   border-radius: 8px;
@@ -1717,6 +1075,7 @@ onUnmounted(() => {
   justify-content: flex-start;
   width: 100%;
   position: relative;
+  gap: 8px;
 }
 
 .switch-label {
@@ -1741,18 +1100,59 @@ onUnmounted(() => {
   position: relative;
   overflow: hidden;
   min-height: 0;
-  /* 移除居中显示，让图表自然填充 */
   display: block;
 }
 
 .chart {
+  position: absolute;
+  top: 0;
+  left: 0;
   width: 100%;
   height: 100%;
   touch-action: none;
   overscroll-behavior: none;
-  /* 添加最小尺寸确保图表始终有大小 */
-  min-width: 200px;
-  min-height: 200px;
+}
+
+.axis-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  min-height: 0;
+}
+
+.deviation-tooltip {
+  position: absolute;
+  pointer-events: none;
+  padding: 6px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  line-height: 1.4;
+  white-space: pre-line;
+  background-color: var(--app-surface);
+  color: var(--app-text);
+  border: 1px solid var(--app-border);
+  box-shadow: 0 2px 8px 0 var(--app-shadow);
+  z-index: 10;
+}
+
+.info-bar {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  pointer-events: none;
+  padding: 6px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  line-height: 1.4;
+  white-space: pre-line;
+  background-color: var(--app-surface);
+  color: var(--app-text);
+  border: 1px solid var(--app-border);
+  box-shadow: 0 2px 8px 0 var(--app-shadow);
+  z-index: 10;
 }
 
 .point-size-control {
@@ -1779,7 +1179,37 @@ onUnmounted(() => {
   font-size: 12px;
 }
 
-/* 添加滑块样式 */
+.legend-panel {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: 8px;
+  flex-wrap: wrap;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  user-select: none;
+  font-size: 12px;
+  color: var(--app-text);
+  opacity: 1;
+  transition: opacity 0.2s ease;
+}
+
+.legend-item.disabled {
+  opacity: 0.4;
+}
+
+.legend-color {
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+  border: 1px solid var(--app-border);
+}
+
 :deep(.el-slider) {
   --el-slider-height: 5px;
   --el-slider-button-size: 22px;
@@ -1791,14 +1221,14 @@ onUnmounted(() => {
 }
 
 :deep(.el-slider__bar) {
-  background: #6E6E6E;
+  background: #6e6e6e;
   border-radius: 4px;
 }
 
 :deep(.el-slider__button) {
   width: var(--el-slider-button-size);
   height: var(--el-slider-button-size);
-  background-image: url("data:image/svg+xml;charset=utf-8;base64,PHN2ZyBjbGFzcz0iaWNvbiIgdmlld0JveD0iMCAwIDEwMjQgMTAyNCIgdmVyc2lvbj0iMS4xIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHN0eWxlPSJoZWlnaHQ6IDE2cHg7IHdpZHRoOiAxNnB4OyI+PHBhdGggZD0iTTUxMiA2NGE0NDggNDQ4IDAgMCAxIDEzMC4yNCAxOS4yMzJjLTM3LjQwOCAxNDIuNzItMTUuMDQgMjM0LjQgNzUuODQgMjY0LjcwNGwxNy4yOCA1Ljg4OCAxNi40OCA1Ljg4OGMxMDUuNTM2IDM4Ljk3NiAxMjkuMzc2IDcxLjc0NCAxMDQuNjQgMTQ1Ljk4NC0xMS4yIDMzLjYtMzQuOTQ0IDQ5LjgyNC0xMDEuNjk2IDczLjE1MmwtMzUuODQgMTIuMjI0LTE3LjQ0IDYuMzA0Yy03Mi40NDggMjcuMTA0LTEwNC40MTYgNTIuMTI4LTEyMi41NiAxMDYuNTYtMjYuMTQ0IDc4LjM2OCA4LjY0IDE1My4zNzYgOTguMTc2IDIyNC42MDhBNDQ1Ljc5MiA0NDUuNzkyIDAgMCAxIDUxMiA5NjBjLTMyLjg2NCAwLTY0Ljg5Ni0zLjUyLTk1Ljc0NC0xMC4yNCA1Ni4wOTYtNDMuMDcyIDY2LjA0OC0xMDguOCAyNC44LTE5MS4yOTYtMjYuODgtNTMuNjk2LTY5LjI0OC04My4xMzYtMTI5LjkyLTEwMS4zNDRhNDgwLjk2IDQ4MC45NiAwIDAgMC0xOS43NDQtNS40NGwtMzMuNDA4LTcuOTM2Yy0zNC4yNC04LjEyOC00OC40OC0xMy45NTItNTQuNTI4LTIxLjYzMi02LjQtOC4xNi02LjM2OC0yNS45ODQgNi41OTItNjAuMzJsMi41Ni02LjY1NmM1My44MjQtMTM0LjU2IDE1LjEwNC0yMTkuMDcyLTEwNi40NjQtMjMzLjA4OEMxNzcuNjMyIDE2OS42IDMzMi40OCA2NCA1MTIgNjR6TTgyLjQ2NCAzODQuMjU2Yzg5LjYgMy42NDggMTEwLjYyNCA0My4wNCA3My41MDQgMTQwLjA2NGwtMi43ODQgNy4wNGMtMjMuMDQgNTcuNjk2LTI0LjEyOCA5OS42NDgtMC4wNjQgMTMwLjI3MiAxNy40MDggMjIuMjA4IDM4Ljg0OCAzMS43NzYgODIuNTYgNDIuNTZsMzMuMjggNy44NzJjOS4wMjQgMi4yMDggMTYuNjQgNC4yMjQgMjMuNzc2IDYuMzY4IDQ1LjI0OCAxMy41NjggNzMuMjQ4IDMzLjAyNCA5MS4wNzIgNjguNjcyIDM1LjIgNzAuMzY4IDIxLjQ0IDExMS4zNi01MS44NCAxMzUuMjMyQzE3NC4xNzYgODUzLjAyNCA2NCA2OTUuMzYgNjQgNTEyYzAtNDQuMzg0IDYuNDY0LTg3LjI2NCAxOC40NjQtMTI3Ljc0NHogbTYxOS44MDgtMjc3Ljk1MkM4NTQuNTYgMTc3LjgyNCA5NjAgMzMyLjYwOCA5NjAgNTEyYzAgMTYzLjUyLTg3LjYxNiAzMDYuNjI0LTIxOC40OTYgMzg0LjgzMi04OC4zMi02MS44MjQtMTE5LjY4LTExOS4xNjgtMTAxLjg1Ni0xNzIuNjQgMTEuMTY4LTMzLjUzNiAzNC44OC00OS43NiAxMDEuMzQ0LTczLjAyNGwxNy4xODQtNS44NTZjOTguNzItMzIuODk2IDEzOC4wNDgtNTYuNTEyIDE1OS4wNC0xMTkuMzYgNDIuMTc2LTEyNi41OTItMTUuNTUyLTE4NC4zMi0xNzguODgtMjM4LjcyLTQ3LjItMTUuNzQ0LTYyLjQ5Ni02OS42MzItMzguNzUyLTE3MC4wOGwyLjY4OC0xMC44OHogbS0yMzEuMTM2IDMyMy41MmMwIDM0LjY1NiA0MS4wODggODIuMTc2IDEyMy4yMzIgODIuMTc2IDgyLjE3NiAwIDgyLjE3Ni04Mi4xNDQgMC0xMjMuMjMyLTgyLjE0NC00MS4wODgtMTIzLjIgNi40MzItMTIzLjIgNDEuMDg4eiIgZmlsbD0iIzVDNUM1QyI+PC9wYXRoPjwvc3ZnPg==");
+  background-image: url("data:image/svg+xml;charset=utf-8;base64,PHN2ZyBjbGFzcz0iaWNvbiIgdmlld0JveD0iMCAwIDEwMjQgMTAyNCIgdmVyc2lvbj0iMS4xIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHN0eWxlPSJoZWlnaHQ6IDE2cHg7IHdpZHRoOiAxNnB4OyI+PHBhdGggZD0iTTUxMiA2NGE0NDggNDQ4IDAgMCAxIDEzMC4yNCAxOS4yMzJjLTM3LjQwOCAxNDIuNzItMTUuMDQgMjM0LjQgNzUuODQgMjY0LjcwNGwxNy4yOCA1Ljg4OCAxNi40OCA1Ljg4OGMxMDUuNTM2IDM4Ljk3NiAxMjkuMzc2IDcxLjc0NCAxMDQuNjQgMTQ1Ljk4NC0xMS4yIDMzLjYtMzQuOTQ0IDQ5LjgyNC0xMDEuNjk2IDczLjE1MmwtMzUuODQgMTIuMjI0LTE3LjQ0IDYuMzA0Yy03Mi40NDggMjcuMTA0LTEwNC40MTYgNTIuMTI4LTEyMi41NiAxMDYuNTYtMjYuMTQ0IDc4LjM2OCA4LjY0IDE1My4zNzYgOTguMTc2IDIyNC42MDhBNDQ1Ljc5MiA0NDUuNzkyIDAgMCAxIDUxMiA5NjBjLTMyLjg2NCAwLTY0Ljg5Ni0zLjUyLTk1Ljc0NC0xMC4yNCA1Ni4wOTYtNDMuMDcyIDY2LjA0OC0xMDguOCAyNC44LTE5MS4yOTYtMjYuODgtNTMuNjk2LTY5LjI0OC04My4xMzYtMTI5LjkyLTEwMS4zNDRhNDgwLjk2IDQ4MC45NiAwIDAgMC0xOS43NDQtNS40NGwtMzMuNDA4LTcuOTM2Yy0zNC4yNC04LjEyOC00OC40OC0xMy45NTItNTQuNTI4LTIxLjYzMi02LjQtOC4xNi02LjM2OC0yNS45ODQgNi41OTItNjAuMzJsMi41Ni02LjY1NmM1My44MjQtMTM0LjU2IDE1LjEwNC0yMTkuMDcyLTEwNi40NjQtMjMzLjA4OEMxNzcuNjMyIDE2OS42IDMzMi40OCA2NCA1MTIgNjR6TTgyLjQ2NCAzODQuMjU2Yzg5LjYgMy42NDggMTEwLjYyNCA0My4wNCA3My41MDQgMTQwLjA2NGwtMi43ODQgNy4wNGMtMjMuMDQgNTcuNjk2LTI0LjEyOCA5OS42NDgtMC4wNjQgMTMwLjI3MiAxNy40MDggMjIuMjA4IDM4Ljg0OCAzMS43NzYgODIuNTYgNDIuNTZsMzMuMjggNy44NzJjOS4wMjQgMi4yMDggMTYuNjQgNC4yMjQgMjMuNzc2IDYuMzY4IDQ1LjI0OCAxMy41NjggNzMuMjQ4IDMzLjAyNCA5MS4wNzIgNjguNjcyIDM1LjIgNzAuMzY4IDIxLjQ0IDExMS4zNi01MS44NCAxMzUuMjMyQzE3NC4xNzYgODUzLjAyNCA2NCA2OTUuMzYgNjQgNTEyYzAtNDQuMzg0IDYuNDY0LTg3LjI2NCAxOC40NjQtMTI3Ljc0NHogbTYxOS44MDgtMjc3Ljk1MkM4NTQuNTYgMTc3LjgyNCA5NjAgMzMyLjYwOCA5NjAgNTEyYzAgMTYzLjUyLTg3LjYxNiAzMDYuNjI0LTIxOC40OTYgMzg0LjgzMi04OC4zMi02MS44MjQtMTE5LjY4LTExOS4xNjgtMTAxLjg1Ni0xNzIuNjQgMTEuMTY4LTMzLjUzNiAzNC44OC00OS43NiAxMDEuMzQ0LTczLjAyNGwxNy4xODQtNS44NTZjOTguNzItMzIuODk2IDEzOC4wNDgtNTYuNTEyIDE1OS4wNC0xMTkuMzYgNDIuMTc2LTEyNi41OTItMTUuNTUyLTE4NC4zMi0xNzguODgtMjM4LjcyLTQ3LjItMTUuNzQ0LTYyLjQ5Ni02OS42MzItMzguNzUyLTE3MC4w");
   background-size: contain;
   background-position: center;
   background-repeat: no-repeat;
@@ -1816,70 +1246,30 @@ onUnmounted(() => {
   transform: scale(0.95);
 }
 
-/* 新增右侧按钮容器样式 */
 .right-buttons {
   display: flex;
   align-items: center;
-  margin-left: auto; /* 自动占据剩余空间，将按钮推到右侧 */
+  margin-left: auto;
+  gap: 4px;
 }
 
-/* 配置对话框样式 - 参考FlowData的现代化设计 */
-.chart-config-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 20px;
-  margin-bottom: 20px;
-}
-
-.chart-config-section {
-  margin-bottom: 15px;
-  padding: 15px;
-  background-color: var(--app-surface-muted);
-  border-radius: 8px;
-  border: 1px solid var(--app-border);
-  transition: all 0.3s ease;
-}
-
-.chart-config-section:hover {
-  background-color: var(--app-hover);
-  border-color: var(--app-border-strong);
-}
-
-.source-selectors {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-/* 针对不同屏幕尺寸的响应式调整 */
-@media (max-width: 768px) {
-  .chart-config-grid {
-    grid-template-columns: 1fr;
+@container (max-width: 680px) {
+  .tracking-text,
+  .size-label {
+    display: none;
   }
-}
 
-/* 对话框内容样式优化 */
-:deep(.el-dialog__body) {
-  padding: 20px;
-}
+  .point-size-control {
+    margin: 0 4px;
+  }
 
-:deep(.el-dialog__title) {
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--app-text);
-}
+  .legend-label {
+    display: none;
+  }
 
-/* 选择器样式优化 */
-:deep(.el-select) {
-  --el-select-border-color-hover: #409eff;
-}
-
-:deep(.el-select__wrapper) {
-  border-radius: 4px;
-  transition: all 0.2s ease;
-}
-
-:deep(.el-select__wrapper:hover) {
-  border-color: #409eff;
+  .legend-panel {
+    gap: 6px;
+    margin-left: 4px;
+  }
 }
 </style>

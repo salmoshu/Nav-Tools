@@ -6,58 +6,98 @@
     @mousedown="startDrag"
   >
     <div class="statusbar-handle">
-      <span class="statusbar-title">Status View</span>
+      <div class="statusbar-heading">
+        <span class="statusbar-title-icon">
+          <el-icon><DataAnalysis /></el-icon>
+        </span>
+        <span class="statusbar-heading-copy">
+          <strong class="statusbar-title">Status View</strong>
+          <small :class="{ active: hasMonitorStatus }">
+            <i></i>
+            {{ hasMonitorStatus ? `${statusCount} live metrics` : 'Waiting for data' }}
+          </small>
+        </span>
+      </div>
       <el-button type="text" @click="showStatusBar = false" class="remove-btn" title="移除卡片">
         <el-icon><Close /></el-icon>
       </el-button>
     </div>
     <div class="statusbar-content">
-      <div v-for="(statusValue, statusName) in monitorStatus" :key="statusName" class="status-item">
-        <div class="status-item-row">
-          <!-- 为字段名添加点击进入编辑模式的功能 -->
-          <span class="status-label" @click="showComputedStatusDialog(statusName)">{{
-            statusName
-          }}</span>
-          <div style="display: flex; align-items: center; gap: 8px">
-            <!-- 为值添加点击进入编辑模式的功能 -->
-            <span
-              class="status-indicator"
-              :style="getStatusStyle(statusValue)"
-              @click="showComputedStatusDialog(statusName)"
-              >{{ getStatusValue(statusValue) }}</span
-            >
-            <!-- 只为自定义属性显示删除按钮 -->
-            <template
-              v-if="
-                showComputedStatus &&
-                flowStore.customStatusConfigs.some((config) => config.fieldName === statusName) &&
-                (!flowData.value ||
-                  typeof flowData.value !== 'object' ||
-                  !('rawDataKeys' in flowData.value) ||
-                  !Array.isArray(flowData.value.rawDataKeys) ||
-                  !flowData.value.rawDataKeys.includes(statusName))
-              "
-            >
-              <el-button
-                type="text"
-                size="small"
-                @click="deleteCustomStatus(statusName)"
-                title="删除"
-                class="delete-status-btn"
+      <draggable
+        :list="orderedEntries"
+        item-key="0"
+        handle=".status-drag-handle"
+        class="status-draggable"
+        :animation="200"
+        easing="cubic-bezier(0.22, 1, 0.36, 1)"
+        :force-fallback="true"
+        :fallback-on-body="true"
+        :fallback-tolerance="4"
+        ghost-class="status-ghost"
+        drag-class="status-drag-clone"
+        @end="onSortEnd"
+      >
+        <template #item="{ element }">
+          <div class="status-item" :class="getStatusClass(element[1])">
+            <div class="status-item-row">
+              <span class="status-drag-handle" @mousedown.stop>
+                <el-icon><Rank /></el-icon>
+              </span>
+              <!-- 为字段名添加点击进入编辑模式的功能 -->
+              <span
+                class="status-label"
+                :title="String(element[0])"
+                @click="showComputedStatusDialog(element[0])"
               >
-                <el-icon><Delete /></el-icon>
-              </el-button>
-            </template>
+                {{ formatStatusName(String(element[0])) }}
+              </span>
+              <span class="status-state-dot" aria-hidden="true"></span>
+              <div class="status-value-row">
+                <!-- 为值添加点击进入编辑模式的功能 -->
+                <span
+                  class="status-indicator"
+                  :title="String(getStatusValue(element[1], String(element[0])))"
+                  @click="showComputedStatusDialog(element[0])"
+                  >{{ getStatusValue(element[1], String(element[0])) }}</span
+                >
+                <!-- 只为自定义属性显示删除按钮 -->
+                <template
+                  v-if="
+                    showComputedStatus &&
+                    flowStore.customStatusConfigs.some((config) => config.fieldName === element[0]) &&
+                    (!flowData.value ||
+                      typeof flowData.value !== 'object' ||
+                      !('rawDataKeys' in flowData.value) ||
+                      !Array.isArray(flowData.value.rawDataKeys) ||
+                      !flowData.value.rawDataKeys.includes(element[0]))
+                  "
+                >
+                  <el-button
+                    type="text"
+                    size="small"
+                    @click="deleteCustomStatus(element[0])"
+                    title="删除"
+                    class="delete-status-btn"
+                  >
+                    <el-icon><Delete /></el-icon>
+                  </el-button>
+                </template>
+              </div>
+            </div>
           </div>
-        </div>
-      </div>
+        </template>
+      </draggable>
       <div v-if="!hasMonitorStatus" class="status-empty">
-        <span>暂无状态数据</span>
-        <small>连接数据源后将在此显示</small>
+        <span class="status-empty-icon"><el-icon><DataAnalysis /></el-icon></span>
+        <strong>暂无状态数据</strong>
+        <small>连接数据源后，实时指标将在这里呈现</small>
       </div>
       <div v-if="showComputedStatus">
         <div class="computed-section">
-          <span class="status-label">Add new value</span>
+          <span>
+            <strong>Add metric</strong>
+            <small>Custom computed value</small>
+          </span>
           <el-button type="primary" size="small" @click="showAddDialog = true" class="add-btn">
             <el-icon><Plus /></el-icon>
           </el-button>
@@ -253,6 +293,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, inject, watch, type Ref } from 'vue'
+import draggable from 'vuedraggable'
 import {
   editorRef,
   isEditMode,
@@ -260,13 +301,15 @@ import {
   newStatusConfig,
   editStatusConfig,
   getMonitorStatus,
+  statusOrder,
+  setStatusOrder,
   createCodeEditor,
 } from '@/composables/useStatusManager'
 import { useApplicationSelector } from '@/composables/useApplicationSelector'
 import { useFlow } from '@/composables/flow/useFlow'
 import { useFlowStore } from '@/stores/flow'
 // 4. 导入需要的图标
-import { Plus, Close, Delete, Edit, InfoFilled } from '@element-plus/icons-vue'
+import { Plus, Close, Delete, Edit, InfoFilled, DataAnalysis, Rank } from '@element-plus/icons-vue'
 import AppDialogTitle from '@/components/AppDialogTitle.vue'
 import {
   ElMessage,
@@ -283,6 +326,35 @@ import {
 const { activeDataModes } = useApplicationSelector()
 const monitorStatus = computed(() => getMonitorStatus())
 const hasMonitorStatus = computed(() => Object.keys(monitorStatus.value).length > 0)
+const statusCount = computed(() => Object.keys(monitorStatus.value).length)
+
+// 按用户自定义顺序展示状态项
+const orderedEntries = ref<[string, any][]>([])
+
+watch(
+  monitorStatus,
+  (status) => {
+    const entryMap = new Map(Object.entries(status))
+    const existingKeys = new Set(orderedEntries.value.map(([key]) => key))
+    const nextEntries: [string, any][] = []
+
+    // 保留用户已调整的顺序
+    for (const [key, value] of orderedEntries.value) {
+      if (entryMap.has(key)) nextEntries.push([key, entryMap.get(key)])
+    }
+    // 追加新增字段
+    for (const [key, value] of entryMap) {
+      if (!existingKeys.has(key)) nextEntries.push([key, value])
+    }
+
+    orderedEntries.value = nextEntries
+  },
+  { immediate: true, deep: true },
+)
+
+function onSortEnd() {
+  setStatusOrder(orderedEntries.value.map(([key]) => key))
+}
 
 // 添加编辑自定义状态的方法
 const editCustomStatus = (fieldName: string) => {
@@ -312,26 +384,30 @@ const showComputedStatusDialog = (statusName: string) => {
     : undefined
 }
 
-const commonStyle = {
-  trueStyle: 'color: #00b894; background: rgba(0, 184, 148, 0.1); font-weight: 700;',
-  falseStyle: 'color: #ff6b6b; background: rgba(255, 107, 107, 0.1); font-weight: 700;',
-}
+const getStatusClass = (status: unknown) => ({
+  'status-positive': status === true,
+  'status-negative': status === false,
+  'status-empty-value': status === '' || status === null || status === undefined,
+})
 
-const getStatusStyle = (status: any) => {
-  if (typeof status === 'boolean') {
-    return status ? commonStyle.trueStyle : commonStyle.falseStyle
-  }
-  return ''
-}
+const formatStatusName = (name: string) =>
+  name
+    .replace(/^([^.]+)\./, '$1 · ')
+    .replace(/[_-]+/g, ' ')
+    .replace(/([a-z\d])([A-Z])/g, '$1 $2')
+    .replace(/\b\w/g, (letter) => letter.toUpperCase())
 
-const getStatusValue = (status: any) => {
+const getStatusValue = (status: unknown, statusName = '') => {
   if (typeof status === 'boolean') {
-    return status ? 'True' : 'False'
+    return status ? 'ON' : 'OFF'
   }
   if (typeof status === 'number') {
-    return status.toFixed(2)
+    if (!Number.isFinite(status)) return '—'
+    if (/latitude|longitude/i.test(statusName)) return status.toFixed(6)
+    return Number.isInteger(status) ? status.toLocaleString() : status.toFixed(2)
   }
-  return status
+  if (status === '' || status === null || status === undefined) return '—'
+  return String(status)
 }
 
 // Flow相关
@@ -515,7 +591,7 @@ const getDockZoneStyle = (zone: 'left' | 'right') => {
   const toolbarWidth = toolbarSize?.value?.width || 40
 
   switch (zone) {
-    case 'left':
+    case 'left': {
       // 当toolbar也在左边时，dock-zone应该从toolbar右侧开始
       const leftOffset = toolbarPosition?.value === 'left' ? toolbarWidth : 0
       return {
@@ -524,7 +600,8 @@ const getDockZoneStyle = (zone: 'left' | 'right') => {
         width: `${dockWidth}px`,
         height: `${windowHeight}px`,
       }
-    case 'right':
+    }
+    case 'right': {
       // 当toolbar也在右边时，dock-zone应该从toolbar左侧开始
       const rightOffset = toolbarPosition?.value === 'right' ? toolbarWidth : 0
       return {
@@ -533,6 +610,7 @@ const getDockZoneStyle = (zone: 'left' | 'right') => {
         width: `${dockWidth}px`,
         height: `${windowHeight}px`,
       }
+    }
     default:
       return {}
   }
@@ -732,11 +810,17 @@ onUnmounted(() => {
 <style scoped>
 .statusbar {
   position: fixed;
+  box-sizing: border-box;
   color: var(--app-text);
-  background-color: var(--app-surface);
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--el-color-primary) 4%, var(--app-surface)) 0,
+      var(--app-surface) 150px
+    );
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: stretch;
   z-index: 999;
   border: 1px solid var(--app-border);
   border-radius: 0;
@@ -746,7 +830,8 @@ onUnmounted(() => {
   height: 100vh;
   font-family:
     -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-  overflow: auto;
+  overflow: hidden;
+  box-shadow: -8px 0 28px color-mix(in srgb, var(--app-shadow) 55%, transparent);
   user-select: none; /* 现代浏览器 */
   -webkit-user-select: none; /* Safari */
   -moz-user-select: none; /* Firefox */
@@ -759,6 +844,7 @@ onUnmounted(() => {
   border-radius: 0;
   height: calc(v-bind(statusbarHeight) - var(--app-header-height));
   margin-top: var(--app-header-height);
+  box-shadow: 8px 0 28px color-mix(in srgb, var(--app-shadow) 55%, transparent);
 }
 
 .statusbar-right {
@@ -770,52 +856,135 @@ onUnmounted(() => {
 }
 
 .statusbar-handle {
-  font-family: 'Helvetica Neue', Arial, sans-serif;
-  font-size: 14px;
-  font-weight: 600;
+  flex: 0 0 56px;
   color: var(--app-text);
   cursor: grab;
-  padding: 0 8px;
-  margin: 0 auto;
-  text-align: center;
-  background-color: var(--app-surface-muted);
+  padding: 0 10px 0 12px;
+  background:
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--el-color-primary) 10%, var(--app-surface)) 0%,
+      var(--app-surface-muted) 75%
+    );
   border-bottom: 1px solid var(--app-border);
   width: 100%;
-  height: 40px;
   box-sizing: border-box;
-  border-radius: 0;
   display: flex;
   justify-content: space-between;
   align-items: center;
 }
 
+.statusbar-heading {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 9px;
+}
+
+.statusbar-title-icon {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--el-color-primary) 26%, var(--app-border));
+  border-radius: 9px;
+  color: var(--el-color-primary);
+  background: color-mix(in srgb, var(--el-color-primary) 10%, var(--app-surface));
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--el-color-primary) 12%, transparent);
+}
+
+.statusbar-heading-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+}
+
+.statusbar-title {
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 720;
+  letter-spacing: 0.01em;
+  line-height: 1.1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.statusbar-heading-copy small {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--app-text-muted);
+  font-size: 9px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.statusbar-heading-copy small i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--app-border-strong);
+}
+
+.statusbar-heading-copy small.active i {
+  background: var(--el-color-success);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--el-color-success) 14%, transparent);
+}
+
 .statusbar-content {
   display: flex;
+  min-height: 0;
   flex-direction: column;
-  gap: 8px;
+  flex: 1;
+  gap: 7px;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
   font-size: 12px;
-  padding: 10px;
+  padding: 10px 9px 12px;
   width: 100%;
   box-sizing: border-box;
 }
 
 .status-empty {
-  display: grid;
-  place-items: center;
-  gap: 4px;
-  min-height: 108px;
-  padding: 12px;
+  display: flex;
+  min-height: 170px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 18px 12px;
   color: var(--app-text-muted);
   text-align: center;
 }
 
-.status-empty span {
+.status-empty-icon {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  margin-bottom: 4px;
+  place-items: center;
+  border: 1px dashed color-mix(in srgb, var(--el-color-primary) 35%, var(--app-border));
+  border-radius: 13px;
+  color: var(--el-color-primary);
+  background: color-mix(in srgb, var(--el-color-primary) 8%, var(--app-surface));
+  font-size: 19px;
+}
+
+.status-empty strong {
   color: var(--app-text-secondary);
   font-size: 13px;
+  font-weight: 650;
 }
 
 .status-empty small {
+  max-width: 145px;
   font-size: 11px;
+  line-height: 1.55;
 }
 
 .statusbar-content h3 {
@@ -828,36 +997,72 @@ onUnmounted(() => {
 }
 
 .status-item {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 4px;
-  transition: background-color 140ms ease;
-  margin: 4px 0;
+  position: relative;
+  flex: 0 0 auto;
+  min-height: 58px;
+  box-sizing: border-box;
+  padding: 9px 10px 10px;
+  overflow: hidden;
+  border: 1px solid var(--app-border);
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--app-surface) 94%, var(--app-surface-muted));
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--app-shadow) 22%, transparent);
+  transition:
+    border-color 140ms ease,
+    background-color 140ms ease,
+    transform 140ms ease;
 }
 
 .status-item:hover {
-  background: var(--app-hover);
+  border-color: color-mix(in srgb, var(--el-color-primary) 38%, var(--app-border));
+  background: color-mix(in srgb, var(--el-color-primary) 4%, var(--app-surface));
+  transform: translateY(-1px);
 }
 
-.status-label {
-  color: var(--app-text-muted);
-  font-weight: 600;
-  font-size: 12px;
-  line-height: 1.5;
+.status-item .status-indicator {
+  min-width: 0;
+  color: color-mix(in srgb, var(--el-color-primary) 82%, var(--app-text));
+  font-weight: 400;
+  font-size: 13px;
+  letter-spacing: -0.015em;
+  line-height: 1.3;
+  padding: 3px 0 0;
   box-sizing: border-box;
   text-align: left;
-  min-width: 60px;
+  flex-grow: 1;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 
-.status-indicator {
-  color: var(--app-text);
-  font-weight: 600;
-  font-size: 14px;
-  padding: 4px 8px;
-  box-sizing: border-box;
-  text-align: right;
-  flex-grow: 1;
+.status-positive {
+  border-color: color-mix(in srgb, var(--el-color-success) 30%, var(--app-border));
+}
+
+.status-positive .status-indicator,
+.status-positive .status-state-dot {
+  color: var(--el-color-success);
+}
+
+.status-positive .status-state-dot {
+  background: var(--el-color-success);
+}
+
+.status-negative {
+  border-color: color-mix(in srgb, var(--el-color-danger) 30%, var(--app-border));
+}
+
+.status-negative .status-indicator,
+.status-negative .status-state-dot {
+  color: var(--el-color-danger);
+}
+
+.status-negative .status-state-dot {
+  background: var(--el-color-danger);
+}
+
+.status-empty-value .status-indicator {
+  color: var(--app-text-muted);
 }
 
 .statusbar-dock-zones {
@@ -878,10 +1083,89 @@ onUnmounted(() => {
 }
 
 .status-item-row {
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
+  gap: 6px;
   width: 100%;
+}
+
+.status-drag-handle {
+  display: grid;
+  width: 14px;
+  height: 14px;
+  place-items: center;
+  color: var(--app-text-muted);
+  cursor: grab;
+  opacity: 0.55;
+  transition: opacity 140ms ease;
+}
+
+.status-drag-handle:hover {
+  opacity: 1;
+  color: var(--el-color-primary);
+}
+
+.status-label {
+  grid-column: 2;
+  min-width: 0;
+  color: var(--app-text-muted);
+  font-weight: 650;
+  font-size: 10px;
+  letter-spacing: 0.045em;
+  line-height: 1.25;
+  box-sizing: border-box;
+  text-align: left;
+  text-transform: uppercase;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.status-state-dot {
+  grid-column: 3;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--app-border-strong);
+}
+
+.status-value-row {
+  display: flex;
+  min-width: 0;
+  grid-column: 1 / -1;
+  align-items: flex-start;
+  gap: 7px;
+}
+
+.status-draggable {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+/* 排序拖拽：落点占位槽（仿 iOS 桌面挤压效果） */
+.status-ghost {
+  border-style: dashed;
+  border-color: color-mix(in srgb, var(--el-color-primary) 45%, var(--app-border));
+  background: color-mix(in srgb, var(--el-color-primary) 8%, transparent);
+  box-shadow: none;
+  transition: none;
+}
+
+.status-ghost > * {
+  opacity: 0;
+}
+
+/* 排序拖拽：跟随光标的悬浮克隆体（SortableJS 已内联 position/z-index/pointer-events，
+   且其定位使用 inline transform，因此这里只做阴影与描边高亮，不可用 transform） */
+.status-drag-clone {
+  border-color: color-mix(in srgb, var(--el-color-primary) 60%, var(--app-border));
+  background: var(--app-surface);
+  box-shadow:
+    0 16px 38px color-mix(in srgb, var(--app-shadow) 65%, transparent),
+    0 0 0 1px color-mix(in srgb, var(--el-color-primary) 22%, transparent);
+  cursor: grabbing;
+  transition: none;
 }
 
 .dock-zone {
@@ -903,17 +1187,26 @@ onUnmounted(() => {
   background: color-mix(in srgb, var(--el-color-primary) 30%, transparent);
 }
 
-.statusbar-title {
-  margin: 0 auto;
-}
-
 .remove-btn {
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+  padding: 0;
+  border-radius: 8px;
   color: var(--app-text-muted);
 }
 
+.remove-btn:hover {
+  color: var(--el-color-danger);
+  background: color-mix(in srgb, var(--el-color-danger) 9%, transparent);
+}
+
 .delete-status-btn {
-  min-width: 20px;
+  width: 22px;
+  min-width: 22px;
+  height: 22px;
   padding: 0;
+  border-radius: 6px;
   color: var(--el-color-danger);
 }
 
@@ -922,15 +1215,42 @@ onUnmounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 8px;
-  background-color: var(--app-surface-muted);
-  border-radius: 4px;
-  margin-top: 8px;
+  gap: 8px;
+  padding: 10px;
+  border: 1px dashed color-mix(in srgb, var(--el-color-primary) 40%, var(--app-border));
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--el-color-primary) 5%, var(--app-surface));
+  margin-top: 2px;
+}
+
+.computed-section > span {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+
+.computed-section strong {
+  color: var(--app-text-secondary);
+  font-size: 11px;
+  font-weight: 680;
+}
+
+.computed-section small {
+  overflow: hidden;
+  max-width: 115px;
+  color: var(--app-text-muted);
+  font-size: 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .add-btn {
-  height: 24px;
-  padding: 0 8px;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 8px;
   font-size: 12px;
 }
 

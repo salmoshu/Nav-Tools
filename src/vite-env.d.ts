@@ -28,12 +28,27 @@ interface Window {
     toggleAlwaysOnTop: () => Promise<boolean>
     restoreDetachedPanel: () => Promise<boolean>
     closeWindow: () => Promise<void>
-    startWindowResize: (edge: import('./core/window/WindowService').WindowResizeEdge) => Promise<void>
+    startWindowResize: (
+      edge: import('./core/window/WindowService').WindowResizeEdge,
+    ) => Promise<void>
     stopWindowResize: () => Promise<void>
     startCameraStream: (url: string) => Promise<{ ok: boolean; message?: string }>
     stopCameraStream: () => Promise<void>
+    sendCameraCommand: (request: {
+      host: string
+      port: number
+      subCommand: string
+      content: string
+      contentFormat: 'text' | 'hex'
+    }) => Promise<{
+      response: string
+      responseHex: string
+      packetHex: string
+      subCommandHex: string
+      contentHex: string
+      contentBytes: number
+      dataLength: number
+    }>
   }
   ipcRenderer: import('electron').IpcRenderer
 }
-
-

@@ -36,7 +36,7 @@ function evaluateExpression(expr: string, context: Record<string, any>): any {
     }
     
     // 检查表达式是否包含不允许的字符
-    const allowedChars = /^[0-9.+\-*/()\[\]{}_a-zA-Z."'|>=<%,]+$/;
+    const allowedChars = /^[0-9.+\-*/()[\]{}_a-zA-Z."'|>=<%,]+$/;
     if (!allowedChars.test(trimmedExpr)) {
       throw new Error('表达式包含不允许的字符')
     }

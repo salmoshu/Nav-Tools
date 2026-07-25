@@ -26,12 +26,23 @@ import {
 import emitter from '@/hooks/useMitt'
 import { useDataSourceManager } from '@/composables/useDataSourceManager'
 import { normalizeRtspUrl, type TextDataParser } from '@/core/data/DataSourceStorage'
+import { FilePlaybackService } from '@/core/file/FilePlaybackService'
+import { LogRecordingService } from '@/core/file/LogRecordingService'
 
-const { processRawData: addGnssData } = useNmea()
-const { addRawData: addFlowData, initRawData: initFlowData } = useFlow()
+const {
+  processRawData: addGnssData,
+  clearData: clearGnssData,
+  clearBuffer: clearGnssBuffer,
+} = useNmea()
+const {
+  addRawData: addFlowData,
+  initRawData: initFlowData,
+  clearRawData: clearFlowData,
+} = useFlow()
 const {
   addMessages: initFlowConsole,
   addMessage: addFlowConsole,
+  clearMessages: clearFlowConsole,
   dataFormat: flowDataFormat,
   displayFormat: flowDisplayFormat,
 } = useConsole(true) // 使用全局实例
@@ -40,6 +51,8 @@ const { activeDataModes, currentWindows } = useApplicationSelector()
 const ipc = createBrowserIpcTransport()
 const serialService = new SerialService(ipc)
 const networkService = new NetworkService(ipc)
+const filePlaybackService = new FilePlaybackService(ipc)
+const logRecordingService = new LogRecordingService(ipc)
 const dataRouter = new IncomingDataRouter({
   appendGnss: addGnssData,
   appendRaw: addFlowConsole,
@@ -80,8 +93,14 @@ const networkPort = toRef(dataSourceSettings.network, 'port')
 
 // 文件配置
 const filePath = toRef(dataSourceSettings.file, 'path')
+const fileTimeTag = toRef(dataSourceSettings.file, 'timeTag')
+const fileReplaySpeed = toRef(dataSourceSettings.file, 'replaySpeed')
+const fileStartOffset = toRef(dataSourceSettings.file, 'startOffset')
+const filePositionBytes = toRef(dataSourceSettings.file, 'filePositionBytes')
 const cameraStreamUrl = toRef(dataSourceSettings.camera, 'url')
 const serialPorts = ref<string[]>([])
+const logRecordingActive = ref(false)
+const logRecordingPath = ref('')
 // const fileContent = ref("");
 
 // 创建全局设备变量，connected值：null(无设备)、true(有设备已连接)、false(有设备未连接)
@@ -150,6 +169,8 @@ function currentNetworkOptions(): NetworkConnectionOptions | undefined {
 }
 
 function routeIncomingData(data: string): void {
+  if (globalDevice.value.connected !== true) return
+  logRecordingService.write(data)
   dataRouter.route(data, {
     activeDataModes: activeDataModes.value,
     activeWindowIds: currentWindows.value.map((windowDefinition) => windowDefinition.id),
@@ -175,6 +196,7 @@ export function routeDataToWindow(data: string, windowId: string): void {
 
 serialService.onData(routeIncomingData)
 networkService.onData(routeIncomingData)
+filePlaybackService.onData(routeIncomingData)
 
 serialService.onDisconnected((data) => {
   if (globalDevice.value.path !== data.path) return
@@ -211,6 +233,108 @@ networkService.onDisconnected((connection) => {
   })
 })
 
+filePlaybackService.onStatus((status) => {
+  if (globalDevice.value.type !== 'file' || globalDevice.value.path !== status.path) return
+
+  if (status.state === 'playing') {
+    globalDevice.value.connected = true
+    ElMessage({
+      message: '时间戳播放已开始',
+      type: 'success',
+      placement: 'bottom-right',
+      offset: 50,
+    })
+    return
+  }
+
+  globalDevice.value.connected = false
+  if (status.state === 'completed') {
+    ElMessage({
+      message: '时间戳播放已完成',
+      type: 'success',
+      placement: 'bottom-right',
+      offset: 50,
+    })
+  } else if (status.state === 'error') {
+    ElMessage({
+      message: `时间戳播放失败: ${status.message ?? '未知错误'}`,
+      type: 'error',
+      placement: 'bottom-right',
+      offset: 50,
+    })
+  }
+})
+
+logRecordingService.onStatus((status) => {
+  logRecordingActive.value = status.state === 'recording'
+  logRecordingPath.value = status.state === 'recording' ? status.path : ''
+
+  if (status.state === 'recording') {
+    ElMessage({
+      message: `开始录制日志: ${status.path}`,
+      type: 'success',
+      placement: 'bottom-right',
+      offset: 50,
+    })
+  } else if (status.state === 'stopped') {
+    ElMessage({
+      message: `日志已保存: ${status.path}`,
+      type: 'success',
+      placement: 'bottom-right',
+      offset: 50,
+    })
+  } else {
+    ElMessage({
+      message: `日志录制失败: ${status.message ?? '未知错误'}`,
+      type: 'error',
+      placement: 'bottom-right',
+      offset: 50,
+    })
+  }
+})
+
+async function toggleLogRecording(): Promise<void> {
+  try {
+    if (logRecordingActive.value) {
+      await logRecordingService.stop()
+      return
+    }
+    await logRecordingService.start()
+  } catch (error) {
+    ElMessage({
+      message: `日志录制操作失败: ${error instanceof Error ? error.message : String(error)}`,
+      type: 'error',
+      placement: 'bottom-right',
+      offset: 50,
+    })
+  }
+}
+
+function startTimestampPlayback(path: string): void {
+  clearGnssBuffer()
+  clearGnssData()
+  clearFlowData()
+  clearFlowConsole()
+  void filePlaybackService
+    .start({
+      path,
+      replaySpeed: fileReplaySpeed.value,
+      startOffset: fileStartOffset.value,
+      filePositionBytes: filePositionBytes.value,
+    })
+    .catch((error) => {
+      if (globalDevice.value.type === 'file' && globalDevice.value.path === path) {
+        globalDevice.value.connected = false
+      }
+      ElMessage({
+        message: `时间戳播放失败: ${error instanceof Error ? error.message : String(error)}`,
+        type: 'error',
+        placement: 'bottom-right',
+        offset: 50,
+      })
+    })
+}
+
 /**
  * 设备管理组合式函数
  * 提供串口、网络和文件输入相关的状态和方法
@@ -220,7 +344,7 @@ export function useDevice() {
 
   // 对话框状态
   const showInputDialog = ref(false)
-  const activeTab = ref<'serial' | 'file' | 'network' | 'camera'>('serial')
+  const activeTab = ref<'serial' | 'file' | 'network' | 'camera'>('file')
   let dataSourceSnapshot: typeof dataSourceSettings | undefined
   let dataSourceChangesCommitted = false
 
@@ -275,19 +399,27 @@ export function useDevice() {
     { label: '偶校验', value: 'even' },
   ]
 
+  // 仅响应操作系统文件拖入；vuedraggable 等内部拖拽的 types 不含 Files，
+  // 直接放行，避免误触发文件拖入遮罩并干扰内部拖拽排序
+  const isFileDrag = (event: DragEvent): boolean =>
+    event.dataTransfer?.types.includes('Files') ?? false
+
   // 拖拽事件处理函数
   const handleDragOver = (event: DragEvent) => {
+    if (!isFileDrag(event)) return
     event.preventDefault() // 允许放置
     event.stopPropagation()
   }
 
   const handleDragEnter = (event: DragEvent) => {
+    if (!isFileDrag(event)) return
     event.preventDefault()
     event.stopPropagation()
     isDragOver.value = true
   }
 
   const handleDragLeave = (event: DragEvent) => {
+    if (!isFileDrag(event)) return
     event.preventDefault()
     event.stopPropagation()
     // 检查是否完全离开容器
@@ -302,6 +434,7 @@ export function useDevice() {
   }
 
   const handleDrop = async (event: DragEvent) => {
+    if (!isFileDrag(event)) return
     event.preventDefault()
     event.stopPropagation()
     isDragOver.value = false
@@ -544,17 +677,9 @@ export function useDevice() {
 
   // 重构handleFileSubmit函数，负责读取文件内容并初始化数据
   const handleFileSubmit = (): string => {
-    const fileCmd = filePath.value
+    const fileCmd = filePath.value.trim()
 
-    // 设置全局设备信息
-    globalDevice.value = {
-      type: 'file',
-      path: fileCmd,
-      connected: false, // 仅实时数据能修改globalDevice为true
-    }
-    saveDataSourceSettings()
-
-    if (!selectedFile.value && !fileCmd) {
+    if (!fileCmd) {
       ElMessage({
         message: `请先选择文件`,
         type: 'error',
@@ -563,6 +688,21 @@ export function useDevice() {
       })
       return ''
     }
+
+    // 设置全局设备信息
+    globalDevice.value = {
+      type: 'file',
+      path: fileCmd,
+      connected: false,
+    }
+    saveDataSourceSettings()
+
+    if (fileTimeTag.value) {
+      startTimestampPlayback(fileCmd)
+      return fileCmd
+    }
+
+    void filePlaybackService.stop()
 
     // 如果有文件对象引用，直接使用它读取内容
     if (selectedFile.value) {
@@ -685,6 +825,12 @@ export function useDevice() {
               offset: 50,
             })
           })
+      } else if (
+        globalDevice.value.type === 'file' &&
+        globalDevice.value.path &&
+        fileTimeTag.value
+      ) {
+        startTimestampPlayback(globalDevice.value.path)
       }
     }
   }
@@ -701,6 +847,10 @@ export function useDevice() {
       } else if (globalDevice.value.type === 'network') {
         networkService.close().then(() => {
           activeDataTransport.clear('network')
+          globalDevice.value = { connected: null }
+        })
+      } else if (globalDevice.value.type === 'file') {
+        filePlaybackService.stop().then(() => {
           globalDevice.value = { connected: null }
         })
       }
@@ -722,6 +872,11 @@ export function useDevice() {
         networkService.close().then(() => {
           activeDataTransport.clear('network')
           if (globalDevice.value.type === 'network') globalDevice.value.connected = false
+        })
+      } else if (globalDevice.value.type === 'file') {
+        globalDevice.value.connected = false
+        filePlaybackService.stop().then(() => {
+          if (globalDevice.value.type === 'file') globalDevice.value.connected = false
         })
       }
     }
@@ -775,6 +930,10 @@ export function useDevice() {
     serialParity,
     serialAdvanced,
     filePath,
+    fileTimeTag,
+    fileReplaySpeed,
+    fileStartOffset,
+    filePositionBytes,
     networkIp,
     networkPort,
     networkProtocol,
@@ -787,6 +946,8 @@ export function useDevice() {
     stopBits,
     parities,
     deviceConnected,
+    logRecordingActive,
+    logRecordingPath,
     globalDevice,
     isDragOver,
     handleDragOver,
@@ -799,6 +960,7 @@ export function useDevice() {
     openCurrDevice,
     closeCurrDevice,
     removeCurrDevice,
+    toggleLogRecording,
     searchSerialPorts,
   }
 }

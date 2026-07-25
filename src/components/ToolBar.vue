@@ -38,6 +38,23 @@
         :title="item.title"
         v-html="item.icon"
       ></button>
+      <button
+        class="toolbar-btn log-record-button"
+        :class="{ 'is-recording': logRecordingActive }"
+        @click="
+          toggleLogRecording()
+          ;($event.currentTarget as HTMLElement)?.blur()
+        "
+        :title="
+          logRecordingActive
+            ? `停止录制${logRecordingPath ? `：${logRecordingPath}` : ''}`
+            : '录制日志'
+        "
+        :aria-pressed="logRecordingActive"
+        aria-label="录制日志"
+      >
+        <span class="log-record-icon" aria-hidden="true"></span>
+      </button>
 
       <span class="divider" aria-hidden="true"></span>
 
@@ -133,6 +150,89 @@
       :stretch="inputTabPosition === 'top'"
       class="data-source-tabs"
     >
+      <el-tab-pane label="文件输入" name="file">
+        <template #label>
+          <span class="source-tab-label">
+            <el-icon><FolderOpened /></el-icon>
+            <span class="source-tab-copy">
+              <strong
+                ><span class="tab-name-full">文件输入</span
+                ><span class="tab-name-compact">文件</span></strong
+              >
+              <small>File</small>
+            </span>
+          </span>
+        </template>
+        <div class="source-panel-heading">
+          <strong>文件数据源</strong>
+          <span>加载日志、文本或 DAT 文件并投递给当前应用组件。</span>
+        </div>
+        <div class="source-config-card">
+          <div class="input-group">
+            <span class="input-label">文件路径</span>
+            <el-input v-model="filePath" placeholder="请输入文件路径" />
+            <el-button type="default" @click="triggerFileSelection">选择文件</el-button>
+          </div>
+          <div class="time-tag-card">
+            <div class="time-tag-copy">
+              <strong>时间戳播放</strong>
+              <span>读取同名 .tag 文件，按原始采集时间间隔回放。</span>
+            </div>
+            <el-switch v-model="fileTimeTag" aria-label="时间戳播放" />
+          </div>
+          <div v-if="fileTimeTag" class="time-tag-options">
+            <div class="input-group compact-input-group">
+              <span class="input-label">播放倍速</span>
+              <el-select v-model="fileReplaySpeed" :teleported="false">
+                <el-option
+                  v-for="speed in replaySpeedOptions"
+                  :key="speed"
+                  :label="`${speed}×`"
+                  :value="speed"
+                />
+              </el-select>
+            </div>
+            <div class="input-group compact-input-group">
+              <span class="input-label">起始偏移</span>
+              <el-input-number
+                v-model="fileStartOffset"
+                :min="0"
+                :step="1"
+                :precision="0"
+                controls-position="right"
+              />
+              <span class="input-unit">秒</span>
+            </div>
+            <div class="input-group compact-input-group">
+              <span class="input-label">位置格式</span>
+              <el-select v-model="filePositionBytes" :teleported="false">
+                <el-option label="4 字节" :value="4" />
+                <el-option label="8 字节" :value="8" />
+              </el-select>
+            </div>
+          </div>
+          <div class="parser-card">
+            <div class="parser-copy">
+              <strong>数据解析方式</strong>
+              <span>{{ activeParserDescription }}</span>
+            </div>
+            <el-select
+              v-model="sourceParser"
+              aria-label="数据解析方式"
+              class="parser-select"
+              :teleported="false"
+            >
+              <el-option
+                v-for="option in textDataParserOptions"
+                :key="option.value"
+                :label="option.label"
+                :value="option.value"
+              />
+            </el-select>
+          </div>
+        </div>
+      </el-tab-pane>
+
       <el-tab-pane label="串口连接" name="serial">
         <template #label>
           <span class="source-tab-label">
@@ -222,51 +322,6 @@
           <div class="input-group compact-input-group">
             <span class="input-label">高级选项</span>
             <el-checkbox v-model="serialAdvanced">显示完整串口参数</el-checkbox>
-          </div>
-          <div class="parser-card">
-            <div class="parser-copy">
-              <strong>数据解析方式</strong>
-              <span>{{ activeParserDescription }}</span>
-            </div>
-            <el-select
-              v-model="sourceParser"
-              aria-label="数据解析方式"
-              class="parser-select"
-              :teleported="false"
-            >
-              <el-option
-                v-for="option in textDataParserOptions"
-                :key="option.value"
-                :label="option.label"
-                :value="option.value"
-              />
-            </el-select>
-          </div>
-        </div>
-      </el-tab-pane>
-
-      <el-tab-pane label="文件输入" name="file">
-        <template #label>
-          <span class="source-tab-label">
-            <el-icon><FolderOpened /></el-icon>
-            <span class="source-tab-copy">
-              <strong
-                ><span class="tab-name-full">文件输入</span
-                ><span class="tab-name-compact">文件</span></strong
-              >
-              <small>File</small>
-            </span>
-          </span>
-        </template>
-        <div class="source-panel-heading">
-          <strong>文件数据源</strong>
-          <span>加载日志、文本或 DAT 文件并投递给当前应用组件。</span>
-        </div>
-        <div class="source-config-card">
-          <div class="input-group">
-            <span class="input-label">文件路径</span>
-            <el-input v-model="filePath" placeholder="请输入文件路径" />
-            <el-button type="default" @click="triggerFileSelection">选择文件</el-button>
           </div>
           <div class="parser-card">
             <div class="parser-copy">
@@ -418,6 +473,8 @@ import {
   ElSelect,
   ElOption,
   ElInput,
+  ElInputNumber,
+  ElSwitch,
   ElCheckbox,
   ElIcon,
 } from 'element-plus'
@@ -453,6 +510,10 @@ const {
   serialAdvanced,
   selectTargetFile,
   filePath,
+  fileTimeTag,
+  fileReplaySpeed,
+  fileStartOffset,
+  filePositionBytes,
   networkIp,
   networkPort,
   networkProtocol,
@@ -466,7 +527,12 @@ const {
   inputDialog,
   searchSerialPorts,
   handleInputSubmit,
+  logRecordingActive,
+  logRecordingPath,
+  toggleLogRecording,
 } = deviceInstance
+
+const replaySpeedOptions = [0.1, 0.2, 0.5, 1, 2, 5, 10]
 
 const activeParserDescription = computed(
   () =>
@@ -474,7 +540,7 @@ const activeParserDescription = computed(
 )
 const inputSubmitLabel = computed(() => {
   if (activeTab.value === 'camera') return '保存数据源'
-  if (activeTab.value === 'file') return '加载文件'
+  if (activeTab.value === 'file') return fileTimeTag.value ? '开始播放' : '加载文件'
   return '连接数据源'
 })
 
@@ -756,10 +822,11 @@ function forceNoDragOnDataInputDialog() {
     element.style.setProperty('-webkit-app-region', 'no-drag', 'important')
   })
   document
-    .querySelectorAll<HTMLElement>(
+    .querySelectorAll<HTMLInputElement | HTMLTextAreaElement>(
       '.data-input-dialog input, .data-input-dialog textarea, .data-input-dialog .el-input__inner',
     )
     .forEach((element) => {
+      element.spellcheck = false
       element.style.setProperty('pointer-events', 'auto', 'important')
       element.style.setProperty('user-select', 'text', 'important')
       element.style.setProperty('-webkit-user-select', 'text', 'important')
@@ -1134,6 +1201,41 @@ onUnmounted(() => {
   background: var(--app-hover);
 }
 
+.log-record-icon {
+  display: grid;
+  width: 12px;
+  height: 12px;
+  border: 2px solid currentColor;
+  border-radius: 50%;
+  place-items: center;
+}
+
+.log-record-icon::after {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: currentColor;
+  content: '';
+}
+
+.log-record-button {
+  color: var(--app-text-muted);
+}
+
+.log-record-button.is-recording {
+  color: #ef4444;
+}
+
+.log-record-button.is-recording .log-record-icon {
+  border-radius: 3px;
+  border-color: currentColor;
+  background: currentColor;
+}
+
+.log-record-button.is-recording .log-record-icon::after {
+  display: none;
+}
+
 .toolbar-dock-zones {
   position: fixed;
   top: 0;
@@ -1385,6 +1487,51 @@ onUnmounted(() => {
   font-weight: 600;
 }
 
+.time-tag-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 2px 0 12px 106px;
+  padding: 11px 13px;
+  border: 1px solid var(--app-border);
+  border-radius: 7px;
+  background: var(--app-surface-muted);
+}
+
+.time-tag-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.time-tag-copy strong {
+  color: var(--app-text);
+  font-size: 13px;
+}
+
+.time-tag-copy span {
+  color: var(--app-text-muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.time-tag-options {
+  margin-left: 106px;
+  padding-bottom: 2px;
+}
+
+.time-tag-options .input-label {
+  min-width: 82px;
+}
+
+.input-unit {
+  margin-left: 8px;
+  color: var(--app-text-muted);
+  font-size: 12px;
+}
+
 .parser-card {
   display: flex;
   align-items: stretch;
@@ -1572,7 +1719,9 @@ onUnmounted(() => {
     margin-left: 0;
   }
 
-  .source-info-card {
+  .source-info-card,
+  .time-tag-card,
+  .time-tag-options {
     margin-left: 0;
   }
 

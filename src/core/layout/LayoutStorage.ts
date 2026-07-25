@@ -19,6 +19,8 @@ interface LayoutDocument {
   version: 1
   items: PersistedLayoutItem[]
   showStatusBar: boolean
+  /** 用户主动移除的窗口 ID，恢复布局时不再自动补回 */
+  removedWindowIds?: string[]
 }
 
 const STORAGE_PREFIX = 'nav-tools:layout'
@@ -51,11 +53,17 @@ export class LayoutStorage {
     return migrated
   }
 
-  public save(applicationId: string, items: PersistedLayoutItem[], showStatusBar: boolean): void {
+  public save(
+    applicationId: string,
+    items: PersistedLayoutItem[],
+    showStatusBar: boolean,
+    removedWindowIds: string[] = [],
+  ): void {
     this.storage.write<LayoutDocument>(this.key(applicationId), {
       version: 1,
       items,
       showStatusBar,
+      removedWindowIds,
     })
   }
 
@@ -77,7 +85,10 @@ function isLayoutDocument(value: unknown): value is LayoutDocument {
     document.version === 1 &&
     Array.isArray(document.items) &&
     document.items.every(isPersistedLayoutItem) &&
-    typeof document.showStatusBar === 'boolean'
+    typeof document.showStatusBar === 'boolean' &&
+    (document.removedWindowIds === undefined ||
+      (Array.isArray(document.removedWindowIds) &&
+        document.removedWindowIds.every(id => typeof id === 'string')))
   )
 }
 

@@ -82,8 +82,8 @@
         >
           <el-option-group
             v-for="group in windowGroups"
-            :key="group.funcMode"
-            :label="formatFuncMode(group.funcMode)"
+            :key="group.catalogGroup"
+            :label="formatCatalogGroup(group.catalogGroup)"
           >
             <el-option
               v-for="windowDefinition in group.windows"
@@ -92,7 +92,10 @@
               :label="windowDefinition.title"
             >
               <div class="window-option">
-                <span class="window-option-icon" :class="`mode-${windowDefinition.funcMode}`">
+                <span
+                  class="window-option-icon"
+                  :class="`mode-${windowDefinition.catalogGroup}`"
+                >
                   <el-icon :size="18">
                     <component :is="getPanelIconComponent(windowDefinition.action)" />
                   </el-icon>
@@ -102,7 +105,7 @@
                   <span class="window-option-subtitle">{{ windowDefinition.description }}</span>
                 </span>
                 <span class="window-option-mode">{{
-                  formatFuncMode(windowDefinition.funcMode)
+                  formatCatalogGroup(windowDefinition.catalogGroup)
                 }}</span>
               </div>
             </el-option>
@@ -173,24 +176,26 @@ const accentPresets = [
   '#64748b',
 ]
 
-const funcModeNames: Record<string, string> = {
+const catalogGroupNames: Record<string, string> = {
   general: '通用',
   flow: 'Flow',
   gnss: 'GNSS',
   motor: 'Motor',
+  camera: 'Camera',
 }
 
-const formatFuncMode = (funcMode: string) =>
-  funcModeNames[funcMode] ?? funcMode.charAt(0).toUpperCase() + funcMode.slice(1)
+const formatCatalogGroup = (catalogGroup: string) =>
+  catalogGroupNames[catalogGroup] ??
+  catalogGroup.charAt(0).toUpperCase() + catalogGroup.slice(1)
 
 const windowGroups = computed(() => {
   const groups = new Map<string, WindowDefinition[]>()
   for (const windowDefinition of windowCatalog) {
-    const windows = groups.get(windowDefinition.funcMode) ?? []
+    const windows = groups.get(windowDefinition.catalogGroup) ?? []
     windows.push(windowDefinition)
-    groups.set(windowDefinition.funcMode, windows)
+    groups.set(windowDefinition.catalogGroup, windows)
   }
-  return [...groups.entries()].map(([funcMode, windows]) => ({ funcMode, windows }))
+  return [...groups.entries()].map(([catalogGroup, windows]) => ({ catalogGroup, windows }))
 })
 
 const validateWindowIds: FormItemRule['validator'] = (_rule, value, callback) => {
@@ -327,6 +332,10 @@ const handleSave = async () => {
 .window-option-icon.mode-motor {
   color: #ea580c;
   background: color-mix(in srgb, #f97316 13%, var(--app-surface));
+}
+.window-option-icon.mode-camera {
+  color: #0d9488;
+  background: color-mix(in srgb, #14b8a6 13%, var(--app-surface));
 }
 
 .window-option-copy {

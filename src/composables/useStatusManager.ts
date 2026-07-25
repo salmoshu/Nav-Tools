@@ -3,7 +3,10 @@ import { useGnssStore } from "@/stores/gnss";
 import { useFlowStore } from "@/stores/flow";
 import { useApplicationSelector } from '@/composables/useApplicationSelector'
 import { useTheme } from '@/composables/useTheme'
+import { JsonStorage } from '@/core/storage/JsonStorage'
 
+const STATUS_ORDER_KEY = 'nav-tools:status-order'
+const statusOrderStorage = new JsonStorage(localStorage)
 const { activeDataModes } = useApplicationSelector()
 const { resolvedTheme } = useTheme()
 
@@ -20,6 +23,28 @@ const newStatusConfig = ref({
   code: ''
 });
 
+const statusOrder = ref<string[]>(
+  statusOrderStorage.read<string[]>(
+    STATUS_ORDER_KEY,
+    [],
+    value => Array.isArray(value) && value.every(item => typeof item === 'string'),
+  ),
+)
+
+watch(statusOrder, order => statusOrderStorage.write(STATUS_ORDER_KEY, order), { deep: true })
+
+function orderEntries(entries: [string, any][]): [string, any][] {
+  const orderMap = new Map(statusOrder.value.map((key, index) => [key, index]))
+  return entries.sort((a, b) => {
+    const indexA = orderMap.get(a[0])
+    const indexB = orderMap.get(b[0])
+    if (indexA !== undefined && indexB !== undefined) return indexA - indexB
+    if (indexA !== undefined) return -1
+    if (indexB !== undefined) return 1
+    return 0
+  })
+}
+
 function getMonitorStatus() {
   const modes = activeDataModes.value
   const uniqueStatusSources = [
@@ -32,14 +57,20 @@ function getMonitorStatus() {
   ]
 
   if (uniqueStatusSources.length === 1) {
-    return uniqueStatusSources[0].status
+    return Object.fromEntries(orderEntries(Object.entries(uniqueStatusSources[0].status)))
   }
 
   return Object.fromEntries(
-    uniqueStatusSources.flatMap(source =>
-      Object.entries(source.status).map(([key, value]) => [`${source.label}.${key}`, value]),
+    orderEntries(
+      uniqueStatusSources.flatMap(source =>
+        Object.entries(source.status).map(([key, value]): [string, any] => [`${source.label}.${key}`, value]),
+      ),
     ),
   )
+}
+
+function setStatusOrder(order: string[]) {
+  statusOrder.value = order
 }
 
 /**
@@ -219,7 +250,9 @@ export {
   showStatusBar,
   editStatusConfig,
   newStatusConfig,
+  statusOrder,
   getMonitorStatus,
+  setStatusOrder,
   addMonacoWords,
   createCodeEditor,
 };

@@ -4,6 +4,7 @@ import { JsonStorage } from '../storage/JsonStorage'
 const APPLICATIONS_KEY = 'nav-tools:custom-applications'
 const SELECTED_APPLICATION_KEY = 'nav-tools:selected-application'
 const CAMERA_DEFAULT_MIGRATION_KEY = 'nav-tools:migration:camera-default-v1'
+const CAMERA_PARAMETERS_MIGRATION_KEY = 'nav-tools:migration:camera-parameters-v1'
 
 export const DEFAULT_APPLICATIONS: readonly UserApplication[] = [
   {
@@ -25,10 +26,10 @@ export const DEFAULT_APPLICATIONS: readonly UserApplication[] = [
   {
     id: 'camera',
     name: 'Camera',
-    description: 'RTSP camera live video workspace',
+    description: 'Camera live video and parameter control workspace',
     icon: 'camera',
     accent: '#14b8a6',
-    windowIds: ['camera-video'],
+    windowIds: ['camera-video', 'camera-parameters'],
   },
 ]
 
@@ -40,6 +41,7 @@ export class ApplicationStorage {
       const defaults = cloneApplications(DEFAULT_APPLICATIONS)
       this.saveApplications(defaults)
       this.storage.writeRaw(CAMERA_DEFAULT_MIGRATION_KEY, '1')
+      this.storage.writeRaw(CAMERA_PARAMETERS_MIGRATION_KEY, '1')
       return defaults
     }
 
@@ -49,11 +51,22 @@ export class ApplicationStorage {
       windowIds: sanitizePanelIds(application.windowIds),
     }))
     if (this.storage.readRaw(CAMERA_DEFAULT_MIGRATION_KEY) === null) {
-      const cameraDefault = DEFAULT_APPLICATIONS.find(application => application.id === 'camera')
-      if (applications.length > 0 && cameraDefault && !applications.some(({ id }) => id === 'camera')) {
+      const cameraDefault = DEFAULT_APPLICATIONS.find((application) => application.id === 'camera')
+      if (
+        applications.length > 0 &&
+        cameraDefault &&
+        !applications.some(({ id }) => id === 'camera')
+      ) {
         applications.push(cloneApplications([cameraDefault])[0])
       }
       this.storage.writeRaw(CAMERA_DEFAULT_MIGRATION_KEY, '1')
+    }
+    if (this.storage.readRaw(CAMERA_PARAMETERS_MIGRATION_KEY) === null) {
+      const cameraApplication = applications.find((application) => application.id === 'camera')
+      if (cameraApplication && !cameraApplication.windowIds.includes('camera-parameters')) {
+        cameraApplication.windowIds.push('camera-parameters')
+      }
+      this.storage.writeRaw(CAMERA_PARAMETERS_MIGRATION_KEY, '1')
     }
     this.saveApplications(applications)
     return applications
@@ -67,6 +80,7 @@ export class ApplicationStorage {
     const defaults = cloneApplications(DEFAULT_APPLICATIONS)
     this.saveApplications(defaults)
     this.storage.writeRaw(CAMERA_DEFAULT_MIGRATION_KEY, '1')
+    this.storage.writeRaw(CAMERA_PARAMETERS_MIGRATION_KEY, '1')
     return defaults
   }
 

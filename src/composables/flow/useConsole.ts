@@ -1,4 +1,4 @@
-import { ref, computed } from "vue";
+import { ref, shallowRef, computed } from "vue";
 import type { Ref } from "vue";
 import { activeDataTransport } from '@/core/device/ActiveDataTransport'
 
@@ -60,20 +60,22 @@ export function useConsole(useGlobal: boolean = true): ConsoleState {
   }
 
   // 状态管理
-  const messages = ref<ConsoleMessage[]>([]);
+  const messages = shallowRef<ConsoleMessage[]>([]);
   const dataFormat = ref<"none" | "json" | "nmea">("none");
   const displayFormat = ref<'hex' | 'ascii'>('ascii')
   const dataFilter = ref(false);
   const dataTimestamp = ref(true);
   const dataAutoScroll = ref(true);
   const isPaused = ref(false);
+  const validNmeaCount = ref(0);
+  const validJsonCount = ref(0);
   let tempDataString = ''; // 临时存储数据，用于处理不完整的消息
 
   // 搜索
   const searchQuery = ref('')
 
   // 配置常量
-  const maxMessages = 100000;
+  const maxMessages = 10000;
 
   // 计算属性
   const filteredMessages = computed(() => {
@@ -84,13 +86,59 @@ export function useConsole(useGlobal: boolean = true): ConsoleState {
       (msg) => msg.dataType === dataFormat.value && msg.isValid
     );
   });
-  const validMsgCount = computed(() => {
-    return messages.value.filter(
-      (msg) => msg.dataType === dataFormat.value && msg.isValid
-    ).length;
-  });
+  const validMsgCount = computed(() =>
+    dataFormat.value === 'nmea'
+      ? validNmeaCount.value
+      : dataFormat.value === 'json'
+        ? validJsonCount.value
+        : 0,
+  );
 
   const totalCount = computed(() => messages.value.length);
+
+  const updateValidCount = (message: ConsoleMessage, delta: 1 | -1) => {
+    if (!message.isValid) return;
+    if (message.dataType === 'nmea') validNmeaCount.value += delta;
+    if (message.dataType === 'json') validJsonCount.value += delta;
+  };
+
+  // 批量缓冲：消息先进入 pendingMessages，定时批量提交到 messages，
+  // 避免每条消息都触发一次响应式更新和虚拟滚动列表的全量重建（O(n²) 劣化）
+  let pendingMessages: ConsoleMessage[] = [];
+  let flushTimer: ReturnType<typeof setTimeout> | null = null;
+
+  const flushPendingMessages = () => {
+    flushTimer = null;
+    if (pendingMessages.length === 0) return;
+    let merged = messages.value.concat(pendingMessages);
+    pendingMessages = [];
+    // 限制消息数量，保持内存使用
+    const excess = merged.length - maxMessages;
+    if (excess > 0) {
+      for (let i = 0; i < excess; i++) updateValidCount(merged[i], -1);
+      merged = merged.slice(excess);
+    }
+    messages.value = merged;
+  };
+
+  const scheduleFlush = () => {
+    if (flushTimer === null) {
+      flushTimer = setTimeout(flushPendingMessages, 200);
+    }
+  };
+
+  const appendConsoleMessage = (message: ConsoleMessage) => {
+    pendingMessages.push(message);
+    updateValidCount(message, 1);
+    scheduleFlush();
+  };
+
+  const trimMessages = (limit: number) => {
+    const excess = messages.value.length - limit;
+    if (excess <= 0) return;
+    for (const message of messages.value.slice(0, excess)) updateValidCount(message, -1);
+    messages.value = messages.value.slice(excess);
+  };
 
   const calcNmeaChecksum = (sentence: string): string => {
     let checksum = 0;
@@ -164,12 +212,10 @@ export function useConsole(useGlobal: boolean = true): ConsoleState {
         isValid: false,
         key: generateKey(timestamp, rawData),
       };
-      messages.value.push(message);
+      appendConsoleMessage(message);
 
       // 限制消息数量，保持内存使用
-      if (messages.value.length > maxMessages) {
-        messages.value.shift();
-      }
+      trimMessages(maxMessages);
     }
 
     tempDataString += rawData;
@@ -195,7 +241,7 @@ export function useConsole(useGlobal: boolean = true): ConsoleState {
               isValid,
               key: generateKey(timestamp, line),
             };
-            messages.value.push(message);
+            appendConsoleMessage(message);
           } else if (dataFormat.value === 'json') {
             isValid = validateJsonMessage(line);
             const message: ConsoleMessage = {
@@ -205,15 +251,13 @@ export function useConsole(useGlobal: boolean = true): ConsoleState {
               isValid,
               key: generateKey(timestamp, line),
             };
-            messages.value.push(message);
+            appendConsoleMessage(message);
           }
         }
       }
   
       // 限制消息数量，保持内存使用
-      if (messages.value.length > maxMessages) {
-        messages.value.shift();
-      }
+      trimMessages(maxMessages);
     }
   };
 
@@ -280,19 +324,23 @@ export function useConsole(useGlobal: boolean = true): ConsoleState {
           key: generateKey(messageTimestamp, cleanedLine),
         };
 
-        messages.value.push(message);
+        appendConsoleMessage(message);
       }
     }
 
     // 限制消息数量
-    if (messages.value.length > maxMessages * 2) {
-      const removedCount = messages.value.length - maxMessages * 2;
-      messages.value.splice(0, removedCount);
-    }
+    trimMessages(maxMessages * 2);
   };
 
   const clearMessages = () => {
+    if (flushTimer !== null) {
+      clearTimeout(flushTimer);
+      flushTimer = null;
+    }
+    pendingMessages = [];
     messages.value = [];
+    validNmeaCount.value = 0;
+    validJsonCount.value = 0;
     tempDataString = '';
   };
 
@@ -424,12 +472,10 @@ export function useConsole(useGlobal: boolean = true): ConsoleState {
         isValid: false,
         key: generateKey(timestamp, data),
       };
-      messages.value.push(message);
+      appendConsoleMessage(message);
       
       // 限制消息数量
-      if (messages.value.length > maxMessages) {
-        messages.value.shift();
-      }
+      trimMessages(maxMessages);
     } catch (error) {
       console.error('发送消息失败:', error);
     }

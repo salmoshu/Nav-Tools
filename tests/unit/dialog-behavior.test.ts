@@ -8,6 +8,7 @@ const dialogFiles = [
   'src/components/ToolBar.vue',
   'src/components/windows/motor/MotorConfig.vue',
   'src/components/windows/common/DeviationConfigDialog.vue',
+  'src/components/windows/common/CameraParameters.vue',
   'src/components/windows/common/Plot.vue',
   'src/components/windows/common/plot/PlotConfigDialog.vue',
 ]
@@ -42,6 +43,29 @@ describe('dialog interaction policy', () => {
     const toolbar = readFileSync('src/components/ToolBar.vue', 'utf8')
     expect(toolbar).not.toContain('@keydown.stop')
     expect(toolbar).toContain('handleInputDialogEscape')
+  })
+
+  it('disables browser spellchecking in data input fields', () => {
+    const toolbar = readFileSync('src/components/ToolBar.vue', 'utf8')
+    expect(toolbar).toContain('.data-input-dialog input, .data-input-dialog textarea')
+    expect(toolbar).toContain('element.spellcheck = false')
+  })
+
+  it('offers RTKLIB time-tag playback controls and timestamped log recording', () => {
+    const toolbar = readFileSync('src/components/ToolBar.vue', 'utf8')
+    expect(toolbar).toContain('v-model="fileTimeTag"')
+    expect(toolbar).toContain('v-model="fileReplaySpeed"')
+    expect(toolbar).toContain('v-model="fileStartOffset"')
+    expect(toolbar).toContain('v-model="filePositionBytes"')
+    expect(toolbar).toContain('toggleLogRecording()')
+    expect(toolbar).toContain('log-record-button')
+    expect(toolbar.indexOf('label="文件输入"')).toBeLessThan(toolbar.indexOf('label="串口连接"'))
+  })
+
+  it('uses dedicated catalog groups without changing panel data modes', () => {
+    const editor = readFileSync('src/components/ApplicationEditor.vue', 'utf8')
+    expect(editor).toContain('windowDefinition.catalogGroup')
+    expect(editor).toContain("camera: 'Camera'")
   })
 
   it('separates motor configuration tools from dialog submission actions', () => {

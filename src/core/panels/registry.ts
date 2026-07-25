@@ -20,6 +20,7 @@ export type ApplicationIcon =
   | 'gauge'
   | 'chart'
 export type PanelDataMode = 'general' | 'flow' | 'gnss' | 'motor'
+export type PanelCatalogGroup = 'general' | 'flow' | 'gnss' | 'motor' | 'camera'
 
 export interface UserApplication {
   id: string
@@ -35,6 +36,7 @@ export interface PanelDefinition {
   moduleId: string
   appMode: string
   funcMode: PanelDataMode
+  catalogGroup: PanelCatalogGroup
   action: string
   title: string
   description: string
@@ -48,6 +50,7 @@ export const panelRegistry: readonly PanelDefinition[] = [
     moduleId: 'general',
     appMode: 'workspace',
     funcMode: 'general',
+    catalogGroup: 'general',
     action: 'data',
     title: 'Plot',
     description: '绘制数值数据随时间的变化',
@@ -59,6 +62,7 @@ export const panelRegistry: readonly PanelDefinition[] = [
     moduleId: 'general',
     appMode: 'workspace',
     funcMode: 'general',
+    catalogGroup: 'general',
     action: 'console',
     title: 'Raw Messages',
     description: '查看、筛选并发送原始消息',
@@ -70,6 +74,7 @@ export const panelRegistry: readonly PanelDefinition[] = [
     moduleId: 'general',
     appMode: 'workspace',
     funcMode: 'general',
+    catalogGroup: 'camera',
     action: 'camera',
     title: 'Camera Video',
     description: '播放 RTSP 相机实时视频画面',
@@ -77,10 +82,23 @@ export const panelRegistry: readonly PanelDefinition[] = [
     componentPath: '@/components/windows/common/CameraVideo.vue',
   },
   {
+    id: 'camera-parameters',
+    moduleId: 'general',
+    appMode: 'workspace',
+    funcMode: 'general',
+    catalogGroup: 'camera',
+    action: 'config',
+    title: 'Camera Parameters',
+    description: '读取和配置相机参数及显示模式',
+    componentName: 'CameraParameters',
+    componentPath: '@/components/windows/common/CameraParameters.vue',
+  },
+  {
     id: 'flow-deviation',
     moduleId: 'flow',
     appMode: 'robot',
     funcMode: 'flow',
+    catalogGroup: 'general',
     action: 'deviation',
     title: 'Flow Deviation',
     description: '分析 Flow 轨迹与偏差',
@@ -88,10 +106,23 @@ export const panelRegistry: readonly PanelDefinition[] = [
     componentPath: '@/components/windows/common/FlowDeviation.vue',
   },
   {
+    id: 'flow-deviation-canvas',
+    moduleId: 'flow',
+    appMode: 'robot',
+    funcMode: 'flow',
+    catalogGroup: 'general',
+    action: 'deviation',
+    title: 'Flow Deviation Canvas',
+    description: '分析 Flow 轨迹与偏差（ECharts 版，用于性能对比与回退）',
+    componentName: 'FlowDeviationCanvas',
+    componentPath: '@/components/windows/common/FlowDeviationCanvas.vue',
+  },
+  {
     id: 'gnss-deviation',
     moduleId: 'gnss',
     appMode: 'pos',
     funcMode: 'gnss',
+    catalogGroup: 'gnss',
     action: 'deviation',
     title: 'GNSS Deviation',
     description: '分析 GNSS 定位偏差',
@@ -99,10 +130,23 @@ export const panelRegistry: readonly PanelDefinition[] = [
     componentPath: '@/components/windows/gnss/GnssDeviation.vue',
   },
   {
+    id: 'gnss-deviation-canvas',
+    moduleId: 'gnss',
+    appMode: 'pos',
+    funcMode: 'gnss',
+    catalogGroup: 'gnss',
+    action: 'deviation',
+    title: 'GNSS Deviation Canvas',
+    description: '分析 GNSS 定位偏差（ECharts 版，用于性能对比与回退）',
+    componentName: 'GnssDeviationCanvas',
+    componentPath: '@/components/windows/gnss/GnssDeviationCanvas.vue',
+  },
+  {
     id: 'gnss-signals',
     moduleId: 'gnss',
     appMode: 'pos',
     funcMode: 'gnss',
+    catalogGroup: 'gnss',
     action: 'signal',
     title: 'GNSS Signals',
     description: '查看卫星信号强度与状态',
@@ -114,6 +158,7 @@ export const panelRegistry: readonly PanelDefinition[] = [
     moduleId: 'gnss',
     appMode: 'pos',
     funcMode: 'gnss',
+    catalogGroup: 'gnss',
     action: 'sky',
     title: 'Sky Plot',
     description: '查看卫星方位角与高度角',
@@ -125,6 +170,7 @@ export const panelRegistry: readonly PanelDefinition[] = [
     moduleId: 'motor',
     appMode: 'pnc',
     funcMode: 'motor',
+    catalogGroup: 'motor',
     action: 'config',
     title: 'Motor Parameters',
     description: '读取和配置电机参数',

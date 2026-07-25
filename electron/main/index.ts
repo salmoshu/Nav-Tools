@@ -1,11 +1,24 @@
-import { app, BrowserWindow, shell, ipcMain, Menu, powerSaveBlocker, screen, type Rectangle } from 'electron'
+import {
+  app,
+  BrowserWindow,
+  dialog,
+  shell,
+  ipcMain,
+  Menu,
+  powerSaveBlocker,
+  screen,
+  type Rectangle,
+} from 'electron'
 import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import os from 'node:os'
 import ffmpegStatic from 'ffmpeg-static'
 import { eventsMap } from './events'
+import { CameraCommandService } from './services/CameraCommandService'
 import { CameraStreamService } from './services/CameraStreamService'
+import { FilePlaybackService } from './services/FilePlaybackService'
+import { LogRecordingService } from './services/LogRecordingService'
 
 const require = createRequire(import.meta.url)
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -40,19 +53,23 @@ if (os.release().startsWith('6.1')) app.disableHardwareAcceleration()
 // Set application name for Windows 10+ notifications
 if (process.platform === 'win32') app.setAppUserModelId(app.getName())
 
-if (!app.requestSingleInstanceLock()) {
-  app.quit()
-  process.exit(0)
-}
-
 let win: BrowserWindow | null = null
 const preload = path.join(__dirname, '../preload/index.mjs')
 const indexHtml = path.join(RENDERER_DIST, 'index.html')
-const ffmpegExecutable = (ffmpegStatic || 'ffmpeg').replace(/app\.asar(?=[\\/])/, 'app.asar.unpacked')
+const ffmpegExecutable = (ffmpegStatic || 'ffmpeg').replace(
+  /app\.asar(?=[\\/])/,
+  'app.asar.unpacked',
+)
 const cameraStreamService = new CameraStreamService(ffmpegExecutable)
+const cameraCommandService = new CameraCommandService()
+const filePlaybackService = new FilePlaybackService()
+const logRecordingService = new LogRecordingService()
 const cameraStreamOwners = new Set<number>()
+const filePlaybackOwners = new Set<number>()
+const logRecordingOwners = new Set<number>()
 
-type WindowResizeEdge = 'top' | 'right' | 'bottom' | 'left' | 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right'
+type WindowResizeEdge =
+  'top' | 'right' | 'bottom' | 'left' | 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right'
 const resizeIntervals = new Map<number, ReturnType<typeof setInterval>>()
 const detachedPanels = new Map<number, { originWebContentsId: number; windowId: string }>()
 
@@ -82,16 +99,16 @@ function stopWindowResize(webContentsId: number) {
   resizeIntervals.delete(webContentsId)
 }
 
-ipcMain.handle('window-get-state', event => {
+ipcMain.handle('window-get-state', (event) => {
   const target = BrowserWindow.fromWebContents(event.sender)
   return target ? getWindowState(target) : { maximized: false, alwaysOnTop: false }
 })
 
-ipcMain.handle('window-minimize', event => {
+ipcMain.handle('window-minimize', (event) => {
   BrowserWindow.fromWebContents(event.sender)?.minimize()
 })
 
-ipcMain.handle('window-toggle-maximize', event => {
+ipcMain.handle('window-toggle-maximize', (event) => {
   const target = BrowserWindow.fromWebContents(event.sender)
   if (!target) return false
   if (target.isMaximized()) target.unmaximize()
@@ -99,7 +116,7 @@ ipcMain.handle('window-toggle-maximize', event => {
   return target.isMaximized()
 })
 
-ipcMain.handle('window-toggle-always-on-top', event => {
+ipcMain.handle('window-toggle-always-on-top', (event) => {
   const target = BrowserWindow.fromWebContents(event.sender)
   if (!target || !detachedPanels.has(target.id)) return false
   const next = !target.isAlwaysOnTop()
@@ -108,14 +125,14 @@ ipcMain.handle('window-toggle-always-on-top', event => {
   return next
 })
 
-ipcMain.handle('window-restore-detached-panel', event => {
+ipcMain.handle('window-restore-detached-panel', (event) => {
   const target = BrowserWindow.fromWebContents(event.sender)
   if (!target) return false
   const detachedPanel = detachedPanels.get(target.id)
   if (!detachedPanel) return false
 
   const origin = BrowserWindow.getAllWindows().find(
-    candidate => candidate.webContents.id === detachedPanel.originWebContentsId,
+    (candidate) => candidate.webContents.id === detachedPanel.originWebContentsId,
   )
   if (!origin || origin.isDestroyed()) return false
   origin.webContents.send('restore-detached-panel', { windowId: detachedPanel.windowId })
@@ -126,15 +143,21 @@ ipcMain.handle('window-restore-detached-panel', event => {
   return true
 })
 
-ipcMain.handle('window-close', event => {
+ipcMain.handle('window-close', (event) => {
   BrowserWindow.fromWebContents(event.sender)?.close()
 })
 
 ipcMain.handle('window-resize-start', (event, edge: WindowResizeEdge) => {
   const target = BrowserWindow.fromWebContents(event.sender)
   const allowedEdges: WindowResizeEdge[] = [
-    'top', 'right', 'bottom', 'left',
-    'top-left', 'top-right', 'bottom-left', 'bottom-right',
+    'top',
+    'right',
+    'bottom',
+    'left',
+    'top-left',
+    'top-right',
+    'bottom-left',
+    'bottom-right',
   ]
   if (!target || target.isMaximized() || !allowedEdges.includes(edge)) return
 
@@ -156,8 +179,14 @@ ipcMain.handle('window-resize-start', (event, edge: WindowResizeEdge) => {
     const fromRight = edge.includes('right')
     const fromTop = edge.includes('top')
     const fromBottom = edge.includes('bottom')
-    const width = Math.max(minWidth || 640, initialBounds.width + (fromRight ? deltaX : fromLeft ? -deltaX : 0))
-    const height = Math.max(minHeight || 480, initialBounds.height + (fromBottom ? deltaY : fromTop ? -deltaY : 0))
+    const width = Math.max(
+      minWidth || 640,
+      initialBounds.width + (fromRight ? deltaX : fromLeft ? -deltaX : 0),
+    )
+    const height = Math.max(
+      minHeight || 480,
+      initialBounds.height + (fromBottom ? deltaY : fromTop ? -deltaY : 0),
+    )
 
     target.setBounds({
       x: fromLeft ? initialBounds.x + initialBounds.width - width : initialBounds.x,
@@ -170,7 +199,7 @@ ipcMain.handle('window-resize-start', (event, edge: WindowResizeEdge) => {
   resizeIntervals.set(event.sender.id, interval)
 })
 
-ipcMain.handle('window-resize-stop', event => {
+ipcMain.handle('window-resize-stop', (event) => {
   stopWindowResize(event.sender.id)
 })
 
@@ -185,9 +214,60 @@ ipcMain.handle('camera-stream-start', (event, url: unknown) => {
   return cameraStreamService.start(event.sender.id, url, event.sender)
 })
 
-ipcMain.handle('camera-stream-stop', event => {
+ipcMain.handle('camera-stream-stop', (event) => {
   cameraStreamService.stop(event.sender.id)
 })
+
+ipcMain.handle('camera-command-send', (_event, request) => cameraCommandService.send(request))
+
+ipcMain.handle('file-playback-start', (event, request) => {
+  if (!filePlaybackOwners.has(event.sender.id)) {
+    filePlaybackOwners.add(event.sender.id)
+    event.sender.once('destroyed', () => {
+      void filePlaybackService.stop(event.sender.id, false)
+      filePlaybackOwners.delete(event.sender.id)
+    })
+  }
+  return filePlaybackService.start(event.sender.id, request, event.sender)
+})
+
+ipcMain.handle('file-playback-stop', (event) => filePlaybackService.stop(event.sender.id))
+
+ipcMain.handle('log-recording-start', async (event) => {
+  const targetWindow = BrowserWindow.fromWebContents(event.sender)
+  const result = await dialog.showSaveDialog(targetWindow ?? undefined, {
+    title: '录制日志',
+    defaultPath: createDefaultLogName(),
+    filters: [
+      { name: '日志文件', extensions: ['log'] },
+      { name: '所有文件', extensions: ['*'] },
+    ],
+  })
+  if (result.canceled || !result.filePath) return { started: false }
+
+  if (!logRecordingOwners.has(event.sender.id)) {
+    logRecordingOwners.add(event.sender.id)
+    event.sender.once('destroyed', () => {
+      void logRecordingService.stop(event.sender.id, false)
+      logRecordingOwners.delete(event.sender.id)
+    })
+  }
+  await logRecordingService.start(event.sender.id, result.filePath, event.sender)
+  return { started: true, path: result.filePath }
+})
+
+ipcMain.handle('log-recording-stop', (event) => logRecordingService.stop(event.sender.id))
+ipcMain.on('log-recording-write', (event, data) => {
+  logRecordingService.write(event.sender.id, data)
+})
+
+function createDefaultLogName(): string {
+  const now = new Date()
+  const digits = (value: number) => String(value).padStart(2, '0')
+  return `nav-tools-${now.getFullYear()}${digits(now.getMonth() + 1)}${digits(now.getDate())}-${digits(
+    now.getHours(),
+  )}${digits(now.getMinutes())}${digits(now.getSeconds())}.log`
+}
 
 async function createWindow() {
   win = new BrowserWindow({
@@ -211,7 +291,8 @@ async function createWindow() {
   })
   configureWebTitleBar(win)
 
-  if (VITE_DEV_SERVER_URL) { // #298
+  if (VITE_DEV_SERVER_URL) {
+    // #298
     win.loadURL(VITE_DEV_SERVER_URL)
     // Open devTool if the app is not packaged
     // win.webContents.openDevTools()
@@ -241,7 +322,7 @@ async function createWindow() {
       win.webContents.send('save-app-mode')
       // 给渲染进程一点时间处理保存操作，然后强制关闭
       setTimeout(() => {
-        isForceClose = true;
+        isForceClose = true
         win?.close()
       }, 100)
     }
@@ -251,7 +332,7 @@ async function createWindow() {
 app.whenReady().then(() => {
   createWindow()
   Menu.setApplicationMenu(null)
-  
+
   // 注册获取版本号的 IPC 处理器
   ipcMain.handle('get-app-version', () => {
     return appVersion
@@ -269,14 +350,10 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit()
 })
 
-app.on('before-quit', () => cameraStreamService.stopAll())
-
-app.on('second-instance', () => {
-  if (win) {
-    // Focus on the main window if the user tried to open another
-    if (win.isMinimized()) win.restore()
-    win.focus()
-  }
+app.on('before-quit', () => {
+  cameraStreamService.stopAll()
+  void filePlaybackService.stopAll()
+  void logRecordingService.stopAll()
 })
 
 app.on('activate', () => {
@@ -297,7 +374,7 @@ ipcMain.handle('open-card-window', async (event, serializedData) => {
     console.error('Error parsing card data:', error)
     return
   }
-  
+
   const cardWindow = new BrowserWindow({
     title: cardData.title || 'Card Content',
     width: cardData.width || 800,
@@ -310,7 +387,7 @@ ipcMain.handle('open-card-window', async (event, serializedData) => {
       preload,
       nodeIntegration: false,
       contextIsolation: true,
-      backgroundThrottling: false
+      backgroundThrottling: false,
     },
   })
   configureWebTitleBar(cardWindow)

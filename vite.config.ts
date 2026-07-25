@@ -73,15 +73,25 @@ export default defineConfig(({ command }) => {
         '@': fileURLToPath(new URL('./src', import.meta.url)),
       },
     },
-    server:
-      process.env.VSCODE_DEBUG &&
-      (() => {
-        const url = new URL(pkg.debug.env.VITE_DEV_SERVER_URL)
-        return {
-          host: url.hostname,
-          port: +url.port,
-        }
-      })(),
+    server: {
+      ...(process.env.VSCODE_DEBUG &&
+        (() => {
+          const url = new URL(pkg.debug.env.VITE_DEV_SERVER_URL)
+          return {
+            host: url.hostname,
+            port: +url.port,
+          }
+        })()),
+      watch: {
+        ignored: [
+          '**/release/**',
+          '**/dist-electron/**',
+          '**/dist/**',
+          '**/node_modules/**',
+          '**/.git/**',
+        ],
+      },
+    },
     clearScreen: false,
   }
 })

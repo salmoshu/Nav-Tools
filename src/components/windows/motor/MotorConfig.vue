@@ -149,15 +149,28 @@
               
               <draggable
                 v-model="messageStructure"
-                :group="{ name: 'messageFields' }"
-                :animation="200"
-                :forceFallback="true"
-                class="message-fields-container"
                 item-key="id"
-                @change="handleStructureChange"
+                tag="div"
+                class="message-fields-container"
+                :animation="200"
+                easing="cubic-bezier(0.22, 1, 0.36, 1)"
+                :force-fallback="true"
+                :fallback-on-body="true"
+                :fallback-tolerance="4"
+                draggable=":not(.fixed-field)"
+                ghost-class="structure-ghost"
+                drag-class="structure-drag-clone"
+                :filter="STRUCTURE_INTERACTIVE_SELECTOR"
+                :prevent-on-filter="false"
+                :move="onStructureMove"
+                @end="onStructureDragEnd"
               >
                 <template #item="{ element }">
-                  <div class="message-field" :class="{ 'fixed-field': element.fixed }">
+                <div
+                  :data-field-id="element.id"
+                  class="message-field"
+                  :class="{ 'fixed-field': element.fixed }"
+                >
                     <div class="field-header">
                       <el-icon class="drag-handle"><Rank /></el-icon>
                       <span class="field-title">{{ element.title }}</span>
@@ -300,7 +313,7 @@
                         </div>
                       </div>
                     </div>
-                  </div>
+                </div>
                 </template>
               </draggable>
             </div>
@@ -664,8 +677,8 @@ import {
   type ReadCommand,
   type WriteCommand,
 } from '@/composables/motor/useMotorCmd'
-import draggable from 'vuedraggable'
 import { useConsole } from '@/composables/flow/useConsole'
+import draggable from 'vuedraggable'
 import MotorCommandPanel from './MotorCommandPanel.vue'
 import AppDialogTitle from '@/components/AppDialogTitle.vue'
 import { 
@@ -940,8 +953,7 @@ const handleDialogBeforeClose = (done: () => void) => {
 }
 
 // 处理报文结构变化
-const handleStructureChange = (event: any) => {
-  // 这里可以添加保存用户偏好的逻辑
+const handleStructureChange = () => {
   ElMessage({
     message: '报文结构已更新',
     type: 'success',
@@ -949,6 +961,25 @@ const handleStructureChange = (event: any) => {
     placement: 'bottom-right',
     offset: 50,
   })
+}
+
+// 指令结构拖拽：vuedraggable（SortableJS）实现，animation 驱动挤压换位动画（iOS 桌面效果）
+// 卡片内交互控件不触发拖拽
+const STRUCTURE_INTERACTIVE_SELECTOR =
+  'input, textarea, select, button, a, .el-switch, .el-select, .el-input-number, .el-checkbox'
+
+// 固定字段（报头/校验和）不可作为拖拽目标或落点，保证报头恒前、校验和恒后
+const onStructureMove = (evt: {
+  draggedContext: { element: MessageField }
+  relatedContext: { element: MessageField | null }
+}) => {
+  if (evt.draggedContext.element.fixed) return false
+  if (evt.relatedContext.element?.fixed) return false
+  return true
+}
+
+const onStructureDragEnd = (evt: { oldIndex?: number; newIndex?: number }) => {
+  if (evt.oldIndex !== evt.newIndex) handleStructureChange()
 }
 
 // 保存配置
@@ -2186,12 +2217,16 @@ onUnmounted(() => {
   padding: 15px;
   min-width: 120px;
   max-width: 300px;
-  transition: all 0.3s ease;
+  transition: border-color 0.3s ease, box-shadow 0.3s ease;
   cursor: move;
   position: relative;
 }
 
-.message-field:hover {
+.message-fields-container .message-field {
+  transition: transform 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+.message-fields-container .message-field:hover {
   border-color: #409eff;
   box-shadow: 0 4px 12px rgba(64, 158, 255, 0.15);
   transform: translateY(-2px);
@@ -2203,7 +2238,7 @@ onUnmounted(() => {
   cursor: default;
 }
 
-.message-field.fixed-field:hover {
+.message-fields-container .message-field.fixed-field:hover {
   border-color: #b3d8ff;
   box-shadow: 0 2px 8px rgba(64, 158, 255, 0.1);
   transform: none;
@@ -2222,6 +2257,7 @@ onUnmounted(() => {
   color: #909399;
   cursor: grab;
   font-size: 14px;
+  touch-action: none;
 }
 
 .fixed-field .drag-handle {
@@ -2264,17 +2300,31 @@ onUnmounted(() => {
   margin-left: 8px;
 }
 
-/* 拖拽时的样式 */
-.sortable-ghost {
-  opacity: 0.5;
-  background: color-mix(in srgb, var(--el-color-primary) 10%, var(--app-surface));
-  border: 2px dashed #409eff;
+/* 拖拽换位挤压动画：SortableJS animation 选项驱动其余模块平滑让位（iOS 桌面效果） */
+
+/* 排序拖拽：落点占位槽 */
+.structure-ghost {
+  border-style: dashed;
+  border-color: color-mix(in srgb, var(--el-color-primary) 45%, var(--app-border));
+  background: color-mix(in srgb, var(--el-color-primary) 8%, transparent);
+  box-shadow: none;
+  transition: none;
 }
 
-.sortable-drag {
-  opacity: 0.9;
-  transform: rotate(2deg);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+.structure-ghost > * {
+  opacity: 0;
+}
+
+/* 排序拖拽：跟随光标的悬浮克隆体（SortableJS 已内联 position/z-index/pointer-events，
+   且其定位使用 inline transform，因此这里只做阴影与描边高亮，不可用 transform） */
+.structure-drag-clone {
+  border-color: color-mix(in srgb, var(--el-color-primary) 60%, var(--app-border));
+  background: var(--app-surface);
+  box-shadow:
+    0 16px 38px color-mix(in srgb, var(--app-shadow) 65%, transparent),
+    0 0 0 1px color-mix(in srgb, var(--el-color-primary) 22%, transparent);
+  cursor: grabbing;
+  transition: none;
 }
 
 /* 响应式布局 */

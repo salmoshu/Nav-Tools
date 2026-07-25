@@ -20,6 +20,10 @@ export interface DataSourceSettings {
   file: {
     path: string
     parser: TextDataParser
+    timeTag: boolean
+    replaySpeed: number
+    startOffset: number
+    filePositionBytes: 4 | 8
   }
   network: {
     protocol: 'tcp' | 'udp'
@@ -49,6 +53,10 @@ export function createDefaultDataSourceSettings(
     file: {
       path: '',
       parser: 'raw',
+      timeTag: false,
+      replaySpeed: 1,
+      startOffset: 0,
+      filePositionBytes: 4,
     },
     network: {
       protocol: 'tcp',
@@ -78,6 +86,14 @@ function portValue(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isInteger(value) && value >= 1 && value <= 65535
     ? value
     : undefined
+}
+
+function positiveNumber(value: unknown, fallback: number): number {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : fallback
+}
+
+function nonNegativeNumber(value: unknown, fallback: number): number {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : fallback
 }
 
 export function normalizeRtspUrl(value: unknown): string | undefined {
@@ -113,6 +129,10 @@ function normalizeSettings(value: unknown, legacyCameraUrl?: string): DataSource
     file: {
       path: stringValue(file.path, defaults.file.path),
       parser: parserValue(file.parser, defaults.file.parser),
+      timeTag: typeof file.timeTag === 'boolean' ? file.timeTag : defaults.file.timeTag,
+      replaySpeed: positiveNumber(file.replaySpeed, defaults.file.replaySpeed),
+      startOffset: nonNegativeNumber(file.startOffset, defaults.file.startOffset),
+      filePositionBytes: file.filePositionBytes === 8 ? 8 : 4,
     },
     network: {
       protocol: network.protocol === 'udp' ? 'udp' : 'tcp',

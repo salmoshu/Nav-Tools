@@ -127,6 +127,11 @@ code {
   text-align: center;
 }
 
+/* Teleported reminders must remain above the frameless window header. */
+.el-message {
+  z-index: 7000 !important;
+}
+
 /* Shared dialog shell: responsive sizing, predictable scrolling, and consistent hierarchy. */
 .el-dialog.app-dialog {
   display: flex;

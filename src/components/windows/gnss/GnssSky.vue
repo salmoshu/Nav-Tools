@@ -58,6 +58,8 @@ const elevationLimit = ref(15)
 // 用于存储需要在组件卸载时执行的清理函数
 const cleanupFunctions = []
 let resizeObserver = null
+let dataUpdateTimer = null
+const DATA_UPDATE_INTERVAL_MS = 200
 
 // 星座标识映射
 const constellationPrefixes = {
@@ -230,12 +232,19 @@ function initChart() {
           label: {
             show: satelliteSize.value >= minSizeForLabel,
             position: 'inside',
+            width: satelliteSize.value,
+            height: satelliteSize.value,
+            align: 'center',
+            verticalAlign: 'middle',
             formatter: function(params) {
               const prefix = constellationPrefixes[params.data.constellation] || 'U'
               return `${prefix}${params.data.prn}`
             },
             color: colors.text,
             fontSize: Math.max(6, satelliteSize.value / 3),
+          },
+          labelLayout: {
+            hideOverlap: true,
           },
           itemStyle: {
             color: function(params) {
@@ -246,13 +255,16 @@ function initChart() {
             opacity: 1.0
           },
           emphasis: {
+            scale: true,
+            scaleSize: 6,
             itemStyle: {
               shadowBlur: 10,
               shadowColor: 'rgba(0, 0, 0, 0.3)'
             },
             label: {
               show: true,
-              fontSize: 12
+              fontSize: 12,
+              fontWeight: 700,
             }
           }
         }],
@@ -268,6 +280,7 @@ function initChart() {
 // 更新图表数据
 function updateChart() {
   if (!chartInstance.value) return
+  if (document.hidden) return
 
   // 过滤数据
   let filteredData = [...satelliteSnrData.value]
@@ -293,16 +306,21 @@ function updateChart() {
   const uniqueData = Array.from(uniqueDataMap.values())
 
   // 转换为极坐标数据格式 [仰角, 方位角, SNR, 其他信息]
-  const polarData = uniqueData.map(sat => ({
+  const polarData = uniqueData.map((sat, index) => ({
     value: [sat.elevation, sat.azimuth, sat.snr],
     prn: sat.prn,
     constellation: sat.constellation,
     elevation: sat.elevation,
     azimuth: sat.azimuth,
-    snr: sat.snr
+    snr: sat.snr,
+    // Later symbols are painted on top. The imperceptible size delta gives
+    // their labels matching priority when ECharts resolves overlap.
+    symbolSize: satelliteSize.value + index * 0.001,
   }))
 
   // 更新图表
+  // setOption 重建 series 会打断 tooltip 隐藏逻辑，先强制隐藏避免滞留
+  chartInstance.value.dispatchAction({ type: 'hideTip' })
   chartInstance.value.setOption({
     series: [{
       name: 'sky view',
@@ -310,10 +328,20 @@ function updateChart() {
       symbolSize: satelliteSize.value,
       label: {
         show: satelliteSize.value >= minSizeForLabel,
+        width: satelliteSize.value,
+        height: satelliteSize.value,
         fontSize: Math.max(6, satelliteSize.value / 3),
       }
     }]
   })
+}
+
+function scheduleDataUpdate() {
+  if (dataUpdateTimer !== null) return
+  dataUpdateTimer = window.setTimeout(() => {
+    dataUpdateTimer = null
+    updateChart()
+  }, DATA_UPDATE_INTERVAL_MS)
 }
 
 // 监听卫星大小变化
@@ -328,8 +356,8 @@ watch(elevationLimit, () => {
 
 // 监听卫星数据变化
 watch(satelliteSnrData, () => {
-  updateChart();
-}, { deep: true });
+  scheduleDataUpdate();
+});
 
 watch(resolvedTheme, () => initChart())
 
@@ -342,6 +370,10 @@ onMounted(() => {
 
 // 组件卸载时
 onUnmounted(() => {
+  if (dataUpdateTimer !== null) {
+    clearTimeout(dataUpdateTimer)
+    dataUpdateTimer = null
+  }
   // 执行所有清理函数
   cleanupFunctions.forEach(func => func())
   cleanupFunctions.length = 0 // 清空数组
