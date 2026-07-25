@@ -15,6 +15,7 @@ const { resolvedTheme } = useTheme()
  */
 const isEditMode = ref(false);
 const showStatusBar = ref<boolean | null>(null);
+const showToolBar = ref<boolean | null>(null);
 const editStatusConfig = ref<any>(null);
 const newStatusConfig = ref({
   fieldName: '',
@@ -248,6 +249,7 @@ export {
   editorRef,
   isEditMode,
   showStatusBar,
+  showToolBar,
   editStatusConfig,
   newStatusConfig,
   statusOrder,

@@ -3,7 +3,7 @@ import type { DefineComponent } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getWindowById, getWindowsByIds, navMode, normalizeWindowId, type WindowDefinition } from '@/settings/config'
 import { useApplicationSelector } from '@/composables/useApplicationSelector'
-import { showStatusBar } from '@/composables/useStatusManager'
+import { showStatusBar, showToolBar } from '@/composables/useStatusManager'
 import { LayoutStorage, type PersistedLayoutItem } from '@/core/layout/LayoutStorage'
 import { JsonStorage } from '@/core/storage/JsonStorage'
 import emitter from '@/hooks/useMitt'
@@ -98,13 +98,34 @@ export function useLayoutManager() {
     if (changed) emitter.emit('layout-changed')
   })
 
+  // toolbar/statusbar 可见性切换：静默持久化，不触发"布局已变更"保存提示。
+  // 重新进入应用时由 initLayout 读取持久化状态自动恢复。
+  function persistVisibilitySilently() {
+    const appId = layoutApplicationId.value
+    if (!appId) return
+    layoutStorage.updateVisibility(
+      appId,
+      showStatusBar.value !== false,
+      showToolBar.value !== false,
+    )
+  }
+
   let showStatusBarInitialized = false
   watch(showStatusBar, () => {
     if (!showStatusBarInitialized) {
       showStatusBarInitialized = true
       return
     }
-    emitter.emit('layout-changed')
+    persistVisibilitySilently()
+  })
+
+  let showToolBarInitialized = false
+  watch(showToolBar, () => {
+    if (!showToolBarInitialized) {
+      showToolBarInitialized = true
+      return
+    }
+    persistVisibilitySilently()
   })
 
   function backupCurrentLayout() {
@@ -120,6 +141,7 @@ export function useLayoutManager() {
       layoutToSave as PersistedLayoutItem[],
       showStatusBar.value !== false,
       [...removedWindowIds],
+      showToolBar.value !== false,
     )
   }
 
@@ -173,6 +195,7 @@ export function useLayoutManager() {
 
     const savedLayout = layoutStorage.load(applicationId)
     showStatusBar.value = savedLayout?.showStatusBar ?? true
+    showToolBar.value = savedLayout?.showToolBar ?? true
     savedLayout?.removedWindowIds?.forEach(id => removedWindowIds.add(id))
 
     if (!savedLayout) {

@@ -3,6 +3,7 @@ import { ipcRenderer, contextBridge, webUtils } from 'electron'
 // --------- Expose some API to the Renderer process ---------
 contextBridge.exposeInMainWorld('electronAPI', {
   getAppVersion: () => ipcRenderer.invoke('get-app-version'),
+  getOfflineTilesDir: () => ipcRenderer.invoke('get-offline-tiles-dir'),
   getPathForFile: (file: File) => webUtils.getPathForFile(file),
   getWindowState: () => ipcRenderer.invoke('window-get-state'),
   minimizeWindow: () => ipcRenderer.invoke('window-minimize'),

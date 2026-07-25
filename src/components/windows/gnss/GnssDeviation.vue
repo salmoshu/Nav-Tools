@@ -2,34 +2,40 @@
   <div class="deviation-container">
     <div class="control-panel">
       <div class="controls">
-        <span class="switch-label">跟踪:</span>
-        <el-switch
-          v-model="isTracking"
-          aria-label="跟踪"
-          title="跟踪"
-          @change="toggleTracking"
-          class="tracking-switch"
-        />
-        <div class="point-size-control">
-          <span class="size-label">尺寸:</span>
-          <el-slider
-            v-model="pointSize"
-            :min="5"
-            :max="20"
-            :step="1"
-            class="point-slider"
-            @change="updatePointSize"
+        <el-radio-group v-model="currentView" size="small" class="view-switch">
+          <el-radio-button label="deviation">偏差图</el-radio-button>
+          <el-radio-button label="position">位置图</el-radio-button>
+        </el-radio-group>
+        <template v-if="currentView === 'deviation'">
+          <span class="switch-label">跟踪:</span>
+          <el-switch
+            v-model="isTracking"
+            aria-label="跟踪"
+            title="跟踪"
+            @change="toggleTracking"
+            class="tracking-switch"
           />
-          <span class="size-value">{{ pointSize }}</span>
-        </div>
+          <div class="point-size-control">
+            <span class="size-label">尺寸:</span>
+            <el-slider
+              v-model="pointSize"
+              :min="5"
+              :max="20"
+              :step="1"
+              class="point-slider"
+              @change="updatePointSize"
+            />
+            <span class="size-value">{{ pointSize }}</span>
+          </div>
+        </template>
 
         <div class="right-buttons">
-          <el-button type="primary" size="small" @click="resetZoom" class="control-btn zoom-btn"><el-icon><RefreshLeft /></el-icon>&nbsp;重置布局</el-button>
+          <el-button v-show="currentView === 'deviation'" type="primary" size="small" @click="resetZoom" class="control-btn zoom-btn"><el-icon><RefreshLeft /></el-icon>&nbsp;重置布局</el-button>
           <el-button type="primary" size="small" @click="clearTrack" class="control-btn clear-btn"><el-icon><Delete /></el-icon>&nbsp;清除</el-button>
         </div>
       </div>
     </div>
-    <div class="chart-container" ref="chartContainerRef">
+    <div class="chart-container" ref="chartContainerRef" v-show="currentView === 'deviation'">
       <canvas ref="canvasRef" class="chart"></canvas>
       <canvas ref="axisCanvasRef" class="axis-layer"></canvas>
       <div
@@ -41,12 +47,19 @@
         {{ tooltipText }}
       </div>
     </div>
+    <div
+      v-show="currentView === 'position'"
+      ref="positionChartRef"
+      class="position-chart-container"
+    ></div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch, nextTick } from 'vue'
+import * as echarts from 'echarts'
 import { useNmea, numberToQuality } from '@/composables/gnss/useNmea'
+import { fixStatusColorRgb01 } from '@/components/windows/gnss/fixStatusColors'
 import { useTheme } from '@/composables/useTheme'
 import { createTrajectoryRenderer } from '@/core/render/createTrajectoryRenderer'
 import type { TrajectoryRenderer } from '@/core/render/TrajectoryRenderer'
@@ -101,6 +114,10 @@ const viewport = ref({
 let trackingXHalfSpan = 10
 let trackingYHalfSpan = 10
 
+// 用户拖拽产生的偏移（相对于最新数据点），跟踪模式下保持此偏移不回中
+let panOffsetX = 0
+let panOffsetY = 0
+
 let previousPlotData: Array<[number, number, number]> = []
 
 let nmeaUpdateTimer: number | null = null
@@ -111,6 +128,277 @@ let resizeFrame: number | null = null
 
 let stopWatch: (() => void) | null = null
 let stopThemeWatch: (() => void) | null = null
+
+// ---- 位置图（E/N/U 随时间折线，仿 RTKLIB rtkplot position-plot） ----
+
+type DeviationView = 'deviation' | 'position'
+
+const currentView = ref<DeviationView>('deviation')
+
+const positionChartRef = ref<HTMLDivElement | null>(null)
+let positionChartInstance: echarts.ECharts | null = null
+let positionResizeObserver: ResizeObserver | null = null
+
+const MAX_POSITION_POINTS = 3600
+const POSITION_UPDATE_INTERVAL_MS = 200
+let positionUpdateTimer: number | null = null
+
+// 三种区分度高的颜色：东向蓝、北向橙、天向绿
+const POSITION_COLORS = {
+  e: '#1890ff',
+  n: '#fa541c',
+  u: '#52c41a',
+}
+
+interface PositionEpoch {
+  time: number
+  e: number | null
+  n: number | null
+  u: number | null
+  quality: number
+}
+
+// 最近 MAX_POSITION_POINTS 个 epoch；U 为 altitude 相对窗口内首个有效 altitude 的差值
+const positionEpochs = computed<PositionEpoch[]>(() => {
+  const items = nmeaData.value.slice(-MAX_POSITION_POINTS)
+
+  let baseAltitude: number | null = null
+  for (const item of items) {
+    if (item.altitude !== null) {
+      baseAltitude = Number(item.altitude)
+      break
+    }
+  }
+
+  const epochs: PositionEpoch[] = []
+  for (const item of items) {
+    if (!item.time) continue
+    // time 形如 "2025/11/09 12:34:56"，统一成 '-' 以保证可解析
+    const time = Date.parse(item.time.replace(/\//g, '-'))
+    if (!Number.isFinite(time)) continue
+    epochs.push({
+      time,
+      e: item.enuE !== null ? Number(item.enuE) : null,
+      n: item.enuN !== null ? Number(item.enuN) : null,
+      u:
+        item.altitude !== null && baseAltitude !== null
+          ? Number(item.altitude) - baseAltitude
+          : null,
+      quality: Number(item.quality ?? 0),
+    })
+  }
+  return epochs
+})
+
+interface PositionTooltipParam {
+  seriesName: string
+  marker: string
+  data: { value: [number, number | null]; quality: number }
+}
+
+function formatPositionTooltip(params: unknown): string {
+  const list = (Array.isArray(params) ? params : [params]) as PositionTooltipParam[]
+  const first = list[0]
+  if (!first || !first.data) return ''
+  const epochTime = new Date(first.data.value[0])
+  const hhmmss = epochTime.toLocaleTimeString('zh-CN', { hour12: false })
+  const colors = chartTheme.value
+
+  const rows = list
+    .map((item) => {
+      const value = item.data.value[1]
+      const text = value === null ? '--' : `${value.toFixed(3)} m`
+      return `<div style="display:flex;justify-content:space-between;gap:16px;margin-top:4px;">
+        <span>${item.marker}${item.seriesName}</span><span style="font-weight:bold;">${text}</span>
+      </div>`
+    })
+    .join('')
+
+  return `<div style="min-width:160px;text-align:left;color:${colors.text};">
+    <div style="font-weight:bold;padding-bottom:4px;border-bottom:1px solid ${colors.border};">${hhmmss}</div>
+    ${rows}
+    <div style="margin-top:4px;color:${colors.textMuted};">质量: ${numberToQuality(first.data.quality)}</div>
+  </div>`
+}
+
+function initPositionChart(): void {
+  if (!positionChartRef.value) return
+
+  if (positionChartInstance) {
+    positionChartInstance.dispose()
+    positionChartInstance = null
+  }
+
+  setupPositionResizeObserver()
+
+  nextTick(() => {
+    if (!positionChartRef.value) return
+    positionChartInstance = echarts.init(positionChartRef.value, null, { renderer: 'svg' })
+    const colors = chartTheme.value
+
+    positionChartInstance.setOption({
+      backgroundColor: 'transparent',
+      tooltip: {
+        trigger: 'axis',
+        formatter: formatPositionTooltip,
+        backgroundColor: colors.surface,
+        borderColor: colors.border,
+        borderWidth: 1,
+        textStyle: { color: colors.text },
+      },
+      legend: {
+        data: ['东向 E', '北向 N', '天向 U'],
+        top: 0,
+        textStyle: { color: colors.textMuted },
+        inactiveColor: colors.grid,
+      },
+      grid: {
+        left: '3%',
+        right: '4%',
+        bottom: '6%',
+        top: '14%',
+        containLabel: true,
+      },
+      xAxis: {
+        type: 'time',
+        axisLabel: {
+          color: colors.textMuted,
+          fontSize: 12,
+          formatter: '{HH}:{mm}:{ss}',
+        },
+        axisLine: { lineStyle: { color: colors.border } },
+        splitLine: { show: false },
+      },
+      yAxis: {
+        type: 'value',
+        name: 'm',
+        scale: true,
+        nameTextStyle: { color: colors.textMuted },
+        axisLabel: { color: colors.textMuted, fontSize: 12 },
+        axisLine: { lineStyle: { color: colors.border } },
+        splitLine: { lineStyle: { color: colors.grid } },
+      },
+      series: [
+        {
+          name: '东向 E',
+          type: 'line',
+          showSymbol: false,
+          data: [],
+          lineStyle: { width: 1.5, color: POSITION_COLORS.e },
+          itemStyle: { color: POSITION_COLORS.e },
+        },
+        {
+          name: '北向 N',
+          type: 'line',
+          showSymbol: false,
+          data: [],
+          lineStyle: { width: 1.5, color: POSITION_COLORS.n },
+          itemStyle: { color: POSITION_COLORS.n },
+        },
+        {
+          name: '天向 U',
+          type: 'line',
+          showSymbol: false,
+          data: [],
+          lineStyle: { width: 1.5, color: POSITION_COLORS.u },
+          itemStyle: { color: POSITION_COLORS.u },
+        },
+      ],
+      animation: false,
+    })
+
+    updatePositionChart()
+  })
+}
+
+function updatePositionChart(): void {
+  if (!positionChartInstance) return
+  if (document.hidden) return
+
+  const epochs = positionEpochs.value
+  positionChartInstance.dispatchAction({ type: 'hideTip' })
+  positionChartInstance.setOption({
+    series: [
+      { data: epochs.map((p) => ({ value: [p.time, p.e], quality: p.quality })) },
+      { data: epochs.map((p) => ({ value: [p.time, p.n], quality: p.quality })) },
+      { data: epochs.map((p) => ({ value: [p.time, p.u], quality: p.quality })) },
+    ],
+  })
+}
+
+function schedulePositionUpdate(): void {
+  if (positionUpdateTimer !== null) return
+  positionUpdateTimer = window.setTimeout(() => {
+    positionUpdateTimer = null
+    updatePositionChart()
+  }, POSITION_UPDATE_INTERVAL_MS)
+}
+
+function cancelScheduledPositionUpdate(): void {
+  if (positionUpdateTimer !== null) {
+    clearTimeout(positionUpdateTimer)
+    positionUpdateTimer = null
+  }
+}
+
+function setupPositionResizeObserver(): void {
+  if (!positionChartRef.value || typeof ResizeObserver === 'undefined') return
+
+  if (positionResizeObserver) {
+    positionResizeObserver.disconnect()
+    positionResizeObserver = null
+  }
+
+  positionResizeObserver = new ResizeObserver(() => {
+    nextTick(() => {
+      if (positionChartInstance) {
+        try {
+          positionChartInstance.resize()
+        } catch (error) {
+          // 图表调整大小失败不影响正常使用，静默处理
+        }
+      }
+    })
+  })
+
+  positionResizeObserver.observe(positionChartRef.value)
+}
+
+function teardownPositionChart(): void {
+  cancelScheduledPositionUpdate()
+  if (positionResizeObserver) {
+    positionResizeObserver.disconnect()
+    positionResizeObserver = null
+  }
+  if (positionChartInstance) {
+    positionChartInstance.dispose()
+    positionChartInstance = null
+  }
+}
+
+// 数据变化：位置视图下做 200ms 节流刷新
+watch(nmeaData, () => {
+  if (currentView.value === 'position') schedulePositionUpdate()
+})
+
+// 视图切换：切到位置图时按需初始化或刷新
+watch(currentView, (view) => {
+  if (view === 'position') {
+    nextTick(() => {
+      if (!positionChartInstance) {
+        initPositionChart()
+      } else {
+        positionChartInstance.resize()
+        updatePositionChart()
+      }
+    })
+  }
+})
+
+// 主题切换：重建位置图
+watch(resolvedTheme, () => {
+  if (currentView.value === 'position') initPositionChart()
+})
 
 const DRAG_THRESHOLD_PX = 3
 let isDragging = false
@@ -127,20 +415,7 @@ function formatDistance(value: number): string {
 }
 
 function qualityToRgb(quality: number): [number, number, number] {
-  switch (quality) {
-    case 0:
-      return [128 / 255, 128 / 255, 128 / 255]
-    case 1:
-      return [1, 0, 0]
-    case 2:
-      return [0, 0, 1]
-    case 4:
-      return [0, 128 / 255, 0]
-    case 5:
-      return [1, 165 / 255, 0]
-    default:
-      return [128 / 255, 128 / 255, 128 / 255]
-  }
+  return fixStatusColorRgb01(quality)
 }
 
 function qualityToColor(quality: number): [number, number, number, number] {
@@ -312,12 +587,23 @@ function handleNmeaUpdate(): void {
 
   syncRendererData()
 
+  // 拖拽中只更新数据渲染，不改变视口，避免视图跳动
+  if (isDragging) {
+    renderer.render()
+    drawAxisLayer()
+    drawCurrentPosition()
+    return
+  }
+
   if (isTracking.value) {
+    // 视口中心 = 最新点 + 用户拖拽偏移，保持当前跨度
+    const centerX = latestTrackPoint[0] + panOffsetX
+    const centerY = latestTrackPoint[1] + panOffsetY
     updateViewport(
-      latestTrackPoint[0] - trackingXHalfSpan,
-      latestTrackPoint[0] + trackingXHalfSpan,
-      latestTrackPoint[1] - trackingYHalfSpan,
-      latestTrackPoint[1] + trackingYHalfSpan,
+      centerX - trackingXHalfSpan,
+      centerX + trackingXHalfSpan,
+      centerY - trackingYHalfSpan,
+      centerY + trackingYHalfSpan,
     )
   } else {
     renderer.render()
@@ -354,6 +640,9 @@ function toggleTracking(): void {
   const latestPoint = plotData.value[plotData.value.length - 1]
 
   if (isTracking.value) {
+    // 开启跟踪：重置用户拖拽偏移，视口以最新点为中心
+    panOffsetX = 0
+    panOffsetY = 0
     const xSpan = viewport.value.xMax - viewport.value.xMin
     const ySpan = viewport.value.yMax - viewport.value.yMin
     trackingXHalfSpan = xSpan / 2
@@ -370,6 +659,10 @@ function toggleTracking(): void {
 function resetZoom(): void {
   if (!renderer || !chartContainerRef.value) return
   const points = plotData.value
+
+  // 重置布局时清除用户拖拽偏移
+  panOffsetX = 0
+  panOffsetY = 0
 
   const width = chartContainerRef.value.clientWidth
   const height = chartContainerRef.value.clientHeight
@@ -402,6 +695,8 @@ function clearTrack(): void {
   cancelScheduledNmeaUpdate()
   renderer?.clear()
   previousPlotData = []
+  panOffsetX = 0
+  panOffsetY = 0
   updateViewport(-10, 10, -10, 10)
   clearData()
 }
@@ -437,6 +732,13 @@ function handleWheel(e: WheelEvent): void {
   trackingXHalfSpan = (newXMax - newXMin) / 2
   trackingYHalfSpan = (newYMax - newYMin) / 2
   updateViewport(newXMin, newXMax, newYMin, newYMax)
+
+  // 拖拽后更新偏移：新视口中心相对于最新数据点的偏移
+  const latestPoint = plotData.value[plotData.value.length - 1]
+  if (latestPoint) {
+    panOffsetX = (newXMin + newXMax) / 2 - latestPoint[0]
+    panOffsetY = (newYMin + newYMax) / 2 - latestPoint[1]
+  }
 }
 
 function handleMouseMove(e: MouseEvent): void {
@@ -616,11 +918,16 @@ onMounted(() => {
         drawCurrentPosition()
       })
     })
+
+    if (currentView.value === 'position') {
+      initPositionChart()
+    }
   })
 })
 
 onUnmounted(() => {
   cancelScheduledNmeaUpdate()
+  teardownPositionChart()
   stopWatch?.()
   stopThemeWatch?.()
   teardownResizeObserver()
@@ -700,6 +1007,19 @@ onUnmounted(() => {
   position: relative;
   overflow: hidden;
   min-height: 0;
+}
+
+.position-chart-container {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  min-height: 0;
+  width: 100%;
+}
+
+.view-switch {
+  margin-right: 12px;
+  flex-shrink: 0;
 }
 
 .chart {

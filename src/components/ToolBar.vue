@@ -60,15 +60,6 @@
 
       <!-- Actions: Draw/Data/Config... -->
       <button
-        class="toolbar-btn"
-        @click="
-          handleStatus()
-          ;($event.currentTarget as HTMLElement)?.blur()
-        "
-        :title="statusBtn.title"
-        v-html="statusBtn.icon"
-      ></button>
-      <button
         v-for="item in handleList"
         :key="item.msg"
         class="toolbar-btn"
@@ -183,11 +174,15 @@
           <div v-if="fileTimeTag" class="time-tag-options">
             <div class="input-group compact-input-group">
               <span class="input-label">播放倍速</span>
-              <el-select v-model="fileReplaySpeed" :teleported="false">
+              <el-select
+                v-model="fileReplaySpeed"
+                :teleported="true"
+                popper-class="replay-speed-dropdown"
+              >
                 <el-option
                   v-for="speed in replaySpeedOptions"
                   :key="speed"
-                  :label="`${speed}×`"
+                  :label="`×${speed}`"
                   :value="speed"
                 />
               </el-select>
@@ -454,7 +449,6 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch, inject, nextTick, type Ref } from 'vue'
-import { ButtonItem } from '@/settings/config'
 import { toolBarIcon } from '@/settings/icons'
 import {
   getWindowButtonList,
@@ -580,18 +574,6 @@ const handleDeviceConnected = () => {
       deviceInstance.openCurrDevice()
     }
   }
-}
-
-const handleStatus = () => {
-  showStatusBar.value = !showStatusBar.value
-}
-
-const statusBtn: ButtonItem = {
-  msg: 'status',
-  title: 'Status',
-  icon: toolBarIcon.status,
-  template: '', // 补充 template 属性
-  text: '', // 补充 text 属性
 }
 
 const handleList = computed(() => getWindowButtonList(currentApplication.value?.windowIds ?? []))
@@ -1636,6 +1618,12 @@ onUnmounted(() => {
 :global(.el-select-dropdown),
 :global(.el-select-dropdown *) {
   -webkit-app-region: no-drag !important;
+}
+
+/* 播放倍速下拉框 teleport 到 body，需置于数据接入对话框（z-index 8000）之上，
+   否则会落入对话框的 overflow 容器被截断，看不到 10× 等末尾选项。 */
+:global(.replay-speed-dropdown) {
+  z-index: 8002 !important;
 }
 
 :global(.data-input-dialog .el-input__inner),

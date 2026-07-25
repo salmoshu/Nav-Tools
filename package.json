@@ -1,6 +1,6 @@
 {
   "name": "nav-tools",
-  "version": "v1.1.0-2026XXXX",
+  "version": "v1.1.0-20260725",
   "main": "dist-electron/main/index.js",
   "description": "Nav-Tools is a desktop-grade visualization workbench built with Electron & Vue3, tailored for roboticists.",
   "author": "Winchell.Hu <winchell.hu@outlook.com>",
@@ -55,6 +55,7 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.55.1",
+    "@types/leaflet": "^1.9.21",
     "@typescript-eslint/eslint-plugin": "^8.46.2",
     "@typescript-eslint/parser": "^8.46.2",
     "@vitejs/plugin-vue": "^5.2.1",
@@ -84,6 +85,7 @@
     "element-resize-detector": "^1.2.4",
     "ffmpeg-static": "^5.2.0",
     "grid-layout-plus": "^1.1.0",
+    "leaflet": "^1.9.4",
     "mathjs": "^14.7.0",
     "mitt": "^3.0.1",
     "monaco-editor": "^0.53.0",

@@ -366,6 +366,7 @@ export function useNmea() {
 
     gnssStore.status.utcTime = data.time
     gnssStore.status.fixMode = numberToQuality(parseInt(data.quality))
+    gnssStore.status.quality = parseInt(data.quality) || 0
     gnssStore.status.longitude = parseFloat(lonRes.toFixed(6))
     gnssStore.status.latitude = parseFloat(latRes.toFixed(6))
     gnssStore.status.altitude = parseFloat(data.altitude)

@@ -3,6 +3,7 @@ import { defineStore } from "pinia"
 
 interface GnssState {
     fixMode: string
+    quality: number
     TTFF: string
     longitude: number
     latitude: number
@@ -22,6 +23,7 @@ export const useGnssStore = defineStore('gnss', () => {
     const status = ref<GnssState>({
         utcTime: '',
         fixMode: '',
+        quality: 0,
         TTFF: '',
         longitude: 0.0,
         latitude: 0.0,

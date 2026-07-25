@@ -1,7 +1,6 @@
 import { reactive } from 'vue'
 import {
   getPanelById,
-  getPanelsByIds,
   normalizePanelId,
   normalizePanelIds,
   panelRegistry,
@@ -55,8 +54,12 @@ function getWindowById(id: string): WindowDefinition | undefined {
 }
 
 function getWindowsByIds(ids: readonly string[]): WindowDefinition[] {
-  const panelIds = new Set(getPanelsByIds(ids).map((panel) => panel.id))
-  return windowCatalog.filter((panel) => panelIds.has(panel.id))
+  const result: WindowDefinition[] = []
+  for (const id of normalizeWindowIds(ids)) {
+    const window = getWindowById(id)
+    if (window) result.push(window)
+  }
+  return result
 }
 
 class NavMode {

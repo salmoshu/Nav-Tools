@@ -2,6 +2,7 @@
   <div
     class="dashboard"
     :class="{ 'dashboard-resizing': isGridResizing }"
+    :style="dashboardStyle"
     @pointerdown.capture="handleDashboardPointerDown"
     @dragover="device.handleDragOver"
     @dragenter="device.handleDragEnter"
@@ -12,11 +13,11 @@
     <div v-if="device.isDragOver.value" class="drag-overlay"></div>
 
     <!-- 原有内容 -->
-    <ToolBar @positionChange="handleToolbarPositionChange" />
+    <ToolBar v-if="toolbarRendered" @positionChange="handleToolbarPositionChange" />
 
     <StatusBar
       @positionChange="handleStatusbarPositionChange"
-      v-if="showStatusBar && !fullScreenItem"
+      v-if="statusbarRendered"
     />
 
     <div class="dashboard-content" :class="contentClasses" :style="contentStyle">
@@ -118,13 +119,13 @@
 import ToolBar from './ToolBar.vue'
 import StatusBar from './StatusBar.vue'
 import ApplicationSelector from './ApplicationSelector.vue'
-import { ref, computed, nextTick, onMounted, onUnmounted, provide } from 'vue'
+import { ref, computed, nextTick, onMounted, onUnmounted, provide, watch } from 'vue'
 import { GridLayout, GridItem } from 'grid-layout-plus'
 import { ElButton, ElCard, ElIcon, ElMessage } from 'element-plus'
 import { Close, Share, FullScreen } from '@element-plus/icons-vue'
 import emitter from '@/hooks/useMitt'
 import { useLayoutManager } from '@/composables/useLayoutManager'
-import { showStatusBar } from '@/composables/useStatusManager'
+import { showStatusBar, showToolBar } from '@/composables/useStatusManager'
 import { getWindowById, windowCatalog } from '@/settings/config'
 import { getPanelIconComponent } from '@/settings/panelIcons'
 import { useDevice } from '@/hooks/useDevice'
@@ -207,6 +208,49 @@ const statusbarSize = ref({ width: 200, height: 60 })
 const fullScreenItem = ref<string | null>(null)
 const isGridResizing = ref(false)
 
+// 工具栏/状态栏实际渲染状态：延迟跟随用户切换状态。
+// 全屏模式下隐藏时，先让 full-screen-card 拉伸（dashboardStyle 已基于 showToolBar 更新），
+// 等待浏览器渲染一帧后再移除 toolbar/statusbar，避免瞬间露出下方内容。
+// 显示时立即渲染，由 toolbar 填充全屏卡片让出的空间。
+const toolbarRendered = ref(showToolBar.value)
+const statusbarRendered = ref(showStatusBar.value)
+
+watch(showToolBar, (visible) => {
+  if (visible) {
+    // 显示：立即渲染 toolbar，填充全屏卡片让出的空间
+    toolbarRendered.value = true
+    return
+  }
+  // 隐藏：非全屏时立即移除；全屏时先拉伸全屏卡片再移除
+  if (fullScreenItem.value === null) {
+    toolbarRendered.value = false
+    return
+  }
+  // 等待两帧：第一帧 dashboardStyle 更新触发 full-screen-card 拉伸，
+  // 第二帧确认渲染完成后再隐藏 toolbar
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      toolbarRendered.value = false
+    })
+  })
+})
+
+watch(showStatusBar, (visible) => {
+  if (visible) {
+    statusbarRendered.value = true
+    return
+  }
+  if (fullScreenItem.value === null) {
+    statusbarRendered.value = false
+    return
+  }
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      statusbarRendered.value = false
+    })
+  })
+})
+
 // 提供工具栏和状态栏位置的响应式引用
 provide('toolbarPosition', toolbarPosition)
 provide('statusbarPosition', statusbarPosition)
@@ -226,6 +270,10 @@ const exitFullScreen = () => {
   if (fullScreenItem.value === null) return
 
   fullScreenItem.value = null
+  // 退出全屏时立即同步渲染状态：若 toolbar/statusbar 正处于延迟隐藏中，
+  // 直接同步为用户实际开关状态，避免与内容区域重叠
+  toolbarRendered.value = showToolBar.value !== false
+  statusbarRendered.value = showStatusBar.value !== false
   emit('fullscreen-panel-change', undefined)
 }
 
@@ -277,12 +325,46 @@ const handleKeyDown = (event: KeyboardEvent) => {
 // 计算内容区域的类
 const contentClasses = computed(() => {
   return {
-    'toolbar-top': toolbarPosition.value === 'top',
-    'toolbar-bottom': toolbarPosition.value === 'bottom',
-    'toolbar-left': toolbarPosition.value === 'left',
-    'toolbar-right': toolbarPosition.value === 'right',
+    'toolbar-top': showToolBar.value === true && toolbarPosition.value === 'top',
+    'toolbar-bottom': showToolBar.value === true && toolbarPosition.value === 'bottom',
+    'toolbar-left': showToolBar.value === true && toolbarPosition.value === 'left',
+    'toolbar-right': showToolBar.value === true && toolbarPosition.value === 'right',
     'statusbar-left': statusbarPosition.value === 'left',
     'statusbar-right': statusbarPosition.value === 'right',
+  }
+})
+
+// Dashboard 根元素样式：将状态栏宽度作为 CSS 变量暴露给全屏卡片定位使用。
+// 状态栏隐藏时置 0，全屏卡片无需为其让出空间。
+const dashboardStyle = computed(() => {
+  const statusbarW = showStatusBar.value ? statusbarSize.value.width : 0
+  const toolbarW = showToolBar.value === true ? toolbarSize.value.width : 0
+  const toolbarH = showToolBar.value === true ? toolbarSize.value.height : 0
+
+  // 全屏卡片的左右偏移：综合考虑工具栏(左右)与状态栏(左右)的位置
+  // 工具栏在左侧时，全屏卡片左侧需让出工具栏宽度；状态栏在左侧时再让出状态栏宽度
+  let fsLeft = 0
+  let fsRight = 0
+  if (toolbarPosition.value === 'left') fsLeft += toolbarW
+  if (toolbarPosition.value === 'right') fsRight += toolbarW
+  if (showStatusBar.value) {
+    if (statusbarPosition.value === 'left') fsLeft += statusbarW
+    if (statusbarPosition.value === 'right') fsRight += statusbarW
+  }
+  // 全屏卡片的上下偏移：工具栏在上下时让出工具栏高度
+  let fsTop = 0
+  let fsBottom = 0
+  if (toolbarPosition.value === 'top') fsTop += toolbarH
+  if (toolbarPosition.value === 'bottom') fsBottom += toolbarH
+
+  return {
+    '--app-statusbar-size': `${statusbarW}px`,
+    '--fs-left': `${fsLeft}px`,
+    '--fs-right': `${fsRight}px`,
+    '--fs-top': `${fsTop}px`,
+    '--fs-bottom': `${fsBottom}px`,
+    '--fs-width': `calc(100vw - ${fsLeft}px - ${fsRight}px)`,
+    '--fs-height': `calc(100vh - var(--app-header-height, 38px) - ${fsTop}px - ${fsBottom}px)`,
   }
 })
 
@@ -307,7 +389,7 @@ const contentStyle = computed(() => {
   }
 
   // 处理工具栏的位置，考虑与状态栏的边缘限制
-  if (!fullScreenItem.value) {
+  if (showToolBar.value === true && !fullScreenItem.value) {
     switch (toolbarPosition.value) {
       case 'top':
         // 当ToolBar在上边时，限制ToolBar下边缘在StatusBar上边缘
@@ -559,67 +641,24 @@ onUnmounted(() => {
 /* 全屏卡片样式增强 */
 .full-screen-card {
   position: fixed;
-  z-index: 999; /* 降低z-index，使其低于Toolbar的1000 */
+  z-index: 998; /* 低于 Toolbar(1000) 与 StatusBar(999)，避免遮挡二者 */
   margin: 0;
   border: none;
   border-radius: 0;
   box-shadow: none;
+  /* 综合考虑 Header/Toolbar/StatusBar 位置，由 dashboardStyle 计算的 CSS 变量驱动 */
+  top: calc(var(--app-header-height, 38px) + var(--fs-top, 0px));
+  left: var(--fs-left, 0px);
+  right: var(--fs-right, 0px);
+  bottom: var(--fs-bottom, 0px);
+  width: var(--fs-width, 100vw);
+  height: var(--fs-height, calc(100vh - var(--app-header-height, 38px)));
   /* 确保全屏卡片不受父元素影响 */
   opacity: 1 !important;
   visibility: visible !important;
   pointer-events: auto !important;
   background-color: var(--app-surface);
   overflow: hidden;
-}
-
-/* 全屏模式下，根据Header和Toolbar位置调整全屏卡片的位置和大小 */
-.toolbar-top .full-screen-card {
-  top: calc(var(--app-header-height, 38px) + var(--app-toolbar-size));
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: calc(100vh - var(--app-header-height, 38px) - var(--app-toolbar-size));
-}
-
-.toolbar-bottom .full-screen-card {
-  top: var(--app-header-height, 38px);
-  left: 0;
-  right: 0;
-  bottom: var(--app-toolbar-size);
-  height: calc(100vh - var(--app-header-height, 38px) - var(--app-toolbar-size));
-}
-
-.toolbar-left .full-screen-card {
-  top: var(--app-header-height, 38px);
-  left: var(--app-toolbar-size);
-  right: 0;
-  bottom: 0;
-  width: calc(100vw - var(--app-toolbar-size));
-  height: calc(100vh - var(--app-header-height, 38px));
-}
-
-.toolbar-right .full-screen-card {
-  top: var(--app-header-height, 38px);
-  left: 0;
-  right: var(--app-toolbar-size);
-  bottom: 0;
-  width: calc(100vw - var(--app-toolbar-size));
-  height: calc(100vh - var(--app-header-height, 38px));
-}
-
-/* 全屏模式下，同时有上下或左右Toolbar的情况 */
-.toolbar-top.toolbar-bottom .full-screen-card {
-  top: calc(var(--app-header-height, 38px) + var(--app-toolbar-size));
-  bottom: var(--app-toolbar-size);
-  height: calc(100vh - var(--app-header-height, 38px) - 2 * var(--app-toolbar-size));
-}
-
-.toolbar-left.toolbar-right .full-screen-card {
-  top: var(--app-header-height, 38px);
-  left: var(--app-toolbar-size);
-  right: var(--app-toolbar-size);
-  width: calc(100vw - 2 * var(--app-toolbar-size));
-  height: calc(100vh - var(--app-header-height, 38px));
 }
 
 /* 确保 el-card 的内容区域正确计算高度 - 使用更精确的选择器 */

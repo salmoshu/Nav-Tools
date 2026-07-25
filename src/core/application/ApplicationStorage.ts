@@ -5,15 +5,25 @@ const APPLICATIONS_KEY = 'nav-tools:custom-applications'
 const SELECTED_APPLICATION_KEY = 'nav-tools:selected-application'
 const CAMERA_DEFAULT_MIGRATION_KEY = 'nav-tools:migration:camera-default-v1'
 const CAMERA_PARAMETERS_MIGRATION_KEY = 'nav-tools:migration:camera-parameters-v1'
+const SERIAL_DEFAULT_MIGRATION_KEY = 'nav-tools:migration:serial-default-v1'
+const GNSS_MESSAGES_MIGRATION_KEY = 'nav-tools:migration:gnss-messages-v1'
 
 export const DEFAULT_APPLICATIONS: readonly UserApplication[] = [
+  {
+    id: 'serial',
+    name: 'Serial',
+    description: 'Serial port telemetry and raw message workspace',
+    icon: 'connection',
+    accent: '#8b5cf6',
+    windowIds: ['plot', 'raw-messages'],
+  },
   {
     id: 'gnss',
     name: 'GNSS',
     description: 'GNSS positioning, satellite, and raw message workspace',
     icon: 'position',
     accent: '#0ea5e9',
-    windowIds: ['raw-messages', 'gnss-deviation', 'gnss-signals', 'sky-plot'],
+    windowIds: ['gnss-map', 'gnss-deviation', 'gnss-signals', 'sky-plot', 'raw-messages'],
   },
   {
     id: 'motor',
@@ -42,6 +52,7 @@ export class ApplicationStorage {
       this.saveApplications(defaults)
       this.storage.writeRaw(CAMERA_DEFAULT_MIGRATION_KEY, '1')
       this.storage.writeRaw(CAMERA_PARAMETERS_MIGRATION_KEY, '1')
+      this.storage.writeRaw(SERIAL_DEFAULT_MIGRATION_KEY, '1')
       return defaults
     }
 
@@ -68,6 +79,27 @@ export class ApplicationStorage {
       }
       this.storage.writeRaw(CAMERA_PARAMETERS_MIGRATION_KEY, '1')
     }
+    if (this.storage.readRaw(SERIAL_DEFAULT_MIGRATION_KEY) === null) {
+      const serialDefault = DEFAULT_APPLICATIONS.find((application) => application.id === 'serial')
+      if (
+        applications.length > 0 &&
+        serialDefault &&
+        !applications.some(({ id }) => id === 'serial')
+      ) {
+        applications.push(cloneApplications([serialDefault])[0])
+      }
+      this.storage.writeRaw(SERIAL_DEFAULT_MIGRATION_KEY, '1')
+    }
+    if (this.storage.readRaw(GNSS_MESSAGES_MIGRATION_KEY) === null) {
+      const gnssApplication = applications.find((application) => application.id === 'gnss')
+      if (gnssApplication && gnssApplication.windowIds[0] === 'raw-messages') {
+        gnssApplication.windowIds = [
+          ...gnssApplication.windowIds.filter((id) => id !== 'raw-messages'),
+          'raw-messages',
+        ]
+      }
+      this.storage.writeRaw(GNSS_MESSAGES_MIGRATION_KEY, '1')
+    }
     this.saveApplications(applications)
     return applications
   }
@@ -81,6 +113,8 @@ export class ApplicationStorage {
     this.saveApplications(defaults)
     this.storage.writeRaw(CAMERA_DEFAULT_MIGRATION_KEY, '1')
     this.storage.writeRaw(CAMERA_PARAMETERS_MIGRATION_KEY, '1')
+    this.storage.writeRaw(SERIAL_DEFAULT_MIGRATION_KEY, '1')
+    this.storage.writeRaw(GNSS_MESSAGES_MIGRATION_KEY, '1')
     return defaults
   }
 
@@ -102,8 +136,8 @@ export class ApplicationStorage {
 }
 
 export function sanitizePanelIds(ids: readonly string[]): string[] {
-  const requested = new Set(normalizePanelIds(ids))
-  return panelRegistry.filter((panel) => requested.has(panel.id)).map((panel) => panel.id)
+  const validIds = new Set(panelRegistry.map((panel) => panel.id))
+  return normalizePanelIds(ids).filter((id) => validIds.has(id))
 }
 
 function cloneApplications(applications: readonly UserApplication[]): UserApplication[] {

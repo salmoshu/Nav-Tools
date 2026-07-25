@@ -102,6 +102,26 @@ let forceNextNmeaRender = false;
 let trackingXHalfSpan = 10;
 let trackingYHalfSpan = 10;
 
+// 用户拖拽产生的偏移（相对于最新数据点），跟踪模式下保持此偏移不回中
+let panOffsetX = 0;
+let panOffsetY = 0;
+
+// 拖拽状态
+const DRAG_THRESHOLD_PX = 3;
+let isDragging = false;
+let dragStartClientX = 0;
+let dragStartClientY = 0;
+let dragLastClientX = 0;
+let dragLastClientY = 0;
+let dragHasMoved = false;
+// 拖拽起始时的 dataZoom 范围与像素到数据的转换比
+let dragStartXStart = 0;
+let dragStartXEnd = 0;
+let dragStartYStart = 0;
+let dragStartYEnd = 0;
+let dragXPixelToData = 1;
+let dragYPixelToData = 1;
+
 function toggleSlideWindow() {
   enableWindow.value = !enableWindow.value;
   handleNmeaUpdate();
@@ -257,6 +277,12 @@ function initChart() {
 
   // 直接在DOM元素上绑定事件监听器
   bindWheelHandler(handleWheel);
+
+  // 绑定拖拽事件（跟踪模式下拖拽平移视图）
+  const dom = chartInstance.value.getDom();
+  if (dom) {
+    dom.addEventListener('mousedown', handleDragStart);
+  }
 }
 
 function handleWheel(e) {
@@ -312,6 +338,104 @@ function handleWheel(e) {
   return false;
 };
 
+function handleDragStart(e) {
+  if (e.button !== 0 || !chartInstance.value) return;
+  isDragging = true;
+  dragHasMoved = false;
+  dragStartClientX = e.clientX;
+  dragStartClientY = e.clientY;
+  dragLastClientX = e.clientX;
+  dragLastClientY = e.clientY;
+
+  // 记录拖拽起始时的 dataZoom 范围
+  const opt = chartInstance.value.getOption();
+  dragStartXStart = opt.dataZoom[0].startValue;
+  dragStartXEnd = opt.dataZoom[0].endValue;
+  dragStartYStart = opt.dataZoom[1].startValue;
+  dragStartYEnd = opt.dataZoom[1].endValue;
+
+  // 计算像素到数据的转换比（基于起始位置）
+  const xData0 = chartInstance.value.convertFromPixel({ xAxisIndex: 0 }, 0);
+  const xData1 = chartInstance.value.convertFromPixel({ xAxisIndex: 0 }, 1);
+  dragXPixelToData = xData1 - xData0;
+  const yData0 = chartInstance.value.convertFromPixel({ yAxisIndex: 0 }, 0);
+  const yData1 = chartInstance.value.convertFromPixel({ yAxisIndex: 0 }, 1);
+  dragYPixelToData = yData1 - yData0;
+
+  window.addEventListener('mousemove', handleDragMove);
+  window.addEventListener('mouseup', handleDragEnd);
+}
+
+function handleDragMove(e) {
+  if (!isDragging || !chartInstance.value) return;
+  const dx = e.clientX - dragLastClientX;
+  const dy = e.clientY - dragLastClientY;
+  const totalDx = e.clientX - dragStartClientX;
+  const totalDy = e.clientY - dragStartClientY;
+  dragLastClientX = e.clientX;
+  dragLastClientY = e.clientY;
+  if (!dragHasMoved && Math.hypot(totalDx, totalDy) >= DRAG_THRESHOLD_PX) {
+    dragHasMoved = true;
+  }
+  if (!dragHasMoved) return;
+
+  const limit = 10000;
+  const xSpan = dragStartXEnd - dragStartXStart;
+  const ySpan = dragStartYEnd - dragStartYStart;
+
+  // 以拖拽起始范围为基准，内容跟随鼠标移动
+  // 屏幕 Y 向下而数据 Y 向上，dragYPixelToData 为负，取反后方向一致
+  let newXStart = dragStartXStart - totalDx * dragXPixelToData;
+  let newXEnd = dragStartXEnd - totalDx * dragXPixelToData;
+  let newYStart = dragStartYStart - totalDy * dragYPixelToData;
+  let newYEnd = dragStartYEnd - totalDy * dragYPixelToData;
+
+  if (newXStart < -limit) {
+    newXStart = -limit;
+    newXEnd = -limit + xSpan;
+  } else if (newXEnd > limit) {
+    newXEnd = limit;
+    newXStart = limit - xSpan;
+  }
+  if (newYStart < -limit) {
+    newYStart = -limit;
+    newYEnd = -limit + ySpan;
+  } else if (newYEnd > limit) {
+    newYEnd = limit;
+    newYStart = limit - ySpan;
+  }
+
+  trackingXHalfSpan = (newXEnd - newXStart) / 2;
+  trackingYHalfSpan = (newYEnd - newYStart) / 2;
+
+  chartInstance.value.dispatchAction({
+    type: 'dataZoom',
+    dataZoomIndex: 0,
+    startValue: newXStart,
+    endValue: newXEnd,
+  });
+  chartInstance.value.dispatchAction({
+    type: 'dataZoom',
+    dataZoomIndex: 1,
+    startValue: newYStart,
+    endValue: newYEnd,
+  });
+
+  // 更新拖拽偏移：新视口中心相对于最新数据点的偏移
+  const latestPoint = plotData.value[plotData.value.length - 1];
+  if (latestPoint) {
+    panOffsetX = (newXStart + newXEnd) / 2 - latestPoint[0];
+    panOffsetY = (newYStart + newYEnd) / 2 - latestPoint[1];
+  }
+}
+
+function handleDragEnd() {
+  if (!isDragging) return;
+  isDragging = false;
+  window.removeEventListener('mousemove', handleDragMove);
+  window.removeEventListener('mouseup', handleDragEnd);
+}
+
 function qualityToColor (num) {
   // 0：无效解；1：单点定位解；2：伪距差分；4：固定解；5：浮动解。
   switch (num) {
@@ -353,17 +477,20 @@ function handleNmeaUpdate() {
   ];
 
   // 跟踪模式：数据保持原始 ENU 坐标不再二次 map，
-  // 仅平移 dataZoom 视口（保持当前跨度）使最新点居中
+  // 视口中心 = 最新点 + 用户拖拽偏移，保持当前跨度
+  // 拖拽中不更新 dataZoom，避免与拖拽操作冲突
   let trackingZoom = null;
-  if (isTracking.value) {
+  if (isTracking.value && !isDragging) {
+    const centerX = latestTrackPoint[0] + panOffsetX;
+    const centerY = latestTrackPoint[1] + panOffsetY;
     trackingZoom = [
       {
-        startValue: latestTrackPoint[0] - trackingXHalfSpan,
-        endValue: latestTrackPoint[0] + trackingXHalfSpan,
+        startValue: centerX - trackingXHalfSpan,
+        endValue: centerX + trackingXHalfSpan,
       },
       {
-        startValue: latestTrackPoint[1] - trackingYHalfSpan,
-        endValue: latestTrackPoint[1] + trackingYHalfSpan,
+        startValue: centerY - trackingYHalfSpan,
+        endValue: centerY + trackingYHalfSpan,
       },
     ];
   }
@@ -430,8 +557,10 @@ function toggleTracking() {
   const latestPoint = plotData.value[plotData.value.length - 1];
 
   if (isTracking.value) {
-    // 开启跟踪：数据保持原始坐标，视口以最新点为中心，
+    // 开启跟踪：重置用户拖拽偏移，视口以最新点为中心，
     // 跨度取当前的一半（与原实现视觉一致）
+    panOffsetX = 0;
+    panOffsetY = 0;
     const opt = chartInstance.value.getOption();
     const xSpan = (opt.dataZoom[0].endValue - opt.dataZoom[0].startValue) / 2;
     const ySpan = (opt.dataZoom[1].endValue - opt.dataZoom[1].startValue) / 2;
@@ -463,6 +592,10 @@ function toggleTracking() {
 function resetZoom() {
   if (!chartInstance.value) return;
   const points = plotData.value;
+
+  // 重置布局时清除用户拖拽偏移
+  panOffsetX = 0;
+  panOffsetY = 0;
 
   const width = chartContainerRef.value?.clientWidth || 1;
   const height = chartContainerRef.value?.clientHeight || 1;
@@ -505,6 +638,8 @@ function resetZoom() {
 function clearTrack() {
   cancelScheduledNmeaUpdate();
   lastNmeaRenderKey = '';
+  panOffsetX = 0;
+  panOffsetY = 0;
   clearData();
 
   chartInstance.value.setOption({
@@ -568,7 +703,12 @@ watch(resolvedTheme, () => {
 onUnmounted(() => {
   cancelScheduledNmeaUpdate();
   stopWatch?.();
+  // 清理拖拽事件
+  window.removeEventListener('mousemove', handleDragMove);
+  window.removeEventListener('mouseup', handleDragEnd);
   if (chartInstance.value) {
+    const dom = chartInstance.value.getDom();
+    if (dom) dom.removeEventListener('mousedown', handleDragStart);
     chartInstance.value.dispose();
   }
   disconnectResizeObserver();

@@ -4,6 +4,7 @@ import {
   Compass,
   Grid,
   Histogram,
+  MapLocation,
   Monitor,
   Setting,
   TrendCharts,
@@ -18,6 +19,7 @@ export const panelIconComponents: Readonly<Record<string, Component>> = {
   signal: Histogram,
   sky: Compass,
   config: Setting,
+  map: MapLocation,
 }
 
 export function getPanelIconComponent(action?: string): Component {

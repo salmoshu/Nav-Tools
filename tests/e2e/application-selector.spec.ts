@@ -515,7 +515,7 @@ test('prevents text selection in adjacent cards while resizing', async ({ page }
 
   await page.goto('/#app/resize-selection-audit')
   const firstItem = page.locator('.vgl-item:not(.vgl-item--placeholder)').first()
-  const secondTitle = page.getByText('Raw Messages', { exact: true })
+  const secondTitle = page.getByText('Messages', { exact: true })
   const resizerBounds = await firstItem.locator('.vgl-item__resizer').boundingBox()
   const titleBounds = await secondTitle.boundingBox()
   expect(resizerBounds).not.toBeNull()
@@ -542,11 +542,11 @@ test('shows restore and always-on-top controls for detached panels', async ({ pa
     JSON.stringify({
       componentName: 'RawMessages',
       windowId: 'raw-messages',
-      title: 'Raw Messages',
+      title: 'Messages',
     }),
   )
   await page.goto(`/#card/${payload}`)
-  await expect(page.locator('.brand-name')).toHaveText('Raw Messages')
+  await expect(page.locator('.brand-name')).toHaveText('Messages')
   await expect(page.locator('.context-title')).toHaveCount(0)
   await expect(page.getByTitle('还原到主窗口')).toBeVisible()
   await expect(page.getByTitle('保持置顶')).toBeVisible()

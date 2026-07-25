@@ -19,6 +19,7 @@ import { CameraCommandService } from './services/CameraCommandService'
 import { CameraStreamService } from './services/CameraStreamService'
 import { FilePlaybackService } from './services/FilePlaybackService'
 import { LogRecordingService } from './services/LogRecordingService'
+import { OfflineTileService } from './services/OfflineTileService'
 
 const require = createRequire(import.meta.url)
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -64,6 +65,9 @@ const cameraStreamService = new CameraStreamService(ffmpegExecutable)
 const cameraCommandService = new CameraCommandService()
 const filePlaybackService = new FilePlaybackService()
 const logRecordingService = new LogRecordingService()
+const offlineTileService = new OfflineTileService()
+// 自定义瓦片协议必须在 app ready 之前注册为 privileged scheme
+offlineTileService.registerPrivilegedScheme()
 const cameraStreamOwners = new Set<number>()
 const filePlaybackOwners = new Set<number>()
 const logRecordingOwners = new Set<number>()
@@ -330,6 +334,10 @@ async function createWindow() {
 }
 
 app.whenReady().then(() => {
+  // app ready 后注册瓦片协议 handler 与离线瓦片目录查询 IPC
+  offlineTileService.registerHandler()
+  ipcMain.handle('get-offline-tiles-dir', () => offlineTileService.getTilesDir())
+
   createWindow()
   Menu.setApplicationMenu(null)
 
@@ -476,6 +484,7 @@ ipcMain.handle('read-file-event', eventsMap['read-file-event'])
 ipcMain.on('send-serial-hex-data', eventsMap['send-serial-hex-data'])
 ipcMain.on('send-serial-ascii-data', eventsMap['send-serial-ascii-data'])
 ipcMain.on('serial-data-format', eventsMap['serial-data-format'])
+ipcMain.handle('send-data-chunk', eventsMap['send-data-chunk'])
 ipcMain.handle('open-network-connection', eventsMap['open-network-connection'])
 ipcMain.handle('close-network-connection', eventsMap['close-network-connection'])
 ipcMain.on('send-network-hex-data', eventsMap['send-network-hex-data'])

@@ -164,8 +164,13 @@ const editingApplication = ref<UserApplication | undefined>(undefined)
 const selectorMessageBoxTarget = '.selector-backdrop'
 
 const applicationWindows = (application: UserApplication) => {
-  const requestedIds = new Set(application.windowIds)
-  return windowCatalog.filter((windowDefinition) => requestedIds.has(windowDefinition.id))
+  const catalogById = new Map(windowCatalog.map((window) => [window.id, window]))
+  const windows: typeof windowCatalog[number][] = []
+  for (const id of application.windowIds) {
+    const window = catalogById.get(id)
+    if (window) windows.push(window)
+  }
+  return windows
 }
 
 const openEditor = (application?: UserApplication) => {

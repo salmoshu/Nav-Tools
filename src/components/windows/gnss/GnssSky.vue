@@ -79,7 +79,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, watch } from 'vue'
+import { ref, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import * as echarts from 'echarts'
 import { useNmea } from '@/composables/gnss/useNmea'
 import { useTheme } from '@/composables/useTheme'
@@ -135,15 +135,17 @@ function setupResizeObserver() {
   }
 
   resizeObserver = new ResizeObserver(() => {
-    if (chartInstance.value) {
-      try {
-        chartInstance.value.resize()
-      } catch (error) {
-        // 由于图表调整大小失败不会影响正常使用，所以先规避该问题：
-        // task#32 GnssSky中极坐标系使用resize所引发的报错
-        // console.error('图表调整大小失败:', error)
+    // nextTick 后再 resize：极坐标图表在 ResizeObserver 回调里同步 resize
+    // 会偶发报错导致图表尺寸不更新（task#32），静默吞错会让窗口拉伸后图表保持旧尺寸
+    nextTick(() => {
+      if (chartInstance.value) {
+        try {
+          chartInstance.value.resize()
+        } catch (error) {
+          // 图表调整大小失败不会影响正常使用，静默处理
+        }
       }
-    }
+    })
   })
 
   resizeObserver.observe(containerRef.value)
@@ -334,11 +336,10 @@ function buildSeriesOption(polarData, colors) {
     type: 'scatter',
     coordinateSystem: 'polar',
     data: polarData,
-    symbolSize: function(params) {
-      const sat = params.data
+    symbolSize: function(value, params) {
       let size = satelliteSize.value
       if (viewMode.value === 'snr') {
-        const scale = Math.min(1, Math.max(0, sat.snr / 60))
+        const scale = Math.min(1, Math.max(0, params.data.snr / 60))
         size = Math.max(8, satelliteSize.value * (0.5 + 0.5 * scale))
       }
       // 极小的索引增量用于在标签重叠时让后绘制的卫星标签优先显示

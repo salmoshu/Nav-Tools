@@ -82,7 +82,7 @@ export function useDeviationChart(options: UseDeviationChartOptions = {}) {
       xAxisIndex: 0,
       zoomOnMouseWheel: false,
       moveOnMouseWheel: !isTracking.value,
-      moveOnMouseMove: true,
+      moveOnMouseMove: false,
     };
 
     const initYConfig = {
@@ -90,7 +90,7 @@ export function useDeviationChart(options: UseDeviationChartOptions = {}) {
       yAxisIndex: 0,
       zoomOnMouseWheel: false,
       moveOnMouseWheel: !isTracking.value,
-      moveOnMouseMove: true,
+      moveOnMouseMove: false,
     };
 
     if (xStart !== undefined && xEnd !== undefined && yStart !== undefined && yEnd !== undefined) {

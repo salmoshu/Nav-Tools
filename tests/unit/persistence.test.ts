@@ -30,22 +30,32 @@ class MemoryStorage implements StorageLike {
 }
 
 describe('panel and application persistence', () => {
-  it('seeds editable GNSS, Motor, and Camera applications on first launch', () => {
+  it('seeds editable Serial, GNSS, Motor, and Camera applications on first launch', () => {
     const memory = new MemoryStorage()
     const applications = new ApplicationStorage(new JsonStorage(memory)).loadApplications()
 
-    expect(applications.map((application) => application.name)).toEqual(['GNSS', 'Motor', 'Camera'])
+    expect(applications.map((application) => application.name)).toEqual([
+      'Serial',
+      'GNSS',
+      'Motor',
+      'Camera',
+    ])
     expect(applications[0]).toMatchObject({
-      id: 'gnss',
-      icon: 'position',
-      windowIds: ['raw-messages', 'gnss-deviation', 'gnss-signals', 'sky-plot'],
+      id: 'serial',
+      icon: 'connection',
+      windowIds: ['plot', 'raw-messages'],
     })
     expect(applications[1]).toMatchObject({
+      id: 'gnss',
+      icon: 'position',
+      windowIds: ['gnss-map', 'gnss-deviation', 'gnss-signals', 'sky-plot', 'raw-messages'],
+    })
+    expect(applications[2]).toMatchObject({
       id: 'motor',
       icon: 'motor',
       windowIds: ['plot', 'raw-messages', 'motor-parameters'],
     })
-    expect(applications[2]).toMatchObject({
+    expect(applications[3]).toMatchObject({
       id: 'camera',
       icon: 'camera',
       windowIds: ['camera-video', 'camera-parameters'],
@@ -60,7 +70,7 @@ describe('panel and application persistence', () => {
     expect(new ApplicationStorage(new JsonStorage(memory)).loadApplications()).toEqual([])
   })
 
-  it('adds Camera once when upgrading an existing application list', () => {
+  it('adds Camera and Serial once when upgrading an existing application list', () => {
     const memory = new MemoryStorage()
     memory.setItem(
       'nav-tools:custom-applications',
@@ -77,8 +87,10 @@ describe('panel and application persistence', () => {
     )
     const storage = new ApplicationStorage(new JsonStorage(memory))
 
-    expect(storage.loadApplications().map(({ id }) => id)).toEqual(['custom', 'camera'])
-    storage.saveApplications(storage.loadApplications().filter(({ id }) => id !== 'camera'))
+    expect(storage.loadApplications().map(({ id }) => id)).toEqual(['custom', 'camera', 'serial'])
+    storage.saveApplications(
+      storage.loadApplications().filter(({ id }) => id !== 'camera' && id !== 'serial'),
+    )
     expect(storage.loadApplications().map(({ id }) => id)).toEqual(['custom'])
   })
 
@@ -105,7 +117,31 @@ describe('panel and application persistence', () => {
     expect(storage.loadApplications()[0].windowIds).toEqual(['camera-video'])
   })
 
-  it('resets saved applications back to GNSS, Motor, and Camera defaults', () => {
+  it('adds Serial once when upgrading an existing application list without Serial', () => {
+    const memory = new MemoryStorage()
+    memory.setItem('nav-tools:migration:camera-default-v1', '1')
+    memory.setItem('nav-tools:migration:camera-parameters-v1', '1')
+    memory.setItem(
+      'nav-tools:custom-applications',
+      JSON.stringify([
+        {
+          id: 'gnss',
+          name: 'GNSS',
+          description: '',
+          icon: 'position',
+          accent: '#0ea5e9',
+          windowIds: ['raw-messages', 'gnss-deviation', 'gnss-signals', 'sky-plot'],
+        },
+      ]),
+    )
+    const storage = new ApplicationStorage(new JsonStorage(memory))
+
+    expect(storage.loadApplications().map(({ id }) => id)).toEqual(['gnss', 'serial'])
+    storage.saveApplications(storage.loadApplications().filter(({ id }) => id !== 'serial'))
+    expect(storage.loadApplications().map(({ id }) => id)).toEqual(['gnss'])
+  })
+
+  it('resets saved applications back to Serial, GNSS, Motor, and Camera defaults', () => {
     const memory = new MemoryStorage()
     const storage = new ApplicationStorage(new JsonStorage(memory))
     storage.saveApplications([
@@ -121,8 +157,14 @@ describe('panel and application persistence', () => {
 
     const applications = storage.resetApplicationsToDefaults()
 
-    expect(applications.map((application) => application.id)).toEqual(['gnss', 'motor', 'camera'])
+    expect(applications.map((application) => application.id)).toEqual([
+      'serial',
+      'gnss',
+      'motor',
+      'camera',
+    ])
     expect(storage.loadApplications().map((application) => application.id)).toEqual([
+      'serial',
       'gnss',
       'motor',
       'camera',
@@ -194,6 +236,44 @@ describe('LayoutStorage', () => {
       showStatusBar: true,
       removedWindowIds: ['sky-plot'],
     })
+  })
+
+  it('silently updates toolbar/statusbar visibility without touching layout items', () => {
+    const memory = new MemoryStorage()
+    const item = {
+      titleName: 'Plot',
+      componentName: 'Plot',
+      windowId: 'plot',
+      x: 0,
+      y: 0,
+      w: 6,
+      h: 6,
+      i: 'plot-1',
+    }
+
+    const storage = new LayoutStorage(new JsonStorage(memory))
+    storage.save('demo', [item], true, [], true)
+
+    // 静默更新可见性：toolbar 关、statusbar 开
+    storage.updateVisibility('demo', true, false)
+
+    const restored = storage.load('demo')
+    expect(restored?.showStatusBar).toBe(true)
+    expect(restored?.showToolBar).toBe(false)
+    // 布局项保持不变
+    expect(restored?.items).toEqual([item])
+  })
+
+  it('creates a visibility-only document when no layout exists yet', () => {
+    const memory = new MemoryStorage()
+    const storage = new LayoutStorage(new JsonStorage(memory))
+
+    storage.updateVisibility('demo', false, true)
+
+    const restored = storage.load('demo')
+    expect(restored?.showStatusBar).toBe(false)
+    expect(restored?.showToolBar).toBe(true)
+    expect(restored?.items).toEqual([])
   })
 })
 

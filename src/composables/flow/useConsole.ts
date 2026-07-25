@@ -70,6 +70,8 @@ export function useConsole(useGlobal: boolean = true): ConsoleState {
   const validNmeaCount = ref(0);
   const validJsonCount = ref(0);
   let tempDataString = ''; // 临时存储数据，用于处理不完整的消息
+  let noneFlushTimer: ReturnType<typeof setTimeout> | null = null; // none模式下无换行符时的刷新定时器
+  const NONE_FLUSH_DELAY = 300; // ms，无新数据到达后刷新缓冲区
 
   // 搜索
   const searchQuery = ref('')
@@ -203,23 +205,66 @@ export function useConsole(useGlobal: boolean = true): ConsoleState {
   const addMessage = (rawData: string) => {
     if (isPaused.value) return;
 
-    if (dataFormat.value == 'none') {
-      const timestamp = generateTimestamp();
-      const message: ConsoleMessage = {
-        timestamp: timestamp + ' [MSG ⬅️]',
-        raw: rawData,
-        dataType: 'none',
-        isValid: false,
-        key: generateKey(timestamp, rawData),
-      };
-      appendConsoleMessage(message);
+    // 统一换行符：\r\n -> \n, 单独的 \r -> \n，避免 \r 导致显示异常
+    const normalizedData = rawData.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
 
-      // 限制消息数量，保持内存使用
-      trimMessages(maxMessages);
+    if (dataFormat.value === 'none') {
+      // Raw 模式：缓冲并按行拆分，避免串口分片导致消息断裂
+      tempDataString += normalizedData;
+
+      if (tempDataString.includes('\n')) {
+        // 取消刷新定时器，因为有完整行可以处理
+        if (noneFlushTimer !== null) {
+          clearTimeout(noneFlushTimer);
+          noneFlushTimer = null;
+        }
+
+        const lines = tempDataString.split('\n');
+        // 保留最后一行，因为它可能是不完整的
+        tempDataString = lines[lines.length - 1];
+
+        // 处理所有完整的行（除了最后一行）
+        for (let i = 0; i < lines.length - 1; i++) {
+          const line = lines[i];
+          if (line === '') continue;
+          const timestamp = generateTimestamp();
+          const message: ConsoleMessage = {
+            timestamp: timestamp + ' [MSG ⬅️]',
+            raw: line,
+            dataType: 'none',
+            isValid: false,
+            key: generateKey(timestamp, line),
+          };
+          appendConsoleMessage(message);
+        }
+        trimMessages(maxMessages);
+      } else {
+        // 无换行符：启动刷新定时器，超时后强制输出缓冲区内容
+        // 防止设备不发换行符时数据永远不显示
+        if (noneFlushTimer !== null) clearTimeout(noneFlushTimer);
+        noneFlushTimer = setTimeout(() => {
+          noneFlushTimer = null;
+          if (tempDataString.length > 0 && dataFormat.value === 'none') {
+            const timestamp = generateTimestamp();
+            const message: ConsoleMessage = {
+              timestamp: timestamp + ' [MSG ⬅️]',
+              raw: tempDataString,
+              dataType: 'none',
+              isValid: false,
+              key: generateKey(timestamp, tempDataString),
+            };
+            appendConsoleMessage(message);
+            tempDataString = '';
+            trimMessages(maxMessages);
+          }
+        }, NONE_FLUSH_DELAY);
+      }
+      return;
     }
 
-    tempDataString += rawData;
-    if (dataFormat.value !== 'none' && tempDataString.includes('\n')) {
+    // 结构化模式（nmea/json）：缓冲并按行拆分
+    tempDataString += normalizedData;
+    if (tempDataString.includes('\n')) {
       const timestamp = generateTimestamp();
       const lines = tempDataString.split('\n');
 
@@ -255,7 +300,7 @@ export function useConsole(useGlobal: boolean = true): ConsoleState {
           }
         }
       }
-  
+
       // 限制消息数量，保持内存使用
       trimMessages(maxMessages);
     }
@@ -336,6 +381,10 @@ export function useConsole(useGlobal: boolean = true): ConsoleState {
     if (flushTimer !== null) {
       clearTimeout(flushTimer);
       flushTimer = null;
+    }
+    if (noneFlushTimer !== null) {
+      clearTimeout(noneFlushTimer);
+      noneFlushTimer = null;
     }
     pendingMessages = [];
     messages.value = [];

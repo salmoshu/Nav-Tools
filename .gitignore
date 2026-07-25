@@ -38,3 +38,6 @@ pnpm-workspace.yaml
 # temp
 tempCodeRunnerFile*
 tmp
+
+# workbuddy
+.workbuddy/

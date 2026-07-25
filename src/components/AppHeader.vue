@@ -61,7 +61,42 @@
         aria-label="退出组件全屏"
         @click="$emit('exit-panel-fullscreen')"
       >
-        <el-icon><ScaleToOriginal /></el-icon>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M8 3v3a2 2 0 0 1-2 2H3" />
+          <path d="M21 8h-3a2 2 0 0 1-2-2V3" />
+          <path d="M3 16h3a2 2 0 0 1 2 2v3" />
+          <path d="M16 21v-3a2 2 0 0 1 2-2h3" />
+        </svg>
+      </button>
+      <button
+        v-if="!showDetachedControls"
+        class="header-button panel-toggle"
+        :class="{ active: showToolBar !== false }"
+        type="button"
+        title="切换工具栏"
+        aria-label="切换工具栏"
+        :aria-pressed="showToolBar !== false"
+        @click="showToolBar = !(showToolBar !== false)"
+      >
+        <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+          <rect x="1.5" y="1.5" width="13" height="13" rx="2" fill="none" stroke="currentColor" stroke-width="1.4" />
+          <rect x="3.5" y="9.5" width="9" height="3" stroke="currentColor" stroke-width="1.1" :fill="showToolBar !== false ? 'currentColor' : 'none'" />
+        </svg>
+      </button>
+      <button
+        v-if="!showDetachedControls"
+        class="header-button panel-toggle"
+        :class="{ active: showStatusBar !== false }"
+        type="button"
+        title="切换状态栏"
+        aria-label="切换状态栏"
+        :aria-pressed="showStatusBar !== false"
+        @click="showStatusBar = !(showStatusBar !== false)"
+      >
+        <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+          <rect x="1.5" y="1.5" width="13" height="13" rx="2" fill="none" stroke="currentColor" stroke-width="1.4" />
+          <rect x="9.5" y="3.5" width="3" height="9" stroke="currentColor" stroke-width="1.1" :fill="showStatusBar !== false ? 'currentColor' : 'none'" />
+        </svg>
       </button>
       <el-dropdown
         v-if="!showDetachedControls"
@@ -139,9 +174,9 @@ import {
   FullScreen,
   Grid,
   Minus,
-  ScaleToOriginal,
 } from '@element-plus/icons-vue'
 import { PanelTopOpen, Pin } from '@lucide/vue'
+import { showStatusBar, showToolBar } from '@/composables/useStatusManager'
 import { useTheme, type ThemeMode } from '@/composables/useTheme'
 import { getBrowserWindowService } from '@/core/window/browserWindowService'
 import { getPanelIconComponent } from '@/settings/panelIcons'
@@ -382,6 +417,13 @@ onUnmounted(() => {
 .header-button.active {
   color: var(--el-color-primary);
   background: var(--app-hover);
+}
+
+/* 面板开关（工具栏/状态栏）：不使用背景色表示激活，
+   激活态通过图标内矩形实心/空心表达（仿 VSCode 面板开关） */
+.header-button.panel-toggle.active {
+  color: var(--app-text);
+  background: transparent;
 }
 
 .header-button.close:hover,

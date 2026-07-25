@@ -21,6 +21,7 @@ interface Window {
   // expose in the `electron/preload/index.ts`
   electronAPI: {
     getAppVersion: () => Promise<string>
+    getOfflineTilesDir: () => Promise<string>
     getPathForFile: (file: File) => string
     getWindowState: () => Promise<{ maximized: boolean; alwaysOnTop: boolean }>
     minimizeWindow: () => Promise<void>

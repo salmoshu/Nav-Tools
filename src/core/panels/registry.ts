@@ -64,8 +64,8 @@ export const panelRegistry: readonly PanelDefinition[] = [
     funcMode: 'general',
     catalogGroup: 'general',
     action: 'console',
-    title: 'Raw Messages',
-    description: '查看、筛选并发送原始消息',
+    title: 'Messages',
+    description: '查看、筛选并发送消息',
     componentName: 'RawMessages',
     componentPath: '@/components/windows/common/RawMessages.vue',
   },
@@ -116,6 +116,18 @@ export const panelRegistry: readonly PanelDefinition[] = [
     description: '分析 Flow 轨迹与偏差（ECharts 版，用于性能对比与回退）',
     componentName: 'FlowDeviationCanvas',
     componentPath: '@/components/windows/common/FlowDeviationCanvas.vue',
+  },
+  {
+    id: 'gnss-map',
+    moduleId: 'gnss',
+    appMode: 'pos',
+    funcMode: 'gnss',
+    catalogGroup: 'gnss',
+    action: 'map',
+    title: 'GNSS Map',
+    description: '在地图上查看当前位置与历史轨迹',
+    componentName: 'GnssMap',
+    componentPath: '@/components/windows/gnss/GnssMap.vue',
   },
   {
     id: 'gnss-deviation',
@@ -189,6 +201,7 @@ const legacyPanelIds: Readonly<Record<string, string>> = {
   'gnss.deviation': 'gnss-deviation',
   'gnss.signal': 'gnss-signals',
   'gnss.sky': 'sky-plot',
+  'gnss.map': 'gnss-map',
   'motor.config': 'motor-parameters',
 }
 
@@ -206,6 +219,10 @@ export function getPanelById(id: string): PanelDefinition | undefined {
 }
 
 export function getPanelsByIds(ids: readonly string[]): PanelDefinition[] {
-  const requestedIds = new Set(normalizePanelIds(ids))
-  return panelRegistry.filter((panel) => requestedIds.has(panel.id))
+  const result: PanelDefinition[] = []
+  for (const id of normalizePanelIds(ids)) {
+    const panel = panelRegistry.find((entry) => entry.id === id)
+    if (panel) result.push(panel)
+  }
+  return result
 }

@@ -116,6 +116,57 @@
       </DynamicScroller>
     </div>
 
+    <!-- 文件发送进度面板 -->
+    <div v-if="fileSendState.status !== 'idle'" class="file-send-panel">
+      <div class="file-send-header">
+        <div class="file-send-info">
+          <el-icon class="file-send-icon" :class="fileSendState.status">
+            <Loading v-if="fileSendState.status === 'sending'" />
+            <CircleCheck v-else-if="fileSendState.status === 'success'" />
+            <CircleClose v-else-if="fileSendState.status === 'error' || fileSendState.status === 'cancelled'" />
+            <Document v-else />
+          </el-icon>
+          <span class="file-send-name" :title="fileSendState.fileName">{{ fileSendState.fileName }}</span>
+          <span class="file-send-size">{{ formatFileSize(fileSendState.fileSize) }}</span>
+        </div>
+        <div class="file-send-actions">
+          <el-button
+            v-if="fileSendState.status === 'sending'"
+            @click="cancelFileSend"
+            size="small"
+            type="danger"
+            plain
+          >
+            <el-icon><Close /></el-icon>&nbsp;取消
+          </el-button>
+          <el-button
+            v-if="fileSendState.status !== 'sending'"
+            @click="resetFileSend"
+            size="small"
+            type="text"
+          >
+            <el-icon><Close /></el-icon>
+          </el-button>
+        </div>
+      </div>
+      <el-progress
+        v-if="fileSendState.status !== 'loaded'"
+        :percentage="fileSendProgress"
+        :status="fileSendProgressStatus"
+        :stroke-width="14"
+        :show-text="true"
+        class="file-send-progress"
+      />
+      <div class="file-send-stats" v-if="fileSendState.status !== 'loaded'">
+        <span>{{ formatFileSize(fileSendState.bytesSent) }} / {{ formatFileSize(fileSendState.fileSize) }}</span>
+        <span v-if="isFileSending && fileSendRate > 0">{{ formatRate(fileSendRate) }}</span>
+        <span v-if="fileSendState.elapsedTime > 0">{{ formatElapsed(fileSendState.elapsedTime) }}</span>
+        <span class="file-send-ack" :class="fileSendState.status">
+          {{ fileSendStatusText }}
+        </span>
+      </div>
+    </div>
+
     <!-- 消息输入框 -->
     <div class="console-input-bar">
       <div class="input-container">
@@ -156,7 +207,10 @@
           :disabled="inputFormat === 'hex' || !deviceConnected"
           :title="addNewLine ? '已启用换行' : '启用换行'"
         >
-          <el-icon><Bottom /></el-icon>&nbsp;换行
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px;">
+            <path d="M9 10l-5 5 5 5"/>
+            <path d="M20 4v7a4 4 0 0 1-4 4H4"/>
+          </svg>&nbsp;换行
         </el-button>
         
         <el-button 
@@ -165,8 +219,31 @@
           size="default"
           style="font-size: 12px;"
           :disabled="!deviceConnected || !inputMessage.trim()"
+          title="发送消息"
         >
           <el-icon><Position /></el-icon>&nbsp;发送
+        </el-button>
+        
+        <el-button 
+          @click="handleSelectFile"
+          :disabled="isFileSending"
+          size="default"
+          :title="isFileSending ? '文件发送中...' : '加载文件'"
+          style="font-size: 12px;"
+        >
+          <el-icon><Document /></el-icon>
+        </el-button>
+        
+        <el-button 
+          v-if="fileSendState.status !== 'idle'"
+          @click="handleStartSend" 
+          type="success" 
+          size="default"
+          style="font-size: 12px;"
+          :disabled="!deviceConnected || (fileSendState.status !== 'loaded' && fileSendState.status !== 'success')"
+          :title="fileSendState.status === 'loaded' || fileSendState.status === 'success' ? '发送已加载的文件' : '文件发送中'"
+        >
+          <el-icon><Promotion /></el-icon>&nbsp;发送文件
         </el-button>
       </div>
     </div>
@@ -182,7 +259,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, nextTick, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { 
   Filter, 
   Clock, 
@@ -195,11 +272,17 @@ import {
   ArrowDown,
   Edit,
   Position,
+  Promotion,
   Document,
   Coin,
-  DataAnalysis
+  DataAnalysis,
+  Close,
+  CircleCheck,
+  CircleClose,
+  Loading,
 } from '@element-plus/icons-vue'
 import { useConsole } from '@/composables/flow/useConsole'
+import { useFileSend } from '@/composables/flow/useFileSend'
 import { useDevice } from '@/hooks/useDevice'
 import { useApplicationSelector } from '@/composables/useApplicationSelector'
 import { DynamicScroller, DynamicScrollerItem } from 'vue-virtual-scroller'
@@ -243,6 +326,96 @@ const {
 // 获取设备连接状态
 const { deviceConnected, activeDataParser } = useDevice()
 const { activeDataModes } = useApplicationSelector()
+
+// 文件发送
+const {
+  state: fileSendState,
+  isSending: isFileSending,
+  hasStagedFile,
+  progress: fileSendProgress,
+  transferRate: fileSendRate,
+  loadFile,
+  startSend,
+  cancel: cancelFileSend,
+  reset: resetFileSend,
+} = useFileSend()
+
+// 格式化文件大小
+const formatFileSize = (bytes: number): string => {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(2)} MB`
+}
+
+// 格式化传输速率
+const formatRate = (bytesPerSec: number): string => {
+  if (bytesPerSec < 1024) return `${bytesPerSec} B/s`
+  if (bytesPerSec < 1024 * 1024) return `${(bytesPerSec / 1024).toFixed(1)} KB/s`
+  return `${(bytesPerSec / (1024 * 1024)).toFixed(2)} MB/s`
+}
+
+// 格式化耗时
+const formatElapsed = (ms: number): string => {
+  const seconds = Math.floor(ms / 1000)
+  if (seconds < 60) return `${seconds}s`
+  const minutes = Math.floor(seconds / 60)
+  const remainingSeconds = seconds % 60
+  return `${minutes}m ${remainingSeconds}s`
+}
+
+// 文件发送状态文本
+const fileSendStatusText = computed(() => {
+  switch (fileSendState.value.status) {
+    case 'sending':
+      return `发送中... ACK ${fileSendState.value.ackedChunks}/${fileSendState.value.totalChunks}`
+    case 'success':
+      return `发送完成 (${fileSendState.value.ackedChunks}/${fileSendState.value.totalChunks} ACK)`
+    case 'error':
+      return `发送失败: ${fileSendState.value.error}`
+    case 'cancelled':
+      return `已取消 (${fileSendState.value.ackedChunks}/${fileSendState.value.totalChunks} ACK)`
+    default:
+      return ''
+  }
+})
+
+// 文件发送进度条状态
+const fileSendProgressStatus = computed(() => {
+  switch (fileSendState.value.status) {
+    case 'success':
+      return 'success'
+    case 'error':
+      return 'exception'
+    case 'cancelled':
+      return 'exception'
+    default:
+      return undefined
+  }
+})
+
+// 选择并加载文件（不立即发送）
+const handleSelectFile = () => {
+  const fileInput = document.createElement('input')
+  fileInput.type = 'file'
+  fileInput.style.display = 'none'
+  document.body.appendChild(fileInput)
+
+  fileInput.onchange = (event) => {
+    const target = event.target as HTMLInputElement
+    const file = target.files?.[0]
+    if (file) {
+      loadFile(file)
+    }
+    document.body.removeChild(fileInput)
+  }
+
+  fileInput.click()
+}
+
+// 开始发送已加载的文件
+const handleStartSend = () => {
+  void startSend()
+}
 
 // 输入框状态
 const inputMessage = ref('')
@@ -827,5 +1000,116 @@ onUnmounted(() => {
 
 :deep(.el-select__placeholder) {
   font-size: 12px;
+}
+
+/* 文件发送进度面板 */
+.file-send-panel {
+  padding: 10px 16px;
+  background-color: var(--app-surface-muted);
+  border-top: 1px solid var(--app-border);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.file-send-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.file-send-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+}
+
+.file-send-icon {
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.file-send-icon.loaded {
+  color: var(--el-color-primary);
+}
+
+.file-send-icon.sending {
+  animation: spin 1s linear infinite;
+  color: var(--el-color-primary);
+}
+
+.file-send-icon.success {
+  color: #67c23a;
+}
+
+.file-send-icon.error,
+.file-send-icon.cancelled {
+  color: #f56c6c;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.file-send-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--app-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 300px;
+}
+
+.file-send-size {
+  font-size: 12px;
+  color: var(--app-text-muted);
+  flex-shrink: 0;
+}
+
+.file-send-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.file-send-progress {
+  width: 100%;
+}
+
+.file-send-stats {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--app-text-muted);
+  flex-wrap: wrap;
+}
+
+.file-send-ack {
+  margin-left: auto;
+  font-weight: 600;
+}
+
+.file-send-ack.loaded {
+  color: var(--el-color-primary);
+}
+
+.file-send-ack.sending {
+  color: var(--el-color-primary);
+}
+
+.file-send-ack.success {
+  color: #67c23a;
+}
+
+.file-send-ack.error,
+.file-send-ack.cancelled {
+  color: #f56c6c;
 }
 </style>

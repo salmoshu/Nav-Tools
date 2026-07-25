@@ -9,6 +9,12 @@ import {
 const serialService = new SerialPortService()
 const networkService = new NetworkConnectionService()
 
+export interface SendDataChunkRequest {
+  data: string
+  format: 'hex' | 'ascii'
+  transport: 'serial' | 'network'
+}
+
 const eventsMap = {
   'console-to-node': consoleToNode,
   'search-serial-ports': searchSerialPorts,
@@ -21,6 +27,7 @@ const eventsMap = {
   'close-network-connection': closeNetworkConnection,
   'send-network-hex-data': sendNetworkHexData,
   'send-network-ascii-data': sendNetworkAsciiData,
+  'send-data-chunk': sendDataChunk,
   'open-file-dialog': openFileDialog,
   'read-file-event': readFileEvent,
 }
@@ -96,6 +103,15 @@ async function sendNetworkData(event: IpcMainEvent, data: string, format: 'hex' 
     const message = error instanceof Error ? error.message : String(error)
     event.sender.send('network-send-error', { error: message })
   }
+}
+
+async function sendDataChunk(_event: IpcMainInvokeEvent, request: SendDataChunkRequest): Promise<void> {
+  const { data, format, transport } = request
+  if (transport === 'network') {
+    await networkService.send(data, format)
+    return
+  }
+  await serialService.send(data, format)
 }
 
 function openFileDialog() {
