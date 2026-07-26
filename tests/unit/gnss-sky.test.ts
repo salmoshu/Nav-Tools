@@ -11,4 +11,19 @@ describe('GNSS sky plot label stacking', () => {
     expect(source).toContain('width: satelliteSize.value')
     expect(source).toContain('height: satelliteSize.value')
   })
+
+  it('forces the tooltip closed when the pointer leaves the plot', () => {
+    const source = readFileSync('src/components/windows/gnss/GnssSky.vue', 'utf8')
+
+    expect(source).toContain('@mouseleave="hideSkyTooltip"')
+    expect(source).toContain("getZr().on('globalout', hideSkyTooltip)")
+    expect(source).toContain("dispatchAction({ type: 'hideTip' })")
+  })
+
+  it('lets theme controls paint before rebuilding the chart', () => {
+    const source = readFileSync('src/components/windows/gnss/GnssSky.vue', 'utf8')
+
+    expect(source).toContain('watch(resolvedTheme, scheduleThemeRefresh)')
+    expect(source.match(/themeRefreshRaf = requestAnimationFrame/g)).toHaveLength(2)
+  })
 })

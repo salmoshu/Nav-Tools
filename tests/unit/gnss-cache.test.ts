@@ -34,6 +34,38 @@ describe('GNSS cache clearing', () => {
     expect(nmea.nmeaData.value).toHaveLength(2)
   })
 
+  it('maintains an incremental deviation point cache and clears it with GNSS data', () => {
+    const nmea = useNmea()
+    const sentence = '$GPGGA,123519,4807.038,N,01131.000,E,1,08,0.9,545.4,M,46.9,M,,*47\r\n'
+
+    nmea.processRawData(sentence)
+    const points = nmea.deviationPoints.value
+    nmea.processRawData(sentence)
+
+    expect(nmea.deviationPoints.value).toBe(points)
+    expect(points).toHaveLength(2)
+    expect(points[0]).toEqual([0, 0, 1])
+
+    nmea.clearData()
+    expect(nmea.deviationPoints.value).toHaveLength(0)
+  })
+
+  it('retains every precise map coordinate from a batched GGA update', () => {
+    const nmea = useNmea()
+    const sentence = '$GPGGA,123519,4807.038,N,01131.000,E,1,08,0.9,545.4,M,46.9,M,,*47\r\n'
+    const points = nmea.mapTrackPoints.value
+
+    nmea.processRawData(sentence.repeat(3))
+
+    expect(nmea.mapTrackPoints.value).toBe(points)
+    expect(points).toHaveLength(3)
+    expect(points[0][0]).toBeCloseTo(11.5166666667)
+    expect(points[0][1]).toBeCloseTo(48.1173)
+
+    nmea.clearData()
+    expect(nmea.mapTrackPoints.value).toHaveLength(0)
+  })
+
   it('coalesces repeated satellite reports into the latest satellite snapshot', () => {
     const nmea = useNmea()
     const sentence =

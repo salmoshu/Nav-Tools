@@ -42,6 +42,7 @@ describe('GNSS deviation window position view', () => {
 
   it('rebuilds the position chart on theme change', () => {
     expect(source).toContain('watch(resolvedTheme')
+    expect(source).toContain('scheduleThemeRefresh')
     expect(source).toContain('initPositionChart')
   })
 
@@ -54,5 +55,18 @@ describe('GNSS deviation window position view', () => {
     expect(source).toContain('createTrajectoryRenderer')
     expect(source).toContain('renderer?.setViewport')
     expect(source).toContain('renderer?.dispose()')
+  })
+
+  it('renders every deviation point through a frame-budgeted animation queue', () => {
+    expect(source).toContain('deviationPoints: plotData')
+    expect(source).toContain('RENDER_QUEUE_TARGET_FRAMES = 2')
+    expect(source).toContain('RENDER_MAX_POINTS_PER_FRAME = 128')
+    expect(source).toContain('RENDER_BUDGET_MS = 4')
+    expect(source).toContain('getLatestRenderedPoint')
+    expect(source).toContain('renderedPointCount')
+    expect(source).toContain("currentView.value !== 'deviation'")
+    expect(source).not.toContain('RENDER_INTERVAL_MS = 33')
+    expect(source).not.toContain('renderer.addPointsBatch(points)')
+    expect(source).not.toContain('previousPlotData = points.slice()')
   })
 })

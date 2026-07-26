@@ -85,35 +85,30 @@
 
     <!-- 虚拟滚动消息列表 -->
     <div class="console-content-virtual" ref="consoleContent">
-      <DynamicScroller
+      <RecycleScroller
         ref="scrollerRef"
         class="scroller"
         :items="filteredMessages"
-        :min-item-size="20"
+        :item-size="25"
         key-field="key"
-        v-slot="{ item, index, active }"
+        v-slot="{ item, index }"
       >
-        <DynamicScrollerItem
-          :item="item"
-          :active="active"
-          :data-index="index"
+        <div
+          class="message-line"
+          :class="getMessageClasses(item, index)"
+          :title="item.raw"
         >
-          <div 
-            class="message-line" 
-            :class="getMessageClasses(item, index)"
+          <span v-if="dataTimestamp" class="timestamp">{{ item.timestamp }}: </span>
+          <span
+            :class="[
+              (item.isValid && item.dataType === dataFormat) ? 'valid-message' : 'invalid-message',
+              'message-content'
+            ]"
+            v-html="highlightSearch(item.raw, searchQuery)"
           >
-            <span v-if="dataTimestamp" class="timestamp">{{ item.timestamp }}: </span>
-            <span 
-              :class="[
-                (item.isValid && item.dataType === dataFormat) ? 'valid-message' : 'invalid-message',
-                'message-content'
-              ]"
-              v-html="highlightSearch(item.raw, searchQuery)"
-            >
-            </span>
-          </div>
-        </DynamicScrollerItem>
-      </DynamicScroller>
+          </span>
+        </div>
+      </RecycleScroller>
     </div>
 
     <!-- 文件发送进度面板 -->
@@ -285,21 +280,20 @@ import { useConsole } from '@/composables/flow/useConsole'
 import { useFileSend } from '@/composables/flow/useFileSend'
 import { useDevice } from '@/hooks/useDevice'
 import { useApplicationSelector } from '@/composables/useApplicationSelector'
-import { DynamicScroller, DynamicScrollerItem } from 'vue-virtual-scroller'
+import { RecycleScroller } from 'vue-virtual-scroller'
 import { parserLabel } from '@/composables/useDataSourceManager'
 
 // DOM引用
 const consoleRoot = ref<HTMLDivElement | null>(null)
 const consoleContent = ref<HTMLDivElement | null>(null)
 const searchInput = ref<InstanceType<typeof HTMLInputElement> | null>(null)
-const scrollerRef = ref<InstanceType<typeof DynamicScroller> | null>(null)
+const scrollerRef = ref<InstanceType<typeof RecycleScroller> | null>(null)
 
 // 搜索状态
 const showSearchBox = ref(false)
 const currentResultIndex = ref(-1)
 const searchResults = ref<any[]>([])
 const isSearching = ref(false)
-const isAtBottom = ref(false)
 
 // 使用虚拟滚动控制台组合式函数（使用全局实例）
 const {
@@ -674,13 +668,7 @@ const handleScrollToBottom = () => {
   requestAnimationFrame(() => {
     scrollScheduled = false;
     if (!scrollerRef.value) return;
-    const el = scrollerRef.value.$el;
-    const distanceFromBottom = el.scrollHeight - (el.scrollTop + el.clientHeight);
-    if (distanceFromBottom > 2) { // 允许2px的误差
-      scrollerRef.value.scrollToItem(filteredMessages.value.length - 1);
-      el.scrollTop = el.scrollHeight - el.clientHeight;
-    }
-    isAtBottom.value = true;
+    scrollerRef.value.scrollToItem(filteredMessages.value.length - 1);
   });
 };
 
@@ -838,16 +826,17 @@ onUnmounted(() => {
 
 .message-line {
   display: flex;
+  height: 25px;
+  box-sizing: border-box;
   padding: 2px 12px;
   border-bottom: 1px solid var(--app-border);
-  min-height: 20px;
+  min-height: 25px;
   align-items: center;
   margin-bottom: 0;
   padding-left: 12px;
   border-left: 2px solid transparent;
-  white-space: pre-wrap;
-  word-wrap: break-word;
-  overflow-wrap: break-word;
+  white-space: nowrap;
+  overflow: hidden;
   text-align: left;
   border-radius: 0;
   transition: background-color 0.1s ease;
@@ -893,7 +882,9 @@ onUnmounted(() => {
 
 .message-content {
   flex: 1;
-  word-break: break-all;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .message-content :deep(mark) {

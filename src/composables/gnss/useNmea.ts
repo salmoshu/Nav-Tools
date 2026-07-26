@@ -7,6 +7,8 @@ const HISTORY_TRIM_SIZE = 3600
 const SATELLITE_TTL_MS = 3000
 const nmeaData = shallowRef<NmeaData[]>([])
 const ggaData = shallowRef<GgaData[]>([])
+const deviationPoints = shallowRef<Array<[number, number, number]>>([])
+const mapTrackPoints = shallowRef<Array<[number, number, number]>>([])
 const satelliteSnrData = shallowRef<SatelliteSnrData[]>([])
 const latestSatelliteData = new Map<string, SatelliteSnrData>()
 const utcTime = [0, 0, 0, 0, 0, 0]
@@ -14,6 +16,8 @@ let firstLLh: [number | null, number | null, number | null] | null = null
 let batchDepth = 0
 let nmeaDataDirty = false
 let ggaDataDirty = false
+let deviationPointsDirty = false
+let mapTrackPointsDirty = false
 let satelliteDataDirty = false
 
 function trimHistory<T>(records: T[]): void {
@@ -32,6 +36,14 @@ function publishPendingData(): void {
   if (ggaDataDirty) {
     ggaDataDirty = false
     triggerRef(ggaData)
+  }
+  if (deviationPointsDirty) {
+    deviationPointsDirty = false
+    triggerRef(deviationPoints)
+  }
+  if (mapTrackPointsDirty) {
+    mapTrackPointsDirty = false
+    triggerRef(mapTrackPoints)
   }
   if (satelliteDataDirty) {
     satelliteDataDirty = false
@@ -65,6 +77,24 @@ function addNmeaData(data: NmeaData) {
   nmeaData.value.push(data)
   trimHistory(nmeaData.value)
   nmeaDataDirty = true
+  if (data.enuE !== null && data.enuN !== null) {
+    deviationPoints.value.push([
+      Number(data.enuE),
+      Number(data.enuN),
+      Number(data.quality ?? 0),
+    ])
+    trimHistory(deviationPoints.value)
+    deviationPointsDirty = true
+  }
+  if (data.longitude !== null && data.latitude !== null) {
+    mapTrackPoints.value.push([
+      Number(data.longitude),
+      Number(data.latitude),
+      Number(data.quality ?? 0),
+    ])
+    trimHistory(mapTrackPoints.value)
+    mapTrackPointsDirty = true
+  }
   publishPendingData()
 }
 
@@ -677,6 +707,8 @@ export function useNmea() {
     batchDepth = 0
     nmeaDataDirty = false
     ggaDataDirty = false
+    deviationPointsDirty = false
+    mapTrackPointsDirty = false
     satelliteDataDirty = false
     firstLLh = null
     latestSatelliteData.clear()
@@ -684,6 +716,8 @@ export function useNmea() {
     streamParser.clear()
     nmeaData.value = []
     ggaData.value = []
+    deviationPoints.value = []
+    mapTrackPoints.value = []
     satelliteSnrData.value = []  // 确保清除卫星数据
     currentData.value = {
       time: null,
@@ -723,6 +757,8 @@ export function useNmea() {
       dgpsAge: '',
       dgpsStation: ''
     }
+    // 通知地图视图：底层 GNSS 数据已清空，应同步清除本地轨迹
+    useGnssStore().resetTrack()
   }
 
   // 添加处理原始数据的函数
@@ -772,6 +808,8 @@ export function useNmea() {
 
     return {
       nmeaData,
+      deviationPoints,
+      mapTrackPoints,
       currentData,
       currentGgaData,
       latestPosition,

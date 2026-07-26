@@ -456,7 +456,7 @@ import {
   getIoList,
   handleIo,
 } from '@/composables/useToolsManager'
-import { showStatusBar } from '@/composables/useStatusManager'
+import { showStatusBar, toolbarPosition } from '@/composables/useStatusManager'
 
 import emitter from '@/hooks/useMitt'
 import {
@@ -478,7 +478,10 @@ import { getPanelIconComponent } from '@/settings/panelIcons'
 import { textDataParserOptions } from '@/composables/useDataSourceManager'
 
 const ipcRenderer = window.ipcRenderer
-const position = ref<'top' | 'right' | 'bottom' | 'left'>('bottom')
+// 工具栏停靠位置：使用 useStatusManager 提供的全局共享引用，
+// 既与 Dashboard 保持单一数据源，也能在隐藏/重新显示（组件重载）后保持位置，
+// 并由布局持久化层跨重启恢复。
+const position = toolbarPosition
 const viewportWidth = ref(window.innerWidth)
 const inputTabPosition = computed(() => (viewportWidth.value <= 560 ? 'top' : 'left'))
 const updateViewportWidth = () => {
@@ -956,6 +959,11 @@ onMounted(() => {
     },
     { immediate: true },
   )
+
+  // 监听停靠位置变化（如跨重启恢复、重置布局），重新吸附到对应边缘
+  watch(position, () => {
+    snapToEdge()
+  })
 
   // 添加布局更改监听
   emitter.on('layout-changed', () => {

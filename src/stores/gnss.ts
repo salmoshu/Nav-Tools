@@ -38,7 +38,16 @@ export const useGnssStore = defineStore('gnss', () => {
         satsVisible: '',
     })
 
+    // 每当需要整体清空轨迹（重播开始 / 清空 GNSS 数据）时自增，
+    // 地图视图据此清除本地维护的轨迹 polyline，避免新旧轨迹叠加。
+    const trackResetToken = ref(0)
+    function resetTrack(): void {
+        trackResetToken.value++
+    }
+
     return {
-        status
+        status,
+        trackResetToken,
+        resetTrack,
     }
 })

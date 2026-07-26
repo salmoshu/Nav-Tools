@@ -56,9 +56,11 @@ import { InfoFilled } from '@element-plus/icons-vue'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { useGnssStore } from '@/stores/gnss'
+import { useNmea } from '@/composables/gnss/useNmea'
 import { fixStatusColor } from '@/components/windows/gnss/fixStatusColors'
 
 const gnssStore = useGnssStore()
+const { mapTrackPoints } = useNmea()
 
 // 滑窗模式只保留最近的点；Polyline 分块后，追加或淘汰点都只影响一个小分块。
 const TRACK_WINDOW_POINTS = 2000
@@ -73,8 +75,10 @@ const isElectron = typeof window !== 'undefined' && !!window.ipcRenderer
 const containerRef = ref<HTMLElement | null>(null)
 const mapRef = ref<HTMLElement | null>(null)
 const follow = ref(true)
-const slidingWindow = ref(true)
+const slidingWindow = ref(false)
 const offlineTilesDir = ref('')
+
+type SourceTrackPoint = [longitude: number, latitude: number, quality: number]
 
 interface TrackPoint {
   id: number
@@ -96,6 +100,17 @@ const trackSegments: TrackSegment[] = []
 let nextTrackPointId = 1
 let hasCentered = false
 let resizeObserver: ResizeObserver | null = null
+let trackRenderFrame: number | null = null
+let observedSourceCount = 0
+let firstObservedSourcePoint: SourceTrackPoint | undefined
+let pendingTrackHead = 0
+let lastFollowUpdateAt = 0
+const pendingTrackPoints: SourceTrackPoint[] = []
+
+const TRACK_QUEUE_TARGET_FRAMES = 2
+const TRACK_RENDER_MAX_POINTS_PER_FRAME = 128
+const TRACK_RENDER_BUDGET_MS = 4
+const MAP_FOLLOW_INTERVAL_MS = 50
 
 const tileUrl = computed(() => (isElectron ? ELECTRON_TILE_URL : WEB_TILE_URL))
 
@@ -135,8 +150,13 @@ function initMap() {
   })
   if (containerRef.value) resizeObserver.observe(containerRef.value)
 
-  // 组件挂载前可能已有有效定位（例如从其他面板切换过来），立即应用一次
-  applyPosition(gnssStore.status.longitude, gnssStore.status.latitude, gnssStore.status.quality)
+  // 组件挂载前可能已有有效定位（例如从其他面板切换过来），立即显示当前位置。
+  updateCurrentPosition(
+    gnssStore.status.longitude,
+    gnssStore.status.latitude,
+    gnssStore.status.quality,
+    true,
+  )
 }
 
 // 追加一个轨迹点：相邻同解状态的点连成一段 polyline，状态切换或分块满时另起一段。
@@ -162,6 +182,7 @@ function appendTrackPoint(point: TrackPoint, previousPoint?: TrackPoint) {
     color: fixStatusColor(point.quality),
     weight: 3,
     opacity: 0.8,
+    smoothFactor: 0,
   }).addTo(map)
   trackSegments.push({
     quality: point.quality,
@@ -209,52 +230,166 @@ function trimTrackToWindow() {
   trimOldestTrackPoints(trackPoints.length - TRACK_WINDOW_POINTS)
 }
 
-function applyPosition(longitude: number, latitude: number, quality: number) {
-  if (!map || !positionMarker) return
-  if (!isValidPosition(longitude, latitude)) return
+function appendTrackPosition(longitude: number, latitude: number, quality: number): boolean {
+  if (!map || !isValidPosition(longitude, latitude)) return false
 
   const latlng: L.LatLngExpression = [latitude, longitude]
+  const previousPoint = trackPoints[trackPoints.length - 1]
+  const point = { id: nextTrackPointId++, latlng, quality }
+  trackPoints.push(point)
+  appendTrackPoint(point, previousPoint)
+  return true
+}
 
+function updateCurrentPosition(
+  longitude: number,
+  latitude: number,
+  quality: number,
+  forceFollow = false,
+) {
+  if (!map || !positionMarker || !isValidPosition(longitude, latitude)) return
+
+  const latlng: L.LatLngExpression = [latitude, longitude]
+  const now = performance.now()
   if (!hasCentered) {
     hasCentered = true
+    lastFollowUpdateAt = now
     map.setView(latlng, DEFAULT_ZOOM)
-  } else if (follow.value) {
-    map.panTo(latlng)
+  } else if (
+    follow.value &&
+    (forceFollow || now - lastFollowUpdateAt >= MAP_FOLLOW_INTERVAL_MS)
+  ) {
+    lastFollowUpdateAt = now
+    map.panTo(latlng, { animate: false })
   }
 
   positionMarker.setLatLng(latlng)
   positionMarker.setStyle({ fillColor: fixStatusColor(quality) })
   if (!map.hasLayer(positionMarker)) positionMarker.addTo(map)
-
-  const previousPoint = trackPoints[trackPoints.length - 1]
-  const point = { id: nextTrackPointId++, latlng, quality }
-  trackPoints.push(point)
-  appendTrackPoint(point, previousPoint)
-  if (slidingWindow.value) trimTrackToWindow()
 }
 
-function clearTrack() {
+function pendingTrackCount(): number {
+  return pendingTrackPoints.length - pendingTrackHead
+}
+
+function scheduleTrackRender() {
+  if (!map || trackRenderFrame !== null || pendingTrackCount() === 0) return
+  trackRenderFrame = requestAnimationFrame(renderPendingTrack)
+}
+
+function renderPendingTrack() {
+  trackRenderFrame = null
+  const remaining = pendingTrackCount()
+  if (!map || remaining === 0) return
+
+  const targetCount = Math.min(
+    TRACK_RENDER_MAX_POINTS_PER_FRAME,
+    Math.max(1, Math.ceil(remaining / TRACK_QUEUE_TARGET_FRAMES)),
+  )
+  const startedAt = performance.now()
+  let processedCount = 0
+  let latestPosition: SourceTrackPoint | undefined
+
+  while (pendingTrackHead < pendingTrackPoints.length && processedCount < targetCount) {
+    const point = pendingTrackPoints[pendingTrackHead++]
+    if (appendTrackPosition(point[0], point[1], point[2])) latestPosition = point
+    processedCount += 1
+    if (processedCount >= 2 && performance.now() - startedAt >= TRACK_RENDER_BUDGET_MS) break
+  }
+
+  if (slidingWindow.value) trimTrackToWindow()
+
+  const queueEmpty = pendingTrackHead >= pendingTrackPoints.length
+  if (latestPosition) {
+    updateCurrentPosition(latestPosition[0], latestPosition[1], latestPosition[2])
+  }
+
+  if (queueEmpty) {
+    pendingTrackPoints.length = 0
+    pendingTrackHead = 0
+  } else {
+    scheduleTrackRender()
+  }
+}
+
+function cancelTrackRender() {
+  if (trackRenderFrame !== null) {
+    cancelAnimationFrame(trackRenderFrame)
+    trackRenderFrame = null
+  }
+  pendingTrackPoints.length = 0
+  pendingTrackHead = 0
+}
+
+function clearRenderedTrack() {
   trackPoints.length = 0
   for (const segment of trackSegments) segment.line.remove()
   trackSegments.length = 0
   nextTrackPointId = 1
 }
 
+function clearTrack() {
+  cancelTrackRender()
+  observedSourceCount = mapTrackPoints.value.length
+  firstObservedSourcePoint = mapTrackPoints.value[0]
+  clearRenderedTrack()
+}
+
+function resetTrackHistory() {
+  cancelTrackRender()
+  observedSourceCount = 0
+  firstObservedSourcePoint = undefined
+  hasCentered = false
+  lastFollowUpdateAt = 0
+  clearRenderedTrack()
+}
+
+function syncTrackSource() {
+  const source = mapTrackPoints.value
+  const sourceReset =
+    source.length < observedSourceCount ||
+    (source.length > 0 &&
+      observedSourceCount > 0 &&
+      source[0] !== firstObservedSourcePoint)
+
+  if (sourceReset) resetTrackHistory()
+
+  for (let index = observedSourceCount; index < source.length; index++) {
+    pendingTrackPoints.push(source[index])
+  }
+  observedSourceCount = source.length
+  firstObservedSourcePoint = source[0]
+  scheduleTrackRender()
+}
+
+function rebuildTrackFromSource() {
+  resetTrackHistory()
+  syncTrackSource()
+}
+
 function copyTilesDir() {
   if (offlineTilesDir.value) void navigator.clipboard?.writeText(offlineTilesDir.value)
 }
 
-watch(
-  () => [gnssStore.status.longitude, gnssStore.status.latitude, gnssStore.status.quality] as const,
-  ([longitude, latitude, quality]) => applyPosition(longitude, latitude, quality),
-)
+watch(mapTrackPoints, syncTrackSource)
 
-watch(slidingWindow, (enabled) => {
-  if (enabled) trimTrackToWindow()
+watch(slidingWindow, (enabled, wasEnabled) => {
+  if (enabled) {
+    trimTrackToWindow()
+  } else if (wasEnabled && mapTrackPoints.value.length > trackPoints.length) {
+    rebuildTrackFromSource()
+  }
 })
+
+// 文件重播开始 / 清空 GNSS 数据时，自动清除地图本地轨迹，避免新旧轨迹叠加
+watch(
+  () => gnssStore.trackResetToken,
+  () => resetTrackHistory(),
+)
 
 onMounted(() => {
   initMap()
+  syncTrackSource()
   if (isElectron) {
     window.electronAPI
       ?.getOfflineTilesDir?.()
@@ -268,6 +403,7 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  cancelTrackRender()
   resizeObserver?.disconnect()
   resizeObserver = null
   map?.remove()

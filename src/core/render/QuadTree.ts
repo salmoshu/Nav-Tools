@@ -37,8 +37,11 @@ export interface NearestResult<T> {
 export class QuadTree<T> {
   /** Maximum entries stored in a leaf node before it splits. */
   public static readonly CAPACITY = 50
+  /** Prevent identical or near-identical points from subdividing forever. */
+  public static readonly MAX_DEPTH = 32
 
   private bounds: Bounds
+  private readonly depth: number
   private entries: Entry<T>[] = []
   private divided = false
   private nw: QuadTree<T> | null = null
@@ -46,8 +49,9 @@ export class QuadTree<T> {
   private sw: QuadTree<T> | null = null
   private se: QuadTree<T> | null = null
 
-  constructor(bounds: Bounds) {
+  constructor(bounds: Bounds, depth = 0) {
     this.bounds = { ...bounds }
+    this.depth = depth
   }
 
   /**
@@ -164,14 +168,18 @@ export class QuadTree<T> {
   }
 
   private subdivide(): void {
+    if (this.depth >= QuadTree.MAX_DEPTH) return
+
     const { minX, minY, maxX, maxY } = this.bounds
     const midX = (minX + maxX) * 0.5
     const midY = (minY + maxY) * 0.5
+    if (midX === minX || midX === maxX || midY === minY || midY === maxY) return
 
-    this.nw = new QuadTree<T>({ minX, minY, maxX: midX, maxY: midY })
-    this.ne = new QuadTree<T>({ minX: midX, minY, maxX, maxY: midY })
-    this.sw = new QuadTree<T>({ minX, minY: midY, maxX: midX, maxY })
-    this.se = new QuadTree<T>({ minX: midX, minY: midY, maxX, maxY })
+    const childDepth = this.depth + 1
+    this.nw = new QuadTree<T>({ minX, minY, maxX: midX, maxY: midY }, childDepth)
+    this.ne = new QuadTree<T>({ minX: midX, minY, maxX, maxY: midY }, childDepth)
+    this.sw = new QuadTree<T>({ minX, minY: midY, maxX: midX, maxY }, childDepth)
+    this.se = new QuadTree<T>({ minX: midX, minY: midY, maxX, maxY }, childDepth)
 
     const oldEntries = this.entries
     this.entries = []

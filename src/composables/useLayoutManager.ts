@@ -3,7 +3,7 @@ import type { DefineComponent } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getWindowById, getWindowsByIds, navMode, normalizeWindowId, type WindowDefinition } from '@/settings/config'
 import { useApplicationSelector } from '@/composables/useApplicationSelector'
-import { showStatusBar, showToolBar } from '@/composables/useStatusManager'
+import { showStatusBar, showToolBar, toolbarPosition, statusbarPosition } from '@/composables/useStatusManager'
 import { LayoutStorage, type PersistedLayoutItem } from '@/core/layout/LayoutStorage'
 import { JsonStorage } from '@/core/storage/JsonStorage'
 import emitter from '@/hooks/useMitt'
@@ -72,6 +72,8 @@ export function useLayoutManager() {
   const originalLayout = ref<LayoutItem[]>([])
   // 用户主动移除的窗口，恢复布局时不再作为“缺失窗口”自动补回
   const removedWindowIds = new Set<string>()
+  // initLayout 完成从持久化恢复后变为 true，之后停靠位置变化才会静默持久化
+  let layoutPersistenceReady = false
 
   const currentApplication = computed(() =>
     applications.value.find(application => application.id === layoutApplicationId.value),
@@ -107,6 +109,8 @@ export function useLayoutManager() {
       appId,
       showStatusBar.value !== false,
       showToolBar.value !== false,
+      toolbarPosition.value,
+      statusbarPosition.value,
     )
   }
 
@@ -128,6 +132,19 @@ export function useLayoutManager() {
     persistVisibilitySilently()
   })
 
+  // 工具栏/状态栏停靠位置变化：静默持久化，不触发"布局已变更"保存提示；
+  // 仅在 initLayout 完成恢复后再持久化，避免把恢复过程本身误存为一次用户变更。
+  watch(toolbarPosition, () => {
+    if (!layoutPersistenceReady) return
+    persistVisibilitySilently()
+  })
+
+  // 状态栏停靠位置变化：同上，静默持久化。
+  watch(statusbarPosition, () => {
+    if (!layoutPersistenceReady) return
+    persistVisibilitySilently()
+  })
+
   function backupCurrentLayout() {
     originalLayout.value = layoutDraggableList.value.map(item => ({ ...item }))
   }
@@ -142,6 +159,8 @@ export function useLayoutManager() {
       showStatusBar.value !== false,
       [...removedWindowIds],
       showToolBar.value !== false,
+      toolbarPosition.value,
+      statusbarPosition.value,
     )
   }
 
@@ -196,7 +215,12 @@ export function useLayoutManager() {
     const savedLayout = layoutStorage.load(applicationId)
     showStatusBar.value = savedLayout?.showStatusBar ?? true
     showToolBar.value = savedLayout?.showToolBar ?? true
+    toolbarPosition.value = savedLayout?.toolbarPosition ?? 'bottom'
+    statusbarPosition.value = savedLayout?.statusbarPosition ?? 'right'
     savedLayout?.removedWindowIds?.forEach(id => removedWindowIds.add(id))
+
+    // 恢复完成，此后停靠位置变化才静默持久化
+    layoutPersistenceReady = true
 
     if (!savedLayout) {
       await createDefaultLayout()
@@ -234,6 +258,9 @@ export function useLayoutManager() {
   async function resetLayout() {
     if (layoutApplicationId.value) layoutStorage.remove(layoutApplicationId.value)
     removedWindowIds.clear()
+    // 重置布局时一并复位工具栏/状态栏停靠位置（自适应 Auto 不应触碰工具栏/状态栏）
+    toolbarPosition.value = 'bottom'
+    statusbarPosition.value = 'right'
     await createDefaultLayout()
   }
 

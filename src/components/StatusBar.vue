@@ -304,6 +304,7 @@ import {
   statusOrder,
   setStatusOrder,
   createCodeEditor,
+  statusbarPosition,
 } from '@/composables/useStatusManager'
 import { useApplicationSelector } from '@/composables/useApplicationSelector'
 import { useFlow } from '@/composables/flow/useFlow'
@@ -562,7 +563,10 @@ const deleteCustomStatus = (fieldName: string) => {
 }
 
 const dockWidth = 200
-const position = ref<'left' | 'right'>('right')
+// 状态栏停靠位置：使用 useStatusManager 提供的全局共享引用，
+// 既与 Dashboard 保持单一数据源，也能在隐藏/重新显示（组件重载）后保持位置，
+// 并由布局持久化层跨重启恢复。
+const position = statusbarPosition
 const isDragging = ref(false)
 const dragOffset = ref({ x: 0, y: 0 })
 const statusbarRect = ref({ x: 0, y: 0 })
@@ -798,6 +802,11 @@ onMounted(() => {
     },
     { immediate: true },
   )
+
+  // 监听停靠位置变化（如跨重启恢复、重置布局），重新吸附到对应边缘
+  watch(position, () => {
+    snapToEdge()
+  })
 })
 
 onUnmounted(() => {

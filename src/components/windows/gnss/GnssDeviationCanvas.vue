@@ -55,8 +55,7 @@ import {
 } from '@/core/deviation/DeviationViewport'
 
 const {
-  nmeaData,
-  latestPosition,
+  deviationPoints,
   latestGgaPosition,
   enableWindow,
   clearData,
@@ -66,10 +65,9 @@ const { chartTheme, resolvedTheme } = useTheme()
 
 const DEVIATION_WINDOW_POINTS = 10000;
 const plotData = computed(() => {
-  const source = enableWindow.value
-    ? nmeaData.value.slice(-DEVIATION_WINDOW_POINTS)
-    : nmeaData.value;
-  return source.map(item => [item.enuE, item.enuN, item.quality]);
+  return enableWindow.value
+    ? deviationPoints.value.slice(-DEVIATION_WINDOW_POINTS)
+    : deviationPoints.value;
 });
 
 const {
@@ -98,6 +96,7 @@ let lastNmeaRenderKey = '';
 let nmeaUpdateTimer = null;
 let nmeaUpdateFrame = null;
 let forceNextNmeaRender = false;
+let themeRefreshFrame = null;
 // 跟踪视口半跨度缓存（米）。避免每次渲染调用 getOption() 全量拷贝大数据
 let trackingXHalfSpan = 10;
 let trackingYHalfSpan = 10;
@@ -683,9 +682,9 @@ onMounted(() => {
   }, { immediate: true });
 
   stopWatch = watch(
-    latestPosition,
-    (newVal) => {
-      if (newVal && chartInstance.value) {
+    plotData,
+    () => {
+      if (chartInstance.value) {
         scheduleNmeaUpdate();
       }
     },
@@ -693,15 +692,25 @@ onMounted(() => {
   );
 });
 
-watch(resolvedTheme, () => {
-  nextTick(() => {
-    initChart();
-    handleNmeaUpdate();
+function scheduleThemeRefresh() {
+  if (themeRefreshFrame !== null) cancelAnimationFrame(themeRefreshFrame);
+  themeRefreshFrame = requestAnimationFrame(() => {
+    themeRefreshFrame = requestAnimationFrame(() => {
+      themeRefreshFrame = null;
+      initChart();
+      handleNmeaUpdate();
+    });
   });
-});
+}
+
+watch(resolvedTheme, scheduleThemeRefresh);
 
 onUnmounted(() => {
   cancelScheduledNmeaUpdate();
+  if (themeRefreshFrame !== null) {
+    cancelAnimationFrame(themeRefreshFrame);
+    themeRefreshFrame = null;
+  }
   stopWatch?.();
   // 清理拖拽事件
   window.removeEventListener('mousemove', handleDragMove);

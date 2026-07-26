@@ -100,6 +100,9 @@ const VERTEX_STRIDE = 6
 const BYTES_PER_FLOAT = 4
 /** Initial point capacity; doubled as needed. */
 const INITIAL_CAPACITY = 1024
+/** Loose index bounds avoid rebuilding the entire tree for each small range expansion. */
+const QUAD_TREE_MIN_HALF_SPAN = 1
+const QUAD_TREE_BOUNDS_PADDING = 4
 
 /**
  * WebGL-based trajectory renderer.
@@ -451,11 +454,11 @@ export class WebGLTrajectoryRenderer implements TrajectoryRenderer {
   private insertIntoQuadTree(x: number, y: number, index: number, quality: number): void {
     if (!this.quadTree) {
       this.rebuildQuadTree()
+      return
     }
     const ok = this.quadTree!.insert(x, y, { pointIndex: index, quality })
     if (!ok) {
       this.rebuildQuadTree()
-      this.quadTree!.insert(x, y, { pointIndex: index, quality })
     }
   }
 
@@ -467,7 +470,9 @@ export class WebGLTrajectoryRenderer implements TrajectoryRenderer {
     const { minX, maxX, minY, maxY } = this.dataBounds
     const cx = (minX + maxX) / 2
     const cy = (minY + maxY) / 2
-    const half = Math.max(1e-9, (maxX - minX) / 2, (maxY - minY) / 2) * 1.2
+    const half =
+      Math.max(QUAD_TREE_MIN_HALF_SPAN, (maxX - minX) / 2, (maxY - minY) / 2) *
+      QUAD_TREE_BOUNDS_PADDING
 
     this.quadTree = new QuadTree<PickData>({
       minX: cx - half,

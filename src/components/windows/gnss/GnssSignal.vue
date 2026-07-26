@@ -185,6 +185,7 @@ const chartInstance = ref(null)
 let resizeObserver = null
 const DATA_UPDATE_INTERVAL_MS = 200
 let dataUpdateTimer = null
+let themeRefreshRaf = null
 
 // 卫星数目（NSat）视图相关：滚动历史，参考 RTKLIB rtkplot 的 NSat 图
 const nsatChartRef = ref(null)
@@ -1005,13 +1006,21 @@ watch(currentView, (view) => {
 })
 
 // 监听主题变化
-watch(resolvedTheme, () => {
-  if (currentView.value === 'chart') {
-    initChart()
-  } else if (currentView.value === 'nsat') {
-    initNsatChart()
-  }
-})
+function scheduleThemeRefresh() {
+  if (themeRefreshRaf !== null) cancelAnimationFrame(themeRefreshRaf)
+  themeRefreshRaf = requestAnimationFrame(() => {
+    themeRefreshRaf = requestAnimationFrame(() => {
+      themeRefreshRaf = null
+      if (currentView.value === 'chart') {
+        initChart()
+      } else if (currentView.value === 'nsat') {
+        initNsatChart()
+      }
+    })
+  })
+}
+
+watch(resolvedTheme, scheduleThemeRefresh)
 
 // 组件挂载时
 onMounted(() => {
@@ -1031,6 +1040,11 @@ onUnmounted(() => {
   if (dataUpdateTimer !== null) {
     clearTimeout(dataUpdateTimer)
     dataUpdateTimer = null
+  }
+
+  if (themeRefreshRaf !== null) {
+    cancelAnimationFrame(themeRefreshRaf)
+    themeRefreshRaf = null
   }
 
   if (nsatSampleTimer !== null) {

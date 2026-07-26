@@ -16,6 +16,10 @@ const { resolvedTheme } = useTheme()
 const isEditMode = ref(false);
 const showStatusBar = ref<boolean | null>(null);
 const showToolBar = ref<boolean | null>(null);
+/** 工具栏停靠位置；默认值与首次启动行为保持一致（底部）。 */
+const toolbarPosition = ref<'top' | 'right' | 'bottom' | 'left'>('bottom');
+/** 状态栏停靠位置；默认值与首次启动行为保持一致（右侧）。 */
+const statusbarPosition = ref<'left' | 'right'>('right');
 const editStatusConfig = ref<any>(null);
 const newStatusConfig = ref({
   fieldName: '',
@@ -250,6 +254,8 @@ export {
   isEditMode,
   showStatusBar,
   showToolBar,
+  toolbarPosition,
+  statusbarPosition,
   editStatusConfig,
   newStatusConfig,
   statusOrder,

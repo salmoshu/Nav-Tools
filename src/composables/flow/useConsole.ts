@@ -70,6 +70,7 @@ export function useConsole(useGlobal: boolean = true): ConsoleState {
   const validNmeaCount = ref(0);
   const validJsonCount = ref(0);
   let tempDataString = ''; // 临时存储数据，用于处理不完整的消息
+  let messageKeySequence = 0;
   let noneFlushTimer: ReturnType<typeof setTimeout> | null = null; // none模式下无换行符时的刷新定时器
   const NONE_FLUSH_DELAY = 300; // ms，无新数据到达后刷新缓冲区
 
@@ -195,10 +196,9 @@ export function useConsole(useGlobal: boolean = true): ConsoleState {
     );
   };
 
-  const generateKey = (timestamp: string, raw: string): string => {
-    return `${timestamp}_${raw}_${Date.now()}_${Math.random()
-      .toString(36)
-      .slice(2, 11)}`;   // ← 等价于原来的 substr(2, 9)
+  const generateKey = (timestamp: string): string => {
+    messageKeySequence += 1;
+    return `${timestamp}_${messageKeySequence}`;
   };
 
   // 核心方法
@@ -233,7 +233,7 @@ export function useConsole(useGlobal: boolean = true): ConsoleState {
             raw: line,
             dataType: 'none',
             isValid: false,
-            key: generateKey(timestamp, line),
+            key: generateKey(timestamp),
           };
           appendConsoleMessage(message);
         }
@@ -251,7 +251,7 @@ export function useConsole(useGlobal: boolean = true): ConsoleState {
               raw: tempDataString,
               dataType: 'none',
               isValid: false,
-              key: generateKey(timestamp, tempDataString),
+              key: generateKey(timestamp),
             };
             appendConsoleMessage(message);
             tempDataString = '';
@@ -284,7 +284,7 @@ export function useConsole(useGlobal: boolean = true): ConsoleState {
               raw: line,
               dataType: 'nmea',
               isValid,
-              key: generateKey(timestamp, line),
+              key: generateKey(timestamp),
             };
             appendConsoleMessage(message);
           } else if (dataFormat.value === 'json') {
@@ -294,7 +294,7 @@ export function useConsole(useGlobal: boolean = true): ConsoleState {
               raw: line,
               dataType: 'json',
               isValid,
-              key: generateKey(timestamp, line),
+              key: generateKey(timestamp),
             };
             appendConsoleMessage(message);
           }
@@ -366,7 +366,7 @@ export function useConsole(useGlobal: boolean = true): ConsoleState {
           raw: cleanedLine,
           dataType,
           isValid,
-          key: generateKey(messageTimestamp, cleanedLine),
+          key: generateKey(messageTimestamp),
         };
 
         appendConsoleMessage(message);
@@ -519,7 +519,7 @@ export function useConsole(useGlobal: boolean = true): ConsoleState {
         raw: data,
         dataType: 'none',
         isValid: false,
-        key: generateKey(timestamp, data),
+        key: generateKey(timestamp),
       };
       appendConsoleMessage(message);
       

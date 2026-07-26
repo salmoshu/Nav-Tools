@@ -51,4 +51,16 @@ describe('Dashboard fullscreen toolbar/statusbar deferred hide', () => {
     expect(styleBlock).toContain('showStatusBar.value')
     expect(styleBlock).toContain('showToolBar.value === true')
   })
+
+  it('synchronizes grid width immediately when a side panel changes', () => {
+    expect(source).toContain('ref="gridLayoutRef"')
+    expect(source).toContain('gridLayout.state.width = width')
+    expect(source).toContain("{ flush: 'post' }")
+
+    const contentStyle = source.slice(
+      source.indexOf('.dashboard-content {'),
+      source.indexOf('.dashboard-grid {'),
+    )
+    expect(contentStyle).not.toContain('transition:')
+  })
 })

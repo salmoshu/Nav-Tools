@@ -70,21 +70,13 @@ import {
   GNSS_MIN_VISIBLE_SPAN_METERS,
 } from '@/core/deviation/DeviationViewport'
 
-const { nmeaData, latestPosition, latestGgaPosition, clearData } = useNmea()
+const { nmeaData, deviationPoints: plotData, clearData } = useNmea()
 const { chartTheme, resolvedTheme } = useTheme()
 
 const LIMIT_METERS = 10000
-const RENDER_INTERVAL_MS = 200
-
-const plotData = computed<Array<[number, number, number]>>(() => {
-  return nmeaData.value
-    .filter((item) => item.enuE !== null && item.enuN !== null)
-    .map((item) => [
-      Number(item.enuE),
-      Number(item.enuN),
-      Number(item.quality ?? 0),
-    ]) as Array<[number, number, number]>
-})
+const RENDER_QUEUE_TARGET_FRAMES = 2
+const RENDER_MAX_POINTS_PER_FRAME = 128
+const RENDER_BUDGET_MS = 4
 
 const canvasRef = ref<HTMLCanvasElement | null>(null)
 const axisCanvasRef = ref<HTMLCanvasElement | null>(null)
@@ -118,10 +110,11 @@ let trackingYHalfSpan = 10
 let panOffsetX = 0
 let panOffsetY = 0
 
-let previousPlotData: Array<[number, number, number]> = []
+let renderedPointCount = 0
+let firstRenderedPoint: [number, number, number] | undefined
 
-let nmeaUpdateTimer: number | null = null
 let nmeaUpdateFrame: number | null = null
+let themeRefreshFrame: number | null = null
 
 let resizeObserver: ResizeObserver | null = null
 let resizeFrame: number | null = null
@@ -384,6 +377,7 @@ watch(nmeaData, () => {
 // 视图切换：切到位置图时按需初始化或刷新
 watch(currentView, (view) => {
   if (view === 'position') {
+    cancelScheduledNmeaUpdate()
     nextTick(() => {
       if (!positionChartInstance) {
         initPositionChart()
@@ -392,13 +386,25 @@ watch(currentView, (view) => {
         updatePositionChart()
       }
     })
+  } else {
+    scheduleNmeaUpdate()
   }
 })
 
-// 主题切换：重建位置图
-watch(resolvedTheme, () => {
-  if (currentView.value === 'position') initPositionChart()
-})
+function scheduleThemeRefresh(): void {
+  if (themeRefreshFrame !== null) cancelAnimationFrame(themeRefreshFrame)
+  themeRefreshFrame = requestAnimationFrame(() => {
+    themeRefreshFrame = requestAnimationFrame(() => {
+      themeRefreshFrame = null
+      if (currentView.value === 'position') {
+        initPositionChart()
+      } else {
+        drawAxisLayer()
+        drawCurrentPosition()
+      }
+    })
+  })
+}
 
 const DRAG_THRESHOLD_PX = 3
 let isDragging = false
@@ -521,9 +527,11 @@ function drawAxisLayer(): void {
 }
 
 function drawCurrentPosition(): void {
-  if (!axisCtx || axisCssWidth <= 0 || axisCssHeight <= 0 || plotData.value.length === 0) return
+  if (!axisCtx || axisCssWidth <= 0 || axisCssHeight <= 0) return
 
-  const [x, y, q] = plotData.value[plotData.value.length - 1]
+  const latestPoint = getLatestRenderedPoint()
+  if (!latestPoint) return
+  const [x, y, q] = latestPoint
   const sx = dataToScreenX(x)
   const sy = dataToScreenY(y)
   const radius = (pointSize.value * 1.2) / 2
@@ -549,50 +557,62 @@ function updateViewport(xMin: number, xMax: number, yMin: number, yMax: number):
   drawCurrentPosition()
 }
 
-function syncRendererData(): void {
-  if (!renderer) return
+function getLatestRenderedPoint(): [number, number, number] | undefined {
+  if (renderedPointCount <= 0) return undefined
+  return plotData.value[Math.min(renderedPointCount, plotData.value.length) - 1]
+}
+
+function syncRendererData(): boolean {
+  if (!renderer) return false
 
   const points = plotData.value
   const firstChanged =
-    points.length > 0 &&
-    previousPlotData.length > 0 &&
-    (points[0][0] !== previousPlotData[0][0] ||
-      points[0][1] !== previousPlotData[0][1] ||
-      points[0][2] !== previousPlotData[0][2])
-  const resetNeeded = firstChanged || points.length < previousPlotData.length
+    points.length > 0 && renderedPointCount > 0 && points[0] !== firstRenderedPoint
+  const resetNeeded = firstChanged || points.length < renderedPointCount
 
   if (resetNeeded) {
     renderer.clear()
-    if (points.length > 0) {
-      renderer.addPointsBatch(points)
-    }
-  } else {
-    for (let i = previousPlotData.length; i < points.length; i++) {
-      const [x, y, q] = points[i]
-      renderer.addPoint(x, y, q)
-    }
+    renderedPointCount = 0
   }
 
-  previousPlotData = points.slice()
+  firstRenderedPoint = points[0]
+  const remaining = points.length - renderedPointCount
+  if (remaining <= 0) return false
+
+  const targetCount = Math.min(
+    RENDER_MAX_POINTS_PER_FRAME,
+    Math.max(1, Math.ceil(remaining / RENDER_QUEUE_TARGET_FRAMES)),
+  )
+  const startedAt = performance.now()
+  let processedCount = 0
+
+  while (renderedPointCount < points.length && processedCount < targetCount) {
+    const [x, y, q] = points[renderedPointCount]
+    renderer.addPoint(x, y, q)
+    renderedPointCount += 1
+    processedCount += 1
+    if (processedCount >= 2 && performance.now() - startedAt >= RENDER_BUDGET_MS) break
+  }
+
+  return renderedPointCount < points.length
 }
 
-function handleNmeaUpdate(): void {
-  if (!renderer) return
-  const latest = latestGgaPosition.value
-  if (!latest) return
+function handleNmeaUpdate(): boolean {
+  if (!renderer) return false
 
-  const points = plotData.value
-  const latestTrackPoint = points[points.length - 1]
-  if (!latestTrackPoint) return
-
-  syncRendererData()
+  const hasMorePoints = syncRendererData()
+  const latestTrackPoint = getLatestRenderedPoint()
+  if (!latestTrackPoint) {
+    drawAxisLayer()
+    return hasMorePoints
+  }
 
   // 拖拽中只更新数据渲染，不改变视口，避免视图跳动
   if (isDragging) {
     renderer.render()
     drawAxisLayer()
     drawCurrentPosition()
-    return
+    return hasMorePoints
   }
 
   if (isTracking.value) {
@@ -610,34 +630,43 @@ function handleNmeaUpdate(): void {
     drawAxisLayer()
     drawCurrentPosition()
   }
+
+  return hasMorePoints
 }
 
 function scheduleNmeaUpdate(): void {
-  if (document.hidden) return
-  if (nmeaUpdateTimer !== null || nmeaUpdateFrame !== null) return
-  nmeaUpdateTimer = window.setTimeout(() => {
-    nmeaUpdateTimer = null
-    nmeaUpdateFrame = requestAnimationFrame(() => {
-      nmeaUpdateFrame = null
-      handleNmeaUpdate()
-    })
-  }, RENDER_INTERVAL_MS)
+  if (
+    document.hidden ||
+    currentView.value !== 'deviation' ||
+    nmeaUpdateFrame !== null
+  ) return
+  nmeaUpdateFrame = requestAnimationFrame(() => {
+    nmeaUpdateFrame = null
+    if (handleNmeaUpdate()) scheduleNmeaUpdate()
+  })
 }
 
 function cancelScheduledNmeaUpdate(): void {
-  if (nmeaUpdateTimer !== null) {
-    clearTimeout(nmeaUpdateTimer)
-    nmeaUpdateTimer = null
-  }
   if (nmeaUpdateFrame !== null) {
     cancelAnimationFrame(nmeaUpdateFrame)
     nmeaUpdateFrame = null
   }
 }
 
+function handleDocumentVisibilityChange(): void {
+  if (
+    !document.hidden &&
+    currentView.value === 'deviation' &&
+    renderedPointCount < plotData.value.length
+  ) {
+    scheduleNmeaUpdate()
+  }
+}
+
 function toggleTracking(): void {
-  if (!renderer || plotData.value.length === 0) return
-  const latestPoint = plotData.value[plotData.value.length - 1]
+  if (!renderer) return
+  const latestPoint = getLatestRenderedPoint()
+  if (!latestPoint) return
 
   if (isTracking.value) {
     // 开启跟踪：重置用户拖拽偏移，视口以最新点为中心
@@ -694,7 +723,8 @@ function resetZoom(): void {
 function clearTrack(): void {
   cancelScheduledNmeaUpdate()
   renderer?.clear()
-  previousPlotData = []
+  renderedPointCount = 0
+  firstRenderedPoint = undefined
   panOffsetX = 0
   panOffsetY = 0
   updateViewport(-10, 10, -10, 10)
@@ -734,7 +764,7 @@ function handleWheel(e: WheelEvent): void {
   updateViewport(newXMin, newXMax, newYMin, newYMax)
 
   // 拖拽后更新偏移：新视口中心相对于最新数据点的偏移
-  const latestPoint = plotData.value[plotData.value.length - 1]
+  const latestPoint = getLatestRenderedPoint()
   if (latestPoint) {
     panOffsetX = (newXMin + newXMax) / 2 - latestPoint[0]
     panOffsetY = (newYMin + newYMax) / 2 - latestPoint[1]
@@ -903,21 +933,17 @@ onMounted(() => {
   nextTick(() => {
     initRenderer()
     setupResizeObserver()
+    document.addEventListener('visibilitychange', handleDocumentVisibilityChange)
 
     stopWatch = watch(
-      latestPosition,
-      (newVal) => {
-        if (newVal) scheduleNmeaUpdate()
+      plotData,
+      () => {
+        if (currentView.value === 'deviation') scheduleNmeaUpdate()
       },
       { immediate: true },
     )
 
-    stopThemeWatch = watch(resolvedTheme, () => {
-      nextTick(() => {
-        drawAxisLayer()
-        drawCurrentPosition()
-      })
-    })
+    stopThemeWatch = watch(resolvedTheme, scheduleThemeRefresh)
 
     if (currentView.value === 'position') {
       initPositionChart()
@@ -927,6 +953,11 @@ onMounted(() => {
 
 onUnmounted(() => {
   cancelScheduledNmeaUpdate()
+  document.removeEventListener('visibilitychange', handleDocumentVisibilityChange)
+  if (themeRefreshFrame !== null) {
+    cancelAnimationFrame(themeRefreshFrame)
+    themeRefreshFrame = null
+  }
   teardownPositionChart()
   stopWatch?.()
   stopThemeWatch?.()

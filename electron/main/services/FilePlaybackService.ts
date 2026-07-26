@@ -3,6 +3,9 @@ import { StringDecoder } from 'node:string_decoder'
 
 const TIME_TAG_RECORDS_OFFSET = 76
 const READ_CHUNK_SIZE = 64 * 1024
+const DELIVERY_BATCH_INTERVAL_MS = 25
+const DELIVERY_BATCH_MAX_BYTES = 32 * 1024
+const DELIVERY_BATCH_MAX_CHECKPOINTS = 256
 
 export interface FilePlaybackRequest {
   path: string
@@ -172,9 +175,36 @@ export class FilePlaybackService {
     const checkpoints = buildReplayCheckpoints(session.entries, session.fileSize)
     const startedAt = Date.now()
     let position = 0
+    let checkpointIndex = 0
 
     try {
-      for (const checkpoint of checkpoints) {
+      while (checkpointIndex < checkpoints.length) {
+        // Renderer charts publish at a much lower rate than dense RTKLIB tags.
+        // Release a short bounded time window per IPC event so pointer and menu
+        // events can run between playback updates.
+        const firstCheckpoint = checkpoints[checkpointIndex]
+        const firstTargetDelay = Math.max(
+          0,
+          (firstCheckpoint.tick - session.startOffsetMs) / session.replaySpeed,
+        )
+        let checkpoint = firstCheckpoint
+        let batchCheckpointCount = 1
+
+        while (
+          checkpointIndex + batchCheckpointCount < checkpoints.length &&
+          batchCheckpointCount < DELIVERY_BATCH_MAX_CHECKPOINTS
+        ) {
+          const candidate = checkpoints[checkpointIndex + batchCheckpointCount]
+          const candidateTargetDelay = Math.max(
+            0,
+            (candidate.tick - session.startOffsetMs) / session.replaySpeed,
+          )
+          if (candidateTargetDelay - firstTargetDelay > DELIVERY_BATCH_INTERVAL_MS) break
+          if (candidate.position - position > DELIVERY_BATCH_MAX_BYTES) break
+          checkpoint = candidate
+          batchCheckpointCount += 1
+        }
+
         const targetDelay = Math.max(
           0,
           (checkpoint.tick - session.startOffsetMs) / session.replaySpeed,
@@ -183,6 +213,7 @@ export class FilePlaybackService {
         if (!this.isActive(session)) return
 
         position = await this.readUntil(session, position, checkpoint.position, decoder)
+        checkpointIndex += batchCheckpointCount
       }
 
       const remainder = decoder.end()

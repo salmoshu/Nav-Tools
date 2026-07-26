@@ -39,6 +39,11 @@ describe('GNSS signal SNR bar chart view', () => {
     expect(source).toContain('ResizeObserver')
     expect(source).toContain('chartInstance.value.resize()')
   })
+
+  it('defers chart recreation until theme controls have painted', () => {
+    expect(source).toContain('watch(resolvedTheme, scheduleThemeRefresh)')
+    expect(source.match(/themeRefreshRaf = requestAnimationFrame/g)).toHaveLength(2)
+  })
 })
 
 describe('GNSS signal NSat (satellite count) view', () => {

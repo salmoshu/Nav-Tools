@@ -98,41 +98,82 @@
           <rect x="9.5" y="3.5" width="3" height="9" stroke="currentColor" stroke-width="1.1" :fill="showStatusBar !== false ? 'currentColor' : 'none'" />
         </svg>
       </button>
-      <el-dropdown
+      <div
         v-if="!showDetachedControls"
-        trigger="click"
-        placement="bottom-end"
-        :teleported="false"
-        @command="handleThemeCommand"
+        ref="themeMenuRef"
+        class="theme-menu-anchor"
       >
         <button
           class="header-button"
           type="button"
           :title="`主题模式：${themeLabel}`"
           :aria-label="`选择主题模式，当前为${themeLabel}`"
+          aria-haspopup="menu"
+          :aria-expanded="themeMenuOpen"
+          @click="toggleThemeMenu"
         >
           <ThemeModeIcon :mode="themeMode" />
         </button>
-        <template #dropdown>
-          <el-dropdown-menu>
-            <el-dropdown-item command="system">
-              <ThemeModeIcon mode="system" />
-              <span>跟随系统</span>
-              <el-icon v-if="themeMode === 'system'" class="theme-check"><Check /></el-icon>
-            </el-dropdown-item>
-            <el-dropdown-item command="light">
-              <ThemeModeIcon mode="light" />
-              <span>浅色模式</span>
-              <el-icon v-if="themeMode === 'light'" class="theme-check"><Check /></el-icon>
-            </el-dropdown-item>
-            <el-dropdown-item command="dark">
-              <ThemeModeIcon mode="dark" />
-              <span>深色模式</span>
-              <el-icon v-if="themeMode === 'dark'" class="theme-check"><Check /></el-icon>
-            </el-dropdown-item>
-          </el-dropdown-menu>
-        </template>
-      </el-dropdown>
+        <div
+          class="theme-mode-menu"
+          :class="{ open: themeMenuOpen }"
+          role="menu"
+          :aria-hidden="!themeMenuOpen"
+          @keydown.esc.stop.prevent="closeThemeMenu"
+        >
+          <button
+            class="theme-mode-option"
+            type="button"
+            role="menuitemradio"
+            :aria-checked="themeMode === 'system'"
+            @click="handleThemeCommand('system')"
+          >
+            <ThemeModeIcon mode="system" />
+            <span>跟随系统</span>
+            <el-icon
+              class="theme-check"
+              :class="{ visible: themeMode === 'system' }"
+              aria-hidden="true"
+            >
+              <Check />
+            </el-icon>
+          </button>
+          <button
+            class="theme-mode-option"
+            type="button"
+            role="menuitemradio"
+            :aria-checked="themeMode === 'light'"
+            @click="handleThemeCommand('light')"
+          >
+            <ThemeModeIcon mode="light" />
+            <span>浅色模式</span>
+            <el-icon
+              class="theme-check"
+              :class="{ visible: themeMode === 'light' }"
+              aria-hidden="true"
+            >
+              <Check />
+            </el-icon>
+          </button>
+          <button
+            class="theme-mode-option"
+            type="button"
+            role="menuitemradio"
+            :aria-checked="themeMode === 'dark'"
+            @click="handleThemeCommand('dark')"
+          >
+            <ThemeModeIcon mode="dark" />
+            <span>深色模式</span>
+            <el-icon
+              class="theme-check"
+              :class="{ visible: themeMode === 'dark' }"
+              aria-hidden="true"
+            >
+              <Check />
+            </el-icon>
+          </button>
+        </div>
+      </div>
       <button
         class="header-button"
         type="button"
@@ -201,9 +242,12 @@ const emit = defineEmits<{
 const version = ref('')
 const maximized = ref(false)
 const alwaysOnTop = ref(false)
+const themeMenuOpen = ref(false)
+const themeMenuRef = ref<HTMLElement>()
 const { themeMode, setTheme } = useTheme()
 const windowService = getBrowserWindowService()
 let removeWindowStateListener: (() => void) | undefined
+let themeApplyFrame: number | undefined
 const themeLabel = computed(
   () =>
     ({
@@ -213,8 +257,34 @@ const themeLabel = computed(
     })[themeMode.value],
 )
 
+function toggleThemeMenu() {
+  themeMenuOpen.value = !themeMenuOpen.value
+}
+
+function closeThemeMenu() {
+  themeMenuOpen.value = false
+}
+
 function handleThemeCommand(command: ThemeMode) {
-  setTheme(command)
+  closeThemeMenu()
+  if (command === themeMode.value) return
+
+  if (themeApplyFrame !== undefined) cancelAnimationFrame(themeApplyFrame)
+  themeApplyFrame = requestAnimationFrame(() => {
+    themeApplyFrame = requestAnimationFrame(() => {
+      themeApplyFrame = undefined
+      setTheme(command)
+    })
+  })
+}
+
+function handleDocumentPointerDown(event: PointerEvent) {
+  if (!themeMenuOpen.value) return
+  if (!themeMenuRef.value?.contains(event.target as Node)) closeThemeMenu()
+}
+
+function handleDocumentKeydown(event: KeyboardEvent) {
+  if (event.key === 'Escape') closeThemeMenu()
 }
 
 function applyWindowState(state?: { maximized?: boolean; alwaysOnTop?: boolean }) {
@@ -245,6 +315,10 @@ async function restoreDetachedPanel() {
 }
 
 onMounted(async () => {
+  document.addEventListener('pointerdown', handleDocumentPointerDown)
+  document.addEventListener('keydown', handleDocumentKeydown)
+  window.addEventListener('blur', closeThemeMenu)
+
   const [appVersion, state] = await Promise.all([
     windowService.getAppVersion(),
     windowService.getState(),
@@ -255,6 +329,10 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
+  document.removeEventListener('pointerdown', handleDocumentPointerDown)
+  document.removeEventListener('keydown', handleDocumentKeydown)
+  window.removeEventListener('blur', closeThemeMenu)
+  if (themeApplyFrame !== undefined) cancelAnimationFrame(themeApplyFrame)
   removeWindowStateListener?.()
 })
 </script>
@@ -381,17 +459,67 @@ onUnmounted(() => {
   -webkit-app-region: no-drag;
 }
 
-.header-controls :deep(.el-dropdown) {
+.theme-menu-anchor {
+  position: relative;
   height: 100%;
+  -webkit-app-region: no-drag;
 }
 
-.header-controls :deep(.el-tooltip__trigger) {
-  height: 100%;
+.theme-mode-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 4px;
+  z-index: 1;
+  display: grid;
+  width: 152px;
+  padding: 4px;
+  border: 1px solid var(--app-border);
+  border-radius: 4px;
+  color: var(--app-text);
+  background: var(--app-surface);
+  box-shadow: var(--el-box-shadow-light);
+  box-sizing: border-box;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  contain: layout style;
+}
+
+.theme-mode-menu.open {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+}
+
+.theme-mode-option {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) 16px;
+  align-items: center;
+  width: 100%;
+  height: 32px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 3px;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  gap: 8px;
   outline: none;
 }
 
+.theme-mode-option:hover,
+.theme-mode-option:focus-visible {
+  background: var(--app-hover);
+}
+
 .theme-check {
-  margin-left: auto;
+  visibility: hidden;
+}
+
+.theme-check.visible {
+  visibility: visible;
 }
 
 .header-button {

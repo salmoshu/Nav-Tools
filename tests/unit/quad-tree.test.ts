@@ -16,9 +16,9 @@ describe('QuadTree', () => {
 
   it('handles duplicate coordinates', () => {
     const tree = new QuadTree<string>({ minX: 0, maxX: 10, minY: 0, maxY: 10 })
-    tree.insert(5, 5, 'a')
-    tree.insert(5, 5, 'b')
-    tree.insert(5, 5, 'c')
+    for (let index = 0; index < 1000; index++) {
+      expect(tree.insert(5, 5, String(index))).toBe(true)
+    }
 
     const result = tree.queryNearest(5, 5, 0.1)
     expect(result).not.toBeNull()

@@ -21,6 +21,10 @@ interface LayoutDocument {
   showStatusBar: boolean
   /** 工具栏可见性；旧版文档缺省视为 true */
   showToolBar?: boolean
+  /** 工具栏停靠位置；缺省视为 bottom */
+  toolbarPosition?: 'top' | 'right' | 'bottom' | 'left'
+  /** 状态栏停靠位置；缺省视为 right */
+  statusbarPosition?: 'left' | 'right'
   /** 用户主动移除的窗口 ID，恢复布局时不再自动补回 */
   removedWindowIds?: string[]
 }
@@ -61,12 +65,16 @@ export class LayoutStorage {
     showStatusBar: boolean,
     removedWindowIds: string[] = [],
     showToolBar?: boolean,
+    toolbarPosition?: 'top' | 'right' | 'bottom' | 'left',
+    statusbarPosition?: 'left' | 'right',
   ): void {
     this.storage.write<LayoutDocument>(this.key(applicationId), {
       version: 1,
       items,
       showStatusBar,
       ...(showToolBar === undefined ? {} : { showToolBar }),
+      ...(toolbarPosition === undefined ? {} : { toolbarPosition }),
+      ...(statusbarPosition === undefined ? {} : { statusbarPosition }),
       removedWindowIds,
     })
   }
@@ -85,6 +93,8 @@ export class LayoutStorage {
     applicationId: string,
     showStatusBar: boolean,
     showToolBar: boolean,
+    toolbarPosition?: 'top' | 'right' | 'bottom' | 'left',
+    statusbarPosition?: 'left' | 'right',
   ): void {
     const existing = this.load(applicationId)
     if (!existing) {
@@ -94,6 +104,8 @@ export class LayoutStorage {
         items: [],
         showStatusBar,
         showToolBar,
+        ...(toolbarPosition === undefined ? {} : { toolbarPosition }),
+        ...(statusbarPosition === undefined ? {} : { statusbarPosition }),
         removedWindowIds: [],
       })
       return
@@ -102,6 +114,8 @@ export class LayoutStorage {
       ...existing,
       showStatusBar,
       showToolBar,
+      ...(toolbarPosition === undefined ? {} : { toolbarPosition }),
+      ...(statusbarPosition === undefined ? {} : { statusbarPosition }),
     })
   }
 
@@ -119,6 +133,14 @@ function isLayoutDocument(value: unknown): value is LayoutDocument {
     document.items.every(isPersistedLayoutItem) &&
     typeof document.showStatusBar === 'boolean' &&
     (document.showToolBar === undefined || typeof document.showToolBar === 'boolean') &&
+    (document.toolbarPosition === undefined ||
+      document.toolbarPosition === 'top' ||
+      document.toolbarPosition === 'right' ||
+      document.toolbarPosition === 'bottom' ||
+      document.toolbarPosition === 'left') &&
+    (document.statusbarPosition === undefined ||
+      document.statusbarPosition === 'left' ||
+      document.statusbarPosition === 'right') &&
     (document.removedWindowIds === undefined ||
       (Array.isArray(document.removedWindowIds) &&
         document.removedWindowIds.every(id => typeof id === 'string')))

@@ -25,6 +25,7 @@
       <div class="dashboard-grid">
         <!-- use-css-transforms 需设置为 false，也即禁用 CSS 变换，否则会导致内层字体模糊 -->
         <grid-layout
+          ref="gridLayoutRef"
           v-model:layout="layoutDraggableList"
           :col-num="12"
           :row-height="60"
@@ -125,7 +126,12 @@ import { ElButton, ElCard, ElIcon, ElMessage } from 'element-plus'
 import { Close, Share, FullScreen } from '@element-plus/icons-vue'
 import emitter from '@/hooks/useMitt'
 import { useLayoutManager } from '@/composables/useLayoutManager'
-import { showStatusBar, showToolBar } from '@/composables/useStatusManager'
+import {
+  showStatusBar,
+  showToolBar,
+  toolbarPosition,
+  statusbarPosition,
+} from '@/composables/useStatusManager'
 import { getWindowById, windowCatalog } from '@/settings/config'
 import { getPanelIconComponent } from '@/settings/panelIcons'
 import { useDevice } from '@/hooks/useDevice'
@@ -199,14 +205,15 @@ const openApplicationWindow = async (applicationId: string) => {
 }
 
 // 工具栏和状态栏位置状态
-const toolbarPosition = ref<'top' | 'right' | 'bottom' | 'left'>('top')
-const statusbarPosition = ref<'left' | 'right'>('right')
+// toolbarPosition / statusbarPosition 为 useStatusManager 提供的全局共享引用
+// （兼顾持久化与跨组件同步）
 const toolbarSize = ref({ width: 40, height: 40 })
 const statusbarSize = ref({ width: 200, height: 60 })
 
 // 全屏相关状态
 const fullScreenItem = ref<string | null>(null)
 const isGridResizing = ref(false)
+const gridLayoutRef = ref<InstanceType<typeof GridLayout> | null>(null)
 
 // 工具栏/状态栏实际渲染状态：延迟跟随用户切换状态。
 // 全屏模式下隐藏时，先让 full-screen-card 拉伸（dashboardStyle 已基于 showToolBar 更新），
@@ -250,6 +257,26 @@ watch(showStatusBar, (visible) => {
     })
   })
 })
+
+// grid-layout-plus 对 ResizeObserver 做了尾触发防抖；高速数据流下主动同步，避免卡片保留旧宽度。
+function syncGridLayoutWidth() {
+  const gridLayout = gridLayoutRef.value
+  const gridElement = gridLayout?.$el as HTMLElement | undefined
+  if (!gridLayout || !gridElement) return
+
+  const width = gridElement.offsetWidth
+  if (width > 0 && gridLayout.state.width !== width) {
+    gridLayout.state.width = width
+  }
+
+  void nextTick(() => window.dispatchEvent(new Event('resize')))
+}
+
+watch(
+  [showToolBar, showStatusBar, toolbarPosition, statusbarPosition, fullScreenItem],
+  syncGridLayoutWidth,
+  { flush: 'post' },
+)
 
 // 提供工具栏和状态栏位置的响应式引用
 provide('toolbarPosition', toolbarPosition)
@@ -604,7 +631,6 @@ onUnmounted(() => {
 .dashboard-content {
   width: 100%;
   height: 100%;
-  transition: all 0.3s ease;
   position: relative;
   overflow: auto;
 }

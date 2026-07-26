@@ -8,6 +8,7 @@ describe('GNSS map track retention', () => {
     expect(source).toContain('v-model="slidingWindow"')
     expect(source).toContain('active-text="滑窗"')
     expect(source).toContain('inactive-text="全部"')
+    expect(source).toContain('const slidingWindow = ref(false)')
     expect(source).toContain('TRACK_WINDOW_POINTS = 2000')
     expect(source).toContain('if (slidingWindow.value) trimTrackToWindow()')
   })
@@ -17,7 +18,18 @@ describe('GNSS map track retention', () => {
     expect(source).toContain('lastSegment.line.addLatLng(point.latlng)')
     expect(source).toContain('firstSegment.line.setLatLngs(firstSegment.latlngs)')
     expect(source).toContain('firstSegment.line.remove()')
-    expect(source).not.toContain('rebuildTrack')
+  })
+
+  it('queues every precise GGA point and drains the queue across animation frames', () => {
+    expect(source).toContain('const { mapTrackPoints } = useNmea()')
+    expect(source).toContain('pendingTrackPoints.push(source[index])')
+    expect(source).toContain('requestAnimationFrame(renderPendingTrack)')
+    expect(source).toContain('TRACK_RENDER_BUDGET_MS = 4')
+    expect(source).not.toContain('POSITION_UPDATE_INTERVAL_MS')
+  })
+
+  it('disables Leaflet path simplification so displayed geometry retains every point', () => {
+    expect(source).toContain('smoothFactor: 0')
   })
 
   it('passes the actual previous point when starting a segment', () => {

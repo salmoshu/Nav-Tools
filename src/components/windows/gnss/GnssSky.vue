@@ -111,7 +111,7 @@
           <path d="M4 6h16M4 12h16M4 18h16" />
         </svg>
       </button>
-      <div class="sky-chart" ref="chartRef"></div>
+      <div class="sky-chart" ref="chartRef" @mouseleave="hideSkyTooltip"></div>
     </div>
   </div>
 </template>
@@ -148,6 +148,7 @@ const isNarrow = ref(false)
 const NARROW_THRESHOLD = 640
 // 用于合并连续的 resize 请求，避免布局抖动
 let resizeRaf = null
+let themeRefreshRaf = null
 
 function collapsePanel() {
   panelOpen.value = false
@@ -178,6 +179,17 @@ function scheduleResize() {
     } catch (error) {
       // 图表调整大小失败不会影响正常使用，静默处理
     }
+  })
+}
+
+// 先让主题按钮和下拉框完成一帧绘制，再重建较重的 SVG 图表。
+function scheduleThemeRefresh() {
+  if (themeRefreshRaf !== null) cancelAnimationFrame(themeRefreshRaf)
+  themeRefreshRaf = requestAnimationFrame(() => {
+    themeRefreshRaf = requestAnimationFrame(() => {
+      themeRefreshRaf = null
+      initChart()
+    })
   })
 }
 
@@ -249,6 +261,7 @@ function initChart() {
     setupResizeObserver()
 
     chartInstance.value = echarts.init(chartRef.value, null, { renderer: 'svg' })
+    chartInstance.value.getZr().on('globalout', hideSkyTooltip)
     // e2e 测试钩子：仅开发模式暴露实例，用于断言极坐标布局（生产构建会被消除）
     if (import.meta.env.DEV) window.__gnssSkyChart = chartInstance.value
     const colors = chartTheme.value
@@ -257,6 +270,9 @@ function initChart() {
     const option = {
       tooltip: {
         trigger: 'item',
+        hideDelay: 0,
+        enterable: false,
+        transitionDuration: 0,
         formatter: function(params) {
           const data = params.data
           const prefix = constellationPrefixes[data.constellation] || 'U'
@@ -535,6 +551,10 @@ function updateChartData() {
   }, { replaceMerge: ['series'] })
 }
 
+function hideSkyTooltip() {
+  chartInstance.value?.dispatchAction({ type: 'hideTip' })
+}
+
 function scheduleDataUpdate() {
   if (dataUpdateTimer !== null) return
   dataUpdateTimer = window.setTimeout(() => {
@@ -563,7 +583,7 @@ watch(satelliteSnrData, () => {
   scheduleDataUpdate()
 })
 
-watch(resolvedTheme, () => initChart())
+watch(resolvedTheme, scheduleThemeRefresh)
 
 // 面板开合会改变图表可用宽度（宽屏侧边栏模式），需等 DOM 更新后重新计算尺寸
 watch(panelOpen, () => {
@@ -591,6 +611,10 @@ onUnmounted(() => {
   if (resizeRaf !== null) {
     cancelAnimationFrame(resizeRaf)
     resizeRaf = null
+  }
+  if (themeRefreshRaf !== null) {
+    cancelAnimationFrame(themeRefreshRaf)
+    themeRefreshRaf = null
   }
 
   window.removeEventListener('resize', scheduleResize)

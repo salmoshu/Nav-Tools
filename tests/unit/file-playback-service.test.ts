@@ -98,6 +98,51 @@ describe('FilePlaybackService', () => {
     expect(await readFile(filePath, 'utf8')).toBe('abcdef')
   })
 
+  it('coalesces dense checkpoints before sending renderer IPC events', async () => {
+    const directory = await mkdtemp(path.join(os.tmpdir(), 'nav-tools-playback-batch-'))
+    tempDirectories.push(directory)
+    const filePath = path.join(directory, 'capture.log')
+    const content = 'x'.repeat(1000)
+    await writeFile(filePath, content)
+    await writeFile(
+      `${filePath}.tag`,
+      Buffer.concat([
+        createRtklibTimeTagHeader(Date.now()),
+        ...Array.from({ length: content.length }, (_, index) =>
+          createRtklibTimeTagRecord(index, index + 1),
+        ),
+      ]),
+    )
+
+    const deliveries: string[] = []
+    let finish: () => void = () => undefined
+    const completed = new Promise<void>((resolve) => {
+      finish = resolve
+    })
+    const sender = {
+      isDestroyed: () => false,
+      send(channel: string, payload: unknown) {
+        if (channel === 'file-playback-data') deliveries.push(String(payload))
+        if (
+          channel === 'file-playback-status' &&
+          (payload as { state?: string }).state === 'completed'
+        ) {
+          finish()
+        }
+      },
+    }
+
+    await new FilePlaybackService().start(
+      1,
+      { path: filePath, replaySpeed: 1000, startOffset: 0, filePositionBytes: 4 },
+      sender,
+    )
+    await completed
+
+    expect(deliveries.join('')).toBe(content)
+    expect(deliveries.length).toBeLessThanOrEqual(5)
+  })
+
   it('lets stop requests interrupt playback that is behind schedule', async () => {
     const directory = await mkdtemp(path.join(os.tmpdir(), 'nav-tools-playback-stop-'))
     tempDirectories.push(directory)
