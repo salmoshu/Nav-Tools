@@ -1,6 +1,24 @@
 <template>
-  <div class="gnss-sky-container" ref="containerRef">
-    <div class="control-panel">
+  <div class="gnss-sky-container" ref="containerRef" :class="{ 'is-narrow': isNarrow }">
+    <aside
+      v-show="panelOpen"
+      class="control-panel"
+      :class="{ drawer: isNarrow }"
+    >
+      <div class="panel-header">
+        <span class="panel-title">控制面板</span>
+        <button
+          class="icon-btn collapse-btn"
+          type="button"
+          @click="collapsePanel"
+          :title="isNarrow ? '关闭面板' : '折叠面板'"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M15 18l-6-6 6-6" />
+          </svg>
+        </button>
+      </div>
+
       <div class="controls">
         <div class="control-group">
           <span class="control-label">视图模式</span>
@@ -73,13 +91,33 @@
           </div>
         </div>
       </div>
+    </aside>
+
+    <div
+      v-if="panelOpen && isNarrow"
+      class="panel-backdrop"
+      @click="collapsePanel"
+    ></div>
+
+    <div class="chart-area">
+      <button
+        v-if="!panelOpen"
+        class="icon-btn expand-btn"
+        type="button"
+        @click="expandPanel"
+        title="展开面板"
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M4 6h16M4 12h16M4 18h16" />
+        </svg>
+      </button>
+      <div class="sky-chart" ref="chartRef"></div>
     </div>
-    <div class="sky-chart" ref="chartRef"></div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, watch, nextTick } from 'vue'
+import { ref, shallowRef, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import * as echarts from 'echarts'
 import { useNmea } from '@/composables/gnss/useNmea'
 import { useTheme } from '@/composables/useTheme'
@@ -91,13 +129,57 @@ const { chartTheme, resolvedTheme } = useTheme()
 // 组件状态
 const containerRef = ref(null)
 const chartRef = ref(null)
-const chartInstance = ref(null)
+// echarts 实例必须用 shallowRef 持有：普通 ref 会深度响应式化实例，
+// 导致 echarts 内部对象被 Vue 代理、身份比较失效（findAxisModel 找不到轴模型），
+// resize() 在 polar 重建坐标系时抛 "Cannot read properties of undefined (reading 'get')"，
+// 最终表现为窗口调整后图表停留在左上角旧尺寸不铺满（apache/echarts#16642 同类问题）
+const chartInstance = shallowRef(null)
 const viewMode = ref('constellation')
 const constellationFilter = ref('all')
 const satelliteSize = ref(25)
 const minSizeForLabel = 20
 // 添加仰角限制状态，默认15°
 const elevationLimit = ref(15)
+
+// 控制面板折叠状态
+const panelOpen = ref(true)
+const isNarrow = ref(false)
+// 容器宽度低于该阈值时视为“小窗”，面板自动折叠为抽屉
+const NARROW_THRESHOLD = 640
+// 用于合并连续的 resize 请求，避免布局抖动
+let resizeRaf = null
+
+function collapsePanel() {
+  panelOpen.value = false
+}
+
+function expandPanel() {
+  panelOpen.value = true
+}
+
+// 在下一帧统一触发图表 resize，避免 ResizeObserver 高频回调造成抖动
+function scheduleResize() {
+  if (resizeRaf) cancelAnimationFrame(resizeRaf)
+  resizeRaf = requestAnimationFrame(() => {
+    resizeRaf = null
+    if (!chartInstance.value) return
+    try {
+      // 先更新 SVG 视口尺寸
+      chartInstance.value.resize()
+    } catch (error) {
+      // resize 失败不阻塞后续重绘
+    }
+    try {
+      // SVG 渲染器下 resize() 只更新视口的像素宽高，不会重排图表内容；
+      // 必须再通过 setOption 重新渲染，否则最大化 / 拉伸窗口后极坐标准星图
+      // 仍停留在左上角的旧尺寸（不铺满、不居中）。即使暂停或数据为空，
+      // 重新应用 series 也会让坐标轴与网格按新尺寸重新布局并居中。
+      updateChartData()
+    } catch (error) {
+      // 图表调整大小失败不会影响正常使用，静默处理
+    }
+  })
+}
 
 // 用于存储需要在组件卸载时执行的清理函数
 const cleanupFunctions = []
@@ -125,9 +207,9 @@ const constellationColors = {
   UNKNOWN: '#757575'
 }
 
-// 设置ResizeObserver监听容器尺寸变化
+// 设置ResizeObserver监控容器尺寸变化
 function setupResizeObserver() {
-  if (!containerRef.value) return
+  if (!containerRef.value || !chartRef.value) return
 
   // 清理之前的ResizeObserver
   if (resizeObserver) {
@@ -135,20 +217,23 @@ function setupResizeObserver() {
   }
 
   resizeObserver = new ResizeObserver(() => {
-    // nextTick 后再 resize：极坐标图表在 ResizeObserver 回调里同步 resize
-    // 会偶发报错导致图表尺寸不更新（task#32），静默吞错会让窗口拉伸后图表保持旧尺寸
-    nextTick(() => {
-      if (chartInstance.value) {
-        try {
-          chartInstance.value.resize()
-        } catch (error) {
-          // 图表调整大小失败不会影响正常使用，静默处理
-        }
-      }
-    })
+    const el = containerRef.value
+    if (!el) return
+
+    const narrow = el.clientWidth <= NARROW_THRESHOLD
+    // 窗口变窄进入小屏时自动折叠面板（只折叠、不自动展开，避免来回跳动）
+    if (narrow && !isNarrow.value) {
+      panelOpen.value = false
+    }
+    isNarrow.value = narrow
+
+    // 图表元素尺寸变化（最大化 / 拉伸窗口 / 面板折叠 / 停靠布局变化）时重新铺满
+    scheduleResize()
   })
 
-  resizeObserver.observe(containerRef.value)
+  // 直接观察图表元素本身：其尺寸在窗口拉伸、面板开合、停靠尺寸变化时都会改变，
+  // 比观察外层容器更可靠（外层容器带 container-type 时 ResizeObserver 行为不稳定）
+  resizeObserver.observe(chartRef.value)
 }
 
 // 初始化图表
@@ -164,6 +249,8 @@ function initChart() {
     setupResizeObserver()
 
     chartInstance.value = echarts.init(chartRef.value, null, { renderer: 'svg' })
+    // e2e 测试钩子：仅开发模式暴露实例，用于断言极坐标布局（生产构建会被消除）
+    if (import.meta.env.DEV) window.__gnssSkyChart = chartInstance.value
     const colors = chartTheme.value
 
     // 设置图表选项
@@ -212,7 +299,7 @@ function initChart() {
         show: false,
       },
       polar: {
-        radius: '75%',
+        radius: '85%',
         splitNumber: 6,
         center: ['50%', '50%']
       },
@@ -478,8 +565,16 @@ watch(satelliteSnrData, () => {
 
 watch(resolvedTheme, () => initChart())
 
+// 面板开合会改变图表可用宽度（宽屏侧边栏模式），需等 DOM 更新后重新计算尺寸
+watch(panelOpen, () => {
+  nextTick(() => scheduleResize())
+})
+
 // 组件挂载时
 onMounted(() => {
+  // 兜底：窗口（最大化 / 拉伸主窗口）尺寸变化时强制重算图表，
+  // 与 ResizeObserver 互补，确保停止播放后拉伸窗口也能铺满并居中
+  window.addEventListener('resize', scheduleResize)
   setTimeout(() => {
     initChart()
   }, 100)
@@ -491,6 +586,14 @@ onUnmounted(() => {
     clearTimeout(dataUpdateTimer)
     dataUpdateTimer = null
   }
+
+  // 取消尚未执行的 resize 帧
+  if (resizeRaf !== null) {
+    cancelAnimationFrame(resizeRaf)
+    resizeRaf = null
+  }
+
+  window.removeEventListener('resize', scheduleResize)
   // 执行所有清理函数
   cleanupFunctions.forEach(func => func())
   cleanupFunctions.length = 0 // 清空数组
@@ -517,26 +620,111 @@ onUnmounted(() => {
   overflow: hidden;
   color: var(--app-text);
   background: var(--app-surface);
+  position: relative;
   container-type: inline-size;
 }
 
 .control-panel {
   flex: 0 0 auto;
   width: min(260px, 30%);
-  min-width: 180px;
   padding: 16px;
   border-right: 2px solid var(--app-border);
   display: flex;
   flex-direction: column;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
   overflow-y: auto;
+  background: var(--app-surface);
+  z-index: 5;
+}
+
+/* 小窗模式下面板变为抽屉，浮在图表之上，不占用布局宽度 */
+.control-panel.drawer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  width: min(300px, 80%);
+  max-width: 80%;
+  border-right: 2px solid var(--app-border);
+  box-shadow: 4px 0 16px rgba(0, 0, 0, 0.18);
+  z-index: 20;
+}
+
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.panel-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--app-text);
+}
+
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--app-border);
+  border-radius: 6px;
+  background: var(--app-surface-raised);
+  color: var(--app-text);
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.icon-btn:hover {
+  background: rgba(64, 158, 255, 0.1);
+  border-color: #409EFF;
+}
+
+.icon-btn svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* 抽屉展开时的半透明遮罩，点击可关闭面板 */
+.panel-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.25);
+  z-index: 10;
+}
+
+.chart-area {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.expand-btn {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 15;
+  width: 34px;
+  height: 34px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
 }
 
 .sky-chart {
   flex: 1;
   width: 100%;
   min-height: 0px;
-  padding: 15px;
+  padding: 0;
   background-color: var(--app-surface);
 }
 
@@ -717,31 +905,8 @@ onUnmounted(() => {
 }
 
 @container (max-width: 520px) {
-  .gnss-sky-container {
-    flex-direction: column;
-  }
-  .control-panel {
-    width: 100%;
-    min-width: auto;
-    border-right: none;
-    border-bottom: 1px solid var(--app-border);
-    padding: 12px;
-  }
   .controls {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
     gap: 12px;
-  }
-  .control-group,
-  .satellite-size-control,
-  .elevation-limit-control,
-  .constellation-legend,
-  .mode-hint {
-    grid-column: span 1;
-  }
-  .constellation-legend,
-  .mode-hint {
-    grid-column: span 2;
   }
 }
 </style>

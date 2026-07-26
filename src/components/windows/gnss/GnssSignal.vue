@@ -308,6 +308,7 @@ function getSnrColor(snr) {
 
 // 获取状态标签类型
 function getStatusTagType(snr) {
+  if (snr <= 0) return 'danger'
   if (snr >= 45) return 'success'
   if (snr >= 35) return 'primary'
   if (snr >= 25) return 'warning'
@@ -316,6 +317,7 @@ function getStatusTagType(snr) {
 
 // 获取状态文本
 function getStatusText(snr) {
+  if (snr <= 0) return '无效'
   if (snr >= 45) return '优秀'
   if (snr >= 35) return '良好'
   if (snr >= 25) return '一般'

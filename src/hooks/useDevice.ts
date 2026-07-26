@@ -238,6 +238,11 @@ filePlaybackService.onStatus((status) => {
 
   if (status.state === 'playing') {
     globalDevice.value.connected = true
+    // 每次（重新）开始播放都清空上一次的绘图数据，避免新旧轨迹叠加
+    clearGnssBuffer()
+    clearGnssData()
+    clearFlowData()
+    clearFlowConsole()
     ElMessage({
       message: '时间戳播放已开始',
       type: 'success',
