@@ -18,6 +18,7 @@ import { eventsMap } from './events'
 import { CameraCommandService } from './services/CameraCommandService'
 import { CameraStreamService } from './services/CameraStreamService'
 import { FilePlaybackService } from './services/FilePlaybackService'
+import { TextFileStreamService } from './services/TextFileStreamService'
 import { LogRecordingService } from './services/LogRecordingService'
 import { OfflineTileService } from './services/OfflineTileService'
 
@@ -64,12 +65,14 @@ const ffmpegExecutable = (ffmpegStatic || 'ffmpeg').replace(
 const cameraStreamService = new CameraStreamService(ffmpegExecutable)
 const cameraCommandService = new CameraCommandService()
 const filePlaybackService = new FilePlaybackService()
+const textFileStreamService = new TextFileStreamService()
 const logRecordingService = new LogRecordingService()
 const offlineTileService = new OfflineTileService()
 // 自定义瓦片协议必须在 app ready 之前注册为 privileged scheme
 offlineTileService.registerPrivilegedScheme()
 const cameraStreamOwners = new Set<number>()
 const filePlaybackOwners = new Set<number>()
+const textFileStreamOwners = new Set<number>()
 const logRecordingOwners = new Set<number>()
 
 type WindowResizeEdge =
@@ -236,6 +239,22 @@ ipcMain.handle('file-playback-start', (event, request) => {
 })
 
 ipcMain.handle('file-playback-stop', (event) => filePlaybackService.stop(event.sender.id))
+ipcMain.handle('text-file-stream-open', (event, request) => {
+  if (!textFileStreamOwners.has(event.sender.id)) {
+    textFileStreamOwners.add(event.sender.id)
+    event.sender.once('destroyed', () => {
+      void textFileStreamService.closeOwner(event.sender.id)
+      textFileStreamOwners.delete(event.sender.id)
+    })
+  }
+  return textFileStreamService.start(event.sender.id, request)
+})
+ipcMain.handle('text-file-stream-read', (event, requestId) =>
+  textFileStreamService.read(event.sender.id, requestId),
+)
+ipcMain.handle('text-file-stream-close', (event, requestId) =>
+  textFileStreamService.close(event.sender.id, requestId),
+)
 
 ipcMain.handle('log-recording-start', async (event) => {
   const targetWindow = BrowserWindow.fromWebContents(event.sender)

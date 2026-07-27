@@ -5,48 +5,48 @@
       <div class="console-controls">
         <!-- 左侧按钮组 -->
         <div class="left-controls">
-          <div class="data-parser-badge" title="数据解析方式请在数据接入中配置">
+          <div class="data-parser-badge" :title="t('common.rawMessages.parserBadgeTitle')">
             <el-icon><DataAnalysis /></el-icon>
-            <span>解析</span>
+            <span>{{ t('common.rawMessages.parse') }}</span>
             <strong>{{ parserLabel(activeDataParser) }}</strong>
           </div>
           
-          <el-button @click="toggleFilter" :type="dataFilter ? 'success' : 'default'" size="small" :title="dataFilter?'取消过滤':'启用过滤'" :disabled="dataFormat === 'none'">
+          <el-button @click="toggleFilter" :type="dataFilter ? 'success' : 'default'" size="small" :title="dataFilter ? t('common.rawMessages.filterOff') : t('common.rawMessages.filterOn')" :disabled="dataFormat === 'none'">
             <el-icon><Filter /></el-icon>
-            &nbsp;过滤
+            &nbsp;{{ t('common.rawMessages.filter') }}
           </el-button>
-          <el-button @click="toggleTimestamp" :type="dataTimestamp ? 'success' : 'default'" size="small" :title="dataTimestamp?'隐藏时间戳':'显示时间戳'">
+          <el-button @click="toggleTimestamp" :type="dataTimestamp ? 'success' : 'default'" size="small" :title="dataTimestamp ? t('common.rawMessages.timestampOff') : t('common.rawMessages.timestampOn')">
             <el-icon><Clock /></el-icon>
-            &nbsp;时间
+            &nbsp;{{ t('common.rawMessages.time') }}
           </el-button>
-          <el-button 
-            @click="handleAutoScroll" 
-            :type="dataAutoScroll ? 'success' : 'default'" 
-            size="small" 
-            :title="dataAutoScroll?'手动滚动':'自动滚动'"
+          <el-button
+            @click="handleAutoScroll"
+            :type="dataAutoScroll ? 'success' : 'default'"
+            size="small"
+            :title="dataAutoScroll ? t('common.rawMessages.scrollManual') : t('common.rawMessages.scrollAuto')"
           >
             <el-icon><Bottom /></el-icon>
-            &nbsp;置底
+            &nbsp;{{ t('common.rawMessages.scrollToBottom') }}
           </el-button>
 
-          <el-button @click="toggleDisplayFormat" :type="displayFormat === 'hex' ? 'success' : 'default'" size="small" :title="displayFormat==='hex'?'HEX显示':'ASCII显示'">
+          <el-button @click="toggleDisplayFormat" :type="displayFormat === 'hex' ? 'success' : 'default'" size="small" :title="displayFormat==='hex' ? t('common.rawMessages.hexDisplay') : t('common.rawMessages.asciiDisplay')">
             <el-icon><Coin /></el-icon>
-            &nbsp;HEX
+            &nbsp;{{ t('common.rawMessages.hex') }}
           </el-button>
         </div>
         
         <!-- 右侧按钮组 -->
         <div class="right-controls">
-          <el-button @click="toggleSearch" size="small" :type="showSearchBox ? 'primary' : 'text'" :title="showSearchBox?'关闭搜索':'打开搜索'">
+          <el-button @click="toggleSearch" size="small" :type="showSearchBox ? 'primary' : 'text'" :title="showSearchBox ? t('common.rawMessages.searchClose') : t('common.rawMessages.searchOpen')">
             <el-icon><Search /></el-icon>
           </el-button>
-          <el-button @click="saveConsoleData" type="text" size="small" :disabled="totalCount === 0" style="margin: 0px 0px;" title="保存到文件">
+          <el-button @click="saveConsoleData" type="text" size="small" :disabled="totalCount === 0" style="margin: 0px 0px;" :title="t('common.rawMessages.saveFile')">
             <el-icon><Document /></el-icon>
           </el-button>
-          <el-button @click="clearConsole" type="text" size="small" style="margin: 0px 0px;" title="清空控制台">
+          <el-button @click="clearConsole" type="text" size="small" style="margin: 0px 0px;" :title="t('common.rawMessages.clearConsole')">
             <el-icon><Delete /></el-icon>
           </el-button>
-          <el-button @click="togglePause" size="small" style="margin: 0px 0px;" :type="isPaused ? 'text' : 'success'" :title="isPaused?'继续接收':'暂停接收'">
+          <el-button @click="togglePause" size="small" style="margin: 0px 0px;" :type="isPaused ? 'text' : 'success'" :title="isPaused ? t('common.rawMessages.resumeReceive') : t('common.rawMessages.pauseReceive')">
             <el-icon v-if="!isPaused"><VideoPause /></el-icon>
             <el-icon v-else><VideoPlay /></el-icon>
           </el-button>
@@ -61,7 +61,7 @@
           ref="searchInput"
           v-model="searchQuery"
           size="small"
-          placeholder="搜索... (按ESC关闭)"
+          :placeholder="t('common.rawMessages.searchPlaceholder')"
           style="width: 200px; margin-right: 5px;"
           @input="performSearch"
           @keyup.enter="findNext"
@@ -77,9 +77,9 @@
           <el-icon><ArrowDown /></el-icon>
         </el-button>
         <span class="search-info-text" v-if="searchQuery && !isSearching">
-          找到 {{ searchResults.length }} 个匹配项，当前是第 {{ currentResultIndex + 1 }} 项
+          {{ t('common.rawMessages.searchResults', { count: searchResults.length, index: currentResultIndex + 1 }) }}
         </span>
-        <el-button @click="clearSearch" type="text" size="small" style="color: #909399; margin-left: 10px;">清除</el-button>
+        <el-button @click="clearSearch" type="text" size="small" style="color: #909399; margin-left: 10px;">{{ t('common.rawMessages.clear') }}</el-button>
       </div>
     </div>
 
@@ -132,7 +132,7 @@
             type="danger"
             plain
           >
-            <el-icon><Close /></el-icon>&nbsp;取消
+            <el-icon><Close /></el-icon>&nbsp;{{ t('common.rawMessages.cancel') }}
           </el-button>
           <el-button
             v-if="fileSendState.status !== 'sending'"
@@ -169,7 +169,7 @@
           v-model="inputFormat" 
           size="default" 
           style="width: 90px; margin-right: 8px;"
-          placeholder="格式"
+          :placeholder="t('common.rawMessages.format')"
           :teleported="false"
         >
           <el-option 
@@ -185,7 +185,7 @@
         <el-input
           v-model="inputMessage"
           size="default"
-          :placeholder="inputFormat === 'hex' ? '输入十六进制数据，如: 01 02 03' : '输入ASCII数据'"
+          :placeholder="inputFormat === 'hex' ? t('common.rawMessages.inputHexPlaceholder') : t('common.rawMessages.inputAsciiPlaceholder')"
           style="flex: 1; margin-right: 8px;"
           @keyup.enter="sendMessage"
           :disabled="!deviceConnected"
@@ -200,12 +200,12 @@
           :type="addNewLine ? 'success' : 'default'" 
           size="default"
           :disabled="inputFormat === 'hex' || !deviceConnected"
-          :title="addNewLine ? '已启用换行' : '启用换行'"
+          :title="addNewLine ? t('common.rawMessages.newlineOn') : t('common.rawMessages.newlineOff')"
         >
           <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px;">
             <path d="M9 10l-5 5 5 5"/>
             <path d="M20 4v7a4 4 0 0 1-4 4H4"/>
-          </svg>&nbsp;换行
+          </svg>&nbsp;{{ t('common.rawMessages.newline') }}
         </el-button>
         
         <el-button 
@@ -214,16 +214,16 @@
           size="default"
           style="font-size: 12px;"
           :disabled="!deviceConnected || !inputMessage.trim()"
-          title="发送消息"
+          :title="t('common.rawMessages.sendMessage')"
         >
-          <el-icon><Position /></el-icon>&nbsp;发送
+          <el-icon><Position /></el-icon>&nbsp;{{ t('common.rawMessages.send') }}
         </el-button>
         
         <el-button 
           @click="handleSelectFile"
           :disabled="isFileSending"
           size="default"
-          :title="isFileSending ? '文件发送中...' : '加载文件'"
+          :title="isFileSending ? t('common.rawMessages.sendingFile') : t('common.rawMessages.loadFile')"
           style="font-size: 12px;"
         >
           <el-icon><Document /></el-icon>
@@ -236,19 +236,19 @@
           size="default"
           style="font-size: 12px;"
           :disabled="!deviceConnected || (fileSendState.status !== 'loaded' && fileSendState.status !== 'success')"
-          :title="fileSendState.status === 'loaded' || fileSendState.status === 'success' ? '发送已加载的文件' : '文件发送中'"
+          :title="fileSendState.status === 'loaded' || fileSendState.status === 'success' ? t('common.rawMessages.sendLoadedFile') : t('common.rawMessages.sendingFile')"
         >
-          <el-icon><Promotion /></el-icon>&nbsp;发送文件
+          <el-icon><Promotion /></el-icon>&nbsp;{{ t('common.rawMessages.sendFile') }}
         </el-button>
       </div>
     </div>
 
     <!-- 底部状态栏 -->
     <div class="console-footer">
-      <span>共 {{ totalCount }} 条消息</span>
-      <span>&nbsp;|&nbsp;有效数目 {{ validMsgCount }} 条</span>
-      <span v-if="messageRate > 0">&nbsp;|&nbsp;{{ messageRate }} 条/秒</span>
-      <span v-if="isPaused">&nbsp;|&nbsp;已暂停</span>
+      <span>{{ t('common.rawMessages.totalMessages', { count: totalCount }) }}</span>
+      <span>&nbsp;|&nbsp;{{ t('common.rawMessages.validCount', { count: validMsgCount }) }}</span>
+      <span v-if="messageRate > 0">&nbsp;|&nbsp;{{ messageRate }} {{ t('common.rawMessages.perSecond') }}</span>
+      <span v-if="isPaused">&nbsp;|&nbsp;{{ t('common.rawMessages.paused') }}</span>
     </div>
   </div>
 </template>
@@ -282,6 +282,7 @@ import { useDevice } from '@/hooks/useDevice'
 import { useApplicationSelector } from '@/composables/useApplicationSelector'
 import { RecycleScroller } from 'vue-virtual-scroller'
 import { parserLabel } from '@/composables/useDataSourceManager'
+import { t } from '@/i18n'
 
 // DOM引用
 const consoleRoot = ref<HTMLDivElement | null>(null)
@@ -361,13 +362,22 @@ const formatElapsed = (ms: number): string => {
 const fileSendStatusText = computed(() => {
   switch (fileSendState.value.status) {
     case 'sending':
-      return `发送中... ACK ${fileSendState.value.ackedChunks}/${fileSendState.value.totalChunks}`
+      return t('common.rawMessages.sendingAck', {
+        acked: fileSendState.value.ackedChunks,
+        total: fileSendState.value.totalChunks,
+      })
     case 'success':
-      return `发送完成 (${fileSendState.value.ackedChunks}/${fileSendState.value.totalChunks} ACK)`
+      return t('common.rawMessages.sendCompleteAck', {
+        acked: fileSendState.value.ackedChunks,
+        total: fileSendState.value.totalChunks,
+      })
     case 'error':
-      return `发送失败: ${fileSendState.value.error}`
+      return t('common.rawMessages.sendFailedMsg', { error: fileSendState.value.error })
     case 'cancelled':
-      return `已取消 (${fileSendState.value.ackedChunks}/${fileSendState.value.totalChunks} ACK)`
+      return t('common.rawMessages.cancelledAck', {
+        acked: fileSendState.value.ackedChunks,
+        total: fileSendState.value.totalChunks,
+      })
     default:
       return ''
   }

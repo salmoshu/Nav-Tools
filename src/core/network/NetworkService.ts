@@ -1,4 +1,5 @@
 import type { IpcTransport } from '../platform/IpcTransport'
+import { t } from '@/i18n'
 
 export type NetworkProtocol = 'tcp' | 'udp'
 
@@ -13,10 +14,12 @@ export interface NetworkDisconnectEvent extends NetworkConnectionOptions {
 }
 
 export function validateNetworkOptions(options: NetworkConnectionOptions): string | undefined {
-  if (options.protocol !== 'tcp' && options.protocol !== 'udp') return '请选择 TCP 或 UDP 协议'
-  if (!options.host.trim()) return options.protocol === 'tcp' ? '请输入远端地址' : '请输入监听地址'
+  if (options.protocol !== 'tcp' && options.protocol !== 'udp') return t('core.network.protocolRequired')
+  if (!options.host.trim()) {
+    return options.protocol === 'tcp' ? t('core.network.remoteHostRequired') : t('core.network.listenHostRequired')
+  }
   if (!Number.isInteger(options.port) || options.port < 1 || options.port > 65_535) {
-    return '端口必须是 1 到 65535 之间的整数'
+    return t('core.network.portRange')
   }
   return undefined
 }

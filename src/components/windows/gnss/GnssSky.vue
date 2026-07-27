@@ -6,12 +6,12 @@
       :class="{ drawer: isNarrow }"
     >
       <div class="panel-header">
-        <span class="panel-title">控制面板</span>
+        <span class="panel-title">{{ t('gnss.sky.controlPanel') }}</span>
         <button
           class="icon-btn collapse-btn"
           type="button"
           @click="collapsePanel"
-          :title="isNarrow ? '关闭面板' : '折叠面板'"
+          :title="isNarrow ? t('gnss.sky.closePanel') : t('gnss.sky.collapsePanel')"
         >
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <path d="M15 18l-6-6 6-6" />
@@ -21,18 +21,18 @@
 
       <div class="controls">
         <div class="control-group">
-          <span class="control-label">视图模式</span>
+          <span class="control-label">{{ t('gnss.sky.viewMode') }}</span>
           <el-select v-model="viewMode" @change="applyViewMode" size="default" class="view-mode-select">
-            <el-option label="星座视图" value="constellation" />
-            <el-option label="SNR 视图" value="snr" />
-            <el-option label="仰角视图" value="elevation" />
+            <el-option :label="t('gnss.sky.constellationView')" value="constellation" />
+            <el-option :label="t('gnss.sky.snrView')" value="snr" />
+            <el-option :label="t('gnss.sky.elevationView')" value="elevation" />
           </el-select>
         </div>
 
         <div class="control-group">
-          <span class="control-label">星座过滤</span>
+          <span class="control-label">{{ t('gnss.sky.constellationFilter') }}</span>
           <el-select v-model="constellationFilter" @change="updateChartData" size="default" class="constellation-select">
-            <el-option label="所有星座" value="all" />
+            <el-option :label="t('gnss.sky.allConstellations')" value="all" />
             <el-option label="GPS" value="GPS" />
             <el-option label="GLONASS" value="GLONASS" />
             <el-option label="GALILEO" value="GALILEO" />
@@ -42,7 +42,7 @@
         </div>
 
         <div class="satellite-size-control">
-          <span>卫星大小: {{ satelliteSize }}px</span>
+          <span>{{ t('gnss.sky.satSize') }}: {{ satelliteSize }}px</span>
           <el-slider
             v-model="satelliteSize"
             :min="10"
@@ -53,7 +53,7 @@
         </div>
 
         <div class="elevation-limit-control">
-          <span>仰角限制: {{ elevationLimit }}°</span>
+          <span>{{ t('gnss.sky.elevLimit') }}: {{ elevationLimit }}°</span>
           <el-slider
             v-model="elevationLimit"
             :min="0"
@@ -64,7 +64,7 @@
         </div>
 
         <div v-if="viewMode === 'constellation'" class="constellation-legend">
-          <span class="control-label">星座图例</span>
+          <span class="control-label">{{ t('gnss.sky.constellationLegend') }}</span>
           <div class="legend-items">
             <div v-for="(color, name) in constellationColors" :key="name" class="legend-item">
               <span class="legend-dot" :style="{ backgroundColor: color }"></span>
@@ -74,20 +74,20 @@
         </div>
 
         <div v-else-if="viewMode === 'snr'" class="mode-hint">
-          <span class="control-label">颜色 / 大小 = SNR (0–60 dB)</span>
+          <span class="control-label">{{ t('gnss.sky.colorSizeSnr') }}</span>
           <div class="gradient-bar snr-gradient"></div>
           <div class="gradient-labels">
-            <span>低</span>
-            <span>高</span>
+            <span>{{ t('gnss.sky.low') }}</span>
+            <span>{{ t('gnss.sky.high') }}</span>
           </div>
         </div>
 
         <div v-else-if="viewMode === 'elevation'" class="mode-hint">
-          <span class="control-label">颜色 = 仰角 (0–90°)</span>
+          <span class="control-label">{{ t('gnss.sky.colorElev') }}</span>
           <div class="gradient-bar elevation-gradient"></div>
           <div class="gradient-labels">
-            <span>低</span>
-            <span>高</span>
+            <span>{{ t('gnss.sky.low') }}</span>
+            <span>{{ t('gnss.sky.high') }}</span>
           </div>
         </div>
       </div>
@@ -105,7 +105,7 @@
         class="icon-btn expand-btn"
         type="button"
         @click="expandPanel"
-        title="展开面板"
+        :title="t('gnss.sky.expandPanel')"
       >
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <path d="M4 6h16M4 12h16M4 18h16" />
@@ -121,6 +121,7 @@ import { ref, shallowRef, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import * as echarts from 'echarts'
 import { useNmea } from '@/composables/gnss/useNmea'
 import { useTheme } from '@/composables/useTheme'
+import { t } from '@/i18n'
 
 // 获取卫星数据
 const { satelliteSnrData } = useNmea()
@@ -287,15 +288,15 @@ function initChart() {
                 </div>
               </div>
               <div style="display: flex; margin-bottom: 5px;">
-                <span style="font-weight: 500; width: 68px; color: ${colors.textMuted};">仰角:</span>
+                <span style="font-weight: 500; width: 68px; color: ${colors.textMuted};">${t('gnss.sky.tooltipElevation')}:</span>
                 <span style="color: ${colors.text};">${data.elevation}°</span>
               </div>
               <div style="display: flex; margin-bottom: 5px;">
-                <span style="font-weight: 500; width: 68px; color: ${colors.textMuted};">方位角:</span>
+                <span style="font-weight: 500; width: 68px; color: ${colors.textMuted};">${t('gnss.sky.tooltipAzimuth')}:</span>
                 <span style="color: ${colors.text};">${data.azimuth}°</span>
               </div>
               <div style="display: flex;">
-                <span style="font-weight: 500; width: 68px; color: ${colors.textMuted};">SNR:</span>
+                <span style="font-weight: 500; width: 68px; color: ${colors.textMuted};">${t('gnss.sky.tooltipSnr')}:</span>
                 <span style="color: ${colors.text};">${data.snr} dB</span>
               </div>
             </div>
@@ -410,7 +411,7 @@ function buildVisualMap(colors) {
       inRange: {
         color: ['#d73027', '#fc8d59', '#fee08b', '#d9ef8b', '#91cf60', '#1a9850']
       },
-      text: ['高 SNR', '低 SNR']
+      text: [t('gnss.sky.visualSnrHigh'), t('gnss.sky.visualSnrLow')]
     }]
   }
 
@@ -423,7 +424,7 @@ function buildVisualMap(colors) {
       inRange: {
         color: ['#313695', '#4575b4', '#74add1', '#fee090', '#f46d43', '#d73027']
       },
-      text: ['高 仰角', '低 仰角']
+      text: [t('gnss.sky.visualElevHigh'), t('gnss.sky.visualElevLow')]
     }]
   }
 

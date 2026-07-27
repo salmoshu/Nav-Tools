@@ -11,7 +11,7 @@
         <img
           v-if="frameUrl"
           :src="frameUrl"
-          alt="相机实时视频"
+          :alt="t('common.video.liveVideoAlt')"
           class="video-frame"
           draggable="false"
         />
@@ -25,10 +25,10 @@
 
       <div v-if="status === 'connecting'" class="connecting-overlay">
         <el-icon class="is-loading" :size="28"><Loading /></el-icon>
-        <span>正在连接视频流…</span>
+        <span>{{ t('common.video.connecting') }}</span>
       </div>
 
-      <div v-if="zoomLevel > 1" class="zoom-hint" title="双击复位">
+      <div v-if="zoomLevel > 1" class="zoom-hint" :title="t('common.video.zoomResetHint')">
         {{ Math.round(zoomLevel * 100) }}%
       </div>
 
@@ -38,8 +38,8 @@
       </div>
     </div>
 
-    <div v-if="labels.length" class="label-hints" aria-label="识别到的标签信息">
-      <span class="hints-title">识别标签</span>
+    <div v-if="labels.length" class="label-hints" :aria-label="t('common.video.recognizedLabelsDesc')">
+      <span class="hints-title">{{ t('common.video.recognizedLabels') }}</span>
       <span v-for="(label, index) in labels" :key="index" class="label-chip">{{ label }}</span>
     </div>
 
@@ -47,7 +47,7 @@
       <button
         class="source-reference"
         type="button"
-        title="在 Input 中配置 Camera RTSP 数据源"
+        :title="t('common.video.sourceConfigHint')"
         @click="openCameraSourceSettings"
       >
         <el-icon :size="16"><Link /></el-icon>
@@ -55,7 +55,7 @@
           <small>Camera RTSP</small>
           <strong>{{ streamUrl }}</strong>
         </span>
-        <span class="source-config-action">配置</span>
+        <span class="source-config-action">{{ t('common.video.configure') }}</span>
       </button>
       <el-button
         v-if="!isActive"
@@ -64,9 +64,9 @@
         :loading="status === 'connecting'"
         @click="startStream"
       >
-        播放
+        {{ t('common.video.play') }}
       </el-button>
-      <el-button v-else :icon="VideoPause" @click="pauseStream">暂停</el-button>
+      <el-button v-else :icon="VideoPause" @click="pauseStream">{{ t('common.video.pause') }}</el-button>
     </div>
   </section>
 </template>
@@ -75,6 +75,7 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Link, Loading, VideoCamera, VideoPause, VideoPlay } from '@element-plus/icons-vue'
+import { t } from '@/i18n'
 import { normalizeRtspUrl } from '@/core/data/DataSourceStorage'
 import { useDataSourceManager } from '@/composables/useDataSourceManager'
 import emitter from '@/hooks/useMitt'
@@ -85,7 +86,7 @@ type StreamStatusPayload = { status?: StreamStatus; message?: string }
 const { settings: dataSourceSettings } = useDataSourceManager()
 const streamUrl = computed(() => dataSourceSettings.camera.url)
 const status = ref<StreamStatus>('idle')
-const statusMessage = ref('等待播放')
+const statusMessage = ref(t('common.video.waitingToPlay'))
 const frameUrl = ref('')
 /** 主进程标签识别结果(模板匹配 + 时序投票) */
 const labels = ref<string[]>([])
@@ -148,10 +149,12 @@ function resetZoom() {
 
 const isActive = computed(() => status.value === 'connecting' || status.value === 'playing')
 const statusText = computed(() => statusMessage.value || status.value)
-const placeholderTitle = computed(() => (status.value === 'error' ? '视频连接失败' : '相机画面'))
+const placeholderTitle = computed(() =>
+  status.value === 'error' ? t('common.video.connectionFailed') : t('common.video.cameraView'),
+)
 const placeholderHint = computed(() => {
   if (status.value === 'error' || status.value === 'unavailable') return statusMessage.value
-  return '在 Input 中配置 RTSP 数据源后点击播放'
+  return t('common.video.configRtspHint')
 })
 
 function revokeFrameUrl() {
@@ -162,19 +165,19 @@ function revokeFrameUrl() {
 async function startStream() {
   const url = normalizeRtspUrl(streamUrl.value)
   if (!url) {
-    ElMessage.warning('请输入以 rtsp:// 开头的有效视频地址')
+    ElMessage.warning(t('common.video.errInvalidRtsp'))
     return
   }
 
   if (!window.electronAPI?.startCameraStream) {
     status.value = 'unavailable'
-    statusMessage.value = 'RTSP 播放仅支持 Nav-Tools 桌面版'
+    statusMessage.value = t('common.video.errDesktopOnly')
     return
   }
 
   revokeFrameUrl()
   status.value = 'connecting'
-  statusMessage.value = '正在连接…'
+  statusMessage.value = t('common.video.connectingStatus')
 
   const result = await window.electronAPI.startCameraStream(url).catch((error) => ({
     ok: false,
@@ -182,7 +185,7 @@ async function startStream() {
   }))
   if (!result.ok) {
     status.value = 'error'
-    statusMessage.value = result.message || '无法启动视频流'
+    statusMessage.value = result.message || t('common.video.errStartStream')
   }
 }
 
@@ -195,7 +198,7 @@ async function pauseStream() {
   revokeFrameUrl()
   labels.value = []
   status.value = 'stopped'
-  statusMessage.value = '已暂停'
+  statusMessage.value = t('common.video.paused')
 }
 
 const frameListener = (_event: unknown, data: ArrayBuffer | Uint8Array) => {
@@ -206,7 +209,7 @@ const frameListener = (_event: unknown, data: ArrayBuffer | Uint8Array) => {
   if (frameUrl.value) URL.revokeObjectURL(frameUrl.value)
   frameUrl.value = nextUrl
   status.value = 'playing'
-  statusMessage.value = '直播中'
+  statusMessage.value = t('common.video.live')
 }
 
 const statusListener = (_event: unknown, payload: StreamStatusPayload) => {

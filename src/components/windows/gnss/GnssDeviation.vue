@@ -2,21 +2,24 @@
   <div class="deviation-container">
     <div class="control-panel">
       <div class="controls">
-        <el-radio-group v-model="currentView" size="small" class="view-switch">
-          <el-radio-button label="deviation">偏差图</el-radio-button>
-          <el-radio-button label="position">位置图</el-radio-button>
-        </el-radio-group>
+        <el-select v-model="currentView" size="small" class="view-switch">
+          <el-option :label="t('gnss.deviation.deviationView')" value="deviation" />
+          <el-option :label="t('gnss.deviation.positionView')" value="position" />
+          <el-option :label="t('gnss.deviation.speedView')" value="speed" />
+        </el-select>
         <template v-if="currentView === 'deviation'">
-          <span class="switch-label">跟踪:</span>
           <el-switch
             v-model="isTracking"
-            aria-label="跟踪"
-            title="跟踪"
+            inline-prompt
+            :active-text="t('gnss.deviation.tracking')"
+            :inactive-text="t('gnss.deviation.tracking')"
+            :aria-label="t('gnss.deviation.tracking')"
+            :title="t('gnss.deviation.tracking')"
             @change="toggleTracking"
             class="tracking-switch"
           />
           <div class="point-size-control">
-            <span class="size-label">尺寸:</span>
+            <span class="size-label">{{ t('gnss.deviation.size') }}:</span>
             <el-slider
               v-model="pointSize"
               :min="5"
@@ -30,39 +33,74 @@
         </template>
 
         <div class="right-buttons">
-          <el-button v-show="currentView === 'deviation'" type="primary" size="small" @click="resetZoom" class="control-btn zoom-btn"><el-icon><RefreshLeft /></el-icon>&nbsp;重置布局</el-button>
-          <el-button type="primary" size="small" @click="clearTrack" class="control-btn clear-btn"><el-icon><Delete /></el-icon>&nbsp;清除</el-button>
+          <el-button
+            v-show="currentView === 'deviation'"
+            type="primary"
+            size="small"
+            @click="resetZoom"
+            class="control-btn zoom-btn"
+            ><el-icon><RefreshLeft /></el-icon>&nbsp;{{
+              t('gnss.deviation.resetLayout')
+            }}</el-button
+          >
+          <el-button type="primary" size="small" @click="clearTrack" class="control-btn clear-btn"
+            ><el-icon><Delete /></el-icon>&nbsp;{{ t('gnss.deviation.clear') }}</el-button
+          >
         </div>
       </div>
     </div>
     <div class="chart-container" ref="chartContainerRef" v-show="currentView === 'deviation'">
       <canvas ref="canvasRef" class="chart"></canvas>
       <canvas ref="axisCanvasRef" class="axis-layer"></canvas>
-      <div
-        ref="tooltipRef"
-        class="deviation-tooltip"
-        :style="tooltipStyle"
-        v-show="tooltipVisible"
-      >
+      <div ref="tooltipRef" class="deviation-tooltip" :style="tooltipStyle" v-show="tooltipVisible">
         {{ tooltipText }}
       </div>
     </div>
-    <div
-      v-show="currentView === 'position'"
-      ref="positionChartRef"
-      class="position-chart-container"
-    ></div>
+    <div v-show="currentView === 'position'" class="position-chart-grid">
+      <GnssMetricTimeSeries
+        field="E"
+        :label="t('gnss.deviation.axisE')"
+        unit="m"
+        color="#1890ff"
+        :active="currentView === 'position'"
+      />
+      <GnssMetricTimeSeries
+        field="N"
+        :label="t('gnss.deviation.axisN')"
+        unit="m"
+        color="#fa541c"
+        :active="currentView === 'position'"
+      />
+      <GnssMetricTimeSeries
+        field="U"
+        :label="t('gnss.deviation.axisU')"
+        unit="m"
+        color="#52c41a"
+        :active="currentView === 'position'"
+      />
+    </div>
+    <div v-show="currentView === 'speed'" class="speed-chart-container">
+      <GnssMetricTimeSeries
+        field="SPEED"
+        :label="t('gnss.deviation.speed')"
+        unit="km/h"
+        color="#722ed1"
+        :active="currentView === 'speed'"
+      />
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch, nextTick } from 'vue'
-import * as echarts from 'echarts'
+import { onMounted, onUnmounted, ref, watch, nextTick } from 'vue'
 import { useNmea, numberToQuality } from '@/composables/gnss/useNmea'
+import { useFileTimeline } from '@/composables/useFileTimeline'
 import { fixStatusColorRgb01 } from '@/components/windows/gnss/fixStatusColors'
 import { useTheme } from '@/composables/useTheme'
 import { createTrajectoryRenderer } from '@/core/render/createTrajectoryRenderer'
+import { t } from '@/i18n'
 import type { TrajectoryRenderer } from '@/core/render/TrajectoryRenderer'
+import GnssMetricTimeSeries from './GnssMetricTimeSeries.vue'
 import {
   clampVisibleSpan,
   fitDeviationPoints,
@@ -70,13 +108,15 @@ import {
   GNSS_MIN_VISIBLE_SPAN_METERS,
 } from '@/core/deviation/DeviationViewport'
 
-const { nmeaData, deviationPoints: plotData, clearData } = useNmea()
+const { deviationPoints: plotData, positionEpochHistory, clearData } = useNmea()
+const fileTimeline = useFileTimeline()
 const { chartTheme, resolvedTheme } = useTheme()
 
 const LIMIT_METERS = 10000
 const RENDER_QUEUE_TARGET_FRAMES = 2
 const RENDER_MAX_POINTS_PER_FRAME = 128
 const RENDER_BUDGET_MS = 4
+const BULK_RENDER_THRESHOLD = 512
 
 const canvasRef = ref<HTMLCanvasElement | null>(null)
 const axisCanvasRef = ref<HTMLCanvasElement | null>(null)
@@ -121,271 +161,15 @@ let resizeFrame: number | null = null
 
 let stopWatch: (() => void) | null = null
 let stopThemeWatch: (() => void) | null = null
+let stopTimelineWatch: (() => void) | null = null
 
-// ---- 位置图（E/N/U 随时间折线，仿 RTKLIB rtkplot position-plot） ----
-
-type DeviationView = 'deviation' | 'position'
+type DeviationView = 'deviation' | 'position' | 'speed'
 
 const currentView = ref<DeviationView>('deviation')
 
-const positionChartRef = ref<HTMLDivElement | null>(null)
-let positionChartInstance: echarts.ECharts | null = null
-let positionResizeObserver: ResizeObserver | null = null
-
-const MAX_POSITION_POINTS = 3600
-const POSITION_UPDATE_INTERVAL_MS = 200
-let positionUpdateTimer: number | null = null
-
-// 三种区分度高的颜色：东向蓝、北向橙、天向绿
-const POSITION_COLORS = {
-  e: '#1890ff',
-  n: '#fa541c',
-  u: '#52c41a',
-}
-
-interface PositionEpoch {
-  time: number
-  e: number | null
-  n: number | null
-  u: number | null
-  quality: number
-}
-
-// 最近 MAX_POSITION_POINTS 个 epoch；U 为 altitude 相对窗口内首个有效 altitude 的差值
-const positionEpochs = computed<PositionEpoch[]>(() => {
-  const items = nmeaData.value.slice(-MAX_POSITION_POINTS)
-
-  let baseAltitude: number | null = null
-  for (const item of items) {
-    if (item.altitude !== null) {
-      baseAltitude = Number(item.altitude)
-      break
-    }
-  }
-
-  const epochs: PositionEpoch[] = []
-  for (const item of items) {
-    if (!item.time) continue
-    // time 形如 "2025/11/09 12:34:56"，统一成 '-' 以保证可解析
-    const time = Date.parse(item.time.replace(/\//g, '-'))
-    if (!Number.isFinite(time)) continue
-    epochs.push({
-      time,
-      e: item.enuE !== null ? Number(item.enuE) : null,
-      n: item.enuN !== null ? Number(item.enuN) : null,
-      u:
-        item.altitude !== null && baseAltitude !== null
-          ? Number(item.altitude) - baseAltitude
-          : null,
-      quality: Number(item.quality ?? 0),
-    })
-  }
-  return epochs
-})
-
-interface PositionTooltipParam {
-  seriesName: string
-  marker: string
-  data: { value: [number, number | null]; quality: number }
-}
-
-function formatPositionTooltip(params: unknown): string {
-  const list = (Array.isArray(params) ? params : [params]) as PositionTooltipParam[]
-  const first = list[0]
-  if (!first || !first.data) return ''
-  const epochTime = new Date(first.data.value[0])
-  const hhmmss = epochTime.toLocaleTimeString('zh-CN', { hour12: false })
-  const colors = chartTheme.value
-
-  const rows = list
-    .map((item) => {
-      const value = item.data.value[1]
-      const text = value === null ? '--' : `${value.toFixed(3)} m`
-      return `<div style="display:flex;justify-content:space-between;gap:16px;margin-top:4px;">
-        <span>${item.marker}${item.seriesName}</span><span style="font-weight:bold;">${text}</span>
-      </div>`
-    })
-    .join('')
-
-  return `<div style="min-width:160px;text-align:left;color:${colors.text};">
-    <div style="font-weight:bold;padding-bottom:4px;border-bottom:1px solid ${colors.border};">${hhmmss}</div>
-    ${rows}
-    <div style="margin-top:4px;color:${colors.textMuted};">质量: ${numberToQuality(first.data.quality)}</div>
-  </div>`
-}
-
-function initPositionChart(): void {
-  if (!positionChartRef.value) return
-
-  if (positionChartInstance) {
-    positionChartInstance.dispose()
-    positionChartInstance = null
-  }
-
-  setupPositionResizeObserver()
-
-  nextTick(() => {
-    if (!positionChartRef.value) return
-    positionChartInstance = echarts.init(positionChartRef.value, null, { renderer: 'svg' })
-    const colors = chartTheme.value
-
-    positionChartInstance.setOption({
-      backgroundColor: 'transparent',
-      tooltip: {
-        trigger: 'axis',
-        formatter: formatPositionTooltip,
-        backgroundColor: colors.surface,
-        borderColor: colors.border,
-        borderWidth: 1,
-        textStyle: { color: colors.text },
-      },
-      legend: {
-        data: ['东向 E', '北向 N', '天向 U'],
-        top: 0,
-        textStyle: { color: colors.textMuted },
-        inactiveColor: colors.grid,
-      },
-      grid: {
-        left: '3%',
-        right: '4%',
-        bottom: '6%',
-        top: '14%',
-        containLabel: true,
-      },
-      xAxis: {
-        type: 'time',
-        axisLabel: {
-          color: colors.textMuted,
-          fontSize: 12,
-          formatter: '{HH}:{mm}:{ss}',
-        },
-        axisLine: { lineStyle: { color: colors.border } },
-        splitLine: { show: false },
-      },
-      yAxis: {
-        type: 'value',
-        name: 'm',
-        scale: true,
-        nameTextStyle: { color: colors.textMuted },
-        axisLabel: { color: colors.textMuted, fontSize: 12 },
-        axisLine: { lineStyle: { color: colors.border } },
-        splitLine: { lineStyle: { color: colors.grid } },
-      },
-      series: [
-        {
-          name: '东向 E',
-          type: 'line',
-          showSymbol: false,
-          data: [],
-          lineStyle: { width: 1.5, color: POSITION_COLORS.e },
-          itemStyle: { color: POSITION_COLORS.e },
-        },
-        {
-          name: '北向 N',
-          type: 'line',
-          showSymbol: false,
-          data: [],
-          lineStyle: { width: 1.5, color: POSITION_COLORS.n },
-          itemStyle: { color: POSITION_COLORS.n },
-        },
-        {
-          name: '天向 U',
-          type: 'line',
-          showSymbol: false,
-          data: [],
-          lineStyle: { width: 1.5, color: POSITION_COLORS.u },
-          itemStyle: { color: POSITION_COLORS.u },
-        },
-      ],
-      animation: false,
-    })
-
-    updatePositionChart()
-  })
-}
-
-function updatePositionChart(): void {
-  if (!positionChartInstance) return
-  if (document.hidden) return
-
-  const epochs = positionEpochs.value
-  positionChartInstance.dispatchAction({ type: 'hideTip' })
-  positionChartInstance.setOption({
-    series: [
-      { data: epochs.map((p) => ({ value: [p.time, p.e], quality: p.quality })) },
-      { data: epochs.map((p) => ({ value: [p.time, p.n], quality: p.quality })) },
-      { data: epochs.map((p) => ({ value: [p.time, p.u], quality: p.quality })) },
-    ],
-  })
-}
-
-function schedulePositionUpdate(): void {
-  if (positionUpdateTimer !== null) return
-  positionUpdateTimer = window.setTimeout(() => {
-    positionUpdateTimer = null
-    updatePositionChart()
-  }, POSITION_UPDATE_INTERVAL_MS)
-}
-
-function cancelScheduledPositionUpdate(): void {
-  if (positionUpdateTimer !== null) {
-    clearTimeout(positionUpdateTimer)
-    positionUpdateTimer = null
-  }
-}
-
-function setupPositionResizeObserver(): void {
-  if (!positionChartRef.value || typeof ResizeObserver === 'undefined') return
-
-  if (positionResizeObserver) {
-    positionResizeObserver.disconnect()
-    positionResizeObserver = null
-  }
-
-  positionResizeObserver = new ResizeObserver(() => {
-    nextTick(() => {
-      if (positionChartInstance) {
-        try {
-          positionChartInstance.resize()
-        } catch (error) {
-          // 图表调整大小失败不影响正常使用，静默处理
-        }
-      }
-    })
-  })
-
-  positionResizeObserver.observe(positionChartRef.value)
-}
-
-function teardownPositionChart(): void {
-  cancelScheduledPositionUpdate()
-  if (positionResizeObserver) {
-    positionResizeObserver.disconnect()
-    positionResizeObserver = null
-  }
-  if (positionChartInstance) {
-    positionChartInstance.dispose()
-    positionChartInstance = null
-  }
-}
-
-// 数据变化：位置视图下做 200ms 节流刷新
-watch(nmeaData, () => {
-  if (currentView.value === 'position') schedulePositionUpdate()
-})
-
-// 视图切换：切到位置图时按需初始化或刷新
 watch(currentView, (view) => {
-  if (view === 'position') {
+  if (view !== 'deviation') {
     cancelScheduledNmeaUpdate()
-    nextTick(() => {
-      if (!positionChartInstance) {
-        initPositionChart()
-      } else {
-        positionChartInstance.resize()
-        updatePositionChart()
-      }
-    })
   } else {
     scheduleNmeaUpdate()
   }
@@ -396,9 +180,7 @@ function scheduleThemeRefresh(): void {
   themeRefreshFrame = requestAnimationFrame(() => {
     themeRefreshFrame = requestAnimationFrame(() => {
       themeRefreshFrame = null
-      if (currentView.value === 'position') {
-        initPositionChart()
-      } else {
+      if (currentView.value === 'deviation') {
         drawAxisLayer()
         drawCurrentPosition()
       }
@@ -529,7 +311,7 @@ function drawAxisLayer(): void {
 function drawCurrentPosition(): void {
   if (!axisCtx || axisCssWidth <= 0 || axisCssHeight <= 0) return
 
-  const latestPoint = getLatestRenderedPoint()
+  const latestPoint = getTimelinePositionPoint() ?? getLatestRenderedPoint()
   if (!latestPoint) return
   const [x, y, q] = latestPoint
   const sx = dataToScreenX(x)
@@ -548,6 +330,18 @@ function drawCurrentPosition(): void {
   ctx.fill()
   ctx.stroke()
   ctx.restore()
+}
+
+function getTimelinePositionPoint(): [number, number, number] | undefined {
+  if (!fileTimeline.active.value) return undefined
+  const history = positionEpochHistory.value
+  if (history.length === 0) return undefined
+  const index = history.findNearestElapsedTime(fileTimeline.elapsedMilliseconds.value)
+  if (index < 0) return undefined
+  const east = history.getValue('E', index)
+  const north = history.getValue('N', index)
+  if (east === null || north === null) return undefined
+  return [east, north, history.getValue('QUALITY', index) ?? 0]
 }
 
 function updateViewport(xMin: number, xMax: number, yMin: number, yMax: number): void {
@@ -579,6 +373,15 @@ function syncRendererData(): boolean {
   const remaining = points.length - renderedPointCount
   if (remaining <= 0) return false
 
+  // File import publishes thousands of points in one reactive update. Upload
+  // that backlog in one renderer batch; the per-point RAF path is reserved for
+  // live data and otherwise can take tens of seconds to catch up.
+  if (remaining >= BULK_RENDER_THRESHOLD) {
+    renderer.addPointsBatch(points.slice(renderedPointCount))
+    renderedPointCount = points.length
+    return false
+  }
+
   const targetCount = Math.min(
     RENDER_MAX_POINTS_PER_FRAME,
     Math.max(1, Math.ceil(remaining / RENDER_QUEUE_TARGET_FRAMES)),
@@ -600,11 +403,37 @@ function syncRendererData(): boolean {
 function handleNmeaUpdate(): boolean {
   if (!renderer) return false
 
+  const sourceChanged =
+    plotData.value.length !== renderedPointCount ||
+    (plotData.value.length > 0 && plotData.value[0] !== firstRenderedPoint)
   const hasMorePoints = syncRendererData()
   const latestTrackPoint = getLatestRenderedPoint()
   if (!latestTrackPoint) {
     drawAxisLayer()
     return hasMorePoints
+  }
+
+  if (
+    fileTimeline.active.value &&
+    sourceChanged &&
+    !hasMorePoints &&
+    chartContainerRef.value
+  ) {
+    const { clientWidth, clientHeight } = chartContainerRef.value
+    const fitted = fitDeviationPoints(
+      plotData.value,
+      clientWidth / Math.max(1, clientHeight),
+      GNSS_MIN_VISIBLE_SPAN_METERS,
+    )
+    if (fitted) {
+      isTracking.value = false
+      panOffsetX = 0
+      panOffsetY = 0
+      trackingXHalfSpan = (fitted.xMax - fitted.xMin) / 2
+      trackingYHalfSpan = (fitted.yMax - fitted.yMin) / 2
+      updateViewport(fitted.xMin, fitted.xMax, fitted.yMin, fitted.yMax)
+      return false
+    }
   }
 
   // 拖拽中只更新数据渲染，不改变视口，避免视图跳动
@@ -635,11 +464,7 @@ function handleNmeaUpdate(): boolean {
 }
 
 function scheduleNmeaUpdate(): void {
-  if (
-    document.hidden ||
-    currentView.value !== 'deviation' ||
-    nmeaUpdateFrame !== null
-  ) return
+  if (document.hidden || currentView.value !== 'deviation' || nmeaUpdateFrame !== null) return
   nmeaUpdateFrame = requestAnimationFrame(() => {
     nmeaUpdateFrame = null
     if (handleNmeaUpdate()) scheduleNmeaUpdate()
@@ -783,7 +608,7 @@ function handleMouseMove(e: MouseEvent): void {
   const picked = renderer.pickPoint(x, y)
   if (picked) {
     tooltipVisible.value = true
-    tooltipText.value = `位置: (${formatDistance(picked.x)}, ${formatDistance(picked.y)})\n质量: ${numberToQuality(picked.quality)}`
+    tooltipText.value = `${t('gnss.deviation.tooltipPositionPrefix')}: (${formatDistance(picked.x)}, ${formatDistance(picked.y)})\n${t('gnss.deviation.tooltipQuality')}: ${numberToQuality(picked.quality)}`
     tooltipStyle.value = {
       left: `${x + 12}px`,
       top: `${y + 12}px`,
@@ -944,10 +769,14 @@ onMounted(() => {
     )
 
     stopThemeWatch = watch(resolvedTheme, scheduleThemeRefresh)
-
-    if (currentView.value === 'position') {
-      initPositionChart()
-    }
+    stopTimelineWatch = watch(
+      [fileTimeline.active, fileTimeline.elapsedMilliseconds],
+      () => {
+        if (currentView.value !== 'deviation') return
+        drawAxisLayer()
+        drawCurrentPosition()
+      },
+    )
   })
 })
 
@@ -958,9 +787,9 @@ onUnmounted(() => {
     cancelAnimationFrame(themeRefreshFrame)
     themeRefreshFrame = null
   }
-  teardownPositionChart()
   stopWatch?.()
   stopThemeWatch?.()
+  stopTimelineWatch?.()
   teardownResizeObserver()
   if (canvasRef.value) {
     canvasRef.value.removeEventListener('wheel', handleWheel)
@@ -1040,15 +869,31 @@ onUnmounted(() => {
   min-height: 0;
 }
 
-.position-chart-container {
+.position-chart-grid {
   flex: 1;
-  position: relative;
-  overflow: hidden;
+  display: grid;
+  grid-template-rows: repeat(3, minmax(220px, 1fr));
+  grid-template-columns: 1fr;
+  gap: 10px;
+  overflow-y: auto;
+  overflow-x: hidden;
   min-height: 0;
   width: 100%;
+  padding: 10px;
+  box-sizing: border-box;
+}
+
+.speed-chart-container {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  padding: 10px;
+  box-sizing: border-box;
+  overflow: hidden;
 }
 
 .view-switch {
+  width: 100px;
   margin-right: 12px;
   flex-shrink: 0;
 }
@@ -1129,7 +974,7 @@ onUnmounted(() => {
 :deep(.el-slider__button) {
   width: var(--el-slider-button-size);
   height: var(--el-slider-button-size);
-  background-image: url("data:image/svg+xml;charset=utf-8;base64,PHN2ZyBjbGFzcz0iaWNvbiIgdmlld0JveD0iMCAwIDEwMjQgMTAyNCIgdmVyc2lvbj0iMS4xIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHN0eWxlPSJoZWlnaHQ6IDE2cHg7IHdpZHRoOiAxNnB4OyI+PHBhdGggZD0iTTUxMiA2NGE0NDggNDQ4IDAgMCAxIDEzMC4yNCAxOS4yMzJjLTM3LjQwOCAxNDIuNzItMTUuMDQgMjM0LjQgNzUuODQgMjY0LjcwNGwxNy4yOCA1Ljg4OCAxNi40OCA1Ljg4OGMxMDUuNTM2IDM4Ljk3NiAxMjkuMzc2IDcxLjc0NCAxMDQuNjQgMTQ1Ljk4NC0xMS4yIDMzLjYtMzQuOTQ0IDQ5LjgyNC0xMDEuNjk2IDczLjE1MmwtMzUuODQgMTIuMjI0LTE3LjQ0IDYuMzA0Yy03Mi40NDggMjcuMTA0LTEwNC40MTYgNTIuMTI4LTEyMi41NiAxMDYuNTYtMjYuMTQ0IDc4LjM2OCA4LjY0IDE1My4zNzYgOTguMTc2IDIyNC42MDhBNDQ1Ljc5MiA0NDUuNzkyIDAgMCAxIDUxMiA5NjBjLTMyLjg2NCAwLTY0Ljg5Ni0zLjUyLTk1Ljc0NC0xMC4yNCA1Ni4wOTYtNDMuMDcyIDY2LjA0OC0xMDguOCAyNC44LTE5MS4yOTYtMjYuODgtNTMuNjk2LTY5LjI0OC04My4xMzYtMTI5LjkyLTEwMS4zNDRhNDgwLjk2IDQ4MC45NiAwIDAgMC0xOS43NDQtNS40NGwtMzMuNDA4LTcuOTM2Yy0zNC4yNC04LjEyOC00OC40OC0xMy45NTItNTQuNTI4LTIxLjYzMi02LjQtOC4xNi02LjM2OC0yNS45ODQgNi41OTItNjAuMzJsMi41Ni02LjY1NmM1My44MjQtMTM0LjU2IDE1LjEwNC0yMTkuMDcyLTEwNi40NjQtMjMzLjA4OEMxNzcuNjMyIDE2OS42IDMzMi40OCA2NCA1MTIgNjR6TTgyLjQ2NCAzODQuMjU2Yzg5LjYgMy42NDggMTEwLjYyNCA0My4wNCA3My41MDQgMTQwLjA2NGwtMi43ODQgNy4wNGMtMjMuMDQgNTcuNjk2LTI0LjEyOCA5OS42NDgtMC4wNjQgMTMwLjI3MiAxNy40MDggMjIuMjA4IDM4Ljg0OCAzMS43NzYgODIuNTYgNDIuNTZsMzMuMjggNy44NzJjOS4wMjQgMi4yMDggMTYuNjQgNC4yMjQgMjMuNzc2IDYuMzY4IDQ1LjI0OCAxMy41NjggNzMuMjQ4IDMzLjAyNCA5MS4wNzIgNjguNjcyIDM1LjIgNzAuMzY4IDIxLjQ0IDExMS4zNi01MS44NCAxMzUuMjMyQzE3NC4xNzYgODUzLjAyNCA2NCA2OTUuMzYgNjQgNTEyYzAtNDQuMzg0IDYuNDY0LTg3LjI2NCAxOC40NjQtMTI3Ljc0NHogbTYxOS44MDgtMjc3Ljk1MkM4NTQuNTYgMTc3LjgyNCA5NjAgMzMyLjYwOCA5NjAgNTEyYzAgMTYzLjUyLTg3LjYxNiAzMDYuNjI0LTIxOC40OTYgMzg0LjgzMi04OC4zMi02MS44MjQtMTE5LjY4LTExOS4xNjgtMTAxLjg1Ni0xNzIuNjQgMTEuMTY4LTMzLjUzNiAzNC44OC00OS43NiAxMDEuMzQ0LTczLjAyNGwxNy4xODQtNS44NTZjOTguNzItMzIuODk2IDEzOC4wNDgtNTYuNTEyIDE1OS4wNC0xMTkuMzYgNDIuMTc2LTEyNi41OTItMTUuNTUyLTE4NC4zMi0xNzguODgtMjM4LjcyLTQ3LjItMTUuNzQ0LTYyLjQ5Ni02OS42MzItMzguNzUyLTE3MC4w");
+  background-image: url('data:image/svg+xml;charset=utf-8;base64,PHN2ZyBjbGFzcz0iaWNvbiIgdmlld0JveD0iMCAwIDEwMjQgMTAyNCIgdmVyc2lvbj0iMS4xIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHN0eWxlPSJoZWlnaHQ6IDE2cHg7IHdpZHRoOiAxNnB4OyI+PHBhdGggZD0iTTUxMiA2NGE0NDggNDQ4IDAgMCAxIDEzMC4yNCAxOS4yMzJjLTM3LjQwOCAxNDIuNzItMTUuMDQgMjM0LjQgNzUuODQgMjY0LjcwNGwxNy4yOCA1Ljg4OCAxNi40OCA1Ljg4OGMxMDUuNTM2IDM4Ljk3NiAxMjkuMzc2IDcxLjc0NCAxMDQuNjQgMTQ1Ljk4NC0xMS4yIDMzLjYtMzQuOTQ0IDQ5LjgyNC0xMDEuNjk2IDczLjE1MmwtMzUuODQgMTIuMjI0LTE3LjQ0IDYuMzA0Yy03Mi40NDggMjcuMTA0LTEwNC40MTYgNTIuMTI4LTEyMi41NiAxMDYuNTYtMjYuMTQ0IDc4LjM2OCA4LjY0IDE1My4zNzYgOTguMTc2IDIyNC42MDhBNDQ1Ljc5MiA0NDUuNzkyIDAgMCAxIDUxMiA5NjBjLTMyLjg2NCAwLTY0Ljg5Ni0zLjUyLTk1Ljc0NC0xMC4yNCA1Ni4wOTYtNDMuMDcyIDY2LjA0OC0xMDguOCAyNC44LTE5MS4yOTYtMjYuODgtNTMuNjk2LTY5LjI0OC04My4xMzYtMTI5LjkyLTEwMS4zNDRhNDgwLjk2IDQ4MC45NiAwIDAgMC0xOS43NDQtNS40NGwtMzMuNDA4LTcuOTM2Yy0zNC4yNC04LjEyOC00OC40OC0xMy45NTItNTQuNTI4LTIxLjYzMi02LjQtOC4xNi02LjM2OC0yNS45ODQgNi41OTItNjAuMzJsMi41Ni02LjY1NmM1My44MjQtMTM0LjU2IDE1LjEwNC0yMTkuMDcyLTEwNi40NjQtMjMzLjA4OEMxNzcuNjMyIDE2OS42IDMzMi40OCA2NCA1MTIgNjR6TTgyLjQ2NCAzODQuMjU2Yzg5LjYgMy42NDggMTEwLjYyNCA0My4wNCA3My41MDQgMTQwLjA2NGwtMi43ODQgNy4wNGMtMjMuMDQgNTcuNjk2LTI0LjEyOCA5OS42NDgtMC4wNjQgMTMwLjI3MiAxNy40MDggMjIuMjA4IDM4Ljg0OCAzMS43NzYgODIuNTYgNDIuNTZsMzMuMjggNy44NzJjOS4wMjQgMi4yMDggMTYuNjQgNC4yMjQgMjMuNzc2IDYuMzY4IDQ1LjI0OCAxMy41NjggNzMuMjQ4IDMzLjAyNCA5MS4wNzIgNjguNjcyIDM1LjIgNzAuMzY4IDIxLjQ0IDExMS4zNi01MS44NCAxMzUuMjMyQzE3NC4xNzYgODUzLjAyNCA2NCA2OTUuMzYgNjQgNTEyYzAtNDQuMzg0IDYuNDY0LTg3LjI2NCAxOC40NjQtMTI3Ljc0NHogbTYxOS44MDgtMjc3Ljk1MkM4NTQuNTYgMTc3LjgyNCA5NjAgMzMyLjYwOCA5NjAgNTEyYzAgMTYzLjUyLTg3LjYxNiAzMDYuNjI0LTIxOC40OTYgMzg0LjgzMi04OC4zMi02MS44MjQtMTE5LjY4LTExOS4xNjgtMTAxLjg1Ni0xNzIuNjQgMTEuMTY4LTMzLjUzNiAzNC44OC00OS43NiAxMDEuMzQ0LTczLjAyNGwxNy4xODQtNS44NTZjOTguNzItMzIuODk2IDEzOC4wNDgtNTYuNTEyIDE1OS4wNC0xMTkuMzYgNDIuMTc2LTEyNi41OTItMTUuNTUyLTE4NC4zMi0xNzguODgtMjM4LjcyLTQ3LjItMTUuNzQ0LTYyLjQ5Ni02OS42MzItMzguNzUyLTE3MC4w');
   background-size: contain;
   background-position: center;
   background-repeat: no-repeat;
@@ -1154,7 +999,6 @@ onUnmounted(() => {
 }
 
 @container (max-width: 680px) {
-  .switch-label,
   .size-label {
     display: none;
   }

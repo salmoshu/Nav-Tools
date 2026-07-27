@@ -4,7 +4,17 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/logo.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-inline';" />
+    <!--
+      `unsafe-eval` is required because vue-i18n's runtime message compiler
+      compiles interpolated messages (e.g. "停止录制：{v}") via `new Function`.
+      This is a local Electron app loading only bundled/trusted code, so the
+      eval risk is limited to first-party code. If a strict CSP is ever needed,
+      switch to pre-compiled messages via @intlify/unplugin-vue-i18n instead.
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="script-src 'self' 'unsafe-inline' 'unsafe-eval';"
+    />
     <title>Nav-Tools</title>
     <script>
       // 异步设置窗口标题包含版本号

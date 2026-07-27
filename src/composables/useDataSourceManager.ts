@@ -5,15 +5,16 @@ import {
   type TextDataParser,
 } from '@/core/data/DataSourceStorage'
 import { JsonStorage, type StorageLike } from '@/core/storage/JsonStorage'
+import { t } from '@/i18n'
 
 export const textDataParserOptions: ReadonlyArray<{
   value: TextDataParser
   label: string
   description: string
 }> = [
-  { value: 'raw', label: 'Raw', description: '保留原始数据，不进行结构校验' },
-  { value: 'json', label: 'JSON', description: '按行解析并校验 JSON 对象' },
-  { value: 'nmea', label: 'NMEA', description: '按行解析并校验 NMEA 语句' },
+  { value: 'raw', label: 'Raw', description: t('data.parserRawDesc') },
+  { value: 'json', label: 'JSON', description: t('data.parserJsonDesc') },
+  { value: 'nmea', label: 'NMEA', description: t('data.parserNmeaDesc') },
 ]
 
 const memoryValues = new Map<string, string>()

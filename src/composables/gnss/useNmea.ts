@@ -1,8 +1,20 @@
 import { ref, shallowRef, triggerRef, computed } from 'vue'
 import { useGnssStore } from '@/stores/gnss'
 import { NmeaStreamParser, validateNmeaChecksum } from '@/core/data/NmeaStreamParser'
+import {
+  SatelliteEpochAssembler,
+} from '@/core/gnss/SatelliteEpochAssembler'
+import { SatelliteEpochStore } from '@/core/gnss/SatelliteEpochStore'
+import { NumericEpochStore } from '@/core/gnss/NumericEpochStore'
+import {
+  SatelliteDetailEpochStore,
+  type SatelliteDetailSample,
+} from '@/core/gnss/SatelliteDetailEpochStore'
+import { t } from '@/i18n'
 
-const MAX_NMEA_DATA = 12*3600    // 12h
+// Keep object-heavy legacy histories bounded; reuse the same count as a roughly
+// one-point-per-second map budget for a 12 h, 10 Hz file.
+const MAX_NMEA_DATA = 12 * 3600
 const HISTORY_TRIM_SIZE = 3600
 const SATELLITE_TTL_MS = 3000
 const nmeaData = shallowRef<NmeaData[]>([])
@@ -10,7 +22,37 @@ const ggaData = shallowRef<GgaData[]>([])
 const deviationPoints = shallowRef<Array<[number, number, number]>>([])
 const mapTrackPoints = shallowRef<Array<[number, number, number]>>([])
 const satelliteSnrData = shallowRef<SatelliteSnrData[]>([])
+const satelliteEpochHistory = shallowRef(new SatelliteEpochStore())
+const satelliteDetailEpochHistory = new SatelliteDetailEpochStore()
+const positionEpochHistory = shallowRef(new NumericEpochStore(['E', 'N', 'U', 'QUALITY']))
+const speedEpochHistory = shallowRef(new NumericEpochStore(['SPEED']))
+const mapPositionEpochHistory = new NumericEpochStore(
+  ['LONGITUDE', 'LATITUDE', 'QUALITY'],
+  { valuePrecision: 'float64' },
+)
+const statusEpochHistory = shallowRef(
+  new NumericEpochStore(
+    [
+      'DATE',
+      'QUALITY',
+      'LONGITUDE',
+      'LATITUDE',
+      'ALTITUDE',
+      'ALTITUDE_MSL',
+      'VELOCITY',
+      'PDOP',
+      'HDOP',
+      'SATS_USED',
+      'SATS_VISIBLE',
+      'TWO_D_ACC',
+      'THREE_D_ACC',
+    ],
+    { valuePrecision: 'float64' },
+  ),
+)
 const latestSatelliteData = new Map<string, SatelliteSnrData>()
+const pendingSatelliteDetails = new Map<string, SatelliteSnrData>()
+const satelliteEpochAssembler = new SatelliteEpochAssembler()
 const utcTime = [0, 0, 0, 0, 0, 0]
 let firstLLh: [number | null, number | null, number | null] | null = null
 let batchDepth = 0
@@ -19,6 +61,13 @@ let ggaDataDirty = false
 let deviationPointsDirty = false
 let mapTrackPointsDirty = false
 let satelliteDataDirty = false
+let satelliteEpochHistoryDirty = false
+let positionEpochHistoryDirty = false
+let speedEpochHistoryDirty = false
+let statusEpochHistoryDirty = false
+let firstAltitude: number | null = null
+let pendingGgaEpochTime = ''
+let latestSpeedEpochTime = ''
 
 function trimHistory<T>(records: T[]): void {
   if (records.length > MAX_NMEA_DATA) {
@@ -53,6 +102,22 @@ function publishPendingData(): void {
     }
     satelliteSnrData.value = [...latestSatelliteData.values()]
   }
+  if (satelliteEpochHistoryDirty) {
+    satelliteEpochHistoryDirty = false
+    triggerRef(satelliteEpochHistory)
+  }
+  if (positionEpochHistoryDirty) {
+    positionEpochHistoryDirty = false
+    triggerRef(positionEpochHistory)
+  }
+  if (speedEpochHistoryDirty) {
+    speedEpochHistoryDirty = false
+    triggerRef(speedEpochHistory)
+  }
+  if (statusEpochHistoryDirty) {
+    statusEpochHistoryDirty = false
+    triggerRef(statusEpochHistory)
+  }
 }
 
 function runInBatch<T>(callback: () => T): T {
@@ -63,6 +128,16 @@ function runInBatch<T>(callback: () => T): T {
     batchDepth -= 1
     publishPendingData()
   }
+}
+
+function beginBulkImport(): void {
+  batchDepth += 1
+}
+
+function endBulkImport(): void {
+  if (batchDepth === 0) return
+  batchDepth -= 1
+  publishPendingData()
 }
 
 function llhToEnu(latitude: number, longitude: number, firstLatitude: number, firstLongitude: number) {
@@ -98,6 +173,223 @@ function addNmeaData(data: NmeaData) {
   publishPendingData()
 }
 
+// 仅写入轨迹点（不影响 nmeaData 统计 / 偏差点），供 GGA 之外的定位语句（如 RMC）
+// 补充轨迹。与上一个点经纬度几乎重合时跳过，避免 GGA+RMC 同解产生重复点。
+function pushTrackPoint(longitude: number, latitude: number, quality: number): void {
+  if (!Number.isFinite(longitude) || !Number.isFinite(latitude)) return
+  if (longitude === 0 && latitude === 0) return
+  if (Math.abs(latitude) > 90 || Math.abs(longitude) > 180) return
+  const last = mapTrackPoints.value[mapTrackPoints.value.length - 1]
+  if (last && Math.abs(last[0] - longitude) < 1e-9 && Math.abs(last[1] - latitude) < 1e-9) {
+    return
+  }
+  mapTrackPoints.value.push([Number(longitude), Number(latitude), Number(quality)])
+  trimHistory(mapTrackPoints.value)
+  mapTrackPointsDirty = true
+  publishPendingData()
+}
+
+function rebuildMapTrackFromPositionHistory(maxPoints = MAX_NMEA_DATA): void {
+  const history = mapPositionEpochHistory
+  const pointBudget = Math.max(2, Math.floor(maxPoints))
+  const stride = Math.max(
+    1,
+    Math.ceil(Math.max(0, history.length - 1) / Math.max(1, pointBudget - 1)),
+  )
+  const points: Array<[number, number, number]> = []
+
+  const appendIndex = (index: number) => {
+    const longitude = history.getValue('LONGITUDE', index)
+    const latitude = history.getValue('LATITUDE', index)
+    if (
+      longitude === null ||
+      latitude === null ||
+      (longitude === 0 && latitude === 0) ||
+      Math.abs(longitude) > 180 ||
+      Math.abs(latitude) > 90
+    ) {
+      return
+    }
+    const quality = history.getValue('QUALITY', index) ?? 0
+    const previous = points[points.length - 1]
+    if (previous && previous[0] === longitude && previous[1] === latitude) return
+    points.push([longitude, latitude, quality])
+  }
+
+  for (let index = 0; index < history.length; index += stride) appendIndex(index)
+  if (history.length > 0 && (history.length - 1) % stride !== 0) {
+    appendIndex(history.length - 1)
+  }
+
+  mapTrackPoints.value = points
+  mapTrackPointsDirty = true
+  publishPendingData()
+}
+
+function appendMapPositionEpoch(
+  time: string,
+  longitude: number,
+  latitude: number,
+  quality: number,
+): void {
+  if (!time || !isFinite(longitude) || !isFinite(latitude)) return
+  mapPositionEpochHistory.append(
+    time,
+    {
+      LONGITUDE: longitude,
+      LATITUDE: latitude,
+      QUALITY: quality,
+    },
+    { replaceLast: true },
+  )
+}
+
+function rebuildDeviationFromPositionHistory(maxPoints = MAX_NMEA_DATA): void {
+  const history = positionEpochHistory.value
+  const pointBudget = Math.max(2, Math.floor(maxPoints))
+  const selectedIndices = new Set<number>()
+
+  if (history.length <= pointBudget) {
+    for (let index = 0; index < history.length; index += 1) selectedIndices.add(index)
+  } else {
+    const fieldBudget = Math.max(2, Math.floor(pointBudget / 2))
+    for (const field of ['E', 'N']) {
+      const series = history.extractSeries(field, 0, history.length - 1, fieldBudget)
+      for (let offset = 0; offset < series.points.length; offset += 2) {
+        selectedIndices.add(series.points[offset])
+      }
+    }
+    selectedIndices.add(0)
+    selectedIndices.add(history.length - 1)
+  }
+
+  deviationPoints.value = [...selectedIndices]
+    .sort((left, right) => left - right)
+    .map(
+      (index): [number, number, number] => [
+        history.getValue('E', index) ?? 0,
+        history.getValue('N', index) ?? 0,
+        history.getValue('QUALITY', index) ?? 0,
+      ],
+    )
+  deviationPointsDirty = true
+  publishPendingData()
+}
+
+function appendPositionEpoch(data: NmeaData): void {
+  if (!pendingGgaEpochTime || data.enuE === null || data.enuN === null) return
+  if (firstAltitude === null && data.altitude !== null) {
+    firstAltitude = Number(data.altitude)
+  }
+  const up =
+    data.altitude !== null && firstAltitude !== null
+      ? Number(data.altitude) - firstAltitude
+      : null
+  positionEpochHistory.value.append(pendingGgaEpochTime, {
+    E: Number(data.enuE),
+    N: Number(data.enuN),
+    U: up,
+    QUALITY: Number(data.quality ?? 0),
+  })
+  positionEpochHistoryDirty = true
+}
+
+function appendSpeedEpoch(time: string, speedKmh: number, replaceLast = false): void {
+  if (!time || !Number.isFinite(speedKmh)) return
+  latestSpeedEpochTime = time
+  speedEpochHistory.value.append(
+    time,
+    { SPEED: speedKmh },
+    { replaceLast },
+  )
+  speedEpochHistoryDirty = true
+}
+
+function finiteStatusValue(value: unknown): number | null {
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
+function appendStatusEpoch(time: string, replaceLast = true): void {
+  if (!time) return
+  const status = useGnssStore().status
+  const dateMatch = status.utcTime.match(/^(\d{4})\/(\d{2})\/(\d{2})/)
+  const date = dateMatch
+    ? Math.floor(
+        Date.UTC(Number(dateMatch[1]), Number(dateMatch[2]) - 1, Number(dateMatch[3])) /
+          86_400_000,
+      )
+    : null
+  statusEpochHistory.value.append(
+    time,
+    {
+      DATE: date,
+      QUALITY: finiteStatusValue(status.quality),
+      LONGITUDE: finiteStatusValue(status.longitude),
+      LATITUDE: finiteStatusValue(status.latitude),
+      ALTITUDE: finiteStatusValue(status.altitude),
+      ALTITUDE_MSL: finiteStatusValue(status.altitudeMsl),
+      VELOCITY: finiteStatusValue(status.velocity),
+      PDOP: finiteStatusValue(status.PDOP),
+      HDOP: finiteStatusValue(status.HDOP),
+      SATS_USED: finiteStatusValue(status.satsUsed),
+      SATS_VISIBLE: finiteStatusValue(status.satsVisible),
+      TWO_D_ACC: finiteStatusValue(status.twoDAcc),
+      THREE_D_ACC: finiteStatusValue(status.threeDAcc),
+    },
+    { replaceLast },
+  )
+  statusEpochHistoryDirty = true
+}
+
+function applyStatusEpoch(index: number): void {
+  const history = statusEpochHistory.value
+  if (index < 0 || index >= history.length) return
+  const status = useGnssStore().status
+  const value = (field: string) => history.getValue(field, index)
+  const text = (field: string) => {
+    const fieldValue = value(field)
+    return fieldValue === null ? '' : String(fieldValue)
+  }
+  const fixed = (field: string, digits: number) => {
+    const fieldValue = value(field)
+    return fieldValue === null ? '' : fieldValue.toFixed(digits)
+  }
+  const quality = value('QUALITY') ?? 0
+  const date = value('DATE')
+  const dateValue = date === null ? null : new Date(Math.trunc(date) * 86_400_000)
+  const dateText = dateValue
+    ? `${dateValue.getUTCFullYear()}/${String(dateValue.getUTCMonth() + 1).padStart(2, '0')}/${String(dateValue.getUTCDate()).padStart(2, '0')} `
+    : ''
+
+  status.utcTime = `${dateText}${history.formatTime(index)}`
+  status.quality = quality
+  status.fixMode = numberToQuality(quality)
+  status.longitude = value('LONGITUDE') ?? 0
+  status.latitude = value('LATITUDE') ?? 0
+  status.altitude = value('ALTITUDE') ?? 0
+  status.altitudeMsl = value('ALTITUDE_MSL') ?? 0
+  status.velocity = fixed('VELOCITY', 2)
+  status.PDOP = text('PDOP')
+  status.HDOP = text('HDOP')
+  status.satsUsed = text('SATS_USED')
+  status.satsVisible = text('SATS_VISIBLE')
+  status.twoDAcc = fixed('TWO_D_ACC', 2)
+  status.threeDAcc = fixed('THREE_D_ACC', 2)
+}
+
+function applyTimelineEpoch(index: number): void {
+  applyStatusEpoch(index)
+  const statusHistory = statusEpochHistory.value
+  if (index < 0 || index >= statusHistory.length || satelliteDetailEpochHistory.length === 0) return
+  const satelliteIndex = satelliteDetailEpochHistory.findNearestElapsedTime(
+    statusHistory.getElapsedTime(index),
+  )
+  if (satelliteIndex >= 0) {
+    satelliteSnrData.value = satelliteDetailEpochHistory.getSnapshot(satelliteIndex)
+  }
+}
+
 function addGgaData(data: GgaData) {
   ggaData.value.push(data)
   trimHistory(ggaData.value)
@@ -105,9 +397,10 @@ function addGgaData(data: GgaData) {
   publishPendingData()
 }
 
-function timeArrToString (time: any) {
-  // time = [0, 0, 0, 0, 0, 0]
-  return `20${time[0]}/${time[1]}/${time[2]} ${time[3]}:${time[4]}:${time[5]}`
+function timeArrToString(time: number[]): string {
+  const pad2 = (value: number) => String(Math.trunc(value)).padStart(2, '0')
+  const seconds = Number(time[5] ?? 0).toFixed(3).padStart(6, '0')
+  return `20${pad2(time[0])}/${pad2(time[1])}/${pad2(time[2])} ${pad2(time[3])}:${pad2(time[4])}:${seconds}`
 }
 
 function addSatelliteSnrData(data: SatelliteSnrData) {
@@ -120,8 +413,27 @@ function addSatelliteSnrData(data: SatelliteSnrData) {
     timestamp: new Date().toISOString()
   }
   latestSatelliteData.set(`${item.constellation}-${item.prn}`, item)
+  pendingSatelliteDetails.set(`${item.constellation}-${item.prn}`, item)
   satelliteDataDirty = true
   publishPendingData()
+}
+
+function commitSatelliteEpoch(rawGgaTime: string): void {
+  satelliteEpochHistory.value.append(satelliteEpochAssembler.commit(rawGgaTime))
+  satelliteDetailEpochHistory.append(
+    rawGgaTime,
+    pendingSatelliteDetails.size > 0 ? [...pendingSatelliteDetails.values()] : undefined,
+  )
+  pendingSatelliteDetails.clear()
+  satelliteEpochHistoryDirty = true
+  publishPendingData()
+}
+
+function clearSatelliteEpochHistory(): void {
+  satelliteEpochAssembler.clear()
+  satelliteEpochHistoryDirty = false
+  satelliteEpochHistory.value.clear()
+  triggerRef(satelliteEpochHistory)
 }
 
 enum NmeaType {
@@ -242,7 +554,7 @@ interface GstData {
 }
 
 // 添加卫星SNR数据接口
-interface SatelliteSnrData {
+interface SatelliteSnrData extends SatelliteDetailSample {
   prn: string
   elevation: number
   azimuth: number
@@ -320,17 +632,17 @@ export function numberToQuality (num: number) {
   // 0：无效解；1：单点定位解；2：伪距差分；4：固定解；5：浮动解。
   switch (num) {
     case 0:
-      return 'Invalid'
+      return t('data.qualityInvalid')
     case 1:
-      return 'Single'
+      return t('data.qualitySingle')
     case 2:
-      return 'DGNSS'
+      return t('data.qualityDgnss')
     case 4:
-      return 'Fix'
+      return t('data.qualityFix')
     case 5:
-      return 'Float'
+      return t('data.qualityFloat')
     default:
-      return 'Unknown'
+      return t('data.qualityUnknown')
   }
 }
 
@@ -339,15 +651,15 @@ const streamParser = new NmeaStreamParser()
 export function useNmea() {
   // 计算属性：信号质量
   const signalQuality = computed(() => {
-    if (!currentData.value.satellites || !currentData.value.hdop) return '无信号'
-    if (currentData.value.satellites >= 8 && currentData.value.hdop <= 2) return '优秀'
-    if (currentData.value.satellites >= 4 && currentData.value.hdop <= 5) return '良好'
-    return '一般'
+    if (!currentData.value.satellites || !currentData.value.hdop) return t('data.signalNone')
+    if (currentData.value.satellites >= 8 && currentData.value.hdop <= 2) return t('data.signalExcellent')
+    if (currentData.value.satellites >= 4 && currentData.value.hdop <= 5) return t('data.signalGood')
+    return t('data.signalFair')
   })
 
   // 计算属性：定位状态
   const fixStatus = computed(() => {
-    return currentData.value.status === 'A' ? '已定位' : '未定位'
+    return currentData.value.status === 'A' ? t('data.fixPositioned') : t('data.fixNotPositioned')
   })
 
 
@@ -360,9 +672,11 @@ export function useNmea() {
 
     let time = ''
     const timeParts = parts[1]
+    pendingGgaEpochTime = timeParts
+    latestSpeedEpochTime = timeParts
     utcTime[3] = parseInt(timeParts.substring(0, 2))
     utcTime[4] = parseInt(timeParts.substring(2, 4))
-    utcTime[5] = parseFloat(timeParts.substring(4, 6))
+    utcTime[5] = parseFloat(timeParts.substring(4))
     if (utcTime[0] !== 0) {
       time = timeArrToString(utcTime)
     }
@@ -392,6 +706,9 @@ export function useNmea() {
       dgpsStation: parts[14].split('*')[0]
     }
 
+    // GSV blocks in the supported receiver stream precede their matching GGA.
+    // Commit here so every GGA epoch gets one speed-independent satellite snapshot.
+    commitSatelliteEpoch(timeParts)
     addGgaData(data)
 
     gnssStore.status.utcTime = data.time
@@ -403,6 +720,8 @@ export function useNmea() {
     gnssStore.status.altitudeMsl = parseFloat((parseFloat(data.altitude) + parseFloat(data.geoidHeight)).toFixed(2))
     gnssStore.status.HDOP = data.hdop
     gnssStore.status.satsUsed = data.satellites
+    appendMapPositionEpoch(timeParts, lonRes, latRes, parseInt(data.quality) || 0)
+    appendStatusEpoch(timeParts)
     
     return {
       time: data.time,
@@ -467,6 +786,14 @@ export function useNmea() {
         }
       }
     }
+
+    satelliteEpochAssembler.addGsv({
+      source: talkerId,
+      constellation,
+      totalMessages: Number(data.totalMessages),
+      messageNumber: Number(data.messageNumber),
+      satelliteIds: data.satellites.map(satellite => satellite.prn),
+    })
     
     gnssStore.status.satsVisible = data.satellitesInView
     
@@ -501,6 +828,7 @@ export function useNmea() {
     const speedKnots = parseFloat(data.speed) || 0
     const speedKmh = speedKnots * 1.852
     gnssStore.status.velocity = speedKmh.toFixed(2)
+    appendSpeedEpoch(data.time, speedKmh, true)
 
     const timeParts = data.time // Hhmmss.ss
     const dateParts = data.date // ddmmyy
@@ -509,7 +837,8 @@ export function useNmea() {
     utcTime[2] = parseInt(dateParts.substring(0, 2))
     utcTime[3] = parseInt(timeParts.substring(0, 2))
     utcTime[4] = parseInt(timeParts.substring(2, 4))
-    utcTime[5] = parseFloat(timeParts.substring(4, 6))
+    utcTime[5] = parseFloat(timeParts.substring(4))
+    gnssStore.status.utcTime = timeArrToString(utcTime)
 
     const latDeg = Math.floor(parseFloat(parts[3]) / 100)
     const latMin = parseFloat(parts[3]) - latDeg * 100
@@ -518,6 +847,28 @@ export function useNmea() {
     const lonDeg = Math.floor(parseFloat(parts[5]) / 100)
     const lonMin = parseFloat(parts[5]) - lonDeg * 100
     const lonRes = lonDeg + lonMin / 60
+
+    // 用 RMC 定位补充轨迹：RMC 是标准位置语句，许多 NMEA 流（如 RMC-only
+    // 或 GGA 未定位）不含可用 GGA 定位，若仅依赖 GGA 则轨迹图会空白。
+    // RMC 携带有效定位（status=A）时同样写入轨迹，保证导入数据可见。
+    const rmcLon = lonRes
+    const rmcLat = latRes
+    const rmcPosValid =
+      data.status === 'A' &&
+      Number.isFinite(rmcLon) &&
+      Number.isFinite(rmcLat) &&
+      !(rmcLon === 0 && rmcLat === 0) &&
+      Math.abs(rmcLat) <= 90 &&
+      Math.abs(rmcLon) <= 180
+    if (rmcPosValid) {
+      gnssStore.status.longitude = parseFloat(rmcLon.toFixed(6))
+      gnssStore.status.latitude = parseFloat(rmcLat.toFixed(6))
+      gnssStore.status.quality = 1
+      gnssStore.status.fixMode = numberToQuality(1)
+      pushTrackPoint(rmcLon, rmcLat, 1)
+      appendMapPositionEpoch(data.time, rmcLon, rmcLat, 1)
+    }
+    appendStatusEpoch(data.time)
 
     return {
       time: timeArrToString(utcTime),
@@ -551,6 +902,8 @@ export function useNmea() {
     
     const speedKmh = parseFloat(data.speedKmh) || 0
     gnssStore.status.velocity = speedKmh.toFixed(2)
+    appendSpeedEpoch(latestSpeedEpochTime, speedKmh, true)
+    appendStatusEpoch(latestSpeedEpochTime)
     
     return {
       speed: speedKmh,
@@ -609,6 +962,7 @@ export function useNmea() {
 
     gnssStore.status.twoDAcc = twoDAcc.toFixed(2)
     gnssStore.status.threeDAcc = threeDAcc.toFixed(2)
+    appendStatusEpoch(data.time)
 
     return {
       raw: sentence,
@@ -654,14 +1008,23 @@ export function useNmea() {
 
       currentData.value = newData;
 
+      appendPositionEpoch(newData)
       addNmeaData(newData);
 
       return NmeaType.GGA
     } else if (sentence.includes('RMC')) {
       parsedData = parseRmc(sentence)
+      currentData.value = {
+        ...currentData.value,
+        ...parsedData,
+      }
       return NmeaType.RMC
     } else if (sentence.includes('VTG')) {
       parsedData = parseVtg(sentence)
+      currentData.value = {
+        ...currentData.value,
+        ...parsedData,
+      }
       return NmeaType.VTG
     } else if (sentence.includes('GSV')) {
       parsedData = parseGsv(sentence)
@@ -710,8 +1073,18 @@ export function useNmea() {
     deviationPointsDirty = false
     mapTrackPointsDirty = false
     satelliteDataDirty = false
+    satelliteEpochHistoryDirty = false
+    positionEpochHistoryDirty = false
+    speedEpochHistoryDirty = false
+    statusEpochHistoryDirty = false
     firstLLh = null
+    firstAltitude = null
+    pendingGgaEpochTime = ''
+    latestSpeedEpochTime = ''
     latestSatelliteData.clear()
+    pendingSatelliteDetails.clear()
+    satelliteEpochAssembler.clear()
+    satelliteDetailEpochHistory.clear()
     utcTime.fill(0)
     streamParser.clear()
     nmeaData.value = []
@@ -719,6 +1092,15 @@ export function useNmea() {
     deviationPoints.value = []
     mapTrackPoints.value = []
     satelliteSnrData.value = []  // 确保清除卫星数据
+    satelliteEpochHistory.value.clear()
+    triggerRef(satelliteEpochHistory)
+    positionEpochHistory.value.clear()
+    triggerRef(positionEpochHistory)
+    speedEpochHistory.value.clear()
+    triggerRef(speedEpochHistory)
+    mapPositionEpochHistory.clear()
+    statusEpochHistory.value.clear()
+    triggerRef(statusEpochHistory)
     currentData.value = {
       time: null,
       firstLatitude: null,
@@ -757,8 +1139,10 @@ export function useNmea() {
       dgpsAge: '',
       dgpsStation: ''
     }
-    // 通知地图视图：底层 GNSS 数据已清空，应同步清除本地轨迹
-    useGnssStore().resetTrack()
+    // 文件或数据源切换后，不保留上一次的状态或地图位置。
+    const gnssStore = useGnssStore()
+    gnssStore.resetStatus()
+    gnssStore.resetTrack()
   }
 
   // 添加处理原始数据的函数
@@ -815,14 +1199,26 @@ export function useNmea() {
       latestPosition,
       latestGgaPosition,
       satelliteSnrData, // 添加卫星SNR数据
+      satelliteEpochHistory,
+      satelliteDetailEpochHistory,
+      positionEpochHistory,
+      speedEpochHistory,
+      statusEpochHistory,
       signalQuality,
       fixStatus,
       enableWindow,
       // toggleSlideWindow,
       parseNmea,
       parseNmeaBatch,
+      beginBulkImport,
+      endBulkImport,
+      rebuildMapTrackFromPositionHistory,
+      rebuildDeviationFromPositionHistory,
       getStatistics,
       clearData,
+      applyStatusEpoch,
+      applyTimelineEpoch,
+      clearSatelliteEpochHistory,
       processRawData,  // 导出新函数
       clearBuffer     // 导出新函数
     }

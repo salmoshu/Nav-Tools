@@ -9,10 +9,10 @@
             size="small"
             class="config-btn"
             :disabled="activeReadCommands.size > 0"
-            :title="activeReadCommands.size > 0 ? '请先停止周期读指令' : '配置电机指令'"
+            :title="activeReadCommands.size > 0 ? t('motor.stopPeriodicReadFirst') : t('motor.configureMotorCommand')"
             @click="showConfigDialog"
           >
-            <el-icon><Setting /></el-icon>&nbsp;配置
+            <el-icon><Setting /></el-icon>&nbsp;{{ t('motor.configButton') }}
           </el-button>
         </div>
       </div>
@@ -38,7 +38,7 @@
     <!-- 配置对话框 -->
     <el-dialog
       v-model="configDialogVisible"
-      title="电机驱动指令配置（16进制）"
+      :title="t('motor.dialogTitle')"
       class="app-dialog motor-config-dialog"
       width="min(1180px, calc(100vw - 32px))"
       :append-to-body="true"
@@ -52,20 +52,20 @@
       <template #header>
         <AppDialogTitle
           :icon="Setting"
-          title="电机驱动指令配置"
-          description="定义指令结构、校验和与读写命令（16 进制）"
+          :title="t('motor.dialogTitleMain')"
+          :description="t('motor.dialogDescription')"
         />
       </template>
 
       <div class="dialog-content">
-        <section class="config-tool-card" aria-label="配置工具">
+        <section class="config-tool-card" :aria-label="t('motor.configToolTitle')">
           <div class="config-tool-copy">
             <div class="config-tool-icon">
               <el-icon><Setting /></el-icon>
             </div>
             <div>
-              <div class="config-tool-title">配置工具</div>
-              <div class="config-tool-description">载入、导出或恢复电机指令配置</div>
+              <div class="config-tool-title">{{ t('motor.configToolTitle') }}</div>
+              <div class="config-tool-description">{{ t('motor.configToolDescription') }}</div>
             </div>
           </div>
           <div class="config-tool-actions">
@@ -78,11 +78,11 @@
               :on-change="handleFileLoad"
             >
               <template #trigger>
-                <el-button :icon="Upload" size="default">载入配置</el-button>
+                <el-button :icon="Upload" size="default">{{ t('motor.loadConfig') }}</el-button>
               </template>
             </el-upload>
             <el-button :icon="Download" size="default" @click="downloadConfig">
-              导出配置
+              {{ t('motor.exportConfig') }}
             </el-button>
             <span class="config-tool-separator" aria-hidden="true"></span>
             <el-button
@@ -92,7 +92,7 @@
               size="default"
               @click="resetConfig"
             >
-              恢复默认
+              {{ t('motor.restoreDefault') }}
             </el-button>
           </div>
         </section>
@@ -119,11 +119,11 @@
           :closable="false"
           show-icon
         >
-          <template #title>当前配置还有 {{ configurationIssues.length }} 项需要处理</template>
+          <template #title>{{ t('motor.configIssuesTitle', { n: configurationIssues.length }) }}</template>
           <div class="config-validation-list">
             <span v-for="issue in configurationIssues.slice(0, 4)" :key="issue">{{ issue }}</span>
             <span v-if="configurationIssues.length > 4">
-              另有 {{ configurationIssues.length - 4 }} 项，请继续检查命令表格
+              {{ t('motor.configIssuesMore', { n: configurationIssues.length - 4 }) }}
             </span>
           </div>
         </el-alert>
@@ -137,14 +137,14 @@
             <template #label>
               <span class="tab-label">
                 <el-icon><Rank /></el-icon>
-                指令结构
+                {{ t('motor.structureTab') }}
               </span>
             </template>
             
             <!-- 基础配置 - 拖拽式报文结构 -->
             <div class="message-structure-container">
               <el-text type="info" size="small" style="margin-bottom: 15px; display: block;">
-                拖拽下方模块来调整报文结构（报头始终在前，校验和始终在后）
+                {{ t('motor.dragHint') }}
               </el-text>
               
               <draggable
@@ -182,7 +182,7 @@
                         <el-input 
                           :model-value="configForm.header"
                           @input="handleHeaderInput"
-                          placeholder="例如: AACC"
+                          :placeholder="t('motor.headerPlaceholder')"
                           size="small"
                           style="width: 110px;"
                         >
@@ -194,32 +194,32 @@
                       
                       <!-- 地址字段 -->
                       <div v-else-if="element.id === 'address'" class="field-config">
-                        <el-switch :model-value="true" size="small" active-text="启用" disabled />
+                        <el-switch :model-value="true" size="small" :active-text="t('motor.enabled')" disabled />
                         <el-select 
                           v-model="configForm.addressLength" 
-                          placeholder="字节长度"
+                          :placeholder="t('motor.byteLength')"
                           size="small"
                           style="width: 80px; margin-left: 8px;"
                           @change="normalizeAllCommands"
                         >
-                          <el-option label="1字节" :value="1" />
-                          <el-option label="2字节" :value="2" />
+                          <el-option :label="t('motor.oneByte')" :value="1" />
+                          <el-option :label="t('motor.twoByte')" :value="2" />
                         </el-select>
                       </div>
                       
                       <!-- 功能码字段 -->
                       <div v-else-if="element.id === 'function'" class="field-config">
-                        <el-switch v-model="configForm.includeFunction" size="small" active-text="启用" />
+                        <el-switch v-model="configForm.includeFunction" size="small" :active-text="t('motor.enabled')" />
                         <el-select 
                           v-model="configForm.functionLength" 
-                          placeholder="字节长度"
+                          :placeholder="t('motor.byteLength')"
                           size="small"
                           style="width: 80px; margin-left: 8px;"
                           :disabled="!configForm.includeFunction"
                           @change="normalizeAllCommands"
                         >
-                          <el-option label="1字节" :value="1" />
-                          <el-option label="2字节" :value="2" />
+                          <el-option :label="t('motor.oneByte')" :value="1" />
+                          <el-option :label="t('motor.twoByte')" :value="2" />
                         </el-select>
                       </div>
                       
@@ -228,48 +228,48 @@
                         <el-switch
                           v-model="configForm.includeRegisterCount"
                           size="small"
-                          active-text="启用"
+                          :active-text="t('motor.enabled')"
                           @change="handleGlobalRegisterCountChange"
                         />
                         <el-select 
                           v-model="configForm.registerCountLength" 
-                          placeholder="字节长度"
+                          :placeholder="t('motor.byteLength')"
                           size="small"
                           style="width: 80px; margin-left: 8px;"
                           :disabled="!configForm.includeRegisterCount"
                           @change="handleRegisterCountWidthChange"
                         >
-                          <el-option label="1字节" :value="1" />
-                          <el-option label="2字节" :value="2" />
+                          <el-option :label="t('motor.oneByte')" :value="1" />
+                          <el-option :label="t('motor.twoByte')" :value="2" />
                         </el-select>
                       </div>
                       
                       <!-- 长度字段 -->
                       <div v-else-if="element.id === 'length'" class="field-config">
-                        <el-switch :model-value="true" size="small" active-text="启用" disabled />
+                        <el-switch :model-value="true" size="small" :active-text="t('motor.enabled')" disabled />
                         <el-select 
                           v-model="configForm.lengthLength" 
-                          placeholder="字节长度"
+                          :placeholder="t('motor.byteLength')"
                           size="small"
                           style="width: 80px; margin-left: 8px;"
                         >
-                          <el-option label="1字节" :value="1" />
-                          <el-option label="2字节" :value="2" />
+                          <el-option :label="t('motor.oneByte')" :value="1" />
+                          <el-option :label="t('motor.twoByte')" :value="2" />
                         </el-select>
                       </div>
                       
                       <!-- 数据字段 -->
                       <div v-else-if="element.id === 'data'" class="field-config">
-                        <el-switch :model-value="true" size="small" active-text="启用" disabled />
+                        <el-switch :model-value="true" size="small" :active-text="t('motor.enabled')" disabled />
                         <el-select 
                           :model-value="configForm.dataEndianness"
                           @change="handleDataEndiannessChange"
-                          placeholder="字节序" 
+                          :placeholder="t('motor.endianness')"
                           size="small"
                           style="width: 80px; margin-left: 8px;"
                         >
-                          <el-option label="大端" value="big" />
-                          <el-option label="小端" value="little" />
+                          <el-option :label="t('motor.bigEndian')" value="big" />
+                          <el-option :label="t('motor.littleEndian')" value="little" />
                         </el-select>
                       </div>
                       
@@ -277,25 +277,25 @@
                       <div v-else-if="element.id === 'checksum'" class="field-config">
                         <el-select 
                           v-model="configForm.checksum.method" 
-                          placeholder="校验方法"
+                          :placeholder="t('motor.checksumMethod')"
                           size="small"
                           style="width: 90px;"
                         >
-                          <el-option label="无校验" value="none" />
-                          <el-option label="和校验" value="sum" />
-                          <el-option label="XOR" value="xor" />
-                          <el-option label="CRC8" value="crc8" />
-                          <el-option label="CRC16" value="crc16" />
+                          <el-option :label="t('motor.checksumNone')" value="none" />
+                          <el-option :label="t('motor.checksumSum')" value="sum" />
+                          <el-option :label="t('motor.checksumXor')" value="xor" />
+                          <el-option :label="t('motor.checksumCrc8')" value="crc8" />
+                          <el-option :label="t('motor.checksumCrc16')" value="crc16" />
                         </el-select>
                         <div class="checksum-params" v-if="configForm.checksum.method === 'crc16'">
                           <el-select 
                             v-model="configForm.checksum.endianness" 
-                            placeholder="字节序"
+                            :placeholder="t('motor.endianness')"
                             size="small"
                             style="width: 80px;"
                           >
-                            <el-option label="大端" value="big" />
-                            <el-option label="小端" value="little" />
+                            <el-option :label="t('motor.bigEndian')" value="big" />
+                            <el-option :label="t('motor.littleEndian')" value="little" />
                           </el-select>
                         </div>
                         <div class="checksum-params" v-if="configForm.checksum.method && configForm.checksum.method !== 'none'">
@@ -305,9 +305,9 @@
                             size="small"
                             controls-position="right"
                             style="width: 70px;"
-                            placeholder="起始"
+                            :placeholder="t('motor.startIndexPlaceholder')"
                           />
-                          <el-tooltip content="起始位：从第几个字节开始计算校验和" placement="top">
+                          <el-tooltip :content="t('motor.checksumStartTooltip')" placement="top">
                             <el-icon class="param-info"><InfoFilled /></el-icon>
                           </el-tooltip>
                         </div>
@@ -323,15 +323,15 @@
             <template #label>
               <span class="tab-label">
                 <el-icon><Upload /></el-icon>
-                读指令
+                {{ t('motor.readTab') }}
                 <el-tag size="small" type="info">{{ readCommands.length }}</el-tag>
               </span>
             </template>
             
             <div class="command-header">
-              <el-text type="info" size="small">读取电机状态的相关命令（数据长度和数据类型用以决定应答数据，下发指令则不包含）</el-text>
+              <el-text type="info" size="small">{{ t('motor.readCommandHint') }}</el-text>
               <el-button type="primary" size="small" @click="addMotorCommand('read')" :icon="Plus" :disabled="activeReadCommands.size > 0">
-                添加读命令
+                {{ t('motor.addReadCommand') }}
               </el-button>
             </div>
             
@@ -352,13 +352,13 @@
                     class="drag-handle" 
                     @mousedown="(e: MouseEvent) => startDrag(e, 'read', scope.$index)"
                     style="cursor: move; color: #909399;"
-                    title="拖拽排序"
+                    :title="t('motor.dragSort')"
                   >
                     <Rank />
                   </el-icon>
                 </template>
               </el-table-column>
-              <el-table-column label="操作" width="50" align="center" fixed="right">
+              <el-table-column :label="t('motor.colOperation')" width="50" align="center" fixed="right">
                 <template #default="scope">
                   <el-button
                     type="danger"
@@ -370,7 +370,7 @@
                   />
                 </template>
               </el-table-column>
-              <el-table-column prop="name" label="命令名称" min-width="120">
+              <el-table-column prop="name" :label="t('motor.colCommandName')" min-width="120">
                 <template #default="scope">
                   <el-input v-model="scope.row.name" size="default" :disabled="activeReadCommands.has(scope.row.name)" @blur="normalizeCommand(scope.row, 'read')">
                     <template #prefix>
@@ -379,7 +379,7 @@
                   </el-input>
                 </template>
               </el-table-column>
-              <el-table-column v-if="configForm.includeFunction" prop="functionCode" label="功能码" width="110">
+              <el-table-column v-if="configForm.includeFunction" prop="functionCode" :label="t('motor.fieldFunction')" width="110">
                 <template #default="scope">
                   <el-input
                     :model-value="scope.row.functionCode"
@@ -394,7 +394,7 @@
                   </el-input>
                 </template>
               </el-table-column>
-              <el-table-column prop="address" label="寄存器地址" width="120">
+              <el-table-column prop="address" :label="t('motor.colRegisterAddress')" width="120">
                 <template #default="scope">
                   <el-input
                     :model-value="scope.row.address"
@@ -409,7 +409,7 @@
                   </el-input>
                 </template>
               </el-table-column>
-              <el-table-column v-if="configForm.includeRegisterCount" prop="registerCount" label="寄存器个数" width="100">
+              <el-table-column v-if="configForm.includeRegisterCount" prop="registerCount" :label="t('motor.colRegisterCount')" width="100">
                 <template #default="scope">
                   <div style="display: flex; align-items: center; gap: 4px;">
                     <el-checkbox 
@@ -432,7 +432,7 @@
                   </div>
                 </template>
               </el-table-column>
-              <el-table-column prop="length" label="字节个数" width="100">
+              <el-table-column prop="length" :label="t('motor.colByteCount')" width="100">
                 <template #default="scope">
                   <div style="display: flex; align-items: center; gap: 4px;">
                     <el-checkbox 
@@ -456,7 +456,7 @@
                   </div>
                 </template>
               </el-table-column>
-              <el-table-column prop="data" label="数据内容" width="180">
+              <el-table-column prop="data" :label="t('motor.colDataContent')" width="180">
                 <template #default>
                   <el-input size="default" placeholder="" disabled>
                     <template #prefix>
@@ -466,7 +466,7 @@
                   </el-input>
                 </template>
               </el-table-column>
-              <el-table-column prop="dataType" label="数据类型" width="100">
+              <el-table-column prop="dataType" :label="t('motor.colDataType')" width="100">
                 <template #default="scope">
                   <el-select
                     :model-value="scope.row.dataType"
@@ -486,15 +486,15 @@
             <template #label>
               <span class="tab-label">
                 <el-icon><Download /></el-icon>
-                写指令
+                {{ t('motor.writeTab') }}
                 <el-tag size="small" type="info">{{ writeCommands.length }}</el-tag>
               </span>
             </template>
             
             <div class="command-header">
-              <el-text type="info" size="small">控制电机运行的相关命令</el-text>
+              <el-text type="info" size="small">{{ t('motor.writeCommandHint') }}</el-text>
               <el-button type="primary" size="small" @click="addMotorCommand('write')" :icon="Plus">
-                添加写命令
+                {{ t('motor.addWriteCommand') }}
               </el-button>
             </div>
             
@@ -515,13 +515,13 @@
                     class="drag-handle" 
                     @mousedown="(e: MouseEvent) => startDrag(e, 'write', scope.$index)"
                     style="cursor: move; color: #909399;"
-                    title="拖拽排序"
+                    :title="t('motor.dragSort')"
                   >
                     <Rank />
                   </el-icon>
                 </template>
               </el-table-column>
-              <el-table-column label="操作" width="50" align="center" fixed="right">
+              <el-table-column :label="t('motor.colOperation')" width="50" align="center" fixed="right">
                 <template #default="scope">
                   <el-button
                     type="danger"
@@ -532,7 +532,7 @@
                   />
                 </template>
               </el-table-column>
-              <el-table-column prop="name" label="命令名称" min-width="120">
+              <el-table-column prop="name" :label="t('motor.colCommandName')" min-width="120">
                 <template #default="scope">
                   <el-input v-model="scope.row.name" size="default" @blur="normalizeCommand(scope.row, 'write')">
                     <template #prefix>
@@ -541,7 +541,7 @@
                   </el-input>
                 </template>
               </el-table-column>
-              <el-table-column v-if="configForm.includeFunction" prop="functionCode" label="功能码" width="110">
+              <el-table-column v-if="configForm.includeFunction" prop="functionCode" :label="t('motor.fieldFunction')" width="110">
                 <template #default="scope">
                   <el-input
                     :model-value="scope.row.functionCode"
@@ -555,7 +555,7 @@
                   </el-input>
                 </template>
               </el-table-column>
-              <el-table-column prop="address" label="寄存器地址" width="120">
+              <el-table-column prop="address" :label="t('motor.colRegisterAddress')" width="120">
                 <template #default="scope">
                   <el-input
                     :model-value="scope.row.address"
@@ -569,7 +569,7 @@
                   </el-input>
                 </template>
               </el-table-column>
-              <el-table-column v-if="configForm.includeRegisterCount" prop="registerCount" label="寄存器个数" width="100">
+              <el-table-column v-if="configForm.includeRegisterCount" prop="registerCount" :label="t('motor.colRegisterCount')" width="100">
                 <template #default="scope">
                   <div style="display: flex; align-items: center; gap: 4px;">
                     <el-checkbox 
@@ -591,7 +591,7 @@
                   </div>
                 </template>
               </el-table-column>
-              <el-table-column prop="length" label="字节个数" width="100">
+              <el-table-column prop="length" :label="t('motor.colByteCount')" width="100">
                 <template #default="scope">
                   <div style="display: flex; align-items: center; gap: 4px;">
                     <el-checkbox 
@@ -614,13 +614,13 @@
                   </div>
                 </template>
               </el-table-column>
-              <el-table-column prop="data" label="数据内容" width="180">
+              <el-table-column prop="data" :label="t('motor.colDataContent')" width="180">
                 <template #default="scope">
                   <el-input 
                     :model-value="scope.row.data"
                     :disabled="scope.row.length===0"
                     size="default" 
-                    placeholder="十进制或十六进制"
+                    :placeholder="t('motor.dataHexPlaceholder')"
                     :maxlength="scope.row.length * 2"
                     @input="handleWriteDataHexInput(scope.row, String($event))"
                     @blur="normalizeCommand(scope.row, 'write')"
@@ -632,7 +632,7 @@
                   </el-input>
                 </template>
               </el-table-column>
-              <el-table-column prop="dataType" label="数据类型" width="100">
+              <el-table-column prop="dataType" :label="t('motor.colDataType')" width="100">
                 <template #default="scope">
                   <el-select
                     :model-value="scope.row.dataType"
@@ -650,9 +650,9 @@
       </div>
       <template #footer>
         <div class="dialog-footer">
-          <el-button @click="cancelConfig" :icon="Close">取消</el-button>
+          <el-button @click="cancelConfig" :icon="Close">{{ t('motor.cancel') }}</el-button>
           <el-button type="primary" @click="saveConfig" :icon="Check" :disabled="!isConfigValid">
-            确定
+            {{ t('motor.confirm') }}
           </el-button>
         </div>
       </template>
@@ -663,6 +663,7 @@
 <script lang="ts" setup>
 import { ref, onMounted, onUnmounted, watch, computed, reactive } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { t } from '@/i18n'
 import {
   DEFAULT_MOTOR_MESSAGE_FIELD_ORDER,
   fitHexToBytes,
@@ -753,54 +754,54 @@ interface MessageField {
 
 // 报文字段配置
 const messageFields = reactive<MessageField[]>([
-  { 
-    id: 'header', 
-    title: '报头', 
-    tag: '固定', 
-    tagType: 'info' as const, 
-    fixed: true 
+  {
+    id: 'header',
+    title: t('motor.fieldHeader'),
+    tag: t('motor.tagFixed'),
+    tagType: 'info' as const,
+    fixed: true
   },
-  { 
-    id: 'address', 
-    title: '寄存器地址', 
-    tag: '可变', 
-    tagType: 'success' as const, 
-    fixed: false 
+  {
+    id: 'address',
+    title: t('motor.fieldRegisterAddress'),
+    tag: t('motor.tagVariable'),
+    tagType: 'success' as const,
+    fixed: false
   },
-  { 
-    id: 'function', 
-    title: '功能码', 
-    tag: '可选', 
-    tagType: 'warning' as const, 
-    fixed: false 
+  {
+    id: 'function',
+    title: t('motor.fieldFunction'),
+    tag: t('motor.tagOptional'),
+    tagType: 'warning' as const,
+    fixed: false
   },
-  { 
-    id: 'registerCount', 
-    title: '寄存器个数', 
-    tag: '可选', 
-    tagType: 'warning' as const, 
-    fixed: false 
+  {
+    id: 'registerCount',
+    title: t('motor.fieldRegisterCount'),
+    tag: t('motor.tagOptional'),
+    tagType: 'warning' as const,
+    fixed: false
   },
-  { 
-    id: 'length', 
-    title: '字节个数', 
-    tag: '可变', 
-    tagType: 'success' as const, 
-    fixed: false 
+  {
+    id: 'length',
+    title: t('motor.fieldLength'),
+    tag: t('motor.tagVariable'),
+    tagType: 'success' as const,
+    fixed: false
   },
-  { 
-    id: 'data', 
-    title: '数据内容', 
-    tag: '可变', 
-    tagType: 'success' as const, 
-    fixed: false 
+  {
+    id: 'data',
+    title: t('motor.fieldData'),
+    tag: t('motor.tagVariable'),
+    tagType: 'success' as const,
+    fixed: false
   },
-  { 
-    id: 'checksum', 
-    title: '校验和', 
-    tag: '固定', 
-    tagType: 'info' as const, 
-    fixed: true 
+  {
+    id: 'checksum',
+    title: t('motor.fieldChecksumFull'),
+    tag: t('motor.tagFixed'),
+    tagType: 'info' as const,
+    fixed: true
   }
 ])
 
@@ -840,7 +841,7 @@ const serialSuccessListener = (event: any, result: any) => {
 const serialErrorListener = (event: any, error: any) => {
   console.error('串口数据发送失败:', error.error)
   ElMessage({
-    message: `串口发送失败: ${error.error}`,
+    message: t('motor.serialSendFailed', { error: error.error }),
     type: 'error',
     duration: 2000,
     placement: 'bottom-right',
@@ -955,7 +956,7 @@ const handleDialogBeforeClose = (done: () => void) => {
 // 处理报文结构变化
 const handleStructureChange = () => {
   ElMessage({
-    message: '报文结构已更新',
+    message: t('motor.structureUpdated'),
     type: 'success',
     duration: 1000,
     placement: 'bottom-right',
@@ -987,7 +988,7 @@ const saveConfig = () => {
   try {
     normalizeAllCommands()
     if (!isConfigValid.value) {
-      ElMessage.warning(configurationIssues.value[0] || '请先修正配置中的关联问题')
+      ElMessage.warning(configurationIssues.value[0] || t('motor.fixConfigIssues'))
       return
     }
 
@@ -997,7 +998,7 @@ const saveConfig = () => {
     dialogSnapshot = null
     configDialogVisible.value = false
     ElMessage({
-      message: '配置保存成功',
+      message: t('motor.configSaved'),
       type: 'success',
       duration: 1000,
       placement: 'bottom-right',
@@ -1005,7 +1006,7 @@ const saveConfig = () => {
     })
   } catch (error) {
     ElMessage({
-      message: '配置保存失败',
+      message: t('motor.configSaveFailed'),
       type: 'error',
       duration: 1000,
       placement: 'bottom-right',
@@ -1106,13 +1107,13 @@ const addMotorCommand = (kind: MotorCommandKind) => {
 
 
 const previewLabels: Record<MotorMessageFieldId, string> = {
-  header: '报头',
-  address: '寄存器地址',
-  function: '功能码',
-  registerCount: '寄存器个数',
-  length: '字节个数',
-  data: '数据内容',
-  checksum: '校验',
+  header: t('motor.fieldHeader'),
+  address: t('motor.fieldRegisterAddress'),
+  function: t('motor.fieldFunction'),
+  registerCount: t('motor.fieldRegisterCount'),
+  length: t('motor.fieldLength'),
+  data: t('motor.fieldData'),
+  checksum: t('motor.fieldChecksum'),
 }
 
 // 使用当前标签页中的真实命令生成预览，确保预览与实际下发报文一致。
@@ -1205,7 +1206,7 @@ const sendReadCommand = (cmd: any) => {
         // 如果已经在发送，停止发送
         activeReadCommands.value.delete(cmd.name)
         ElMessage({
-          message: `读指令 "${cmd.name}" 已停止发送`,
+          message: t('motor.readStopped', { name: cmd.name }),
           type: 'success',
           duration: 1000,
           placement: 'bottom-right',
@@ -1218,7 +1219,7 @@ const sendReadCommand = (cmd: any) => {
         // 开始定时发送
         activeReadCommands.value.add(cmd.name)
         ElMessage({
-          message: `读指令 "${cmd.name}" 开始以 ${cmd.frequency}Hz 频率发送`,
+          message: t('motor.readStarted', { name: cmd.name, freq: cmd.frequency }),
           type: 'success',
           duration: 1000,
           placement: 'bottom-right',
@@ -1232,7 +1233,7 @@ const sendReadCommand = (cmd: any) => {
       // 单次发送模式
       console.log(`发送读指令: ${cmd.name}, 报文: ${message}`)
       ElMessage({
-        message: `读指令 "${cmd.name}" 发送成功`,
+        message: t('motor.readSent', { name: cmd.name }),
         type: 'success',
         duration: 1000,
         placement: 'bottom-right',
@@ -1243,7 +1244,7 @@ const sendReadCommand = (cmd: any) => {
     
   } catch (error) {
     ElMessage({
-      message: `读指令 "${cmd.name}" 发送失败`,
+      message: t('motor.readSendFailed', { name: cmd.name }),
       type: 'error',
       duration: 1000,
       placement: 'bottom-right',
@@ -1263,7 +1264,7 @@ const sendWriteCommand = (cmd: any) => {
     
   } catch (error) {
     ElMessage({
-      message: `写指令 "${cmd.name}" 发送失败`,
+      message: t('motor.writeSendFailed', { name: cmd.name }),
       type: 'error',
       duration: 1000,
       placement: 'bottom-right',
@@ -1479,7 +1480,7 @@ const sendDataToSerial = (data: string) => {
   } else {
     console.error('IPC通信不可用')
     ElMessage({
-      message: '串口通信未初始化',
+      message: t('motor.serialNotInitialized'),
       type: 'error',
       duration: 2000,
       placement: 'bottom-right',
@@ -1536,12 +1537,12 @@ const updateGlobalTimer = () => {
 // 重置为默认配置
 const resetConfig = () => {
   ElMessageBox.confirm(
-    '确定恢复内置默认值吗？点击“取消”或关闭配置窗口仍可撤销本次更改。',
-    '恢复默认配置',
+    t('motor.restoreDefaultConfirm'),
+    t('motor.restoreDefaultTitle'),
     {
-      confirmButtonText: '确定',
+      confirmButtonText: t('motor.confirm'),
       confirmButtonClass: 'el-button--warning',
-      cancelButtonText: '取消',
+      cancelButtonText: t('motor.cancel'),
       type: 'warning',
       customClass: 'app-message-box',
       closeOnClickModal: true,
@@ -1553,7 +1554,7 @@ const resetConfig = () => {
     initializeDecimalInputs()
     generateCommandPreview()
     ElMessage({
-      message: '已恢复默认值，点击“确定”后保存',
+      message: t('motor.restoredDefault'),
       type: 'success',
       duration: 1000,
       placement: 'bottom-right',
@@ -1706,7 +1707,7 @@ const loadConfig = (config: any) => {
     
   } catch (error) {
     ElMessage({
-      message: '配置格式错误，载入失败',
+      message: t('motor.configFormatError'),
       type: 'error',
       duration: 1000,
       placement: 'bottom-right',
@@ -1761,7 +1762,7 @@ const handleFileLoad = (uploadFile: any) => {
       const config = JSON.parse(e.target?.result as string)
       loadConfig(config)
       ElMessage({
-        message: '配置载入成功',
+        message: t('motor.configLoaded'),
         type: 'success',
         duration: 1000,
         placement: 'bottom-right',
@@ -1769,7 +1770,7 @@ const handleFileLoad = (uploadFile: any) => {
       })
     } catch (error) {
       ElMessage({
-        message: '配置文件格式错误',
+        message: t('motor.configFileFormatError'),
         type: 'error',
         duration: 1000,
         placement: 'bottom-right',
@@ -1781,10 +1782,10 @@ const handleFileLoad = (uploadFile: any) => {
   }
   reader.onerror = () => {
     uploadRef.value?.clearFiles?.()
-    ElMessage.error('配置文件读取失败')
+    ElMessage.error(t('motor.configFileReadFailed'))
   }
   if (!uploadFile.raw) {
-    ElMessage.error('未读取到配置文件')
+    ElMessage.error(t('motor.noConfigFile'))
     return
   }
   reader.readAsText(uploadFile.raw)
@@ -1795,7 +1796,7 @@ const downloadConfig = () => {
   try {
     normalizeAllCommands()
     if (!isConfigValid.value) {
-      ElMessage.warning(configurationIssues.value[0] || '请先修正配置后再导出')
+      ElMessage.warning(configurationIssues.value[0] || t('motor.fixConfigBeforeExport'))
       return
     }
     const configData = JSON.stringify({
@@ -1817,7 +1818,7 @@ const downloadConfig = () => {
     document.body.removeChild(link)
     URL.revokeObjectURL(url)
     ElMessage({
-      message: '配置导出成功',
+      message: t('motor.configExported'),
       type: 'success',
       duration: 1000,
       placement: 'bottom-right',
@@ -1825,7 +1826,7 @@ const downloadConfig = () => {
     })
   } catch (error) {
     ElMessage({
-      message: '配置导出失败',
+      message: t('motor.configExportFailed'),
       type: 'error',
       duration: 1000,
       placement: 'bottom-right',

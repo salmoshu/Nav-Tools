@@ -6,17 +6,17 @@
           <span class="heading-icon"
             ><el-icon><Connection /></el-icon
           ></span>
-          <strong class="section-title">连接设置</strong>
+          <strong class="section-title">{{ t('common.camera.connectionSettings') }}</strong>
           <el-tag :type="statusType" effect="plain" round>{{ statusText }}</el-tag>
         </div>
 
         <div class="connection-grid">
           <label>
-            <span>服务器地址</span>
+            <span>{{ t('common.camera.serverAddress') }}</span>
             <el-input v-model="host" placeholder="192.168.3.14" :disabled="sending" />
           </label>
           <label>
-            <span>端口</span>
+            <span>{{ t('common.camera.port') }}</span>
             <el-input-number
               v-model="port"
               :min="1"
@@ -26,8 +26,8 @@
             />
           </label>
           <label>
-            <span>登录命令</span>
-            <el-input model-value="0x00000001" aria-label="登录命令" readonly />
+            <span>{{ t('common.camera.loginCommand') }}</span>
+            <el-input model-value="0x00000001" :aria-label="t('common.camera.loginCommand')" readonly />
           </label>
         </div>
       </div>
@@ -37,20 +37,20 @@
           <span class="heading-icon"
             ><el-icon><Setting /></el-icon
           ></span>
-          <strong class="section-title">相机命令</strong>
+          <strong class="section-title">{{ t('common.camera.cameraCommands') }}</strong>
           <el-button text class="hint-toggle" @click="showCommandHelp = true">
             <el-icon><InfoFilled /></el-icon>
-            说明
+            {{ t('common.camera.help') }}
           </el-button>
         </div>
 
         <div class="command-form">
           <div class="field-row sub-command-field">
-            <span class="field-label">子命令类型</span>
+            <span class="field-label">{{ t('common.camera.subCommandType') }}</span>
             <el-select
               v-model="subCommand"
-              aria-label="子命令类型"
-              placeholder="请选择子命令"
+              :aria-label="t('common.camera.subCommandType')"
+              :placeholder="t('common.camera.selectSubCommand')"
               :disabled="sending"
               @change="handleSubCommandChange"
             >
@@ -62,16 +62,16 @@
               />
             </el-select>
             <div class="format-switch">
-              <span>字节格式</span>
+              <span>{{ t('common.camera.byteFormat') }}</span>
               <el-switch v-model="contentIsHex" :disabled="sending" />
             </div>
           </div>
 
           <div class="field-row content-field">
-            <span class="field-label">子命令内容</span>
+            <span class="field-label">{{ t('common.camera.subCommandContent') }}</span>
             <el-input
               v-model="content"
-              aria-label="子命令内容"
+              :aria-label="t('common.camera.subCommandContent')"
               type="textarea"
               :rows="3"
               resize="vertical"
@@ -82,10 +82,10 @@
           </div>
 
           <div class="command-actions">
-            <span>Ctrl + Enter 快速发送</span>
+            <span>{{ t('common.camera.ctrlEnterHint') }}</span>
             <el-button type="primary" :loading="sending" @click="sendCommand">
               <el-icon v-if="!sending"><Promotion /></el-icon>
-              {{ sending ? '发送中' : '发送命令' }}
+              {{ sending ? t('common.camera.sending') : t('common.camera.sendCommand') }}
             </el-button>
           </div>
         </div>
@@ -96,9 +96,9 @@
           <span class="heading-icon"
             ><el-icon><Document /></el-icon
           ></span>
-          <strong class="section-title">输出结果</strong>
+          <strong class="section-title">{{ t('common.camera.outputResult') }}</strong>
           <el-button text :disabled="logs.length === 0 || sending" @click="clearOutput"
-            >清空</el-button
+            >{{ t('common.camera.clear') }}</el-button
           >
         </div>
         <pre ref="outputElement" class="output-console">{{ outputText }}</pre>
@@ -107,7 +107,7 @@
 
     <el-dialog
       v-model="showCommandHelp"
-      title="相机命令说明"
+      :title="t('common.camera.commandHelpTitle')"
       class="app-dialog camera-command-help-dialog"
       width="min(520px, calc(100vw - 32px))"
       :close-on-click-modal="true"
@@ -117,12 +117,12 @@
     >
       <div class="command-help">
         <p>
-          <strong>参数示例</strong>
-          <span>0.631,66.661,-19.111（高度 / FOV / OFFSET，单位为角度）</span>
+          <strong>{{ t('common.camera.paramExample') }}</strong>
+          <span>{{ t('common.camera.paramExampleDesc') }}</span>
         </p>
         <p>
-          <strong>显示框</strong>
-          <span>06 / 04 / 02 分别表示全显 / 十字 / 框</span>
+          <strong>{{ t('common.camera.displayBox') }}</strong>
+          <span>{{ t('common.camera.displayBoxDesc') }}</span>
         </p>
       </div>
     </el-dialog>
@@ -133,6 +133,7 @@
 import { computed, nextTick, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Connection, Document, InfoFilled, Promotion, Setting } from '@element-plus/icons-vue'
+import { t } from '@/i18n'
 import {
   CAMERA_SUB_COMMANDS,
   CameraParametersStorage,
@@ -174,10 +175,10 @@ watch(
 const statusText = computed(
   () =>
     ({
-      ready: '就绪',
-      sending: '正在发送',
-      success: '发送完成',
-      error: '发送失败',
+      ready: t('common.camera.status.ready'),
+      sending: t('common.camera.status.sending'),
+      success: t('common.camera.status.success'),
+      error: t('common.camera.status.error'),
     })[status.value],
 )
 
@@ -195,12 +196,12 @@ const statusType = computed(
 
 const contentPlaceholder = computed(() =>
   contentIsHex.value
-    ? '输入十六进制字节，例如：06 或 A1 B2 00 3C'
-    : '输入 UTF-8 文本，例如：0.631,66.661,-19.111',
+    ? t('common.camera.placeholderHex')
+    : t('common.camera.placeholderUtf8'),
 )
 
 const outputText = computed(() =>
-  logs.value.length > 0 ? logs.value.join('\n') : '等待发送相机命令…',
+  logs.value.length > 0 ? logs.value.join('\n') : t('common.camera.waitingToSend'),
 )
 
 function handleSubCommandChange(value: string) {
@@ -208,16 +209,16 @@ function handleSubCommandChange(value: string) {
 }
 
 function validateInput(): string | undefined {
-  if (!host.value.trim()) return '请输入服务器地址'
+  if (!host.value.trim()) return t('common.camera.errEnterServerAddress')
   if (!Number.isInteger(port.value) || port.value < 1 || port.value > 65535) {
-    return '端口必须是 1 到 65535 之间的整数'
+    return t('common.camera.errPortRange')
   }
-  if (!subCommand.value) return '请选择子命令'
-  if (!content.value.trim()) return '请输入子命令内容'
+  if (!subCommand.value) return t('common.camera.errSelectSubCommand')
+  if (!content.value.trim()) return t('common.camera.errEnterSubCommandContent')
   if (contentIsHex.value) {
     const compact = content.value.replace(/\s/g, '')
     if (compact.length % 2 !== 0 || !/^[\da-fA-F]+$/.test(compact)) {
-      return '十六进制内容必须由完整的字节组成，例如 06 或 A1 B2 00 3C'
+      return t('common.camera.errHexBytes')
     }
   }
   return undefined
@@ -241,7 +242,7 @@ async function sendCommand() {
     return
   }
   if (!window.electronAPI?.sendCameraCommand) {
-    ElMessage.error('当前环境不支持相机 TCP 命令')
+    ElMessage.error(t('common.camera.errTcpNotSupported'))
     return
   }
 
@@ -249,13 +250,17 @@ async function sendCommand() {
   status.value = 'sending'
   await appendLog(
     '',
-    '=== 发送 login 命令 ===',
-    '主命令码: 0x00000001',
-    `服务器: ${host.value.trim()}:${port.value}`,
-    `子命令: ${subCommand.value}`,
-    `内容格式: ${contentIsHex.value ? '字节（十六进制）' : '字符串（UTF-8）'}`,
-    `子命令内容: ${content.value}`,
-    '--------------------------------------------------',
+    t('common.camera.logLoginHeader'),
+    t('common.camera.logMainCmd'),
+    t('common.camera.logServer', { host: `${host.value.trim()}:${port.value}` }),
+    t('common.camera.logSubCommand', { sub: subCommand.value }),
+    t('common.camera.logContentFormat', {
+      fmt: contentIsHex.value
+        ? t('common.camera.logContentFormatHex')
+        : t('common.camera.logContentFormatUtf8'),
+    }),
+    t('common.camera.logSubCommandContent', { content: content.value }),
+    t('common.camera.logSeparator'),
   )
 
   try {
@@ -267,22 +272,22 @@ async function sendCommand() {
       contentFormat: contentIsHex.value ? 'hex' : 'text',
     })
     await appendLog(
-      `子命令字段（16 字节）: ${formatHex(result.subCommandHex)}`,
-      `内容字节数: ${result.contentBytes}`,
-      `内容字节: ${formatHex(result.contentHex) || '(空)'}`,
-      `总数据长度: ${result.dataLength} 字节`,
-      `完整报文: ${formatHex(result.packetHex)}`,
-      `响应: ${result.response || '(空响应)'}`,
-      `响应字节: ${formatHex(result.responseHex) || '(空)'}`,
-      '==================================================',
+      t('common.camera.logSubField', { hex: formatHex(result.subCommandHex) }),
+      t('common.camera.logContentBytes', { n: result.contentBytes }),
+      t('common.camera.logContentByte', { hex: formatHex(result.contentHex) || '(空)' }),
+      t('common.camera.logTotalLen', { n: result.dataLength }),
+      t('common.camera.logFullPacket', { hex: formatHex(result.packetHex) }),
+      t('common.camera.logResponse', { resp: result.response || '(空响应)' }),
+      t('common.camera.logResponseByte', { hex: formatHex(result.responseHex) || '(空)' }),
+      t('common.camera.logBigSeparator'),
     )
     status.value = 'success'
-    ElMessage.success('相机命令发送完成')
+    ElMessage.success(t('common.camera.sentSuccess'))
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
-    await appendLog(`错误: ${message}`, '==================================================')
+    await appendLog(t('common.camera.logError', { msg: message }), t('common.camera.logBigSeparator'))
     status.value = 'error'
-    ElMessage.error(`发送失败：${message}`)
+    ElMessage.error(t('common.camera.sendFailed') + message)
   } finally {
     sending.value = false
   }

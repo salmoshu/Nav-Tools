@@ -94,6 +94,16 @@ describe('NMEA and theme utilities', () => {
     expect(parser.push(complete.slice(20))).toEqual([complete])
   })
 
+  it('parses every complete sentence when one chunk exceeds the safety buffer', () => {
+    const sentence = '$GPGGA,123519.10,4807.038,N,01131.000,E,1,08,0.9,545.4,M,46.9,M,,'
+    const complete = `${sentence}*${calculateNmeaChecksum(sentence)}`
+    const parser = new NmeaStreamParser()
+
+    expect(parser.push(Array.from({ length: 1_000 }, () => complete).join('\n'))).toHaveLength(
+      1_000,
+    )
+  })
+
   it('resolves system theme without depending on Vue or the DOM', () => {
     expect(resolveTheme('system', true)).toBe('dark')
     expect(resolveTheme('light', true)).toBe('light')

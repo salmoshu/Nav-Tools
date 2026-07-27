@@ -2,17 +2,17 @@
   <div class="deviation-container">
     <div class="control-panel">
       <div class="controls">
-        <span class="switch-label">跟踪:</span>
+        <span class="switch-label">{{ t('gnss.deviation.tracking') }}:</span>
         <el-switch
           v-model="isTracking"
-          aria-label="跟踪"
-          title="跟踪"
+          :aria-label="t('gnss.deviation.tracking')"
+          :title="t('gnss.deviation.tracking')"
           @change="toggleTracking"
           class="tracking-switch"
         />
         <!-- 添加轨迹点尺寸调节滑块 -->
         <div class="point-size-control">
-          <span class="size-label">尺寸:</span>
+          <span class="size-label">{{ t('gnss.deviation.size') }}:</span>
           <el-slider
             v-model="pointSize"
             :min="5"
@@ -28,10 +28,10 @@
           <el-button :disabled="deviceConnected" type="default" size="small" @click="toggleSlideWindow">
             <el-icon v-if="enableWindow"><CircleClose /></el-icon>
             <el-icon v-else><CircleCheck /></el-icon>
-            &nbsp;{{enableWindow?"关闭滑窗":"启用滑窗"}}
+            &nbsp;{{ enableWindow ? t('gnss.deviation.disableWindow') : t('gnss.deviation.enableWindow') }}
           </el-button>
-          <el-button type="primary" size="small" @click="resetZoom" class="control-btn zoom-btn"><el-icon><RefreshLeft /></el-icon>&nbsp;重置布局</el-button>
-          <el-button type="primary" size="small" @click="clearTrack" class="control-btn clear-btn"><el-icon><Delete /></el-icon>&nbsp;清除</el-button>
+          <el-button type="primary" size="small" @click="resetZoom" class="control-btn zoom-btn"><el-icon><RefreshLeft /></el-icon>&nbsp;{{ t('gnss.deviation.resetLayout') }}</el-button>
+          <el-button type="primary" size="small" @click="clearTrack" class="control-btn clear-btn"><el-icon><Delete /></el-icon>&nbsp;{{ t('gnss.deviation.clear') }}</el-button>
         </div>
       </div>
     </div>
@@ -53,6 +53,7 @@ import {
   fitDeviationPointsAroundCenter,
   GNSS_MIN_VISIBLE_SPAN_METERS,
 } from '@/core/deviation/DeviationViewport'
+import { t } from '@/i18n'
 
 const {
   deviationPoints,
@@ -152,20 +153,20 @@ function initChart() {
       textStyle: { color: colors.text },
       formatter: function(params) {
         const point = params[0].value;
-        return `位置: (${formatDistance(point[0])}, ${formatDistance(point[1])})`;
+        return `${t('gnss.deviation.tooltipPositionPrefix')}: (${formatDistance(point[0])}, ${formatDistance(point[1])})`;
       },
       show: false,
     },
     legend: {
       data: [
         {
-          name: '历史轨迹',
+          name: t('gnss.deviation.historyTrack'),
           itemStyle: {
             color: 'grey',
           },
         },
         {
-          name: '当前位置',
+          name: t('gnss.deviation.currentPosition'),
         },
       ],
       right: 10,
@@ -239,7 +240,7 @@ function initChart() {
     },
     series: [
       {
-        name: '历史轨迹',
+        name: t('gnss.deviation.historyTrack'),
         type: 'scatter',
         data: [],
         coordinateSystem: 'cartesian2d',
@@ -258,7 +259,7 @@ function initChart() {
         silent: false,
       },
       {
-        name: '当前位置',
+        name: t('gnss.deviation.currentPosition'),
         type: 'scatter',
         data: [],
         coordinateSystem: 'cartesian2d',
@@ -499,7 +500,7 @@ function handleNmeaUpdate() {
       ...(trackingZoom ? { dataZoom: trackingZoom } : {}),
       series: [
         {
-          name: '历史轨迹',
+          name: t('gnss.deviation.historyTrack'),
           data: displayTrackData,
           symbolSize: pointSize.value,
           itemStyle: {
@@ -515,7 +516,7 @@ function handleNmeaUpdate() {
           silent: displayTrackData.length >= LARGE_RENDER_THRESHOLD,
         },
         {
-          name: '当前位置',
+          name: t('gnss.deviation.currentPosition'),
           data: [currentDisplayPoint],
           symbolSize: pointSize.value * 1.2,
           itemStyle: {
@@ -644,11 +645,11 @@ function clearTrack() {
   chartInstance.value.setOption({
     series: [
       {
-        name: '历史轨迹',
+        name: t('gnss.deviation.historyTrack'),
         data: [],
       },
       {
-        name: '当前位置',
+        name: t('gnss.deviation.currentPosition'),
         data: [],
       },
     ],
@@ -660,7 +661,7 @@ function updatePointSize() {
     chartInstance.value.setOption({
       series: [
         {
-          name: '历史轨迹',
+          name: t('gnss.deviation.historyTrack'),
           symbolSize: pointSize.value
         }
       ]

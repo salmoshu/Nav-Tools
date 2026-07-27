@@ -16,7 +16,7 @@
         @dblclick.stop
         @click="$emit('open-application-selector')"
       >
-        <el-icon><Grid /></el-icon>
+        <LayoutDashboard :size="16" :stroke-width="1.8" aria-hidden="true" />
       </button>
       <span v-if="contextTitle || contextPanelTitle" class="context-title">
         <span v-if="contextTitle" class="context-app-name">{{ contextTitle }}</span>
@@ -100,78 +100,155 @@
       </button>
       <div
         v-if="!showDetachedControls"
-        ref="themeMenuRef"
+        ref="settingsMenuRef"
         class="theme-menu-anchor"
       >
         <button
           class="header-button"
           type="button"
-          :title="`主题模式：${themeLabel}`"
-          :aria-label="`选择主题模式，当前为${themeLabel}`"
+          :title="t('app.settings')"
+          :aria-label="t('app.settings')"
           aria-haspopup="menu"
-          :aria-expanded="themeMenuOpen"
-          @click="toggleThemeMenu"
+          :aria-expanded="settingsOpen"
+          @click="toggleSettingsMenu"
         >
-          <ThemeModeIcon :mode="themeMode" />
+          <el-icon><Setting /></el-icon>
         </button>
         <div
-          class="theme-mode-menu"
-          :class="{ open: themeMenuOpen }"
+          class="settings-menu"
+          :class="{ open: settingsOpen }"
           role="menu"
-          :aria-hidden="!themeMenuOpen"
-          @keydown.esc.stop.prevent="closeThemeMenu"
+          :aria-hidden="!settingsOpen"
+          @keydown.esc.stop.prevent="closeSettingsMenu"
+          @mouseout="handleMenuMouseOut"
         >
-          <button
-            class="theme-mode-option"
-            type="button"
-            role="menuitemradio"
-            :aria-checked="themeMode === 'system'"
-            @click="handleThemeCommand('system')"
-          >
-            <ThemeModeIcon mode="system" />
-            <span>跟随系统</span>
-            <el-icon
-              class="theme-check"
-              :class="{ visible: themeMode === 'system' }"
-              aria-hidden="true"
+          <div class="settings-root" role="group" aria-label="settings">
+            <button
+              class="settings-item"
+              type="button"
+              role="menuitem"
+              :aria-haspopup="true"
+              :aria-expanded="activeSubmenu === 'theme'"
+              @mouseenter="openSub('theme')"
+              @click="openSub('theme')"
             >
-              <Check />
-            </el-icon>
-          </button>
-          <button
-            class="theme-mode-option"
-            type="button"
-            role="menuitemradio"
-            :aria-checked="themeMode === 'light'"
-            @click="handleThemeCommand('light')"
-          >
-            <ThemeModeIcon mode="light" />
-            <span>浅色模式</span>
-            <el-icon
-              class="theme-check"
-              :class="{ visible: themeMode === 'light' }"
-              aria-hidden="true"
+              <span>{{ t('app.settingsTheme') }}</span>
+              <el-icon class="item-chevron"><ArrowRight /></el-icon>
+            </button>
+            <button
+              class="settings-item"
+              type="button"
+              role="menuitem"
+              :aria-haspopup="true"
+              :aria-expanded="activeSubmenu === 'language'"
+              @mouseenter="openSub('language')"
+              @click="openSub('language')"
             >
-              <Check />
-            </el-icon>
-          </button>
-          <button
-            class="theme-mode-option"
-            type="button"
-            role="menuitemradio"
-            :aria-checked="themeMode === 'dark'"
-            @click="handleThemeCommand('dark')"
+              <span>{{ t('app.settingsLanguage') }}</span>
+              <el-icon class="item-chevron"><ArrowRight /></el-icon>
+            </button>
+          </div>
+          <div
+            v-if="activeSubmenu === 'theme'"
+            class="settings-submenu"
+            :class="submenuAlign"
+            role="menu"
+            aria-label="theme"
           >
-            <ThemeModeIcon mode="dark" />
-            <span>深色模式</span>
-            <el-icon
-              class="theme-check"
-              :class="{ visible: themeMode === 'dark' }"
-              aria-hidden="true"
+            <button
+              class="theme-mode-option"
+              type="button"
+              role="menuitemradio"
+              :aria-checked="themeMode === 'system'"
+              @click="handleThemeCommand('system')"
             >
-              <Check />
-            </el-icon>
-          </button>
+              <ThemeModeIcon mode="system" />
+              <span>{{ t('theme.system') }}</span>
+              <el-icon
+                class="theme-check"
+                :class="{ visible: themeMode === 'system' }"
+                aria-hidden="true"
+              >
+                <Check />
+              </el-icon>
+            </button>
+            <button
+              class="theme-mode-option"
+              type="button"
+              role="menuitemradio"
+              :aria-checked="themeMode === 'light'"
+              @click="handleThemeCommand('light')"
+            >
+              <ThemeModeIcon mode="light" />
+              <span>{{ t('theme.light') }}</span>
+              <el-icon
+                class="theme-check"
+                :class="{ visible: themeMode === 'light' }"
+                aria-hidden="true"
+              >
+                <Check />
+              </el-icon>
+            </button>
+            <button
+              class="theme-mode-option"
+              type="button"
+              role="menuitemradio"
+              :aria-checked="themeMode === 'dark'"
+              @click="handleThemeCommand('dark')"
+            >
+              <ThemeModeIcon mode="dark" />
+              <span>{{ t('theme.dark') }}</span>
+              <el-icon
+                class="theme-check"
+                :class="{ visible: themeMode === 'dark' }"
+                aria-hidden="true"
+              >
+                <Check />
+              </el-icon>
+            </button>
+          </div>
+          <div
+            v-else-if="activeSubmenu === 'language'"
+            class="settings-submenu"
+            :class="submenuAlign"
+            role="menu"
+            aria-label="language"
+          >
+            <button
+              class="theme-mode-option"
+              type="button"
+              role="menuitemradio"
+              :aria-checked="locale === 'zh-CN'"
+              @click="setLocale('zh-CN')"
+            >
+              <span class="opt-icon-slot" aria-hidden="true"></span>
+              <span>{{ t('language.zh') }}</span>
+              <el-icon
+                class="theme-check"
+                :class="{ visible: locale === 'zh-CN' }"
+                aria-hidden="true"
+              >
+                <Check />
+              </el-icon>
+            </button>
+            <button
+              class="theme-mode-option"
+              type="button"
+              role="menuitemradio"
+              :aria-checked="locale === 'en-US'"
+              @click="setLocale('en-US')"
+            >
+              <span class="opt-icon-slot" aria-hidden="true"></span>
+              <span>{{ t('language.en') }}</span>
+              <el-icon
+                class="theme-check"
+                :class="{ visible: locale === 'en-US' }"
+                aria-hidden="true"
+              >
+                <Check />
+              </el-icon>
+            </button>
+          </div>
         </div>
       </div>
       <button
@@ -206,22 +283,23 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
 import {
   ArrowRight,
   Check,
   Close,
   CopyDocument,
   FullScreen,
-  Grid,
   Minus,
 } from '@element-plus/icons-vue'
-import { PanelTopOpen, Pin } from '@lucide/vue'
+import { LayoutDashboard, PanelTopOpen, Pin } from '@lucide/vue'
 import { showStatusBar, showToolBar } from '@/composables/useStatusManager'
 import { useTheme, type ThemeMode } from '@/composables/useTheme'
+import { useLocale } from '@/composables/useLocale'
 import { getBrowserWindowService } from '@/core/window/browserWindowService'
 import { getPanelIconComponent } from '@/settings/panelIcons'
 import ThemeModeIcon from './ThemeModeIcon.vue'
+import { t } from '@/i18n'
 
 defineProps<{
   brandTitle?: string
@@ -242,31 +320,58 @@ const emit = defineEmits<{
 const version = ref('')
 const maximized = ref(false)
 const alwaysOnTop = ref(false)
-const themeMenuOpen = ref(false)
-const themeMenuRef = ref<HTMLElement>()
+const settingsOpen = ref(false)
+const activeSubmenu = ref<'theme' | 'language' | null>(null)
+const submenuSide = ref<'right' | 'left'>('right')
+const submenuAlign = computed(() =>
+  submenuSide.value === 'left' ? 'align-left' : 'align-right',
+)
+const settingsMenuRef = ref<HTMLElement>()
 const { themeMode, setTheme } = useTheme()
+const { locale, setLocale } = useLocale()
 const windowService = getBrowserWindowService()
 let removeWindowStateListener: (() => void) | undefined
 let themeApplyFrame: number | undefined
-const themeLabel = computed(
-  () =>
-    ({
-      system: '跟随系统',
-      light: '浅色模式',
-      dark: '深色模式',
-    })[themeMode.value],
-)
-
-function toggleThemeMenu() {
-  themeMenuOpen.value = !themeMenuOpen.value
+function toggleSettingsMenu() {
+  settingsOpen.value = !settingsOpen.value
+  if (!settingsOpen.value) activeSubmenu.value = null
 }
 
-function closeThemeMenu() {
-  themeMenuOpen.value = false
+// Open a submenu and decide where it should appear so it never overflows the
+// viewport: by default to the right of the root, flipped to the left if that
+// would go off-screen. The root (一级菜单) itself never moves.
+function openSub(menu: 'theme' | 'language') {
+  activeSubmenu.value = menu
+  nextTick(updateSubmenuSide)
+}
+
+function updateSubmenuSide() {
+  const root = settingsMenuRef.value?.querySelector('.settings-root')
+  const sub = settingsMenuRef.value?.querySelector('.settings-submenu')
+  if (!root || !sub) return
+  const rootRect = root.getBoundingClientRect()
+  const subWidth = sub.getBoundingClientRect().width
+  const overflowsRight = rootRect.right + 4 + subWidth > window.innerWidth
+  submenuSide.value = overflowsRight ? 'left' : 'right'
+}
+
+function closeSettingsMenu() {
+  settingsOpen.value = false
+  activeSubmenu.value = null
+}
+
+// Close the whole menu when the pointer truly leaves it. Using `mouseout`
+// (not `mouseleave`) lets us inspect `relatedTarget`: the submenu is rendered
+// outside the root menu's visual box (it flips left), but it is still a DOM
+// child of `.settings-menu`, so moving into it must NOT close the menu.
+function handleMenuMouseOut(e: MouseEvent) {
+  const related = e.relatedTarget as Node | null
+  if (related && settingsMenuRef.value?.contains(related)) return
+  closeSettingsMenu()
 }
 
 function handleThemeCommand(command: ThemeMode) {
-  closeThemeMenu()
+  closeSettingsMenu()
   if (command === themeMode.value) return
 
   if (themeApplyFrame !== undefined) cancelAnimationFrame(themeApplyFrame)
@@ -279,12 +384,12 @@ function handleThemeCommand(command: ThemeMode) {
 }
 
 function handleDocumentPointerDown(event: PointerEvent) {
-  if (!themeMenuOpen.value) return
-  if (!themeMenuRef.value?.contains(event.target as Node)) closeThemeMenu()
+  if (!settingsOpen.value) return
+  if (!settingsMenuRef.value?.contains(event.target as Node)) closeSettingsMenu()
 }
 
 function handleDocumentKeydown(event: KeyboardEvent) {
-  if (event.key === 'Escape') closeThemeMenu()
+  if (event.key === 'Escape') closeSettingsMenu()
 }
 
 function applyWindowState(state?: { maximized?: boolean; alwaysOnTop?: boolean }) {
@@ -317,7 +422,7 @@ async function restoreDetachedPanel() {
 onMounted(async () => {
   document.addEventListener('pointerdown', handleDocumentPointerDown)
   document.addEventListener('keydown', handleDocumentKeydown)
-  window.addEventListener('blur', closeThemeMenu)
+  window.addEventListener('blur', closeSettingsMenu)
 
   const [appVersion, state] = await Promise.all([
     windowService.getAppVersion(),
@@ -331,7 +436,7 @@ onMounted(async () => {
 onUnmounted(() => {
   document.removeEventListener('pointerdown', handleDocumentPointerDown)
   document.removeEventListener('keydown', handleDocumentKeydown)
-  window.removeEventListener('blur', closeThemeMenu)
+  window.removeEventListener('blur', closeSettingsMenu)
   if (themeApplyFrame !== undefined) cancelAnimationFrame(themeApplyFrame)
   removeWindowStateListener?.()
 })
@@ -465,32 +570,6 @@ onUnmounted(() => {
   -webkit-app-region: no-drag;
 }
 
-.theme-mode-menu {
-  position: absolute;
-  top: calc(100% + 4px);
-  right: 4px;
-  z-index: 1;
-  display: grid;
-  width: 152px;
-  padding: 4px;
-  border: 1px solid var(--app-border);
-  border-radius: 4px;
-  color: var(--app-text);
-  background: var(--app-surface);
-  box-shadow: var(--el-box-shadow-light);
-  box-sizing: border-box;
-  opacity: 0;
-  visibility: hidden;
-  pointer-events: none;
-  contain: layout style;
-}
-
-.theme-mode-menu.open {
-  opacity: 1;
-  visibility: visible;
-  pointer-events: auto;
-}
-
 .theme-mode-option {
   display: grid;
   grid-template-columns: 18px minmax(0, 1fr) 16px;
@@ -520,6 +599,77 @@ onUnmounted(() => {
 
 .theme-check.visible {
   visibility: visible;
+}
+
+.settings-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 4px;
+  z-index: 1;
+  display: none;
+  box-sizing: border-box;
+}
+
+.settings-menu.open {
+  display: block;
+}
+
+.settings-root,
+.settings-submenu {
+  display: grid;
+  grid-auto-rows: max-content;
+  width: 168px;
+  padding: 4px;
+  border: 1px solid var(--app-border);
+  border-radius: 4px;
+  color: var(--app-text);
+  background: var(--app-surface);
+  box-shadow: var(--el-box-shadow-light);
+  box-sizing: border-box;
+}
+
+/* Submenu is absolutely positioned so the root menu never shifts.
+   It appears to the right of the root by default, or flips to the left
+   when that would overflow the viewport. */
+.settings-submenu {
+  position: absolute;
+  top: 0;
+}
+
+.settings-submenu.align-right {
+  left: 100%;
+}
+
+.settings-submenu.align-left {
+  right: 100%;
+}
+
+.settings-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  height: 32px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 3px;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  outline: none;
+}
+
+.settings-item:hover,
+.settings-item:focus-visible {
+  background: var(--app-hover);
+}
+
+.item-chevron {
+  margin-left: 8px;
+  color: var(--app-text-muted);
+  font-size: 14px;
 }
 
 .header-button {

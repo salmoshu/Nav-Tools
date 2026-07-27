@@ -1,6 +1,7 @@
 import { ref, computed } from 'vue'
 import { activeDataTransport } from '@/core/device/ActiveDataTransport'
 import { useConsole } from './useConsole'
+import { t } from '@/i18n'
 
 export type FileSendStatus = 'idle' | 'loaded' | 'sending' | 'success' | 'error' | 'cancelled'
 
@@ -124,7 +125,7 @@ function createFileSend() {
     const transport = activeDataTransport.current
     if (!transport) {
       // 无连接时不切换到 error 状态，保持当前状态以便设备重连后重试
-      state.value = { ...state.value, error: '没有可用的数据连接，请先连接设备' }
+      state.value = { ...state.value, error: t('flow.noAvailableConnection') }
       return
     }
 
@@ -187,7 +188,7 @@ function createFileSend() {
           state.value = {
             ...state.value,
             status: 'error',
-            error: `Chunk ${chunkIndex + 1} 发送失败: ${message}`,
+            error: t('flow.fileChunkSendFailed', { index: chunkIndex + 1, message }),
             elapsedTime: Date.now() - state.value.startTime,
           }
           return

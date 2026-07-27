@@ -10,22 +10,22 @@
     <section class="selector-panel">
       <header class="selector-header">
         <div>
-          <h1 id="application-selector-title">选择应用</h1>
-          <p>选择一组工具面板进入工作区</p>
+          <h1 id="application-selector-title">{{ t('app.selector.title') }}</h1>
+          <p>{{ t('app.selector.subtitle') }}</p>
         </div>
         <div class="header-actions">
           <el-button v-if="applications.length > 0" :icon="Plus" @click="openEditor()">
-            新建应用
+            {{ t('app.selector.newApp') }}
           </el-button>
           <el-button v-if="applications.length > 0" :icon="Refresh" @click="confirmReset">
-            重置应用
+            {{ t('app.selector.resetApp') }}
           </el-button>
           <el-button
             v-if="currentApplicationId"
             text
             circle
-            title="关闭应用选择器"
-            aria-label="关闭应用选择器"
+            :title="t('app.selector.close')"
+            :aria-label="t('app.selector.close')"
             @click="$emit('close')"
           >
             <el-icon><Close /></el-icon>
@@ -35,9 +35,9 @@
 
       <div v-if="applications.length === 0" class="empty-state">
         <el-icon :size="44" class="empty-state-icon"><FolderAdd /></el-icon>
-        <h2>还没有应用</h2>
-        <p>创建你的第一个应用，自由组合所需的窗口</p>
-        <el-button type="primary" :icon="Plus" @click="openEditor()">新建应用</el-button>
+        <h2>{{ t('app.selector.emptyTitle') }}</h2>
+        <p>{{ t('app.selector.emptyDesc') }}</p>
+        <el-button type="primary" :icon="Plus" @click="openEditor()">{{ t('app.selector.newApp') }}</el-button>
       </div>
 
       <div v-else class="application-grid">
@@ -63,18 +63,18 @@
               <el-icon
                 v-if="application.id === currentApplicationId"
                 class="selected-icon"
-                title="当前应用"
+                :title="t('app.selector.currentApp')"
               >
                 <CircleCheckFilled />
               </el-icon>
             </div>
-            <p>{{ application.description || '无描述' }}</p>
+            <p>{{ application.description || t('app.selector.noDescription') }}</p>
             <div class="panel-list">
               <span
                 v-for="windowDefinition in applicationWindows(application)"
                 :key="windowDefinition.id"
               >
-                {{ windowDefinition.title }}
+                {{ t(windowDefinition.title) }}
               </span>
             </div>
           </div>
@@ -82,8 +82,8 @@
             <el-button
               text
               circle
-              title="在新窗口打开"
-              aria-label="在新窗口打开"
+              :title="t('app.selector.openWindow')"
+              :aria-label="t('app.selector.openWindow')"
               @click.stop="$emit('open-window', application.id)"
             >
               <el-icon><CopyDocument /></el-icon>
@@ -91,8 +91,8 @@
             <el-button
               text
               circle
-              title="编辑应用"
-              aria-label="编辑应用"
+              :title="t('app.selector.editApp')"
+              :aria-label="t('app.selector.editApp')"
               @click.stop="openEditor(application)"
             >
               <el-icon><Edit /></el-icon>
@@ -100,8 +100,8 @@
             <el-button
               text
               circle
-              title="删除应用"
-              aria-label="删除应用"
+              :title="t('app.selector.deleteApp')"
+              :aria-label="t('app.selector.deleteApp')"
               class="delete-button"
               @click.stop="confirmDelete(application)"
             >
@@ -139,6 +139,7 @@ import type { UserApplication } from '@/settings/config'
 import { useApplicationSelector } from '@/composables/useApplicationSelector'
 import { applicationIconComponents } from '@/settings/applicationIcons'
 import ApplicationEditor from './ApplicationEditor.vue'
+import { t } from '@/i18n'
 
 const props = defineProps<{
   open: boolean
@@ -187,14 +188,14 @@ const handleSave = (form: Omit<UserApplication, 'id'> & { id?: string }) => {
 const confirmReset = async () => {
   try {
     await ElMessageBox.confirm(
-      '该操作会删除所有自定义应用和对应用的编辑，只保留默认的 GNSS、Motor 和 Camera 应用。重置后不可恢复，确定继续吗？',
-      '重置应用',
+      t('app.selector.resetConfirm'),
+      t('app.selector.resetConfirmTitle'),
       {
         appendTo: selectorMessageBoxTarget,
         type: 'warning',
-        confirmButtonText: '重置应用',
+        confirmButtonText: t('app.selector.resetConfirmButton'),
         confirmButtonClass: 'el-button--danger',
-        cancelButtonText: '取消',
+        cancelButtonText: t('app.cancel'),
         customClass: 'app-message-box',
         closeOnClickModal: true,
         closeOnPressEscape: true,
@@ -212,14 +213,14 @@ const confirmReset = async () => {
 const confirmDelete = async (application: UserApplication) => {
   try {
     await ElMessageBox.confirm(
-      `删除后不可恢复，确定删除应用「${application.name}」吗？`,
-      '删除应用',
+      t('app.selector.deleteConfirm', { v: application.name }),
+      t('app.selector.deleteConfirmTitle'),
       {
         appendTo: selectorMessageBoxTarget,
         type: 'warning',
-        confirmButtonText: '删除',
+        confirmButtonText: t('app.selector.deleteConfirmButton'),
         confirmButtonClass: 'el-button--danger',
-        cancelButtonText: '取消',
+        cancelButtonText: t('app.cancel'),
         customClass: 'app-message-box',
         closeOnClickModal: true,
         closeOnPressEscape: true,

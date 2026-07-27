@@ -5,12 +5,12 @@
         <!-- 左侧按钮 -->
         <div class="left-buttons">
           <el-button type="default" size="small" @click="showViewConfig" class="layout-btn">
-            <el-icon><Setting /></el-icon>&nbsp;配置
+            <el-icon><Setting /></el-icon>&nbsp;{{ t('common.plot.configButton') }}
           </el-button>
           <el-button :disabled="deviceConnected" type="default" size="small" @click="toggleSlideWindow">
             <el-icon v-if="enableWindow"><CircleClose /></el-icon>
             <el-icon v-else><CircleCheck /></el-icon>
-            &nbsp;{{enableWindow?"关闭滑窗":"启用滑窗"}}
+            &nbsp;{{ enableWindow ? t('common.plot.disableSlideWindow') : t('common.plot.enableSlideWindow') }}
           </el-button>
         </div>
         
@@ -37,7 +37,7 @@
   <el-dialog
     v-model="messageDialogVisible"
     class="app-dialog plot-message-dialog"
-    title="数据格式说明"
+    :title="t('common.plot.dataFormatTitle')"
     width="min(600px, calc(100vw - 24px))"
     :append-to-body="true"
     :z-index="8000"
@@ -48,29 +48,29 @@
     <template #header>
       <AppDialogTitle
         :icon="InfoFilled"
-        title="数据格式说明"
-        description="JSON 数据结构与输入约定"
+        :title="t('common.plot.dataFormatTitle')"
+        :description="t('common.plot.dataFormatDesc')"
       />
     </template>
     <div class="dialog-content message-content">
-      <p><strong>数据说明：</strong></p>
-      <p>数据主要采用JSON格式，并以换行符分隔。每行一个JSON对象，每个JSON对象可以灵活配置字段。</p>
+      <p><strong>{{ t('common.plot.dataDesc') }}</strong></p>
+      <p>{{ t('common.plot.dataDescBody') }}</p>
       <el-divider></el-divider>
-      <p><strong>示例数据：</strong></p>
+      <p><strong>{{ t('common.plot.exampleData') }}</strong></p>
       <pre class="example-code">
 {"time": 0.00, "camera_distance": 1.20, "camera_angle": 0.5, "pid_left_speed": 0.30, "pid_right_speed": 0.30, "motor_left_speed": 0.28, "motor_right_speed": 0.28}
 {"time": 0.05, "camera_distance": 1.18, "camera_angle": 0.4, "pid_left_speed": 0.30, "pid_right_speed": 0.30, "motor_left_speed": 0.29, "motor_right_speed": 0.29}
 {"time": 0.10, "camera_distance": 1.15, "camera_angle": 0.3, "pid_left_speed": 0.31, "pid_right_speed": 0.30, "motor_left_speed": 0.30, "motor_right_speed": 0.29}
       </pre>
       <el-divider></el-divider>
-      <p><strong>注意事项：</strong></p>
+      <p><strong>{{ t('common.plot.notices') }}</strong></p>
       <ul style="list-style-type: disc; padding-left: 20px;">
-        <li>数值型空数据请使用null</li>
-        <li>时间戳非必须选项，若不包含则默认从0开始递增</li>
+        <li>{{ t('common.plot.noticeNull') }}</li>
+        <li>{{ t('common.plot.noticeTimestamp') }}</li>
       </ul>
     </div>
     <template #footer>
-      <el-button @click="messageDialogVisible = false">关闭</el-button>
+      <el-button @click="messageDialogVisible = false">{{ t('common.plot.close') }}</el-button>
     </template>
   </el-dialog>
 
@@ -102,6 +102,7 @@ import { useDevice } from '@/hooks/useDevice'
 import { useTheme } from '@/composables/useTheme'
 import PlotConfigDialog from './plot/PlotConfigDialog.vue'
 import AppDialogTitle from '@/components/AppDialogTitle.vue'
+import { t } from '@/i18n'
 
 // 初始化数据流处理
 const { flowData, plotData, enableWindow, toggleSlideWindow, clearRawData } = useFlow()
@@ -189,7 +190,7 @@ function clearPlotData() {
   createChart()
   // 显示成功消息
   ElMessage({
-    message: `数据已清除`,
+    message: t('common.plot.dataCleared'),
     type: 'success',
     placement: 'bottom-right',
     offset: 50,

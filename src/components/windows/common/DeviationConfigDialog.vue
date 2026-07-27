@@ -1,7 +1,7 @@
 <template>
   <el-dialog
     :model-value="modelValue"
-    title="轨迹配置"
+    :title="t('flow.trackConfigTitle')"
     class="app-dialog deviation-config-dialog"
     width="min(710px, calc(100vw - 24px))"
     destroy-on-close
@@ -15,25 +15,25 @@
     <template #header>
       <AppDialogTitle
         :icon="Aim"
-        title="轨迹配置"
-        description="为四条轨迹选择 X / Y 字段与颜色"
+        :title="t('flow.trackConfigTitle')"
+        :description="t('flow.trackConfigDesc')"
       />
     </template>
 
     <div class="chart-config-grid">
       <section v-for="track in 4" :key="track" class="chart-config-section">
         <header>
-          <h4>轨迹{{ track }}</h4>
+          <h4>{{ t('flow.trackN', { n: track }) }}</h4>
           <el-color-picker
             :model-value="getValue(track, 'Color')"
             @update:model-value="setValue(track, 'Color', $event)"
           />
         </header>
         <label>
-          <span>X轴：</span>
+          <span>{{ t('flow.xAxisLabel') }}</span>
           <el-select
             :model-value="getValue(track, 'X')"
-            placeholder="选择X轴字段"
+            :placeholder="t('flow.selectXAxisField')"
             @update:model-value="setValue(track, 'X', $event)"
           >
             <el-option label="<None>" value="" />
@@ -41,10 +41,10 @@
           </el-select>
         </label>
         <label>
-          <span>Y轴：</span>
+          <span>{{ t('flow.yAxisLabel') }}</span>
           <el-select
             :model-value="getValue(track, 'Y')"
-            placeholder="选择Y轴字段"
+            :placeholder="t('flow.selectYAxisField')"
             @update:model-value="setValue(track, 'Y', $event)"
           >
             <el-option label="<None>" value="" />
@@ -54,8 +54,8 @@
       </section>
     </div>
     <template #footer>
-      <el-button @click="$emit('update:modelValue', false)">取消</el-button>
-      <el-button type="primary" @click="$emit('apply')">确定</el-button>
+      <el-button @click="$emit('update:modelValue', false)">{{ t('flow.cancel') }}</el-button>
+      <el-button type="primary" @click="$emit('apply')">{{ t('flow.confirm') }}</el-button>
     </template>
   </el-dialog>
 </template>
@@ -63,6 +63,7 @@
 <script setup lang="ts">
 import { Aim } from '@element-plus/icons-vue'
 import AppDialogTitle from '@/components/AppDialogTitle.vue'
+import { t } from '@/i18n'
 
 type DeviationConfig = Record<string, { value: unknown }>
 

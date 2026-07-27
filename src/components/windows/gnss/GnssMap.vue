@@ -1,50 +1,58 @@
 <template>
   <div ref="containerRef" class="gnss-map-container">
     <div class="toolbar">
-      <el-switch v-model="follow" inline-prompt active-text="跟随" inactive-text="跟随" />
+      <el-switch v-model="follow" inline-prompt :active-text="t('gnss.map.follow')" :inactive-text="t('gnss.map.follow')" />
       <el-switch
         v-model="slidingWindow"
         inline-prompt
-        active-text="滑窗"
-        inactive-text="全部"
-        aria-label="轨迹保留模式"
-        title="滑窗：保留最近 2000 点；全部：持续保留后续所有点"
+        :active-text="t('gnss.map.slidingWindow')"
+        :inactive-text="t('gnss.map.all')"
+        :aria-label="t('gnss.map.trackRetentionMode')"
+        :title="t('gnss.map.windowTitle')"
       />
-      <el-button size="small" @click="clearTrack">清除轨迹</el-button>
-      <el-popover placement="bottom-start" :width="420" trigger="click">
-        <template #reference>
-          <el-button size="small" circle class="info-btn">
-            <el-icon><InfoFilled /></el-icon>
-          </el-button>
-        </template>
-        <div class="offline-help">
-          <h4>离线地图</h4>
-          <template v-if="isElectron">
-            <p>
-              应用不预置离线地图。把栅格瓦片按
-              <code>{z}/{x}/{y}.png</code> 目录结构放入下面的目录后，地图会优先使用本地瓦片，
-              缺失的瓦片自动回退到在线 OSM 源：
-            </p>
-            <p class="tiles-dir" :title="'点击复制'" @click="copyTilesDir">
-              {{ offlineTilesDir || '目录获取中…' }}
-            </p>
-            <p>目录结构示例：</p>
-            <pre>
-offline-tiles/
-  15/
-    27455/
-      13208.png</pre>
-            <p>
-              可用 QGIS、MOBAC（Mobile Atlas Creator）或 wget/脚本从公开瓦片源下载所需区域与 zoom
-              层级的瓦片。请遵守所用瓦片源的使用条款（如 OSM Tile Usage Policy），
-              避免大批量抓取在线服务。
-            </p>
+      <div class="toolbar-right">
+        <el-button type="primary" size="small" @click="clearTrack" class="clear-btn">
+          <el-icon><Delete /></el-icon>&nbsp;{{ t('gnss.map.clear') }}
+        </el-button>
+        <el-popover placement="bottom-start" :width="420" trigger="click">
+          <template #reference>
+            <el-button size="small" circle class="info-btn">
+              <el-icon><InfoFilled /></el-icon>
+            </el-button>
           </template>
-          <p v-else>
-            当前为浏览器环境，离线瓦片仅在桌面版（Electron）中可用，现使用在线 OSM 瓦片。
-          </p>
-        </div>
+          <div class="offline-help">
+            <h4>{{ t('gnss.map.offlineTitle') }}</h4>
+            <template v-if="isElectron">
+              <p>{{ t('gnss.map.offlineDesc1') }}</p>
+              <p class="help-step-title">{{ t('gnss.map.offlineStepsTitle') }}</p>
+              <ol class="help-steps">
+                <li>
+                  {{ t('gnss.map.offlineStep1A') }}
+                  <strong>{{ t('gnss.map.offlineStep1Strong') }}</strong>
+                  {{ t('gnss.map.offlineStep1B') }}
+                  <code>offline-tiles</code>
+                  {{ t('gnss.map.offlineStep1C') }}
+                </li>
+                <li>
+                  {{ t('gnss.map.offlineStep2A') }}
+                  <code>{z}/{x}/{y}.png</code>
+                  {{ t('gnss.map.offlineStep2B') }}
+                  <code>offline-tiles/15/27455/13208.png</code>
+                </li>
+                <li>{{ t('gnss.map.offlineStep3') }}</li>
+              </ol>
+              <p>{{ t('gnss.map.offlineDesc2') }}</p>
+              <p>
+                {{ t('gnss.map.offlineDesc3Prefix') }}
+                <el-button size="small" class="copy-dir-btn" :title="t('gnss.map.copyDirTitle')" @click="copyTilesDir">{{ t('gnss.map.offlineCopyDir') }}</el-button>
+              </p>
+            </template>
+            <p v-else>
+              {{ t('gnss.map.offlineBrowserNote') }}
+            </p>
+          </div>
       </el-popover>
+      </div>
     </div>
     <div ref="mapRef" class="map-view"></div>
   </div>
@@ -57,10 +65,13 @@ import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { useGnssStore } from '@/stores/gnss'
 import { useNmea } from '@/composables/gnss/useNmea'
+import { useFileTimeline } from '@/composables/useFileTimeline'
 import { fixStatusColor } from '@/components/windows/gnss/fixStatusColors'
+import { t } from '@/i18n'
 
 const gnssStore = useGnssStore()
 const { mapTrackPoints } = useNmea()
+const fileTimeline = useFileTimeline()
 
 // 滑窗模式只保留最近的点；Polyline 分块后，追加或淘汰点都只影响一个小分块。
 const TRACK_WINDOW_POINTS = 2000
@@ -74,7 +85,7 @@ const isElectron = typeof window !== 'undefined' && !!window.ipcRenderer
 
 const containerRef = ref<HTMLElement | null>(null)
 const mapRef = ref<HTMLElement | null>(null)
-const follow = ref(true)
+const follow = ref(!fileTimeline.active.value)
 const slidingWindow = ref(false)
 const offlineTilesDir = ref('')
 
@@ -94,6 +105,7 @@ interface TrackSegment {
 }
 
 let map: L.Map | null = null
+let trackRenderer: L.Canvas | null = null
 let positionMarker: L.CircleMarker | null = null
 const trackPoints: TrackPoint[] = []
 const trackSegments: TrackSegment[] = []
@@ -110,6 +122,8 @@ const pendingTrackPoints: SourceTrackPoint[] = []
 const TRACK_QUEUE_TARGET_FRAMES = 2
 const TRACK_RENDER_MAX_POINTS_PER_FRAME = 128
 const TRACK_RENDER_BUDGET_MS = 4
+const TRACK_BULK_THRESHOLD = 512
+const TRACK_BULK_POINTS_PER_FRAME = 4096
 const MAP_FOLLOW_INTERVAL_MS = 50
 
 const tileUrl = computed(() => (isElectron ? ELECTRON_TILE_URL : WEB_TILE_URL))
@@ -129,6 +143,7 @@ function initMap() {
     zoom: 3,
     zoomControl: true,
   })
+  trackRenderer = L.canvas({ padding: 0.5 })
 
   L.tileLayer(tileUrl.value, {
     maxZoom: 19,
@@ -159,6 +174,28 @@ function initMap() {
   )
 }
 
+function createTrackSegment(point: TrackPoint, previousPoint?: TrackPoint): TrackSegment | null {
+  if (!map) return null
+  // 新分段以上一个点为起点，保证轨迹连续不断开
+  const startPoints = previousPoint ? [previousPoint.latlng, point.latlng] : [point.latlng]
+  const pointIds = previousPoint ? [previousPoint.id, point.id] : [point.id]
+  const line = L.polyline(startPoints, {
+    renderer: trackRenderer ?? undefined,
+    color: fixStatusColor(point.quality),
+    weight: 3,
+    opacity: 0.8,
+    smoothFactor: 0,
+  }).addTo(map)
+  const segment = {
+    quality: point.quality,
+    line,
+    pointIds,
+    latlngs: startPoints,
+  }
+  trackSegments.push(segment)
+  return segment
+}
+
 // 追加一个轨迹点：相邻同解状态的点连成一段 polyline，状态切换或分块满时另起一段。
 function appendTrackPoint(point: TrackPoint, previousPoint?: TrackPoint) {
   if (!map) return
@@ -175,21 +212,7 @@ function appendTrackPoint(point: TrackPoint, previousPoint?: TrackPoint) {
     return
   }
 
-  // 新分段以上一个点为起点，保证轨迹连续不断开
-  const startPoints = previousPoint ? [previousPoint.latlng, point.latlng] : [point.latlng]
-  const pointIds = previousPoint ? [previousPoint.id, point.id] : [point.id]
-  const line = L.polyline(startPoints, {
-    color: fixStatusColor(point.quality),
-    weight: 3,
-    opacity: 0.8,
-    smoothFactor: 0,
-  }).addTo(map)
-  trackSegments.push({
-    quality: point.quality,
-    line,
-    pointIds,
-    latlngs: startPoints,
-  })
+  createTrackSegment(point, previousPoint)
 }
 
 // 从轨迹头部批量淘汰点。完整旧分块直接移除，边界分块最多重设 TRACK_SEGMENT_POINTS 个点。
@@ -241,6 +264,44 @@ function appendTrackPosition(longitude: number, latitude: number, quality: numbe
   return true
 }
 
+function appendTrackRange(start: number, end: number): SourceTrackPoint | undefined {
+  if (!map) return undefined
+  const touchedSegments = new Set<TrackSegment>()
+  let latestPosition: SourceTrackPoint | undefined
+
+  for (let index = start; index < end; index += 1) {
+    const sourcePoint = pendingTrackPoints[index]
+    if (!isValidPosition(sourcePoint[0], sourcePoint[1])) continue
+
+    const previousPoint = trackPoints[trackPoints.length - 1]
+    const point: TrackPoint = {
+      id: nextTrackPointId++,
+      latlng: [sourcePoint[1], sourcePoint[0]],
+      quality: sourcePoint[2],
+    }
+    trackPoints.push(point)
+
+    const lastSegment = trackSegments[trackSegments.length - 1]
+    if (
+      lastSegment &&
+      lastSegment.quality === point.quality &&
+      lastSegment.pointIds.length < TRACK_SEGMENT_POINTS
+    ) {
+      lastSegment.pointIds.push(point.id)
+      lastSegment.latlngs.push(point.latlng)
+      touchedSegments.add(lastSegment)
+    } else {
+      const segment = createTrackSegment(point, previousPoint)
+      if (segment) touchedSegments.add(segment)
+    }
+    latestPosition = sourcePoint
+  }
+
+  // One Leaflet geometry update per segment instead of one per imported point.
+  for (const segment of touchedSegments) segment.line.setLatLngs(segment.latlngs)
+  return latestPosition
+}
+
 function updateCurrentPosition(
   longitude: number,
   latitude: number,
@@ -268,6 +329,19 @@ function updateCurrentPosition(
   if (!map.hasLayer(positionMarker)) positionMarker.addTo(map)
 }
 
+function fitCompleteTrack(): void {
+  if (!map || trackPoints.length === 0) return
+  const bounds = L.latLngBounds([])
+  for (const point of trackPoints) bounds.extend(point.latlng)
+  if (!bounds.isValid()) return
+  map.fitBounds(bounds, {
+    animate: false,
+    padding: [20, 20],
+    maxZoom: DEFAULT_ZOOM,
+  })
+  hasCentered = true
+}
+
 function pendingTrackCount(): number {
   return pendingTrackPoints.length - pendingTrackHead
 }
@@ -290,23 +364,30 @@ function renderPendingTrack() {
   let processedCount = 0
   let latestPosition: SourceTrackPoint | undefined
 
-  while (pendingTrackHead < pendingTrackPoints.length && processedCount < targetCount) {
-    const point = pendingTrackPoints[pendingTrackHead++]
-    if (appendTrackPosition(point[0], point[1], point[2])) latestPosition = point
-    processedCount += 1
-    if (processedCount >= 2 && performance.now() - startedAt >= TRACK_RENDER_BUDGET_MS) break
+  if (remaining >= TRACK_BULK_THRESHOLD) {
+    const end = Math.min(pendingTrackPoints.length, pendingTrackHead + TRACK_BULK_POINTS_PER_FRAME)
+    latestPosition = appendTrackRange(pendingTrackHead, end)
+    pendingTrackHead = end
+  } else {
+    while (pendingTrackHead < pendingTrackPoints.length && processedCount < targetCount) {
+      const point = pendingTrackPoints[pendingTrackHead++]
+      if (appendTrackPosition(point[0], point[1], point[2])) latestPosition = point
+      processedCount += 1
+      if (processedCount >= 2 && performance.now() - startedAt >= TRACK_RENDER_BUDGET_MS) break
+    }
   }
 
   if (slidingWindow.value) trimTrackToWindow()
 
   const queueEmpty = pendingTrackHead >= pendingTrackPoints.length
-  if (latestPosition) {
+  if (latestPosition && !fileTimeline.active.value) {
     updateCurrentPosition(latestPosition[0], latestPosition[1], latestPosition[2])
   }
 
   if (queueEmpty) {
     pendingTrackPoints.length = 0
     pendingTrackHead = 0
+    if (fileTimeline.active.value && !slidingWindow.value) fitCompleteTrack()
   } else {
     scheduleTrackRender()
   }
@@ -342,6 +423,7 @@ function resetTrackHistory() {
   hasCentered = false
   lastFollowUpdateAt = 0
   clearRenderedTrack()
+  positionMarker?.remove()
 }
 
 function syncTrackSource() {
@@ -372,6 +454,20 @@ function copyTilesDir() {
 }
 
 watch(mapTrackPoints, syncTrackSource)
+
+watch(fileTimeline.active, (active) => {
+  if (active) follow.value = false
+})
+
+watch(
+  () =>
+    [
+      gnssStore.status.longitude,
+      gnssStore.status.latitude,
+      gnssStore.status.quality,
+    ] as const,
+  ([longitude, latitude, quality]) => updateCurrentPosition(longitude, latitude, quality),
+)
 
 watch(slidingWindow, (enabled, wasEnabled) => {
   if (enabled) {
@@ -408,6 +504,7 @@ onUnmounted(() => {
   resizeObserver = null
   map?.remove()
   map = null
+  trackRenderer = null
   positionMarker = null
   trackSegments.length = 0
   trackPoints.length = 0
@@ -432,6 +529,27 @@ onUnmounted(() => {
   gap: 12px;
   padding: 8px 12px;
   border-bottom: 1px solid var(--app-border);
+}
+
+.toolbar-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.clear-btn {
+  padding: 6px 12px;
+  background-color: var(--app-surface-raised);
+  color: var(--app-text-secondary);
+  border: 1px solid var(--app-border);
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: all 0.2s ease;
+  line-height: 1;
+  display: flex;
+  align-items: center;
 }
 
 .map-view {
@@ -468,10 +586,24 @@ onUnmounted(() => {
   overflow-x: auto;
 }
 
-.tiles-dir {
-  font-family: monospace;
-  word-break: break-all;
-  cursor: pointer;
-  color: #409eff;
+.help-step-title {
+  margin: 10px 0 4px;
+  font-weight: 600;
+}
+
+.help-steps {
+  margin: 4px 0;
+  padding-left: 22px;
+}
+
+.help-steps li {
+  margin: 4px 0;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.copy-dir-btn {
+  margin-left: 4px;
+  vertical-align: middle;
 }
 </style>

@@ -10,6 +10,7 @@ import * as ElementPlusIconsVue from '@element-plus/icons-vue'
 import { useDevice } from '@/hooks/useDevice'
 import 'vue-virtual-scroller/dist/vue-virtual-scroller.css'
 import VirtualScroller from 'vue-virtual-scroller'
+import { i18n } from './i18n'
 
 const app = createApp(App)
 const pinia = createPinia()
@@ -34,6 +35,9 @@ app.use(ElementPlus, {
     offset: MESSAGE_TOP_OFFSET,
   },
 })
+
+// 使用 vue-i18n（中英文）
+app.use(i18n)
 for (const [key, component] of Object.entries(ElementPlusIconsVue)) {
   app.component(key, component)
 }

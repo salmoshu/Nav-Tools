@@ -7,6 +7,7 @@ import { showStatusBar, showToolBar, toolbarPosition, statusbarPosition } from '
 import { LayoutStorage, type PersistedLayoutItem } from '@/core/layout/LayoutStorage'
 import { JsonStorage } from '@/core/storage/JsonStorage'
 import emitter from '@/hooks/useMitt'
+import { t } from '@/i18n'
 
 export interface LayoutItem {
   titleName: string
@@ -267,7 +268,7 @@ export function useLayoutManager() {
   function saveLayout() {
     saveCurrentLayout()
     ElMessage({
-      message: '布局已保存',
+      message: t('data.layoutSaved'),
       type: 'success',
       duration: 1000,
       placement: 'bottom-right',
@@ -284,7 +285,7 @@ export function useLayoutManager() {
     const windowDefinition = getWindowById(windowId)
     if (!windowDefinition || !currentApplication.value?.windowIds.includes(windowId)) {
       ElMessage({
-        message: '该窗口不属于当前应用',
+        message: t('data.windowNotInApp'),
         type: 'warning',
         duration: 1000,
         placement: 'bottom-right',

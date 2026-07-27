@@ -1,7 +1,7 @@
 import { ref } from "vue"
 import { defineStore } from "pinia"
 
-interface GnssState {
+export interface GnssState {
     fixMode: string
     quality: number
     TTFF: string
@@ -19,8 +19,8 @@ interface GnssState {
     satsVisible: string
 }
 
-export const useGnssStore = defineStore('gnss', () => {
-    const status = ref<GnssState>({
+function createDefaultGnssState(): GnssState {
+    return {
         utcTime: '',
         fixMode: '',
         quality: 0,
@@ -36,7 +36,15 @@ export const useGnssStore = defineStore('gnss', () => {
         HDOP: '',
         satsUsed: '',
         satsVisible: '',
-    })
+    }
+}
+
+export const useGnssStore = defineStore('gnss', () => {
+    const status = ref<GnssState>(createDefaultGnssState())
+
+    function resetStatus(): void {
+        status.value = createDefaultGnssState()
+    }
 
     // 每当需要整体清空轨迹（重播开始 / 清空 GNSS 数据）时自增，
     // 地图视图据此清除本地维护的轨迹 polyline，避免新旧轨迹叠加。
@@ -47,6 +55,7 @@ export const useGnssStore = defineStore('gnss', () => {
 
     return {
         status,
+        resetStatus,
         trackResetToken,
         resetTrack,
     }

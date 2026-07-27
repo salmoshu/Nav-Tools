@@ -25,9 +25,6 @@ export class NmeaStreamParser {
 
   public push(chunk: string): string[] {
     this.buffer += chunk
-    if (this.buffer.length > this.maxBufferLength) {
-      this.buffer = this.buffer.slice(-this.retainedLength)
-    }
 
     const firstStart = this.buffer.indexOf('$')
     if (firstStart === -1) {
@@ -40,11 +37,17 @@ export class NmeaStreamParser {
     if (matches.length === 0) {
       const lastStart = this.buffer.lastIndexOf('$')
       if (lastStart > 0) this.buffer = this.buffer.slice(lastStart)
+      if (this.buffer.length > this.maxBufferLength) {
+        this.buffer = this.buffer.slice(-this.retainedLength)
+      }
       return []
     }
 
     const last = matches[matches.length - 1]
     this.buffer = this.buffer.slice((last.index ?? 0) + last[0].length)
+    if (this.buffer.length > this.maxBufferLength) {
+      this.buffer = this.buffer.slice(-this.retainedLength)
+    }
     return matches.map((match) => match[0])
   }
 

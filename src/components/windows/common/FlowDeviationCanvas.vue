@@ -4,31 +4,31 @@
       <div class="controls">
         <!-- 视图配置按钮 -->
         <el-button type="default" size="small" @click="showViewConfig" class="control-btn config-btn">
-          <el-icon><Setting /></el-icon>&nbsp;配置
+          <el-icon><Setting /></el-icon>&nbsp;{{ t('flow.config') }}
         </el-button>
         
         <!-- 滑窗开关按钮 -->
         <el-button :disabled="deviceConnected" type="default" size="small" @click="toggleSlideWindow">
           <el-icon v-if="enableWindow"><CircleClose /></el-icon>
           <el-icon v-else><CircleCheck /></el-icon>
-          &nbsp;{{enableWindow?"关闭滑窗":"启用滑窗"}}
+          &nbsp;{{ enableWindow ? t('flow.disableSlideWindow') : t('flow.enableSlideWindow') }}
         </el-button>
 
         <el-button
           type="default"
           size="small"
-          title="跟踪"
-          aria-label="跟踪"
+          :title="t('flow.tracking')"
+          :aria-label="t('flow.tracking')"
           class="tracking-button"
           @click="toggleTracking"
         >
           <el-icon><Aim /></el-icon>
-          <span class="tracking-text">&nbsp;{{isTracking?"关闭跟踪":"启用跟踪"}}</span>
+          <span class="tracking-text">&nbsp;{{ isTracking ? t('flow.disableTracking') : t('flow.enableTracking') }}</span>
         </el-button>
         
         <!-- 添加轨迹点尺寸调节滑块 -->
         <div class="point-size-control">
-          <span class="size-label">尺寸:</span>
+          <span class="size-label">{{ t('flow.size') }}</span>
           <el-slider
             v-model="pointSize"
             :min="5"
@@ -66,6 +66,7 @@
 
 <script setup>
 import { ref, watch, onMounted, onUnmounted, nextTick, computed, reactive } from 'vue';
+import { t } from '@/i18n';
 import { useFlow } from '@/composables/flow/useFlow';
 import { useDevice } from '@/hooks/useDevice'
 import { ElMessage } from 'element-plus';
@@ -210,7 +211,7 @@ function applyViewConfig() {
   // 验证是否至少配置了一条轨迹
   if (!deviationConfig.track1X.value && !deviationConfig.track2X.value && !deviationConfig.track3X.value && !deviationConfig.track4X.value) {
     ElMessage({
-      message: `请至少配置一条轨迹的X轴和Y轴字段`,
+      message: t('flow.configNeedTrackAxis'),
       type: 'warning',
       placement: 'bottom-right',
       offset: 50,
@@ -253,10 +254,10 @@ function applyViewConfig() {
   if (chartInstance.value) {
     chartInstance.value.setOption({
       xAxis: {
-        name: xAxisName || 'X轴'
+        name: xAxisName || t('flow.xAxis')
       },
       yAxis: {
-        name: yAxisName || 'Y轴'
+        name: yAxisName || t('flow.yAxis')
       }
     });
   }
@@ -336,7 +337,7 @@ function initChart() {
     dataZoom: getDataZoomConfig(-10, 10, -10, 10),
     xAxis: {
       type: 'value',
-      name: isTracking.value ? 'X轴' : 'X轴',
+      name: isTracking.value ? t('flow.xAxis') : t('flow.xAxis'),
       nameLocation: 'middle',
       nameGap: 30,
       axisLabel: {
@@ -360,7 +361,7 @@ function initChart() {
     },
     yAxis: {
       type: 'value',
-      name: isTracking.value ? 'Y轴' : 'Y轴',
+      name: isTracking.value ? t('flow.yAxis') : t('flow.yAxis'),
       nameLocation: 'middle',
       nameGap: 40,
       axisLabel: {
@@ -732,7 +733,7 @@ function updateChartDisplay() {
     const isLatestTrack = latestPointInfo.track === 1;
     series.push({
       id: 'flow-track-1',
-      name: '轨迹1',
+      name: t('flow.trackN', { n: 1 }),
       type: 'scatter',
       data: track1Data,
       coordinateSystem: 'cartesian2d',
@@ -813,7 +814,7 @@ function updateChartDisplay() {
     const isLatestTrack = latestPointInfo.track === 2;
     series.push({
       id: 'flow-track-2',
-      name: '轨迹2',
+      name: t('flow.trackN', { n: 2 }),
       type: 'scatter',
       data: track2Data,
       coordinateSystem: 'cartesian2d',
@@ -894,7 +895,7 @@ function updateChartDisplay() {
     const isLatestTrack = latestPointInfo.track === 3;
     series.push({
       id: 'flow-track-3',
-      name: '轨迹3',
+      name: t('flow.trackN', { n: 3 }),
       type: 'scatter',
       data: track3Data,
       coordinateSystem: 'cartesian2d',
@@ -969,7 +970,7 @@ function updateChartDisplay() {
     const isLatestTrack = latestPointInfo.track === 4;
     series.push({
       id: 'flow-track-4',
-      name: '轨迹4',
+      name: t('flow.trackN', { n: 4 }),
       type: 'scatter',
       data: track4Data,
       coordinateSystem: 'cartesian2d',
@@ -1046,7 +1047,7 @@ function updateChartDisplay() {
     if (deviationConfig.track1X.value && deviationConfig.track1Y.value && track1Data.length > 0) {
       series.push({
         id: 'flow-current-1',
-        name: '当前位置1',
+        name: t('flow.currentPosN', { n: 1 }),
         type: 'scatter',
         data: [[0, 0]], // 跟踪模式下轨迹1固定在中心
         coordinateSystem: 'cartesian2d',
@@ -1077,7 +1078,7 @@ function updateChartDisplay() {
       const lastPoint2 = track2Data[track2Data.length - 1];
       series.push({
         id: 'flow-current-2',
-        name: '当前位置2',
+        name: t('flow.currentPosN', { n: 2 }),
         type: 'scatter',
         data: [lastPoint2],
         coordinateSystem: 'cartesian2d',
@@ -1108,7 +1109,7 @@ function updateChartDisplay() {
       const lastPoint3 = track3Data[track3Data.length - 1];
       series.push({
         id: 'flow-current-3',
-        name: '当前位置3',
+        name: t('flow.currentPosN', { n: 3 }),
         type: 'scatter',
         data: [lastPoint3],
         coordinateSystem: 'cartesian2d',
@@ -1139,7 +1140,7 @@ function updateChartDisplay() {
       const lastPoint4 = track4Data[track4Data.length - 1];
       series.push({
         id: 'flow-current-4',
-        name: '当前位置4',
+        name: t('flow.currentPosN', { n: 4 }),
         type: 'scatter',
         data: [lastPoint4],
         coordinateSystem: 'cartesian2d',
@@ -1171,7 +1172,7 @@ function updateChartDisplay() {
       const lastPoint1 = track1Data[track1Data.length - 1];
       series.push({
         id: 'flow-current-1',
-        name: '当前位置1',
+        name: t('flow.currentPosN', { n: 1 }),
         type: 'scatter',
         data: [lastPoint1],
         coordinateSystem: 'cartesian2d',
@@ -1202,7 +1203,7 @@ function updateChartDisplay() {
       const lastPoint2 = track2Data[track2Data.length - 1];
       series.push({
         id: 'flow-current-2',
-        name: '当前位置2',
+        name: t('flow.currentPosN', { n: 2 }),
         type: 'scatter',
         data: [lastPoint2],
         coordinateSystem: 'cartesian2d',
@@ -1233,7 +1234,7 @@ function updateChartDisplay() {
       const lastPoint3 = track3Data[track3Data.length - 1];
       series.push({
         id: 'flow-current-3',
-        name: '当前位置3',
+        name: t('flow.currentPosN', { n: 3 }),
         type: 'scatter',
         data: [lastPoint3],
         coordinateSystem: 'cartesian2d',
@@ -1264,7 +1265,7 @@ function updateChartDisplay() {
       const lastPoint4 = track4Data[track4Data.length - 1];
       series.push({
         id: 'flow-current-4',
-        name: '当前位置4',
+        name: t('flow.currentPosN', { n: 4 }),
         type: 'scatter',
         data: [lastPoint4],
         coordinateSystem: 'cartesian2d',
@@ -1292,10 +1293,10 @@ function updateChartDisplay() {
   }
 
   const historyColors = {
-    '轨迹1': deviationConfig.track1Color.value,
-    '轨迹2': deviationConfig.track2Color.value,
-    '轨迹3': deviationConfig.track3Color.value,
-    '轨迹4': deviationConfig.track4Color.value,
+    [t('flow.trackN', { n: 1 })]: deviationConfig.track1Color.value,
+    [t('flow.trackN', { n: 2 })]: deviationConfig.track2Color.value,
+    [t('flow.trackN', { n: 3 })]: deviationConfig.track3Color.value,
+    [t('flow.trackN', { n: 4 })]: deviationConfig.track4Color.value,
   };
   for (const item of series) {
     const color = historyColors[item.name];
@@ -1308,7 +1309,7 @@ function updateChartDisplay() {
   }
 
   // 更新图例（过滤掉所有当前位置系列）
-  const legendData = series.filter(s => !s.name.startsWith('当前位置')).map(s => {
+  const legendData = series.filter(s => !s.name.startsWith(t('flow.currentPos'))).map(s => {
     // 获取系列的颜色 - 处理函数和直接值的情况
     let seriesColor;
     if (typeof s.itemStyle.color === 'function') {
@@ -1422,12 +1423,12 @@ function toggleTracking() {
     
     chartInstance.value.setOption({
       xAxis: {
-        name: xAxisName || 'X轴',
+        name: xAxisName || t('flow.xAxis'),
         moveOnMouseWheel: !isTracking.value,
         moveOnMouseMove: !isTracking.value
       },
       yAxis: {
-        name: yAxisName || 'Y轴',
+        name: yAxisName || t('flow.yAxis'),
         moveOnMouseWheel: !isTracking.value,
         moveOnMouseMove: !isTracking.value
       }
@@ -1473,7 +1474,7 @@ function updatePointSize() {
     if (option && option.series) {
       // 更新所有系列的点大小，当前位置系列使用1.2倍大小
       const updatedSeries = option.series.map(series => {
-        if (series.name === '当前位置' || series.name.startsWith('当前位置')) {
+        if (series.name === t('flow.currentPos') || series.name.startsWith(t('flow.currentPos'))) {
           return {
             ...series,
             symbolSize: pointSize.value * 1.2
@@ -1499,57 +1500,57 @@ function handleLegendSelectChanged(params) {
   const selected = params.selected;
   
   // 当点击轨迹1时，同步控制当前位置1的显示状态
-  if (params.name === '轨迹1') {
+  if (params.name === t('flow.trackN', { n: 1 })) {
     // 获取轨迹1的选中状态
-    const track1Selected = selected['轨迹1'];
+    const track1Selected = selected[t('flow.trackN', { n: 1 })];
     
     // 同步设置当前位置1的选中状态
     if (track1Selected !== undefined) {
       chartInstance.value.dispatchAction({
         type: 'legendToggleSelect',
-        name: '当前位置1'
+        name: t('flow.currentPosN', { n: 1 })
       });
     }
   }
   
   // 当点击轨迹2时，同步控制当前位置2的显示状态
-  if (params.name === '轨迹2') {
+  if (params.name === t('flow.trackN', { n: 2 })) {
     // 获取轨迹2的选中状态
-    const track2Selected = selected['轨迹2'];
+    const track2Selected = selected[t('flow.trackN', { n: 2 })];
     
     // 同步设置当前位置2的选中状态
     if (track2Selected !== undefined) {
       chartInstance.value.dispatchAction({
         type: 'legendToggleSelect',
-        name: '当前位置2'
+        name: t('flow.currentPosN', { n: 2 })
       });
     }
   }
   
   // 当点击轨迹3时，同步控制当前位置3的显示状态
-  if (params.name === '轨迹3') {
+  if (params.name === t('flow.trackN', { n: 3 })) {
     // 获取轨迹3的选中状态
-    const track3Selected = selected['轨迹3'];
+    const track3Selected = selected[t('flow.trackN', { n: 3 })];
     
     // 同步设置当前位置3的选中状态
     if (track3Selected !== undefined) {
       chartInstance.value.dispatchAction({
         type: 'legendToggleSelect',
-        name: '当前位置3'
+        name: t('flow.currentPosN', { n: 3 })
       });
     }
   }
 
   // 当点击轨迹4时，同步控制当前位置4的显示状态
-  if (params.name === '轨迹4') {
+  if (params.name === t('flow.trackN', { n: 4 })) {
     // 获取轨迹4的选中状态
-    const track4Selected = selected['轨迹4'];
+    const track4Selected = selected[t('flow.trackN', { n: 4 })];
     
     // 同步设置当前位置4的选中状态
     if (track4Selected !== undefined) {
       chartInstance.value.dispatchAction({
         type: 'legendToggleSelect',
-        name: '当前位置4'
+        name: t('flow.currentPosN', { n: 4 })
       });
     }
   }
@@ -1596,24 +1597,24 @@ function handleChartDblClick(params) {
     let rawTime = null;
     
     // 根据系列名称获取对应的时间戳
-    if (seriesName === '轨迹1' && track1ToRawIndex[dataIndex] !== undefined) {
+    if (seriesName === t('flow.trackN', { n: 1 }) && track1ToRawIndex[dataIndex] !== undefined) {
       rawTime = plotData.value.timestamp[track1ToRawIndex[dataIndex]];
-    } else if (seriesName === '轨迹2' && track2ToRawIndex[dataIndex] !== undefined) {
+    } else if (seriesName === t('flow.trackN', { n: 2 }) && track2ToRawIndex[dataIndex] !== undefined) {
       rawTime = plotData.value.timestamp[track2ToRawIndex[dataIndex]];
-    } else if (seriesName === '轨迹3' && track3ToRawIndex[dataIndex] !== undefined) {
+    } else if (seriesName === t('flow.trackN', { n: 3 }) && track3ToRawIndex[dataIndex] !== undefined) {
       rawTime = plotData.value.timestamp[track3ToRawIndex[dataIndex]];
-    } else if (seriesName === '轨迹4' && track4ToRawIndex[dataIndex] !== undefined) {
+    } else if (seriesName === t('flow.trackN', { n: 4 }) && track4ToRawIndex[dataIndex] !== undefined) {
       rawTime = plotData.value.timestamp[track4ToRawIndex[dataIndex]];
-    } else if (seriesName === '当前位置1' && track1ToRawIndex.length > 0) {
+    } else if (seriesName === t('flow.currentPosN', { n: 1 }) && track1ToRawIndex.length > 0) {
       // 当前位置1使用轨迹1的最后一个时间戳
       rawTime = plotData.value.timestamp[track1ToRawIndex[track1ToRawIndex.length - 1]];
-    } else if (seriesName === '当前位置2' && track2ToRawIndex.length > 0) {
+    } else if (seriesName === t('flow.currentPosN', { n: 2 }) && track2ToRawIndex.length > 0) {
       // 当前位置2使用轨迹2的最后一个时间戳
       rawTime = plotData.value.timestamp[track2ToRawIndex[track2ToRawIndex.length - 1]];
-    } else if (seriesName === '当前位置3' && track3ToRawIndex.length > 0) {
+    } else if (seriesName === t('flow.currentPosN', { n: 3 }) && track3ToRawIndex.length > 0) {
       // 当前位置3使用轨迹3的最后一个时间戳
       rawTime = plotData.value.timestamp[track3ToRawIndex[track3ToRawIndex.length - 1]];
-    } else if (seriesName === '当前位置4' && track4ToRawIndex.length > 0) {
+    } else if (seriesName === t('flow.currentPosN', { n: 4 }) && track4ToRawIndex.length > 0) {
       // 当前位置4使用轨迹4的最后一个时间戳
       rawTime = plotData.value.timestamp[track4ToRawIndex[track4ToRawIndex.length - 1]];
     }
@@ -1642,21 +1643,21 @@ const handleMouseOver = function(params) {
   let targetTime = null;
   
   // 获取当前悬停点的时间
-  if (seriesName === '轨迹1' && track1ToRawIndex[dataIndex] !== undefined) {
+  if (seriesName === t('flow.trackN', { n: 1 }) && track1ToRawIndex[dataIndex] !== undefined) {
     targetTime = plotData.value.timestamp[track1ToRawIndex[dataIndex]];
-  } else if (seriesName === '轨迹2' && track2ToRawIndex[dataIndex] !== undefined) {
+  } else if (seriesName === t('flow.trackN', { n: 2 }) && track2ToRawIndex[dataIndex] !== undefined) {
     targetTime = plotData.value.timestamp[track2ToRawIndex[dataIndex]];
-  } else if (seriesName === '轨迹3' && track3ToRawIndex[dataIndex] !== undefined) {
+  } else if (seriesName === t('flow.trackN', { n: 3 }) && track3ToRawIndex[dataIndex] !== undefined) {
     targetTime = plotData.value.timestamp[track3ToRawIndex[dataIndex]];
-  } else if (seriesName === '轨迹4' && track4ToRawIndex[dataIndex] !== undefined) {
+  } else if (seriesName === t('flow.trackN', { n: 4 }) && track4ToRawIndex[dataIndex] !== undefined) {
     targetTime = plotData.value.timestamp[track4ToRawIndex[dataIndex]];
-  } else if (seriesName === '当前位置1' && track1ToRawIndex.length > 0) {
+  } else if (seriesName === t('flow.currentPosN', { n: 1 }) && track1ToRawIndex.length > 0) {
     targetTime = plotData.value.timestamp[track1ToRawIndex[track1ToRawIndex.length - 1]];
-  } else if (seriesName === '当前位置2' && track2ToRawIndex.length > 0) {
+  } else if (seriesName === t('flow.currentPosN', { n: 2 }) && track2ToRawIndex.length > 0) {
     targetTime = plotData.value.timestamp[track2ToRawIndex[track2ToRawIndex.length - 1]];
-  } else if (seriesName === '当前位置3' && track3ToRawIndex.length > 0) {
+  } else if (seriesName === t('flow.currentPosN', { n: 3 }) && track3ToRawIndex.length > 0) {
     targetTime = plotData.value.timestamp[track3ToRawIndex[track3ToRawIndex.length - 1]];
-  } else if (seriesName === '当前位置4' && track4ToRawIndex.length > 0) {
+  } else if (seriesName === t('flow.currentPosN', { n: 4 }) && track4ToRawIndex.length > 0) {
     targetTime = plotData.value.timestamp[track4ToRawIndex[track4ToRawIndex.length - 1]];
   }
   
@@ -1673,10 +1674,10 @@ const handleMouseOver = function(params) {
   const timeEntry = timeIndexMap.get(targetTime);
   if (timeEntry) {
     const trackHighlight = [
-      ['轨迹1', timeEntry.track1],
-      ['轨迹2', timeEntry.track2],
-      ['轨迹3', timeEntry.track3],
-      ['轨迹4', timeEntry.track4],
+      [t('flow.trackN', { n: 1 }), timeEntry.track1],
+      [t('flow.trackN', { n: 2 }), timeEntry.track2],
+      [t('flow.trackN', { n: 3 }), timeEntry.track3],
+      [t('flow.trackN', { n: 4 }), timeEntry.track4],
     ];
     for (const [trackName, trackIndex] of trackHighlight) {
       if (trackIndex === undefined) continue;
@@ -1708,35 +1709,35 @@ const handleMouseOver = function(params) {
   let originY = params.value[1];
   
   // 根据系列名称选择对应的轴字段和时间
-  if (seriesName === '轨迹1' && deviationConfig.track1X.value && deviationConfig.track1Y.value) {
+  if (seriesName === t('flow.trackN', { n: 1 }) && deviationConfig.track1X.value && deviationConfig.track1Y.value) {
     xField = deviationConfig.track1X.value;
     yField = deviationConfig.track1Y.value;
     dataIndexModifed = track1ToRawIndex[params.dataIndex];
     currentTime = plotData.value.timestamp[dataIndexModifed];
     originX = plotData.value[deviationConfig.track1X.value][dataIndexModifed];
     originY = plotData.value[deviationConfig.track1Y.value][dataIndexModifed];
-  } else if (seriesName === '轨迹2' && deviationConfig.track2X.value && deviationConfig.track2Y.value) {
+  } else if (seriesName === t('flow.trackN', { n: 2 }) && deviationConfig.track2X.value && deviationConfig.track2Y.value) {
     xField = deviationConfig.track2X.value;
     yField = deviationConfig.track2Y.value;
     dataIndexModifed = track2ToRawIndex[params.dataIndex];
     currentTime = plotData.value.timestamp[dataIndexModifed];
     originX = plotData.value[deviationConfig.track2X.value][dataIndexModifed];
     originY = plotData.value[deviationConfig.track2Y.value][dataIndexModifed];
-  } else if (seriesName === '轨迹3' && deviationConfig.track3X.value && deviationConfig.track3Y.value) {
+  } else if (seriesName === t('flow.trackN', { n: 3 }) && deviationConfig.track3X.value && deviationConfig.track3Y.value) {
     xField = deviationConfig.track3X.value;
     yField = deviationConfig.track3Y.value;
     dataIndexModifed = track3ToRawIndex[params.dataIndex];
     currentTime = plotData.value.timestamp[dataIndexModifed];
     originX = plotData.value[deviationConfig.track3X.value][dataIndexModifed];
     originY = plotData.value[deviationConfig.track3Y.value][dataIndexModifed];
-  } else if (seriesName === '轨迹4' && deviationConfig.track4X.value && deviationConfig.track4Y.value) {
+  } else if (seriesName === t('flow.trackN', { n: 4 }) && deviationConfig.track4X.value && deviationConfig.track4Y.value) {
     xField = deviationConfig.track4X.value;
     yField = deviationConfig.track4Y.value;
     dataIndexModifed = track4ToRawIndex[params.dataIndex];
     currentTime = plotData.value.timestamp[dataIndexModifed];
     originX = plotData.value[deviationConfig.track4X.value][dataIndexModifed];
     originY = plotData.value[deviationConfig.track4Y.value][dataIndexModifed];
-  } else if (seriesName === '当前位置1' && deviationConfig.track1X.value && deviationConfig.track1Y.value) {
+  } else if (seriesName === t('flow.currentPosN', { n: 1 }) && deviationConfig.track1X.value && deviationConfig.track1Y.value) {
     // 当前位置1使用轨迹1的字段和时间
     xField = deviationConfig.track1X.value;
     yField = deviationConfig.track1Y.value;
@@ -1744,7 +1745,7 @@ const handleMouseOver = function(params) {
     currentTime = plotData.value.timestamp[dataIndexModifed];
     originX = plotData.value[deviationConfig.track1X.value][dataIndexModifed];
     originY = plotData.value[deviationConfig.track1Y.value][dataIndexModifed];
-  } else if (seriesName === '当前位置2' && deviationConfig.track2X.value && deviationConfig.track2Y.value) {
+  } else if (seriesName === t('flow.currentPosN', { n: 2 }) && deviationConfig.track2X.value && deviationConfig.track2Y.value) {
     // 当前位置2使用轨迹2的字段和时间
     xField = deviationConfig.track2X.value;
     yField = deviationConfig.track2Y.value;
@@ -1752,7 +1753,7 @@ const handleMouseOver = function(params) {
     currentTime = plotData.value.timestamp[dataIndexModifed];
     originX = plotData.value[deviationConfig.track2X.value][dataIndexModifed];
     originY = plotData.value[deviationConfig.track2Y.value][dataIndexModifed];
-  } else if (seriesName === '当前位置3' && deviationConfig.track3X.value && deviationConfig.track3Y.value) {
+  } else if (seriesName === t('flow.currentPosN', { n: 3 }) && deviationConfig.track3X.value && deviationConfig.track3Y.value) {
     // 当前位置3使用轨迹3的字段和时间
     xField = deviationConfig.track3X.value;
     yField = deviationConfig.track3Y.value;
@@ -1760,7 +1761,7 @@ const handleMouseOver = function(params) {
     currentTime = plotData.value.timestamp[dataIndexModifed];
     originX = plotData.value[deviationConfig.track3X.value][dataIndexModifed];
     originY = plotData.value[deviationConfig.track3Y.value][dataIndexModifed];
-  } else if (seriesName === '当前位置4' && deviationConfig.track4X.value && deviationConfig.track4Y.value) {
+  } else if (seriesName === t('flow.currentPosN', { n: 4 }) && deviationConfig.track4X.value && deviationConfig.track4Y.value) {
     // 当前位置4使用轨迹4的字段和时间
     xField = deviationConfig.track4X.value;
     yField = deviationConfig.track4Y.value;

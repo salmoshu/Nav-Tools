@@ -2,6 +2,7 @@ import { computed, ref, toRef, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useApplicationSelector } from '@/composables/useApplicationSelector'
 import { useNmea } from '@/composables/gnss/useNmea'
+import { useFileTimeline, type FileTimelineMode } from '@/composables/useFileTimeline'
 import { useFlow } from '@/composables/flow/useFlow'
 import { useConsole } from '@/composables/flow/useConsole'
 import { useMotorCmd } from '@/composables/motor/useMotorCmd'
@@ -27,12 +28,20 @@ import emitter from '@/hooks/useMitt'
 import { useDataSourceManager } from '@/composables/useDataSourceManager'
 import { normalizeRtspUrl, type TextDataParser } from '@/core/data/DataSourceStorage'
 import { FilePlaybackService } from '@/core/file/FilePlaybackService'
+import { TextFileStreamService } from '@/core/file/TextFileStreamService'
 import { LogRecordingService } from '@/core/file/LogRecordingService'
+import { t } from '@/i18n'
 
 const {
   processRawData: addGnssData,
   clearData: clearGnssData,
   clearBuffer: clearGnssBuffer,
+  beginBulkImport: beginGnssBulkImport,
+  endBulkImport: endGnssBulkImport,
+  rebuildMapTrackFromPositionHistory,
+  rebuildDeviationFromPositionHistory,
+  statusEpochHistory,
+  applyTimelineEpoch,
 } = useNmea()
 const {
   addRawData: addFlowData,
@@ -52,6 +61,8 @@ const ipc = createBrowserIpcTransport()
 const serialService = new SerialService(ipc)
 const networkService = new NetworkService(ipc)
 const filePlaybackService = new FilePlaybackService(ipc)
+const textFileStreamService = new TextFileStreamService(ipc)
+const fileTimeline = useFileTimeline()
 const logRecordingService = new LogRecordingService(ipc)
 const dataRouter = new IncomingDataRouter({
   appendGnss: addGnssData,
@@ -73,6 +84,14 @@ const loadTextIntoActiveWindows = (content: string) => {
   }
   if (isWindowActive('raw-messages')) {
     initFlowConsole(content)
+    handled = true
+  }
+  // GNSS 应用激活时，加载的文本文件（如 NMEA）也要进入 GNSS 解析管线，
+  // 否则轨迹图会空白、只有 raw-messages 面板能看到导入内容。
+  // 与重播路径保持一致：先清空旧轨迹再解析，保证导入数据干净可见。
+  if (activeDataModes.value.includes('gnss')) {
+    clearGnssData()
+    addGnssData(content)
     handled = true
   }
   return handled
@@ -97,6 +116,8 @@ const fileTimeTag = toRef(dataSourceSettings.file, 'timeTag')
 const fileReplaySpeed = toRef(dataSourceSettings.file, 'replaySpeed')
 const fileStartOffset = toRef(dataSourceSettings.file, 'startOffset')
 const filePositionBytes = toRef(dataSourceSettings.file, 'filePositionBytes')
+const selectedFile = ref<File | null>(null)
+const selectedFilePath = ref('')
 const cameraStreamUrl = toRef(dataSourceSettings.camera, 'url')
 const serialPorts = ref<string[]>([])
 const logRecordingActive = ref(false)
@@ -116,6 +137,13 @@ const globalDevice = ref<{
   port?: number
   connected: null | boolean
 }>({ connected: null })
+
+watch(fileReplaySpeed, (speed) => fileTimeline.setPlaybackSpeed(speed))
+watch(fileTimeline.playing, (playing) => {
+  if (globalDevice.value.type === 'file' && fileTimeline.active.value) {
+    globalDevice.value.connected = playing
+  }
+})
 
 const deviceConnected = computed(() => {
   return globalDevice.value.connected === true
@@ -206,7 +234,7 @@ serialService.onDisconnected((data) => {
     serialPorts.value = ports
   })
   ElMessage({
-    message: `串口${data.path}已断开连接`,
+    message: t('data.serialDisconnected', { path: data.path }),
     type: 'warning',
     placement: 'bottom-right',
     offset: 50,
@@ -225,12 +253,12 @@ networkService.onDisconnected((connection) => {
 
   globalDevice.value.connected = false
   activeDataTransport.clear('network')
-  ElMessage({
-    message: connection.reason || `${connection.protocol.toUpperCase()} 网络连接已断开`,
-    type: 'warning',
-    placement: 'bottom-right',
-    offset: 50,
-  })
+    ElMessage({
+      message: connection.reason || t('data.netDisconnected', { protocol: connection.protocol.toUpperCase() }),
+      type: 'warning',
+      placement: 'bottom-right',
+      offset: 50,
+    })
 })
 
 filePlaybackService.onStatus((status) => {
@@ -244,7 +272,7 @@ filePlaybackService.onStatus((status) => {
     clearFlowData()
     clearFlowConsole()
     ElMessage({
-      message: '时间戳播放已开始',
+      message: t('data.tsPlayStarted'),
       type: 'success',
       placement: 'bottom-right',
       offset: 50,
@@ -255,14 +283,14 @@ filePlaybackService.onStatus((status) => {
   globalDevice.value.connected = false
   if (status.state === 'completed') {
     ElMessage({
-      message: '时间戳播放已完成',
+      message: t('data.tsPlayCompleted'),
       type: 'success',
       placement: 'bottom-right',
       offset: 50,
     })
   } else if (status.state === 'error') {
     ElMessage({
-      message: `时间戳播放失败: ${status.message ?? '未知错误'}`,
+      message: t('data.tsPlayFailed', { message: status.message ?? t('data.unknownError') }),
       type: 'error',
       placement: 'bottom-right',
       offset: 50,
@@ -276,21 +304,21 @@ logRecordingService.onStatus((status) => {
 
   if (status.state === 'recording') {
     ElMessage({
-      message: `开始录制日志: ${status.path}`,
+      message: t('data.logRecordStart', { path: status.path }),
       type: 'success',
       placement: 'bottom-right',
       offset: 50,
     })
   } else if (status.state === 'stopped') {
     ElMessage({
-      message: `日志已保存: ${status.path}`,
+      message: t('data.logSaved', { path: status.path }),
       type: 'success',
       placement: 'bottom-right',
       offset: 50,
     })
   } else {
     ElMessage({
-      message: `日志录制失败: ${status.message ?? '未知错误'}`,
+      message: t('data.logRecordFailed', { message: status.message ?? t('data.unknownError') }),
       type: 'error',
       placement: 'bottom-right',
       offset: 50,
@@ -307,7 +335,7 @@ async function toggleLogRecording(): Promise<void> {
     await logRecordingService.start()
   } catch (error) {
     ElMessage({
-      message: `日志录制操作失败: ${error instanceof Error ? error.message : String(error)}`,
+      message: t('data.logRecordOpFailed', { error: error instanceof Error ? error.message : String(error) }),
       type: 'error',
       placement: 'bottom-right',
       offset: 50,
@@ -315,7 +343,133 @@ async function toggleLogRecording(): Promise<void> {
   }
 }
 
+function yieldFileImport(): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, 0))
+}
+
+type GnssTimelineReader = (
+  onChunk: (chunk: string) => void,
+  onProgress: (progress: number) => void,
+) => Promise<void>
+
+async function loadGnssTimelineSource(
+  timelineMode: FileTimelineMode,
+  readSource: GnssTimelineReader,
+): Promise<void> {
+  const streamPlot = isWindowActive('plot')
+  const streamRaw = isWindowActive('raw-messages')
+  const routeAuxiliaryText = (text: string) => {
+    if (streamPlot) addFlowData(text)
+    if (streamRaw) addFlowConsole(text)
+  }
+  const appendChunk = (chunk: string) => {
+    if (!chunk) return
+    addGnssData(chunk)
+    routeAuxiliaryText(chunk)
+  }
+
+  fileTimeline.beginIndexing()
+  globalDevice.value.connected = false
+  clearGnssBuffer()
+  clearGnssData()
+  clearFlowData()
+  clearFlowConsole()
+  beginGnssBulkImport()
+
+  try {
+    await readSource(appendChunk, fileTimeline.updateIndexingProgress)
+    addGnssData('\n')
+    routeAuxiliaryText('\n')
+    rebuildMapTrackFromPositionHistory()
+    rebuildDeviationFromPositionHistory()
+  } finally {
+    endGnssBulkImport()
+  }
+
+  const attached = fileTimeline.attachTimeline(statusEpochHistory.value, {
+    mode: timelineMode,
+    speed: fileReplaySpeed.value,
+    startElapsedMilliseconds: timelineMode === 'replay' ? fileStartOffset.value * 1000 : 0,
+    applyEpoch: applyTimelineEpoch,
+  })
+  if (!attached) throw new Error(t('data.noGnssEpochs'))
+
+  ElMessage({
+    message: timelineMode === 'replay' ? t('data.tsPlayStarted') : t('data.dataLoadSuccess'),
+    type: 'success',
+    placement: 'bottom-right',
+    offset: 50,
+  })
+}
+
+async function loadGnssTimelineFile(file: File, timelineMode: FileTimelineMode): Promise<void> {
+  await loadGnssTimelineSource(timelineMode, async (onChunk, onProgress) => {
+    const decoder = new TextDecoder()
+    let processedBytes = 0
+    let bytesSinceYield = 0
+
+    if (typeof file.stream === 'function') {
+      const reader = file.stream().getReader()
+      while (true) {
+        const result = await reader.read()
+        if (result.done) break
+        onChunk(decoder.decode(result.value, { stream: true }))
+        processedBytes += result.value.byteLength
+        bytesSinceYield += result.value.byteLength
+        onProgress(file.size <= 0 ? 0 : (processedBytes / file.size) * 100)
+        if (bytesSinceYield >= 2 * 1024 * 1024) {
+          bytesSinceYield = 0
+          await yieldFileImport()
+        }
+      }
+      onChunk(decoder.decode())
+      return
+    }
+
+    const content = await file.text()
+    const chunkSize = 32 * 1024
+    for (let offset = 0; offset < content.length; offset += chunkSize) {
+      const chunk = content.slice(offset, offset + chunkSize)
+      onChunk(chunk)
+      onProgress(content.length === 0 ? 0 : ((offset + chunk.length) / content.length) * 100)
+      bytesSinceYield += chunk.length
+      if (bytesSinceYield >= 2 * 1024 * 1024) {
+        bytesSinceYield = 0
+        await yieldFileImport()
+      }
+    }
+  })
+}
+
+async function loadGnssTimelinePath(path: string, timelineMode: FileTimelineMode): Promise<void> {
+  await loadGnssTimelineSource(timelineMode, (onChunk, onProgress) =>
+    textFileStreamService.read(path, { onChunk, onProgress }),
+  )
+}
+
 function startTimestampPlayback(path: string): void {
+  if (
+    selectedFile.value &&
+    selectedFilePath.value === path &&
+    activeDataModes.value.includes('gnss')
+  ) {
+    void loadGnssTimelineFile(selectedFile.value, 'replay').catch((error) => {
+      fileTimeline.clearTimeline()
+      clearGnssData()
+      globalDevice.value.connected = false
+      ElMessage({
+        message: t('data.tsPlayFailed', {
+          message: error instanceof Error ? error.message : String(error),
+        }),
+        type: 'error',
+        placement: 'bottom-right',
+        offset: 50,
+      })
+    })
+    return
+  }
+
+  fileTimeline.clearTimeline()
   clearGnssBuffer()
   clearGnssData()
   clearFlowData()
@@ -332,7 +486,7 @@ function startTimestampPlayback(path: string): void {
         globalDevice.value.connected = false
       }
       ElMessage({
-        message: `时间戳播放失败: ${error instanceof Error ? error.message : String(error)}`,
+        message: t('data.tsPlayFailed', { message: error instanceof Error ? error.message : String(error) }),
         type: 'error',
         placement: 'bottom-right',
         offset: 50,
@@ -399,9 +553,9 @@ export function useDevice() {
   const dataBits = ['5', '6', '7', '8']
   const stopBits = ['1', '1.5', '2']
   const parities = [
-    { label: '无', value: 'none' },
-    { label: '奇校验', value: 'odd' },
-    { label: '偶校验', value: 'even' },
+    { label: t('data.parityNone'), value: 'none' },
+    { label: t('data.parityOdd'), value: 'odd' },
+    { label: t('data.parityEven'), value: 'even' },
   ]
 
   // 仅响应操作系统文件拖入；vuedraggable 等内部拖拽的 types 不含 Files，
@@ -460,19 +614,40 @@ export function useDevice() {
             file.name.toLowerCase().endsWith('.dat')
           ) {
             // 处理文本文件
+            const droppedPath = window.electronAPI?.getPathForFile(file) || file.name
+            selectedFile.value = file
+            selectedFilePath.value = droppedPath
+            filePath.value = droppedPath
+            globalDevice.value = {
+              type: 'file',
+              path: droppedPath,
+              connected: false,
+            }
+            saveDataSourceSettings()
+
+            if (activeDataModes.value.includes('gnss')) {
+              await filePlaybackService.stop()
+              await loadGnssTimelineFile(file, 'loaded')
+              break
+            }
+
             await handleTextFile(file)
           } else {
             // 其他文件类型
             ElMessage({
-              message: `不支持的文件类型: ${file.name}`,
+              message: t('data.fileTypeUnsupported', { name: file.name }),
               type: 'warning',
               placement: 'bottom-right',
               offset: 50,
             })
           }
         } catch (error) {
+          if (activeDataModes.value.includes('gnss')) {
+            fileTimeline.clearTimeline()
+            clearGnssData()
+          }
           ElMessage({
-            message: `处理文件 ${file.name} 失败: ${error}`,
+            message: t('data.fileProcessFailed', { name: file.name, error }),
             type: 'error',
             placement: 'bottom-right',
             offset: 50,
@@ -493,7 +668,7 @@ export function useDevice() {
 
           if (loadTextIntoActiveWindows(content)) {
             ElMessage({
-              message: `成功导入文件: ${file.name}`,
+              message: t('data.fileImportSuccess', { name: file.name }),
               type: 'success',
               placement: 'bottom-right',
               offset: 50,
@@ -504,7 +679,7 @@ export function useDevice() {
           resolve()
         } catch (error) {
           ElMessage({
-            message: `读取文本文件失败: ${file.name}: ${error}`,
+            message: t('data.textFileReadFailed', { name: file.name, error }),
             type: 'error',
             placement: 'bottom-right',
             offset: 50,
@@ -513,7 +688,7 @@ export function useDevice() {
         }
       }
 
-      reader.onerror = () => reject(new Error('读取文件失败'))
+      reader.onerror = () => reject(new Error(t('data.fileReadFailed')))
       reader.readAsText(file)
     })
   }
@@ -558,7 +733,7 @@ export function useDevice() {
         console.error('自动检索串口设备失败:', error)
         if (silent !== true) {
           ElMessage({
-            message: '自动检索串口设备失败',
+            message: t('data.serialAutodetectFailed'),
             type: 'error',
             placement: 'bottom-right',
             offset: 50,
@@ -591,6 +766,7 @@ export function useDevice() {
     }
 
     // 设置全局设备信息
+    fileTimeline.clearTimeline()
     globalDevice.value = {
       type: 'serial',
       path: port,
@@ -630,6 +806,7 @@ export function useDevice() {
       return ''
     }
 
+    fileTimeline.clearTimeline()
     globalDevice.value = {
       type: 'network',
       path: `${options.protocol}://${options.host}:${options.port}`,
@@ -661,6 +838,7 @@ export function useDevice() {
       if (file) {
         // Electron 32+ 通过 preload 的 webUtils 获取文件系统路径。
         filePath.value = window.electronAPI?.getPathForFile(file) || file.name
+        selectedFilePath.value = filePath.value
 
         // 在Electron环境中，可以考虑存储文件对象引用，以便后续读取
         if (file instanceof File) {
@@ -678,15 +856,13 @@ export function useDevice() {
   }
 
   // 添加一个响应式变量来存储选择的文件对象
-  const selectedFile = ref<File | null>(null)
-
   // 重构handleFileSubmit函数，负责读取文件内容并初始化数据
   const handleFileSubmit = (): string => {
     const fileCmd = filePath.value.trim()
 
     if (!fileCmd) {
       ElMessage({
-        message: `请先选择文件`,
+        message: t('data.selectFileFirst'),
         type: 'error',
         placement: 'bottom-right',
         offset: 50,
@@ -709,15 +885,48 @@ export function useDevice() {
 
     void filePlaybackService.stop()
 
+    if (activeDataModes.value.includes('gnss')) {
+      const loadTimeline = selectedFile.value && selectedFilePath.value === fileCmd
+        ? loadGnssTimelineFile(selectedFile.value, 'loaded')
+        : window.ipcRenderer
+          ? loadGnssTimelinePath(fileCmd, 'loaded')
+          : null
+
+      if (!loadTimeline) {
+        ElMessage({
+          message: t('data.reselectFile'),
+          type: 'warning',
+          placement: 'bottom-right',
+          offset: 50,
+        })
+        return fileCmd
+      }
+
+      void loadTimeline.catch((error) => {
+        fileTimeline.clearTimeline()
+        clearGnssData()
+        ElMessage({
+          message: t('data.dataLoadFailed', {
+            error: error instanceof Error ? error.message : String(error),
+          }),
+          type: 'error',
+          placement: 'bottom-right',
+          offset: 50,
+        })
+      })
+      return fileCmd
+    }
+
     // 如果有文件对象引用，直接使用它读取内容
     if (selectedFile.value) {
+      fileTimeline.clearTimeline()
       const reader = new FileReader()
       reader.onload = (e) => {
         const content = e.target?.result as string
         try {
           if (loadTextIntoActiveWindows(content)) {
             ElMessage({
-              message: `数据加载成功`,
+              message: t('data.dataLoadSuccess'),
               type: 'success',
               placement: 'bottom-right',
               offset: 50,
@@ -725,7 +934,7 @@ export function useDevice() {
           }
         } catch (error) {
           ElMessage({
-            message: `数据加载失败: ${error}`,
+            message: t('data.dataLoadFailed', { error }),
             type: 'error',
             placement: 'bottom-right',
             offset: 50,
@@ -735,7 +944,7 @@ export function useDevice() {
 
       reader.onerror = () => {
         ElMessage({
-          message: `文件读取失败`,
+          message: t('data.fileReadError'),
           type: 'error',
           placement: 'bottom-right',
           offset: 50,
@@ -745,12 +954,12 @@ export function useDevice() {
       reader.readAsText(selectedFile.value)
     } else {
       // 如果没有文件对象，显示提示信息
-      ElMessage({
-        message: `请重新选择文件以加载数据`,
-        type: 'warning',
-        placement: 'bottom-right',
-        offset: 50,
-      })
+        ElMessage({
+          message: t('data.reselectFile'),
+          type: 'warning',
+          placement: 'bottom-right',
+          offset: 50,
+        })
     }
 
     return fileCmd
@@ -760,7 +969,7 @@ export function useDevice() {
     const url = normalizeRtspUrl(cameraStreamUrl.value)
     if (!url) {
       ElMessage({
-        message: '请输入以 rtsp:// 开头的有效视频地址',
+        message: t('data.rtspUrlInvalid'),
         type: 'warning',
         placement: 'bottom-right',
         offset: 50,
@@ -768,10 +977,11 @@ export function useDevice() {
       return ''
     }
 
+    fileTimeline.clearTimeline()
     cameraStreamUrl.value = url
     saveDataSourceSettings()
     ElMessage({
-      message: 'Camera RTSP 数据源已保存',
+      message: t('data.cameraRtspSaved'),
       type: 'success',
       placement: 'bottom-right',
       offset: 50,
@@ -791,7 +1001,7 @@ export function useDevice() {
             activeDataTransport.activate('serial')
 
             ElMessage({
-              message: `串口${globalDevice.value.path}打开成功`,
+              message: t('data.serialOpenSuccess', { path: globalDevice.value.path }),
               type: 'success',
               placement: 'bottom-right',
               offset: 50,
@@ -813,9 +1023,9 @@ export function useDevice() {
           .then(() => {
             globalDevice.value.connected = true
             activeDataTransport.activate('network')
-            const action = options.protocol === 'tcp' ? '连接' : '监听'
+            const action = options.protocol === 'tcp' ? t('data.netConnectSuccess') : t('data.netListenSuccess')
             ElMessage({
-              message: `${options.protocol.toUpperCase()} ${options.host}:${options.port} ${action}成功`,
+              message: `${options.protocol.toUpperCase()} ${options.host}:${options.port} ${action}`,
               type: 'success',
               placement: 'bottom-right',
               offset: 50,
@@ -832,10 +1042,10 @@ export function useDevice() {
           })
       } else if (
         globalDevice.value.type === 'file' &&
-        globalDevice.value.path &&
-        fileTimeTag.value
+        globalDevice.value.path
       ) {
-        startTimestampPlayback(globalDevice.value.path)
+        if (fileTimeline.active.value) fileTimeline.play()
+        else if (fileTimeTag.value) startTimestampPlayback(globalDevice.value.path)
       }
     }
   }
@@ -855,6 +1065,7 @@ export function useDevice() {
           globalDevice.value = { connected: null }
         })
       } else if (globalDevice.value.type === 'file') {
+        fileTimeline.clearTimeline()
         filePlaybackService.stop().then(() => {
           globalDevice.value = { connected: null }
         })
@@ -880,6 +1091,7 @@ export function useDevice() {
         })
       } else if (globalDevice.value.type === 'file') {
         globalDevice.value.connected = false
+        fileTimeline.pause()
         filePlaybackService.stop().then(() => {
           if (globalDevice.value.type === 'file') globalDevice.value.connected = false
         })
@@ -916,7 +1128,7 @@ export function useDevice() {
       showInputDialog.value = false
     } else {
       ElMessage({
-        message: '请输入指令',
+        message: t('data.enterCommand'),
         type: 'warning',
         placement: 'bottom-right',
         offset: 50,

@@ -6,9 +6,9 @@
       v-bind="cardProps"
     />
     <div v-else-if="loadError" class="load-error">
-      <p class="message">组件加载失败</p>
+      <p class="message">{{ t('app.cardWindow.loadFailed') }}</p>
       <p class="detail">{{ loadError }}</p>
-      <button class="close-btn" @click="closeWindow">关闭窗口</button>
+      <button class="close-btn" @click="closeWindow">{{ t('app.cardWindow.close') }}</button>
     </div>
   </div>
 </template>
@@ -17,6 +17,7 @@
 import { markRaw, onMounted, onUnmounted, ref } from 'vue'
 import type { Component } from 'vue'
 import { routeDataToWindow } from '@/hooks/useDevice'
+import { t } from '@/i18n'
 
 // 构建后动态 import 的路径会被打包成哈希文件名，
 // 因此用 import.meta.glob 预扫描所有组件，运行时按键查找
@@ -35,7 +36,7 @@ const loadError = ref('')
 onMounted(async () => {
   const hash = window.location.hash.slice(1) // 移除 #
   if (!hash.startsWith('card/')) {
-    loadError.value = '无效的卡片窗口地址'
+    loadError.value = t('app.cardWindow.invalidAddress')
     return
   }
 
@@ -53,7 +54,7 @@ onMounted(async () => {
       )?.[1]
 
     if (!loader) {
-      loadError.value = `未找到组件: ${componentName}`
+      loadError.value = t('app.cardWindow.componentNotFound', { v: componentName })
       return
     }
 

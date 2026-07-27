@@ -1,7 +1,7 @@
 <template>
   <el-dialog
     :model-value="open"
-    :title="application ? '编辑应用' : '新建应用'"
+    :title="application ? t('app.editor.editTitle') : t('app.editor.newTitle')"
     class="app-dialog application-editor-dialog"
     width="min(640px, calc(100vw - 32px))"
     :close-on-click-modal="true"
@@ -12,42 +12,42 @@
     <template #header>
       <AppDialogTitle
         :icon="EditPen"
-        :title="application ? '编辑应用' : '新建应用'"
+        :title="application ? t('app.editor.editTitle') : t('app.editor.newTitle')"
         :description="
-          application ? '调整应用外观和包含窗口' : '创建一组可快速打开的窗口布局'
+          application ? t('app.editor.editDesc') : t('app.editor.newDesc')
         "
       />
     </template>
 
     <el-form ref="formRef" :model="form" :rules="rules" label-position="top" @submit.prevent>
-      <el-form-item label="名称" prop="name">
+      <el-form-item :label="t('app.editor.name')" prop="name">
         <el-input
           v-model="form.name"
-          placeholder="例如：巡检工作台"
+          :placeholder="t('app.editor.namePlaceholder')"
           maxlength="30"
           show-word-limit
         />
       </el-form-item>
 
-      <el-form-item label="描述" prop="description">
+      <el-form-item :label="t('app.editor.description')" prop="description">
         <el-input
           v-model="form.description"
           type="textarea"
           :rows="2"
-          placeholder="这组窗口用来做什么"
+          :placeholder="t('app.editor.descriptionPlaceholder')"
           maxlength="80"
         />
       </el-form-item>
 
-      <el-form-item label="图标" prop="icon">
-        <div class="icon-options" role="radiogroup" aria-label="应用图标">
+      <el-form-item :label="t('app.editor.icon')" prop="icon">
+        <div class="icon-options" role="radiogroup" :aria-label="t('app.editor.iconLabel')">
           <button
             v-for="option in iconOptions"
             :key="option.value"
             type="button"
             class="icon-option"
             :class="{ selected: form.icon === option.value }"
-            :title="option.label"
+            :title="t(option.label)"
             :aria-pressed="form.icon === option.value"
             @click="form.icon = option.value"
           >
@@ -58,7 +58,7 @@
         </div>
       </el-form-item>
 
-      <el-form-item label="主题色" prop="accent">
+      <el-form-item :label="t('app.editor.accent')" prop="accent">
         <el-color-picker
           v-model="form.accent"
           :predefine="accentPresets"
@@ -67,7 +67,7 @@
         />
       </el-form-item>
 
-      <el-form-item label="包含窗口（至少 1 个）" prop="windowIds">
+      <el-form-item :label="t('app.editor.windows')" prop="windowIds">
         <el-select
           v-if="windowGroups.length > 0"
           v-model="form.windowIds"
@@ -76,7 +76,7 @@
           :collapse-tags-tooltip="true"
           :max-collapse-tags="4"
           :teleported="false"
-          placeholder="选择要包含的窗口"
+          :placeholder="t('app.editor.windowsPlaceholder')"
           class="window-select"
           popper-class="application-window-popper"
         >
@@ -89,7 +89,7 @@
               v-for="windowDefinition in group.windows"
               :key="windowDefinition.id"
               :value="windowDefinition.id"
-              :label="windowDefinition.title"
+              :label="t(windowDefinition.title)"
             >
               <div class="window-option">
                 <span
@@ -101,8 +101,8 @@
                   </el-icon>
                 </span>
                 <span class="window-option-copy">
-                  <span class="window-option-title">{{ windowDefinition.title }}</span>
-                  <span class="window-option-subtitle">{{ windowDefinition.description }}</span>
+                  <span class="window-option-title">{{ t(windowDefinition.title) }}</span>
+                  <span class="window-option-subtitle">{{ t(windowDefinition.description) }}</span>
                 </span>
                 <span class="window-option-mode">{{
                   formatCatalogGroup(windowDefinition.catalogGroup)
@@ -113,7 +113,7 @@
         </el-select>
         <el-alert
           v-else
-          title="没有可用窗口，请检查窗口目录配置"
+          :title="t('app.editor.noWindows')"
           type="error"
           :closable="false"
           show-icon
@@ -122,9 +122,9 @@
     </el-form>
 
     <template #footer>
-      <el-button @click="handleCancel">取消</el-button>
+      <el-button @click="handleCancel">{{ t('app.cancel') }}</el-button>
       <el-button type="primary" :icon="Check" @click="handleSave">
-        {{ application ? '保存修改' : '创建应用' }}
+        {{ application ? t('app.editor.saveEdit') : t('app.editor.createApp') }}
       </el-button>
     </template>
   </el-dialog>
@@ -139,6 +139,7 @@ import type { UserApplication, WindowDefinition } from '@/settings/config'
 import { useApplicationSelector } from '@/composables/useApplicationSelector'
 import { applicationIconComponents, applicationIconOptions } from '@/settings/applicationIcons'
 import { getPanelIconComponent } from '@/settings/panelIcons'
+import { t } from '@/i18n'
 
 type ApplicationForm = Omit<UserApplication, 'id'> & { id?: string }
 
@@ -177,7 +178,7 @@ const accentPresets = [
 ]
 
 const catalogGroupNames: Record<string, string> = {
-  general: '通用',
+  general: 'app.editor.catalogGeneral',
   flow: 'Flow',
   gnss: 'GNSS',
   motor: 'Motor',
@@ -185,8 +186,7 @@ const catalogGroupNames: Record<string, string> = {
 }
 
 const formatCatalogGroup = (catalogGroup: string) =>
-  catalogGroupNames[catalogGroup] ??
-  catalogGroup.charAt(0).toUpperCase() + catalogGroup.slice(1)
+  t(catalogGroupNames[catalogGroup] ?? catalogGroup.charAt(0).toUpperCase() + catalogGroup.slice(1))
 
 const windowGroups = computed(() => {
   const groups = new Map<string, WindowDefinition[]>()
@@ -200,14 +200,14 @@ const windowGroups = computed(() => {
 
 const validateWindowIds: FormItemRule['validator'] = (_rule, value, callback) => {
   if (!Array.isArray(value) || value.length === 0) {
-    callback(new Error('请至少选择 1 个窗口'))
+    callback(new Error(t('app.editor.windowRequired')))
   } else {
     callback()
   }
 }
 
 const rules: FormRules<ApplicationForm> = {
-  name: [{ required: true, message: '请输入应用名称', trigger: 'blur' }],
+  name: [{ required: true, message: t('app.editor.nameRequired'), trigger: 'blur' }],
   windowIds: [{ validator: validateWindowIds, trigger: 'change' }],
 }
 

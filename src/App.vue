@@ -1,11 +1,19 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { ElConfigProvider } from 'element-plus'
+import zhCn from 'element-plus/es/locale/lang/zh-cn'
+import en from 'element-plus/es/locale/lang/en'
 import AppHeader from './components/AppHeader.vue'
 import WindowResizeHandles from './components/WindowResizeHandles.vue'
 import Dashboard from './components/Dashboard.vue'
 import CardWindow from './components/CardWindow.vue'
 import emitter from '@/hooks/useMitt'
 import { useApplicationSelector } from '@/composables/useApplicationSelector'
+import { useLocale } from '@/composables/useLocale'
+import { t } from '@/i18n'
+
+const { locale } = useLocale()
+const epLocale = computed(() => (locale.value === 'en-US' ? en : zhCn))
 
 interface FullscreenPanelContext {
   title: string
@@ -27,14 +35,16 @@ const contextTitle = computed(() => {
   if (isCardWindow.value) {
     try {
       const payload = JSON.parse(decodeURIComponent(window.location.hash.slice('#card/'.length)))
-      return typeof payload.title === 'string' ? payload.title : 'Panel'
+      return typeof payload.title === 'string' ? payload.title : panelTitleFallback.value
     } catch {
-      return 'Panel'
+      return panelTitleFallback.value
     }
   }
 
-  return currentApplication.value?.name
+    return currentApplication.value?.name
 })
+
+const panelTitleFallback = computed(() => t('app.panel'))
 
 const openApplicationSelector = () => emitter.emit('open-application-selector')
 const exitPanelFullscreen = () => dashboardRef.value?.exitFullScreen()
@@ -44,30 +54,32 @@ const handleFullscreenPanelChange = (panel?: FullscreenPanelContext) => {
 </script>
 
 <template>
-  <div class="app-shell">
-    <WindowResizeHandles v-if="!maximized" />
-    <AppHeader
-      :brand-title="isCardWindow ? contextTitle : 'Nav-Tools'"
-      :context-title="isCardWindow ? undefined : contextTitle"
-      :context-panel-title="fullscreenPanel?.title"
-      :context-icon-action="fullscreenPanel?.action"
-      :show-application-selector="!isCardWindow"
-      :show-detached-controls="isCardWindow"
-      :show-panel-fullscreen-exit="Boolean(fullscreenPanel)"
-      @open-application-selector="openApplicationSelector"
-      @exit-panel-fullscreen="exitPanelFullscreen"
-      @maximized-change="maximized = $event"
-    />
-    <main class="app-content">
-      <CardWindow v-if="isCardWindow" />
-      <Dashboard
-        v-else
-        ref="dashboardRef"
-        :initial-application-id="applicationId"
-        @fullscreen-panel-change="handleFullscreenPanelChange"
+  <el-config-provider :locale="epLocale">
+    <div class="app-shell">
+      <WindowResizeHandles v-if="!maximized" />
+      <AppHeader
+        :brand-title="isCardWindow ? contextTitle : 'Nav-Tools'"
+        :context-title="isCardWindow ? undefined : contextTitle"
+        :context-panel-title="fullscreenPanel?.title"
+        :context-icon-action="fullscreenPanel?.action"
+        :show-application-selector="!isCardWindow"
+        :show-detached-controls="isCardWindow"
+        :show-panel-fullscreen-exit="Boolean(fullscreenPanel)"
+        @open-application-selector="openApplicationSelector"
+        @exit-panel-fullscreen="exitPanelFullscreen"
+        @maximized-change="maximized = $event"
       />
-    </main>
-  </div>
+      <main class="app-content">
+        <CardWindow v-if="isCardWindow" />
+        <Dashboard
+          v-else
+          ref="dashboardRef"
+          :initial-application-id="applicationId"
+          @fullscreen-panel-change="handleFullscreenPanelChange"
+        />
+      </main>
+    </div>
+  </el-config-provider>
 </template>
 
 <style>

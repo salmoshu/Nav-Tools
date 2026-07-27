@@ -1,4 +1,5 @@
 import { ref, reactive, computed } from 'vue'
+import { t } from '@/i18n'
 
 export type MotorDataType = 'int16' | 'float32'
 export type MotorEndianness = 'big' | 'little'
@@ -596,28 +597,28 @@ export function createMotorCmdManager() {
     const issues: string[] = []
     const header = sanitizeHex(configForm.header)
     if (!header || header !== configForm.header.toUpperCase() || header.length % 2 !== 0) {
-      issues.push('报头必须是完整的十六进制字节')
+      issues.push(t('motor.issueHeaderBytes'))
     }
     if (!Number.isInteger(configForm.checksum.start_index) || configForm.checksum.start_index < 0) {
-      issues.push('校验起始字节必须是非负整数')
+      issues.push(t('motor.issueChecksumStartIndex'))
     }
 
     const names = new Set<string>()
     const readMappings = new Set<string>()
     const inspect = (cmd: Command, kind: MotorCommandKind, index: number) => {
-      const label = `${kind === 'read' ? '读' : '写'}指令 ${index + 1}`
-      if (!cmd.name.trim()) issues.push(`${label}缺少命令名称`)
-      else if (names.has(cmd.name)) issues.push(`命令名称“${cmd.name}”重复`)
+      const label = t(kind === 'read' ? 'motor.readCommandLabel' : 'motor.writeCommandLabel', { n: index + 1 })
+      if (!cmd.name.trim()) issues.push(t('motor.issueNameMissing', { label }))
+      else if (names.has(cmd.name)) issues.push(t('motor.issueNameDuplicate', { name: cmd.name }))
       else names.add(cmd.name)
 
       const addressLength = (configForm.addressLength ?? 1) * 2
       if (sanitizeHex(cmd.address).length !== addressLength) {
-        issues.push(`${label}的寄存器地址应为 ${addressLength} 位十六进制数`)
+        issues.push(t('motor.issueAddressLength', { label, count: addressLength }))
       }
       if (configForm.includeFunction) {
         const functionLength = (configForm.functionLength ?? 1) * 2
         if (sanitizeHex(cmd.functionCode).length !== functionLength) {
-          issues.push(`${label}的功能码应为 ${functionLength} 位十六进制数`)
+          issues.push(t('motor.issueFunctionLength', { label, count: functionLength }))
         }
       }
 
@@ -629,7 +630,7 @@ export function createMotorCmdManager() {
             : '',
         ].join(':')
         if (readMappings.has(mappingKey)) {
-          issues.push(`${label}与其他读指令使用了相同的地址和功能码，接收数据时无法区分`)
+          issues.push(t('motor.issueDuplicateMapping', { label }))
         } else {
           readMappings.add(mappingKey)
         }
@@ -643,24 +644,24 @@ export function createMotorCmdManager() {
         cmd.length % bytesPerValue !== 0 ||
         (kind === 'write' && cmd.length === 0)
       ) {
-        issues.push(`${label}的字节个数必须是 ${bytesPerValue} 的正整数倍`)
+        issues.push(t('motor.issueLengthMultiple', { label, count: bytesPerValue }))
       }
       if (kind === 'write' && sanitizeHex(cmd.data).length !== cmd.length * 2) {
-        issues.push(`${label}的数据内容与字节个数不一致`)
+        issues.push(t('motor.issueDataMismatch', { label }))
       }
       if (
         configForm.includeRegisterCount &&
         cmd.includeRegisterCount !== false &&
         cmd.registerCount !== registerCountFromLength(cmd.length)
       ) {
-        issues.push(`${label}的寄存器个数应与字节个数保持 1:2`)
+        issues.push(t('motor.issueRegisterRatio', { label }))
       }
       if (
         kind === 'read' &&
         (cmd as ReadCommand).frequency !== null &&
         (!Number.isFinite((cmd as ReadCommand).frequency) || (cmd as ReadCommand).frequency! <= 0)
       ) {
-        issues.push(`${label}的发送频率必须留空或大于 0`)
+        issues.push(t('motor.issueFrequency', { label }))
       }
     }
 

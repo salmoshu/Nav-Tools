@@ -2,6 +2,7 @@ import { getWindowsByIds, type ButtonItem } from '@/settings/config'
 import { toolBarIcon } from '@/settings/icons'
 import emitter from '@/hooks/useMitt'
 import { ElMessage } from 'element-plus'
+import { t } from '@/i18n'
 
 const getWindowButtonList = (windowIds: readonly string[]): ButtonItem[] =>
   getWindowsByIds(windowIds).map(windowDefinition => ({
@@ -85,7 +86,7 @@ const handleIo = (action: string) => {
   } else if (action === 'log') {
     emitter.emit('log-event')
     ElMessage({
-      message: 'Log功能暂未实现',
+      message: t('data.logNotImplemented'),
       type: 'info',
       placement: 'bottom-right',
       offset: 50,

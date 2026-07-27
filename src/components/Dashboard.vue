@@ -67,14 +67,14 @@
                           :is="getPanelIconComponent(getWindowById(item.windowId)?.action)"
                         />
                       </el-icon>
-                      <span>{{ item.titleName }}</span>
+                      <span>{{ t(item.titleName) }}</span>
                     </span>
                     <div class="card-actions">
                       <el-button
                         type="text"
                         @click="detachItem(item)"
                         class="detach-btn"
-                        title="分离到独立窗口"
+                        :title="t('app.dashboard.detach')"
                       >
                         <el-icon><Share /></el-icon>
                       </el-button>
@@ -82,7 +82,7 @@
                         type="text"
                         @click="toggleCardFullScreen(item.i)"
                         class="fullscreen-btn"
-                        title="全屏展示"
+                        :title="t('app.dashboard.fullscreen')"
                       >
                         <el-icon><FullScreen /></el-icon>
                       </el-button>
@@ -90,7 +90,7 @@
                         type="text"
                         @click="removeItem(item.i)"
                         class="remove-btn"
-                        title="移除卡片"
+                        :title="t('app.dashboard.removeCard')"
                       >
                         <el-icon><Close /></el-icon>
                       </el-button>
@@ -137,6 +137,7 @@ import { getPanelIconComponent } from '@/settings/panelIcons'
 import { useDevice } from '@/hooks/useDevice'
 import { useApplicationSelector } from '@/composables/useApplicationSelector'
 import { createBrowserIpcTransport } from '@/core/platform/IpcTransport'
+import { t } from '@/i18n'
 
 const props = defineProps<{
   initialApplicationId?: string
@@ -196,7 +197,7 @@ const openApplicationWindow = async (applicationId: string) => {
   })
   if (windowId === null) {
     ElMessage({
-      message: '无法打开应用窗口',
+      message: t('app.dashboard.openWindowFailed'),
       type: 'error',
       placement: 'bottom-right',
       offset: 50,
@@ -316,11 +317,11 @@ const toggleCardFullScreen = (itemId: string | null) => {
 
   fullScreenItem.value = itemId
   emit('fullscreen-panel-change', {
-    title: item.titleName,
+    title: t(item.titleName),
     action: getWindowById(item.windowId)?.action,
   })
   ElMessage({
-    message: '按 Esc 键或点击主标题栏按钮退出全屏',
+    message: t('app.dashboard.exitFullscreenHint'),
     type: 'success',
     duration: 1000,
     placement: 'bottom-right',
@@ -527,7 +528,7 @@ const detachItem = async (item: any) => {
     const cardData = {
       componentName: item.componentName,
       windowId: item.windowId,
-      title: item.titleName,
+      title: t(item.titleName),
       props: item.props,
       width,
       height,

@@ -38,6 +38,7 @@ pnpm-workspace.yaml
 # temp
 tempCodeRunnerFile*
 tmp
+*.tsbuildinfo
 
 # workbuddy
 .workbuddy/

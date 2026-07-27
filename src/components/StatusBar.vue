@@ -18,7 +18,7 @@
           </small>
         </span>
       </div>
-      <el-button type="text" @click="showStatusBar = false" class="remove-btn" title="移除卡片">
+      <el-button type="text" @click="showStatusBar = false" class="remove-btn" :title="t('app.statusbar.removeCard')">
         <el-icon><Close /></el-icon>
       </el-button>
     </div>
@@ -76,8 +76,8 @@
                     type="text"
                     size="small"
                     @click="deleteCustomStatus(element[0])"
-                    title="删除"
-                    class="delete-status-btn"
+                  :title="t('app.statusbar.delete')"
+                  class="delete-status-btn"
                   >
                     <el-icon><Delete /></el-icon>
                   </el-button>
@@ -89,8 +89,8 @@
       </draggable>
       <div v-if="!hasMonitorStatus" class="status-empty">
         <span class="status-empty-icon"><el-icon><DataAnalysis /></el-icon></span>
-        <strong>暂无状态数据</strong>
-        <small>连接数据源后，实时指标将在这里呈现</small>
+        <strong>{{ t('app.statusbar.emptyTitle') }}</strong>
+        <small>{{ t('app.statusbar.emptyHint') }}</small>
       </div>
       <div v-if="showComputedStatus">
         <div class="computed-section">
@@ -123,25 +123,25 @@
     :close-on-press-escape="true"
     @opened="createCodeEditor1"
     @close="resetDialog"
-    :title="isEditMode ? '编辑自定义属性' : '添加自定义属性'"
+    :title="isEditMode ? t('app.statusbar.editCustom') : t('app.statusbar.addCustom')"
   >
     <template #header>
       <AppDialogTitle
         :icon="isEditMode ? Edit : Plus"
-        :title="isEditMode ? '编辑自定义属性' : '添加自定义属性'"
-        description="从数据字段创建状态栏显示项"
+        :title="isEditMode ? t('app.statusbar.editCustom') : t('app.statusbar.addCustom')"
+        :description="t('app.statusbar.customDesc')"
       />
     </template>
 
     <!-- 可用字段列表 -->
     <div class="dialog-content">
       <div class="available-fields">
-        <div class="status-section-heading">
+          <div class="status-section-heading">
           <div>
-            <h4>可用字段</h4>
-            <p>点击字段即可快速填入名称</p>
+            <h4>{{ t('app.statusbar.availableFields') }}</h4>
+            <p>{{ t('app.statusbar.clickField') }}</p>
           </div>
-          <el-tag size="small" type="info">{{ availableFields.length }} 项</el-tag>
+          <el-tag size="small" type="info">{{ t('app.statusbar.fieldCount', { v: availableFields.length }) }}</el-tag>
         </div>
         <div v-if="availableFields.length > 0" class="fields-list">
           <div
@@ -155,7 +155,7 @@
         </div>
         <div v-else class="fields-empty">
           <el-icon><InfoFilled /></el-icon>
-          <span>连接数据源后，可在这里快速选择字段</span>
+          <span>{{ t('app.statusbar.fieldsEmpty') }}</span>
         </div>
       </div>
 
@@ -167,33 +167,33 @@
           label-position="top"
           @submit.prevent
         >
-          <el-form-item label="字段名" prop="fieldName" :disabled="isEditMode">
+          <el-form-item :label="t('app.statusbar.fieldName')" prop="fieldName" :disabled="isEditMode">
             <!-- 编辑模式 -->
             <el-input
               v-if="isEditMode"
               v-model="editStatusConfig.fieldName"
-              placeholder="选择或输入字段名"
+              :placeholder="t('app.statusbar.fieldNamePlaceholder')"
               required
             ></el-input>
             <!-- 新增模式 -->
             <el-input
               v-else
               v-model="newStatusConfig.fieldName"
-              placeholder="选择或输入字段名"
+              :placeholder="t('app.statusbar.fieldNamePlaceholder')"
               :disabled="availableFields.length === 0"
               required
             ></el-input>
           </el-form-item>
 
           <!-- 计算公式表单项 -->
-          <el-form-item label="计算公式" prop="code">
+          <el-form-item :label="t('app.statusbar.formula')" prop="code">
             <!-- 编辑模式 -->
             <el-input
               v-if="isEditMode"
               v-show="false"
               v-model="editStatusConfig.code"
               type="textarea"
-              placeholder="请在下方编辑公式"
+              :placeholder="t('app.statusbar.formulaPlaceholder')"
               :rows="1"
               readonly
               required
@@ -204,7 +204,7 @@
               v-show="false"
               v-model="newStatusConfig.code"
               type="textarea"
-              placeholder="请在下方编辑公式"
+              :placeholder="t('app.statusbar.formulaPlaceholder')"
               :rows="1"
               :disabled="availableFields.length === 0"
               readonly
@@ -214,12 +214,12 @@
               <div ref="editorRef" class="code-editor"></div>
             </div>
             <div class="code-hint">
-              说明：直接使用字段名访问数据（如camera_angle），支持常用数学函数或常量（如abs、sqrt、sin、cos、max、min、PI、E等）
+              {{ t('app.statusbar.formulaHint') }}
             </div>
           </el-form-item>
 
           <!-- 小数位数表单项 -->
-          <el-form-item label="小数位数" prop="decimalPlaces">
+          <el-form-item :label="t('app.statusbar.decimalPlaces')" prop="decimalPlaces">
             <!-- 编辑模式 -->
             <el-input-number
               v-if="isEditMode"
@@ -282,9 +282,9 @@
     <!-- 对话框底部的操作按钮 -->
     <template #footer>
       <span class="dialog-footer">
-        <el-button @click="resetDialog">取消</el-button>
+        <el-button @click="resetDialog">{{ t('app.cancel') }}</el-button>
         <el-button type="primary" @click="addNewStatus">
-          {{ isEditMode ? '保存修改' : '添加属性' }}
+          {{ isEditMode ? t('app.statusbar.saveEdit') : t('app.statusbar.addProp') }}
         </el-button>
       </span>
     </template>
@@ -312,6 +312,7 @@ import { useFlowStore } from '@/stores/flow'
 // 4. 导入需要的图标
 import { Plus, Close, Delete, Edit, InfoFilled, DataAnalysis, Rank } from '@element-plus/icons-vue'
 import AppDialogTitle from '@/components/AppDialogTitle.vue'
+import { t } from '@/i18n'
 import {
   ElMessage,
   ElDialog,
@@ -449,7 +450,7 @@ const addNewStatus = () => {
     // 检查字段名是否为空
     if (!newStatusConfig.value.fieldName) {
       ElMessage({
-        message: `请输入字段名`,
+        message: t('app.statusbar.enterFieldName'),
         type: 'error',
         placement: 'bottom-right',
         offset: 50,
@@ -460,7 +461,7 @@ const addNewStatus = () => {
     // 检查代码是否为空（设为必填项）
     if (!newStatusConfig.value.code) {
       ElMessage({
-        message: `请输入自定义计算代码`,
+        message: t('app.statusbar.enterCode'),
         type: 'error',
         placement: 'bottom-right',
         offset: 50,
@@ -474,7 +475,7 @@ const addNewStatus = () => {
       flowData.value.rawDataKeys.includes(newStatusConfig.value.fieldName)
     ) {
       ElMessage({
-        message: `自定义字段名称与原始字段名重复`,
+        message: t('app.statusbar.duplicateField'),
         type: 'error',
         placement: 'bottom-right',
         offset: 50,
@@ -502,7 +503,9 @@ const addNewStatus = () => {
 
   // 显示成功消息
   ElMessage({
-    message: `状态${isEditMode.value ? '更新' : '添加'}成功`,
+    message: t('app.statusbar.statusSuccess', {
+      v: isEditMode.value ? t('app.updated') : t('app.added'),
+    }),
     type: 'success',
     placement: 'bottom-right',
     offset: 50,
@@ -531,10 +534,10 @@ const resetDialog = () => {
 
 const deleteCustomStatus = (fieldName: string) => {
   // 弹出确认对话框
-  ElMessageBox.confirm(`确定要删除自定义属性 "${fieldName}" 吗？`, '确认删除', {
-    confirmButtonText: '确定',
+  ElMessageBox.confirm(t('app.statusbar.deleteConfirm', { v: fieldName }), t('app.statusbar.deleteConfirmTitle'), {
+    confirmButtonText: t('app.confirm'),
     confirmButtonClass: 'el-button--danger',
-    cancelButtonText: '取消',
+    cancelButtonText: t('app.cancel'),
     type: 'warning',
     customClass: 'app-message-box',
     closeOnClickModal: true,
@@ -545,7 +548,7 @@ const deleteCustomStatus = (fieldName: string) => {
       flowStore.removeCustomStatus(fieldName)
       // 显示成功消息
       ElMessage({
-        message: `自定义属性删除成功`,
+        message: t('app.statusbar.deleteSuccess'),
         type: 'success',
         placement: 'bottom-right',
         offset: 50,
@@ -554,7 +557,7 @@ const deleteCustomStatus = (fieldName: string) => {
     .catch(() => {
       // 用户取消删除
       ElMessage({
-        message: `已取消删除`,
+        message: t('app.statusbar.deleteCancelled'),
         type: 'info',
         placement: 'bottom-right',
         offset: 50,

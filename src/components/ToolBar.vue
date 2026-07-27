@@ -17,7 +17,7 @@
           class="toggle-switch"
           :class="{ 'toggle-on': deviceConnected }"
           @click="handleDeviceConnected"
-          :title="deviceConnected ? '断开连接' : '连接设备'"
+          :title="deviceConnected ? t('app.toolbar.disconnect') : t('app.toolbar.connect')"
         >
           <div class="toggle-slider">
             <span
@@ -47,11 +47,11 @@
         "
         :title="
           logRecordingActive
-            ? `停止录制${logRecordingPath ? `：${logRecordingPath}` : ''}`
-            : '录制日志'
+            ? (logRecordingPath ? t('app.toolbar.stopRecordPath', { v: logRecordingPath }) : t('app.toolbar.stopRecord'))
+            : t('app.toolbar.recordLog')
         "
         :aria-pressed="logRecordingActive"
-        aria-label="录制日志"
+        :aria-label="t('app.toolbar.recordLog')"
       >
         <span class="log-record-icon" aria-hidden="true"></span>
       </button>
@@ -67,7 +67,7 @@
           handleAction(item.msg)
           ;($event.currentTarget as HTMLElement)?.blur()
         "
-        :title="item.title"
+        :title="t(item.title)"
       >
         <el-icon class="toolbar-window-icon" :size="18">
           <component :is="getPanelIconComponent(item.action)" />
@@ -84,7 +84,7 @@
           handleLayout('save')
           ;($event.currentTarget as HTMLElement)?.blur()
         "
-        :title="layoutList[1].title"
+        :title="t(layoutList[1].title)"
         v-html="layoutList[1].icon"
       ></button>
       <button
@@ -93,7 +93,7 @@
           handleLayout('auto')
           ;($event.currentTarget as HTMLElement)?.blur()
         "
-        :title="layoutList[2].title"
+        :title="t(layoutList[2].title)"
         v-html="layoutList[2].icon"
       ></button>
       <button
@@ -102,9 +102,12 @@
           handleLayout('reset')
           ;($event.currentTarget as HTMLElement)?.blur()
         "
-        :title="layoutList[3].title"
+        :title="t(layoutList[3].title)"
         v-html="layoutList[3].icon"
       ></button>
+
+      <span v-if="fileTimelineActive" class="divider timeline-divider" aria-hidden="true"></span>
+      <FileTimelineControl :position="position" />
     </div>
     <div class="toolbar-dock-zones" v-if="isDragging && activeDockZone">
       <div
@@ -114,7 +117,7 @@
     </div>
   </div>
   <el-dialog
-    title="数据接入"
+    :title="t('app.toolbar.dataInputTitle')"
     v-model="showInputDialog"
     class="app-dialog data-input-dialog"
     width="min(760px, calc(100vw - 32px))"
@@ -129,8 +132,8 @@
       <div class="data-source-dialog-title">
         <span class="dialog-title-icon"><Connection :size="20" /></span>
         <div>
-          <strong>数据接入</strong>
-          <span>统一管理连接地址、传输参数和解析方式</span>
+          <strong>{{ t('app.toolbar.dataInputTitle') }}</strong>
+          <span>{{ t('app.toolbar.dataInputDesc') }}</span>
         </div>
       </div>
     </template>
@@ -141,39 +144,39 @@
       :stretch="inputTabPosition === 'top'"
       class="data-source-tabs"
     >
-      <el-tab-pane label="文件输入" name="file">
+      <el-tab-pane :label="t('app.toolbar.fileTab')" name="file">
         <template #label>
           <span class="source-tab-label">
             <el-icon><FolderOpened /></el-icon>
             <span class="source-tab-copy">
               <strong
-                ><span class="tab-name-full">文件输入</span
-                ><span class="tab-name-compact">文件</span></strong
+                ><span class="tab-name-full">{{ t('app.toolbar.fileTab') }}</span
+                ><span class="tab-name-compact">{{ t('app.toolbar.fileTabShort') }}</span></strong
               >
               <small>File</small>
             </span>
           </span>
         </template>
         <div class="source-panel-heading">
-          <strong>文件数据源</strong>
-          <span>加载日志、文本或 DAT 文件并投递给当前应用组件。</span>
+          <strong>{{ t('app.toolbar.fileSource') }}</strong>
+          <span>{{ t('app.toolbar.fileSourceDesc') }}</span>
         </div>
         <div class="source-config-card">
           <div class="input-group">
-            <span class="input-label">文件路径</span>
-            <el-input v-model="filePath" placeholder="请输入文件路径" />
-            <el-button type="default" @click="triggerFileSelection">选择文件</el-button>
+            <span class="input-label">{{ t('app.toolbar.filePath') }}</span>
+            <el-input v-model="filePath" :placeholder="t('app.toolbar.filePathPlaceholder')" />
+            <el-button type="default" @click="triggerFileSelection">{{ t('app.toolbar.selectFile') }}</el-button>
           </div>
           <div class="time-tag-card">
             <div class="time-tag-copy">
-              <strong>时间戳播放</strong>
-              <span>读取同名 .tag 文件，按原始采集时间间隔回放。</span>
+              <strong>{{ t('app.toolbar.timeTag') }}</strong>
+              <span>{{ t('app.toolbar.timeTagDesc') }}</span>
             </div>
-            <el-switch v-model="fileTimeTag" aria-label="时间戳播放" />
+            <el-switch v-model="fileTimeTag" :aria-label="t('app.toolbar.timeTag')" />
           </div>
           <div v-if="fileTimeTag" class="time-tag-options">
             <div class="input-group compact-input-group">
-              <span class="input-label">播放倍速</span>
+              <span class="input-label">{{ t('app.toolbar.replaySpeed') }}</span>
               <el-select
                 v-model="fileReplaySpeed"
                 :teleported="true"
@@ -188,7 +191,7 @@
               </el-select>
             </div>
             <div class="input-group compact-input-group">
-              <span class="input-label">起始偏移</span>
+              <span class="input-label">{{ t('app.toolbar.startOffset') }}</span>
               <el-input-number
                 v-model="fileStartOffset"
                 :min="0"
@@ -196,24 +199,24 @@
                 :precision="0"
                 controls-position="right"
               />
-              <span class="input-unit">秒</span>
+              <span class="input-unit">{{ t('app.toolbar.second') }}</span>
             </div>
             <div class="input-group compact-input-group">
-              <span class="input-label">位置格式</span>
+              <span class="input-label">{{ t('app.toolbar.posFormat') }}</span>
               <el-select v-model="filePositionBytes" :teleported="false">
-                <el-option label="4 字节" :value="4" />
-                <el-option label="8 字节" :value="8" />
+                <el-option :label="t('app.toolbar.bytes', { v: 4 })" :value="4" />
+                <el-option :label="t('app.toolbar.bytes', { v: 8 })" :value="8" />
               </el-select>
             </div>
           </div>
           <div class="parser-card">
             <div class="parser-copy">
-              <strong>数据解析方式</strong>
+              <strong>{{ t('app.toolbar.parseMethod') }}</strong>
               <span>{{ activeParserDescription }}</span>
             </div>
             <el-select
               v-model="sourceParser"
-              aria-label="数据解析方式"
+              :aria-label="t('app.toolbar.parseMethod')"
               class="parser-select"
               :teleported="false"
             >
@@ -228,22 +231,22 @@
         </div>
       </el-tab-pane>
 
-      <el-tab-pane label="串口连接" name="serial">
+      <el-tab-pane :label="t('app.toolbar.serialTab')" name="serial">
         <template #label>
           <span class="source-tab-label">
             <el-icon><Connection /></el-icon>
             <span class="source-tab-copy">
               <strong
-                ><span class="tab-name-full">串口连接</span
-                ><span class="tab-name-compact">串口</span></strong
+                ><span class="tab-name-full">{{ t('app.toolbar.serialTab') }}</span
+                ><span class="tab-name-compact">{{ t('app.toolbar.serialTabShort') }}</span></strong
               >
               <small>Serial</small>
             </span>
           </span>
         </template>
         <div class="source-panel-heading">
-          <strong>串口数据源</strong>
-          <span>接入串口设备输出的实时文本或二进制数据。</span>
+          <strong>{{ t('app.toolbar.serialSource') }}</strong>
+          <span>{{ t('app.toolbar.serialSourceDesc') }}</span>
         </div>
         <div class="source-config-card">
           <div class="input-group">
@@ -251,11 +254,11 @@
               <el-button @click="searchSerialPorts" class="icon-only-refresh">
                 <el-icon><Refresh /></el-icon>
               </el-button>
-              端口
+              {{ t('app.toolbar.port') }}
             </span>
             <el-select
               v-model="serialPort"
-              placeholder="请选择串口"
+              :placeholder="t('app.toolbar.portPlaceholder')"
               style="flex: 1"
               :teleported="false"
               @click="searchSerialPorts"
@@ -264,10 +267,10 @@
             </el-select>
           </div>
           <div class="input-group">
-            <span class="input-label">波特率</span>
+            <span class="input-label">{{ t('app.toolbar.baudRate') }}</span>
             <el-select
               v-model="serialBaudRate"
-              placeholder="请选择或输入波特率"
+              :placeholder="t('app.toolbar.baudRatePlaceholder')"
               filterable
               allow-create
               style="flex: 1"
@@ -277,10 +280,10 @@
             </el-select>
           </div>
           <div class="input-group" v-if="serialAdvanced">
-            <span class="input-label">数据位</span>
+            <span class="input-label">{{ t('app.toolbar.dataBits') }}</span>
             <el-select
               v-model="serialDataBits"
-              placeholder="请选择数据位"
+              :placeholder="t('app.toolbar.dataBitsPlaceholder')"
               style="flex: 1"
               :teleported="false"
             >
@@ -288,10 +291,10 @@
             </el-select>
           </div>
           <div class="input-group" v-if="serialAdvanced">
-            <span class="input-label">停止位</span>
+            <span class="input-label">{{ t('app.toolbar.stopBits') }}</span>
             <el-select
               v-model="serialStopBits"
-              placeholder="请选择停止位"
+              :placeholder="t('app.toolbar.stopBitsPlaceholder')"
               style="flex: 1"
               :teleported="false"
             >
@@ -299,10 +302,10 @@
             </el-select>
           </div>
           <div class="input-group" v-if="serialAdvanced">
-            <span class="input-label">校验位</span>
+            <span class="input-label">{{ t('app.toolbar.parity') }}</span>
             <el-select
               v-model="serialParity"
-              placeholder="请选择校验位"
+              :placeholder="t('app.toolbar.parityPlaceholder')"
               style="flex: 1"
               :teleported="false"
             >
@@ -315,17 +318,17 @@
             </el-select>
           </div>
           <div class="input-group compact-input-group">
-            <span class="input-label">高级选项</span>
-            <el-checkbox v-model="serialAdvanced">显示完整串口参数</el-checkbox>
+            <span class="input-label">{{ t('app.toolbar.advanced') }}</span>
+            <el-checkbox v-model="serialAdvanced">{{ t('app.toolbar.showAdvanced') }}</el-checkbox>
           </div>
           <div class="parser-card">
             <div class="parser-copy">
-              <strong>数据解析方式</strong>
+              <strong>{{ t('app.toolbar.parseMethod') }}</strong>
               <span>{{ activeParserDescription }}</span>
             </div>
             <el-select
               v-model="sourceParser"
-              aria-label="数据解析方式"
+              :aria-label="t('app.toolbar.parseMethod')"
               class="parser-select"
               :teleported="false"
             >
@@ -340,26 +343,26 @@
         </div>
       </el-tab-pane>
 
-      <el-tab-pane label="网络连接" name="network">
+      <el-tab-pane :label="t('app.toolbar.networkTab')" name="network">
         <template #label>
           <span class="source-tab-label">
             <el-icon><Monitor /></el-icon>
             <span class="source-tab-copy">
               <strong
-                ><span class="tab-name-full">网络连接</span
-                ><span class="tab-name-compact">网络</span></strong
+                ><span class="tab-name-full">{{ t('app.toolbar.networkTab') }}</span
+                ><span class="tab-name-compact">{{ t('app.toolbar.networkTabShort') }}</span></strong
               >
               <small>TCP / UDP</small>
             </span>
           </span>
         </template>
         <div class="source-panel-heading">
-          <strong>网络数据源</strong>
-          <span>通过 TCP 客户端或 UDP 监听接收实时数据。</span>
+          <strong>{{ t('app.toolbar.networkSource') }}</strong>
+          <span>{{ t('app.toolbar.networkSourceDesc') }}</span>
         </div>
         <div class="source-config-card">
           <div class="input-group">
-            <span class="input-label">网络协议</span>
+            <span class="input-label">{{ t('app.toolbar.networkProtocol') }}</span>
             <el-select v-model="networkProtocol" style="flex: 1" :teleported="false">
               <el-option label="TCP" value="tcp" />
               <el-option label="UDP" value="udp" />
@@ -367,7 +370,7 @@
           </div>
           <div class="input-group">
             <span class="input-label">{{
-              networkProtocol === 'tcp' ? '远端地址' : '监听地址'
+              t(networkProtocol === 'tcp' ? 'app.toolbar.remoteAddr' : 'app.toolbar.listenAddr')
             }}</span>
             <el-input
               v-model="networkIp"
@@ -375,23 +378,23 @@
             />
           </div>
           <div class="input-group">
-            <span class="input-label">网络端口</span>
+            <span class="input-label">{{ t('app.toolbar.networkPort') }}</span>
             <el-input
               v-model="networkPortText"
               inputmode="numeric"
               maxlength="5"
-              placeholder="请输入端口"
+              :placeholder="t('app.toolbar.networkPortPlaceholder')"
               style="flex: 1; width: 100%"
             />
           </div>
           <div class="parser-card">
             <div class="parser-copy">
-              <strong>数据解析方式</strong>
+              <strong>{{ t('app.toolbar.parseMethod') }}</strong>
               <span>{{ activeParserDescription }}</span>
             </div>
             <el-select
               v-model="sourceParser"
-              aria-label="数据解析方式"
+              :aria-label="t('app.toolbar.parseMethod')"
               class="parser-select"
               :teleported="false"
             >
@@ -413,35 +416,35 @@
             <span class="source-tab-copy">
               <strong
                 ><span class="tab-name-full">Camera</span
-                ><span class="tab-name-compact">相机</span></strong
+                ><span class="tab-name-compact">{{ t('app.toolbar.cameraTabShort') }}</span></strong
               >
               <small>RTSP</small>
             </span>
           </span>
         </template>
         <div class="source-panel-heading">
-          <strong>Camera 视频源</strong>
-          <span>保存 RTSP 视频地址，Camera Video 将使用此处的统一配置。</span>
+          <strong>{{ t('app.toolbar.cameraSource') }}</strong>
+          <span>{{ t('app.toolbar.cameraSourceDesc') }}</span>
         </div>
         <div class="source-config-card">
           <div class="input-group">
-            <span class="input-label">视频地址</span>
+            <span class="input-label">{{ t('app.toolbar.videoUrl') }}</span>
             <el-input
               v-model="cameraStreamUrl"
-              aria-label="RTSP 视频地址"
+              :aria-label="t('app.toolbar.videoUrlLabel')"
               placeholder="rtsp://192.168.3.14:8554/rgbstream"
               clearable
             />
           </div>
           <div class="source-info-card">
-            <span>传输协议</span><strong>RTSP</strong> <span>输出类型</span
-            ><strong>实时视频帧</strong> <span>使用组件</span><strong>Camera Video</strong>
+            <span>{{ t('app.toolbar.transProtocol') }}</span><strong>RTSP</strong> <span>{{ t('app.toolbar.outputType') }}</span
+            ><strong>{{ t('app.toolbar.realtimeFrame') }}</strong> <span>{{ t('app.toolbar.usedBy') }}</span><strong>Camera Video</strong>
           </div>
         </div>
       </el-tab-pane>
     </el-tabs>
     <template #footer>
-      <el-button @click="showInputDialog = false">取消</el-button>
+      <el-button @click="showInputDialog = false">{{ t('app.cancel') }}</el-button>
       <el-button type="primary" @click="handleInputSubmit">{{ inputSubmitLabel }}</el-button>
     </template>
   </el-dialog>
@@ -476,12 +479,16 @@ import { Connection, FolderOpened, Monitor, Refresh, VideoCamera } from '@elemen
 import { useApplicationSelector } from '@/composables/useApplicationSelector'
 import { getPanelIconComponent } from '@/settings/panelIcons'
 import { textDataParserOptions } from '@/composables/useDataSourceManager'
+import { useFileTimeline } from '@/composables/useFileTimeline'
+import FileTimelineControl from '@/components/FileTimelineControl.vue'
+import { t } from '@/i18n'
 
 const ipcRenderer = window.ipcRenderer
 // 工具栏停靠位置：使用 useStatusManager 提供的全局共享引用，
 // 既与 Dashboard 保持单一数据源，也能在隐藏/重新显示（组件重载）后保持位置，
 // 并由布局持久化层跨重启恢复。
 const position = toolbarPosition
+const { active: fileTimelineActive } = useFileTimeline()
 const viewportWidth = ref(window.innerWidth)
 const inputTabPosition = computed(() => (viewportWidth.value <= 560 ? 'top' : 'left'))
 const updateViewportWidth = () => {
@@ -536,9 +543,9 @@ const activeParserDescription = computed(
     textDataParserOptions.find((option) => option.value === sourceParser.value)?.description ?? '',
 )
 const inputSubmitLabel = computed(() => {
-  if (activeTab.value === 'camera') return '保存数据源'
-  if (activeTab.value === 'file') return fileTimeTag.value ? '开始播放' : '加载文件'
-  return '连接数据源'
+  if (activeTab.value === 'camera') return t('app.toolbar.saveSource')
+  if (activeTab.value === 'file') return fileTimeTag.value ? t('app.toolbar.startPlay') : t('app.toolbar.loadFile')
+  return t('app.toolbar.connectSource')
 })
 
 // 添加triggerFileSelection函数，注意这里是const而不是sconst

@@ -1,20 +1,20 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
-describe('AppHeader theme menu performance', () => {
+describe('AppHeader settings menu performance', () => {
   const source = readFileSync('src/components/AppHeader.vue', 'utf8')
 
-  it('keeps the theme menu pre-rendered without Popper layout work', () => {
+  it('keeps the settings menu pre-rendered without Popper layout work', () => {
     expect(source).not.toContain('<el-dropdown')
-    expect(source).toContain('class="theme-mode-menu"')
-    expect(source).toContain(':class="{ open: themeMenuOpen }"')
-    expect(source).toMatch(/\.theme-mode-menu\s*\{[\s\S]*visibility: hidden/)
-    expect(source).toMatch(/\.theme-mode-menu\.open\s*\{[\s\S]*visibility: visible/)
+    expect(source).toContain('class="settings-menu"')
+    expect(source).toContain(':class="{ open: settingsOpen }"')
+    expect(source).toMatch(/\.settings-menu\s*\{[\s\S]*visibility: hidden/)
+    expect(source).toMatch(/\.settings-menu\.open\s*\{[\s\S]*visibility: visible/)
   })
 
   it('closes immediately and defers the global theme repaint', () => {
     expect(source).toContain('document.addEventListener(\'pointerdown\', handleDocumentPointerDown)')
-    expect(source).toContain('closeThemeMenu()')
+    expect(source).toContain('closeSettingsMenu()')
     expect(source.match(/themeApplyFrame = requestAnimationFrame/g)).toHaveLength(2)
   })
 })

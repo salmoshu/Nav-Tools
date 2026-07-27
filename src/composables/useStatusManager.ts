@@ -4,6 +4,7 @@ import { useFlowStore } from "@/stores/flow";
 import { useApplicationSelector } from '@/composables/useApplicationSelector'
 import { useTheme } from '@/composables/useTheme'
 import { JsonStorage } from '@/core/storage/JsonStorage'
+import { t } from '@/i18n'
 
 const STATUS_ORDER_KEY = 'nav-tools:status-order'
 const statusOrderStorage = new JsonStorage(localStorage)
@@ -90,61 +91,61 @@ let disposeListener: monaco.IDisposable | null = null
 const Function = monaco.languages.CompletionItemKind.Function
 const Constant = monaco.languages.CompletionItemKind.Constant
 const SAFE_FUNC_SNIPPETS = [
-  { label: 'divide_s', insertText: 'divide_s', kind: Constant, doc: '安全除法' },
+  { label: 'divide_s', insertText: 'divide_s', kind: Constant, doc: t('data.funcSafeDivide') },
 ]
 
 const MATHJS_FUNC_SNIPPETS = [
-  { label: 'abs',    insertText: 'abs', kind: Function, doc: '绝对值' },
-  { label: 'acos',   insertText: 'acos', kind: Function, doc: '反余弦（弧度）' },
-  { label: 'acosh',  insertText: 'acosh', kind: Function, doc: '反双曲余弦' },
-  { label: 'asin',   insertText: 'asin', kind: Function, doc: '反正弦（弧度）' },
-  { label: 'asinh',  insertText: 'asinh', kind: Function, doc: '反双曲正弦' },
-  { label: 'atan',   insertText: 'atan', kind: Function, doc: '反正切（弧度）' },
-  { label: 'atan2',  insertText: 'atan2', kind: Function, doc: '双参反正切' },
-  { label: 'atanh',  insertText: 'atanh', kind: Function, doc: '反双曲正切' },
-  { label: 'ceil',   insertText: 'ceil', kind: Function, doc: '向上取整' },
-  { label: 'cos',    insertText: 'cos', kind: Function, doc: '余弦' },
-  { label: 'cosh',   insertText: 'cosh', kind: Function, doc: '双曲余弦' },
-  { label: 'cube',   insertText: 'cube', kind: Function, doc: 'x³' },
-  { label: 'exp',    insertText: 'exp', kind: Function, doc: 'e^x' },
-  { label: 'floor',  insertText: 'floor', kind: Function, doc: '向下取整' },
-  { label: 'gcd',    insertText: 'gcd', kind: Function, doc: '最大公约数' },
-  { label: 'lcm',    insertText: 'lcm', kind: Function, doc: '最小公倍数' },
-  { label: 'log',    insertText: 'log', kind: Function, doc: '自然对数' },
-  { label: 'log10',  insertText: 'log10', kind: Function, doc: '10 为底对数' },
-  { label: 'log2',   insertText: 'log2', kind: Function, doc: '2 为底对数' },
-  { label: 'mean',   insertText: 'mean', kind: Function, doc: '算术平均' },
-  { label: 'median', insertText: 'median', kind: Function, doc: '中位数' },
-  { label: 'min',    insertText: 'min', kind: Function, doc: '最小值' },
-  { label: 'max',    insertText: 'max', kind: Function, doc: '最大值' },
-  { label: 'pow',    insertText: 'pow', kind: Function, doc: '幂运算' },
-  { label: 'random', insertText: 'random', kind: Function, doc: '随机数' },
-  { label: 'round',  insertText: 'round', kind: Function, doc: '四舍五入' },
-  { label: 'sign',   insertText: 'sign', kind: Function, doc: '符号函数' },
-  { label: 'sin',    insertText: 'sin', kind: Function, doc: '正弦' },
-  { label: 'sinh',   insertText: 'sinh', kind: Function, doc: '双曲正弦' },
-  { label: 'sqrt',   insertText: 'sqrt', kind: Function, doc: '平方根' },
-  { label: 'square', insertText: 'square', kind: Function, doc: 'x²' },
-  { label: 'tan',    insertText: 'tan', kind: Function, doc: '正切' },
-  { label: 'tanh',   insertText: 'tanh', kind: Function, doc: '双曲正切' },
-  { label: 'sum',    insertText: 'sum', kind: Function, doc: '求和' },
-  { label: 'prod',   insertText: 'prod', kind: Function, doc: '连乘' },
-  { label: 'std',    insertText: 'std', kind: Function, doc: '标准差' },
-  { label: 'var',    insertText: 'var', kind: Function, doc: '方差' },
-  { label: 'det',    insertText: 'det', kind: Function, doc: '矩阵行列式' },
-  { label: 'transpose', insertText: 'transpose', kind: Function, doc: '矩阵转置' },
-  { label: 'inv',    insertText: 'inv', kind: Function, doc: '矩阵求逆' }
+  { label: 'abs',    insertText: 'abs', kind: Function, doc: t('data.funcAbs') },
+  { label: 'acos',   insertText: 'acos', kind: Function, doc: t('data.funcAcos') },
+  { label: 'acosh',  insertText: 'acosh', kind: Function, doc: t('data.funcAcosh') },
+  { label: 'asin',   insertText: 'asin', kind: Function, doc: t('data.funcAsin') },
+  { label: 'asinh',  insertText: 'asinh', kind: Function, doc: t('data.funcAsinh') },
+  { label: 'atan',   insertText: 'atan', kind: Function, doc: t('data.funcAtan') },
+  { label: 'atan2',  insertText: 'atan2', kind: Function, doc: t('data.funcAtan2') },
+  { label: 'atanh',  insertText: 'atanh', kind: Function, doc: t('data.funcAtanh') },
+  { label: 'ceil',   insertText: 'ceil', kind: Function, doc: t('data.funcCeil') },
+  { label: 'cos',    insertText: 'cos', kind: Function, doc: t('data.funcCos') },
+  { label: 'cosh',   insertText: 'cosh', kind: Function, doc: t('data.funcCosh') },
+  { label: 'cube',   insertText: 'cube', kind: Function, doc: t('data.funcCube') },
+  { label: 'exp',    insertText: 'exp', kind: Function, doc: t('data.funcExp') },
+  { label: 'floor',  insertText: 'floor', kind: Function, doc: t('data.funcFloor') },
+  { label: 'gcd',    insertText: 'gcd', kind: Function, doc: t('data.funcGcd') },
+  { label: 'lcm',    insertText: 'lcm', kind: Function, doc: t('data.funcLcm') },
+  { label: 'log',    insertText: 'log', kind: Function, doc: t('data.funcLog') },
+  { label: 'log10',  insertText: 'log10', kind: Function, doc: t('data.funcLog10') },
+  { label: 'log2',   insertText: 'log2', kind: Function, doc: t('data.funcLog2') },
+  { label: 'mean',   insertText: 'mean', kind: Function, doc: t('data.funcMean') },
+  { label: 'median', insertText: 'median', kind: Function, doc: t('data.funcMedian') },
+  { label: 'min',    insertText: 'min', kind: Function, doc: t('data.funcMin') },
+  { label: 'max',    insertText: 'max', kind: Function, doc: t('data.funcMax') },
+  { label: 'pow',    insertText: 'pow', kind: Function, doc: t('data.funcPow') },
+  { label: 'random', insertText: 'random', kind: Function, doc: t('data.funcRandom') },
+  { label: 'round',  insertText: 'round', kind: Function, doc: t('data.funcRound') },
+  { label: 'sign',   insertText: 'sign', kind: Function, doc: t('data.funcSign') },
+  { label: 'sin',    insertText: 'sin', kind: Function, doc: t('data.funcSin') },
+  { label: 'sinh',   insertText: 'sinh', kind: Function, doc: t('data.funcSinh') },
+  { label: 'sqrt',   insertText: 'sqrt', kind: Function, doc: t('data.funcSqrt') },
+  { label: 'square', insertText: 'square', kind: Function, doc: t('data.funcSquare') },
+  { label: 'tan',    insertText: 'tan', kind: Function, doc: t('data.funcTan') },
+  { label: 'tanh',   insertText: 'tanh', kind: Function, doc: t('data.funcTanh') },
+  { label: 'sum',    insertText: 'sum', kind: Function, doc: t('data.funcSum') },
+  { label: 'prod',   insertText: 'prod', kind: Function, doc: t('data.funcProd') },
+  { label: 'std',    insertText: 'std', kind: Function, doc: t('data.funcStd') },
+  { label: 'var',    insertText: 'var', kind: Function, doc: t('data.funcVar') },
+  { label: 'det',    insertText: 'det', kind: Function, doc: t('data.funcDet') },
+  { label: 'transpose', insertText: 'transpose', kind: Function, doc: t('data.funcTranspose') },
+  { label: 'inv',    insertText: 'inv', kind: Function, doc: t('data.funcInv') }
 ]
 
 const MATHJS_CONSTANTS = [
-  { label: 'PI',  insertText: 'PI',  kind: Constant, doc: '圆周率 π' },
-  { label: 'E',   insertText: 'E',   kind: Constant, doc: '自然底数 e' },
-  { label: 'LN2', insertText: 'LN2', kind: Constant, doc: 'ln(2)' },
-  { label: 'LN10',insertText: 'LN10',kind: Constant, doc: 'ln(10)' },
-  { label: 'LOG2E',insertText:'LOG2E',kind:Constant, doc: 'log2(e)' },
-  { label: 'LOG10E',insertText:'LOG10E',kind:Constant, doc: 'log10(e)' },
-  { label: 'SQRT1_2',insertText:'SQRT1_2',kind:Constant, doc: '√0.5' },
-  { label: 'SQRT2',insertText:'SQRT2',kind:Constant, doc: '√2' }
+  { label: 'PI',  insertText: 'PI',  kind: Constant, doc: t('data.constPi') },
+  { label: 'E',   insertText: 'E',   kind: Constant, doc: t('data.constE') },
+  { label: 'LN2', insertText: 'LN2', kind: Constant, doc: t('data.constLn2') },
+  { label: 'LN10',insertText: 'LN10',kind: Constant, doc: t('data.constLn10') },
+  { label: 'LOG2E',insertText:'LOG2E',kind:Constant, doc: t('data.constLog2e') },
+  { label: 'LOG10E',insertText:'LOG10E',kind:Constant, doc: t('data.constLog10e') },
+  { label: 'SQRT1_2',insertText:'SQRT1_2',kind:Constant, doc: t('data.constSqrt1_2') },
+  { label: 'SQRT2',insertText:'SQRT2',kind:Constant, doc: t('data.constSqrt2') }
 ]
 
 const customHints = ref([

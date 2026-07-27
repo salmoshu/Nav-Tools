@@ -3,23 +3,23 @@
     <div class="control-panel">
       <div class="controls">
         <el-button type="default" size="small" @click="showViewConfig" class="control-btn config-btn">
-          <el-icon><Setting /></el-icon>&nbsp;配置
+          <el-icon><Setting /></el-icon>&nbsp;{{ t('flow.config') }}
         </el-button>
 
         <el-button
           type="default"
           size="small"
-          title="跟踪"
-          aria-label="跟踪"
+          :title="t('flow.tracking')"
+          :aria-label="t('flow.tracking')"
           class="tracking-button"
           @click="toggleTracking"
         >
           <el-icon><Aim /></el-icon>
-          <span class="tracking-text">&nbsp;{{ isTracking ? "关闭跟踪" : "启用跟踪" }}</span>
+          <span class="tracking-text">&nbsp;{{ isTracking ? t('flow.disableTracking') : t('flow.enableTracking') }}</span>
         </el-button>
 
         <div class="point-size-control">
-          <span class="size-label">尺寸:</span>
+          <span class="size-label">{{ t('flow.size') }}</span>
           <el-slider
             v-model="pointSize"
             :min="5"
@@ -43,7 +43,7 @@
               class="legend-color"
               :style="{ backgroundColor: getTrackColor(track) }"
             ></span>
-            <span class="legend-label">轨迹{{ track }}</span>
+            <span class="legend-label">{{ t('flow.trackN', { n: track }) }}</span>
           </div>
         </div>
 
@@ -91,6 +91,7 @@ import { useDevice } from '@/hooks/useDevice'
 import { useDataConfig } from '@/composables/flow/useDataConfig'
 import { useConsole } from '@/composables/flow/useConsole'
 import { useTheme } from '@/composables/useTheme'
+import { t } from '@/i18n'
 import DeviationConfigDialog from './DeviationConfigDialog.vue'
 import { createMultiSeriesTrajectoryRenderer } from '@/core/render/createMultiSeriesTrajectoryRenderer'
 import type {
@@ -649,7 +650,7 @@ function applyViewConfig(): void {
     !deviationConfig.track4X.value
   ) {
     ElMessage({
-      message: '请至少配置一条轨迹的X轴和Y轴字段',
+      message: t('flow.configNeedTrackAxis'),
       type: 'warning',
       placement: 'bottom-right',
       offset: 50,
@@ -783,7 +784,7 @@ function showHover(picked: PickedPoint, sx: number, sy: number): void {
     top: `${sy + 12}px`,
   }
 
-  infoBarText.value = `轨迹${trackNum} 🕐time: ${time.toFixed(3)} 📍${xField}:${originX.toFixed(3)}, ${yField}:${originY.toFixed(3)}`
+  infoBarText.value = `${t('flow.trackN', { n: trackNum })} 🕐time: ${time.toFixed(3)} 📍${xField}:${originX.toFixed(3)}, ${yField}:${originY.toFixed(3)}`
   infoBarVisible.value = true
 
   drawHighlights(timeIndexMap.get(time))

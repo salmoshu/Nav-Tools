@@ -2,6 +2,7 @@ import { ref, computed } from 'vue'
 import { useFlow } from '@/composables/flow/useFlow'
 import { defineStore } from 'pinia'
 import { create, all } from 'mathjs';
+import { t } from '@/i18n';
 
 const math = create(all);
 math.import({
@@ -32,20 +33,20 @@ function evaluateExpression(expr: string, context: Record<string, any>): any {
     
     // 检查表达式是否为空
     if (!trimmedExpr) {
-      throw new Error('表达式不能为空')
+      throw new Error(t('data.exprEmpty'))
     }
     
     // 检查表达式是否包含不允许的字符
     const allowedChars = /^[0-9.+\-*/()[\]{}_a-zA-Z."'|>=<%,]+$/;
     if (!allowedChars.test(trimmedExpr)) {
-      throw new Error('表达式包含不允许的字符')
+      throw new Error(t('data.exprInvalidChar'))
     }
     
     // 检查是否包含危险的关键词
     const dangerousKeywords = ['eval', 'Function', 'constructor', 'prototype', 'import', 'require']
     for (const keyword of dangerousKeywords) {
       if (trimmedExpr.toLowerCase().includes(keyword)) {
-        throw new Error('表达式包含不允许的关键词: ' + keyword)
+        throw new Error(t('data.exprInvalidKeyword', { keyword }))
       }
     }
     

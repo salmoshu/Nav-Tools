@@ -3,7 +3,7 @@
     <el-tabs :model-value="activeTab" type="card" class="control-tabs" @update:model-value="$emit('update:activeTab', String($event))">
       <el-tab-pane name="read">
         <template #label>
-          <span><el-icon><Position /></el-icon> 读指令 <el-tag v-if="readCommands.length" size="small" type="info">{{ readCommands.length }}</el-tag></span>
+          <span><el-icon><Position /></el-icon> {{ t('motor.readTab') }} <el-tag v-if="readCommands.length" size="small" type="info">{{ readCommands.length }}</el-tag></span>
         </template>
         <div class="command-list">
           <div v-for="command in readCommands" :key="command.name" class="command-item">
@@ -14,7 +14,7 @@
               @click="$emit('sendRead', command)"
             >
               <el-icon><Position /></el-icon>
-              {{ activeReadCommands.has(command.name) ? '停止' : command.name }}
+              {{ activeReadCommands.has(command.name) ? t('motor.stop') : command.name }}
             </el-button>
             <div class="frequency-input-wrapper">
               <el-input-number
@@ -27,13 +27,13 @@
               <span>Hz</span>
             </div>
           </div>
-          <el-empty v-if="readCommands.length === 0" description="暂无读指令配置" :image-size="48" />
+          <el-empty v-if="readCommands.length === 0" :description="t('motor.noReadConfig')" :image-size="48" />
         </div>
       </el-tab-pane>
 
       <el-tab-pane name="write">
         <template #label>
-          <span><el-icon><Edit /></el-icon> 写指令 <el-tag v-if="writeCommands.length" size="small" type="info">{{ writeCommands.length }}</el-tag></span>
+          <span><el-icon><Edit /></el-icon> {{ t('motor.writeTab') }} <el-tag v-if="writeCommands.length" size="small" type="info">{{ writeCommands.length }}</el-tag></span>
         </template>
         <div class="command-list">
           <div v-for="command in writeCommands" :key="command.name" class="command-item">
@@ -61,7 +61,7 @@
               </div>
             </div>
           </div>
-          <el-empty v-if="writeCommands.length === 0" description="暂无写指令配置" :image-size="48" />
+          <el-empty v-if="writeCommands.length === 0" :description="t('motor.noWriteConfig')" :image-size="48" />
         </div>
       </el-tab-pane>
     </el-tabs>
@@ -70,6 +70,7 @@
 
 <script setup lang="ts">
 import { Edit, Position } from '@element-plus/icons-vue'
+import { t } from '@/i18n'
 import type { Command, ReadCommand, WriteCommand } from '@/composables/motor/useMotorCmd'
 
 defineProps<{
