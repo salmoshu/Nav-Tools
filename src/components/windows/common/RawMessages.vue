@@ -31,7 +31,7 @@
 
           <el-button @click="toggleDisplayFormat" :type="displayFormat === 'hex' ? 'success' : 'default'" size="small" :title="displayFormat==='hex' ? t('common.rawMessages.hexDisplay') : t('common.rawMessages.asciiDisplay')">
             <el-icon><Coin /></el-icon>
-            &nbsp;{{ t('common.rawMessages.hex') }}
+            &nbsp;{{ t('common.rawMessages.hexDisplay') }}
           </el-button>
         </div>
         
