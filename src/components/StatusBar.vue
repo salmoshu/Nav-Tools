@@ -766,12 +766,10 @@ const snapToEdge = () => {
 /**
  * 公式编辑
  */
-import { addMonacoWords } from '@/composables/useStatusManager'
+import { setMonacoFieldWords } from '@/composables/useStatusManager'
 watch(availableFields, (newFields) => {
-  newFields.forEach((field) => {
-    addMonacoWords(field)
-  })
-})
+  setMonacoFieldWords(newFields)
+}, { immediate: true })
 
 function createCodeEditor1() {
   createCodeEditor()

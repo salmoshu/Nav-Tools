@@ -153,11 +153,12 @@ const MATHJS_CONSTANTS = [
   { label: 'SQRT2',insertText:'SQRT2',kind:Constant, doc: t('data.constSqrt2') }
 ]
 
-const customHints = ref([
+const BASE_COMPLETION_HINTS = [
   ...SAFE_FUNC_SNIPPETS,
   ...MATHJS_FUNC_SNIPPETS,
   ...MATHJS_CONSTANTS,
-])  
+]
+const customHints = ref([...BASE_COMPLETION_HINTS])
 
 monaco.languages.register({ id: 'mathjs' })
 monaco.languages.setLanguageConfiguration('mathjs', {
@@ -197,18 +198,18 @@ monaco.languages.registerCompletionItemProvider('mathjs', {
   }
 })
 
-function addMonacoWords(label: string) {
-  // 检查是否已存在相同标签的项
-  if (customHints.value.some(item => item.label === label)) {
-    return; // 如果已存在，直接返回
-  }
+function setMonacoFieldWords(labels: string[]) {
+  const baseLabels = new Set(BASE_COMPLETION_HINTS.map(item => item.label))
+  const fieldHints = [...new Set(labels.map(label => label.trim()).filter(Boolean))]
+    .filter(label => !baseLabels.has(label))
+    .map(label => ({
+      label,
+      kind: monaco.languages.CompletionItemKind.Field,
+      insertText: label,
+      doc: label,
+    }))
 
-  customHints.value.push({
-    label,
-    kind: monaco.languages.CompletionItemKind.Text,
-    insertText: label,
-    doc: label
-  })
+  customHints.value = [...BASE_COMPLETION_HINTS, ...fieldHints]
 }
 
 async function createCodeEditor() {
@@ -267,6 +268,6 @@ export {
   statusOrder,
   getMonitorStatus,
   setStatusOrder,
-  addMonacoWords,
+  setMonacoFieldWords,
   createCodeEditor,
 };
