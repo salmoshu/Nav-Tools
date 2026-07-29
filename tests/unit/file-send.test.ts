@@ -20,6 +20,7 @@ vi.mock('@/composables/flow/useConsole', () => ({
 
 import { useFileSend } from '@/composables/flow/useFileSend'
 import { activeDataTransport } from '@/core/device/ActiveDataTransport'
+import { t } from '@/i18n'
 
 /**
  * Create a File-like object with a working arrayBuffer() method.
@@ -229,7 +230,7 @@ describe('useFileSend composable', () => {
 
     // 状态保持 loaded，以便设备重连后可重试
     expect(state.value.status).toBe('loaded')
-    expect(state.value.error).toBe('没有可用的数据连接，请先连接设备')
+    expect(state.value.error).toBe(t('flow.noAvailableConnection'))
     expect(invokeMock).not.toHaveBeenCalled()
   })
 
@@ -310,7 +311,7 @@ describe('useFileSend composable', () => {
     await startSend()
     // 无连接时保持 success 状态，不切换到 error
     expect(state.value.status).toBe('success')
-    expect(state.value.error).toBe('没有可用的数据连接，请先连接设备')
+    expect(state.value.error).toBe(t('flow.noAvailableConnection'))
 
     // 模拟设备重连
     activeDataTransport.current = 'serial'
@@ -397,14 +398,14 @@ describe('RawMessages.vue file send UI', () => {
   it('keeps text send button separate from file send button', () => {
     // 文本发送按钮始终存在，只管文本
     expect(source).toContain('@click="handleSendMessage"')
-    expect(source).toContain('title="发送消息"')
+    expect(source).toContain(':title="t(\'common.rawMessages.sendMessage\')"')
     // 文件发送按钮与进度面板生命周期一致，仅在 idle 时隐藏
     expect(source).toContain('@click="handleStartSend"')
     expect(source).toContain("v-if=\"fileSendState.status !== 'idle'\"")
     // loaded 和 success 状态下均可发送（支持重发）
     expect(source).toContain("fileSendState.status !== 'loaded'")
     expect(source).toContain("fileSendState.status !== 'success'")
-    expect(source).toContain('发送文件')
+    expect(source).toContain("t('common.rawMessages.sendFile')")
     // 不应存在统一发送入口
     expect(source).not.toContain('@click="handleSend"')
   })

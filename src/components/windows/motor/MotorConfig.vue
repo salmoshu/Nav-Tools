@@ -197,6 +197,7 @@
                         <el-switch :model-value="true" size="small" :active-text="t('motor.enabled')" disabled />
                         <el-select 
                           v-model="configForm.addressLength" 
+                          popper-class="app-dialog-select-popper"
                           :placeholder="t('motor.byteLength')"
                           size="small"
                           style="width: 80px; margin-left: 8px;"
@@ -212,6 +213,7 @@
                         <el-switch v-model="configForm.includeFunction" size="small" :active-text="t('motor.enabled')" />
                         <el-select 
                           v-model="configForm.functionLength" 
+                          popper-class="app-dialog-select-popper"
                           :placeholder="t('motor.byteLength')"
                           size="small"
                           style="width: 80px; margin-left: 8px;"
@@ -233,6 +235,7 @@
                         />
                         <el-select 
                           v-model="configForm.registerCountLength" 
+                          popper-class="app-dialog-select-popper"
                           :placeholder="t('motor.byteLength')"
                           size="small"
                           style="width: 80px; margin-left: 8px;"
@@ -249,6 +252,7 @@
                         <el-switch :model-value="true" size="small" :active-text="t('motor.enabled')" disabled />
                         <el-select 
                           v-model="configForm.lengthLength" 
+                          popper-class="app-dialog-select-popper"
                           :placeholder="t('motor.byteLength')"
                           size="small"
                           style="width: 80px; margin-left: 8px;"
@@ -263,6 +267,7 @@
                         <el-switch :model-value="true" size="small" :active-text="t('motor.enabled')" disabled />
                         <el-select 
                           :model-value="configForm.dataEndianness"
+                          popper-class="app-dialog-select-popper"
                           @change="handleDataEndiannessChange"
                           :placeholder="t('motor.endianness')"
                           size="small"
@@ -277,6 +282,7 @@
                       <div v-else-if="element.id === 'checksum'" class="field-config">
                         <el-select 
                           v-model="configForm.checksum.method" 
+                          popper-class="app-dialog-select-popper"
                           :placeholder="t('motor.checksumMethod')"
                           size="small"
                           style="width: 90px;"
@@ -290,6 +296,7 @@
                         <div class="checksum-params" v-if="configForm.checksum.method === 'crc16'">
                           <el-select 
                             v-model="configForm.checksum.endianness" 
+                            popper-class="app-dialog-select-popper"
                             :placeholder="t('motor.endianness')"
                             size="small"
                             style="width: 80px;"
@@ -470,6 +477,7 @@
                 <template #default="scope">
                   <el-select
                     :model-value="scope.row.dataType"
+                    popper-class="app-dialog-select-popper"
                     size="default"
                     :disabled="activeReadCommands.has(scope.row.name)"
                     @change="handleCommandDataType(scope.row, $event, 'read')"
@@ -636,6 +644,7 @@
                 <template #default="scope">
                   <el-select
                     :model-value="scope.row.dataType"
+                    popper-class="app-dialog-select-popper"
                     size="default"
                     @change="handleCommandDataType(scope.row, $event, 'write')"
                   >
@@ -1119,12 +1128,19 @@ const previewLabels: Record<MotorMessageFieldId, string> = {
 // 使用当前标签页中的真实命令生成预览，确保预览与实际下发报文一致。
 const generateCommandPreview = () => {
   const preferRead = activeTab.value === 'read'
-  const command: Command | undefined = preferRead
+  const command: Command = (preferRead
     ? readCommands.value[0] || writeCommands.value[0]
-    : writeCommands.value[0] || readCommands.value[0]
-  if (!command) {
-    previewMessage.value = []
-    return
+    : writeCommands.value[0] || readCommands.value[0]) ?? {
+    // 无任何指令时使用占位指令，保证预览区始终能展示当前报文结构
+    name: '',
+    address: '00',
+    data: '',
+    length: 0,
+    dataType: 'int16',
+    functionCode: '00',
+    registerCount: 0,
+    includeRegisterCount: true,
+    includeLength: true,
   }
 
   const isWriteCommand = writeCommands.value.includes(command as WriteCommand)

@@ -199,7 +199,21 @@ function renderChart(): void {
   }
 
   const start = Math.max(0, Math.floor(viewport.value.start))
-  const endExclusive = Math.min(length, Math.max(start + 1, Math.ceil(viewport.value.end)))
+  const replayEndExclusive =
+    fileTimeline.active.value && fileTimeline.mode.value === 'replay'
+      ? store.findNearestElapsedTime(fileTimeline.elapsedMilliseconds.value) + 1
+      : length
+  const endExclusive = Math.min(
+    replayEndExclusive,
+    Math.max(start + 1, Math.ceil(viewport.value.end)),
+  )
+  if (endExclusive <= start) {
+    renderer.clear()
+    renderer.render()
+    renderedYMax = 5
+    drawAxes(renderedYMax)
+    return
+  }
   const end = endExclusive - 1
   const { width } = currentPlotSize()
   const maxPoints = Math.max(64, Math.floor(width * 2))
@@ -504,7 +518,7 @@ watch(
 watch(resolvedTheme, () => scheduleRender())
 
 watch(
-  [fileTimeline.active, fileTimeline.elapsedMilliseconds],
+  [fileTimeline.active, fileTimeline.mode, fileTimeline.elapsedMilliseconds],
   () => {
     if (!props.active) return
     if (props.slidingWindow && fileTimeline.active.value) {
@@ -516,7 +530,7 @@ watch(
       }
       scheduleRender()
     } else {
-      drawAxes(renderedYMax)
+      scheduleRender()
     }
   },
 )

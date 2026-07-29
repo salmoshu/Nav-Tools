@@ -16,35 +16,27 @@ export default {
     desc: 'Read and configure camera parameters and display mode',
   },
   'flow-deviation': {
-    title: 'Flow Deviation',
-    desc: 'Analyze Flow trajectory and deviation',
-  },
-  'flow-deviation-canvas': {
-    title: 'Flow Deviation Canvas',
-    desc: 'Analyze Flow trajectory and deviation (ECharts version, for performance comparison and fallback)',
+    title: 'Deviation Chart',
+    desc: 'Analyze Flow trajectory and deviation (WebGL rendering)',
   },
   'gnss-map': {
     title: 'GNSS Map',
     desc: 'View current position and history track on the map',
   },
   'gnss-deviation': {
-    title: 'GNSS Deviation',
-    desc: 'Analyze GNSS positioning deviation',
-  },
-  'gnss-deviation-canvas': {
-    title: 'GNSS Deviation Canvas',
-    desc: 'Analyze GNSS positioning deviation (ECharts version, for performance comparison and fallback)',
+    title: 'GNSS Deviation Chart',
+    desc: 'Analyze GNSS positioning deviation (WebGL rendering)',
   },
   'gnss-signals': {
     title: 'GNSS Signals',
     desc: 'View satellite signal strength and status',
   },
   'sky-plot': {
-    title: 'Sky Plot',
+    title: 'GNSS Sky Plot',
     desc: 'View satellite azimuth and elevation',
   },
   'motor-parameters': {
-    title: 'Motor Parameters',
-    desc: 'Read and configure motor parameters',
+    title: 'Hex Message',
+    desc: 'Read and configure parameters',
   },
 }

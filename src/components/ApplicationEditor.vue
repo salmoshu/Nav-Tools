@@ -181,7 +181,6 @@ const catalogGroupNames: Record<string, string> = {
   general: 'app.editor.catalogGeneral',
   flow: 'Flow',
   gnss: 'GNSS',
-  motor: 'Motor',
   camera: 'Camera',
 }
 
@@ -328,10 +327,6 @@ const handleSave = async () => {
 .window-option-icon.mode-gnss {
   color: #0284c7;
   background: color-mix(in srgb, #0ea5e9 13%, var(--app-surface));
-}
-.window-option-icon.mode-motor {
-  color: #ea580c;
-  background: color-mix(in srgb, #f97316 13%, var(--app-surface));
 }
 .window-option-icon.mode-camera {
   color: #0d9488;

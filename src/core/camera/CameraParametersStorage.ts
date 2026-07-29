@@ -17,8 +17,6 @@ export type CameraSubCommand = (typeof CAMERA_SUB_COMMANDS)[number] | ''
 
 export interface CameraParametersSettings {
   version: 1
-  host: string
-  port: number
   subCommand: CameraSubCommand
   content: string
   contentIsHex: boolean
@@ -27,8 +25,6 @@ export interface CameraParametersSettings {
 export function createDefaultCameraParametersSettings(): CameraParametersSettings {
   return {
     version: 1,
-    host: '192.168.3.14',
-    port: 8080,
     subCommand: '',
     content: '',
     contentIsHex: false,
@@ -49,14 +45,6 @@ function normalizeSettings(value: unknown): CameraParametersSettings {
 
   return {
     version: 1,
-    host: typeof saved.host === 'string' ? saved.host : defaults.host,
-    port:
-      typeof saved.port === 'number' &&
-      Number.isInteger(saved.port) &&
-      saved.port >= 1 &&
-      saved.port <= 65535
-        ? saved.port
-        : defaults.port,
     subCommand,
     content: typeof saved.content === 'string' ? saved.content : defaults.content,
     contentIsHex:
@@ -68,9 +56,7 @@ export class CameraParametersStorage {
   public constructor(private readonly storage: JsonStorage) {}
 
   public load(): CameraParametersSettings {
-    return normalizeSettings(
-      this.storage.read<unknown>(CAMERA_PARAMETERS_SETTINGS_KEY, undefined),
-    )
+    return normalizeSettings(this.storage.read<unknown>(CAMERA_PARAMETERS_SETTINGS_KEY, undefined))
   }
 
   public save(settings: CameraParametersSettings): void {

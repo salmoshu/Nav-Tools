@@ -7,6 +7,7 @@ const CAMERA_DEFAULT_MIGRATION_KEY = 'nav-tools:migration:camera-default-v1'
 const CAMERA_PARAMETERS_MIGRATION_KEY = 'nav-tools:migration:camera-parameters-v1'
 const SERIAL_DEFAULT_MIGRATION_KEY = 'nav-tools:migration:serial-default-v1'
 const GNSS_MESSAGES_MIGRATION_KEY = 'nav-tools:migration:gnss-messages-v1'
+const FLOW_DEFAULT_MIGRATION_KEY = 'nav-tools:migration:flow-default-v1'
 
 export const DEFAULT_APPLICATIONS: readonly UserApplication[] = [
   {
@@ -15,7 +16,7 @@ export const DEFAULT_APPLICATIONS: readonly UserApplication[] = [
     description: 'Serial port telemetry and raw message workspace',
     icon: 'connection',
     accent: '#8b5cf6',
-    windowIds: ['plot', 'raw-messages'],
+    windowIds: ['plot', 'raw-messages', 'motor-parameters'],
   },
   {
     id: 'gnss',
@@ -27,11 +28,11 @@ export const DEFAULT_APPLICATIONS: readonly UserApplication[] = [
   },
   {
     id: 'motor',
-    name: 'Motor',
-    description: 'Motor telemetry, command, and parameter workspace',
+    name: 'Flow',
+    description: 'Flow deviation, telemetry, and parameter workspace',
     icon: 'motor',
     accent: '#f97316',
-    windowIds: ['plot', 'raw-messages', 'motor-parameters'],
+    windowIds: ['plot', 'raw-messages', 'flow-deviation', 'motor-parameters'],
   },
   {
     id: 'camera',
@@ -53,6 +54,7 @@ export class ApplicationStorage {
       this.storage.writeRaw(CAMERA_DEFAULT_MIGRATION_KEY, '1')
       this.storage.writeRaw(CAMERA_PARAMETERS_MIGRATION_KEY, '1')
       this.storage.writeRaw(SERIAL_DEFAULT_MIGRATION_KEY, '1')
+      this.storage.writeRaw(FLOW_DEFAULT_MIGRATION_KEY, '1')
       return defaults
     }
 
@@ -100,6 +102,24 @@ export class ApplicationStorage {
       }
       this.storage.writeRaw(GNSS_MESSAGES_MIGRATION_KEY, '1')
     }
+    if (this.storage.readRaw(FLOW_DEFAULT_MIGRATION_KEY) === null) {
+      const flowDefault = DEFAULT_APPLICATIONS.find((application) => application.id === 'motor')
+      const motorApplication = applications.find((application) => application.id === 'motor')
+      if (motorApplication && flowDefault) {
+        if (motorApplication.name === 'Motor') {
+          motorApplication.name = flowDefault.name
+          motorApplication.description = flowDefault.description
+        }
+        if (!motorApplication.windowIds.includes('flow-deviation')) {
+          motorApplication.windowIds.push('flow-deviation')
+        }
+      }
+      const serialApplication = applications.find((application) => application.id === 'serial')
+      if (serialApplication && !serialApplication.windowIds.includes('motor-parameters')) {
+        serialApplication.windowIds.push('motor-parameters')
+      }
+      this.storage.writeRaw(FLOW_DEFAULT_MIGRATION_KEY, '1')
+    }
     this.saveApplications(applications)
     return applications
   }
@@ -115,6 +135,7 @@ export class ApplicationStorage {
     this.storage.writeRaw(CAMERA_PARAMETERS_MIGRATION_KEY, '1')
     this.storage.writeRaw(SERIAL_DEFAULT_MIGRATION_KEY, '1')
     this.storage.writeRaw(GNSS_MESSAGES_MIGRATION_KEY, '1')
+    this.storage.writeRaw(FLOW_DEFAULT_MIGRATION_KEY, '1')
     return defaults
   }
 

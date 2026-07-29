@@ -68,6 +68,37 @@
       </el-button>
       <el-button v-else :icon="VideoPause" @click="pauseStream">{{ t('common.video.pause') }}</el-button>
     </div>
+
+    <el-dialog
+      v-model="showCameraSourceDialog"
+      :title="t('common.video.rtspSettingsTitle')"
+      class="app-dialog camera-video-source-dialog"
+      width="min(520px, calc(100vw - 32px))"
+      :close-on-click-modal="true"
+      :close-on-press-escape="true"
+      :append-to-body="true"
+      align-center
+    >
+      <div class="camera-source-config">
+        <p>{{ t('common.video.rtspSettingsDesc') }}</p>
+        <label>
+          <span>{{ t('common.video.rtspAddress') }}</span>
+          <el-input
+            v-model="streamUrlDraft"
+            :aria-label="t('common.video.rtspAddress')"
+            placeholder="rtsp://192.168.3.14:8554/rgbstream"
+            clearable
+            @keydown.enter.prevent="saveCameraSourceSettings"
+          />
+        </label>
+      </div>
+      <template #footer>
+        <el-button @click="showCameraSourceDialog = false">{{ t('app.cancel') }}</el-button>
+        <el-button type="primary" @click="saveCameraSourceSettings">
+          {{ t('common.video.saveRtspSettings') }}
+        </el-button>
+      </template>
+    </el-dialog>
   </section>
 </template>
 
@@ -76,15 +107,19 @@ import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Link, Loading, VideoCamera, VideoPause, VideoPlay } from '@element-plus/icons-vue'
 import { t } from '@/i18n'
-import { normalizeRtspUrl } from '@/core/data/DataSourceStorage'
-import { useDataSourceManager } from '@/composables/useDataSourceManager'
-import emitter from '@/hooks/useMitt'
+import {
+  CameraVideoStorage,
+  normalizeRtspUrl,
+} from '@/core/camera/CameraVideoStorage'
+import { JsonStorage } from '@/core/storage/JsonStorage'
 
 type StreamStatus = 'idle' | 'connecting' | 'playing' | 'stopped' | 'error' | 'unavailable'
 type StreamStatusPayload = { status?: StreamStatus; message?: string }
 
-const { settings: dataSourceSettings } = useDataSourceManager()
-const streamUrl = computed(() => dataSourceSettings.camera.url)
+const videoStorage = new CameraVideoStorage(new JsonStorage(window.localStorage))
+const streamUrl = ref(videoStorage.load().streamUrl)
+const streamUrlDraft = ref(streamUrl.value)
+const showCameraSourceDialog = ref(false)
 const status = ref<StreamStatus>('idle')
 const statusMessage = ref(t('common.video.waitingToPlay'))
 const frameUrl = ref('')
@@ -190,7 +225,22 @@ async function startStream() {
 }
 
 function openCameraSourceSettings() {
-  emitter.emit('input-event', { tab: 'camera' })
+  streamUrlDraft.value = streamUrl.value
+  showCameraSourceDialog.value = true
+}
+
+function saveCameraSourceSettings() {
+  const url = normalizeRtspUrl(streamUrlDraft.value)
+  if (!url) {
+    ElMessage.warning(t('common.video.errInvalidRtsp'))
+    return
+  }
+
+  streamUrl.value = url
+  streamUrlDraft.value = url
+  videoStorage.save({ version: 1, streamUrl: url })
+  showCameraSourceDialog.value = false
+  ElMessage.success(t('data.cameraRtspSaved'))
 }
 
 async function pauseStream() {
@@ -261,6 +311,25 @@ onUnmounted(() => {
   padding: 10px;
   border-top: 1px solid var(--app-border);
   background: var(--app-surface-muted);
+}
+
+.camera-source-config {
+  display: grid;
+  gap: 16px;
+}
+
+.camera-source-config p {
+  margin: 0;
+  color: var(--app-text-secondary);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.camera-source-config label {
+  display: grid;
+  gap: 7px;
+  color: var(--app-text-secondary);
+  font-size: 12px;
 }
 
 .label-hints {

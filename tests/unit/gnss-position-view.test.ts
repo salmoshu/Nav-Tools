@@ -14,11 +14,19 @@ describe('GNSS deviation position and speed views', () => {
 
   it('renders E, N, and U as three separate rows', () => {
     expect(source).toContain('class="position-chart-grid"')
-    expect(source).toContain('grid-template-rows: repeat(3, minmax(220px, 1fr))')
+    expect(source).toContain('grid-template-rows: repeat(3, minmax(0, 1fr))')
     expect(source).toContain('grid-template-columns: 1fr')
+    expect(source).toContain('overflow: hidden')
     for (const field of ['E', 'N', 'U']) {
       expect(source).toContain(`field="${field}"`)
     }
+  })
+
+  it('adapts chart layout and tick density to the available row height', () => {
+    expect(metric).toContain('min-height: 0')
+    expect(metric).toContain('updateLayout(container.clientHeight)')
+    expect(metric).toContain('containerHeight < 150')
+    expect(metric).toContain('plotHeight < 80 ? 2 : 4')
   })
 
   it('adds a separate ground-speed chart in km/h', () => {
@@ -30,7 +38,9 @@ describe('GNSS deviation position and speed views', () => {
   it('uses the WebGL time-series renderer and pixel-bounded LOD', () => {
     expect(metric).toContain('createSatelliteTimeSeriesRenderer')
     expect(metric).toContain('store.extractSeries')
-    expect(metric).toContain('new Float32Array(extracted.points)')
+    expect(metric).toContain('splitSeriesByQuality')
+    expect(metric).toContain('FIX_STATUS_QUALITIES')
+    expect(metric).toContain('fixStatusColor(quality)')
     expect(metric).toContain('OVERVIEW_RENDER_INTERVAL_MS = 1_000')
     expect(metric).not.toContain("renderer: 'svg'")
     expect(metric).not.toContain('import * as echarts')
@@ -62,13 +72,17 @@ describe('GNSS deviation position and speed views', () => {
     expect(source).toContain('getLatestRenderedPoint')
     expect(source).toContain('renderedPointCount')
     expect(source).toContain('fitDeviationPoints(')
-    expect(source).toContain('isTracking.value = false')
+    expect(source).toContain('const isTracking = ref(true)')
+    expect(source).not.toContain('isTracking.value = false')
   })
 
   it('moves deviation and metric cursors with the shared file timeline', () => {
     expect(source).toContain('getTimelinePositionPoint')
-    expect(source).toContain('history.findNearestElapsedTime(fileTimeline.elapsedMilliseconds.value)')
+    expect(source).toContain(
+      'history.findNearestElapsedTime(fileTimeline.elapsedMilliseconds.value)',
+    )
     expect(metric).toContain('useFileTimeline')
     expect(metric).toContain('store.findNearestElapsedTime(fileTimeline.elapsedMilliseconds.value)')
+    expect(metric).toContain("store.getValue('QUALITY', cursorIndex)")
   })
 })

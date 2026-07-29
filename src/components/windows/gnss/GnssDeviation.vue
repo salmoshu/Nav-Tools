@@ -61,21 +61,18 @@
         field="E"
         :label="t('gnss.deviation.axisE')"
         unit="m"
-        color="#1890ff"
         :active="currentView === 'position'"
       />
       <GnssMetricTimeSeries
         field="N"
         :label="t('gnss.deviation.axisN')"
         unit="m"
-        color="#fa541c"
         :active="currentView === 'position'"
       />
       <GnssMetricTimeSeries
         field="U"
         :label="t('gnss.deviation.axisU')"
         unit="m"
-        color="#52c41a"
         :active="currentView === 'position'"
       />
     </div>
@@ -84,7 +81,6 @@
         field="SPEED"
         :label="t('gnss.deviation.speed')"
         unit="km/h"
-        color="#722ed1"
         :active="currentView === 'speed'"
       />
     </div>
@@ -415,6 +411,7 @@ function handleNmeaUpdate(): boolean {
 
   if (
     fileTimeline.active.value &&
+    !isTracking.value &&
     sourceChanged &&
     !hasMorePoints &&
     chartContainerRef.value
@@ -426,7 +423,6 @@ function handleNmeaUpdate(): boolean {
       GNSS_MIN_VISIBLE_SPAN_METERS,
     )
     if (fitted) {
-      isTracking.value = false
       panOffsetX = 0
       panOffsetY = 0
       trackingXHalfSpan = (fitted.xMax - fitted.xMin) / 2
@@ -872,15 +868,18 @@ onUnmounted(() => {
 .position-chart-grid {
   flex: 1;
   display: grid;
-  grid-template-rows: repeat(3, minmax(220px, 1fr));
+  grid-template-rows: repeat(3, minmax(0, 1fr));
   grid-template-columns: 1fr;
-  gap: 10px;
-  overflow-y: auto;
-  overflow-x: hidden;
+  gap: clamp(4px, 1vh, 10px);
+  overflow: hidden;
   min-height: 0;
   width: 100%;
-  padding: 10px;
+  padding: clamp(4px, 1vh, 10px);
   box-sizing: border-box;
+}
+
+.position-chart-grid > * {
+  min-height: 0;
 }
 
 .speed-chart-container {

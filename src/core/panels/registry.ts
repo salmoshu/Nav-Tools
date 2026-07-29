@@ -20,7 +20,7 @@ export type ApplicationIcon =
   | 'gauge'
   | 'chart'
 export type PanelDataMode = 'general' | 'flow' | 'gnss' | 'motor'
-export type PanelCatalogGroup = 'general' | 'flow' | 'gnss' | 'motor' | 'camera'
+export type PanelCatalogGroup = 'general' | 'flow' | 'gnss' | 'camera'
 
 export interface UserApplication {
   id: string
@@ -106,18 +106,6 @@ export const panelRegistry: readonly PanelDefinition[] = [
     componentPath: '@/components/windows/common/FlowDeviation.vue',
   },
   {
-    id: 'flow-deviation-canvas',
-    moduleId: 'flow',
-    appMode: 'robot',
-    funcMode: 'flow',
-    catalogGroup: 'general',
-    action: 'deviation',
-    title: 'panel.flow-deviation-canvas.title',
-    description: 'panel.flow-deviation-canvas.desc',
-    componentName: 'FlowDeviationCanvas',
-    componentPath: '@/components/windows/common/FlowDeviationCanvas.vue',
-  },
-  {
     id: 'gnss-map',
     moduleId: 'gnss',
     appMode: 'pos',
@@ -140,18 +128,6 @@ export const panelRegistry: readonly PanelDefinition[] = [
     description: 'panel.gnss-deviation.desc',
     componentName: 'GnssDeviation',
     componentPath: '@/components/windows/gnss/GnssDeviation.vue',
-  },
-  {
-    id: 'gnss-deviation-canvas',
-    moduleId: 'gnss',
-    appMode: 'pos',
-    funcMode: 'gnss',
-    catalogGroup: 'gnss',
-    action: 'deviation',
-    title: 'panel.gnss-deviation-canvas.title',
-    description: 'panel.gnss-deviation-canvas.desc',
-    componentName: 'GnssDeviationCanvas',
-    componentPath: '@/components/windows/gnss/GnssDeviationCanvas.vue',
   },
   {
     id: 'gnss-signals',
@@ -182,7 +158,7 @@ export const panelRegistry: readonly PanelDefinition[] = [
     moduleId: 'motor',
     appMode: 'pnc',
     funcMode: 'motor',
-    catalogGroup: 'motor',
+    catalogGroup: 'general',
     action: 'config',
     title: 'panel.motor-parameters.title',
     description: 'panel.motor-parameters.desc',

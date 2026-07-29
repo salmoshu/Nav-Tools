@@ -1,4 +1,10 @@
 import { computed, ref } from "vue"
+import {
+  DEFAULT_KEY_VALUE_REGEX,
+  parseTextRecord,
+  type ParsedTextRecord,
+  type TextDataParser,
+} from '@/core/data/TextRecordParser'
 
 type FlowDataType = {
   plotTime?: number[]
@@ -56,7 +62,11 @@ export function useFlow() {
     }
   }
 
-  const initRawData = (data: string) => {
+  const initRawData = (
+    data: string,
+    parser: TextDataParser = 'json',
+    regexPattern = DEFAULT_KEY_VALUE_REGEX,
+  ) => {
     clearRawData()
     const lines = data.split("\n")
     flowData.value.isBatchData = true
@@ -67,15 +77,14 @@ export function useFlow() {
           const combined_reg = /^(\d{2}:\d{2}:\d{2}\.\d+)?\s*(\[MSG ⬅️\]:\s+|\[STR ➡️\]:\s+|\[HEX ➡️\]:\s+)?/;
           const cleanedLine = line.replace(combined_reg, '').trim()
 
-          if (cleanedLine.indexOf('{') === -1 || cleanedLine.indexOf('}') === -1) {
-            continue
-          }
-          const json = JSON.parse(cleanedLine)
+          const parsed = parseTextRecord(cleanedLine, parser, regexPattern)
+          if (!parsed.valid || !parsed.record) continue
+          const json: ParsedTextRecord = parsed.record
           
           // 自适应添加新的数据源字段
           Object.keys(json).forEach(key => {
             if (!(key in flowData.value) && key !== 'time') {
-              flowData.value[key] = []
+              flowData.value[key] = Array(flowData.value.plotTime?.length ?? 0).fill(null)
               flowData.value.rawDataKeys!.push(key)
             }
           })
@@ -101,9 +110,9 @@ export function useFlow() {
           }
           
           // 存储数据
-          Object.keys(json).forEach(key => {
-            if (key !== 'time' && Array.isArray(flowData.value[key])) {
-              (flowData.value[key] as any[]).push(json[key])
+          flowData.value.rawDataKeys!.forEach(key => {
+            if (Array.isArray(flowData.value[key])) {
+              (flowData.value[key] as any[]).push(key in json ? json[key] : null)
             }
           })
         } catch (error) {
@@ -126,7 +135,11 @@ export function useFlow() {
     })
   }
 
-  const addRawData = (data: string) => {
+  const addRawData = (
+    data: string,
+    parser: TextDataParser = 'json',
+    regexPattern = DEFAULT_KEY_VALUE_REGEX,
+  ) => {
     if (flowData.value.isBatchData) {
       clearRawData()
       flowData.value.isBatchData = false
@@ -146,15 +159,15 @@ export function useFlow() {
     for (const line of lines) {
       if (line.trim() !== "") {
         try {
-          if (line.indexOf('{') === -1 || line.indexOf('}') === -1) {
-            continue
-          }
-          const json = JSON.parse(line)
+          const parsed = parseTextRecord(line, parser, regexPattern)
+          if (!parsed.valid || !parsed.record) continue
+          const json: ParsedTextRecord = parsed.record
           
           // 自适应添加新的数据源字段
           Object.keys(json).forEach(key => {
             if (!(key in flowData.value) && key !== 'time') {
-              flowData.value[key] = []
+              flowData.value[key] = Array(flowData.value.plotTime?.length ?? 0).fill(null)
+              flowData.value.rawDataKeys!.push(key)
             }
           })
 
@@ -180,9 +193,9 @@ export function useFlow() {
           }
           
           // 存储数据
-          Object.keys(json).forEach(key => {
-            if (key !== 'time' && Array.isArray(flowData.value[key])) {
-              (flowData.value[key] as any[]).push(json[key])
+          flowData.value.rawDataKeys!.forEach(key => {
+            if (Array.isArray(flowData.value[key])) {
+              (flowData.value[key] as any[]).push(key in json ? json[key] : null)
             }
           })
         } catch (error) {

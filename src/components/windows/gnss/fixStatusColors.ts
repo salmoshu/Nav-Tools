@@ -1,4 +1,4 @@
-// GNSS 解状态（GGA quality 字段）颜色映射，GnssDeviation / GnssDeviationCanvas / GnssMap 共用。
+// GNSS 解状态（GGA quality 字段）颜色映射，GnssDeviation / GnssMap 共用。
 // 0：无效解；1：单点定位解；2：伪距差分；4：固定解；5：浮动解。
 export const FIX_STATUS_COLORS: Readonly<Record<number, string>> = {
   0: '#808080', // Invalid 无效解（grey）
@@ -9,6 +9,15 @@ export const FIX_STATUS_COLORS: Readonly<Record<number, string>> = {
 }
 
 export const DEFAULT_FIX_STATUS_COLOR = '#808080'
+
+export const FIX_STATUS_QUALITIES = [0, 1, 2, 4, 5] as const
+export type FixStatusQuality = (typeof FIX_STATUS_QUALITIES)[number]
+
+export function normalizeFixStatusQuality(quality: number | null): FixStatusQuality {
+  return FIX_STATUS_QUALITIES.includes(quality as FixStatusQuality)
+    ? (quality as FixStatusQuality)
+    : 0
+}
 
 export function fixStatusColor(quality: number): string {
   return FIX_STATUS_COLORS[quality] ?? DEFAULT_FIX_STATUS_COLOR

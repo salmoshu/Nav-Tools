@@ -67,6 +67,12 @@ export default {
   parserRawDesc: 'Keep raw data without structural validation',
   parserJsonDesc: 'Parse and validate JSON objects per line',
   parserNmeaDesc: 'Parse and validate NMEA sentences per line',
+  parserRegexDesc: 'Extract key-value fields with a regular expression for charting',
+  parserCsvDesc: 'Split by comma; keys are 1-based column indices; values are type-inferred',
+  parserGroupStructured: 'Structured',
+  parserGroupProtocol: 'Protocol',
+  parserGroupCustom: 'Custom',
+  regexPatternInvalid: 'Invalid regular expression: {message}',
 
   // useStatusManager.ts — Monaco completion docs (functions)
   funcSafeDivide: 'Safe division',

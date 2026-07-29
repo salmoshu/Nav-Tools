@@ -129,83 +129,9 @@ export const createDefaultMotorConfig = (): ConfigForm => ({
   dataEndianness: 'little',
 })
 
-export const createDefaultReadCommands = (): ReadCommand[] => [
-  {
-    name: 'GET_SPEED',
-    address: '00',
-    data: '0000',
-    length: 4,
-    dataType: 'int16',
-    functionCode: '03',
-    registerCount: 2,
-    includeRegisterCount: true,
-    includeLength: true,
-    frequency: null,
-    lastSentTime: 0,
-  },
-  {
-    name: 'GET_SPEED_M1',
-    address: '01',
-    data: '0000',
-    length: 2,
-    dataType: 'int16',
-    functionCode: '03',
-    registerCount: 1,
-    includeRegisterCount: true,
-    includeLength: true,
-    frequency: null,
-    lastSentTime: 0,
-  },
-  {
-    name: 'GET_SPEED_M2',
-    address: '02',
-    data: '0000',
-    length: 2,
-    dataType: 'int16',
-    functionCode: '03',
-    registerCount: 1,
-    includeRegisterCount: true,
-    includeLength: true,
-    frequency: null,
-    lastSentTime: 0,
-  },
-]
+export const createDefaultReadCommands = (): ReadCommand[] => []
 
-export const createDefaultWriteCommands = (): WriteCommand[] => [
-  {
-    name: 'SET_SPEED',
-    address: '00',
-    data: '00000000',
-    length: 4,
-    dataType: 'float32',
-    functionCode: '06',
-    registerCount: 2,
-    includeRegisterCount: true,
-    includeLength: true,
-  },
-  {
-    name: 'SET_SPEED_M1',
-    address: '01',
-    data: '0000',
-    length: 2,
-    dataType: 'int16',
-    functionCode: '06',
-    registerCount: 1,
-    includeRegisterCount: true,
-    includeLength: true,
-  },
-  {
-    name: 'SET_SPEED_M2',
-    address: '02',
-    data: '0000',
-    length: 2,
-    dataType: 'int16',
-    functionCode: '06',
-    registerCount: 1,
-    includeRegisterCount: true,
-    includeLength: true,
-  },
-]
+export const createDefaultWriteCommands = (): WriteCommand[] => []
 
 export function createMotorCmdManager() {
   // 配置表单数据

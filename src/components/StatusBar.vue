@@ -308,6 +308,7 @@ import {
 } from '@/composables/useStatusManager'
 import { useApplicationSelector } from '@/composables/useApplicationSelector'
 import { useFlow } from '@/composables/flow/useFlow'
+import { hasStatusData } from '@/core/status/statusValue'
 import { useFlowStore } from '@/stores/flow'
 // 4. 导入需要的图标
 import { Plus, Close, Delete, Edit, InfoFilled, DataAnalysis, Rank } from '@element-plus/icons-vue'
@@ -387,9 +388,8 @@ const showComputedStatusDialog = (statusName: string) => {
 }
 
 const getStatusClass = (status: unknown) => ({
-  'status-positive': status === true,
-  'status-negative': status === false,
-  'status-empty-value': status === '' || status === null || status === undefined,
+  'status-has-data': hasStatusData(status),
+  'status-no-data': !hasStatusData(status),
 })
 
 const formatStatusName = (name: string) =>
@@ -400,9 +400,6 @@ const formatStatusName = (name: string) =>
     .replace(/\b\w/g, (letter) => letter.toUpperCase())
 
 const getStatusValue = (status: unknown, statusName = '') => {
-  if (typeof status === 'boolean') {
-    return status ? 'ON' : 'OFF'
-  }
   if (typeof status === 'number') {
     if (!Number.isFinite(status)) return '—'
     if (/latitude|longitude/i.test(statusName)) return status.toFixed(6)
@@ -1047,34 +1044,12 @@ onUnmounted(() => {
   white-space: normal;
 }
 
-.status-positive {
-  border-color: color-mix(in srgb, var(--el-color-success) 30%, var(--app-border));
-}
-
-.status-positive .status-indicator,
-.status-positive .status-state-dot {
-  color: var(--el-color-success);
-}
-
-.status-positive .status-state-dot {
+.status-has-data .status-state-dot {
   background: var(--el-color-success);
 }
 
-.status-negative {
-  border-color: color-mix(in srgb, var(--el-color-danger) 30%, var(--app-border));
-}
-
-.status-negative .status-indicator,
-.status-negative .status-state-dot {
-  color: var(--el-color-danger);
-}
-
-.status-negative .status-state-dot {
-  background: var(--el-color-danger);
-}
-
-.status-empty-value .status-indicator {
-  color: var(--app-text-muted);
+.status-no-data .status-state-dot {
+  background: var(--app-border-strong);
 }
 
 .statusbar-dock-zones {

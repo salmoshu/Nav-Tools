@@ -85,7 +85,7 @@ const isElectron = typeof window !== 'undefined' && !!window.ipcRenderer
 
 const containerRef = ref<HTMLElement | null>(null)
 const mapRef = ref<HTMLElement | null>(null)
-const follow = ref(!fileTimeline.active.value)
+const follow = ref(true)
 const slidingWindow = ref(false)
 const offlineTilesDir = ref('')
 
@@ -115,6 +115,7 @@ let resizeObserver: ResizeObserver | null = null
 let trackRenderFrame: number | null = null
 let observedSourceCount = 0
 let firstObservedSourcePoint: SourceTrackPoint | undefined
+let lastObservedSourcePoint: SourceTrackPoint | undefined
 let pendingTrackHead = 0
 let lastFollowUpdateAt = 0
 const pendingTrackPoints: SourceTrackPoint[] = []
@@ -128,10 +129,10 @@ const MAP_FOLLOW_INTERVAL_MS = 50
 
 const tileUrl = computed(() => (isElectron ? ELECTRON_TILE_URL : WEB_TILE_URL))
 
-function isValidPosition(longitude: number, latitude: number): boolean {
+function isValidPosition(longitude: number | string, latitude: number | string): boolean {
   if (!Number.isFinite(longitude) || !Number.isFinite(latitude)) return false
   if (longitude === 0 && latitude === 0) return false
-  return Math.abs(latitude) <= 90 && Math.abs(longitude) <= 180
+  return Math.abs(Number(latitude)) <= 90 && Math.abs(Number(longitude)) <= 180
 }
 
 function initMap() {
@@ -256,12 +257,57 @@ function trimTrackToWindow() {
 function appendTrackPosition(longitude: number, latitude: number, quality: number): boolean {
   if (!map || !isValidPosition(longitude, latitude)) return false
 
-  const latlng: L.LatLngExpression = [latitude, longitude]
+  const latlng: L.LatLngExpression = [Number(latitude), Number(longitude)]
   const previousPoint = trackPoints[trackPoints.length - 1]
   const point = { id: nextTrackPointId++, latlng, quality }
   trackPoints.push(point)
   appendTrackPoint(point, previousPoint)
   return true
+}
+
+function removeLatestTrackPoint(): boolean {
+  const removedPoint = trackPoints.pop()
+  if (!removedPoint) return false
+
+  for (let index = trackSegments.length - 1; index >= 0; index -= 1) {
+    const segment = trackSegments[index]
+    const pointIndex = segment.pointIds.lastIndexOf(removedPoint.id)
+    if (pointIndex < 0) continue
+
+    segment.pointIds.splice(pointIndex, 1)
+    segment.latlngs.splice(pointIndex, 1)
+    if (segment.pointIds.length < 2) {
+      segment.line.remove()
+      trackSegments.splice(index, 1)
+    } else {
+      segment.line.setLatLngs(segment.latlngs)
+    }
+    return true
+  }
+
+  return true
+}
+
+// A matching GGA sample replaces the provisional RMC sample at the source tail.
+// Update only that queued/rendered point so a live 10 Hz stream does not rebuild
+// its complete Leaflet history every time an epoch is coalesced.
+function replaceLatestTrackPoint(
+  previous: SourceTrackPoint,
+  replacement: SourceTrackPoint,
+): void {
+  const pendingIndex = pendingTrackPoints.lastIndexOf(previous)
+  if (pendingIndex >= pendingTrackHead) {
+    pendingTrackPoints[pendingIndex] = replacement
+    return
+  }
+
+  if (!removeLatestTrackPoint()) {
+    pendingTrackPoints.push(replacement)
+    scheduleTrackRender()
+    return
+  }
+
+  appendTrackPosition(replacement[0], replacement[1], replacement[2])
 }
 
 function appendTrackRange(start: number, end: number): SourceTrackPoint | undefined {
@@ -303,14 +349,14 @@ function appendTrackRange(start: number, end: number): SourceTrackPoint | undefi
 }
 
 function updateCurrentPosition(
-  longitude: number,
-  latitude: number,
+  longitude: number | string,
+  latitude: number | string,
   quality: number,
   forceFollow = false,
 ) {
   if (!map || !positionMarker || !isValidPosition(longitude, latitude)) return
 
-  const latlng: L.LatLngExpression = [latitude, longitude]
+  const latlng: L.LatLngExpression = [Number(latitude), Number(longitude)]
   const now = performance.now()
   if (!hasCentered) {
     hasCentered = true
@@ -387,7 +433,7 @@ function renderPendingTrack() {
   if (queueEmpty) {
     pendingTrackPoints.length = 0
     pendingTrackHead = 0
-    if (fileTimeline.active.value && !slidingWindow.value) fitCompleteTrack()
+    if (fileTimeline.active.value && !slidingWindow.value && !follow.value) fitCompleteTrack()
   } else {
     scheduleTrackRender()
   }
@@ -413,6 +459,7 @@ function clearTrack() {
   cancelTrackRender()
   observedSourceCount = mapTrackPoints.value.length
   firstObservedSourcePoint = mapTrackPoints.value[0]
+  lastObservedSourcePoint = mapTrackPoints.value.at(-1)
   clearRenderedTrack()
 }
 
@@ -420,6 +467,7 @@ function resetTrackHistory() {
   cancelTrackRender()
   observedSourceCount = 0
   firstObservedSourcePoint = undefined
+  lastObservedSourcePoint = undefined
   hasCentered = false
   lastFollowUpdateAt = 0
   clearRenderedTrack()
@@ -434,13 +482,26 @@ function syncTrackSource() {
       observedSourceCount > 0 &&
       source[0] !== firstObservedSourcePoint)
 
-  if (sourceReset) resetTrackHistory()
+  if (sourceReset) {
+    resetTrackHistory()
+  } else if (
+    observedSourceCount > 0 &&
+    source.length >= observedSourceCount &&
+    lastObservedSourcePoint &&
+    source[observedSourceCount - 1] !== lastObservedSourcePoint
+  ) {
+    replaceLatestTrackPoint(
+      lastObservedSourcePoint,
+      source[observedSourceCount - 1],
+    )
+  }
 
   for (let index = observedSourceCount; index < source.length; index++) {
     pendingTrackPoints.push(source[index])
   }
   observedSourceCount = source.length
   firstObservedSourcePoint = source[0]
+  lastObservedSourcePoint = source.at(-1)
   scheduleTrackRender()
 }
 
@@ -454,10 +515,6 @@ function copyTilesDir() {
 }
 
 watch(mapTrackPoints, syncTrackSource)
-
-watch(fileTimeline.active, (active) => {
-  if (active) follow.value = false
-})
 
 watch(
   () =>

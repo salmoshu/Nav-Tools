@@ -5,6 +5,7 @@ import { getWindowById, getWindowsByIds, navMode, normalizeWindowId, type Window
 import { useApplicationSelector } from '@/composables/useApplicationSelector'
 import { showStatusBar, showToolBar, toolbarPosition, statusbarPosition } from '@/composables/useStatusManager'
 import { LayoutStorage, type PersistedLayoutItem } from '@/core/layout/LayoutStorage'
+import { arrangeLayoutInBestGrid } from '@/core/layout/arrangeBestGrid'
 import { JsonStorage } from '@/core/storage/JsonStorage'
 import emitter from '@/hooks/useMitt'
 import { t } from '@/i18n'
@@ -196,7 +197,10 @@ export function useLayoutManager() {
   }
 
   async function createDefaultLayout() {
-    layoutDraggableList.value = allowedWindows.value.map(createLayoutItem)
+    const items = allowedWindows.value.map(createLayoutItem)
+    // 默认布局即最佳布局：按最优网格排列，且每个设定组件仅出现一次
+    // （allowedWindows 已去重，故天然满足“每个组件仅一个”）。
+    layoutDraggableList.value = arrangeLayoutInBestGrid(items)
     backupCurrentLayout()
   }
 
@@ -237,17 +241,7 @@ export function useLayoutManager() {
   }
 
   async function createBestLayout() {
-    const componentCount = layoutDraggableList.value.length
-    const columnCount = componentCount > 9 ? 4 : componentCount > 4 ? 3 : 2
-    const cellWidth = 12 / columnCount
-
-    layoutDraggableList.value = layoutDraggableList.value.map((item, index) => ({
-      ...item,
-      x: (index % columnCount) * cellWidth,
-      y: Math.floor(index / columnCount) * 6,
-      w: cellWidth,
-      h: 6,
-    }))
+    layoutDraggableList.value = arrangeLayoutInBestGrid(layoutDraggableList.value)
     backupCurrentLayout()
   }
 

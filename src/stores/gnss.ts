@@ -5,10 +5,10 @@ export interface GnssState {
     fixMode: string
     quality: number
     TTFF: string
-    longitude: number
-    latitude: number
-    altitude: number
-    altitudeMsl: number
+    longitude: number | string
+    latitude: number | string
+    altitude: number | string
+    altitudeMsl: number | string
     velocity: string
     utcTime: string
     threeDAcc: string
@@ -25,10 +25,10 @@ function createDefaultGnssState(): GnssState {
         fixMode: '',
         quality: 0,
         TTFF: '',
-        longitude: 0.0,
-        latitude: 0.0,
-        altitude: 0.0,
-        altitudeMsl: 0.0,
+        longitude: '',
+        latitude: '',
+        altitude: '',
+        altitudeMsl: '',
         velocity: '',
         threeDAcc: '',
         twoDAcc: '',

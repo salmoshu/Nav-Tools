@@ -137,6 +137,10 @@ import { getPanelIconComponent } from '@/settings/panelIcons'
 import { useDevice } from '@/hooks/useDevice'
 import { useApplicationSelector } from '@/composables/useApplicationSelector'
 import { createBrowserIpcTransport } from '@/core/platform/IpcTransport'
+import {
+  buildConfigurationExport,
+  downloadConfigurationExport,
+} from '@/core/config/ConfigurationExport'
 import { t } from '@/i18n'
 
 const props = defineProps<{
@@ -170,6 +174,7 @@ const device = useDevice()
 const {
   layoutDraggableList,
   initLayout,
+  saveCurrentLayout,
   saveLayout,
   autoLayout,
   resetLayout,
@@ -178,6 +183,33 @@ const {
   removeItem,
   handleApplicationChange,
 } = useLayoutManager()
+
+const handleExportConfiguration = () => {
+  try {
+    const exportedAt = new Date()
+    saveCurrentLayout()
+    const configuration = buildConfigurationExport(localStorage, {
+      applications: applications.value,
+      selectedApplicationId: currentApplicationId.value,
+      exportedAt,
+    })
+    downloadConfigurationExport(configuration, exportedAt)
+    ElMessage({
+      message: t('app.toolbar.exportConfigurationSuccess'),
+      type: 'success',
+      placement: 'bottom-right',
+      offset: 50,
+    })
+  } catch (error) {
+    console.error('Failed to export Nav-Tools configuration:', error)
+    ElMessage({
+      message: t('app.toolbar.exportConfigurationFailed'),
+      type: 'error',
+      placement: 'bottom-right',
+      offset: 50,
+    })
+  }
+}
 
 const handleApplicationSelect = async (applicationId: string) => {
   const application = selectApplication(applicationId)
@@ -566,6 +598,7 @@ onMounted(() => {
   emitter.on('reset', () => {
     void runAfterExitingFullScreen(resetLayout)
   })
+  emitter.on('export-configuration', handleExportConfiguration)
   emitter.on('open-application-selector', openApplicationSelector)
 
   // 添加键盘事件监听

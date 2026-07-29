@@ -2,12 +2,44 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   createMotorCmdManager,
   type MotorMessageFieldId,
+  type ReadCommand,
+  type WriteCommand,
 } from '@/composables/motor/useMotorCmd'
+import { t } from '@/i18n'
+
+const createReadCommand = (overrides: Partial<ReadCommand> = {}): ReadCommand => ({
+  name: 'GET_SPEED',
+  address: '00',
+  data: '0000',
+  length: 4,
+  dataType: 'int16',
+  functionCode: '03',
+  registerCount: 2,
+  includeRegisterCount: true,
+  includeLength: true,
+  frequency: null,
+  lastSentTime: 0,
+  ...overrides,
+})
+
+const createWriteCommand = (overrides: Partial<WriteCommand> = {}): WriteCommand => ({
+  name: 'SET_SPEED',
+  address: '01',
+  data: '0000',
+  length: 2,
+  dataType: 'int16',
+  functionCode: '06',
+  registerCount: 1,
+  includeRegisterCount: true,
+  includeLength: true,
+  ...overrides,
+})
 
 describe('motor command configuration', () => {
   it('keeps byte length, value type, data size, and register count linked', () => {
     const manager = createMotorCmdManager()
-    const command = manager.writeCommands.value[1]
+    manager.writeCommands.value.push(createWriteCommand())
+    const command = manager.writeCommands.value[0]
 
     manager.updateCommandLength(command, 3, 'write')
     expect(command).toMatchObject({ length: 4, registerCount: 2 })
@@ -24,7 +56,8 @@ describe('motor command configuration', () => {
 
   it('encodes write data once and preserves its value when endianness changes', () => {
     const manager = createMotorCmdManager()
-    const command = manager.writeCommands.value[1]
+    manager.writeCommands.value.push(createWriteCommand())
+    const command = manager.writeCommands.value[0]
     manager.configForm.checksum.method = 'none'
 
     command.data = manager.decimalToHex('4660', 'int16', 'little')
@@ -56,6 +89,7 @@ describe('motor command configuration', () => {
 
   it('parses responses with the active field order and rejects a bad checksum', () => {
     const manager = createMotorCmdManager()
+    manager.readCommands.value.push(createReadCommand())
     const order: MotorMessageFieldId[] = [
       'header',
       'function',
@@ -80,12 +114,18 @@ describe('motor command configuration', () => {
 
   it('reports ambiguous read mappings before commands can be sent', () => {
     const manager = createMotorCmdManager()
+    manager.readCommands.value.push(
+      createReadCommand({ name: 'GET_SPEED', address: '00' }),
+      createReadCommand({ name: 'GET_CURRENT', address: '01' }),
+    )
     manager.readCommands.value[1].address = manager.readCommands.value[0].address
     manager.readCommands.value[1].functionCode = manager.readCommands.value[0].functionCode
 
     expect(manager.isConfigValid.value).toBe(false)
     expect(manager.configurationIssues.value).toContain(
-      '读指令 2与其他读指令使用了相同的地址和功能码，接收数据时无法区分',
+      t('motor.issueDuplicateMapping', {
+        label: t('motor.readCommandLabel', { n: 2 }),
+      }),
     )
   })
 })

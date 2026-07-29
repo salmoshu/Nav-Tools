@@ -1,20 +1,49 @@
 import { ref, shallowRef, computed } from "vue";
 import type { Ref } from "vue";
 import { activeDataTransport } from '@/core/device/ActiveDataTransport'
+import { useFileTimeline } from '@/composables/useFileTimeline'
+import {
+  DEFAULT_KEY_VALUE_REGEX,
+  parseTextRecord,
+} from '@/core/data/TextRecordParser'
 
 // 消息类型定义
 export interface ConsoleMessage {
   timestamp: string;
   raw: string;
-  dataType: "json" | "nmea" | "none";
+  dataType: "json" | "nmea" | "regex" | "csv" | "none";
   isValid: boolean;
   key: string;
+  fileElapsedMilliseconds?: number;
+}
+
+export function findTimelineMessageIndex(
+  source: readonly ConsoleMessage[],
+  cutoffMilliseconds: number,
+): number {
+  if (source.length === 0) return -1;
+
+  let low = 0;
+  let high = source.length - 1;
+  let targetIndex = 0;
+  while (low <= high) {
+    const middle = Math.floor((low + high) / 2);
+    const elapsed = source[middle].fileElapsedMilliseconds;
+    if (elapsed === undefined || elapsed <= cutoffMilliseconds) {
+      targetIndex = middle;
+      low = middle + 1;
+    } else {
+      high = middle - 1;
+    }
+  }
+  return targetIndex;
 }
 
 // 控制台状态接口
 export interface ConsoleState {
   messages: Ref<ConsoleMessage[]>;
-  dataFormat: Ref<"none" | "json" | "nmea">;
+  dataFormat: Ref<"none" | "json" | "nmea" | "regex" | "csv">;
+  regexPattern: Ref<string>;
   displayFormat: Ref<'hex' | 'ascii'>;
   dataFilter: Ref<boolean>;
   dataTimestamp: Ref<boolean>;
@@ -33,6 +62,9 @@ export interface ConsoleState {
   // 方法
   addMessage: (rawData: string) => void;
   addMessages: (rawData: string) => void;
+  beginFileReplayMessages: () => void;
+  addFileReplayData: (rawData: string) => void;
+  endFileReplayMessages: () => void;
   clearMessages: () => void;
   toggleFilter: () => void;
   toggleDisplayFormat: () => void;
@@ -61,7 +93,8 @@ export function useConsole(useGlobal: boolean = true): ConsoleState {
 
   // 状态管理
   const messages = shallowRef<ConsoleMessage[]>([]);
-  const dataFormat = ref<"none" | "json" | "nmea">("none");
+  const dataFormat = ref<"none" | "json" | "nmea" | "regex" | "csv">("none");
+  const regexPattern = ref(DEFAULT_KEY_VALUE_REGEX);
   const displayFormat = ref<'hex' | 'ascii'>('ascii')
   const dataFilter = ref(false);
   const dataTimestamp = ref(true);
@@ -69,6 +102,15 @@ export function useConsole(useGlobal: boolean = true): ConsoleState {
   const isPaused = ref(false);
   const validNmeaCount = ref(0);
   const validJsonCount = ref(0);
+  const validRegexCount = ref(0);
+  const validCsvCount = ref(0);
+  const fileTimeline = useFileTimeline();
+  const hasFileReplayMessages = ref(false);
+  let fileReplayBuffer = '';
+  let fileReplayFirstClock: number | null = null;
+  let fileReplayPreviousClock: number | null = null;
+  let fileReplayDayOffset = 0;
+  let fileReplayLastElapsed = 0;
   let tempDataString = ''; // 临时存储数据，用于处理不完整的消息
   let messageKeySequence = 0;
   let noneFlushTimer: ReturnType<typeof setTimeout> | null = null; // none模式下无换行符时的刷新定时器
@@ -81,28 +123,54 @@ export function useConsole(useGlobal: boolean = true): ConsoleState {
   const maxMessages = 10000;
 
   // 计算属性
+  const timelineMessages = computed(() => {
+    const shouldProjectReplay =
+      hasFileReplayMessages.value &&
+      (fileTimeline.indexing.value ||
+        (fileTimeline.active.value && fileTimeline.mode.value === 'replay'));
+    if (!shouldProjectReplay) return messages.value;
+
+    const cutoff = Math.max(0, fileTimeline.elapsedMilliseconds.value);
+    return messages.value.filter(
+      (message) =>
+        message.fileElapsedMilliseconds === undefined ||
+        message.fileElapsedMilliseconds <= cutoff,
+    );
+  });
+
   const filteredMessages = computed(() => {
     if (!dataFilter.value) {
-      return messages.value;
+      return timelineMessages.value;
     }
-    return messages.value.filter(
+    return timelineMessages.value.filter(
       (msg) => msg.dataType === dataFormat.value && msg.isValid
     );
   });
-  const validMsgCount = computed(() =>
-    dataFormat.value === 'nmea'
-      ? validNmeaCount.value
-      : dataFormat.value === 'json'
-        ? validJsonCount.value
-        : 0,
-  );
+  const validMsgCount = computed(() => {
+    if (!hasFileReplayMessages.value) {
+      return dataFormat.value === 'nmea'
+        ? validNmeaCount.value
+        : dataFormat.value === 'json'
+          ? validJsonCount.value
+        : dataFormat.value === 'regex'
+          ? validRegexCount.value
+          : dataFormat.value === 'csv'
+            ? validCsvCount.value
+            : 0;
+    }
+    return timelineMessages.value.filter(
+      (message) => message.dataType === dataFormat.value && message.isValid,
+    ).length;
+  });
 
-  const totalCount = computed(() => messages.value.length);
+  const totalCount = computed(() => timelineMessages.value.length);
 
   const updateValidCount = (message: ConsoleMessage, delta: 1 | -1) => {
     if (!message.isValid) return;
     if (message.dataType === 'nmea') validNmeaCount.value += delta;
     if (message.dataType === 'json') validJsonCount.value += delta;
+    if (message.dataType === 'regex') validRegexCount.value += delta;
+    if (message.dataType === 'csv') validCsvCount.value += delta;
   };
 
   // 批量缓冲：消息先进入 pendingMessages，定时批量提交到 messages，
@@ -116,7 +184,7 @@ export function useConsole(useGlobal: boolean = true): ConsoleState {
     let merged = messages.value.concat(pendingMessages);
     pendingMessages = [];
     // 限制消息数量，保持内存使用
-    const excess = merged.length - maxMessages;
+    const excess = hasFileReplayMessages.value ? 0 : merged.length - maxMessages;
     if (excess > 0) {
       for (let i = 0; i < excess; i++) updateValidCount(merged[i], -1);
       merged = merged.slice(excess);
@@ -199,6 +267,86 @@ export function useConsole(useGlobal: boolean = true): ConsoleState {
   const generateKey = (timestamp: string): string => {
     messageKeySequence += 1;
     return `${timestamp}_${messageKeySequence}`;
+  };
+
+  const parseNmeaClock = (line: string): number | null => {
+    const sentenceStart = line.indexOf('$');
+    if (sentenceStart < 0) return null;
+
+    const fields = line
+      .slice(sentenceStart + 1)
+      .split('*', 1)[0]
+      .split(',');
+    const sentenceType = fields[0]?.slice(-3).toUpperCase();
+    const timeFieldIndex = sentenceType === 'GLL' ? 5 : 1;
+    if (!['GGA', 'RMC', 'GST', 'ZDA', 'GLL'].includes(sentenceType)) return null;
+
+    const compactTime = fields[timeFieldIndex];
+    const match = compactTime?.match(/^(\d{2})(\d{2})(\d{2}(?:\.\d+)?)$/);
+    if (!match) return null;
+
+    const hours = Number(match[1]);
+    const minutes = Number(match[2]);
+    const seconds = Number(match[3]);
+    if (hours > 23 || minutes > 59 || seconds >= 60) return null;
+    return ((hours * 60 + minutes) * 60 + seconds) * 1000;
+  };
+
+  const resolveFileElapsedMilliseconds = (line: string): number => {
+    const clock = parseNmeaClock(line);
+    if (clock === null) return fileReplayLastElapsed;
+
+    if (
+      fileReplayPreviousClock !== null &&
+      clock < fileReplayPreviousClock - 12 * 60 * 60 * 1000
+    ) {
+      fileReplayDayOffset += 24 * 60 * 60 * 1000;
+    }
+    fileReplayPreviousClock = clock;
+
+    const absoluteClock = fileReplayDayOffset + clock;
+    if (fileReplayFirstClock === null) fileReplayFirstClock = absoluteClock;
+    fileReplayLastElapsed = Math.max(
+      fileReplayLastElapsed,
+      absoluteClock - fileReplayFirstClock,
+      0,
+    );
+    return fileReplayLastElapsed;
+  };
+
+  const appendFileReplayLine = (line: string) => {
+    if (line.trim() === '') return;
+    const timestamp = generateTimestamp();
+    let dataType: ConsoleMessage['dataType'] = 'none';
+    let isValid = false;
+    const nmeaStart = line.indexOf('$');
+    const trimmedLine = line.trim();
+
+    if (dataFormat.value === 'regex') {
+      dataType = 'regex';
+      isValid = parseTextRecord(line, 'regex', regexPattern.value).valid;
+    } else if (dataFormat.value === 'csv') {
+      dataType = 'csv';
+      isValid = parseTextRecord(line, 'csv').valid;
+    } else if (nmeaStart >= 0) {
+      dataType = 'nmea';
+      isValid = validateNmeaMessage(line.slice(nmeaStart).trim());
+    } else if (
+      (dataFormat.value === 'json' || trimmedLine.startsWith('{')) &&
+      trimmedLine.endsWith('}')
+    ) {
+      dataType = 'json';
+      isValid = validateJsonMessage(trimmedLine);
+    }
+
+    appendConsoleMessage({
+      timestamp: dataType === 'nmea' ? timestamp : timestamp + ' [MSG ⬅️]',
+      raw: line,
+      dataType,
+      isValid,
+      key: generateKey(timestamp),
+      fileElapsedMilliseconds: resolveFileElapsedMilliseconds(line),
+    });
   };
 
   // 核心方法
@@ -297,6 +445,26 @@ export function useConsole(useGlobal: boolean = true): ConsoleState {
               key: generateKey(timestamp),
             };
             appendConsoleMessage(message);
+          } else if (dataFormat.value === 'regex') {
+            isValid = parseTextRecord(line, 'regex', regexPattern.value).valid;
+            const message: ConsoleMessage = {
+              timestamp: timestamp + ' [MSG ⬅️]',
+              raw: line,
+              dataType: 'regex',
+              isValid,
+              key: generateKey(timestamp),
+            };
+            appendConsoleMessage(message);
+          } else if (dataFormat.value === 'csv') {
+            isValid = parseTextRecord(line, 'csv').valid;
+            const message: ConsoleMessage = {
+              timestamp: timestamp + ' [MSG ⬅️]',
+              raw: line,
+              dataType: 'csv',
+              isValid,
+              key: generateKey(timestamp),
+            };
+            appendConsoleMessage(message);
           }
         }
       }
@@ -346,10 +514,16 @@ export function useConsole(useGlobal: boolean = true): ConsoleState {
 
         // 检测是否为JSON格式
         let isValid = false;
-        let dataType: "json" | "nmea" = "json";
+        let dataType: "json" | "nmea" | "regex" | "csv" = "json";
 
         // 自动检测数据类型
-        if (cleanedLine.startsWith("$")) {
+        if (dataFormat.value === 'regex') {
+          dataType = 'regex';
+          isValid = parseTextRecord(cleanedLine, 'regex', regexPattern.value).valid;
+        } else if (dataFormat.value === 'csv') {
+          dataType = 'csv';
+          isValid = parseTextRecord(cleanedLine, 'csv').valid;
+        } else if (cleanedLine.startsWith("$")) {
           dataType = "nmea";
           isValid = validateNmeaMessage(cleanedLine);
         } else if (cleanedLine.startsWith("{") && cleanedLine.endsWith("}")) {
@@ -377,6 +551,31 @@ export function useConsole(useGlobal: boolean = true): ConsoleState {
     trimMessages(maxMessages * 2);
   };
 
+  const beginFileReplayMessages = () => {
+    hasFileReplayMessages.value = true;
+    fileReplayBuffer = '';
+    fileReplayFirstClock = null;
+    fileReplayPreviousClock = null;
+    fileReplayDayOffset = 0;
+    fileReplayLastElapsed = 0;
+  };
+
+  const addFileReplayData = (rawData: string) => {
+    fileReplayBuffer += rawData.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+    if (!fileReplayBuffer.includes('\n')) return;
+
+    const lines = fileReplayBuffer.split('\n');
+    fileReplayBuffer = lines.pop() ?? '';
+    for (const line of lines) appendFileReplayLine(line);
+  };
+
+  const endFileReplayMessages = () => {
+    if (fileReplayBuffer.trim() !== '') appendFileReplayLine(fileReplayBuffer);
+    fileReplayBuffer = '';
+    if (flushTimer !== null) clearTimeout(flushTimer);
+    flushPendingMessages();
+  };
+
   const clearMessages = () => {
     if (flushTimer !== null) {
       clearTimeout(flushTimer);
@@ -390,7 +589,15 @@ export function useConsole(useGlobal: boolean = true): ConsoleState {
     messages.value = [];
     validNmeaCount.value = 0;
     validJsonCount.value = 0;
+    validRegexCount.value = 0;
+    validCsvCount.value = 0;
     tempDataString = '';
+    hasFileReplayMessages.value = false;
+    fileReplayBuffer = '';
+    fileReplayFirstClock = null;
+    fileReplayPreviousClock = null;
+    fileReplayDayOffset = 0;
+    fileReplayLastElapsed = 0;
   };
 
   const toggleFilter = () => {
@@ -533,6 +740,7 @@ export function useConsole(useGlobal: boolean = true): ConsoleState {
   const instance: ConsoleState = {
     messages,
     dataFormat,
+    regexPattern,
     displayFormat,
     dataFilter,
     dataTimestamp,
@@ -549,6 +757,9 @@ export function useConsole(useGlobal: boolean = true): ConsoleState {
 
     addMessage,
     addMessages,
+    beginFileReplayMessages,
+    addFileReplayData,
+    endFileReplayMessages,
     clearMessages,
     toggleFilter,
     toggleDisplayFormat,

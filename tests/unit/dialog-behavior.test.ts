@@ -9,6 +9,7 @@ const dialogFiles = [
   'src/components/windows/motor/MotorConfig.vue',
   'src/components/windows/common/DeviationConfigDialog.vue',
   'src/components/windows/common/CameraParameters.vue',
+  'src/components/windows/common/CameraVideo.vue',
   'src/components/windows/common/Plot.vue',
   'src/components/windows/common/plot/PlotConfigDialog.vue',
 ]
@@ -53,13 +54,16 @@ describe('dialog interaction policy', () => {
 
   it('offers RTKLIB time-tag playback controls and timestamped log recording', () => {
     const toolbar = readFileSync('src/components/ToolBar.vue', 'utf8')
-    expect(toolbar).toContain('v-model="fileTimeTag"')
-    expect(toolbar).toContain('v-model="fileReplaySpeed"')
+    expect(toolbar).toContain('v-model="replaySpeedSelection"')
+    expect(toolbar).toContain('fileTimeTag.value = false')
+    expect(toolbar).toContain('fileReplaySpeed.value = value')
     expect(toolbar).toContain('v-model="fileStartOffset"')
     expect(toolbar).toContain('v-model="filePositionBytes"')
     expect(toolbar).toContain('toggleLogRecording()')
     expect(toolbar).toContain('log-record-button')
-    expect(toolbar.indexOf('label="文件输入"')).toBeLessThan(toolbar.indexOf('label="串口连接"'))
+    expect(toolbar.indexOf("t('app.toolbar.fileTab')")).toBeLessThan(
+      toolbar.indexOf("t('app.toolbar.serialTab')"),
+    )
   })
 
   it('uses dedicated catalog groups without changing panel data modes', () => {
@@ -74,8 +78,40 @@ describe('dialog interaction policy', () => {
 
     expect(source).toContain('class="config-tool-card"')
     expect(source).toContain(':before-close="handleDialogBeforeClose"')
-    expect(footer).toContain('取消')
-    expect(footer).toContain('确定')
-    expect(footer).not.toMatch(/载入配置|导出配置|恢复默认/)
+    expect(footer).toContain("t('motor.cancel')")
+    expect(footer).toContain("t('motor.confirm')")
+    expect(footer).not.toMatch(/loadConfig|exportConfig|resetToDefault/)
+  })
+
+  it('keeps Plot and Hex configuration select menus above their dialogs', () => {
+    const style = readFileSync('src/style.css', 'utf8')
+    const plot = readFileSync('src/components/windows/common/plot/PlotConfigDialog.vue', 'utf8')
+    const motor = readFileSync('src/components/windows/motor/MotorConfig.vue', 'utf8')
+    const motorSelectTags = motor.match(/<el-select\b[\s\S]*?>/g) ?? []
+
+    expect(style).toContain('.app-dialog-select-popper')
+    expect(style).toContain('z-index: 8002 !important')
+    expect(plot).toContain('popper-class="app-dialog-select-popper"')
+    expect(motorSelectTags.length).toBeGreaterThan(0)
+    expect(
+      motorSelectTags.every((tag) => tag.includes('popper-class="app-dialog-select-popper"')),
+    ).toBe(true)
+  })
+
+  it('uses a generic command configuration title for the Hex dialog', () => {
+    const zh = readFileSync('src/i18n/locales/zh-CN/motor.ts', 'utf8')
+    const en = readFileSync('src/i18n/locales/en-US/motor.ts', 'utf8')
+
+    expect(zh).toContain("dialogTitle: '指令配置（16进制）'")
+    expect(zh).toContain("dialogTitleMain: '指令配置'")
+    expect(zh).not.toContain('电机驱动指令配置')
+    expect(en).toContain("dialogTitle: 'Command Configuration (Hex)'")
+    expect(en).toContain("dialogTitleMain: 'Command Configuration'")
+  })
+
+  it('restores the last confirmed data source tab when reopening the input dialog', () => {
+    const device = readFileSync('src/hooks/useDevice.ts', 'utf8')
+    // 未指定 tab 打开弹框时回到 activeSource，未确认的 tab 切换不留存
+    expect(device).toContain('activeTab.value = dataSourceSettings.activeSource')
   })
 })

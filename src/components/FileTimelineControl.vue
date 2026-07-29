@@ -24,6 +24,7 @@ const {
   elapsedMilliseconds,
   durationMilliseconds,
   cursorTime,
+  progress,
   togglePlayback,
   stepEpoch,
   beginDrag,
@@ -135,6 +136,8 @@ watch(active, (visible) => {
           :value="elapsedMilliseconds"
           :disabled="durationMilliseconds <= 0"
           :title="elapsedLabel"
+          :aria-label="elapsedLabel"
+          :style="{ '--timeline-progress': `${progress}%` }"
           @mousedown.stop="beginDrag"
           @touchstart.stop="beginDrag"
           @input.stop="previewSlider"
@@ -199,6 +202,8 @@ watch(active, (visible) => {
           :value="elapsedMilliseconds"
           :disabled="durationMilliseconds <= 0"
           :title="elapsedLabel"
+          :aria-label="elapsedLabel"
+          :style="{ '--timeline-progress': `${progress}%` }"
           @mousedown.stop="beginDrag"
           @touchstart.stop="beginDrag"
           @input.stop="previewSlider"
@@ -236,8 +241,12 @@ watch(active, (visible) => {
 }
 
 .timeline-panel--horizontal {
-  gap: 5px;
-  padding: 2px 4px;
+  gap: 6px;
+  padding: 4px 7px;
+  border: 1px solid color-mix(in srgb, var(--el-color-primary) 14%, var(--app-border));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--app-surface) 88%, var(--app-surface-muted));
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--app-shadow) 18%, transparent);
 }
 
 .timeline-button {
@@ -265,11 +274,80 @@ watch(active, (visible) => {
 }
 
 .timeline-slider {
+  --timeline-progress: 0%;
+
+  appearance: none;
+  -webkit-appearance: none;
   width: clamp(120px, 24vw, 360px);
-  height: 18px;
+  height: 24px;
   margin: 0 2px;
-  accent-color: var(--el-color-primary);
+  padding: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
   cursor: pointer;
+}
+
+.timeline-slider::-webkit-slider-runnable-track {
+  height: 6px;
+  border: 1px solid color-mix(in srgb, var(--app-border-strong) 76%, transparent);
+  border-radius: 999px;
+  background: linear-gradient(
+    to right,
+    var(--el-color-primary) 0 var(--timeline-progress),
+    var(--app-surface-muted) var(--timeline-progress) 100%
+  );
+  box-shadow: inset 0 1px 2px color-mix(in srgb, var(--app-shadow) 20%, transparent);
+}
+
+.timeline-slider::-webkit-slider-thumb {
+  width: 16px;
+  height: 16px;
+  margin-top: -6px;
+  appearance: none;
+  -webkit-appearance: none;
+  border: 3px solid var(--app-surface);
+  border-radius: 50%;
+  background: var(--el-color-primary);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--el-color-primary) 68%, var(--app-border)),
+    0 3px 8px color-mix(in srgb, var(--el-color-primary) 30%, transparent);
+  transition:
+    box-shadow 140ms ease,
+    transform 140ms ease;
+}
+
+.timeline-slider:hover::-webkit-slider-thumb,
+.timeline-slider:focus-visible::-webkit-slider-thumb {
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--el-color-primary) 18%, transparent),
+    0 3px 9px color-mix(in srgb, var(--el-color-primary) 35%, transparent);
+  transform: scale(1.08);
+}
+
+.timeline-slider::-moz-range-track {
+  height: 6px;
+  border: 1px solid color-mix(in srgb, var(--app-border-strong) 76%, transparent);
+  border-radius: 999px;
+  background: var(--app-surface-muted);
+  box-shadow: inset 0 1px 2px color-mix(in srgb, var(--app-shadow) 20%, transparent);
+}
+
+.timeline-slider::-moz-range-progress {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--el-color-primary);
+}
+
+.timeline-slider::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border: 3px solid var(--app-surface);
+  border-radius: 50%;
+  background: var(--el-color-primary);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--el-color-primary) 68%, var(--app-border)),
+    0 3px 8px color-mix(in srgb, var(--el-color-primary) 30%, transparent);
 }
 
 .timeline-slider:disabled {

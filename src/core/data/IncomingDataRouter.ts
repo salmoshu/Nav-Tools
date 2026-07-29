@@ -30,6 +30,8 @@ export class IncomingDataRouter {
       else this.targets.appendRaw(data)
     }
 
-    if (windows.has('plot')) this.targets.appendPlot(decodedData)
+    if (windows.has('plot') || modes.has('flow') || modes.has('motor')) {
+      this.targets.appendPlot(decodedData)
+    }
   }
 }

@@ -13,7 +13,7 @@
     <canvas ref="axisCanvasRef" class="metric-axis"></canvas>
 
     <div class="metric-heading">
-      <i :style="{ backgroundColor: color }"></i>
+      <i :style="{ backgroundColor: headingColor }"></i>
       <strong>{{ label }}</strong>
       <span>{{ unit }}</span>
     </div>
@@ -37,12 +37,18 @@ import {
   zoomSatelliteCountViewport,
   type SatelliteCountViewport,
 } from '@/core/gnss/SatelliteCountViewport'
+import { splitSeriesByQuality } from '@/core/gnss/QualitySeries'
 import { createSatelliteTimeSeriesRenderer } from '@/core/render/createSatelliteTimeSeriesRenderer'
 import type {
   SatelliteRendererKind,
   SatelliteSeriesColor,
   SatelliteTimeSeriesRenderer,
 } from '@/core/render/SatelliteTimeSeriesRenderer'
+import {
+  FIX_STATUS_QUALITIES,
+  fixStatusColor,
+  normalizeFixStatusQuality,
+} from './fixStatusColors'
 
 type MetricField = 'E' | 'N' | 'U' | 'SPEED'
 
@@ -50,7 +56,6 @@ const props = defineProps<{
   field: MetricField
   label: string
   unit: string
-  color: string
   active: boolean
 }>()
 
@@ -69,10 +74,17 @@ const rendererKind = ref<SatelliteRendererKind>('canvas')
 const viewport = ref<SatelliteCountViewport>(fitSatelliteCountViewport(sourceStore.value.length))
 const hoverValue = ref<number | null>(null)
 const hoverTime = ref('')
+const headingColor = ref(fixStatusColor(0))
 const tooltipStyle = ref<Record<string, string>>({})
 
-const layout = { left: 54, right: 14, top: 38, bottom: 34 }
-const SERIES_ID = 'metric'
+interface ChartLayout {
+  left: number
+  right: number
+  top: number
+  bottom: number
+}
+
+let layout: ChartLayout = { left: 54, right: 14, top: 38, bottom: 34 }
 const OVERVIEW_RENDER_INTERVAL_MS = 1_000
 
 let renderer: SatelliteTimeSeriesRenderer | null = null
@@ -104,12 +116,26 @@ function hexToRgba(hex: string): SatelliteSeriesColor {
   ]
 }
 
+function qualitySeriesId(quality: number): string {
+  return `quality-${quality}`
+}
+
 function plotSize(): { width: number; height: number } {
   const container = containerRef.value
   if (!container) return { width: 1, height: 1 }
   return {
     width: Math.max(1, container.clientWidth - layout.left - layout.right),
     height: Math.max(1, container.clientHeight - layout.top - layout.bottom),
+  }
+}
+
+function updateLayout(containerHeight: number): void {
+  if (containerHeight < 150) {
+    layout = { left: 44, right: 8, top: 24, bottom: 20 }
+  } else if (containerHeight < 210) {
+    layout = { left: 50, right: 10, top: 30, bottom: 26 }
+  } else {
+    layout = { left: 54, right: 14, top: 38, bottom: 34 }
   }
 }
 
@@ -128,6 +154,11 @@ function resizeLayers(): void {
   const plotCanvas = plotCanvasRef.value
   const axisCanvas = axisCanvasRef.value
   if (!container || !plotCanvas || !axisCanvas || !renderer) return
+
+  updateLayout(container.clientHeight)
+  container.style.setProperty('--metric-heading-top', `${Math.max(4, layout.top - 28)}px`)
+  container.style.setProperty('--metric-heading-left', `${layout.left}px`)
+  container.style.setProperty('--metric-heading-right', `${layout.right}px`)
 
   const { width, height } = plotSize()
   plotCanvas.style.left = `${layout.left}px`
@@ -152,12 +183,24 @@ function renderChart(): void {
     renderer.clear()
     renderer.render()
     renderedRange = { min: -1, max: 1 }
+    headingColor.value = fixStatusColor(0)
     drawAxes()
     return
   }
 
   const start = Math.max(0, Math.floor(viewport.value.start))
-  const end = Math.min(store.length - 1, Math.max(start, Math.ceil(viewport.value.end) - 1))
+  const replayEnd =
+    fileTimeline.active.value && fileTimeline.mode.value === 'replay'
+      ? store.findNearestElapsedTime(fileTimeline.elapsedMilliseconds.value)
+      : store.length - 1
+  const end = Math.min(replayEnd, Math.max(start, Math.ceil(viewport.value.end) - 1))
+  if (end < start) {
+    renderer.clear()
+    renderer.render()
+    renderedRange = { min: -1, max: 1 }
+    drawAxes()
+    return
+  }
   const { width } = plotSize()
   const extracted = store.extractSeries(
     props.field,
@@ -165,13 +208,20 @@ function renderChart(): void {
     end,
     Math.max(64, Math.floor(width * 2)),
   )
-  renderer.setSeriesData(
-    SERIES_ID,
-    new Float32Array(extracted.points),
-    new Uint32Array(extracted.segments),
+  const qualityGeometry = splitSeriesByQuality(
+    extracted.points,
+    extracted.segments,
+    epochIndex =>
+      normalizeFixStatusQuality(store.getValue('QUALITY', epochIndex)),
   )
-  renderer.setSeriesColor(SERIES_ID, hexToRgba(props.color))
-
+  for (const quality of FIX_STATUS_QUALITIES) {
+    const geometry = qualityGeometry.get(quality)
+    renderer.setSeriesData(
+      qualitySeriesId(quality),
+      new Float32Array(geometry?.points ?? []),
+      new Uint32Array(geometry?.segments ?? []),
+    )
+  }
   renderedRange = paddedRange(store.getRange(props.field, start, end))
   renderer.setViewport(
     viewport.value.start - 0.5,
@@ -223,8 +273,9 @@ function drawAxes(): void {
   context.font = '11px sans-serif'
   context.lineWidth = 1
 
-  for (let tick = 0; tick <= 4; tick += 1) {
-    const ratio = tick / 4
+  const yTickCount = plotHeight < 80 ? 2 : 4
+  for (let tick = 0; tick <= yTickCount; tick += 1) {
+    const ratio = tick / yTickCount
     const y = layout.top + plotHeight * (1 - ratio)
     context.strokeStyle = colors.grid
     context.beginPath()
@@ -242,8 +293,16 @@ function drawAxes(): void {
   context.strokeRect(layout.left, layout.top, plotWidth, plotHeight)
 
   if (store.length > 0 && viewport.value.end > viewport.value.start) {
-    for (let tick = 0; tick <= 3; tick += 1) {
-      const ratio = tick / 3
+    const headingIndex = fileTimeline.active.value
+      ? store.findNearestElapsedTime(fileTimeline.elapsedMilliseconds.value)
+      : store.length - 1
+    headingColor.value = fixStatusColor(
+      normalizeFixStatusQuality(store.getValue('QUALITY', headingIndex)),
+    )
+
+    const xTickCount = plotWidth < 320 ? 2 : 3
+    for (let tick = 0; tick <= xTickCount; tick += 1) {
+      const ratio = tick / xTickCount
       const index = Math.max(
         0,
         Math.min(
@@ -255,7 +314,7 @@ function drawAxes(): void {
       )
       const x = layout.left + plotWidth * ratio
       context.fillStyle = colors.textMuted
-      context.textAlign = tick === 0 ? 'left' : tick === 3 ? 'right' : 'center'
+      context.textAlign = tick === 0 ? 'left' : tick === xTickCount ? 'right' : 'center'
       context.textBaseline = 'top'
       context.fillText(store.formatTime(index), x, layout.top + plotHeight + 9)
     }
@@ -268,8 +327,11 @@ function drawAxes(): void {
           Math.max(1, viewport.value.end - viewport.value.start)
         const x = layout.left + plotWidth * ratio
         const value = store.getValue(props.field, cursorIndex)
+        const cursorColor = fixStatusColor(
+          normalizeFixStatusQuality(store.getValue('QUALITY', cursorIndex)),
+        )
 
-        context.strokeStyle = props.color
+        context.strokeStyle = cursorColor
         context.lineWidth = 1.5
         context.beginPath()
         context.moveTo(x, layout.top)
@@ -281,7 +343,7 @@ function drawAxes(): void {
             (value - renderedRange.min) /
             Math.max(Number.EPSILON, renderedRange.max - renderedRange.min)
           const y = layout.top + plotHeight * (1 - Math.max(0, Math.min(1, yRatio)))
-          context.fillStyle = props.color
+          context.fillStyle = cursorColor
           context.strokeStyle = '#ffffff'
           context.lineWidth = 1.5
           context.beginPath()
@@ -398,9 +460,9 @@ watch(
 watch(resolvedTheme, () => scheduleRender())
 
 watch(
-  [fileTimeline.active, fileTimeline.elapsedMilliseconds],
+  [fileTimeline.active, fileTimeline.mode, fileTimeline.elapsedMilliseconds],
   () => {
-    if (props.active) drawAxes()
+    if (props.active) scheduleRender()
   },
 )
 
@@ -410,7 +472,9 @@ onMounted(() => {
   if (plotCanvasRef.value) {
     renderer = createSatelliteTimeSeriesRenderer(plotCanvasRef.value)
     rendererKind.value = renderer.kind
-    renderer.addSeries(SERIES_ID, hexToRgba(props.color))
+    for (const quality of FIX_STATUS_QUALITIES) {
+      renderer.addSeries(qualitySeriesId(quality), hexToRgba(fixStatusColor(quality)))
+    }
     renderer.setLineWidth(1.5)
   }
   resizeObserver = new ResizeObserver(resizeLayers)
@@ -436,7 +500,7 @@ onUnmounted(() => {
 .metric-chart {
   position: relative;
   min-width: 0;
-  min-height: 220px;
+  min-height: 0;
   height: 100%;
   overflow: hidden;
   border: 1px solid var(--app-border);
@@ -464,9 +528,9 @@ onUnmounted(() => {
 
 .metric-heading {
   position: absolute;
-  top: 10px;
-  left: 54px;
-  right: 14px;
+  top: var(--metric-heading-top, 10px);
+  left: var(--metric-heading-left, 54px);
+  right: var(--metric-heading-right, 14px);
   z-index: 3;
   display: flex;
   align-items: center;

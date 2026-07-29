@@ -67,6 +67,12 @@ export default {
   parserRawDesc: '保留原始数据，不进行结构校验',
   parserJsonDesc: '按行解析并校验 JSON 对象',
   parserNmeaDesc: '按行解析并校验 NMEA 语句',
+  parserRegexDesc: '使用正则表达式提取键值字段并转换为曲线数据',
+  parserCsvDesc: '按逗号分列，键为列序号（1 起始），值自动推断类型',
+  parserGroupStructured: '结构化',
+  parserGroupProtocol: '协议',
+  parserGroupCustom: '自定义',
+  regexPatternInvalid: '正则表达式无效：{message}',
 
   // useStatusManager.ts — Monaco completion docs (functions)
   funcSafeDivide: '安全除法',

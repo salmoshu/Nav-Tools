@@ -7,13 +7,13 @@ import { DEFAULT_APPLICATIONS } from '@/core/application/ApplicationStorage'
 describe('camera panels', () => {
   it('provides video and parameter panels in the registry', () => {
     expect(getPanelById('camera-video')).toMatchObject({
-      title: 'Camera Video',
+      title: 'panel.camera-video.title',
       componentName: 'CameraVideo',
       funcMode: 'general',
       catalogGroup: 'camera',
     })
     expect(getPanelById('camera-parameters')).toMatchObject({
-      title: 'Camera Parameters',
+      title: 'panel.camera-parameters.title',
       componentName: 'CameraParameters',
       action: 'config',
       catalogGroup: 'camera',
@@ -40,11 +40,11 @@ describe('camera panels', () => {
   it('uses compact horizontal command fields without heading descriptions', () => {
     const source = readFileSync('src/components/windows/common/CameraParameters.vue', 'utf8')
 
-    expect(source).toContain('<span class="field-label">子命令类型</span>')
-    expect(source).toContain('<span class="field-label">子命令内容</span>')
+    expect(source).toContain("t('common.camera.subCommandType')")
+    expect(source).toContain("t('common.camera.subCommandContent')")
     expect(source).toContain('<el-switch v-model="contentIsHex"')
     expect(source).toContain(':rows="3"')
-    expect(source).toContain('<span>登录命令</span>')
+    expect(source).toContain("t('common.camera.loginCommand')")
     expect(source).toContain('model-value="0x00000001"')
     expect(source).not.toContain('class="readonly-command"')
     expect(source).toContain('const showCommandHelp = ref(false)')

@@ -1,13 +1,14 @@
 import { JsonStorage } from '@/core/storage/JsonStorage'
+import { DEFAULT_KEY_VALUE_REGEX, type TextDataParser } from '@/core/data/TextRecordParser'
+import { CameraVideoStorage } from '@/core/camera/CameraVideoStorage'
+
+export type { TextDataParser } from '@/core/data/TextRecordParser'
 
 export const DATA_SOURCE_SETTINGS_KEY = 'nav-tools:data-source-settings'
-export const LEGACY_CAMERA_STREAM_URL_KEY = 'nav-tools:camera-stream-url'
-export const DEFAULT_CAMERA_STREAM_URL = 'rtsp://192.168.3.14:8554/rgbstream'
-
-export type TextDataParser = 'raw' | 'json' | 'nmea'
 
 export interface DataSourceSettings {
   version: 1
+  activeSource: 'serial' | 'file' | 'network'
   serial: {
     port: string
     baudRate: string
@@ -16,10 +17,12 @@ export interface DataSourceSettings {
     parity: string
     advanced: boolean
     parser: TextDataParser
+    regexPattern: string
   }
   file: {
     path: string
     parser: TextDataParser
+    regexPattern: string
     timeTag: boolean
     replaySpeed: number
     startOffset: number
@@ -30,17 +33,14 @@ export interface DataSourceSettings {
     host: string
     port?: number
     parser: TextDataParser
-  }
-  camera: {
-    url: string
+    regexPattern: string
   }
 }
 
-export function createDefaultDataSourceSettings(
-  cameraUrl = DEFAULT_CAMERA_STREAM_URL,
-): DataSourceSettings {
+export function createDefaultDataSourceSettings(): DataSourceSettings {
   return {
     version: 1,
+    activeSource: 'file',
     serial: {
       port: '',
       baudRate: '115200',
@@ -49,10 +49,12 @@ export function createDefaultDataSourceSettings(
       parity: 'none',
       advanced: false,
       parser: 'raw',
+      regexPattern: DEFAULT_KEY_VALUE_REGEX,
     },
     file: {
       path: '',
       parser: 'raw',
+      regexPattern: DEFAULT_KEY_VALUE_REGEX,
       timeTag: false,
       replaySpeed: 1,
       startOffset: 0,
@@ -63,9 +65,7 @@ export function createDefaultDataSourceSettings(
       host: '127.0.0.1',
       port: undefined,
       parser: 'raw',
-    },
-    camera: {
-      url: normalizeRtspUrl(cameraUrl) ?? DEFAULT_CAMERA_STREAM_URL,
+      regexPattern: DEFAULT_KEY_VALUE_REGEX,
     },
   }
 }
@@ -79,7 +79,20 @@ function stringValue(value: unknown, fallback: string): string {
 }
 
 function parserValue(value: unknown, fallback: TextDataParser): TextDataParser {
-  return value === 'raw' || value === 'json' || value === 'nmea' ? value : fallback
+  return value === 'raw' ||
+    value === 'json' ||
+    value === 'nmea' ||
+    value === 'regex' ||
+    value === 'csv'
+    ? value
+    : fallback
+}
+
+function activeSourceValue(
+  value: unknown,
+  fallback: 'serial' | 'file' | 'network',
+): 'serial' | 'file' | 'network' {
+  return value === 'serial' || value === 'file' || value === 'network' ? value : fallback
 }
 
 function portValue(value: unknown): number | undefined {
@@ -96,27 +109,16 @@ function nonNegativeNumber(value: unknown, fallback: number): number {
   return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : fallback
 }
 
-export function normalizeRtspUrl(value: unknown): string | undefined {
-  if (typeof value !== 'string') return undefined
-  try {
-    const url = new URL(value.trim())
-    return url.protocol === 'rtsp:' && Boolean(url.hostname) ? url.toString() : undefined
-  } catch {
-    return undefined
-  }
-}
-
-function normalizeSettings(value: unknown, legacyCameraUrl?: string): DataSourceSettings {
-  const defaults = createDefaultDataSourceSettings(legacyCameraUrl)
+function normalizeSettings(value: unknown): DataSourceSettings {
+  const defaults = createDefaultDataSourceSettings()
   if (!isRecord(value)) return defaults
 
   const serial = isRecord(value.serial) ? value.serial : {}
   const file = isRecord(value.file) ? value.file : {}
   const network = isRecord(value.network) ? value.network : {}
-  const camera = isRecord(value.camera) ? value.camera : {}
-
   return {
     version: 1,
+    activeSource: activeSourceValue(value.activeSource, defaults.activeSource),
     serial: {
       port: stringValue(serial.port, defaults.serial.port),
       baudRate: stringValue(serial.baudRate, defaults.serial.baudRate),
@@ -125,10 +127,12 @@ function normalizeSettings(value: unknown, legacyCameraUrl?: string): DataSource
       parity: stringValue(serial.parity, defaults.serial.parity),
       advanced: typeof serial.advanced === 'boolean' ? serial.advanced : defaults.serial.advanced,
       parser: parserValue(serial.parser, defaults.serial.parser),
+      regexPattern: stringValue(serial.regexPattern, defaults.serial.regexPattern),
     },
     file: {
       path: stringValue(file.path, defaults.file.path),
       parser: parserValue(file.parser, defaults.file.parser),
+      regexPattern: stringValue(file.regexPattern, defaults.file.regexPattern),
       timeTag: typeof file.timeTag === 'boolean' ? file.timeTag : defaults.file.timeTag,
       replaySpeed: positiveNumber(file.replaySpeed, defaults.file.replaySpeed),
       startOffset: nonNegativeNumber(file.startOffset, defaults.file.startOffset),
@@ -139,9 +143,7 @@ function normalizeSettings(value: unknown, legacyCameraUrl?: string): DataSource
       host: stringValue(network.host, defaults.network.host),
       port: portValue(network.port),
       parser: parserValue(network.parser, defaults.network.parser),
-    },
-    camera: {
-      url: normalizeRtspUrl(camera.url) ?? defaults.camera.url,
+      regexPattern: stringValue(network.regexPattern, defaults.network.regexPattern),
     },
   }
 }
@@ -151,10 +153,14 @@ export class DataSourceStorage {
 
   public load(): DataSourceSettings {
     const saved = this.storage.read<unknown>(DATA_SOURCE_SETTINGS_KEY, undefined)
-    const legacyCameraUrl = this.storage.readRaw(LEGACY_CAMERA_STREAM_URL_KEY) ?? undefined
-    const settings = normalizeSettings(saved, legacyCameraUrl)
+    if (isRecord(saved) && isRecord(saved.camera)) {
+      new CameraVideoStorage(this.storage).load()
+    }
+    const settings = normalizeSettings(saved)
 
-    if (saved === undefined) this.save(settings)
+    if (saved === undefined || JSON.stringify(saved) !== JSON.stringify(settings)) {
+      this.save(settings)
+    }
     return settings
   }
 

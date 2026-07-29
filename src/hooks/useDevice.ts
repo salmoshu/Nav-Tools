@@ -26,7 +26,8 @@ import {
 } from '@/core/serial/SerialService'
 import emitter from '@/hooks/useMitt'
 import { useDataSourceManager } from '@/composables/useDataSourceManager'
-import { normalizeRtspUrl, type TextDataParser } from '@/core/data/DataSourceStorage'
+import type { TextDataParser } from '@/core/data/DataSourceStorage'
+import { createRecordRegex } from '@/core/data/TextRecordParser'
 import { FilePlaybackService } from '@/core/file/FilePlaybackService'
 import { TextFileStreamService } from '@/core/file/TextFileStreamService'
 import { LogRecordingService } from '@/core/file/LogRecordingService'
@@ -42,6 +43,7 @@ const {
   rebuildDeviationFromPositionHistory,
   statusEpochHistory,
   applyTimelineEpoch,
+  prepareTimelineProjection,
 } = useNmea()
 const {
   addRawData: addFlowData,
@@ -51,8 +53,12 @@ const {
 const {
   addMessages: initFlowConsole,
   addMessage: addFlowConsole,
+  beginFileReplayMessages,
+  addFileReplayData,
+  endFileReplayMessages,
   clearMessages: clearFlowConsole,
   dataFormat: flowDataFormat,
+  regexPattern: flowRegexPattern,
   displayFormat: flowDisplayFormat,
 } = useConsole(true) // 使用全局实例
 const { convertByteArrayToJson } = useMotorCmd()
@@ -67,7 +73,8 @@ const logRecordingService = new LogRecordingService(ipc)
 const dataRouter = new IncomingDataRouter({
   appendGnss: addGnssData,
   appendRaw: addFlowConsole,
-  appendPlot: addFlowData,
+  appendPlot: (data) =>
+    addFlowData(data, activeDataParser.value, activeRegexPattern.value),
   decodeMotorHex: convertByteArrayToJson,
 })
 const { settings: dataSourceSettings, saveSettings: saveDataSourceSettings } =
@@ -78,8 +85,12 @@ const isWindowActive = (windowId: string) =>
 
 const loadTextIntoActiveWindows = (content: string) => {
   let handled = false
-  if (isWindowActive('plot')) {
-    initFlowData(content)
+  if (
+    isWindowActive('plot') ||
+    activeDataModes.value.includes('flow') ||
+    activeDataModes.value.includes('motor')
+  ) {
+    initFlowData(content, activeDataParser.value, activeRegexPattern.value)
     handled = true
   }
   if (isWindowActive('raw-messages')) {
@@ -118,7 +129,6 @@ const fileStartOffset = toRef(dataSourceSettings.file, 'startOffset')
 const filePositionBytes = toRef(dataSourceSettings.file, 'filePositionBytes')
 const selectedFile = ref<File | null>(null)
 const selectedFilePath = ref('')
-const cameraStreamUrl = toRef(dataSourceSettings.camera, 'url')
 const serialPorts = ref<string[]>([])
 const logRecordingActive = ref(false)
 const logRecordingPath = ref('')
@@ -156,10 +166,18 @@ const activeDataParser = computed<TextDataParser>(() => {
   return 'raw'
 })
 
+const activeRegexPattern = computed(() => {
+  if (globalDevice.value.type === 'serial') return dataSourceSettings.serial.regexPattern
+  if (globalDevice.value.type === 'network') return dataSourceSettings.network.regexPattern
+  if (globalDevice.value.type === 'file') return dataSourceSettings.file.regexPattern
+  return dataSourceSettings.file.regexPattern
+})
+
 watch(
-  activeDataParser,
-  (parser) => {
+  [activeDataParser, activeRegexPattern],
+  ([parser, regexPattern]) => {
     flowDataFormat.value = parser === 'raw' ? 'none' : parser
+    flowRegexPattern.value = regexPattern
   },
   { immediate: true },
 )
@@ -357,10 +375,9 @@ async function loadGnssTimelineSource(
   readSource: GnssTimelineReader,
 ): Promise<void> {
   const streamPlot = isWindowActive('plot')
-  const streamRaw = isWindowActive('raw-messages')
   const routeAuxiliaryText = (text: string) => {
     if (streamPlot) addFlowData(text)
-    if (streamRaw) addFlowConsole(text)
+    addFileReplayData(text)
   }
   const appendChunk = (chunk: string) => {
     if (!chunk) return
@@ -374,15 +391,20 @@ async function loadGnssTimelineSource(
   clearGnssData()
   clearFlowData()
   clearFlowConsole()
+  beginFileReplayMessages()
   beginGnssBulkImport()
 
   try {
     await readSource(appendChunk, fileTimeline.updateIndexingProgress)
     addGnssData('\n')
     routeAuxiliaryText('\n')
-    rebuildMapTrackFromPositionHistory()
-    rebuildDeviationFromPositionHistory()
+    if (timelineMode === 'loaded') {
+      rebuildMapTrackFromPositionHistory()
+      rebuildDeviationFromPositionHistory()
+    }
+    prepareTimelineProjection(timelineMode)
   } finally {
+    endFileReplayMessages()
     endGnssBulkImport()
   }
 
@@ -410,7 +432,7 @@ async function loadGnssTimelineFile(file: File, timelineMode: FileTimelineMode):
 
     if (typeof file.stream === 'function') {
       const reader = file.stream().getReader()
-      while (true) {
+      for (;;) {
         const result = await reader.read()
         if (result.done) break
         onChunk(decoder.decode(result.value, { stream: true }))
@@ -448,12 +470,26 @@ async function loadGnssTimelinePath(path: string, timelineMode: FileTimelineMode
 }
 
 function startTimestampPlayback(path: string): void {
-  if (
-    selectedFile.value &&
-    selectedFilePath.value === path &&
-    activeDataModes.value.includes('gnss')
-  ) {
-    void loadGnssTimelineFile(selectedFile.value, 'replay').catch((error) => {
+  if (activeDataModes.value.includes('gnss')) {
+    const loadTimeline =
+      selectedFile.value && selectedFilePath.value === path
+        ? loadGnssTimelineFile(selectedFile.value, 'replay')
+        : window.ipcRenderer
+          ? loadGnssTimelinePath(path, 'replay')
+          : null
+
+    if (!loadTimeline) {
+      ElMessage({
+        message: t('data.reselectFile'),
+        type: 'warning',
+        placement: 'bottom-right',
+        offset: 50,
+      })
+      return
+    }
+
+    void filePlaybackService.stop()
+    void loadTimeline.catch((error) => {
       fileTimeline.clearTimeline()
       clearGnssData()
       globalDevice.value.connected = false
@@ -503,30 +539,34 @@ export function useDevice() {
 
   // 对话框状态
   const showInputDialog = ref(false)
-  const activeTab = ref<'serial' | 'file' | 'network' | 'camera'>('file')
+  const activeTab = ref<'serial' | 'file' | 'network'>(dataSourceSettings.activeSource)
   let dataSourceSnapshot: typeof dataSourceSettings | undefined
   let dataSourceChangesCommitted = false
 
   const snapshotDataSourceSettings = (): typeof dataSourceSettings => ({
     version: 1,
+    activeSource: dataSourceSettings.activeSource,
     serial: { ...dataSourceSettings.serial },
     file: { ...dataSourceSettings.file },
     network: { ...dataSourceSettings.network },
-    camera: { ...dataSourceSettings.camera },
   })
 
   const restoreDataSourceSnapshot = () => {
     if (!dataSourceSnapshot) return
+    dataSourceSettings.activeSource = dataSourceSnapshot.activeSource
     Object.assign(dataSourceSettings.serial, dataSourceSnapshot.serial)
     Object.assign(dataSourceSettings.file, dataSourceSnapshot.file)
     Object.assign(dataSourceSettings.network, dataSourceSnapshot.network)
-    Object.assign(dataSourceSettings.camera, dataSourceSnapshot.camera)
+  }
+
+  const beginDataSourceEdit = () => {
+    dataSourceSnapshot = snapshotDataSourceSettings()
+    dataSourceChangesCommitted = false
   }
 
   watch(showInputDialog, (open) => {
     if (open) {
-      dataSourceSnapshot = snapshotDataSourceSettings()
-      dataSourceChangesCommitted = false
+      if (!dataSourceSnapshot) beginDataSourceEdit()
       return
     }
 
@@ -545,6 +585,20 @@ export function useDevice() {
       if (activeTab.value === 'serial') dataSourceSettings.serial.parser = parser
       if (activeTab.value === 'file') dataSourceSettings.file.parser = parser
       if (activeTab.value === 'network') dataSourceSettings.network.parser = parser
+    },
+  })
+
+  const sourceRegexPattern = computed({
+    get: () => {
+      if (activeTab.value === 'serial') return dataSourceSettings.serial.regexPattern
+      if (activeTab.value === 'file') return dataSourceSettings.file.regexPattern
+      if (activeTab.value === 'network') return dataSourceSettings.network.regexPattern
+      return dataSourceSettings.file.regexPattern
+    },
+    set: (pattern: string) => {
+      if (activeTab.value === 'serial') dataSourceSettings.serial.regexPattern = pattern
+      if (activeTab.value === 'file') dataSourceSettings.file.regexPattern = pattern
+      if (activeTab.value === 'network') dataSourceSettings.network.regexPattern = pattern
     },
   })
 
@@ -697,25 +751,28 @@ export function useDevice() {
    * 打开输入对话框
    */
   const inputDialog = (request?: unknown) => {
+    if (!showInputDialog.value) beginDataSourceEdit()
     const requestedTab =
       typeof request === 'string'
         ? request
         : request && typeof request === 'object' && 'tab' in request
           ? (request as { tab?: unknown }).tab
           : undefined
+    const requestedProtocol =
+      request && typeof request === 'object' && 'protocol' in request
+        ? (request as { protocol?: unknown }).protocol
+        : undefined
     if (
       requestedTab === 'serial' ||
       requestedTab === 'file' ||
-      requestedTab === 'network' ||
-      requestedTab === 'camera'
+      requestedTab === 'network'
     ) {
       activeTab.value = requestedTab
-    } else if (
-      currentWindows.value.length === 1 &&
-      currentWindows.value[0]?.id === 'camera-video'
-    ) {
-      activeTab.value = 'camera'
+    } else {
+      // 未指定 tab 时回到上次确认的数据源：未确认（取消/关闭）的 tab 切换不留存
+      activeTab.value = dataSourceSettings.activeSource
     }
+    if (requestedTab === 'network' && requestedProtocol === 'tcp') networkProtocol.value = 'tcp'
     showInputDialog.value = true
     searchSerialPorts(true)
   }
@@ -965,30 +1022,6 @@ export function useDevice() {
     return fileCmd
   }
 
-  const handleCameraSubmit = (): string => {
-    const url = normalizeRtspUrl(cameraStreamUrl.value)
-    if (!url) {
-      ElMessage({
-        message: t('data.rtspUrlInvalid'),
-        type: 'warning',
-        placement: 'bottom-right',
-        offset: 50,
-      })
-      return ''
-    }
-
-    fileTimeline.clearTimeline()
-    cameraStreamUrl.value = url
-    saveDataSourceSettings()
-    ElMessage({
-      message: t('data.cameraRtspSaved'),
-      type: 'success',
-      placement: 'bottom-right',
-      offset: 50,
-    })
-    return url
-  }
-
   const openCurrDevice = () => {
     if (globalDevice.value.connected === false) {
       if (globalDevice.value.type === 'serial') {
@@ -1103,6 +1136,22 @@ export function useDevice() {
    * 提交输入表单
    */
   const handleInputSubmit = () => {
+    if (sourceParser.value === 'regex') {
+      try {
+        createRecordRegex(sourceRegexPattern.value)
+      } catch (error) {
+        ElMessage({
+          message: t('data.regexPatternInvalid', {
+            message: error instanceof Error ? error.message : String(error),
+          }),
+          type: 'error',
+          placement: 'bottom-right',
+          offset: 50,
+        })
+        return
+      }
+    }
+
     let command = ''
 
     switch (activeTab.value) {
@@ -1115,13 +1164,12 @@ export function useDevice() {
       case 'file':
         command = handleFileSubmit()
         break
-      case 'camera':
-        command = handleCameraSubmit()
-        break
     }
 
     if (command) {
       dataSourceChangesCommitted = true
+      dataSourceSettings.activeSource = activeTab.value
+      saveDataSourceSettings()
       if (activeTab.value !== 'file') {
         console.log('输入的指令:', command)
       }
@@ -1155,8 +1203,8 @@ export function useDevice() {
     networkPort,
     networkProtocol,
     sourceParser,
+    sourceRegexPattern,
     activeDataParser,
-    cameraStreamUrl,
     serialPorts,
     baudRates,
     dataBits,

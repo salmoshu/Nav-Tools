@@ -106,6 +106,18 @@
         v-html="layoutList[3].icon"
       ></button>
 
+      <button
+        class="toolbar-btn"
+        :title="t('app.toolbar.exportConfiguration')"
+        :aria-label="t('app.toolbar.exportConfiguration')"
+        @click="
+          handleExportConfiguration()
+          ;($event.currentTarget as HTMLElement)?.blur()
+        "
+      >
+        <el-icon :size="18" aria-hidden="true"><Download /></el-icon>
+      </button>
+
       <span v-if="fileTimelineActive" class="divider timeline-divider" aria-hidden="true"></span>
       <FileTimelineControl :position="position" />
     </div>
@@ -167,29 +179,22 @@
             <el-input v-model="filePath" :placeholder="t('app.toolbar.filePathPlaceholder')" />
             <el-button type="default" @click="triggerFileSelection">{{ t('app.toolbar.selectFile') }}</el-button>
           </div>
-          <div class="time-tag-card">
-            <div class="time-tag-copy">
-              <strong>{{ t('app.toolbar.timeTag') }}</strong>
-              <span>{{ t('app.toolbar.timeTagDesc') }}</span>
-            </div>
-            <el-switch v-model="fileTimeTag" :aria-label="t('app.toolbar.timeTag')" />
+          <div class="input-group compact-input-group">
+            <span class="input-label">{{ t('app.toolbar.replaySpeed') }}</span>
+            <el-select
+              v-model="replaySpeedSelection"
+              :teleported="true"
+              popper-class="replay-speed-dropdown"
+            >
+              <el-option
+                v-for="speed in replaySpeedSelectionOptions"
+                :key="speed"
+                :label="`×${speed}`"
+                :value="speed"
+              />
+            </el-select>
           </div>
           <div v-if="fileTimeTag" class="time-tag-options">
-            <div class="input-group compact-input-group">
-              <span class="input-label">{{ t('app.toolbar.replaySpeed') }}</span>
-              <el-select
-                v-model="fileReplaySpeed"
-                :teleported="true"
-                popper-class="replay-speed-dropdown"
-              >
-                <el-option
-                  v-for="speed in replaySpeedOptions"
-                  :key="speed"
-                  :label="`×${speed}`"
-                  :value="speed"
-                />
-              </el-select>
-            </div>
             <div class="input-group compact-input-group">
               <span class="input-label">{{ t('app.toolbar.startOffset') }}</span>
               <el-input-number
@@ -209,24 +214,39 @@
               </el-select>
             </div>
           </div>
-          <div class="parser-card">
+          <div class="parser-card" :class="{ 'parser-flash': parserFlash }">
             <div class="parser-copy">
-              <strong>{{ t('app.toolbar.parseMethod') }}</strong>
+              <strong>{{ t('app.toolbar.dataSection') }}</strong>
               <span>{{ activeParserDescription }}</span>
             </div>
-            <el-select
-              v-model="sourceParser"
-              :aria-label="t('app.toolbar.parseMethod')"
-              class="parser-select"
-              :teleported="false"
-            >
-              <el-option
-                v-for="option in textDataParserOptions"
-                :key="option.value"
-                :label="option.label"
-                :value="option.value"
+            <div class="input-group">
+              <span class="input-label">{{ t('app.toolbar.parseMethod') }}</span>
+              <el-cascader
+                v-model="sourceParser"
+                :options="textDataParserCascaderOptions"
+                :props="parserCascaderProps"
+                :show-all-levels="false"
+                :aria-label="t('app.toolbar.parseMethod')"
+                class="parser-select"
+                popper-class="parser-select-dropdown"
               />
-            </el-select>
+            </div>
+            <div v-if="sourceParser === 'regex'" class="regex-parser-config">
+              <div class="input-group">
+                <span class="input-label">{{ t('app.toolbar.regexPattern') }}</span>
+                <el-input
+                  v-model="sourceRegexPattern"
+                  type="textarea"
+                  :rows="3"
+                  resize="vertical"
+                  :placeholder="t('app.toolbar.regexPatternPlaceholder')"
+                  :aria-label="t('app.toolbar.regexPattern')"
+                />
+              </div>
+              <small :class="{ invalid: regexPatternError }">
+                {{ regexPatternError || t('app.toolbar.regexPatternHint') }}
+              </small>
+            </div>
           </div>
         </div>
       </el-tab-pane>
@@ -251,10 +271,10 @@
         <div class="source-config-card">
           <div class="input-group">
             <span class="input-label">
+              {{ t('app.toolbar.port') }}
               <el-button @click="searchSerialPorts" class="icon-only-refresh">
                 <el-icon><Refresh /></el-icon>
               </el-button>
-              {{ t('app.toolbar.port') }}
             </span>
             <el-select
               v-model="serialPort"
@@ -321,24 +341,39 @@
             <span class="input-label">{{ t('app.toolbar.advanced') }}</span>
             <el-checkbox v-model="serialAdvanced">{{ t('app.toolbar.showAdvanced') }}</el-checkbox>
           </div>
-          <div class="parser-card">
+          <div class="parser-card" :class="{ 'parser-flash': parserFlash }">
             <div class="parser-copy">
-              <strong>{{ t('app.toolbar.parseMethod') }}</strong>
+              <strong>{{ t('app.toolbar.dataSection') }}</strong>
               <span>{{ activeParserDescription }}</span>
             </div>
-            <el-select
-              v-model="sourceParser"
-              :aria-label="t('app.toolbar.parseMethod')"
-              class="parser-select"
-              :teleported="false"
-            >
-              <el-option
-                v-for="option in textDataParserOptions"
-                :key="option.value"
-                :label="option.label"
-                :value="option.value"
+            <div class="input-group">
+              <span class="input-label">{{ t('app.toolbar.parseMethod') }}</span>
+              <el-cascader
+                v-model="sourceParser"
+                :options="textDataParserCascaderOptions"
+                :props="parserCascaderProps"
+                :show-all-levels="false"
+                :aria-label="t('app.toolbar.parseMethod')"
+                class="parser-select"
+                popper-class="parser-select-dropdown"
               />
-            </el-select>
+            </div>
+            <div v-if="sourceParser === 'regex'" class="regex-parser-config">
+              <div class="input-group">
+                <span class="input-label">{{ t('app.toolbar.regexPattern') }}</span>
+                <el-input
+                  v-model="sourceRegexPattern"
+                  type="textarea"
+                  :rows="3"
+                  resize="vertical"
+                  :placeholder="t('app.toolbar.regexPatternPlaceholder')"
+                  :aria-label="t('app.toolbar.regexPattern')"
+                />
+              </div>
+              <small :class="{ invalid: regexPatternError }">
+                {{ regexPatternError || t('app.toolbar.regexPatternHint') }}
+              </small>
+            </div>
           </div>
         </div>
       </el-tab-pane>
@@ -387,61 +422,43 @@
               style="flex: 1; width: 100%"
             />
           </div>
-          <div class="parser-card">
+          <div class="parser-card" :class="{ 'parser-flash': parserFlash }">
             <div class="parser-copy">
-              <strong>{{ t('app.toolbar.parseMethod') }}</strong>
+              <strong>{{ t('app.toolbar.dataSection') }}</strong>
               <span>{{ activeParserDescription }}</span>
             </div>
-            <el-select
-              v-model="sourceParser"
-              :aria-label="t('app.toolbar.parseMethod')"
-              class="parser-select"
-              :teleported="false"
-            >
-              <el-option
-                v-for="option in textDataParserOptions"
-                :key="option.value"
-                :label="option.label"
-                :value="option.value"
+            <div class="input-group">
+              <span class="input-label">{{ t('app.toolbar.parseMethod') }}</span>
+              <el-cascader
+                v-model="sourceParser"
+                :options="textDataParserCascaderOptions"
+                :props="parserCascaderProps"
+                :show-all-levels="false"
+                :aria-label="t('app.toolbar.parseMethod')"
+                class="parser-select"
+                popper-class="parser-select-dropdown"
               />
-            </el-select>
+            </div>
+            <div v-if="sourceParser === 'regex'" class="regex-parser-config">
+              <div class="input-group">
+                <span class="input-label">{{ t('app.toolbar.regexPattern') }}</span>
+                <el-input
+                  v-model="sourceRegexPattern"
+                  type="textarea"
+                  :rows="3"
+                  resize="vertical"
+                  :placeholder="t('app.toolbar.regexPatternPlaceholder')"
+                  :aria-label="t('app.toolbar.regexPattern')"
+                />
+              </div>
+              <small :class="{ invalid: regexPatternError }">
+                {{ regexPatternError || t('app.toolbar.regexPatternHint') }}
+              </small>
+            </div>
           </div>
         </div>
       </el-tab-pane>
 
-      <el-tab-pane label="Camera RTSP" name="camera">
-        <template #label>
-          <span class="source-tab-label">
-            <el-icon><VideoCamera /></el-icon>
-            <span class="source-tab-copy">
-              <strong
-                ><span class="tab-name-full">Camera</span
-                ><span class="tab-name-compact">{{ t('app.toolbar.cameraTabShort') }}</span></strong
-              >
-              <small>RTSP</small>
-            </span>
-          </span>
-        </template>
-        <div class="source-panel-heading">
-          <strong>{{ t('app.toolbar.cameraSource') }}</strong>
-          <span>{{ t('app.toolbar.cameraSourceDesc') }}</span>
-        </div>
-        <div class="source-config-card">
-          <div class="input-group">
-            <span class="input-label">{{ t('app.toolbar.videoUrl') }}</span>
-            <el-input
-              v-model="cameraStreamUrl"
-              :aria-label="t('app.toolbar.videoUrlLabel')"
-              placeholder="rtsp://192.168.3.14:8554/rgbstream"
-              clearable
-            />
-          </div>
-          <div class="source-info-card">
-            <span>{{ t('app.toolbar.transProtocol') }}</span><strong>RTSP</strong> <span>{{ t('app.toolbar.outputType') }}</span
-            ><strong>{{ t('app.toolbar.realtimeFrame') }}</strong> <span>{{ t('app.toolbar.usedBy') }}</span><strong>Camera Video</strong>
-          </div>
-        </div>
-      </el-tab-pane>
     </el-tabs>
     <template #footer>
       <el-button @click="showInputDialog = false">{{ t('app.cancel') }}</el-button>
@@ -469,18 +486,26 @@ import {
   ElButton,
   ElSelect,
   ElOption,
+  ElCascader,
   ElInput,
   ElInputNumber,
   ElSwitch,
   ElCheckbox,
   ElIcon,
 } from 'element-plus'
-import { Connection, FolderOpened, Monitor, Refresh, VideoCamera } from '@element-plus/icons-vue'
+import {
+  Connection,
+  Download,
+  FolderOpened,
+  Monitor,
+  Refresh,
+} from '@element-plus/icons-vue'
 import { useApplicationSelector } from '@/composables/useApplicationSelector'
 import { getPanelIconComponent } from '@/settings/panelIcons'
-import { textDataParserOptions } from '@/composables/useDataSourceManager'
+import { textDataParserOptions, textDataParserCascaderOptions } from '@/composables/useDataSourceManager'
 import { useFileTimeline } from '@/composables/useFileTimeline'
 import FileTimelineControl from '@/components/FileTimelineControl.vue'
+import { createRecordRegex } from '@/core/data/TextRecordParser'
 import { t } from '@/i18n'
 
 const ipcRenderer = window.ipcRenderer
@@ -495,6 +520,28 @@ const updateViewportWidth = () => {
   viewportWidth.value = window.innerWidth
 }
 const showSaveButton = ref(false)
+
+// 数据格式级联：emitPath=false 使 v-model 直接得到叶子值（与 sourceParser 类型一致），
+// hover 展开二级菜单
+const parserCascaderProps = { emitPath: false, expandTrigger: 'hover' } as const
+
+// 数据格式配置短暂高亮（由消息窗口解析徽标点击触发）
+const parserFlash = ref(false)
+let parserFlashTimer: ReturnType<typeof setTimeout> | null = null
+let parserFlashResetTimer: ReturnType<typeof setTimeout> | null = null
+
+const flashParserConfig = () => {
+  if (parserFlashTimer) clearTimeout(parserFlashTimer)
+  if (parserFlashResetTimer) clearTimeout(parserFlashResetTimer)
+  parserFlash.value = false
+  // 等待 el-dialog 渲染完成后再高亮
+  parserFlashResetTimer = setTimeout(() => {
+    parserFlash.value = true
+    parserFlashTimer = setTimeout(() => {
+      parserFlash.value = false
+    }, 2200)
+  }, 250)
+}
 const { currentApplication, currentApplicationId } = useApplicationSelector()
 
 import { useDevice } from '@/hooks/useDevice'
@@ -522,7 +569,7 @@ const {
   networkPort,
   networkProtocol,
   sourceParser,
-  cameraStreamUrl,
+  sourceRegexPattern,
   serialPorts,
   baudRates,
   dataBits,
@@ -538,15 +585,34 @@ const {
 
 const replaySpeedOptions = [0.1, 0.2, 0.5, 1, 2, 5, 10]
 
+const replaySpeedSelectionOptions = [0, ...replaySpeedOptions]
+
+const replaySpeedSelection = computed<number>({
+  get: () => (fileTimeTag.value ? fileReplaySpeed.value : 0),
+  set: (value: number) => {
+    if (value === 0) {
+      fileTimeTag.value = false
+    } else {
+      fileTimeTag.value = true
+      fileReplaySpeed.value = value
+    }
+  },
+})
+
 const activeParserDescription = computed(
   () =>
     textDataParserOptions.find((option) => option.value === sourceParser.value)?.description ?? '',
 )
-const inputSubmitLabel = computed(() => {
-  if (activeTab.value === 'camera') return t('app.toolbar.saveSource')
-  if (activeTab.value === 'file') return fileTimeTag.value ? t('app.toolbar.startPlay') : t('app.toolbar.loadFile')
-  return t('app.toolbar.connectSource')
+const regexPatternError = computed(() => {
+  if (sourceParser.value !== 'regex') return ''
+  try {
+    createRecordRegex(sourceRegexPattern.value)
+    return ''
+  } catch (error) {
+    return error instanceof Error ? error.message : String(error)
+  }
 })
+const inputSubmitLabel = computed(() => t('app.confirm'))
 
 // 添加triggerFileSelection函数，注意这里是const而不是sconst
 const triggerFileSelection = () => {
@@ -794,6 +860,10 @@ const handleAction = (action: string) => {
   emitter.emit(action)
 }
 
+const handleExportConfiguration = () => {
+  emitter.emit('export-configuration')
+}
+
 const dataInputNoDragSelector = [
   '.data-input-overlay',
   '.data-input-overlay *',
@@ -947,6 +1017,7 @@ function handleInputDialogEscape(event: KeyboardEvent) {
 onMounted(() => {
   searchSerialPorts(true)
   emitter.on('input-event', inputDialog)
+  emitter.on('highlight-parser-format', flashParserConfig)
   document.addEventListener('pointerdown', handleDataInputPointer, true)
   document.addEventListener('mousedown', handleDataInputPointer, true)
   document.addEventListener('click', handleDataInputPointer, true)
@@ -993,6 +1064,9 @@ onUnmounted(() => {
 
   // 移除布局更改监听
   emitter.off('layout-changed')
+  emitter.off('highlight-parser-format', flashParserConfig)
+  if (parserFlashTimer) clearTimeout(parserFlashTimer)
+  if (parserFlashResetTimer) clearTimeout(parserFlashResetTimer)
 })
 </script>
 
@@ -1459,6 +1533,10 @@ onUnmounted(() => {
   font-size: 15px;
 }
 
+.parser-copy strong {
+  font-size: 15px;
+}
+
 .source-config-card {
   padding: 5px 2px 0;
 }
@@ -1484,43 +1562,13 @@ onUnmounted(() => {
   font-weight: 600;
 }
 
-.time-tag-card {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  margin: 2px 0 12px 106px;
-  padding: 11px 13px;
-  border: 1px solid var(--app-border);
-  border-radius: 7px;
-  background: var(--app-surface-muted);
-}
-
-.time-tag-copy {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  gap: 3px;
-}
-
-.time-tag-copy strong {
-  color: var(--app-text);
-  font-size: 13px;
-}
-
-.time-tag-copy span {
-  color: var(--app-text-muted);
-  font-size: 11px;
-  line-height: 1.4;
-}
-
 .time-tag-options {
-  margin-left: 106px;
+  margin-left: 0;
   padding-bottom: 2px;
 }
 
 .time-tag-options .input-label {
-  min-width: 82px;
+  min-width: 94px;
 }
 
 .input-unit {
@@ -1530,6 +1578,7 @@ onUnmounted(() => {
 }
 
 .parser-card {
+  position: relative;
   display: flex;
   align-items: stretch;
   flex-direction: column;
@@ -1539,13 +1588,60 @@ onUnmounted(() => {
   border-top: 1px solid var(--app-border);
 }
 
+/* 数据格式配置短暂高亮（由消息窗口解析徽标点击触发）：
+   边框高亮；::before 外扩 8~10px，避免边框紧贴文字/输入框 */
+.parser-card.parser-flash::before {
+  content: '';
+  position: absolute;
+  inset: -8px -10px;
+  pointer-events: none;
+  border: 2px solid var(--el-color-primary);
+  border-radius: 8px;
+  animation: parser-flash-pulse 2.2s ease-out;
+}
+
+@keyframes parser-flash-pulse {
+  0% {
+    opacity: 0;
+  }
+  12% {
+    opacity: 1;
+  }
+  75% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
 .parser-copy {
   min-width: 0;
 }
 
+/* 数据格式/正则表达式行与上方连接设置的输入行对齐（标签 94px + 间距 12px） */
+.parser-card .input-group {
+  margin-bottom: 0;
+}
+
 .parser-select {
-  width: calc(100% - 106px);
+  flex: 1;
+}
+
+.regex-parser-config :deep(.el-textarea) {
+  flex: 1;
+}
+
+.regex-parser-config small {
+  display: block;
+  margin-top: 6px;
   margin-left: 106px;
+  color: var(--app-text-muted);
+  line-height: 1.45;
+}
+
+.regex-parser-config small.invalid {
+  color: var(--el-color-danger);
 }
 
 .compact-input-group {
@@ -1561,7 +1657,7 @@ onUnmounted(() => {
 
 .input-label {
   min-width: 94px;
-  text-align: right;
+  text-align: left;
   margin-right: 12px;
   font-size: 14px;
   color: var(--app-text-secondary);
@@ -1641,6 +1737,11 @@ onUnmounted(() => {
   z-index: 8002 !important;
 }
 
+/* 数据格式下拉同样 teleport 到 body，避免被对话框 overflow 容器截断分组选项 */
+:global(.parser-select-dropdown) {
+  z-index: 8002 !important;
+}
+
 :global(.data-input-dialog .el-input__inner),
 :global(.data-input-dialog input),
 :global(.data-input-dialog textarea) {
@@ -1657,12 +1758,13 @@ onUnmounted(() => {
   color: var(--app-text-muted);
 }
 
-:global(.data-input-dialog .el-tabs__header) {
+:global(.data-input-dialog .el-tabs__header.is-left) {
   width: 148px;
-  margin-right: 20px;
+  margin: 0;
   padding: 8px;
-  border: 1px solid var(--app-border);
-  border-radius: 9px;
+  border: none;
+  border-right: 1px solid var(--app-border);
+  border-radius: 0;
   background: var(--app-surface-muted);
 }
 
@@ -1704,6 +1806,21 @@ onUnmounted(() => {
   min-height: 290px;
 }
 
+:global(.data-input-dialog .el-tabs--left > .el-tabs__content) {
+  padding-left: 20px;
+}
+
+/* 内容区右/底补内边距：el-tabs__content 有 overflow:hidden，
+   数据格式高亮边框外扩时不被裁掉 */
+:global(.data-input-dialog .el-tabs__content) {
+  padding-right: 20px;
+  padding-bottom: 12px;
+}
+
+:global(.data-input-dialog .el-tabs--top > .el-tabs__content) {
+  padding-left: 20px;
+}
+
 @media (max-width: 560px) {
   .data-source-dialog-title span {
     display: none;
@@ -1717,13 +1834,11 @@ onUnmounted(() => {
     gap: 8px;
   }
 
-  .parser-select {
-    width: 100%;
+  .regex-parser-config small {
     margin-left: 0;
   }
 
   .source-info-card,
-  .time-tag-card,
   .time-tag-options {
     margin-left: 0;
   }
@@ -1753,6 +1868,9 @@ onUnmounted(() => {
     width: auto;
     margin: 0 0 14px;
     padding: 4px;
+    border: 1px solid var(--app-border);
+    border-radius: 9px;
+    background: var(--app-surface-muted);
   }
 
   :global(.data-input-dialog .el-tabs__item.is-top) {

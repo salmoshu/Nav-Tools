@@ -3,15 +3,12 @@ import { ApplicationStorage } from '@/core/application/ApplicationStorage'
 import { LayoutStorage } from '@/core/layout/LayoutStorage'
 import { normalizePanelIds } from '@/core/panels/registry'
 import { JsonStorage, type StorageLike } from '@/core/storage/JsonStorage'
-import {
-  DATA_SOURCE_SETTINGS_KEY,
-  DataSourceStorage,
-  LEGACY_CAMERA_STREAM_URL_KEY,
-} from '@/core/data/DataSourceStorage'
+import { DATA_SOURCE_SETTINGS_KEY, DataSourceStorage } from '@/core/data/DataSourceStorage'
 import {
   CAMERA_PARAMETERS_SETTINGS_KEY,
   CameraParametersStorage,
 } from '@/core/camera/CameraParametersStorage'
+import { CAMERA_VIDEO_SETTINGS_KEY } from '@/core/camera/CameraVideoStorage'
 
 class MemoryStorage implements StorageLike {
   private values = new Map<string, string>()
@@ -30,20 +27,20 @@ class MemoryStorage implements StorageLike {
 }
 
 describe('panel and application persistence', () => {
-  it('seeds editable Serial, GNSS, Motor, and Camera applications on first launch', () => {
+  it('seeds editable Serial, GNSS, Flow, and Camera applications on first launch', () => {
     const memory = new MemoryStorage()
     const applications = new ApplicationStorage(new JsonStorage(memory)).loadApplications()
 
     expect(applications.map((application) => application.name)).toEqual([
       'Serial',
       'GNSS',
-      'Motor',
+      'Flow',
       'Camera',
     ])
     expect(applications[0]).toMatchObject({
       id: 'serial',
       icon: 'connection',
-      windowIds: ['plot', 'raw-messages'],
+      windowIds: ['plot', 'raw-messages', 'motor-parameters'],
     })
     expect(applications[1]).toMatchObject({
       id: 'gnss',
@@ -53,7 +50,7 @@ describe('panel and application persistence', () => {
     expect(applications[2]).toMatchObject({
       id: 'motor',
       icon: 'motor',
-      windowIds: ['plot', 'raw-messages', 'motor-parameters'],
+      windowIds: ['plot', 'raw-messages', 'flow-deviation', 'motor-parameters'],
     })
     expect(applications[3]).toMatchObject({
       id: 'camera',
@@ -141,7 +138,52 @@ describe('panel and application persistence', () => {
     expect(storage.loadApplications().map(({ id }) => id)).toEqual(['gnss'])
   })
 
-  it('resets saved applications back to Serial, GNSS, Motor, and Camera defaults', () => {
+  it('renames Motor to Flow and adds deviation and parameters panels once when upgrading', () => {
+    const memory = new MemoryStorage()
+    memory.setItem(
+      'nav-tools:custom-applications',
+      JSON.stringify([
+        {
+          id: 'serial',
+          name: 'Serial',
+          description: '',
+          icon: 'connection',
+          accent: '#8b5cf6',
+          windowIds: ['plot', 'raw-messages'],
+        },
+        {
+          id: 'motor',
+          name: 'Motor',
+          description: 'Motor telemetry, command, and parameter workspace',
+          icon: 'motor',
+          accent: '#f97316',
+          windowIds: ['plot', 'raw-messages', 'motor-parameters'],
+        },
+      ]),
+    )
+    const storage = new ApplicationStorage(new JsonStorage(memory))
+
+    const [serialApplication, motorApplication] = storage.loadApplications()
+    expect(serialApplication.windowIds).toEqual(['plot', 'raw-messages', 'motor-parameters'])
+    expect(motorApplication.name).toBe('Flow')
+    expect(motorApplication.description).toBe('Flow deviation, telemetry, and parameter workspace')
+    expect(motorApplication.windowIds).toEqual([
+      'plot',
+      'raw-messages',
+      'motor-parameters',
+      'flow-deviation',
+    ])
+    storage.saveApplications([
+      { ...serialApplication, windowIds: ['plot', 'raw-messages'] },
+      { ...motorApplication, name: 'Custom Flow', windowIds: ['plot'] },
+    ])
+    const [serialAgain, motorAgain] = storage.loadApplications()
+    expect(serialAgain.windowIds).toEqual(['plot', 'raw-messages'])
+    expect(motorAgain.name).toBe('Custom Flow')
+    expect(motorAgain.windowIds).toEqual(['plot'])
+  })
+
+  it('resets saved applications back to Serial, GNSS, Flow, and Camera defaults', () => {
     const memory = new MemoryStorage()
     const storage = new ApplicationStorage(new JsonStorage(memory))
     storage.saveApplications([
@@ -278,14 +320,13 @@ describe('LayoutStorage', () => {
 })
 
 describe('DataSourceStorage', () => {
-  it('migrates the legacy Camera URL into unified data-source settings', () => {
+  it('stores only the shared file, serial, and network data sources', () => {
     const memory = new MemoryStorage()
-    memory.setItem(LEGACY_CAMERA_STREAM_URL_KEY, 'rtsp://10.0.0.8:8554/camera')
 
     const settings = new DataSourceStorage(new JsonStorage(memory)).load()
 
-    expect(settings.camera.url).toBe('rtsp://10.0.0.8:8554/camera')
     expect(settings.serial.parser).toBe('raw')
+    expect(settings).not.toHaveProperty('camera')
     expect(memory.getItem(DATA_SOURCE_SETTINGS_KEY)).not.toBeNull()
   })
 
@@ -305,7 +346,7 @@ describe('DataSourceStorage', () => {
           filePositionBytes: 8,
         },
         network: { protocol: 'udp', host: '0.0.0.0', port: 9000, parser: 'unknown' },
-        camera: { url: 'invalid' },
+        camera: { url: 'rtsp://10.0.0.8:8554/camera' },
       }),
     )
 
@@ -326,7 +367,72 @@ describe('DataSourceStorage', () => {
       port: 9000,
       parser: 'raw',
     })
-    expect(settings.camera.url).toBe('rtsp://192.168.3.14:8554/rgbstream')
+    expect(settings).not.toHaveProperty('camera')
+    expect(JSON.parse(memory.getItem(DATA_SOURCE_SETTINGS_KEY) ?? '{}')).not.toHaveProperty(
+      'camera',
+    )
+    expect(JSON.parse(memory.getItem(CAMERA_VIDEO_SETTINGS_KEY) ?? '{}')).toMatchObject({
+      streamUrl: 'rtsp://10.0.0.8:8554/camera',
+    })
+  })
+
+  it('defaults the active source to file when nothing is stored', () => {
+    const memory = new MemoryStorage()
+
+    const settings = new DataSourceStorage(new JsonStorage(memory)).load()
+
+    expect(settings.activeSource).toBe('file')
+  })
+
+  it('persists and restores the active source across restarts', () => {
+    const memory = new MemoryStorage()
+    new DataSourceStorage(new JsonStorage(memory)).save({
+      ...new DataSourceStorage(new JsonStorage(memory)).load(),
+      activeSource: 'network',
+    })
+
+    const restored = new DataSourceStorage(new JsonStorage(memory)).load()
+
+    expect(restored.activeSource).toBe('network')
+  })
+
+  it('normalizes an invalid active source back to file', () => {
+    const memory = new MemoryStorage()
+    memory.setItem(
+      DATA_SOURCE_SETTINGS_KEY,
+      JSON.stringify({
+        version: 1,
+        activeSource: 'camera',
+        serial: {},
+        file: {},
+        network: {},
+        camera: {},
+      }),
+    )
+
+    const settings = new DataSourceStorage(new JsonStorage(memory)).load()
+
+    expect(settings.activeSource).toBe('file')
+  })
+
+  it('persists a regex parser definition for each text source', () => {
+    const memory = new MemoryStorage()
+    const storage = new DataSourceStorage(new JsonStorage(memory))
+    const settings = storage.load()
+    const pattern = String.raw`(?<key>\w+)=(?<value>\S+)`
+
+    settings.serial.parser = 'regex'
+    settings.serial.regexPattern = pattern
+    settings.file.parser = 'regex'
+    settings.file.regexPattern = pattern
+    settings.network.parser = 'regex'
+    settings.network.regexPattern = pattern
+    storage.save(settings)
+
+    const restored = storage.load()
+    expect(restored.serial).toMatchObject({ parser: 'regex', regexPattern: pattern })
+    expect(restored.file).toMatchObject({ parser: 'regex', regexPattern: pattern })
+    expect(restored.network).toMatchObject({ parser: 'regex', regexPattern: pattern })
   })
 })
 
@@ -337,8 +443,6 @@ describe('CameraParametersStorage', () => {
 
     storage.save({
       version: 1,
-      host: '10.0.0.8',
-      port: 9000,
       subCommand: 'bbox_draw',
       content: '06',
       contentIsHex: true,
@@ -347,8 +451,6 @@ describe('CameraParametersStorage', () => {
     expect(memory.getItem(CAMERA_PARAMETERS_SETTINGS_KEY)).not.toBeNull()
     expect(new CameraParametersStorage(new JsonStorage(memory)).load()).toEqual({
       version: 1,
-      host: '10.0.0.8',
-      port: 9000,
       subCommand: 'bbox_draw',
       content: '06',
       contentIsHex: true,
@@ -363,11 +465,11 @@ describe('CameraParametersStorage', () => {
     )
 
     expect(new CameraParametersStorage(new JsonStorage(memory)).load()).toMatchObject({
-      host: '192.168.3.14',
-      port: 8080,
       subCommand: '',
       content: '',
       contentIsHex: false,
     })
+    expect(new CameraParametersStorage(new JsonStorage(memory)).load()).not.toHaveProperty('host')
+    expect(new CameraParametersStorage(new JsonStorage(memory)).load()).not.toHaveProperty('port')
   })
 })

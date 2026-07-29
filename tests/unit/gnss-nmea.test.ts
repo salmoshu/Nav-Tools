@@ -124,7 +124,60 @@ describe('NMEA GNSS status extraction', () => {
     clearData()
     expect(statusEpochHistory.value.length).toBe(0)
     expect(store.status.utcTime).toBe('')
-    expect(store.status.longitude).toBe(0)
+    expect(store.status.longitude).toBe('')
+  })
+
+  it('coalesces matching RMC and GGA map positions with GGA solution quality', () => {
+    const {
+      parseNmea,
+      mapTrackPoints,
+      speedEpochHistory,
+      rebuildMapTrackFromPositionHistory,
+    } = useNmea()
+    const store = useGnssStore()
+    const rmc30 = withChecksum(
+      '$GPRMC,091214.30,A,3110.7353943,N,12124.3158362,E,1.26,0.00,030723,0.0,E,R,V',
+    )
+    const gga30 = withChecksum(
+      '$GPGGA,091214.30,3110.7353943,N,12124.3158362,E,5,15,1.0,5.754,M,10.841,M,0.2,0000',
+    )
+    const gga40 = withChecksum(
+      '$GPGGA,091214.40,3110.7354639,N,12124.3157707,E,4,15,1.0,5.751,M,10.841,M,0.3,0000',
+    )
+    const rmc40 = withChecksum(
+      '$GPRMC,091214.40,A,3110.7354639,N,12124.3157707,E,1.20,0.00,030723,0.0,E,R,V',
+    )
+
+    parseNmea(rmc30)
+    parseNmea(gga30)
+    parseNmea(gga40)
+    parseNmea(rmc40)
+
+    expect(mapTrackPoints.value).toHaveLength(2)
+    expect(mapTrackPoints.value.map((point) => point[2])).toEqual([5, 4])
+    expect(speedEpochHistory.value.getValue('QUALITY', 0)).toBe(5)
+    expect(speedEpochHistory.value.getValue('QUALITY', 1)).toBe(4)
+    expect(store.status.quality).toBe(4)
+
+    rebuildMapTrackFromPositionHistory()
+    expect(mapTrackPoints.value).toHaveLength(2)
+    expect(mapTrackPoints.value.map((point) => point[2])).toEqual([5, 4])
+  })
+
+  it('keeps RMC-only map tracks and maps their mode to the shared solution quality', () => {
+    const { parseNmea, mapTrackPoints } = useNmea()
+    const store = useGnssStore()
+    const rmc = withChecksum(
+      '$GPRMC,091214.30,A,3110.7353943,N,12124.3158362,E,1.26,0.00,030723,0.0,E,R,V',
+    )
+
+    parseNmea(rmc)
+
+    expect(mapTrackPoints.value).toHaveLength(1)
+    expect(mapTrackPoints.value[0][0]).toBeCloseTo(121 + 24.3158362 / 60, 10)
+    expect(mapTrackPoints.value[0][1]).toBeCloseTo(31 + 10.7353943 / 60, 10)
+    expect(mapTrackPoints.value[0][2]).toBe(4)
+    expect(store.status.quality).toBe(4)
   })
 
   it('builds a bounded map overview from full-precision position history', () => {

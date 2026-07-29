@@ -7,22 +7,33 @@
             ><el-icon><Connection /></el-icon
           ></span>
           <strong class="section-title">{{ t('common.camera.connectionSettings') }}</strong>
-          <el-tag :type="statusType" effect="plain" round>{{ statusText }}</el-tag>
+          <span class="conn-status" :class="`conn-status--${status}`">
+            <span class="conn-status__dot"></span>
+            <span class="conn-status__text">{{ statusText }}</span>
+          </span>
         </div>
 
         <div class="connection-grid">
           <label>
             <span>{{ t('common.camera.serverAddress') }}</span>
-            <el-input v-model="host" placeholder="192.168.3.14" :disabled="sending" />
+            <el-input
+              class="network-setting-display"
+              :model-value="host"
+              :aria-label="t('common.camera.serverAddress')"
+              :title="t('common.camera.networkSettingsHint')"
+              readonly
+              @click="openNetworkSettings"
+            />
           </label>
           <label>
             <span>{{ t('common.camera.port') }}</span>
-            <el-input-number
-              v-model="port"
-              :min="1"
-              :max="65535"
-              controls-position="right"
-              :disabled="sending"
+            <el-input
+              class="network-setting-display"
+              :model-value="portText"
+              :aria-label="t('common.camera.port')"
+              :title="t('common.camera.networkSettingsHint')"
+              readonly
+              @click="openNetworkSettings"
             />
           </label>
           <label>
@@ -140,30 +151,46 @@ import {
   type CameraParametersSettings,
 } from '@/core/camera/CameraParametersStorage'
 import { JsonStorage } from '@/core/storage/JsonStorage'
+import { isCameraTcpDataConnected } from '@/core/camera/CameraConnectionStatus'
+import { useDataSourceManager } from '@/composables/useDataSourceManager'
+import { useDevice } from '@/hooks/useDevice'
+import { showToolBar } from '@/composables/useStatusManager'
+import emitter from '@/hooks/useMitt'
 
-type Status = 'ready' | 'sending' | 'success' | 'error'
+// 连接状态（同步相机 TCP 连接结果）：
+// disconnected 未连接 / connecting 连接中 / connected 连接成功(就绪) / error 连接失败
+type Status = 'disconnected' | 'connecting' | 'connected' | 'error'
 
 const subCommandOptions = CAMERA_SUB_COMMANDS
 const parametersStorage = new CameraParametersStorage(new JsonStorage(window.localStorage))
 const savedSettings = parametersStorage.load()
-const host = ref(savedSettings.host)
-const port = ref(savedSettings.port)
+const { settings: dataSourceSettings } = useDataSourceManager()
+const { globalDevice } = useDevice()
+const networkProtocol = computed(() => dataSourceSettings.network.protocol)
+const host = computed(() => dataSourceSettings.network.host)
+const port = computed(() => dataSourceSettings.network.port ?? 0)
+const portText = computed(() => (port.value > 0 ? String(port.value) : '—'))
 const subCommand = ref(savedSettings.subCommand)
 const content = ref(savedSettings.content)
 const contentIsHex = ref(savedSettings.contentIsHex)
 const showCommandHelp = ref(false)
 const sending = ref(false)
-const status = ref<Status>('ready')
+const status = computed<Status>(() =>
+  isCameraTcpDataConnected(globalDevice.value, {
+    host: host.value,
+    port: port.value,
+  })
+    ? 'connected'
+    : 'disconnected',
+)
 const logs = ref<string[]>([])
 const outputElement = ref<HTMLElement>()
 
 watch(
-  [host, port, subCommand, content, contentIsHex],
+  [subCommand, content, contentIsHex],
   () => {
     parametersStorage.save({
       version: 1,
-      host: host.value,
-      port: port.value,
       subCommand: subCommand.value,
       content: content.value,
       contentIsHex: contentIsHex.value,
@@ -172,26 +199,15 @@ watch(
   { flush: 'post' },
 )
 
+// 连接状态文案：连接成功显示“就绪”，未连接/失败显示为“其他状态”。
 const statusText = computed(
   () =>
     ({
-      ready: t('common.camera.status.ready'),
-      sending: t('common.camera.status.sending'),
-      success: t('common.camera.status.success'),
-      error: t('common.camera.status.error'),
+      disconnected: t('common.camera.status.disconnected'),
+      connecting: t('common.camera.status.connecting'),
+      connected: t('common.camera.status.ready'),
+      error: t('common.camera.status.failed'),
     })[status.value],
-)
-
-const statusType = computed(
-  () =>
-    (
-      ({
-        ready: 'info',
-        sending: 'warning',
-        success: 'success',
-        error: 'danger',
-      }) as const
-    )[status.value],
 )
 
 const contentPlaceholder = computed(() =>
@@ -208,7 +224,16 @@ function handleSubCommandChange(value: string) {
   contentIsHex.value = value === 'bbox_draw'
 }
 
+async function openNetworkSettings() {
+  if (showToolBar.value === false) {
+    showToolBar.value = true
+    await nextTick()
+  }
+  emitter.emit('input-event', { tab: 'network', protocol: 'tcp' })
+}
+
 function validateInput(): string | undefined {
+  if (networkProtocol.value !== 'tcp') return t('common.camera.errTcpConfigurationRequired')
   if (!host.value.trim()) return t('common.camera.errEnterServerAddress')
   if (!Number.isInteger(port.value) || port.value < 1 || port.value > 65535) {
     return t('common.camera.errPortRange')
@@ -247,7 +272,6 @@ async function sendCommand() {
   }
 
   sending.value = true
-  status.value = 'sending'
   await appendLog(
     '',
     t('common.camera.logLoginHeader'),
@@ -281,12 +305,10 @@ async function sendCommand() {
       t('common.camera.logResponseByte', { hex: formatHex(result.responseHex) || '(空)' }),
       t('common.camera.logBigSeparator'),
     )
-    status.value = 'success'
     ElMessage.success(t('common.camera.sentSuccess'))
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     await appendLog(t('common.camera.logError', { msg: message }), t('common.camera.logBigSeparator'))
-    status.value = 'error'
     ElMessage.error(t('common.camera.sendFailed') + message)
   } finally {
     sending.value = false
@@ -295,7 +317,6 @@ async function sendCommand() {
 
 function clearOutput() {
   logs.value = []
-  status.value = 'ready'
 }
 </script>
 
@@ -372,6 +393,70 @@ function clearOutput() {
 .connection-grid :deep(.el-input),
 .command-form :deep(.el-select) {
   width: 100%;
+}
+
+.connection-grid :deep(.network-setting-display .el-input__wrapper) {
+  background: var(--app-surface-muted);
+  cursor: pointer;
+}
+
+.connection-grid :deep(.network-setting-display .el-input__inner) {
+  cursor: pointer;
+}
+
+.conn-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 11px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.conn-status__dot {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.conn-status--disconnected {
+  color: var(--el-color-info);
+  background: color-mix(in srgb, var(--el-color-info) 16%, transparent);
+}
+
+.conn-status--disconnected .conn-status__dot {
+  background: var(--el-color-info);
+}
+
+.conn-status--connecting {
+  color: var(--el-color-warning);
+  background: color-mix(in srgb, var(--el-color-warning) 18%, transparent);
+}
+
+.conn-status--connecting .conn-status__dot {
+  background: var(--el-color-warning);
+}
+
+.conn-status--connected {
+  color: var(--el-color-success);
+  background: color-mix(in srgb, var(--el-color-success) 20%, transparent);
+}
+
+.conn-status--connected .conn-status__dot {
+  background: var(--el-color-success);
+}
+
+.conn-status--error {
+  color: var(--el-color-danger);
+  background: color-mix(in srgb, var(--el-color-danger) 18%, transparent);
+}
+
+.conn-status--error .conn-status__dot {
+  background: var(--el-color-danger);
 }
 
 .command-form {

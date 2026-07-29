@@ -81,6 +81,24 @@ describe('IncomingDataRouter', () => {
     expect(targets.appendRaw).toHaveBeenCalledWith('AABB\n{"speed":1}\n')
     expect(targets.appendPlot).toHaveBeenCalledWith('{"speed":1}\n')
   })
+
+  it('feeds structured flow data even when the plot panel is not open', () => {
+    const targets = {
+      appendGnss: vi.fn(),
+      appendRaw: vi.fn(),
+      appendPlot: vi.fn(),
+      decodeMotorHex: vi.fn((data: string) => data),
+    }
+    const router = new IncomingDataRouter(targets)
+
+    router.route('speed=LOW(3)\n', {
+      activeDataModes: ['flow'],
+      activeWindowIds: ['flow-parameters'],
+      displayFormat: 'ascii',
+    })
+
+    expect(targets.appendPlot).toHaveBeenCalledWith('speed=LOW(3)\n')
+  })
 })
 
 describe('NMEA and theme utilities', () => {

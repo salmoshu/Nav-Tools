@@ -31,10 +31,17 @@ describe('GNSS map track retention', () => {
     expect(source).not.toContain('POSITION_UPDATE_INTERVAL_MS')
   })
 
-  it('fits the complete imported track and disables automatic follow', () => {
+  it('updates a rendered or queued tail when GGA replaces the same-epoch RMC point', () => {
+    expect(source).toContain('lastObservedSourcePoint')
+    expect(source).toContain('replaceLatestTrackPoint')
+    expect(source).toContain('pendingTrackPoints[pendingIndex] = replacement')
+    expect(source).toContain('removeLatestTrackPoint()')
+  })
+
+  it('fits the complete imported track only after automatic follow is disabled', () => {
     expect(source).toContain('function fitCompleteTrack()')
     expect(source).toContain('map.fitBounds(bounds')
-    expect(source).toContain('if (active) follow.value = false')
+    expect(source).toContain('fileTimeline.active.value && !slidingWindow.value && !follow.value')
   })
 
   it('disables Leaflet path simplification so displayed geometry retains every point', () => {

@@ -58,7 +58,7 @@ test('keeps legacy configuration dialogs polished and inside a narrow viewport',
   await page.keyboard.press('Escape')
   await expect(dialog).toBeHidden()
 
-  const deviationCard = cards.filter({ has: page.getByText('Flow Deviation', { exact: true }) })
+  const deviationCard = cards.filter({ has: page.getByText('Deviation Chart', { exact: true }) })
   await deviationCard.locator('.config-btn').click()
   dialog = page.locator('.deviation-config-dialog')
   await expectDialogInsideViewport(page, dialog)
@@ -66,7 +66,7 @@ test('keeps legacy configuration dialogs polished and inside a narrow viewport',
   await page.keyboard.press('Escape')
   await expect(dialog).toBeHidden()
 
-  const motorCard = cards.filter({ has: page.getByText('Motor Parameters', { exact: true }) })
+  const motorCard = cards.filter({ has: page.getByText('Hex Message', { exact: true }) })
   await motorCard.locator('.config-btn').click()
   dialog = page.locator('.motor-config-dialog')
   await expectDialogInsideViewport(page, dialog)

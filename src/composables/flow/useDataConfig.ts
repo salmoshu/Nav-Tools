@@ -180,6 +180,24 @@ const doubleChartDoubleYConfig = {
   lowerRightUseArea4: ref<boolean>(false)
 }
 
+function isConvertiblePlotNumber(value: unknown): boolean {
+  if (typeof value === 'number') return Number.isFinite(value)
+  if (typeof value !== 'string' || value.trim() === '') return false
+  return Number.isFinite(Number(value))
+}
+
+export function isNumericPlotSeries(values: unknown[]): boolean {
+  let hasNumericValue = false
+
+  for (const value of values) {
+    if (value === null || value === undefined) continue
+    if (!isConvertiblePlotNumber(value)) return false
+    hasNumericValue = true
+  }
+
+  return hasNumericValue
+}
+
 // 创建并导出useFlowData钩子
 export function useDataConfig(flowData: any) {
   // 视图配置相关
@@ -198,15 +216,19 @@ export function useDataConfig(flowData: any) {
       return []
     }
     
-    return Object.keys(flowData.value).filter(key => 
-      key !== 'plotTime' && 
-      key !== 'timestamp' && 
-      key !== 'startTime' && 
-      key !== 'isBatchData' && 
-      key !== 'rawString' && 
-      key !== 'rawDataKeys' && 
-      Array.isArray(flowData.value[key])
-    )
+    return Object.keys(flowData.value).filter(key => {
+      const values = flowData.value[key]
+      return (
+        key !== 'plotTime' &&
+        key !== 'timestamp' &&
+        key !== 'startTime' &&
+        key !== 'isBatchData' &&
+        key !== 'rawString' &&
+        key !== 'rawDataKeys' &&
+        Array.isArray(values) &&
+        isNumericPlotSeries(values)
+      )
+    })
   })
 
   // 计算属性 - 上图表数据源（双图模式）

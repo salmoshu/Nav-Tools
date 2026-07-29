@@ -8,8 +8,8 @@ describe('AppHeader settings menu performance', () => {
     expect(source).not.toContain('<el-dropdown')
     expect(source).toContain('class="settings-menu"')
     expect(source).toContain(':class="{ open: settingsOpen }"')
-    expect(source).toMatch(/\.settings-menu\s*\{[\s\S]*visibility: hidden/)
-    expect(source).toMatch(/\.settings-menu\.open\s*\{[\s\S]*visibility: visible/)
+    expect(source).toMatch(/\.settings-menu\s*\{[\s\S]*display: none/)
+    expect(source).toMatch(/\.settings-menu\.open\s*\{[\s\S]*display: block/)
   })
 
   it('closes immediately and defers the global theme repaint', () => {

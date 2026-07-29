@@ -5,9 +5,8 @@
       <div class="console-controls">
         <!-- 左侧按钮组 -->
         <div class="left-controls">
-          <div class="data-parser-badge" :title="t('common.rawMessages.parserBadgeTitle')">
+          <div class="data-parser-badge" :title="t('common.rawMessages.parserBadgeTitle')" @click="openParserConfig">
             <el-icon><DataAnalysis /></el-icon>
-            <span>{{ t('common.rawMessages.parse') }}</span>
             <strong>{{ parserLabel(activeDataParser) }}</strong>
           </div>
           
@@ -165,81 +164,99 @@
     <!-- 消息输入框 -->
     <div class="console-input-bar">
       <div class="input-container">
-        <el-select 
-          v-model="inputFormat" 
-          size="default" 
-          style="width: 90px; margin-right: 8px;"
-          :placeholder="t('common.rawMessages.format')"
-          :teleported="false"
-        >
-          <el-option 
-            label="ASCII" 
-            value="ascii"
-          ></el-option>
-          <el-option 
-            label="HEX" 
-            value="hex"
-          ></el-option>
-        </el-select>
-        
-        <el-input
-          v-model="inputMessage"
-          size="default"
-          :placeholder="inputFormat === 'hex' ? t('common.rawMessages.inputHexPlaceholder') : t('common.rawMessages.inputAsciiPlaceholder')"
-          style="flex: 1; margin-right: 8px;"
-          @keyup.enter="sendMessage"
-          :disabled="!deviceConnected"
-        >
-          <template #suffix>
-            <el-icon><Edit /></el-icon>
-          </template>
-        </el-input>
-        
-        <el-button 
-          @click="addNewLine = !addNewLine" 
-          :type="addNewLine ? 'success' : 'default'" 
-          size="default"
-          :disabled="inputFormat === 'hex' || !deviceConnected"
-          :title="addNewLine ? t('common.rawMessages.newlineOn') : t('common.rawMessages.newlineOff')"
-        >
-          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px;">
-            <path d="M9 10l-5 5 5 5"/>
-            <path d="M20 4v7a4 4 0 0 1-4 4H4"/>
-          </svg>&nbsp;{{ t('common.rawMessages.newline') }}
-        </el-button>
-        
-        <el-button 
-          @click="handleSendMessage" 
-          type="primary" 
-          size="default"
-          style="font-size: 12px;"
-          :disabled="!deviceConnected || !inputMessage.trim()"
-          :title="t('common.rawMessages.sendMessage')"
-        >
-          <el-icon><Position /></el-icon>&nbsp;{{ t('common.rawMessages.send') }}
-        </el-button>
-        
-        <el-button 
-          @click="handleSelectFile"
-          :disabled="isFileSending"
-          size="default"
-          :title="isFileSending ? t('common.rawMessages.sendingFile') : t('common.rawMessages.loadFile')"
-          style="font-size: 12px;"
-        >
-          <el-icon><Document /></el-icon>
-        </el-button>
-        
-        <el-button 
-          v-if="fileSendState.status !== 'idle'"
-          @click="handleStartSend" 
-          type="success" 
-          size="default"
-          style="font-size: 12px;"
-          :disabled="!deviceConnected || (fileSendState.status !== 'loaded' && fileSendState.status !== 'success')"
-          :title="fileSendState.status === 'loaded' || fileSendState.status === 'success' ? t('common.rawMessages.sendLoadedFile') : t('common.rawMessages.sendingFile')"
-        >
-          <el-icon><Promotion /></el-icon>&nbsp;{{ t('common.rawMessages.sendFile') }}
-        </el-button>
+        <div class="message-entry">
+          <el-select
+            v-model="inputFormat"
+            class="format-select"
+            size="default"
+            :placeholder="t('common.rawMessages.format')"
+            :aria-label="t('common.rawMessages.format')"
+            :teleported="false"
+          >
+            <el-option label="ASCII" value="ascii"></el-option>
+            <el-option label="HEX" value="hex"></el-option>
+          </el-select>
+
+          <el-input
+            v-model="inputMessage"
+            class="message-input"
+            size="default"
+            :placeholder="inputFormat === 'hex' ? t('common.rawMessages.inputHexPlaceholder') : t('common.rawMessages.inputAsciiPlaceholder')"
+            :aria-label="inputFormat === 'hex' ? t('common.rawMessages.inputHexPlaceholder') : t('common.rawMessages.inputAsciiPlaceholder')"
+            :disabled="!deviceConnected"
+            @keyup.enter="handleSendMessage"
+          >
+            <template #suffix>
+              <el-icon><Edit /></el-icon>
+            </template>
+          </el-input>
+        </div>
+
+        <div class="composer-actions">
+          <div class="message-actions">
+            <el-button
+              :type="addNewLine ? 'success' : 'default'"
+              size="default"
+              :disabled="inputFormat === 'hex' || !deviceConnected"
+              :title="addNewLine ? t('common.rawMessages.newlineOn') : t('common.rawMessages.newlineOff')"
+              :aria-pressed="addNewLine"
+              @click="addNewLine = !addNewLine"
+            >
+              <svg
+                class="newline-icon"
+                viewBox="0 0 24 24"
+                width="14"
+                height="14"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M9 10l-5 5 5 5" />
+                <path d="M20 4v7a4 4 0 0 1-4 4H4" />
+              </svg>
+              <span>{{ t('common.rawMessages.newline') }}</span>
+            </el-button>
+
+            <el-button
+              type="primary"
+              size="default"
+              :disabled="!deviceConnected || !inputMessage.trim()"
+              :title="t('common.rawMessages.sendMessage')"
+              @click="handleSendMessage"
+            >
+              <el-icon><Position /></el-icon>
+              <span>{{ t('common.rawMessages.send') }}</span>
+            </el-button>
+          </div>
+
+          <div class="file-actions">
+            <el-button
+              v-if="fileSendState.status !== 'idle'"
+              type="success"
+              size="default"
+              :disabled="!deviceConnected || (fileSendState.status !== 'loaded' && fileSendState.status !== 'success')"
+              :title="fileSendState.status === 'loaded' || fileSendState.status === 'success' ? t('common.rawMessages.sendLoadedFile') : t('common.rawMessages.sendingFile')"
+              @click="handleStartSend"
+            >
+              <el-icon><Promotion /></el-icon>
+              <span>{{ t('common.rawMessages.sendFile') }}</span>
+            </el-button>
+
+            <el-button
+              class="file-picker-button"
+              size="default"
+              text
+              :disabled="isFileSending"
+              :title="isFileSending ? t('common.rawMessages.sendingFile') : t('common.rawMessages.loadFile')"
+              :aria-label="t('common.rawMessages.loadFile')"
+              @click="handleSelectFile"
+            >
+              <el-icon><Document /></el-icon>
+            </el-button>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -276,10 +293,11 @@ import {
   CircleClose,
   Loading,
 } from '@element-plus/icons-vue'
-import { useConsole } from '@/composables/flow/useConsole'
+import { findTimelineMessageIndex, useConsole } from '@/composables/flow/useConsole'
 import { useFileSend } from '@/composables/flow/useFileSend'
+import { useFileTimeline } from '@/composables/useFileTimeline'
 import { useDevice } from '@/hooks/useDevice'
-import { useApplicationSelector } from '@/composables/useApplicationSelector'
+import emitter from '@/hooks/useMitt'
 import { RecycleScroller } from 'vue-virtual-scroller'
 import { parserLabel } from '@/composables/useDataSourceManager'
 import { t } from '@/i18n'
@@ -320,7 +338,14 @@ const {
 
 // 获取设备连接状态
 const { deviceConnected, activeDataParser } = useDevice()
-const { activeDataModes } = useApplicationSelector()
+const fileTimeline = useFileTimeline()
+
+// 点击解析徽标：打开数据接入弹框并短暂高亮数据格式配置
+// 注意：useDevice 状态非单例，必须经 emitter 由 ToolBar 自己的实例打开弹框
+const openParserConfig = () => {
+  emitter.emit('input-event')
+  emitter.emit('highlight-parser-format')
+}
 
 // 文件发送
 const {
@@ -682,6 +707,16 @@ const handleScrollToBottom = () => {
   });
 };
 
+const scrollToTimelineMessage = () => {
+  if (!scrollerRef.value || filteredMessages.value.length === 0) return;
+
+  const targetIndex = findTimelineMessageIndex(
+    filteredMessages.value,
+    fileTimeline.elapsedMilliseconds.value,
+  );
+  scrollerRef.value.scrollToItem(targetIndex);
+};
+
 // 监听搜索查询变化
 watch(searchQuery, () => {
   performSearch()
@@ -696,9 +731,26 @@ watch(() => filteredMessages.value.length, () => {
   }
 })
 
+watch(
+  () => [
+    fileTimeline.elapsedMilliseconds.value,
+    fileTimeline.dragging.value,
+    fileTimeline.active.value,
+  ] as const,
+  () => {
+    if (!fileTimeline.active.value || fileTimeline.indexing.value) return;
+    if (!dataAutoScroll.value && !fileTimeline.dragging.value) return;
+    nextTick(() => {
+      scrollToTimelineMessage()
+    })
+  },
+)
+
 // 生命周期钩子
 onMounted(() => {
-  clearConsole();
+  if (!fileTimeline.active.value && !fileTimeline.indexing.value) {
+    clearConsole();
+  }
   
   if (dataAutoScroll.value) {
     nextTick(() => {
@@ -706,11 +758,7 @@ onMounted(() => {
     })
   }
 
-  if (activeDataModes.value.includes('gnss')) {
-    dataFormat.value = 'nmea';
-  } else {
-    dataFormat.value = 'none';
-  }
+  dataFormat.value = activeDataParser.value === 'raw' ? 'none' : activeDataParser.value;
   
   // 添加滚动事件监听
   nextTick(() => {
@@ -783,10 +831,16 @@ onUnmounted(() => {
   padding: 5px 8px;
   border: 1px solid var(--app-border);
   border-radius: 5px;
+  cursor: pointer;
   color: var(--app-text-muted);
   background: var(--app-surface);
   font-size: 11px;
   white-space: nowrap;
+}
+
+.data-parser-badge:hover {
+  background: var(--app-hover);
+  border-color: var(--el-color-primary);
 }
 
 .data-parser-badge strong {
@@ -906,7 +960,7 @@ onUnmounted(() => {
 
 /* 底部状态栏样式 - 浅色主题 */
 .console-footer {
-  padding: 6px 12px;
+  padding: 4px 10px;
   background-color: var(--app-surface-muted);
   border-top: 1px solid var(--app-border);
   font-size: 12px;
@@ -917,12 +971,12 @@ onUnmounted(() => {
   align-items: center;
   flex-shrink: 0;
   height: auto;
-  min-height: 30px;
+  min-height: 26px;
 }
 
 /* 消息输入栏样式 - 浅色主题 */
 .console-input-bar {
-  padding: 12px 16px;
+  padding: 8px 10px;
   background-color: var(--app-surface-muted);
   border-top: 1px solid var(--app-border);
   display: flex;
@@ -933,12 +987,76 @@ onUnmounted(() => {
 .input-container {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   width: 100%;
-  gap: 12px;
+  gap: 6px;
 }
 
-.input-container .el-input {
-  flex: 1;
+.message-entry {
+  display: flex;
+  flex: 1 1 360px;
+  align-items: center;
+  min-width: min(100%, 260px);
+  gap: 6px;
+}
+
+.format-select {
+  flex: 0 0 78px;
+  width: 78px;
+}
+
+.message-input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.composer-actions,
+.message-actions,
+.file-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+}
+
+.composer-actions {
+  flex: 0 1 auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 2px;
+  margin-left: auto;
+}
+
+.message-actions,
+.file-actions {
+  flex-wrap: wrap;
+}
+
+.input-container :deep(.el-button) {
+  min-height: 32px;
+  padding-inline: 11px;
+  font-size: 12px;
+}
+
+.input-container :deep(.el-button + .el-button) {
+  margin-left: 0;
+}
+
+.file-picker-button {
+  width: 28px;
+}
+
+.input-container :deep(.file-picker-button) {
+  min-width: 28px;
+  min-height: 28px;
+  padding-inline: 0;
+  border-color: transparent;
+  background: transparent;
+}
+
+.newline-icon {
+  flex: none;
+  margin-right: 6px;
 }
 
 /* Element Plus 按钮样式调整 - 浅色主题 */

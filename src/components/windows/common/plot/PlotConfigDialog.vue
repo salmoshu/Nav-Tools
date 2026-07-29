@@ -44,20 +44,54 @@
         <h4>{{ group.title }}（最多4个）</h4>
         <div v-for="index in 4" :key="index" class="source-row">
           <el-select
-            :model-value="getConfigValue(group.config, `${group.prefix}Source${index}`)"
+            :model-value="
+              getConfigValue(
+                group.config,
+                plotConfigFieldKey(group.prefix, 'source', index),
+              )
+            "
+            popper-class="app-dialog-select-popper"
             placeholder="选择数据"
-            @update:model-value="setConfigValue(group.config, `${group.prefix}Source${index}`, $event)"
+            @update:model-value="
+              setConfigValue(
+                group.config,
+                plotConfigFieldKey(group.prefix, 'source', index),
+                $event,
+              )
+            "
           >
             <el-option label="<None>" value="" />
             <el-option v-for="source in availableSources" :key="source" :label="source" :value="source" />
           </el-select>
           <el-color-picker
-            :model-value="getConfigValue(group.config, `${group.prefix}Color${index}`)"
-            @update:model-value="setConfigValue(group.config, `${group.prefix}Color${index}`, $event)"
+            :model-value="
+              getConfigValue(
+                group.config,
+                plotConfigFieldKey(group.prefix, 'color', index),
+              )
+            "
+            @update:model-value="
+              setConfigValue(
+                group.config,
+                plotConfigFieldKey(group.prefix, 'color', index),
+                $event,
+              )
+            "
           />
           <el-checkbox
-            :model-value="getConfigValue(group.config, `${group.prefix}UseArea${index}`)"
-            @update:model-value="setConfigValue(group.config, `${group.prefix}UseArea${index}`, $event)"
+            :model-value="
+              getConfigValue(
+                group.config,
+                plotConfigFieldKey(group.prefix, 'useArea', index),
+              )
+            "
+            @update:model-value="
+              setConfigValue(
+                group.config,
+                plotConfigFieldKey(group.prefix, 'useArea', index),
+                $event,
+              )
+            "
           >
             填充
           </el-checkbox>
@@ -92,6 +126,7 @@ import { computed, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Setting } from '@element-plus/icons-vue'
 import AppDialogTitle from '@/components/AppDialogTitle.vue'
+import { plotConfigFieldKey } from './plotConfigFields'
 
 type LayoutMode = 'single' | 'double'
 type AxisMode = 'single' | 'double'

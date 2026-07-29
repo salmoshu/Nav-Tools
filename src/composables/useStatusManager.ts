@@ -4,6 +4,7 @@ import { useFlowStore } from "@/stores/flow";
 import { useApplicationSelector } from '@/composables/useApplicationSelector'
 import { useTheme } from '@/composables/useTheme'
 import { JsonStorage } from '@/core/storage/JsonStorage'
+import { filterDisplayableStatusEntries } from '@/core/status/statusValue'
 import { t } from '@/i18n'
 
 const STATUS_ORDER_KEY = 'nav-tools:status-order'
@@ -63,13 +64,17 @@ function getMonitorStatus() {
   ]
 
   if (uniqueStatusSources.length === 1) {
-    return Object.fromEntries(orderEntries(Object.entries(uniqueStatusSources[0].status)))
+    return Object.fromEntries(
+      orderEntries(filterDisplayableStatusEntries(Object.entries(uniqueStatusSources[0].status))),
+    )
   }
 
   return Object.fromEntries(
     orderEntries(
       uniqueStatusSources.flatMap(source =>
-        Object.entries(source.status).map(([key, value]): [string, any] => [`${source.label}.${key}`, value]),
+        filterDisplayableStatusEntries(Object.entries(source.status)).map(
+          ([key, value]): [string, unknown] => [`${source.label}.${key}`, value],
+        ),
       ),
     ),
   )
