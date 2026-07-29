@@ -83,11 +83,16 @@ describe('dialog interaction policy', () => {
     expect(footer).not.toMatch(/loadConfig|exportConfig|resetToDefault/)
   })
 
-  it('keeps Plot and Hex configuration select menus above their dialogs', () => {
+  it('keeps Plot, Hex, and Deviation configuration select menus above their dialogs', () => {
     const style = readFileSync('src/style.css', 'utf8')
     const plot = readFileSync('src/components/windows/common/plot/PlotConfigDialog.vue', 'utf8')
     const motor = readFileSync('src/components/windows/motor/MotorConfig.vue', 'utf8')
+    const deviation = readFileSync(
+      'src/components/windows/common/DeviationConfigDialog.vue',
+      'utf8',
+    )
     const motorSelectTags = motor.match(/<el-select\b[\s\S]*?>/g) ?? []
+    const deviationSelectTags = deviation.match(/<el-select\b[\s\S]*?>/g) ?? []
 
     expect(style).toContain('.app-dialog-select-popper')
     expect(style).toContain('z-index: 8002 !important')
@@ -95,6 +100,12 @@ describe('dialog interaction policy', () => {
     expect(motorSelectTags.length).toBeGreaterThan(0)
     expect(
       motorSelectTags.every((tag) => tag.includes('popper-class="app-dialog-select-popper"')),
+    ).toBe(true)
+    expect(deviationSelectTags).toHaveLength(2)
+    expect(
+      deviationSelectTags.every((tag) =>
+        tag.includes('popper-class="app-dialog-select-popper"'),
+      ),
     ).toBe(true)
   })
 

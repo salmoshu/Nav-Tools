@@ -33,6 +33,7 @@
           <span>{{ t('flow.xAxisLabel') }}</span>
           <el-select
             :model-value="getValue(track, 'X')"
+            popper-class="app-dialog-select-popper"
             :placeholder="t('flow.selectXAxisField')"
             @update:model-value="setValue(track, 'X', $event)"
           >
@@ -44,6 +45,7 @@
           <span>{{ t('flow.yAxisLabel') }}</span>
           <el-select
             :model-value="getValue(track, 'Y')"
+            popper-class="app-dialog-select-popper"
             :placeholder="t('flow.selectYAxisField')"
             @update:model-value="setValue(track, 'Y', $event)"
           >
