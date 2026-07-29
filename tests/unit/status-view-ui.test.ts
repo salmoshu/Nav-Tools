@@ -24,4 +24,11 @@ describe('Status View presentation', () => {
     expect(source).not.toContain('status-positive')
     expect(source).not.toContain('status-negative')
   })
+
+  it('keeps space between the property dialog actions', () => {
+    const source = readFileSync('src/components/StatusBar.vue', 'utf8')
+
+    expect(source).toMatch(/\.dialog-footer\s*\{[\s\S]*?display:\s*inline-flex/)
+    expect(source).toMatch(/\.dialog-footer\s*\{[\s\S]*?gap:\s*8px/)
+  })
 })

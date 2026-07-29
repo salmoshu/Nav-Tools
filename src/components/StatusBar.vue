@@ -63,7 +63,6 @@
                 <!-- 只为自定义属性显示删除按钮 -->
                 <template
                   v-if="
-                    showComputedStatus &&
                     flowStore.customStatusConfigs.some((config) => config.fieldName === element[0]) &&
                     (!flowData.value ||
                       typeof flowData.value !== 'object' ||
@@ -92,7 +91,7 @@
         <strong>{{ t('app.statusbar.emptyTitle') }}</strong>
         <small>{{ t('app.statusbar.emptyHint') }}</small>
       </div>
-      <div v-if="showComputedStatus">
+      <div>
         <div class="computed-section">
           <span>
             <strong>Add metric</strong>
@@ -180,7 +179,6 @@
               v-else
               v-model="newStatusConfig.fieldName"
               :placeholder="t('app.statusbar.fieldNamePlaceholder')"
-              :disabled="availableFields.length === 0"
               required
             ></el-input>
           </el-form-item>
@@ -206,7 +204,6 @@
               type="textarea"
               :placeholder="t('app.statusbar.formulaPlaceholder')"
               :rows="1"
-              :disabled="availableFields.length === 0"
               readonly
               required
             ></el-input>
@@ -235,7 +232,6 @@
               :min="0"
               :max="10"
               :step="1"
-              :disabled="availableFields.length === 0"
             ></el-input-number>
           </el-form-item>
 
@@ -306,7 +302,6 @@ import {
   createCodeEditor,
   statusbarPosition,
 } from '@/composables/useStatusManager'
-import { useApplicationSelector } from '@/composables/useApplicationSelector'
 import { useFlow } from '@/composables/flow/useFlow'
 import { getNumericDataFieldNames } from '@/core/data/NumericDataFields'
 import { hasStatusData } from '@/core/status/statusValue'
@@ -327,7 +322,6 @@ import {
   ElMessageBox,
 } from 'element-plus'
 
-const { activeDataModes } = useApplicationSelector()
 const monitorStatus = computed(() => getMonitorStatus())
 const hasMonitorStatus = computed(() => Object.keys(monitorStatus.value).length > 0)
 const statusCount = computed(() => Object.keys(monitorStatus.value).length)
@@ -372,13 +366,8 @@ const editCustomStatus = (fieldName: string) => {
   }
 }
 
-const showComputedStatus = computed(() => {
-  return activeDataModes.value.includes('flow')
-})
-
 const showComputedStatusDialog = (statusName: string) => {
-  return showComputedStatus.value &&
-    flowStore.customStatusConfigs.some((config) => config.fieldName === statusName) &&
+  return flowStore.customStatusConfigs.some((config) => config.fieldName === statusName) &&
     (!flowData.value ||
       typeof flowData.value !== 'object' ||
       !('rawDataKeys' in flowData.value) ||
@@ -1352,6 +1341,12 @@ onUnmounted(() => {
   margin-bottom: 7px;
   color: var(--app-text-secondary);
   line-height: 1.35;
+}
+
+.dialog-footer {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
 }
 
 :deep(.monaco-editor .view-lines) {
