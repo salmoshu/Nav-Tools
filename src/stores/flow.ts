@@ -70,6 +70,10 @@ function evaluateExpression(expr: string, context: Record<string, any>): any {
   }
 }
 
+function roundStatusValue(value: number, decimalPlaces: number): number {
+  return math.round(value, decimalPlaces) as number
+}
+
 export const useFlowStore = defineStore('flow', () => {
   const { flowData } = useFlow()
   
@@ -130,7 +134,7 @@ export const useFlowStore = defineStore('flow', () => {
           
           // 如果是数字，按照指定的小数位数格式化
           if (typeof value === 'number') {
-            value = Number(value.toFixed(config.decimalPlaces))
+            value = roundStatusValue(value, config.decimalPlaces)
           }
           
           // 使用字段名作为键
@@ -161,7 +165,7 @@ export const useFlowStore = defineStore('flow', () => {
                 
                 // 格式化数值
                 if (typeof timePointValue === 'number') {
-                  timePointValue = Number(timePointValue.toFixed(config.decimalPlaces))
+                  timePointValue = roundStatusValue(timePointValue, config.decimalPlaces)
                 }
                 
                 dataArray.push(timePointValue)
@@ -183,7 +187,7 @@ export const useFlowStore = defineStore('flow', () => {
           let value = dataArray[dataArray.length - 1]
           // 如果是数字，按照指定的小数位数格式化
           if (typeof value === 'number') {
-            value = Number(value.toFixed(config.decimalPlaces))
+            value = roundStatusValue(value, config.decimalPlaces)
           }
           // 使用字段名作为键
           result[config.fieldName] = value
@@ -228,7 +232,7 @@ export const useFlowStore = defineStore('flow', () => {
         
         // 格式化数值
         if (typeof timePointValue === 'number') {
-          timePointValue = Number(timePointValue.toFixed(config.decimalPlaces))
+          timePointValue = roundStatusValue(timePointValue, config.decimalPlaces)
         }
 
         if (dataArray.length !== timestampsLength) {

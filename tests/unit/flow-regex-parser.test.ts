@@ -59,6 +59,35 @@ describe('regex records in the flow pipeline', () => {
     expect(flow.plotData.value.y).toEqual([-4.25])
   })
 
+  it('rounds computed status values to the configured decimal places', () => {
+    flow.addRawData('ult=1.24 dist=0.4\n', 'regex')
+
+    useFlowStore().addNewStatus({
+      fieldName: 'product',
+      decimalPlaces: 2,
+      color: '#2c3e50',
+      isCodeDefinition: true,
+      code: 'ult*dist',
+    })
+
+    expect(useFlowStore().status.product).toBe(0.5)
+    expect(useFlowStore().status.product.toFixed(2)).toBe('0.50')
+  })
+
+  it('uses decimal half-up rounding at binary floating-point boundaries', () => {
+    flow.addRawData('value=1.005\n', 'regex')
+
+    useFlowStore().addNewStatus({
+      fieldName: 'rounded',
+      decimalPlaces: 2,
+      color: '#2c3e50',
+      isCodeDefinition: true,
+      code: 'value',
+    })
+
+    expect(useFlowStore().status.rounded).toBe(1.01)
+  })
+
   it('offers only numeric regex fields to Plot and uses the correct default keys', () => {
     flow.addRawData(
       '[ctl] mode=SYS_ERROR speed=HIGH(1) dir=FORWARD(1) ult=0.742m angle=0.00 dist=0.40\n',
