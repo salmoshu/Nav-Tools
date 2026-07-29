@@ -1,4 +1,8 @@
 import { ref, computed } from 'vue'
+import {
+  getNumericDataFieldNames,
+  isNumericDataSeries,
+} from '@/core/data/NumericDataFields'
 
 // 定义视图布局类型
 export type ViewLayout = 'single' | 'double'
@@ -180,23 +184,7 @@ const doubleChartDoubleYConfig = {
   lowerRightUseArea4: ref<boolean>(false)
 }
 
-function isConvertiblePlotNumber(value: unknown): boolean {
-  if (typeof value === 'number') return Number.isFinite(value)
-  if (typeof value !== 'string' || value.trim() === '') return false
-  return Number.isFinite(Number(value))
-}
-
-export function isNumericPlotSeries(values: unknown[]): boolean {
-  let hasNumericValue = false
-
-  for (const value of values) {
-    if (value === null || value === undefined) continue
-    if (!isConvertiblePlotNumber(value)) return false
-    hasNumericValue = true
-  }
-
-  return hasNumericValue
-}
+export const isNumericPlotSeries = isNumericDataSeries
 
 // 创建并导出useFlowData钩子
 export function useDataConfig(flowData: any) {
@@ -216,19 +204,7 @@ export function useDataConfig(flowData: any) {
       return []
     }
     
-    return Object.keys(flowData.value).filter(key => {
-      const values = flowData.value[key]
-      return (
-        key !== 'plotTime' &&
-        key !== 'timestamp' &&
-        key !== 'startTime' &&
-        key !== 'isBatchData' &&
-        key !== 'rawString' &&
-        key !== 'rawDataKeys' &&
-        Array.isArray(values) &&
-        isNumericPlotSeries(values)
-      )
-    })
+    return getNumericDataFieldNames(flowData.value)
   })
 
   // 计算属性 - 上图表数据源（双图模式）

@@ -107,7 +107,7 @@ import {
 
 const { flowData } = useFlow()
 const { deviceConnected } = useDevice()
-const { deviationConfig } = useDataConfig(flowData)
+const { deviationConfig, availableSources } = useDataConfig(flowData)
 const { searchQuery } = useConsole(true)
 const { chartTheme, resolvedTheme } = useTheme()
 
@@ -196,19 +196,6 @@ let resizeObserver: ResizeObserver | null = null
 let resizeFrame: number | null = null
 
 const viewConfigDialogVisible = ref(false)
-
-const availableSources = computed(() => {
-  if (!plotData.value || !plotData.value.plotTime) return []
-  return Object.keys(plotData.value).filter(
-    (key) =>
-      key !== 'plotTime' &&
-      key !== 'timestamp' &&
-      key !== 'startTime' &&
-      key !== 'rawDataKeys' &&
-      Array.isArray(plotData.value[key]) &&
-      (plotData.value[key] as unknown[]).length > 0,
-  )
-})
 
 function getValidColor(color: string | undefined, defaultColor: string): string {
   if (!color || color === '' || !color.startsWith('#')) return defaultColor

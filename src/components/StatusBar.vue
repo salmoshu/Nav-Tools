@@ -308,6 +308,7 @@ import {
 } from '@/composables/useStatusManager'
 import { useApplicationSelector } from '@/composables/useApplicationSelector'
 import { useFlow } from '@/composables/flow/useFlow'
+import { getNumericDataFieldNames } from '@/core/data/NumericDataFields'
 import { hasStatusData } from '@/core/status/statusValue'
 import { useFlowStore } from '@/stores/flow'
 // 4. 导入需要的图标
@@ -416,21 +417,7 @@ const flowStore = useFlowStore()
 // 对话框相关
 const showAddDialog = ref(false)
 const availableFields = computed(() => {
-  // 获取flowData中除了元数据外的所有数组字段
-  const fields: string[] = []
-  Object.keys(flowData.value).forEach((key) => {
-    if (
-      key !== 'plotTime' &&
-      key !== 'timestamp' &&
-      key !== 'isBatchData' &&
-      key !== 'rawString' &&
-      key !== 'rawDataKeys' &&
-      Array.isArray(flowData.value[key])
-    ) {
-      fields.push(key)
-    }
-  })
-  return fields
+  return getNumericDataFieldNames(flowData.value)
 })
 
 const selectField = (field: string) => {
