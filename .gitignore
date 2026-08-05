@@ -32,9 +32,6 @@ package-lock.json
 pnpm-lock.yaml
 yarn.lock
 
-# workspace
-pnpm-workspace.yaml
-
 # temp
 tempCodeRunnerFile*
 tmp

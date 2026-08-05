@@ -1,0 +1,10 @@
+onlyBuiltDependencies:
+  - '@serialport/bindings-cpp'
+  - electron
+  - esbuild
+  - ffmpeg-static
+  - vue-demi
+ignoredBuiltDependencies:
+  - onnxruntime-node
+overrides:
+  node-abi: ^3.94.0
