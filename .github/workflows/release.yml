@@ -21,6 +21,13 @@ jobs:
         with:
           fetch-depth: 1
 
+      # node-gyp@9 (@electron/rebuild 依赖) 自带的 gyp 依赖 distutils，
+      # Python 3.12+ 已移除该模块，固定 3.11 避免 serialport 原生模块编译失败
+      - name: Use Python 3.11 for node-gyp
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
       - name: Enable Corepack
         run: corepack enable
 

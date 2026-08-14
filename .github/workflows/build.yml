@@ -1,18 +1,9 @@
 name: Build
 
+# 仅在打 tag 时构建，普通提交不触发
 on:
   push:
-    branches: [main]
-    paths-ignore:
-      - "**.md"
-      - "**.spec.js"
-      - ".idea"
-      - ".vscode"
-      - ".dockerignore"
-      - "Dockerfile"
-      - ".gitignore"
-      - ".github/**"
-      - "!.github/workflows/build.yml"
+    tags: ['v*']
 
 jobs:
   build:
@@ -35,9 +26,9 @@ jobs:
         with:
           fetch-depth: 1
 
-      # ① 仅 macOS 降级到 Python 3.11（自带 distutils）
+      # node-gyp@9 (@electron/rebuild 依赖) 自带的 gyp 依赖 distutils，
+      # Python 3.12+ 已移除该模块，所有平台统一固定 3.11
       - name: Use Python 3.11 for node-gyp
-        if: matrix.os == 'macos-latest'
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
@@ -72,7 +63,6 @@ jobs:
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
-        if: github.ref == 'refs/heads/main'  # 只在主分支上传
         with:
           name: release_on_${{ matrix.os }}
           path: |
