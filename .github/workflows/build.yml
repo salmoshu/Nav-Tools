@@ -47,8 +47,10 @@ jobs:
         run: pnpm install --frozen-lockfile
         timeout-minutes: 15  # 设置依赖安装超时
 
+      # --publish never：发布由 release.yml 负责；tag 构建下 electron-builder
+      # 默认会尝试发布（onTagOrDraft），本 workflow 的 GITHUB_TOKEN 只读会导致失败
       - name: Build Release Files
-        run: pnpm run build
+        run: pnpm run build -- --publish never
         timeout-minutes: 30  # 设置构建超时
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
