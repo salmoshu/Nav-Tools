@@ -1,7 +1,7 @@
 // @see https://www.electron.build/configuration/configuration
 {
   "$schema": "https://raw.githubusercontent.com/electron-userland/electron-builder/master/packages/app-builder-lib/scheme.json",
-  "appId": "YourAppID",
+  "appId": "com.salmoshu.navtools",
   "asar": true,
   "asarUnpack": [
     "node_modules/ffmpeg-static/**",
@@ -9,6 +9,26 @@
     "resources/ocr/**"
   ],
   "productName": "Nav-Tools",
+  "releaseInfo": {
+    // 发布说明源:仓库根目录 release-notes.md(Markdown,随 latest.yml 下发)
+    "releaseNotesFile": "release-notes.md"
+  },
+  "extraResources": [
+    // 更新日志随包携带
+    {
+      "from": "release-notes.md",
+      "to": "release-notes.md"
+    }
+  ],
+  "publish": [
+    {
+      "provider": "github",
+      "owner": "salmoshu",
+      "repo": "Nav-Tools",
+      // 直接发布正式 Release(缺省 draft 只上传草稿,页面不可见安装包)
+      "releaseType": "release"
+    }
+  ],
   "directories": {
     "output": "release/${version}"
   },

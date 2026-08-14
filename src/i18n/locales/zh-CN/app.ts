@@ -2,6 +2,8 @@ export default {
   settings: '设置',
   settingsTheme: '主题',
   settingsLanguage: '语言',
+  settingsBack: '返回',
+  settingsVersion: '版本更新',
   header: {
     minimize: '最小化',
     maximize: '最大化',

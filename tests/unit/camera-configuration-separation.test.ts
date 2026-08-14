@@ -116,6 +116,7 @@ describe('camera configuration separation', () => {
     expect(settings).toEqual({
       version: 1,
       streamUrl: 'rtsp://10.0.0.8:8554/camera',
+      autoReconnect: false,
     })
     expect(memory.getItem(CAMERA_VIDEO_SETTINGS_KEY)).toBe(JSON.stringify(settings))
   })

@@ -2,6 +2,8 @@ export default {
   settings: 'Settings',
   settingsTheme: 'Theme',
   settingsLanguage: 'Language',
+  settingsBack: 'Back',
+  settingsVersion: 'Updates',
   header: {
     minimize: 'Minimize',
     maximize: 'Maximize',

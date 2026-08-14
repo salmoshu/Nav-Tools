@@ -9,6 +9,8 @@ const LEGACY_DATA_SOURCE_SETTINGS_KEY = 'nav-tools:data-source-settings'
 export interface CameraVideoSettings {
   version: 1
   streamUrl: string
+  /** 断开后是否自动循环重连 */
+  autoReconnect: boolean
 }
 
 export function normalizeRtspUrl(value: unknown): string | undefined {
@@ -45,6 +47,7 @@ function normalizeSettings(value: unknown, fallbackUrl?: string): CameraVideoSet
       normalizeRtspUrl(saved.streamUrl) ??
       normalizeRtspUrl(fallbackUrl) ??
       DEFAULT_CAMERA_STREAM_URL,
+    autoReconnect: saved.autoReconnect === true,
   }
 }
 

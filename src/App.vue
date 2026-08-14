@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { ElConfigProvider } from 'element-plus'
 import zhCn from 'element-plus/es/locale/lang/zh-cn'
 import en from 'element-plus/es/locale/lang/en'
@@ -7,6 +7,8 @@ import AppHeader from './components/AppHeader.vue'
 import WindowResizeHandles from './components/WindowResizeHandles.vue'
 import Dashboard from './components/Dashboard.vue'
 import CardWindow from './components/CardWindow.vue'
+import SettingsPage from './components/SettingsPage.vue'
+import UpdateDialog from './components/UpdateDialog.vue'
 import emitter from '@/hooks/useMitt'
 import { useApplicationSelector } from '@/composables/useApplicationSelector'
 import { useLocale } from '@/composables/useLocale'
@@ -23,6 +25,7 @@ interface FullscreenPanelContext {
 const maximized = ref(false)
 const dashboardRef = ref<InstanceType<typeof Dashboard> | null>(null)
 const fullscreenPanel = ref<FullscreenPanelContext>()
+const settingsOpen = ref(false)
 const isCardWindow = computed(() => window.location.hash.startsWith('#card/'))
 const { currentApplication } = useApplicationSelector()
 
@@ -41,16 +44,29 @@ const contextTitle = computed(() => {
     }
   }
 
+  if (settingsOpen.value) return t('app.settings')
+
     return currentApplication.value?.name
 })
 
 const panelTitleFallback = computed(() => t('app.panel'))
 
 const openApplicationSelector = () => emitter.emit('open-application-selector')
+const openSettings = () => {
+  settingsOpen.value = true
+}
 const exitPanelFullscreen = () => dashboardRef.value?.exitFullScreen()
 const handleFullscreenPanelChange = (panel?: FullscreenPanelContext) => {
   fullscreenPanel.value = panel
 }
+
+onMounted(() => {
+  emitter.on('open-settings', openSettings)
+})
+
+onUnmounted(() => {
+  emitter.off('open-settings', openSettings)
+})
 </script>
 
 <template>
@@ -71,13 +87,17 @@ const handleFullscreenPanelChange = (panel?: FullscreenPanelContext) => {
       />
       <main class="app-content">
         <CardWindow v-if="isCardWindow" />
-        <Dashboard
-          v-else
-          ref="dashboardRef"
-          :initial-application-id="applicationId"
-          @fullscreen-panel-change="handleFullscreenPanelChange"
-        />
+        <template v-else>
+          <Dashboard
+            v-show="!settingsOpen"
+            ref="dashboardRef"
+            :initial-application-id="applicationId"
+            @fullscreen-panel-change="handleFullscreenPanelChange"
+          />
+          <SettingsPage v-if="settingsOpen" @close="settingsOpen = false" />
+        </template>
       </main>
+      <UpdateDialog v-if="!isCardWindow" />
     </div>
   </el-config-provider>
 </template>

@@ -8,6 +8,7 @@ import motor from './motor'
 import flow from './flow'
 import core from './core'
 import data from './data'
+import update from './update'
 
 export default {
   app,
@@ -20,4 +21,5 @@ export default {
   flow,
   core,
   data,
+  update,
 }

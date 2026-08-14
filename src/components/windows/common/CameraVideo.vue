@@ -67,6 +67,15 @@
         {{ t('common.video.play') }}
       </el-button>
       <el-button v-else :icon="VideoPause" @click="pauseStream">{{ t('common.video.pause') }}</el-button>
+      <span class="loop-toggle" :title="t('common.video.loopReconnectHint')">
+        <span class="loop-toggle-label">{{ t('common.video.loopReconnect') }}</span>
+        <el-switch
+          v-model="autoReconnect"
+          size="small"
+          :aria-label="t('common.video.loopReconnect')"
+          @change="handleAutoReconnectChange"
+        />
+      </span>
     </div>
 
     <el-dialog
@@ -117,14 +126,49 @@ type StreamStatus = 'idle' | 'connecting' | 'playing' | 'stopped' | 'error' | 'u
 type StreamStatusPayload = { status?: StreamStatus; message?: string }
 
 const videoStorage = new CameraVideoStorage(new JsonStorage(window.localStorage))
-const streamUrl = ref(videoStorage.load().streamUrl)
+const initialSettings = videoStorage.load()
+const streamUrl = ref(initialSettings.streamUrl)
 const streamUrlDraft = ref(streamUrl.value)
+/** 循环重连开关:断开后自动重新拉起视频流,面向频繁插拔设备的场景 */
+const autoReconnect = ref(initialSettings.autoReconnect)
 const showCameraSourceDialog = ref(false)
 const status = ref<StreamStatus>('idle')
 const statusMessage = ref(t('common.video.waitingToPlay'))
 const frameUrl = ref('')
 /** 主进程标签识别结果(模板匹配 + 时序投票) */
 const labels = ref<string[]>([])
+
+const RECONNECT_DELAY_MS = 3000
+let reconnectTimer: ReturnType<typeof setTimeout> | undefined
+
+function clearReconnectTimer() {
+  if (reconnectTimer === undefined) return
+  clearTimeout(reconnectTimer)
+  reconnectTimer = undefined
+}
+
+function scheduleReconnect() {
+  if (!autoReconnect.value || status.value !== 'error') return
+  clearReconnectTimer()
+  statusMessage.value = t('common.video.reconnectWait')
+  reconnectTimer = setTimeout(() => {
+    reconnectTimer = undefined
+    void startStream()
+  }, RECONNECT_DELAY_MS)
+}
+
+function handleAutoReconnectChange(enabled: boolean) {
+  persistSettings()
+  if (!enabled) {
+    clearReconnectTimer()
+  } else if (status.value === 'error') {
+    scheduleReconnect()
+  }
+}
+
+function persistSettings() {
+  videoStorage.save({ version: 1, streamUrl: streamUrl.value, autoReconnect: autoReconnect.value })
+}
 
 // 缩放/平移:滚轮以光标为中心缩放,左键拖拽平移,双击复位
 const zoomLevel = ref(1)
@@ -198,6 +242,7 @@ function revokeFrameUrl() {
 }
 
 async function startStream() {
+  clearReconnectTimer()
   const url = normalizeRtspUrl(streamUrl.value)
   if (!url) {
     ElMessage.warning(t('common.video.errInvalidRtsp'))
@@ -221,6 +266,7 @@ async function startStream() {
   if (!result.ok) {
     status.value = 'error'
     statusMessage.value = result.message || t('common.video.errStartStream')
+    scheduleReconnect()
   }
 }
 
@@ -238,12 +284,13 @@ function saveCameraSourceSettings() {
 
   streamUrl.value = url
   streamUrlDraft.value = url
-  videoStorage.save({ version: 1, streamUrl: url })
+  persistSettings()
   showCameraSourceDialog.value = false
   ElMessage.success(t('data.cameraRtspSaved'))
 }
 
 async function pauseStream() {
+  clearReconnectTimer()
   await window.electronAPI?.stopCameraStream?.()
   revokeFrameUrl()
   labels.value = []
@@ -269,6 +316,7 @@ const statusListener = (_event: unknown, payload: StreamStatusPayload) => {
   if (payload.status === 'error') {
     revokeFrameUrl()
     labels.value = []
+    scheduleReconnect()
   }
 }
 
@@ -284,6 +332,7 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  clearReconnectTimer()
   window.ipcRenderer?.off('camera-stream-frame', frameListener)
   window.ipcRenderer?.off('camera-stream-status', statusListener)
   window.ipcRenderer?.off('camera-stream-labels', labelListener)
@@ -311,6 +360,16 @@ onUnmounted(() => {
   padding: 10px;
   border-top: 1px solid var(--app-border);
   background: var(--app-surface-muted);
+}
+
+.loop-toggle {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+  color: var(--app-text-secondary);
+  font-size: 12px;
+  white-space: nowrap;
 }
 
 .camera-source-config {

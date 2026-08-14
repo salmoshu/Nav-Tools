@@ -22,6 +22,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
     content: string
     contentFormat: 'text' | 'hex'
   }) => ipcRenderer.invoke('camera-command-send', request),
+  checkForUpdates: () => ipcRenderer.invoke('update-check'),
+  downloadUpdate: () => ipcRenderer.invoke('update-download'),
+  quitAndInstall: () => ipcRenderer.invoke('update-quit-and-install'),
+  setUpdaterPrefs: (prefs: {
+    autoCheck: boolean
+    autoDownload: boolean
+    ignoredVersion?: string
+  }) => ipcRenderer.send('update-set-prefs', prefs),
 })
 const listenerMap = new Map<string, Map<Function, (...args: unknown[]) => void>>()
 

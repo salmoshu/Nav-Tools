@@ -1,0 +1,44 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+# GITHUB_TOKEN 默认只读，electron-builder 创建 Release 需要写权限
+permissions:
+  contents: write
+
+jobs:
+  build:
+    # windows 固定 2022：windows-latest(2025 镜像) 的 VS2026 无法被
+    # node-gyp@9 (@electron/rebuild 依赖) 识别，导致 serialport 原生模块编译失败
+    runs-on: windows-2022
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+
+      - name: Install Dependencies
+        run: pnpm install --frozen-lockfile
+        timeout-minutes: 15
+
+      # electron-builder --publish 以 package.json version 为准，tag（v1.3.1）需与其保持一致；
+      # latest.yml 与安装包一并上传到 GitHub Releases，客户端 electron-updater 据此检测更新
+      - name: Build & Publish
+        run: pnpm run publish
+        timeout-minutes: 30
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NODE_OPTIONS: --max-old-space-size=8192

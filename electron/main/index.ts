@@ -21,6 +21,7 @@ import { FilePlaybackService } from './services/FilePlaybackService'
 import { TextFileStreamService } from './services/TextFileStreamService'
 import { LogRecordingService } from './services/LogRecordingService'
 import { OfflineTileService } from './services/OfflineTileService'
+import { UpdateService } from './services/UpdateService'
 
 const require = createRequire(import.meta.url)
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -68,6 +69,7 @@ const filePlaybackService = new FilePlaybackService()
 const textFileStreamService = new TextFileStreamService()
 const logRecordingService = new LogRecordingService()
 const offlineTileService = new OfflineTileService()
+const updateService = new UpdateService()
 // 自定义瓦片协议必须在 app ready 之前注册为 privileged scheme
 offlineTileService.registerPrivilegedScheme()
 const cameraStreamOwners = new Set<number>()
@@ -284,6 +286,12 @@ ipcMain.on('log-recording-write', (event, data) => {
   logRecordingService.write(event.sender.id, data)
 })
 
+// 版本更新:偏好由渲染端持久化并在初始化时传入,状态经 'update-status-changed' 推送
+ipcMain.handle('update-check', () => updateService.checkForUpdates())
+ipcMain.handle('update-download', () => updateService.downloadUpdate())
+ipcMain.handle('update-quit-and-install', () => updateService.quitAndInstall())
+ipcMain.on('update-set-prefs', (_event, prefs) => updateService.applyPrefs(prefs))
+
 function createDefaultLogName(): string {
   const now = new Date()
   const digits = (value: number) => String(value).padStart(2, '0')
@@ -313,6 +321,8 @@ async function createWindow() {
     },
   })
   configureWebTitleBar(win)
+  // 更新状态推送到主窗口
+  updateService.attach(win.webContents)
 
   if (VITE_DEV_SERVER_URL) {
     // #298

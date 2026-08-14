@@ -50,6 +50,10 @@ interface Window {
       contentBytes: number
       dataLength: number
     }>
+    checkForUpdates: () => Promise<void>
+    downloadUpdate: () => Promise<void>
+    quitAndInstall: () => Promise<void>
+    setUpdaterPrefs: (prefs: import('./core/update/UpdaterService').UpdaterPrefs) => void
   }
   ipcRenderer: import('electron').IpcRenderer
 }
