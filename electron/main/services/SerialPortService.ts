@@ -79,10 +79,19 @@ export class SerialPortService {
   }
 
   public async send(data: string, format: SerialDataFormat): Promise<void> {
-    if (!this.currentPort?.isOpen) throw new Error('串口未打开或不可用')
+    const port = this.currentPort
+    if (!port?.isOpen) throw new Error('串口未打开或不可用')
     const buffer = Buffer.from(data, format === 'hex' ? 'hex' : 'utf8')
     await new Promise<void>((resolve, reject) => {
-      this.currentPort?.write(buffer, (error) => (error ? reject(error) : resolve()))
+      // write 的回调只表示数据交给了 OS 缓冲，drain 才会等到数据真正写入设备；
+      // 设备掉线/权限错误（如 Windows 上 GetOverlappedResult 失败）会在 drain 阶段抛出
+      port.write(buffer, (writeError) => {
+        if (writeError) {
+          reject(writeError)
+          return
+        }
+        port.drain((drainError) => (drainError ? reject(drainError) : resolve()))
+      })
     })
   }
 

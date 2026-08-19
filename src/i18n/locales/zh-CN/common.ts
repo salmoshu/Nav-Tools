@@ -125,10 +125,10 @@ export default {
     perSecond: '条/秒',
     paused: '已暂停',
     cancel: '取消',
-    sendingAck: '发送中... ACK {acked}/{total}',
-    sendCompleteAck: '发送完成 ({acked}/{total} ACK)',
+    sendingAck: '发送中... 已发送 {acked}/{total}',
+    sendCompleteAck: '发送完成 ({acked}/{total})，请以设备反馈为准',
     sendFailedMsg: '发送失败: {error}',
-    cancelledAck: '已取消 ({acked}/{total} ACK)',
+    cancelledAck: '已取消 ({acked}/{total})',
   },
   plot: {
     configButton: '配置',

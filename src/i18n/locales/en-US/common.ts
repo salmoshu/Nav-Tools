@@ -125,10 +125,10 @@ export default {
     perSecond: 'msgs/s',
     paused: 'Paused',
     cancel: 'Cancel',
-    sendingAck: 'Sending... ACK {acked}/{total}',
-    sendCompleteAck: 'Sent ({acked}/{total} ACK)',
+    sendingAck: 'Sending... sent {acked}/{total}',
+    sendCompleteAck: 'Sent ({acked}/{total}); check device for result',
     sendFailedMsg: 'Send failed: {error}',
-    cancelledAck: 'Cancelled ({acked}/{total} ACK)',
+    cancelledAck: 'Cancelled ({acked}/{total})',
   },
   plot: {
     configButton: 'Configure',
