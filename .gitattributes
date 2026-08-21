@@ -1,0 +1,10 @@
+# 统一行尾：仓库内一律 LF，消除跨平台 CRLF 噪音
+* text=auto
+
+# Shell 脚本任何平台都保持 LF（CRLF 会导致 bash 解析失败）
+*.sh   text eol=lf
+*.bash text eol=lf
+
+# Windows 批处理保持 CRLF
+*.cmd  text eol=crlf
+*.bat  text eol=crlf
