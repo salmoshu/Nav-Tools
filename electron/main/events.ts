@@ -1,6 +1,8 @@
 import fs from 'node:fs'
 import { dialog, type IpcMainEvent, type IpcMainInvokeEvent } from 'electron'
 import { SerialPortService, type SerialPortOptions } from './services/SerialPortService'
+import { IapUpgradeService } from './services/IapUpgradeService'
+import type { IapUpgradeRequest } from '../../src/core/iap/IapUpgrade'
 import {
   NetworkConnectionService,
   type NetworkConnectionOptions,
@@ -8,6 +10,7 @@ import {
 
 const serialService = new SerialPortService()
 const networkService = new NetworkConnectionService()
+const iapUpgradeService = new IapUpgradeService(serialService)
 
 export interface SendDataChunkRequest {
   data: string
@@ -28,6 +31,9 @@ const eventsMap = {
   'send-network-hex-data': sendNetworkHexData,
   'send-network-ascii-data': sendNetworkAsciiData,
   'send-data-chunk': sendDataChunk,
+  'iap-upgrade-start': startIapUpgrade,
+  'iap-upgrade-cancel': cancelIapUpgrade,
+  'iap-upgrade-snapshot': getIapUpgradeSnapshot,
   'open-file-dialog': openFileDialog,
   'read-file-event': readFileEvent,
 }
@@ -114,6 +120,18 @@ async function sendDataChunk(_event: IpcMainInvokeEvent, request: SendDataChunkR
   await serialService.send(data, format)
 }
 
+function startIapUpgrade(event: IpcMainInvokeEvent, request: IapUpgradeRequest) {
+  return iapUpgradeService.start(event.sender, request)
+}
+
+function cancelIapUpgrade() {
+  iapUpgradeService.cancel()
+}
+
+function getIapUpgradeSnapshot() {
+  return iapUpgradeService.getSnapshot()
+}
+
 function openFileDialog() {
   return dialog.showOpenDialog({
     properties: ['openFile'],
@@ -130,4 +148,4 @@ async function readFileEvent(event: IpcMainEvent, filePath: string) {
   }
 }
 
-export { eventsMap }
+export { eventsMap, iapUpgradeService }

@@ -7,6 +7,10 @@ export default {
     title: '消息',
     desc: '查看、筛选并发送消息',
   },
+  'terminal': {
+    title: '终端',
+    desc: 'SSH、SFTP、WSL 与本地 Shell 终端',
+  },
   'camera-video': {
     title: '相机视频',
     desc: '播放 RTSP 相机实时视频画面',

@@ -14,7 +14,7 @@ import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import os from 'node:os'
 import ffmpegStatic from 'ffmpeg-static'
-import { eventsMap } from './events'
+import { eventsMap, iapUpgradeService } from './events'
 import { CameraCommandService } from './services/CameraCommandService'
 import { CameraStreamService } from './services/CameraStreamService'
 import { FilePlaybackService } from './services/FilePlaybackService'
@@ -22,6 +22,8 @@ import { TextFileStreamService } from './services/TextFileStreamService'
 import { LogRecordingService } from './services/LogRecordingService'
 import { OfflineTileService } from './services/OfflineTileService'
 import { UpdateService } from './services/UpdateService'
+import { TerminalService } from './services/TerminalService'
+import { registerTerminalIpc } from './terminalIpc'
 
 const require = createRequire(import.meta.url)
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -70,6 +72,12 @@ const textFileStreamService = new TextFileStreamService()
 const logRecordingService = new LogRecordingService()
 const offlineTileService = new OfflineTileService()
 const updateService = new UpdateService()
+const terminalService = new TerminalService(app.getPath('userData'), (channel, payload) => {
+  for (const target of BrowserWindow.getAllWindows()) {
+    if (!target.isDestroyed()) target.webContents.send(channel, payload)
+  }
+})
+registerTerminalIpc(terminalService)
 // 自定义瓦片协议必须在 app ready 之前注册为 privileged scheme
 offlineTileService.registerPrivilegedScheme()
 const cameraStreamOwners = new Set<number>()
@@ -80,7 +88,15 @@ const logRecordingOwners = new Set<number>()
 type WindowResizeEdge =
   'top' | 'right' | 'bottom' | 'left' | 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right'
 const resizeIntervals = new Map<number, ReturnType<typeof setInterval>>()
-const detachedPanels = new Map<number, { originWebContentsId: number; windowId: string }>()
+interface DetachedPanel {
+  originWebContentsId: number
+  windowId: string
+  componentName?: string
+  closeInProgress?: boolean
+  closeConfirmed?: boolean
+}
+
+const detachedPanels = new Map<number, DetachedPanel>()
 
 function getWindowState(target: BrowserWindow) {
   return {
@@ -388,6 +404,8 @@ app.on('window-all-closed', () => {
 })
 
 app.on('before-quit', () => {
+  iapUpgradeService.cancel()
+  void terminalService.closeAll()
   cameraStreamService.stopAll()
   void filePlaybackService.stopAll()
   void logRecordingService.stopAll()
@@ -432,8 +450,39 @@ ipcMain.handle('open-card-window', async (event, serializedData) => {
     detachedPanels.set(cardWindow.id, {
       originWebContentsId: event.sender.id,
       windowId: cardData.windowId,
+      componentName: typeof cardData.componentName === 'string' ? cardData.componentName : undefined,
     })
   }
+  cardWindow.on('close', async (closeEvent) => {
+    const detachedPanel = detachedPanels.get(cardWindow.id)
+    if (
+      detachedPanel?.componentName !== 'Terminal' ||
+      detachedPanel.closeConfirmed ||
+      terminalService.listSessions().length === 0
+    ) {
+      return
+    }
+
+    closeEvent.preventDefault()
+    if (detachedPanel.closeInProgress) return
+    detachedPanel.closeInProgress = true
+    try {
+      const result = await dialog.showMessageBox(cardWindow, {
+        type: 'warning',
+        buttons: ['关闭并终止 / Close and terminate', '取消 / Cancel'],
+        defaultId: 1,
+        cancelId: 1,
+        title: '关闭终端 / Close Terminal',
+        message: '关闭终端组件会终止全部 Shell、SSH、SFTP 传输和端口转发。\nClosing Terminal will terminate all shells, SSH sessions, SFTP transfers, and port forwarding.',
+      })
+      if (result.response !== 0) return
+      await terminalService.closeAll()
+      detachedPanel.closeConfirmed = true
+      cardWindow.close()
+    } finally {
+      detachedPanel.closeInProgress = false
+    }
+  })
   cardWindow.once('closed', () => detachedPanels.delete(cardWindow.id))
 
   const params = encodeURIComponent(JSON.stringify(cardData))
@@ -514,6 +563,9 @@ ipcMain.on('send-serial-hex-data', eventsMap['send-serial-hex-data'])
 ipcMain.on('send-serial-ascii-data', eventsMap['send-serial-ascii-data'])
 ipcMain.on('serial-data-format', eventsMap['serial-data-format'])
 ipcMain.handle('send-data-chunk', eventsMap['send-data-chunk'])
+ipcMain.handle('iap-upgrade-start', eventsMap['iap-upgrade-start'])
+ipcMain.handle('iap-upgrade-cancel', eventsMap['iap-upgrade-cancel'])
+ipcMain.handle('iap-upgrade-snapshot', eventsMap['iap-upgrade-snapshot'])
 ipcMain.handle('open-network-connection', eventsMap['open-network-connection'])
 ipcMain.handle('close-network-connection', eventsMap['close-network-connection'])
 ipcMain.on('send-network-hex-data', eventsMap['send-network-hex-data'])

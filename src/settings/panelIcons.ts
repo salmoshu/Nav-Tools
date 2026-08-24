@@ -14,6 +14,7 @@ import {
 export const panelIconComponents: Readonly<Record<string, Component>> = {
   data: TrendCharts,
   console: Monitor,
+  terminal: Monitor,
   camera: VideoCamera,
   deviation: Aim,
   signal: Histogram,

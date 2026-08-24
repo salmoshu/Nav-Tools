@@ -3,6 +3,8 @@ onlyBuiltDependencies:
   - electron
   - esbuild
   - ffmpeg-static
+  - node-pty
+  - ssh2
   - vue-demi
 ignoredBuiltDependencies:
   - onnxruntime-node

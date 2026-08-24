@@ -5,6 +5,7 @@
   "asar": true,
   "asarUnpack": [
     "node_modules/ffmpeg-static/**",
+    "node_modules/node-pty/**",
     "node_modules/onnxruntime-node/**",
     "resources/ocr/**"
   ],

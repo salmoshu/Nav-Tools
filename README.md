@@ -2,7 +2,7 @@
 
 <img src="https://raw.githubusercontent.com/salmoshu/Winchell-ImgBed/main/img/20251020-145700.jpg" alt="Nav-Tools 界面预览" />
 
-Nav-Tools 是一个基于 Electron + Vue 3 的机器人开发调试工作台。它以“应用”组织窗口组件，支持实时数据接入、可视化、RTSP 相机播放、布局管理以及多窗口协同。
+Nav-Tools 是一个基于 Electron + Vue 3 的机器人开发调试工作台。它以“应用”组织窗口组件，支持实时数据接入、可视化、固件升级、终端会话、RTSP 相机播放、布局管理以及多窗口协同。
 
 - 应用下载：https://github.com/salmoshu/Nav-Tools/releases
 - 在线文档：https://salmoshu.github.io/robot/Nav-Tools/01-overview.html
@@ -18,6 +18,8 @@ Nav-Tools 是一个基于 Electron + Vue 3 的机器人开发调试工作台。�
 - **统一的窗口图标**：应用编辑器、Toolbar 和组件标题共享同一套窗口图标。
 - **统一数据源管理**：`Input` 集中配置文件、串口、TCP、UDP、Camera RTSP 地址以及 Raw、JSON、NMEA 解析方式，并持久化连接参数。
 - **RTSP 相机播放**：Camera Video 使用 `Input` 中的 RTSP 数据源和内置 FFmpeg，支持播放/暂停、UDP/TCP 自动回退、连接状态提示、画面缩放和平移。
+- **通用 IAP 升级**：Raw Messages 复用当前串口执行固件升级，内置 IGK IAP 模板，并支持结构化协议配置、校验算法、模板导入导出、失败重试及串口恢复。
+- **集成终端**：支持本地 Shell、PowerShell、CMD、Git Bash、WSL 和 SSH；提供标签页、递归分屏、SFTP 远程文件面板及 SSH 本地、远程、SOCKS 端口转发。
 - **友好的弹框交互**：弹框可使用 `Esc` 关闭，也可点击遮罩区域关闭。
 - **主题支持**：支持跟随系统、浅色和深色三种主题模式。
 
@@ -28,7 +30,8 @@ Nav-Tools 是一个基于 Electron + Vue 3 的机器人开发调试工作台。�
 | 类别  | 窗口             | 功能                                                     |
 | ----- | ---------------- | -------------------------------------------------------- |
 | 通用  | Plot             | 绘制数值数据随时间的变化，支持字段、颜色、滑窗和双轴配置 |
-| 通用  | Raw Messages     | 查看、筛选、暂停、保存和发送原始消息                     |
+| 通用  | Raw Messages     | 查看、筛选、暂停、保存原始消息，并通过当前串口执行 IAP   |
+| 通用  | Terminal         | 本地、WSL、SSH 终端，支持分屏、SFTP 和 SSH 端口转发      |
 | 通用  | Camera Video     | 播放 RTSP 实时视频，支持缩放、平移和画面标签提示         |
 | Flow  | Flow Deviation   | 分析 Flow 轨迹与偏差                                     |
 | GNSS  | GNSS Deviation   | 展示定位轨迹和定位状态                                   |
@@ -77,6 +80,25 @@ pnpm run dev
 5. 客户端会先尝试 UDP；连接失败或超时未收到画面时自动回退 TCP，并显示更具体的 FFmpeg 错误信息。
 
 > RTSP 播放依赖 Electron 主进程和内置 FFmpeg，仅桌面版可用。
+
+### IAP 固件升级
+
+1. 通过 `Input` 连接目标串口，再打开 `Raw Messages` 并点击 `IAP`。
+2. 选择固件。默认的 `IGK IAP` 模板使用 115200 波特率、1024 字节包和 5000 ms 超时；需要适配其他设备时可勾选“高级”配置帧头、命令、ACK、字节序、校验算法和重试参数。
+3. 开始升级后，进度只在设备返回有效 ACK 时增长；串口关闭、拒绝访问、ACK 错误或超时都会停止升级并显示错误，不会误报成功。
+4. 升级成功、失败或取消后，Nav-Tools 会尝试恢复升级前的串口连接和波特率。
+
+> IAP 需要设备端 Bootloader 与所选协议模板匹配。内置模板兼容 IGK IAP；其他厂商协议可通过命名模板和 JSON 导入导出进行配置。
+
+### Terminal
+
+1. 将 `Terminal` 添加到任意应用；新标签页和新分屏默认显示空启动页，也可从分屏按钮的下拉菜单继承当前会话。
+2. Windows 支持 PowerShell、CMD、已检测到的 Git Bash 和 WSL 发行版；Linux/macOS 使用系统 Shell。SSH 支持密码、私钥/口令和 SSH Agent，连接配置不会保存密码或口令。
+3. SSH 首次连接会确认并记录主机指纹，指纹变更时会阻止连接。Nav-Tools 也会读取 `~/.ssh/config` 中的 `Host`、`HostName`、`User`、`Port`、`IdentityFile` 和 `ProxyJump`。
+4. SSH 会话可打开仅显示远程目录的 SFTP 面板，进行上传、下载、新建目录、重命名和删除；端口转发支持 Local (`-L`)、Remote (`-R`) 和 SOCKS (`-D`) 多规则配置。
+5. 标签页和递归分屏布局会持久化；应用重启后不会自动连接。组件分离和还原不会中断仍由主进程持有的活动会话。
+
+> 关闭活动窗格、标签页或整个 Terminal 组件前会要求确认；确认后会终止关联 Shell、SSH、SFTP 传输和端口转发。
 
 ---
 
@@ -149,8 +171,10 @@ Dashboard 和独立窗口使用 `import.meta.glob` 加载这些目录中的组�
 │ │ ├── index.ts                     # Electron 主进程入口与窗口 IPC
 │ │ └─┬ services
 │ │   ├── CameraStreamService.ts     # RTSP、FFmpeg 与视频帧处理
+│ │   ├── IapUpgradeService.ts       # 串口 IAP 升级状态机
 │ │   ├── NetworkConnectionService.ts
-│ │   └── SerialPortService.ts
+│ │   ├── SerialPortService.ts
+│ │   └── TerminalService.ts         # PTY、SSH、SFTP 与端口转发
 │ └─┬ preload
 │   └── index.ts                     # 安全暴露桌面 API
 ├─┬ src
@@ -169,9 +193,11 @@ Dashboard 和独立窗口使用 `import.meta.glob` 加载这些目录中的组�
 │ │ ├── application
 │ │ ├── camera
 │ │ ├── data
+│ │ ├── iap
 │ │ ├── network
 │ │ ├── panels
 │ │ ├── serial
+│ │ ├── terminal
 │ │ └── window
 │ ├── hooks                          # 设备协调与 IPC
 │ ├── settings                       # 应用图标、窗口图标及兼容配置
@@ -206,6 +232,7 @@ pnpm run build        # 类型检查、构建并打包桌面应用
 - Pinia
 - FFmpeg (`ffmpeg-static`)
 - SerialPort
+- xterm.js、node-pty、ssh2
 - Vitest + Playwright
 
 ## 通信方式
@@ -215,3 +242,4 @@ pnpm run build        # 类型检查、构建并打包桌面应用
 - TCP
 - UDP
 - RTSP 视频流
+- SSH / SFTP

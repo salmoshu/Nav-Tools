@@ -7,6 +7,10 @@ export default {
     title: 'Messages',
     desc: 'View, filter, and send messages',
   },
+  'terminal': {
+    title: 'Terminal',
+    desc: 'SSH, SFTP, WSL, and local shell terminal',
+  },
   'camera-video': {
     title: 'Camera Video',
     desc: 'Play RTSP camera live video',

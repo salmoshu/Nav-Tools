@@ -88,7 +88,7 @@
                       </el-button>
                       <el-button
                         type="text"
-                        @click="removeItem(item.i)"
+                        @click="handleRemoveItem(item)"
                         class="remove-btn"
                         :title="t('app.dashboard.removeCard')"
                       >
@@ -122,7 +122,7 @@ import StatusBar from './StatusBar.vue'
 import ApplicationSelector from './ApplicationSelector.vue'
 import { ref, computed, nextTick, onMounted, onUnmounted, provide, watch } from 'vue'
 import { GridLayout, GridItem } from 'grid-layout-plus'
-import { ElButton, ElCard, ElIcon, ElMessage } from 'element-plus'
+import { ElButton, ElCard, ElIcon, ElMessage, ElMessageBox } from 'element-plus'
 import { Close, Share, FullScreen } from '@element-plus/icons-vue'
 import emitter from '@/hooks/useMitt'
 import { useLayoutManager } from '@/composables/useLayoutManager'
@@ -577,6 +577,25 @@ const detachItem = async (item: any) => {
       console.error('Error invoking open-card-window:', error)
     }
   }
+}
+
+const handleRemoveItem = async (item: any) => {
+  if (item?.windowId === 'terminal' && window.ipcRenderer) {
+    const sessions = await window.ipcRenderer.invoke('terminal-session-list')
+    if (Array.isArray(sessions) && sessions.length > 0) {
+      try {
+        await ElMessageBox.confirm(
+          t('common.terminal.closeComponentConfirm'),
+          t('common.terminal.closeSession'),
+          { type: 'warning' },
+        )
+      } catch {
+        return
+      }
+      await window.ipcRenderer.invoke('terminal-session-close-all')
+    }
+  }
+  removeItem(item.i)
 }
 
 // 生命周期

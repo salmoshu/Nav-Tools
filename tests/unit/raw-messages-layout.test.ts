@@ -8,7 +8,7 @@ describe('RawMessages bottom composer layout', () => {
     expect(source).toContain('class="message-entry"')
     expect(source).toContain('class="composer-actions"')
     expect(source).toContain('class="message-actions"')
-    expect(source).toContain('class="file-actions"')
+    expect(source).toContain('class="iap-actions"')
     expect(source).toContain('flex: 1 1 360px')
     expect(source).toContain('flex: 0 1 auto')
     expect(source).toContain('flex-wrap: wrap')
@@ -22,24 +22,17 @@ describe('RawMessages bottom composer layout', () => {
     expect(source).not.toContain('style="width: 90px; margin-right: 8px;"')
   })
 
-  it('keeps the file picker compact and accessible', () => {
-    expect(source).toContain('class="file-picker-button"')
-    expect(source).toMatch(/class="file-picker-button"[\s\S]*?size="default"[\s\S]*?text/)
-    expect(source).toContain(':aria-label="t(\'common.rawMessages.loadFile\')"')
+  it('replaces generic file sending with the IAP dialog entry', () => {
+    expect(source).toContain('@click="iapDialogVisible = true"')
+    expect(source).toContain(':title="t(\'common.rawMessages.iapUpgrade\')"')
+    expect(source).toContain('<IapUpgradeDialog v-model="iapDialogVisible" />')
     expect(source).toContain(':aria-label="t(\'common.rawMessages.format\')"')
-    expect(source).toContain('width: 28px')
-    expect(source).toContain('min-height: 28px')
-    expect(source).toContain('border-color: transparent')
   })
 
-  it('keeps the file picker on the right of the conditional send button', () => {
-    const fileActions = source.match(
-      /<div class="file-actions">([\s\S]*?)<\/div>\s*<\/div>\s*<\/div>/,
-    )?.[1]
-
-    expect(fileActions).toBeDefined()
-    expect(fileActions!.indexOf('@click="handleStartSend"')).toBeLessThan(
-      fileActions!.indexOf('@click="handleSelectFile"'),
-    )
+  it('does not retain the removed generic file-send handlers', () => {
+    expect(source).not.toContain('useFileSend')
+    expect(source).not.toContain('handleSelectFile')
+    expect(source).not.toContain('handleStartSend')
+    expect(source).not.toContain('file-picker-button')
   })
 })

@@ -70,6 +70,18 @@ export const panelRegistry: readonly PanelDefinition[] = [
     componentPath: '@/components/windows/common/RawMessages.vue',
   },
   {
+    id: 'terminal',
+    moduleId: 'general',
+    appMode: 'workspace',
+    funcMode: 'general',
+    catalogGroup: 'general',
+    action: 'terminal',
+    title: 'panel.terminal.title',
+    description: 'panel.terminal.desc',
+    componentName: 'Terminal',
+    componentPath: '@/components/windows/common/Terminal.vue',
+  },
+  {
     id: 'camera-video',
     moduleId: 'general',
     appMode: 'workspace',

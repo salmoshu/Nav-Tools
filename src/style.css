@@ -1,5 +1,12 @@
 :root {
-  font-family: Inter, "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, Arial, sans-serif;
+  font-family:
+    Inter,
+    'Segoe UI',
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    Arial,
+    sans-serif;
   color-scheme: light;
   color: #1f2937;
   background: #f3f5f7;
@@ -22,6 +29,8 @@
   --app-toolbar: #2c3e50;
   --app-toolbar-control: #34495e;
   --app-shadow: rgba(15, 23, 42, 0.14);
+  --terminal-bg: #171a21;
+  --terminal-fg: #d8dee9;
 }
 
 :root.dark {
@@ -42,6 +51,8 @@
   --app-toolbar: #181b21;
   --app-toolbar-control: #292e38;
   --app-shadow: rgba(0, 0, 0, 0.36);
+  --terminal-bg: #111318;
+  --terminal-fg: #d8dee9;
 }
 
 html,
@@ -134,7 +145,7 @@ code {
 
 /* Teleported reminders must remain above the frameless window header. */
 .el-message {
-  z-index: 7000 !important;
+  z-index: 9100 !important;
 }
 
 /* Shared dialog shell: responsive sizing, predictable scrolling, and consistent hierarchy. */
