@@ -55,7 +55,7 @@ describe('panel and application persistence', () => {
     expect(applications[3]).toMatchObject({
       id: 'camera',
       icon: 'camera',
-      windowIds: ['camera-video', 'camera-parameters'],
+      windowIds: ['camera-video', 'camera-parameters', 'terminal'],
     })
     expect(memory.getItem('nav-tools:custom-applications')).not.toBeNull()
   })
@@ -109,9 +109,43 @@ describe('panel and application persistence', () => {
     )
     const storage = new ApplicationStorage(new JsonStorage(memory))
 
-    expect(storage.loadApplications()[0].windowIds).toEqual(['camera-video', 'camera-parameters'])
+    expect(storage.loadApplications()[0].windowIds).toEqual([
+      'camera-video',
+      'camera-parameters',
+      'terminal',
+    ])
     storage.saveApplications([{ ...storage.loadApplications()[0], windowIds: ['camera-video'] }])
     expect(storage.loadApplications()[0].windowIds).toEqual(['camera-video'])
+  })
+
+  it('adds Terminal once to an existing Camera application', () => {
+    const memory = new MemoryStorage()
+    memory.setItem('nav-tools:migration:camera-default-v1', '1')
+    memory.setItem('nav-tools:migration:camera-parameters-v1', '1')
+    memory.setItem(
+      'nav-tools:custom-applications',
+      JSON.stringify([
+        {
+          id: 'camera',
+          name: 'Camera',
+          description: '',
+          icon: 'camera',
+          accent: '#14b8a6',
+          windowIds: ['camera-video', 'camera-parameters'],
+        },
+      ]),
+    )
+    const storage = new ApplicationStorage(new JsonStorage(memory))
+
+    expect(storage.loadApplications()[0].windowIds).toEqual([
+      'camera-video',
+      'camera-parameters',
+      'terminal',
+    ])
+    storage.saveApplications([
+      { ...storage.loadApplications()[0], windowIds: ['camera-video', 'camera-parameters'] },
+    ])
+    expect(storage.loadApplications()[0].windowIds).toEqual(['camera-video', 'camera-parameters'])
   })
 
   it('adds Serial once when upgrading an existing application list without Serial', () => {

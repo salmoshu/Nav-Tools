@@ -8,6 +8,7 @@ const CAMERA_PARAMETERS_MIGRATION_KEY = 'nav-tools:migration:camera-parameters-v
 const SERIAL_DEFAULT_MIGRATION_KEY = 'nav-tools:migration:serial-default-v1'
 const GNSS_MESSAGES_MIGRATION_KEY = 'nav-tools:migration:gnss-messages-v1'
 const FLOW_DEFAULT_MIGRATION_KEY = 'nav-tools:migration:flow-default-v1'
+const CAMERA_TERMINAL_MIGRATION_KEY = 'nav-tools:migration:camera-terminal-v1'
 
 export const DEFAULT_APPLICATIONS: readonly UserApplication[] = [
   {
@@ -40,7 +41,7 @@ export const DEFAULT_APPLICATIONS: readonly UserApplication[] = [
     description: 'Camera live video and parameter control workspace',
     icon: 'camera',
     accent: '#14b8a6',
-    windowIds: ['camera-video', 'camera-parameters'],
+    windowIds: ['camera-video', 'camera-parameters', 'terminal'],
   },
 ]
 
@@ -55,6 +56,7 @@ export class ApplicationStorage {
       this.storage.writeRaw(CAMERA_PARAMETERS_MIGRATION_KEY, '1')
       this.storage.writeRaw(SERIAL_DEFAULT_MIGRATION_KEY, '1')
       this.storage.writeRaw(FLOW_DEFAULT_MIGRATION_KEY, '1')
+      this.storage.writeRaw(CAMERA_TERMINAL_MIGRATION_KEY, '1')
       return defaults
     }
 
@@ -120,6 +122,13 @@ export class ApplicationStorage {
       }
       this.storage.writeRaw(FLOW_DEFAULT_MIGRATION_KEY, '1')
     }
+    if (this.storage.readRaw(CAMERA_TERMINAL_MIGRATION_KEY) === null) {
+      const cameraApplication = applications.find((application) => application.id === 'camera')
+      if (cameraApplication && !cameraApplication.windowIds.includes('terminal')) {
+        cameraApplication.windowIds.push('terminal')
+      }
+      this.storage.writeRaw(CAMERA_TERMINAL_MIGRATION_KEY, '1')
+    }
     this.saveApplications(applications)
     return applications
   }
@@ -136,6 +145,7 @@ export class ApplicationStorage {
     this.storage.writeRaw(SERIAL_DEFAULT_MIGRATION_KEY, '1')
     this.storage.writeRaw(GNSS_MESSAGES_MIGRATION_KEY, '1')
     this.storage.writeRaw(FLOW_DEFAULT_MIGRATION_KEY, '1')
+    this.storage.writeRaw(CAMERA_TERMINAL_MIGRATION_KEY, '1')
     return defaults
   }
 

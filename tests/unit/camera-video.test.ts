@@ -32,7 +32,7 @@ describe('camera panels', () => {
       expect.objectContaining({
         id: 'camera',
         icon: 'camera',
-        windowIds: ['camera-video', 'camera-parameters'],
+        windowIds: ['camera-video', 'camera-parameters', 'terminal'],
       }),
     )
   })
