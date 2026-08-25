@@ -1,5 +1,6 @@
 onlyBuiltDependencies:
   - '@serialport/bindings-cpp'
+  - cpu-features
   - electron
   - esbuild
   - ffmpeg-static
