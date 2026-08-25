@@ -1,4 +1,4 @@
-import { createTerminalId } from './TerminalTypes'
+import { createTerminalId, type TerminalLaunchSpec } from './TerminalTypes'
 
 export type TerminalSplitDirection = 'horizontal' | 'vertical'
 
@@ -7,6 +7,7 @@ export interface TerminalPaneNode {
   id: string
   sessionId?: string
   title: string
+  launch?: TerminalLaunchSpec
 }
 
 export interface TerminalSplitNode {

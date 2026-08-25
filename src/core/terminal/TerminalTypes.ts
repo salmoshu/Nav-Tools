@@ -33,6 +33,25 @@ export interface SshConnectionSecrets {
   passphrase?: string
 }
 
+export type TerminalLaunchSpec =
+  | {
+      kind: 'local'
+      localShell: LocalShellKind
+      cwd?: string
+      label?: string
+    }
+  | {
+      kind: 'wsl'
+      wslDistro: string
+      cwd?: string
+      label?: string
+    }
+  | {
+      kind: 'ssh'
+      sshProfile?: SshConnectionProfile
+      label?: string
+    }
+
 export interface TerminalCreateRequest {
   kind: TerminalSessionKind
   cols: number

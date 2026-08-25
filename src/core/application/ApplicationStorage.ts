@@ -137,6 +137,31 @@ export class ApplicationStorage {
     this.storage.write(APPLICATIONS_KEY, applications)
   }
 
+  /**
+   * Move one application to a new position and persist the resulting order.
+   *
+   * The input list is never mutated so callers can safely pass the reactive
+   * list used by the selector.  Invalid positions are clamped to the list
+   * bounds, which keeps keyboard and pointer reorder operations predictable.
+   */
+  public reorderApplications(
+    applications: readonly UserApplication[],
+    fromIndex: number,
+    toIndex: number,
+  ): UserApplication[] {
+    const reordered = cloneApplications(applications)
+    if (reordered.length < 2 || fromIndex < 0 || fromIndex >= reordered.length) {
+      this.saveApplications(reordered)
+      return reordered
+    }
+
+    const [application] = reordered.splice(fromIndex, 1)
+    const targetIndex = Math.max(0, Math.min(toIndex, reordered.length))
+    reordered.splice(targetIndex, 0, application)
+    this.saveApplications(reordered)
+    return reordered
+  }
+
   public resetApplicationsToDefaults(): UserApplication[] {
     const defaults = cloneApplications(DEFAULT_APPLICATIONS)
     this.saveApplications(defaults)

@@ -247,6 +247,22 @@ describe('panel and application persistence', () => {
     ])
   })
 
+  it('persists an application reorder and keeps omitted applications in place', () => {
+    const memory = new MemoryStorage()
+    const storage = new ApplicationStorage(new JsonStorage(memory))
+    const initial = storage.loadApplications()
+
+    const reordered = storage.reorderApplications(initial, 3, 0)
+
+    expect(reordered.map(({ id }) => id)).toEqual(['camera', 'serial', 'gnss', 'motor'])
+    expect(
+      new ApplicationStorage(new JsonStorage(memory)).loadApplications().map(({ id }) => id),
+    ).toEqual(['camera', 'serial', 'gnss', 'motor'])
+
+    const partial = storage.reorderApplications(reordered, 0, 2)
+    expect(partial.map(({ id }) => id)).toEqual(['serial', 'gnss', 'camera', 'motor'])
+  })
+
   it('migrates legacy panel ids and filters unknown panels', () => {
     expect(normalizePanelIds(['flow.data', 'plot', 'missing'])).toEqual(['plot', 'missing'])
     const memory = new MemoryStorage()

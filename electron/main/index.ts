@@ -1,6 +1,7 @@
 import {
   app,
   BrowserWindow,
+  clipboard,
   dialog,
   shell,
   ipcMain,
@@ -306,6 +307,7 @@ ipcMain.on('log-recording-write', (event, data) => {
 ipcMain.handle('update-check', () => updateService.checkForUpdates())
 ipcMain.handle('update-download', () => updateService.downloadUpdate())
 ipcMain.handle('update-quit-and-install', () => updateService.quitAndInstall())
+ipcMain.handle('clipboard-read-text', () => clipboard.readText())
 ipcMain.on('update-set-prefs', (_event, prefs) => updateService.applyPrefs(prefs))
 
 function createDefaultLogName(): string {
@@ -450,7 +452,8 @@ ipcMain.handle('open-card-window', async (event, serializedData) => {
     detachedPanels.set(cardWindow.id, {
       originWebContentsId: event.sender.id,
       windowId: cardData.windowId,
-      componentName: typeof cardData.componentName === 'string' ? cardData.componentName : undefined,
+      componentName:
+        typeof cardData.componentName === 'string' ? cardData.componentName : undefined,
     })
   }
   cardWindow.on('close', async (closeEvent) => {
@@ -473,7 +476,8 @@ ipcMain.handle('open-card-window', async (event, serializedData) => {
         defaultId: 1,
         cancelId: 1,
         title: '关闭终端 / Close Terminal',
-        message: '关闭终端组件会终止全部 Shell、SSH、SFTP 传输和端口转发。\nClosing Terminal will terminate all shells, SSH sessions, SFTP transfers, and port forwarding.',
+        message:
+          '关闭终端组件会终止全部 Shell、SSH、SFTP 传输和端口转发。\nClosing Terminal will terminate all shells, SSH sessions, SFTP transfers, and port forwarding.',
       })
       if (result.response !== 0) return
       await terminalService.closeAll()

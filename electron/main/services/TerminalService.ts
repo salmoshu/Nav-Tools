@@ -153,8 +153,11 @@ export class TerminalService {
   }
 
   public resize(sessionId: string, cols: number, rows: number): void {
-    const session = this.requireSession(sessionId)
     if (!Number.isInteger(cols) || !Number.isInteger(rows) || cols < 2 || rows < 1) return
+    // ResizeObserver callbacks can arrive after a tab/pane has closed its session.
+    // Resizing is best-effort, so a missing session is an expected lifecycle race.
+    const session = this.sessions.get(sessionId)
+    if (!session) return
     if (session.type === 'pty') session.process.resize(cols, rows)
     else session.stream.setWindow(rows, cols, 0, 0)
   }

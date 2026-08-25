@@ -2,6 +2,13 @@ export default {
   settings: '设置',
   settingsTheme: '主题',
   settingsLanguage: '语言',
+  settingsShortcuts: '快捷键',
+  settingsShortcutCategoryTerminal: '终端',
+  settingsShortcutHint: '点击快捷键并按下新的按键组合来更改。',
+  settingsShortcutRecord: '按下想要使用的按键组合',
+  settingsShortcutReset: '恢复默认',
+  settingsShortcutConflict: '该按键组合已被分配。',
+  settingsShortcutInvalid: '该按键组合不可使用。',
   settingsBack: '返回',
   settingsVersion: '版本更新',
   header: {
@@ -109,7 +116,8 @@ export default {
     fieldNamePlaceholder: '选择或输入字段名',
     formula: '计算公式',
     formulaPlaceholder: '请在下方编辑公式',
-    formulaHint: '说明：直接使用字段名访问数据（如camera_angle），支持常用数学函数或常量（如abs、sqrt、sin、cos、max、min、PI、E等）',
+    formulaHint:
+      '说明：直接使用字段名访问数据（如camera_angle），支持常用数学函数或常量（如abs、sqrt、sin、cos、max、min、PI、E等）',
     decimalPlaces: '小数位数',
     saveEdit: '保存修改',
     addProp: '添加属性',
@@ -135,7 +143,8 @@ export default {
     openWindow: '在新窗口打开',
     editApp: '编辑应用',
     deleteApp: '删除应用',
-    resetConfirm: '该操作会删除所有自定义应用和对应用的编辑，只保留默认的 Serial、GNSS、Flow 和 Camera 应用。重置后不可恢复，确定继续吗？',
+    resetConfirm:
+      '该操作会删除所有自定义应用和对应用的编辑，只保留默认的 Serial、GNSS、Flow 和 Camera 应用。重置后不可恢复，确定继续吗？',
     resetConfirmTitle: '重置应用',
     resetConfirmButton: '重置应用',
     deleteConfirm: '删除后不可恢复，确定删除应用「{v}」吗？',

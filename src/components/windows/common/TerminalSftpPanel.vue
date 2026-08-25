@@ -1,5 +1,11 @@
 <template>
-  <aside class="sftp-panel" @dragover.prevent @drop.prevent="handleDrop">
+  <aside
+    ref="panelElement"
+    class="sftp-panel"
+    :style="{ width: `${panelWidth}px` }"
+    @dragover.prevent
+    @drop.prevent="handleDrop"
+  >
     <div class="sftp-toolbar">
       <el-button text size="small" :disabled="loading || currentPath === '/'" @click="goUp">
         <el-icon><ArrowUp /></el-icon>
@@ -84,6 +90,24 @@
       />
     </div>
     <div class="drop-hint">{{ t('common.terminal.sftpDropHint') }}</div>
+    <div
+      ref="resizeHandle"
+      class="sftp-resizer"
+      :class="{ dragging: resizing }"
+      role="separator"
+      tabindex="0"
+      aria-orientation="vertical"
+      :aria-valuenow="panelWidth"
+      :aria-valuemin="MIN_SFTP_WIDTH"
+      :aria-valuemax="MAX_SFTP_WIDTH"
+      :aria-label="t('common.terminal.resizeSftpPanel')"
+      @pointerdown="startResize"
+      @pointermove="resizeWithPointer"
+      @pointerup="finishResize"
+      @pointercancel="finishResize"
+      @lostpointercapture="finishResize"
+      @keydown="resizeWithKeyboard"
+    ></div>
   </aside>
 </template>
 
@@ -104,6 +128,14 @@ import { t } from '@/i18n'
 import type { SftpEntry, SftpTransferEvent } from '@/core/terminal/TerminalTypes'
 
 const props = defineProps<{ sessionId: string }>()
+const MIN_SFTP_WIDTH = 220
+const MAX_SFTP_WIDTH = 560
+const DEFAULT_SFTP_WIDTH = 320
+const panelElement = ref<HTMLElement | null>(null)
+const resizeHandle = ref<HTMLElement | null>(null)
+const panelWidth = ref(DEFAULT_SFTP_WIDTH)
+const resizing = ref(false)
+let activePointerId: number | null = null
 const currentPath = ref('.')
 const pathInput = ref('.')
 const entries = ref<SftpEntry[]>([])
@@ -113,6 +145,51 @@ const transferPercent = computed(() => {
   if (!transfer.value || transfer.value.total <= 0) return 0
   return Math.round((transfer.value.transferred / transfer.value.total) * 100)
 })
+
+function panelWidthBounds(): { min: number; max: number } {
+  const containerWidth = panelElement.value?.parentElement?.getBoundingClientRect().width || 0
+  if (!containerWidth) return { min: MIN_SFTP_WIDTH, max: MAX_SFTP_WIDTH }
+  const max = Math.min(MAX_SFTP_WIDTH, Math.max(MIN_SFTP_WIDTH, Math.floor(containerWidth * 0.7)))
+  return { min: MIN_SFTP_WIDTH, max }
+}
+
+function clampPanelWidth(width: number): number {
+  const { min, max } = panelWidthBounds()
+  return Math.round(Math.min(max, Math.max(min, width)))
+}
+
+function startResize(event: PointerEvent): void {
+  if (event.button !== 0) return
+  event.preventDefault()
+  activePointerId = event.pointerId
+  resizing.value = true
+  resizeHandle.value?.setPointerCapture(event.pointerId)
+  resizeWithPointer(event)
+}
+
+function resizeWithPointer(event: PointerEvent): void {
+  if (!resizing.value || event.pointerId !== activePointerId) return
+  const panelRect = panelElement.value?.getBoundingClientRect()
+  if (!panelRect) return
+  panelWidth.value = clampPanelWidth(event.clientX - panelRect.left)
+}
+
+function finishResize(event: PointerEvent): void {
+  if (activePointerId !== null && event.pointerId !== activePointerId) return
+  const handle = resizeHandle.value
+  if (handle?.hasPointerCapture(event.pointerId)) handle.releasePointerCapture(event.pointerId)
+  activePointerId = null
+  resizing.value = false
+}
+
+function resizeWithKeyboard(event: KeyboardEvent): void {
+  if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
+  event.preventDefault()
+  const delta = event.shiftKey ? 40 : 12
+  panelWidth.value = clampPanelWidth(
+    panelWidth.value + (event.key === 'ArrowRight' ? delta : -delta),
+  )
+}
 
 async function refresh(): Promise<void> {
   loading.value = true
@@ -320,13 +397,46 @@ function errorMessage(error: unknown): string {
 
 <style scoped>
 .sftp-panel {
-  width: min(360px, 45%);
-  min-width: 250px;
+  position: relative;
+  flex: 0 1 auto;
+  width: 320px;
+  min-width: 220px;
+  max-width: min(560px, 70%);
   display: flex;
   flex-direction: column;
   border-right: 1px solid var(--app-border);
   background: var(--app-surface);
   overflow: hidden;
+}
+.sftp-resizer {
+  position: absolute;
+  z-index: 3;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 9px;
+  outline: none;
+  cursor: col-resize;
+  touch-action: none;
+}
+.sftp-resizer::after {
+  position: absolute;
+  top: 0;
+  right: 3px;
+  bottom: 0;
+  width: 2px;
+  border-radius: 2px;
+  background: transparent;
+  content: '';
+  transition:
+    background 0.12s ease,
+    box-shadow 0.12s ease;
+}
+.sftp-resizer:hover::after,
+.sftp-resizer:focus-visible::after,
+.sftp-resizer.dragging::after {
+  background: var(--el-color-primary);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--el-color-primary) 18%, transparent);
 }
 .sftp-toolbar {
   display: grid;

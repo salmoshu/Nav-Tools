@@ -86,6 +86,21 @@ export function useApplicationSelector() {
     }
   }
 
+  const reorderApplications = (fromIndex: number, toIndex: number) => {
+    if (fromIndex === toIndex) return applications.value
+
+    applications.value = applicationStorage.reorderApplications(
+      applications.value,
+      fromIndex,
+      toIndex,
+    )
+    return applications.value
+  }
+
+  const saveApplicationOrder = () => {
+    applicationStorage.saveApplications(applications.value)
+  }
+
   const resetApplications = () => {
     applications.value = applicationStorage.resetApplicationsToDefaults()
     const currentApplication = applications.value.find(
@@ -123,6 +138,8 @@ export function useApplicationSelector() {
     selectApplication,
     saveApplication,
     deleteApplication,
+    reorderApplications,
+    saveApplicationOrder,
     resetApplications,
     openApplicationSelector,
     closeApplicationSelector,

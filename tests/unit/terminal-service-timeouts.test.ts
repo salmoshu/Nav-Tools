@@ -9,6 +9,15 @@ vi.mock('node-pty', () => ({ spawn: vi.fn() }))
 afterEach(() => vi.useRealTimers())
 
 describe('TerminalService SSH timeouts', () => {
+  it('ignores a late resize after its terminal session has already been removed', () => {
+    const service = new TerminalService(
+      path.join(tmpdir(), `nav-tools-late-resize-${Date.now()}`),
+      () => undefined,
+    )
+
+    expect(() => service.resize('removed-session', 80, 24)).not.toThrow()
+  })
+
   it('rejects an unanswered host-key prompt instead of waiting forever', async () => {
     vi.useFakeTimers()
     const broadcasts: Array<{ channel: string; payload: unknown }> = []

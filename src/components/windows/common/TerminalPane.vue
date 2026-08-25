@@ -34,29 +34,26 @@
             <el-icon><component :is="expanded ? ScaleToOriginal : FullScreen" /></el-icon>
           </el-button>
         </el-tooltip>
-        <el-dropdown
-          trigger="click"
-          popper-class="terminal-pane-menu"
-          @command="handleSplitCommand"
-        >
-          <el-button text class="pane-action" :aria-label="t('common.terminal.splitTerminal')">
+        <el-tooltip :content="t('common.terminal.splitRight')" placement="bottom" :show-after="400">
+          <el-button
+            text
+            class="pane-action pane-action--split-right"
+            :aria-label="t('common.terminal.splitRight')"
+            @click="emitSplit('horizontal', Boolean(props.pane.sessionId))"
+          >
             <el-icon><SquareSplitVertical /></el-icon>
           </el-button>
-          <template #dropdown>
-            <el-dropdown-menu>
-              <el-dropdown-item command="right">
-                <el-icon><PanelRightClose /></el-icon>
-                <span>{{ t('common.terminal.splitRight') }}</span>
-                <kbd>{{ splitRightShortcut }}</kbd>
-              </el-dropdown-item>
-              <el-dropdown-item command="down">
-                <el-icon><PanelBottomClose /></el-icon>
-                <span>{{ t('common.terminal.splitDown') }}</span>
-                <kbd>{{ splitDownShortcut }}</kbd>
-              </el-dropdown-item>
-            </el-dropdown-menu>
-          </template>
-        </el-dropdown>
+        </el-tooltip>
+        <el-tooltip :content="t('common.terminal.splitDown')" placement="bottom" :show-after="400">
+          <el-button
+            text
+            class="pane-action pane-action--split-down"
+            :aria-label="t('common.terminal.splitDown')"
+            @click="emitSplit('vertical', Boolean(props.pane.sessionId))"
+          >
+            <el-icon><SquareSplitVertical /></el-icon>
+          </el-button>
+        </el-tooltip>
         <el-tooltip
           v-if="paneCount > 1"
           :content="t('common.terminal.closePaneShortcut')"
@@ -77,6 +74,22 @@
 
     <div v-if="!pane.sessionId" class="launcher">
       <div class="launcher-shell">
+        <div v-if="pane.launch" class="launcher-restore" role="status">
+          <span class="launcher-restore__icon"><RefreshRight /></span>
+          <span class="launcher-restore__copy">
+            <strong>{{ t('common.terminal.sessionNeedsReconnect') }}</strong>
+            <small>{{ launchDescription }}</small>
+          </span>
+          <el-button
+            class="launcher-restore__action"
+            type="primary"
+            plain
+            :loading="connecting"
+            @click="reconnectSession"
+          >
+            {{ t('common.terminal.reconnect') }}
+          </el-button>
+        </div>
         <div class="launcher-heading">
           <span class="launcher-heading__icon"><Monitor /></span>
           <span>
@@ -159,11 +172,28 @@
         :session-id="pane.sessionId"
       />
       <div ref="terminalElement" class="xterm-host"></div>
+      <div v-if="sessionDisconnected" class="session-disconnected" role="status">
+        <span class="session-disconnected__icon"><WarningFilled /></span>
+        <span class="session-disconnected__copy">
+          <strong>{{ disconnectedTitle }}</strong>
+          <small>{{ t('common.terminal.disconnectedDescription') }}</small>
+        </span>
+        <el-button
+          class="session-reconnect"
+          type="primary"
+          :loading="connecting"
+          @click="reconnectSession"
+        >
+          <el-icon><RefreshRight /></el-icon>
+          {{ t('common.terminal.reconnect') }}
+        </el-button>
+      </div>
     </div>
 
     <TerminalConnectionDialog
       v-model="sshDialogVisible"
-      :profiles="profiles"
+      :profiles="connectionProfiles"
+      :preferred-profile-id="preferredSshProfileId"
       :connecting="connecting"
       :connection-error="sshDialogVisible ? launchError : ''"
       @connect="launchSsh"
@@ -259,7 +289,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, toRaw, watch } from 'vue'
 import {
   Close,
   Connection,
@@ -269,10 +299,12 @@ import {
   Loading,
   Monitor,
   Platform,
+  RefreshRight,
   Right,
   ScaleToOriginal,
+  WarningFilled,
 } from '@element-plus/icons-vue'
-import { PanelBottomClose, PanelRightClose, SquareSplitVertical } from '@lucide/vue'
+import { SquareSplitVertical } from '@lucide/vue'
 import { ElMessage } from 'element-plus'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
@@ -288,12 +320,13 @@ import {
   type SshConnectionProfile,
   type SshConnectionSecrets,
   type TerminalCapabilities,
+  type TerminalLaunchSpec,
   type TerminalSessionInfo,
 } from '@/core/terminal/TerminalTypes'
 import TerminalConnectionDialog from './TerminalConnectionDialog.vue'
 import TerminalSftpPanel from './TerminalSftpPanel.vue'
 
-const SESSION_CREATE_TIMEOUT_MS = 55_000
+const SESSION_CREATE_TIMEOUT_MS = 20_000
 
 const props = defineProps<{
   pane: TerminalPaneNode
@@ -303,15 +336,17 @@ const props = defineProps<{
   capabilities: TerminalCapabilities
   profiles: SshConnectionProfile[]
   sessionInfo?: TerminalSessionInfo
+  autoOpenSsh?: boolean
 }>()
 const emit = defineEmits<{
-  session: [paneId: string, session: TerminalSessionInfo]
+  session: [paneId: string, session: TerminalSessionInfo, launch: TerminalLaunchSpec]
   focus: [paneId: string]
   expand: [paneId: string]
   split: [paneId: string, direction: TerminalSplitDirection, inherit: boolean]
   close: [paneId: string]
   'save-profile': [profile: SshConnectionProfile]
   'remove-profile': [id: string]
+  'ssh-dialog-opened': [paneId: string]
 }>()
 
 const terminalElement = ref<HTMLDivElement | null>(null)
@@ -326,16 +361,52 @@ const connectingTarget = ref('')
 const launchError = ref('')
 const runtimeForwards = ref<PortForwardRule[]>([])
 const forwardStatuses = ref<Record<string, PortForwardStatusEvent>>({})
+const connectionProfiles = computed(() => {
+  const restoredProfile =
+    props.pane.launch?.kind === 'ssh' ? props.pane.launch.sshProfile : undefined
+  if (!restoredProfile || props.profiles.some((profile) => profile.id === restoredProfile.id)) {
+    return props.profiles
+  }
+  return [restoredProfile, ...props.profiles]
+})
+const preferredSshProfileId = computed(() => {
+  if (props.pane.launch?.kind === 'ssh') return props.pane.launch.sshProfile?.id
+  return props.sessionInfo?.profileId
+})
 const activeProfile = computed(() =>
-  props.profiles.find((profile) => profile.id === props.sessionInfo?.profileId),
+  connectionProfiles.value.find(
+    (profile) => profile.id === (props.sessionInfo?.profileId || preferredSshProfileId.value),
+  ),
 )
+const sessionDisconnected = computed(
+  () => props.sessionInfo?.status === 'closed' || props.sessionInfo?.status === 'error',
+)
+const disconnectedTitle = computed(() =>
+  props.sessionInfo?.status === 'error'
+    ? t('common.terminal.sessionExitedWithError')
+    : t('common.terminal.sessionDisconnected'),
+)
+const launchDescription = computed(() => {
+  const launch = props.pane.launch
+  if (!launch) return ''
+  if (launch.kind === 'ssh' && launch.sshProfile) {
+    return `${launch.sshProfile.username}@${launch.sshProfile.host}:${launch.sshProfile.port}`
+  }
+  if (launch.kind === 'wsl') return launch.label || `WSL · ${launch.wslDistro}`
+  if (launch.kind === 'local') return launch.label || launch.localShell
+  return 'SSH'
+})
 
 let terminal: Terminal | undefined
 let fitAddon: FitAddon | undefined
 let resizeObserver: ResizeObserver | undefined
 let attachedSessionId = ''
 
-async function createSession(request: Record<string, unknown>, target: string): Promise<boolean> {
+async function createSession(
+  request: Record<string, unknown>,
+  target: string,
+  launch: TerminalLaunchSpec,
+): Promise<boolean> {
   connecting.value = true
   connectingTarget.value = target
   launchError.value = ''
@@ -351,7 +422,7 @@ async function createSession(request: Record<string, unknown>, target: string): 
       (lateSession: TerminalSessionInfo) =>
         void window.ipcRenderer.invoke('terminal-session-close', lateSession.id),
     )
-    emit('session', props.pane.id, session)
+    emit('session', props.pane.id, session, launch)
     return true
   } catch (error) {
     launchError.value = errorMessage(error)
@@ -363,14 +434,23 @@ async function createSession(request: Record<string, unknown>, target: string): 
 }
 
 function launchLocal(kind: LocalShellKind, label: string): void {
-  void createSession({ kind: 'local', localShell: kind, cwd: cwd.value || undefined }, label)
+  const launch: TerminalLaunchSpec = {
+    kind: 'local',
+    localShell: kind,
+    cwd: cwd.value || undefined,
+    label,
+  }
+  void createSession(launch, label, launch)
 }
 
 async function launchWsl(): Promise<void> {
-  const connected = await createSession(
-    { kind: 'wsl', wslDistro: selectedWsl.value, cwd: cwd.value || undefined },
-    `WSL · ${selectedWsl.value}`,
-  )
+  const launch: TerminalLaunchSpec = {
+    kind: 'wsl',
+    wslDistro: selectedWsl.value,
+    cwd: cwd.value || undefined,
+    label: `WSL · ${selectedWsl.value}`,
+  }
+  const connected = await createSession(launch, launch.label || 'WSL', launch)
   if (connected) wslDialogVisible.value = false
 }
 
@@ -380,9 +460,11 @@ async function launchSsh(
   save: boolean,
 ): Promise<void> {
   if (save) emit('save-profile', profile)
+  const launch: TerminalLaunchSpec = { kind: 'ssh', sshProfile: profile, label: profile.name }
   const connected = await createSession(
     { kind: 'ssh', sshProfile: profile, sshSecrets: secrets },
     `${profile.username}@${profile.host}:${profile.port}`,
+    launch,
   )
   if (connected) sshDialogVisible.value = false
 }
@@ -392,16 +474,54 @@ function openSshDialog(): void {
   sshDialogVisible.value = true
 }
 
-function emitSplit(direction: TerminalSplitDirection, inherit: boolean): void {
-  emit('split', props.pane.id, direction, inherit)
+function inferredLaunch(): TerminalLaunchSpec | undefined {
+  if (props.pane.launch) return props.pane.launch
+  if (props.sessionInfo?.kind === 'ssh') {
+    return {
+      kind: 'ssh',
+      sshProfile: connectionProfiles.value.find(
+        (profile) => profile.id === props.sessionInfo?.profileId,
+      ),
+      label: props.sessionInfo.title,
+    }
+  }
+  if (props.sessionInfo?.kind === 'wsl') {
+    const distro = props.capabilities.wslDistros[0]
+    return distro ? { kind: 'wsl', wslDistro: distro, label: props.sessionInfo.title } : undefined
+  }
+  const preferredShell =
+    props.capabilities.localShells.find((shell) => shell.label === props.sessionInfo?.title) ||
+    props.capabilities.localShells[0]
+  return preferredShell
+    ? { kind: 'local', localShell: preferredShell.kind, label: preferredShell.label }
+    : undefined
 }
 
-const isMac = navigator.userAgent.includes('Mac')
-const splitRightShortcut = isMac ? '⌘D' : 'Ctrl+Shift+D'
-const splitDownShortcut = isMac ? '⌘⇧D' : 'Alt+Shift+D'
+async function reconnectSession(): Promise<void> {
+  if (connecting.value) return
+  const launch = inferredLaunch()
+  if (!launch) {
+    launchError.value = t('common.terminal.reconnectTypeUnavailable')
+    return
+  }
+  if (props.pane.sessionId) {
+    await window.ipcRenderer
+      .invoke('terminal-session-close', props.pane.sessionId)
+      .catch(() => undefined)
+  }
+  if (launch.kind === 'ssh') {
+    openSshDialog()
+    return
+  }
+  if (launch.kind === 'wsl') {
+    await createSession(launch, launch.label || `WSL · ${launch.wslDistro}`, launch)
+    return
+  }
+  await createSession(launch, launch.label || launch.localShell, launch)
+}
 
-function handleSplitCommand(command: 'right' | 'down'): void {
-  emitSplit(command === 'right' ? 'horizontal' : 'vertical', Boolean(props.pane.sessionId))
+function emitSplit(direction: TerminalSplitDirection, inherit: boolean): void {
+  emit('split', props.pane.id, direction, inherit)
 }
 
 function focusPane(): void {
@@ -413,6 +533,7 @@ async function attachSession(sessionId: string | undefined): Promise<void> {
   attachedSessionId = sessionId
   terminal.reset()
   const session = await window.ipcRenderer.invoke('terminal-session-attach', sessionId)
+  if (sessionId !== props.pane.sessionId) return
   if (!session) return
   if (session.scrollback) terminal.write(session.scrollback)
   await nextTick()
@@ -420,14 +541,17 @@ async function attachSession(sessionId: string | undefined): Promise<void> {
 }
 
 function fitTerminal(): void {
-  if (!terminal || !fitAddon || !props.pane.sessionId || !terminalElement.value?.clientWidth) return
+  const sessionId = props.pane.sessionId
+  if (!terminal || !fitAddon || !sessionId || !terminalElement.value?.clientWidth) return
   try {
     fitAddon.fit()
-    void window.ipcRenderer.invoke('terminal-session-resize', {
-      sessionId: props.pane.sessionId,
-      cols: terminal.cols,
-      rows: terminal.rows,
-    })
+    void window.ipcRenderer
+      .invoke('terminal-session-resize', {
+        sessionId,
+        cols: terminal.cols,
+        rows: terminal.rows,
+      })
+      .catch(() => undefined)
   } catch {
     // A pane can be temporarily zero-sized while its split tree is changing.
   }
@@ -475,8 +599,35 @@ async function removeRuntimeForward(ruleId: string): Promise<void> {
 
 function saveRuntimeForwards(): void {
   if (!activeProfile.value) return
-  emit('save-profile', { ...activeProfile.value, forwards: structuredClone(runtimeForwards.value) })
+  emit('save-profile', {
+    ...toRaw(activeProfile.value),
+    forwards: cloneForwardRules(runtimeForwards.value),
+  })
   ElMessage.success(t('common.terminal.rulesSaved'))
+}
+
+function cloneForwardRules(rules: readonly PortForwardRule[]): PortForwardRule[] {
+  return rules.map((rule) => ({ ...toRaw(rule) }))
+}
+
+async function readClipboardText(): Promise<string> {
+  try {
+    const text = await window.ipcRenderer.invoke('clipboard-read-text')
+    if (typeof text === 'string') return text
+  } catch {
+    // Fall back to the browser clipboard API when the Electron bridge is unavailable.
+  }
+  try {
+    return (await navigator.clipboard?.readText()) || ''
+  } catch {
+    return ''
+  }
+}
+
+function pasteClipboardText(): void {
+  void readClipboardText().then((text) => {
+    if (text) terminal?.paste(text)
+  })
 }
 
 watch(
@@ -493,12 +644,12 @@ watch(
 watch(
   activeProfile,
   (profile) => {
-    runtimeForwards.value = structuredClone(profile?.forwards || [])
+    runtimeForwards.value = cloneForwardRules(profile?.forwards || [])
   },
   { immediate: true },
 )
 watch(forwardVisible, (open) => {
-  if (open) runtimeForwards.value = structuredClone(activeProfile.value?.forwards || [])
+  if (open) runtimeForwards.value = cloneForwardRules(activeProfile.value?.forwards || [])
 })
 
 onMounted(() => {
@@ -533,8 +684,20 @@ onMounted(() => {
       if (selection) void navigator.clipboard.writeText(selection)
       return false
     }
-    if (event.ctrlKey && event.shiftKey && event.code === 'KeyV') {
-      void navigator.clipboard.readText().then((text) => terminal?.paste(text))
+    const primaryPasteModifier =
+      props.capabilities.platform === 'darwin'
+        ? event.metaKey && !event.ctrlKey
+        : event.ctrlKey && !event.metaKey
+    const isPasteShortcut =
+      (primaryPasteModifier && !event.altKey && event.code === 'KeyV') ||
+      (props.capabilities.platform !== 'darwin' &&
+        event.shiftKey &&
+        !event.ctrlKey &&
+        !event.metaKey &&
+        !event.altKey &&
+        event.code === 'Insert')
+    if (isPasteShortcut) {
+      pasteClipboardText()
       return false
     }
     return true
@@ -544,6 +707,10 @@ onMounted(() => {
   window.ipcRenderer?.on('terminal-output', handleOutput)
   window.ipcRenderer?.on('terminal-forward-status', handleForwardStatus)
   void attachSession(props.pane.sessionId)
+  if (props.autoOpenSsh) {
+    openSshDialog()
+    emit('ssh-dialog-opened', props.pane.id)
+  }
   if (props.focused) void nextTick(() => terminal?.focus())
 })
 
@@ -654,15 +821,63 @@ function withTimeout<T>(
   color: var(--app-text);
   background: var(--app-hover);
 }
+.pane-action--split-right :deep(svg) {
+  transform: rotate(90deg);
+}
 .pane-actions :deep(.pane-action--danger:hover),
 .pane-actions :deep(.pane-action--danger:focus-visible) {
   color: var(--el-color-danger);
 }
 .session-body {
+  position: relative;
   min-height: 0;
   flex: 1;
   display: flex;
   background: var(--terminal-bg);
+}
+.session-disconnected {
+  position: absolute;
+  z-index: 4;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 20px;
+  color: var(--app-text);
+  background: color-mix(in srgb, var(--terminal-bg) 86%, transparent);
+  backdrop-filter: blur(3px);
+}
+.session-disconnected__icon,
+.launcher-restore__icon {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  flex: none;
+  border-radius: 9px;
+  color: var(--el-color-warning);
+  background: color-mix(in srgb, var(--el-color-warning) 13%, var(--app-surface));
+  place-items: center;
+}
+.session-disconnected__copy,
+.launcher-restore__copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+}
+.session-disconnected__copy strong,
+.launcher-restore__copy strong {
+  font-size: 13px;
+  font-weight: 650;
+}
+.session-disconnected__copy small,
+.launcher-restore__copy small {
+  color: var(--app-text-muted);
+  font-size: 11px;
+}
+.session-reconnect {
+  margin-left: 8px;
 }
 .xterm-host {
   flex: 1;
@@ -701,6 +916,18 @@ function withTimeout<T>(
   flex-direction: column;
   justify-content: center;
   gap: 14px;
+}
+.launcher-restore {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 11px 12px;
+  border: 1px solid color-mix(in srgb, var(--el-color-warning) 30%, var(--app-border));
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--el-color-warning) 7%, var(--app-surface-raised));
+}
+.launcher-restore__action {
+  margin-left: auto;
 }
 .launcher-heading {
   display: flex;
@@ -887,17 +1114,6 @@ function withTimeout<T>(
 }
 .forward-state.error {
   color: #f85149;
-}
-:global(.terminal-pane-menu .el-dropdown-menu__item) {
-  display: grid;
-  min-width: 210px;
-  grid-template-columns: auto 1fr auto;
-  gap: 8px;
-}
-:global(.terminal-pane-menu kbd) {
-  color: var(--app-text-muted);
-  font-family: inherit;
-  font-size: 10px;
 }
 @media (max-width: 560px) {
   .launcher-grid {

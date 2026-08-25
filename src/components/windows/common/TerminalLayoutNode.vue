@@ -8,6 +8,7 @@
     :capabilities="capabilities"
     :profiles="profiles"
     :session-info="sessionInfos[node.sessionId || '']"
+    :auto-open-ssh="node.id === autoOpenSshPaneId"
     @session="(...args) => $emit('session', ...args)"
     @focus="(id) => $emit('focus', id)"
     @expand="(id) => $emit('expand', id)"
@@ -15,6 +16,7 @@
     @close="(id) => $emit('close', id)"
     @save-profile="(profile) => $emit('save-profile', profile)"
     @remove-profile="(id) => $emit('remove-profile', id)"
+    @ssh-dialog-opened="(id) => $emit('ssh-dialog-opened', id)"
   />
   <div v-else ref="splitElement" class="split-node" :class="node.direction">
     <TerminalLayoutNode
@@ -27,6 +29,7 @@
       :capabilities="capabilities"
       :profiles="profiles"
       :session-infos="sessionInfos"
+      :auto-open-ssh-pane-id="autoOpenSshPaneId"
       @session="(...args) => $emit('session', ...args)"
       @focus="(id) => $emit('focus', id)"
       @expand="(id) => $emit('expand', id)"
@@ -35,6 +38,7 @@
       @close="(id) => $emit('close', id)"
       @save-profile="(profile) => $emit('save-profile', profile)"
       @remove-profile="(id) => $emit('remove-profile', id)"
+      @ssh-dialog-opened="(id) => $emit('ssh-dialog-opened', id)"
     />
     <div
       ref="dividerElement"
@@ -65,6 +69,7 @@
       :capabilities="capabilities"
       :profiles="profiles"
       :session-infos="sessionInfos"
+      :auto-open-ssh-pane-id="autoOpenSshPaneId"
       @session="(...args) => $emit('session', ...args)"
       @focus="(id) => $emit('focus', id)"
       @expand="(id) => $emit('expand', id)"
@@ -73,6 +78,7 @@
       @close="(id) => $emit('close', id)"
       @save-profile="(profile) => $emit('save-profile', profile)"
       @remove-profile="(id) => $emit('remove-profile', id)"
+      @ssh-dialog-opened="(id) => $emit('ssh-dialog-opened', id)"
     />
   </div>
 </template>
@@ -84,6 +90,7 @@ import type { TerminalLayoutNode, TerminalSplitDirection } from '@/core/terminal
 import type {
   SshConnectionProfile,
   TerminalCapabilities,
+  TerminalLaunchSpec,
   TerminalSessionInfo,
 } from '@/core/terminal/TerminalTypes'
 import TerminalPane from './TerminalPane.vue'
@@ -96,9 +103,10 @@ const props = defineProps<{
   capabilities: TerminalCapabilities
   profiles: SshConnectionProfile[]
   sessionInfos: Record<string, TerminalSessionInfo>
+  autoOpenSshPaneId?: string
 }>()
 const emit = defineEmits<{
-  session: [paneId: string, session: TerminalSessionInfo]
+  session: [paneId: string, session: TerminalSessionInfo, launch: TerminalLaunchSpec]
   focus: [paneId: string]
   expand: [paneId: string]
   resize: [splitId: string, ratio: number]
@@ -106,6 +114,7 @@ const emit = defineEmits<{
   close: [paneId: string]
   'save-profile': [profile: SshConnectionProfile]
   'remove-profile': [id: string]
+  'ssh-dialog-opened': [paneId: string]
 }>()
 
 const splitElement = ref<HTMLDivElement | null>(null)

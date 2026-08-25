@@ -29,7 +29,7 @@ describe('frameless window dragging regression', () => {
     )
     expect(rendererMain).toContain('messageConfig.offset = MESSAGE_TOP_OFFSET')
     expect(rendererMain).toMatch(/message:\s*\{\s*offset:\s*MESSAGE_TOP_OFFSET/)
-    expect(globalStyle).toMatch(/\.el-message\s*\{\s*z-index:\s*7000 !important/)
+    expect(globalStyle).toMatch(/\.el-message\s*\{\s*z-index:\s*9100 !important/)
   })
 
   it('allows multiple Nav-Tools application instances', () => {

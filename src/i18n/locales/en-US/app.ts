@@ -2,6 +2,13 @@ export default {
   settings: 'Settings',
   settingsTheme: 'Theme',
   settingsLanguage: 'Language',
+  settingsShortcuts: 'Keyboard Shortcuts',
+  settingsShortcutCategoryTerminal: 'Terminal',
+  settingsShortcutHint: 'Click a shortcut and press a new key combination to change it.',
+  settingsShortcutRecord: 'Press the desired key combination',
+  settingsShortcutReset: 'Restore Defaults',
+  settingsShortcutConflict: 'That key combination is already assigned.',
+  settingsShortcutInvalid: 'That key combination cannot be used.',
   settingsBack: 'Back',
   settingsVersion: 'Updates',
   header: {
@@ -37,7 +44,8 @@ export default {
     fileTab: 'File Input',
     fileTabShort: 'File',
     fileSource: 'File',
-    fileSourceDesc: 'Load logs, text or DAT files and deliver them to the current application component.',
+    fileSourceDesc:
+      'Load logs, text or DAT files and deliver them to the current application component.',
     filePath: 'File Path',
     filePathPlaceholder: 'Enter file path',
     selectFile: 'Select File',
@@ -81,7 +89,8 @@ export default {
     cameraTab: 'Camera',
     cameraTabShort: 'Camera',
     cameraSource: 'Camera',
-    cameraSourceDesc: 'Save the RTSP video address; Camera Video will use this unified configuration.',
+    cameraSourceDesc:
+      'Save the RTSP video address; Camera Video will use this unified configuration.',
     videoUrl: 'Video URL',
     videoUrlLabel: 'RTSP Video URL',
     transProtocol: 'Transport',
@@ -109,7 +118,8 @@ export default {
     fieldNamePlaceholder: 'Select or enter a field name',
     formula: 'Formula',
     formulaPlaceholder: 'Edit the formula below',
-    formulaHint: 'Note: access data directly by field name (e.g. camera_angle); common math functions or constants are supported (e.g. abs, sqrt, sin, cos, max, min, PI, E).',
+    formulaHint:
+      'Note: access data directly by field name (e.g. camera_angle); common math functions or constants are supported (e.g. abs, sqrt, sin, cos, max, min, PI, E).',
     decimalPlaces: 'Decimal Places',
     saveEdit: 'Save Changes',
     addProp: 'Add Property',
@@ -135,7 +145,8 @@ export default {
     openWindow: 'Open in New Window',
     editApp: 'Edit Application',
     deleteApp: 'Delete Application',
-    resetConfirm: 'This will delete all custom applications and edits, keeping only the default Serial, GNSS, Flow and Camera applications. This cannot be undone. Continue?',
+    resetConfirm:
+      'This will delete all custom applications and edits, keeping only the default Serial, GNSS, Flow and Camera applications. This cannot be undone. Continue?',
     resetConfirmTitle: 'Reset Applications',
     resetConfirmButton: 'Reset Applications',
     deleteConfirm: 'This cannot be undone. Delete the application "{v}"?',

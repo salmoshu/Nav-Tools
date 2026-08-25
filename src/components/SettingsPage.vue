@@ -81,6 +81,41 @@
           </div>
         </section>
 
+        <section v-else-if="activeSection === 'shortcuts'" class="settings-section">
+          <h2 class="section-title">{{ t('app.settingsShortcuts') }}</h2>
+          <p class="section-hint">{{ t('app.settingsShortcutHint') }}</p>
+          <div class="settings-card shortcut-card">
+            <div class="shortcut-category" role="heading" aria-level="3">
+              {{ t('app.settingsShortcutCategoryTerminal') }}
+            </div>
+            <div v-for="command in shortcutCommands" :key="command.id" class="shortcut-command-row">
+              <span class="shortcut-command-label">{{ t(command.labelKey) }}</span>
+              <div class="shortcut-bindings">
+                <input
+                  v-for="(binding, bindingIndex) in command.bindings"
+                  :key="`${command.id}-${bindingIndex}`"
+                  class="shortcut-input"
+                  :class="{ recording: isRecording(command.id, bindingIndex) }"
+                  type="text"
+                  readonly
+                  :value="formatTerminalShortcutBinding(binding, shortcutPlatform)"
+                  :aria-label="`${t(command.labelKey)} ${bindingIndex + 1}`"
+                  :title="t('app.settingsShortcutRecord')"
+                  @focus="beginShortcutRecording(command.id, bindingIndex)"
+                  @keydown="captureShortcut($event, command.id, bindingIndex)"
+                />
+              </div>
+            </div>
+            <p v-if="shortcutError" class="shortcut-error" role="alert">{{ shortcutError }}</p>
+            <div class="shortcut-footer">
+              <span class="shortcut-footer-hint">{{ t('app.settingsShortcutRecord') }}</span>
+              <el-button size="small" @click="resetShortcuts">
+                {{ t('app.settingsShortcutReset') }}
+              </el-button>
+            </div>
+          </div>
+        </section>
+
         <section v-else-if="activeSection === 'version'" class="settings-section">
           <h2 class="section-title">{{ t('app.settingsVersion') }}</h2>
           <div class="settings-card version-card">
@@ -125,7 +160,10 @@
             >
               {{ t('update.readyDesc', { version: updaterEvent.version }) }}
             </p>
-            <p v-else-if="updaterEvent?.type === 'error'" class="version-status version-status-error">
+            <p
+              v-else-if="updaterEvent?.type === 'error'"
+              class="version-status version-status-error"
+            >
               {{ t('update.checkFailed', { message: updaterEvent.message ?? '' }) }}
               {{ t('update.networkHint') }}
             </p>
@@ -157,9 +195,16 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, type Component } from 'vue'
 import { Check, Refresh } from '@element-plus/icons-vue'
-import { ArrowLeft, Languages, Palette } from '@lucide/vue'
+import { ArrowLeft, Keyboard, Languages, Palette } from '@lucide/vue'
 import { useTheme, type ThemeMode } from '@/composables/useTheme'
 import { useLocale } from '@/composables/useLocale'
+import {
+  formatTerminalShortcutBinding,
+  normalizeTerminalShortcutPlatform,
+  TerminalShortcutSettings,
+  terminalShortcutInputFromKeyboardEvent,
+  type TerminalShortcutCommandId,
+} from '@/core/terminal/TerminalShortcuts'
 import { getBrowserWindowService } from '@/core/window/browserWindowService'
 import { getUpdaterService } from '@/core/update/browserUpdaterService'
 import type { UpdateStatusEvent, UpdaterPrefs } from '@/core/update/UpdaterService'
@@ -173,7 +218,7 @@ defineEmits<{
 
 // 设置分类注册表：新增分类时在 sections 中追加一项，
 // 并在内容区添加对应的 <section v-if="activeSection === '...'"> 即可。
-type SettingsSectionKey = 'theme' | 'language' | 'version'
+type SettingsSectionKey = 'theme' | 'language' | 'shortcuts' | 'version'
 
 interface SettingsSection {
   key: SettingsSectionKey
@@ -184,6 +229,7 @@ interface SettingsSection {
 const sections: SettingsSection[] = [
   { key: 'theme', labelKey: 'app.settingsTheme', icon: Palette },
   { key: 'language', labelKey: 'app.settingsLanguage', icon: Languages },
+  { key: 'shortcuts', labelKey: 'app.settingsShortcuts', icon: Keyboard },
   { key: 'version', labelKey: 'app.settingsVersion', icon: Refresh },
 ]
 
@@ -206,6 +252,76 @@ const languageOptions: { value: AppLocale; labelKey: string }[] = [
 // ---- 版本更新 ----
 // 更新事件由 UpdaterService 统一缓存并合并 releaseNotes（见 getLastStatus），
 // 与 UpdateDialog 共用同一份状态源，这里不重复维护合并逻辑。
+const shortcutFallbackStorage = {
+  getItem: () => null,
+  setItem: () => undefined,
+  removeItem: () => undefined,
+}
+const shortcutStorage = typeof localStorage === 'undefined' ? shortcutFallbackStorage : localStorage
+const shortcutPlatform = normalizeTerminalShortcutPlatform(
+  typeof navigator === 'undefined' ? 'win32' : navigator.platform,
+)
+const shortcutSettings = new TerminalShortcutSettings(shortcutStorage, shortcutPlatform)
+const shortcutCommands = ref(shortcutSettings.getCommands())
+const shortcutError = ref('')
+const recordingTarget = ref<{ commandId: TerminalShortcutCommandId; bindingIndex: number } | null>(
+  null,
+)
+
+function refreshShortcutCommands() {
+  shortcutCommands.value = shortcutSettings.getCommands()
+}
+
+function isRecording(commandId: TerminalShortcutCommandId, bindingIndex: number): boolean {
+  return (
+    recordingTarget.value?.commandId === commandId &&
+    recordingTarget.value.bindingIndex === bindingIndex
+  )
+}
+
+function beginShortcutRecording(commandId: TerminalShortcutCommandId, bindingIndex: number) {
+  recordingTarget.value = { commandId, bindingIndex }
+  shortcutError.value = ''
+}
+
+function captureShortcut(
+  event: KeyboardEvent,
+  commandId: TerminalShortcutCommandId,
+  bindingIndex: number,
+) {
+  if (event.key === 'Escape') {
+    event.preventDefault()
+    recordingTarget.value = null
+    shortcutError.value = ''
+    return
+  }
+  if (!isRecording(commandId, bindingIndex)) return
+
+  event.preventDefault()
+  const result = shortcutSettings.updateBinding(
+    commandId,
+    bindingIndex,
+    terminalShortcutInputFromKeyboardEvent(event),
+  )
+  if (!result.ok) {
+    shortcutError.value =
+      result.error.code === 'conflict'
+        ? t('app.settingsShortcutConflict')
+        : t('app.settingsShortcutInvalid')
+    return
+  }
+  refreshShortcutCommands()
+  recordingTarget.value = null
+  shortcutError.value = ''
+}
+
+function resetShortcuts() {
+  shortcutSettings.reset()
+  refreshShortcutCommands()
+  recordingTarget.value = null
+  shortcutError.value = ''
+}
+
 const updater = getUpdaterService()
 const windowService = getBrowserWindowService()
 
@@ -420,6 +536,92 @@ function handleUpdaterPrefChange(
   box-shadow: 0 1px 3px var(--app-shadow);
   gap: 2px;
   box-sizing: border-box;
+}
+
+.section-hint {
+  margin: -4px 0 10px;
+  color: var(--app-text-muted);
+  font-size: 12px;
+}
+
+.shortcut-card {
+  display: block;
+  padding: 10px;
+}
+
+.shortcut-category {
+  padding: 2px 8px 8px;
+  border-bottom: 1px solid var(--app-border);
+  color: var(--app-text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.shortcut-command-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(170px, auto);
+  align-items: center;
+  min-height: 42px;
+  padding: 4px 8px;
+  border-bottom: 1px solid color-mix(in srgb, var(--app-border) 65%, transparent);
+  gap: 12px;
+}
+
+.shortcut-command-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.shortcut-bindings {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.shortcut-input {
+  width: 106px;
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--app-border);
+  border-radius: 4px;
+  color: var(--app-text-secondary);
+  background: var(--app-surface-muted);
+  font: inherit;
+  font-size: 12px;
+  text-align: center;
+  cursor: pointer;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.shortcut-input:hover,
+.shortcut-input:focus,
+.shortcut-input.recording {
+  border-color: var(--el-color-primary);
+  color: var(--app-text);
+  background: var(--app-hover);
+}
+
+.shortcut-error {
+  margin: 8px 8px 0;
+  color: var(--el-color-error);
+  font-size: 12px;
+}
+
+.shortcut-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 8px 2px;
+  gap: 12px;
+}
+
+.shortcut-footer-hint {
+  color: var(--app-text-muted);
+  font-size: 12px;
 }
 
 .option-row {

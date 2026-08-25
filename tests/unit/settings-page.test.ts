@@ -34,6 +34,10 @@ describe('full-page settings', () => {
     expect(page).toContain("{ key: 'theme'")
     expect(page).toContain("{ key: 'language'")
     expect(page).toContain("{ key: 'version'")
+    expect(page).toContain("{ key: 'shortcuts'")
+    expect(page).toContain('TerminalShortcutSettings')
+    expect(page).toContain('updateBinding')
+    expect(page).toContain('shortcutSettings.reset()')
     expect(page).toContain('setTheme')
     expect(page).toContain('setLocale')
     // 返回入口：关闭设置页回到 Dashboard

@@ -256,6 +256,7 @@ const props = defineProps<{
   profiles: SshConnectionProfile[]
   connecting?: boolean
   connectionError?: string
+  preferredProfileId?: string
 }>()
 const emit = defineEmits<{
   'update:modelValue': [value: boolean]
@@ -360,7 +361,16 @@ async function removeProfile(): Promise<void> {
 watch(
   () => props.modelValue,
   (open) => {
-    if (open && !selectedId.value) reset()
+    if (!open) return
+    if (
+      props.preferredProfileId &&
+      props.profiles.some((profile) => profile.id === props.preferredProfileId)
+    ) {
+      selectedId.value = props.preferredProfileId
+      loadSelected(props.preferredProfileId)
+      return
+    }
+    if (!selectedId.value) reset()
   },
 )
 </script>

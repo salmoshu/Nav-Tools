@@ -37,79 +37,103 @@
         <el-icon :size="44" class="empty-state-icon"><FolderAdd /></el-icon>
         <h2>{{ t('app.selector.emptyTitle') }}</h2>
         <p>{{ t('app.selector.emptyDesc') }}</p>
-        <el-button type="primary" :icon="Plus" @click="openEditor()">{{ t('app.selector.newApp') }}</el-button>
+        <el-button type="primary" :icon="Plus" @click="openEditor()">{{
+          t('app.selector.newApp')
+        }}</el-button>
       </div>
 
-      <div v-else class="application-grid">
-        <article
-          v-for="application in applications"
-          :key="application.id"
-          class="application-card"
-          :class="{ selected: application.id === currentApplicationId }"
-          :style="{ '--application-accent': application.accent }"
-          tabindex="0"
-          @click="$emit('select', application.id)"
-          @keydown.enter="$emit('select', application.id)"
-          @keydown.space.prevent="$emit('select', application.id)"
-        >
-          <div class="application-icon" aria-hidden="true">
-            <el-icon :size="24">
-              <component :is="applicationIconComponents[application.icon] ?? Grid" />
-            </el-icon>
-          </div>
-          <div class="application-copy">
-            <div class="application-title-row">
-              <h2>{{ application.name }}</h2>
-              <el-icon
-                v-if="application.id === currentApplicationId"
-                class="selected-icon"
-                :title="t('app.selector.currentApp')"
-              >
-                <CircleCheckFilled />
+      <draggable
+        v-else
+        v-model="applications"
+        class="application-grid"
+        tag="div"
+        item-key="id"
+        :animation="180"
+        ghost-class="application-card-ghost"
+        chosen-class="application-card-chosen"
+        drag-class="application-card-drag"
+        filter=".application-actions"
+        :prevent-on-filter="false"
+        :fallback-on-body="true"
+        @change="handleApplicationOrderChange"
+        @start="handleApplicationDragStart"
+        @end="handleApplicationDragEnd"
+      >
+        <template #item="{ element: application, index }">
+          <article
+            class="application-card"
+            :class="{
+              selected: application.id === currentApplicationId,
+              'application-card-dragging': application.id === draggingApplicationId,
+            }"
+            :style="{ '--application-accent': application.accent }"
+            :data-application-id="application.id"
+            :aria-label="application.name"
+            tabindex="0"
+            @click="$emit('select', application.id)"
+            @keydown.enter="$emit('select', application.id)"
+            @keydown.space.prevent="$emit('select', application.id)"
+            @keydown="handleApplicationKeydown($event, index)"
+          >
+            <div class="application-icon" aria-hidden="true">
+              <el-icon :size="24">
+                <component :is="iconComponent(application.icon)" />
               </el-icon>
             </div>
-            <p>{{ application.description || t('app.selector.noDescription') }}</p>
-            <div class="panel-list">
-              <span
-                v-for="windowDefinition in applicationWindows(application)"
-                :key="windowDefinition.id"
-              >
-                {{ t(windowDefinition.title) }}
-              </span>
+            <div class="application-copy">
+              <div class="application-title-row">
+                <h2>{{ application.name }}</h2>
+                <el-icon
+                  v-if="application.id === currentApplicationId"
+                  class="selected-icon"
+                  :title="t('app.selector.currentApp')"
+                >
+                  <CircleCheckFilled />
+                </el-icon>
+              </div>
+              <p>{{ application.description || t('app.selector.noDescription') }}</p>
+              <div class="panel-list">
+                <span
+                  v-for="windowDefinition in applicationWindows(application)"
+                  :key="windowDefinition.id"
+                >
+                  {{ t(windowDefinition.title) }}
+                </span>
+              </div>
             </div>
-          </div>
-          <div class="application-actions">
-            <el-button
-              text
-              circle
-              :title="t('app.selector.openWindow')"
-              :aria-label="t('app.selector.openWindow')"
-              @click.stop="$emit('open-window', application.id)"
-            >
-              <el-icon><CopyDocument /></el-icon>
-            </el-button>
-            <el-button
-              text
-              circle
-              :title="t('app.selector.editApp')"
-              :aria-label="t('app.selector.editApp')"
-              @click.stop="openEditor(application)"
-            >
-              <el-icon><Edit /></el-icon>
-            </el-button>
-            <el-button
-              text
-              circle
-              :title="t('app.selector.deleteApp')"
-              :aria-label="t('app.selector.deleteApp')"
-              class="delete-button"
-              @click.stop="confirmDelete(application)"
-            >
-              <el-icon><Delete /></el-icon>
-            </el-button>
-          </div>
-        </article>
-      </div>
+            <div class="application-actions">
+              <el-button
+                text
+                circle
+                :title="t('app.selector.openWindow')"
+                :aria-label="t('app.selector.openWindow')"
+                @click.stop="$emit('open-window', application.id)"
+              >
+                <el-icon><CopyDocument /></el-icon>
+              </el-button>
+              <el-button
+                text
+                circle
+                :title="t('app.selector.editApp')"
+                :aria-label="t('app.selector.editApp')"
+                @click.stop="openEditor(application)"
+              >
+                <el-icon><Edit /></el-icon>
+              </el-button>
+              <el-button
+                text
+                circle
+                :title="t('app.selector.deleteApp')"
+                :aria-label="t('app.selector.deleteApp')"
+                class="delete-button"
+                @click.stop="confirmDelete(application)"
+              >
+                <el-icon><Delete /></el-icon>
+              </el-button>
+            </div>
+          </article>
+        </template>
+      </draggable>
     </section>
 
     <ApplicationEditor
@@ -122,8 +146,9 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref } from 'vue'
+import { nextTick, onMounted, onUnmounted, ref } from 'vue'
 import { ElMessageBox } from 'element-plus'
+import draggable from 'vuedraggable'
 import {
   CircleCheckFilled,
   Close,
@@ -157,22 +182,28 @@ const {
   currentApplicationId,
   saveApplication,
   deleteApplication,
+  reorderApplications,
+  saveApplicationOrder,
   resetApplications,
 } = useApplicationSelector()
 
 const editorOpen = ref(false)
 const editingApplication = ref<UserApplication | undefined>(undefined)
+const draggingApplicationId = ref<string | undefined>(undefined)
 const selectorMessageBoxTarget = '.selector-backdrop'
 
 const applicationWindows = (application: UserApplication) => {
   const catalogById = new Map(windowCatalog.map((window) => [window.id, window]))
-  const windows: typeof windowCatalog[number][] = []
+  const windows: (typeof windowCatalog)[number][] = []
   for (const id of application.windowIds) {
     const window = catalogById.get(id)
     if (window) windows.push(window)
   }
   return windows
 }
+
+const iconComponent = (icon: string) =>
+  applicationIconComponents[icon as UserApplication['icon']] ?? Grid
 
 const openEditor = (application?: UserApplication) => {
   editingApplication.value = application
@@ -183,6 +214,41 @@ const handleSave = (form: Omit<UserApplication, 'id'> & { id?: string }) => {
   const savedApplication = saveApplication(form)
   editorOpen.value = false
   emit('select', savedApplication.id)
+}
+
+const handleApplicationOrderChange = () => {
+  saveApplicationOrder()
+}
+
+const handleApplicationDragStart = (event: { item?: HTMLElement }) => {
+  draggingApplicationId.value = event.item?.dataset.applicationId
+}
+
+const handleApplicationDragEnd = () => {
+  draggingApplicationId.value = undefined
+}
+
+const focusApplicationCard = (index: number) => {
+  nextTick(() => {
+    const cards = document
+      .querySelector<HTMLElement>('.application-grid')
+      ?.querySelectorAll<HTMLElement>('.application-card')
+    cards?.[index]?.focus()
+  })
+}
+
+const handleApplicationKeydown = (event: KeyboardEvent, index: number) => {
+  if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) return
+  if (!event.ctrlKey && !event.metaKey && !event.altKey) return
+
+  const direction = event.key === 'ArrowLeft' || event.key === 'ArrowUp' ? -1 : 1
+  const targetIndex = index + direction
+  if (targetIndex < 0 || targetIndex >= applications.value.length) return
+
+  event.preventDefault()
+  event.stopPropagation()
+  reorderApplications(index, targetIndex)
+  focusApplicationCard(targetIndex)
 }
 
 const confirmReset = async () => {
@@ -363,6 +429,30 @@ onUnmounted(() => window.removeEventListener('keydown', handleEscape, { capture:
 .application-card.selected {
   border-color: var(--application-accent);
   box-shadow: inset 3px 0 0 var(--application-accent);
+}
+
+/* Sortable animates the neighboring cards into the open space, while these
+ * states make the dragged card feel lifted from the application grid. */
+.application-card-ghost {
+  opacity: 0.34;
+  border-style: dashed;
+  transform: scale(0.96);
+}
+
+.application-card-chosen {
+  cursor: grabbing;
+  box-shadow: 0 14px 32px var(--app-shadow);
+}
+
+.application-card-drag {
+  cursor: grabbing;
+  border-color: var(--application-accent);
+  box-shadow: 0 18px 36px var(--app-shadow);
+  transform: rotate(1deg) scale(1.025);
+}
+
+.application-card-dragging {
+  cursor: grabbing;
 }
 
 .application-icon {

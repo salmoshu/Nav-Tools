@@ -16,9 +16,8 @@
           @auxclick="closeTabWithMiddleClick($event, tab.id)"
           @keydown.enter="activateTab(tab.id)"
         >
-          <span class="tab-leading" :class="tabStatus(tab)">
-            <el-icon><Monitor /></el-icon>
-            <i></i>
+          <span class="tab-leading" :class="tabStatus(tab)" aria-hidden="true">
+            <i class="tab-status-dot"></i>
           </span>
           <input
             v-if="renamingTabId === tab.id"
@@ -44,35 +43,51 @@
             <el-icon><Close /></el-icon>
           </button>
         </div>
-      </div>
-      <div class="terminal-tabs__actions">
-        <el-tooltip :content="t('common.terminal.newTabShortcut')" placement="bottom">
-          <el-button text class="tab-action" @click="addTab">
+        <el-dropdown
+          trigger="click"
+          placement="bottom-start"
+          popper-class="terminal-new-session-menu"
+          @command="addTerminalTab"
+        >
+          <el-button
+            text
+            class="terminal-tab-add"
+            :aria-label="t('common.terminal.newTabShortcut')"
+            :title="t('common.terminal.newTabShortcut')"
+          >
             <el-icon><Plus /></el-icon>
           </el-button>
-        </el-tooltip>
-        <el-popover
-          placement="bottom-end"
-          :width="360"
-          trigger="click"
-          popper-class="terminal-shortcuts-popover"
-        >
-          <template #reference>
-            <el-button text class="tab-action" :aria-label="t('common.terminal.keyboardShortcuts')">
-              <el-icon><Operation /></el-icon>
-            </el-button>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item
+                v-for="shell in capabilities.localShells"
+                :key="`local-${shell.kind}`"
+                :command="`local:${shell.kind}`"
+              >
+                <el-icon><Monitor /></el-icon>
+                <span>{{ shell.label }}</span>
+              </el-dropdown-item>
+              <el-dropdown-item
+                v-for="distro in capabilities.wslDistros"
+                :key="`wsl-${distro}`"
+                :command="`wsl:${encodeURIComponent(distro)}`"
+              >
+                <el-icon><Platform /></el-icon>
+                <span>WSL · {{ distro }}</span>
+              </el-dropdown-item>
+              <el-dropdown-item v-if="capabilities.sshAvailable" command="ssh" divided>
+                <el-icon><Connection /></el-icon>
+                <span>SSH</span>
+              </el-dropdown-item>
+              <el-dropdown-item command="empty">
+                <el-icon><Plus /></el-icon>
+                <span>{{ t('common.terminal.emptyTerminal') }}</span>
+              </el-dropdown-item>
+            </el-dropdown-menu>
           </template>
-          <div class="shortcut-sheet">
-            <header>
-              <strong>{{ t('common.terminal.keyboardShortcuts') }}</strong>
-              <small>{{ t('common.terminal.keyboardShortcutsHint') }}</small>
-            </header>
-            <div v-for="shortcut in shortcutItems" :key="shortcut.label" class="shortcut-row">
-              <span>{{ shortcut.label }}</span>
-              <kbd>{{ shortcut.keys }}</kbd>
-            </div>
-          </div>
-        </el-popover>
+        </el-dropdown>
+      </div>
+      <div class="terminal-tabs__actions">
         <el-tooltip :content="t('common.terminal.refreshSshConfig')" placement="bottom">
           <el-button text class="tab-action" @click="loadSshConfig">
             <el-icon><Refresh /></el-icon>
@@ -90,6 +105,7 @@
         :capabilities="capabilities"
         :profiles="allProfiles"
         :session-infos="sessionInfos"
+        :auto-open-ssh-pane-id="autoOpenSshPaneId"
         @session="setPaneSession"
         @focus="focusPane"
         @expand="toggleExpandPane"
@@ -98,6 +114,7 @@
         @close="closePane"
         @save-profile="saveProfile"
         @remove-profile="removeProfile"
+        @ssh-dialog-opened="autoOpenSshPaneId = ''"
       />
     </div>
   </div>
@@ -105,7 +122,7 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
-import { Close, Monitor, Operation, Plus, Refresh } from '@element-plus/icons-vue'
+import { Close, Connection, Monitor, Platform, Plus, Refresh } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { t } from '@/i18n'
 import {
@@ -122,26 +139,34 @@ import {
   type TerminalTabLayout,
 } from '@/core/terminal/TerminalLayout'
 import {
-  resolveTerminalShortcut,
+  TerminalShortcutSettings,
+  terminalShortcutInputFromKeyboardEvent,
   type TerminalShortcutAction,
 } from '@/core/terminal/TerminalShortcuts'
+import {
+  planTerminalRecovery,
+  TerminalWorkspaceStorage,
+} from '@/core/terminal/TerminalWorkspaceStorage'
 import {
   type HostKeyMismatchEvent,
   type HostKeyPromptEvent,
   type SshConnectionProfile,
   type TerminalCapabilities,
+  type TerminalLaunchSpec,
   type TerminalSessionInfo,
   type TerminalStatusEvent,
 } from '@/core/terminal/TerminalTypes'
 import { TerminalProfileStorage } from '@/core/terminal/TerminalProfileStorage'
 import TerminalLayoutNodeComponent from './TerminalLayoutNode.vue'
 
-const STORAGE_KEY = 'nav-tools:terminal-layout:v2'
-const LEGACY_STORAGE_KEY = 'nav-tools:terminal-layout:v1'
+const SESSION_CREATE_TIMEOUT_MS = 20_000
 const profileStorage = new TerminalProfileStorage(localStorage)
-const tabs = ref<TerminalTabLayout[]>(loadTabs())
-const activeTabId = ref(tabs.value[0]?.id || '')
+const workspaceStorage = new TerminalWorkspaceStorage(localStorage)
+const initialWorkspace = workspaceStorage.load()
+const tabs = ref<TerminalTabLayout[]>(initialWorkspace.tabs)
+const activeTabId = ref(initialWorkspace.activeTabId)
 const workbenchElement = ref<HTMLDivElement | null>(null)
+const autoOpenSshPaneId = ref('')
 const expandedPaneByTabId = ref<Record<string, string | undefined>>({})
 const renamingTabId = ref('')
 const renameValue = ref('')
@@ -152,6 +177,7 @@ const capabilities = ref<TerminalCapabilities>({
   wslDistros: [],
   sshAvailable: true,
 })
+let shortcutSettings = new TerminalShortcutSettings(localStorage, capabilities.value.platform)
 const savedProfiles = ref<SshConnectionProfile[]>(profileStorage.list())
 const sshConfigProfiles = ref<SshConnectionProfile[]>([])
 const sessionInfos = ref<Record<string, TerminalSessionInfo>>({})
@@ -178,29 +204,6 @@ const activeLayoutNode = computed<TerminalLayoutNode | undefined>(() => {
     : tab.root
 })
 const shortcutPlatform = computed(() => capabilities.value.platform || 'win32')
-const primaryKey = computed(() => (shortcutPlatform.value === 'darwin' ? '⌘' : 'Ctrl'))
-const shortcutItems = computed(() => [
-  { label: t('common.terminal.shortcutNewTab'), keys: `${primaryKey.value}+T` },
-  { label: t('common.terminal.shortcutClose'), keys: `${primaryKey.value}+W` },
-  { label: t('common.terminal.shortcutSwitchTab'), keys: 'Ctrl+Tab / Ctrl+PageUp·PageDown' },
-  {
-    label: t('common.terminal.shortcutSelectTab'),
-    keys: shortcutPlatform.value === 'darwin' ? 'Ctrl+1…9' : 'Alt+1…9',
-  },
-  { label: t('common.terminal.shortcutFocusPane'), keys: `${primaryKey.value}+[ / ]` },
-  {
-    label: t('common.terminal.splitRight'),
-    keys: shortcutPlatform.value === 'darwin' ? '⌘+D' : 'Ctrl+Shift+D',
-  },
-  {
-    label: t('common.terminal.splitDown'),
-    keys: shortcutPlatform.value === 'darwin' ? '⌘+Shift+D' : 'Alt+Shift+D',
-  },
-  {
-    label: t('common.terminal.shortcutExpandPane'),
-    keys: `${primaryKey.value}+Shift+Enter`,
-  },
-])
 const allProfiles = computed(() => {
   const savedIds = new Set(savedProfiles.value.map((profile) => profile.id))
   return [
@@ -213,6 +216,59 @@ function addTab(): void {
   const tab = createTerminalTab(t('common.terminal.terminal'))
   tabs.value.push(tab)
   activeTabId.value = tab.id
+}
+
+function createLaunchedTab(launch: TerminalLaunchSpec): { tab: TerminalTabLayout; paneId: string } {
+  const title = launchTitle(launch)
+  const tab = createTerminalTab(title)
+  const pane = listTerminalPanes(tab.root)[0]
+  tab.root = updateTerminalPane(tab.root, pane.id, { launch, title })
+  tabs.value.push(tab)
+  activeTabId.value = tab.id
+  return { tab, paneId: pane.id }
+}
+
+async function addTerminalTab(command: string): Promise<void> {
+  if (command === 'empty') {
+    addTab()
+    return
+  }
+  if (command === 'ssh') {
+    const { paneId } = createLaunchedTab({ kind: 'ssh', label: 'SSH' })
+    autoOpenSshPaneId.value = paneId
+    return
+  }
+  const [kind, encodedValue] = command.split(':', 2)
+  if (kind === 'local') {
+    const shell = capabilities.value.localShells.find((entry) => entry.kind === encodedValue)
+    if (!shell) return
+    const launch: TerminalLaunchSpec = {
+      kind: 'local',
+      localShell: shell.kind,
+      label: shell.label,
+    }
+    const { paneId } = createLaunchedTab(launch)
+    await createPaneSession(paneId, launch)
+    return
+  }
+  if (kind === 'wsl') {
+    const distro = decodeURIComponent(encodedValue || '')
+    if (!capabilities.value.wslDistros.includes(distro)) return
+    const launch: TerminalLaunchSpec = {
+      kind: 'wsl',
+      wslDistro: distro,
+      label: `WSL · ${distro}`,
+    }
+    const { paneId } = createLaunchedTab(launch)
+    await createPaneSession(paneId, launch)
+  }
+}
+
+function launchTitle(launch: TerminalLaunchSpec): string {
+  if (launch.label) return launch.label
+  if (launch.kind === 'local') return launch.localShell
+  if (launch.kind === 'wsl') return `WSL · ${launch.wslDistro}`
+  return launch.sshProfile?.name || 'SSH'
 }
 
 function activateTab(tabId: string): void {
@@ -289,8 +345,9 @@ function handleRenameKeydown(event: KeyboardEvent, tab: TerminalTabLayout): void
   }
 }
 
-function tabStatus(tab: TerminalTabLayout): 'empty' | 'connecting' | 'ready' | 'error' {
-  const sessions = listTerminalPanes(tab.root).flatMap((pane) =>
+function tabStatus(tab: TerminalTabLayout): 'empty' | 'connecting' | 'ready' | 'closed' | 'error' {
+  const panes = listTerminalPanes(tab.root)
+  const sessions = panes.flatMap((pane) =>
     pane.sessionId && sessionInfos.value[pane.sessionId]
       ? [sessionInfos.value[pane.sessionId]]
       : [],
@@ -298,6 +355,12 @@ function tabStatus(tab: TerminalTabLayout): 'empty' | 'connecting' | 'ready' | '
   if (sessions.some((session) => session.status === 'error')) return 'error'
   if (sessions.some((session) => session.status === 'connecting')) return 'connecting'
   if (sessions.some((session) => session.status === 'ready')) return 'ready'
+  if (
+    sessions.some((session) => session.status === 'closed') ||
+    panes.some((pane) => pane.launch)
+  ) {
+    return 'closed'
+  }
   return 'empty'
 }
 
@@ -317,10 +380,18 @@ function isDefaultTerminalTitle(title: string): boolean {
   return normalized === 'terminal' || normalized === '终端'
 }
 
-function setPaneSession(paneId: string, session: TerminalSessionInfo): void {
+function setPaneSession(
+  paneId: string,
+  session: TerminalSessionInfo,
+  launch?: TerminalLaunchSpec,
+): void {
   const tab = tabs.value.find((entry) => findTerminalPane(entry.root, paneId))
   if (!tab) return
-  tab.root = updateTerminalPane(tab.root, paneId, { sessionId: session.id, title: session.title })
+  tab.root = updateTerminalPane(tab.root, paneId, {
+    sessionId: session.id,
+    title: session.title,
+    ...(launch ? { launch } : {}),
+  })
   tab.focusedPaneId = paneId
   activeTabId.value = tab.id
   sessionInfos.value = { ...sessionInfos.value, [session.id]: session }
@@ -371,6 +442,7 @@ async function splitPane(
       tab.root = updateTerminalPane(tab.root, newPane.id, {
         sessionId: session.id,
         title: session.title,
+        launch: source.launch,
       })
       sessionInfos.value = { ...sessionInfos.value, [session.id]: session }
     } catch (error) {
@@ -472,7 +544,8 @@ function handleTerminalShortcut(event: KeyboardEvent): void {
     element?.matches('input, textarea, select, [contenteditable="true"]')
   if (isEditable && !isTerminalInput) return
   if (document.querySelector('.el-overlay')) return
-  const action = resolveTerminalShortcut(event, shortcutPlatform.value)
+  shortcutSettings.reload()
+  const action = shortcutSettings.resolve(terminalShortcutInputFromKeyboardEvent(event))
   if (!action) return
   event.preventDefault()
   event.stopPropagation()
@@ -501,18 +574,48 @@ async function loadSshConfig(): Promise<void> {
   }
 }
 
+async function createPaneSession(paneId: string, launch: TerminalLaunchSpec): Promise<boolean> {
+  if (launch.kind === 'ssh') return false
+  const request =
+    launch.kind === 'local'
+      ? {
+          kind: 'local' as const,
+          localShell: launch.localShell,
+          cwd: launch.cwd,
+          cols: 80,
+          rows: 24,
+        }
+      : {
+          kind: 'wsl' as const,
+          wslDistro: launch.wslDistro,
+          cwd: launch.cwd,
+          cols: 80,
+          rows: 24,
+        }
+  try {
+    const session = await withTimeout(
+      window.ipcRenderer.invoke('terminal-session-create', request),
+      SESSION_CREATE_TIMEOUT_MS,
+      t('common.terminal.connectionRequestTimeout'),
+      (lateSession: TerminalSessionInfo) =>
+        void window.ipcRenderer.invoke('terminal-session-close', lateSession.id),
+    )
+    setPaneSession(paneId, session, launch)
+    return true
+  } catch (error) {
+    ElMessage.error(errorMessage(error))
+    return false
+  }
+}
+
 async function reconcileSessions(): Promise<void> {
   const sessions: TerminalSessionInfo[] = await window.ipcRenderer.invoke('terminal-session-list')
-  const byId = new Map(sessions.map((session) => [session.id, session]))
   sessionInfos.value = Object.fromEntries(sessions.map((session) => [session.id, session]))
-  const reconcile = (node: TerminalLayoutNode): TerminalLayoutNode => {
-    if (node.kind === 'pane') {
-      if (!node.sessionId || byId.has(node.sessionId)) return node
-      return { ...node, sessionId: undefined, title: t('common.terminal.emptyTerminal') }
-    }
-    return { ...node, first: reconcile(node.first), second: reconcile(node.second) }
-  }
-  tabs.value = tabs.value.map((tab) => ({ ...tab, root: reconcile(tab.root) }))
+  const recovery = planTerminalRecovery(tabs.value, new Set(sessions.map((session) => session.id)))
+  tabs.value = recovery.tabs
+  await Promise.all(
+    recovery.targets.map((target) => createPaneSession(target.paneId, target.launch)),
+  )
 }
 
 async function handleHostKeyPrompt(_event: unknown, prompt: HostKeyPromptEvent): Promise<void> {
@@ -563,8 +666,8 @@ function handleStatus(_event: unknown, event: TerminalStatusEvent): void {
 }
 
 watch(
-  tabs,
-  (value) => localStorage.setItem(STORAGE_KEY, JSON.stringify({ version: 2, tabs: value })),
+  [tabs, activeTabId],
+  () => workspaceStorage.save({ tabs: tabs.value, activeTabId: activeTabId.value }),
   { deep: true },
 )
 
@@ -575,6 +678,7 @@ onMounted(async () => {
   window.ipcRenderer?.on('terminal-status', handleStatus)
   try {
     capabilities.value = await window.ipcRenderer.invoke('terminal-capabilities')
+    shortcutSettings = new TerminalShortcutSettings(localStorage, shortcutPlatform.value)
     await Promise.all([loadSshConfig(), reconcileSessions()])
   } catch (error) {
     ElMessage.error(errorMessage(error))
@@ -588,73 +692,40 @@ onUnmounted(() => {
   window.ipcRenderer?.off('terminal-status', handleStatus)
 })
 
-function loadTabs(): TerminalTabLayout[] {
-  for (const key of [STORAGE_KEY, LEGACY_STORAGE_KEY]) {
-    try {
-      const parsed = JSON.parse(localStorage.getItem(key) || '') as {
-        version?: number
-        tabs?: unknown[]
-      }
-      if (![1, 2].includes(parsed.version || 0) || !Array.isArray(parsed.tabs)) continue
-      const restored = parsed.tabs.flatMap((value) => {
-        const tab = normalizeTab(value)
-        return tab ? [tab] : []
-      })
-      if (restored.length > 0) return restored
-    } catch {
-      // Try the previous storage version, then fall back to a fresh tab.
-    }
-  }
-  return [createTerminalTab('Terminal')]
-}
-
-function normalizeTab(value: unknown): TerminalTabLayout | null {
-  if (!value || typeof value !== 'object') return null
-  const record = value as Partial<TerminalTabLayout>
-  const root = normalizeLayoutNode(record.root)
-  if (!root || typeof record.id !== 'string') return null
-  const panes = listTerminalPanes(root)
-  return {
-    id: record.id,
-    title: typeof record.title === 'string' && record.title ? record.title : 'Terminal',
-    root,
-    focusedPaneId:
-      typeof record.focusedPaneId === 'string' && findTerminalPane(root, record.focusedPaneId)
-        ? record.focusedPaneId
-        : panes[0]?.id,
-  }
-}
-
-function normalizeLayoutNode(value: unknown): TerminalLayoutNode | null {
-  if (!value || typeof value !== 'object') return null
-  const record = value as Record<string, unknown>
-  if (record.kind === 'pane') {
-    if (typeof record.id !== 'string') return null
-    return {
-      kind: 'pane',
-      id: record.id,
-      title: typeof record.title === 'string' ? record.title : 'Terminal',
-      sessionId: typeof record.sessionId === 'string' ? record.sessionId : undefined,
-    }
-  }
-  if (record.kind !== 'split' || typeof record.id !== 'string') return null
-  const first = normalizeLayoutNode(record.first)
-  const second = normalizeLayoutNode(record.second)
-  if (!first || !second) return null
-  const ratio =
-    typeof record.ratio === 'number' && Number.isFinite(record.ratio) ? record.ratio : 0.5
-  return {
-    kind: 'split',
-    id: record.id,
-    direction: record.direction === 'vertical' ? 'vertical' : 'horizontal',
-    ratio: Math.min(0.95, Math.max(0.05, ratio)),
-    first,
-    second,
-  }
-}
-
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
+}
+
+function withTimeout<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  message: string,
+  onLateResolve?: (value: T) => void,
+): Promise<T> {
+  return new Promise((resolve, reject) => {
+    let settled = false
+    const timeout = window.setTimeout(() => {
+      settled = true
+      reject(new Error(message))
+    }, timeoutMs)
+    promise.then(
+      (value) => {
+        if (settled) {
+          onLateResolve?.(value)
+          return
+        }
+        settled = true
+        window.clearTimeout(timeout)
+        resolve(value)
+      },
+      (error) => {
+        if (settled) return
+        settled = true
+        window.clearTimeout(timeout)
+        reject(error)
+      },
+    )
+  })
 }
 </script>
 
@@ -738,38 +809,38 @@ function errorMessage(error: unknown): string {
   background: color-mix(in srgb, var(--app-text) 60%, var(--app-surface));
 }
 .tab-leading {
-  position: relative;
-  flex: none;
-  display: grid;
-  width: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 10px;
   height: 16px;
+  flex: none;
   color: var(--app-text-muted);
-  place-items: center;
 }
 .terminal-tab.active .tab-leading {
   color: var(--app-text-secondary);
 }
-.tab-leading > i {
-  position: absolute;
-  right: -1px;
-  bottom: -1px;
-  width: 6px;
-  height: 6px;
+.tab-status-dot {
+  width: 7px;
+  height: 7px;
   border: 1.5px solid var(--app-surface-muted);
   border-radius: 50%;
   background: #8b949e;
 }
-.terminal-tab.active .tab-leading > i {
+.terminal-tab.active .tab-status-dot {
   border-color: color-mix(in srgb, var(--app-text) 6%, var(--app-surface-muted));
 }
-.tab-leading.ready > i {
+.tab-leading.ready .tab-status-dot {
   background: #3fb950;
 }
-.tab-leading.connecting > i {
+.tab-leading.connecting .tab-status-dot {
   background: #d29922;
 }
-.tab-leading.error > i {
+.tab-leading.error .tab-status-dot {
   background: #f85149;
+}
+.tab-leading.closed .tab-status-dot {
+  background: #f0883e;
 }
 .tab-label {
   flex: 1;
@@ -830,6 +901,20 @@ function errorMessage(error: unknown): string {
   border-left: 1px solid var(--app-border);
   background: var(--app-surface-muted);
 }
+.terminal-tab-add {
+  width: 29px;
+  height: 27px;
+  flex: 0 0 29px;
+  margin: 0 2px;
+  padding: 0;
+  border-radius: 6px;
+  color: var(--app-text-muted);
+}
+.terminal-tab-add:hover,
+.terminal-tab-add:focus-visible {
+  color: var(--app-text);
+  background: var(--app-hover);
+}
 .terminal-tabs__actions :deep(.tab-action) {
   width: 27px;
   height: 27px;
@@ -848,51 +933,8 @@ function errorMessage(error: unknown): string {
   min-height: 0;
   display: flex;
 }
-:global(.terminal-shortcuts-popover) {
-  border-color: var(--app-border) !important;
-  background: var(--app-surface-raised) !important;
-}
-.shortcut-sheet {
-  display: flex;
-  flex-direction: column;
-}
-.shortcut-sheet > header {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  padding: 2px 2px 9px;
-  border-bottom: 1px solid var(--app-border);
-}
-.shortcut-sheet > header strong {
-  color: var(--app-text);
-  font-size: 13px;
-}
-.shortcut-sheet > header small {
-  color: var(--app-text-muted);
-  font-size: 11px;
-}
-.shortcut-row {
-  min-height: 30px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  border-bottom: 1px solid color-mix(in srgb, var(--app-border) 65%, transparent);
-  color: var(--app-text-secondary);
-  font-size: 11px;
-}
-.shortcut-row:last-child {
-  border-bottom: 0;
-}
-.shortcut-row kbd {
-  padding: 2px 6px;
-  border: 1px solid var(--app-border-strong);
-  border-bottom-width: 2px;
-  border-radius: 4px;
-  color: var(--app-text-muted);
-  background: var(--app-surface-muted);
-  font-family: inherit;
-  font-size: 10px;
-  white-space: nowrap;
+:global(.terminal-new-session-menu .el-dropdown-menu__item) {
+  min-width: 180px;
+  gap: 8px;
 }
 </style>
