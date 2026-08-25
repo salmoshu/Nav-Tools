@@ -152,25 +152,31 @@ export class IapUpgradeService {
   private async performHandshake(fileSize: number, config: IapProtocolConfig): Promise<void> {
     const image = createIapImageInfo(fileSize, config.packageSize)
     const frame = buildIapAskFrame(image, config)
-    for (let attempt = 0; attempt <= config.maxRetries; attempt++) {
+    // 设备可能处于「进 BootLoader → 等待握手 → 超时重启」的循环中，监听窗口可能只有几秒。
+    // 若每个超时周期只发一帧，很容易恰好错过窗口；因此在总预算内以固定间隔持续重发，
+    // 与官方烧录工具的行为一致（其日志中能看到设备重复应答握手帧）。
+    const totalBudgetMs = config.timeoutMs * (config.maxRetries + 1)
+    const resendIntervalMs = Math.min(500, config.timeoutMs)
+    const deadline = Date.now() + totalBudgetMs
+    this.log('[IAP] 请求升级中...')
+    for (;;) {
       this.ensureActive()
-      if (attempt > 0) {
-        this.snapshot.retryCount++
-        this.snapshot.timeoutRetryCount++
-        this.log(`[IAP] 握手超时，重试 ${attempt}/${config.maxRetries}`)
-      } else {
-        this.log('[IAP] 请求升级中...')
-      }
       await this.serial.sendBuffer(frame)
+      const remaining = deadline - Date.now()
+      if (remaining <= 0) throw new IapTimeoutError('等待设备应答超时')
       try {
         await this.waitForFrame(
           (candidate) => matchesCommand(candidate, config.askAckCommandHex, config),
-          config.timeoutMs,
+          Math.min(resendIntervalMs, remaining),
         )
         this.log('[IAP] 收到握手应答')
         return
       } catch (error) {
-        if (!(error instanceof IapTimeoutError) || attempt >= config.maxRetries) throw error
+        if (!(error instanceof IapTimeoutError)) throw error
+        this.snapshot.retryCount++
+        this.snapshot.timeoutRetryCount++
+        this.emitState()
+        if (deadline - Date.now() <= 0) throw new IapTimeoutError('等待设备应答超时')
       }
     }
   }
