@@ -3,11 +3,16 @@ import { BrowserWindow, dialog, ipcMain } from 'electron'
 import type {
   PortForwardRule,
   SshConnectionProfile,
+  SshConnectionSecrets,
   TerminalCreateRequest,
 } from '../../src/core/terminal/TerminalTypes'
+import type { TerminalCredentialService } from './services/TerminalCredentialService'
 import type { TerminalService } from './services/TerminalService'
 
-export function registerTerminalIpc(service: TerminalService): void {
+export function registerTerminalIpc(
+  service: TerminalService,
+  credentials: TerminalCredentialService,
+): void {
   ipcMain.handle('terminal-capabilities', () => service.getCapabilities())
   ipcMain.handle('terminal-session-list', () => service.listSessions())
   ipcMain.handle('terminal-session-attach', (_event, sessionId: string) =>
@@ -15,6 +20,9 @@ export function registerTerminalIpc(service: TerminalService): void {
   )
   ipcMain.handle('terminal-session-create', (_event, request: TerminalCreateRequest) =>
     service.create(request),
+  )
+  ipcMain.handle('terminal-session-create-cancel', (_event, requestId: string) =>
+    service.cancelCreate(requestId),
   )
   ipcMain.handle(
     'terminal-session-clone',
@@ -37,6 +45,17 @@ export function registerTerminalIpc(service: TerminalService): void {
       service.respondToHostKey(request.requestId, request.accepted),
   )
   ipcMain.handle('terminal-ssh-config-list', () => service.listSshConfigProfiles())
+  ipcMain.handle('terminal-credential-load', (_event, profileId: string) =>
+    credentials.load(profileId),
+  )
+  ipcMain.handle(
+    'terminal-credential-save',
+    (_event, request: { profileId: string; secrets: SshConnectionSecrets }) =>
+      credentials.save(request.profileId, request.secrets),
+  )
+  ipcMain.handle('terminal-credential-remove', (_event, profileId: string) =>
+    credentials.remove(profileId),
+  )
 
   ipcMain.handle('terminal-sftp-list', (_event, request: { sessionId: string; path: string }) =>
     service.listSftp(request.sessionId, request.path),

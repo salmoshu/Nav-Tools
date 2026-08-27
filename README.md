@@ -19,7 +19,7 @@ Nav-Tools 是一个基于 Electron + Vue 3 的机器人开发调试工作台。�
 - **统一数据源管理**：`Input` 集中配置文件、串口、TCP、UDP、Camera RTSP 地址以及 Raw、JSON、NMEA 解析方式，并持久化连接参数。
 - **RTSP 相机播放**：Camera Video 使用 `Input` 中的 RTSP 数据源和内置 FFmpeg，支持播放/暂停、UDP/TCP 自动回退、连接状态提示、画面缩放和平移。
 - **通用 IAP 升级**：Raw Messages 复用当前串口执行固件升级，内置 IGK IAP 模板，并支持结构化协议配置、校验算法、模板导入导出、失败重试及串口恢复。
-- **集成终端**：支持本地 Shell、PowerShell、CMD、Git Bash、WSL 和 SSH；提供终端类型菜单、可恢复标签页与递归分屏、可拉伸 SFTP 面板、断线原位重连及 SSH 本地、远程、SOCKS 端口转发。
+- **集成终端**：支持本地 Shell、PowerShell、CMD、Git Bash、WSL 和 SSH；提供可拖拽及可恢复标签页、递归分屏、Tab 级可拉伸 SFTP 面板、底部断线重连及 SSH 本地、远程、SOCKS 端口转发。
 - **友好的弹框交互**：弹框可使用 `Esc` 关闭，也可点击遮罩区域关闭。
 - **主题支持**：支持跟随系统、浅色和深色三种主题模式。
 
@@ -93,11 +93,11 @@ pnpm run dev
 ### Terminal
 
 1. 将 `Terminal` 添加到任意应用；点击标签栏末尾的 `+` 可直接选择本地 Shell、WSL、SSH 或空终端。窗格右上角提供独立的向右和向下拆分按钮。
-2. Windows 支持 PowerShell、CMD、已检测到的 Git Bash 和 WSL 发行版；Linux/macOS 使用系统 Shell。SSH 支持密码、私钥/口令和 SSH Agent，连接配置不会保存密码或口令。
+2. Windows 支持 PowerShell、CMD、已检测到的 Git Bash 和 WSL 发行版；Linux/macOS 使用系统 Shell。SSH 支持密码、私钥/口令和 SSH Agent，新连接首选密码认证；启用“安全记住密码/口令”后，凭据由操作系统安全存储加密保存。
 3. SSH 首次连接会确认并记录主机指纹，指纹变更时会阻止连接。Nav-Tools 也会读取 `~/.ssh/config` 中的 `Host`、`HostName`、`User`、`Port`、`IdentityFile` 和 `ProxyJump`。
-4. SSH 会话可打开 SFTP 面板并拖动边缘调整宽度，进行上传、下载、新建目录、重命名和删除；端口转发支持 Local (`-L`)、Remote (`-R`) 和 SOCKS (`-D`) 多规则配置。
-5. 标签页、活动标签、递归分屏布局和终端类型会持久化。重启后本地 Shell/WSL 会自动恢复；SSH 会保留连接配置并要求重新认证，不保存密码或口令。
-6. 会话断开或异常退出后，原窗格会显示重连入口；快捷键可在“设置 → 快捷键 → 终端”中修改并恢复默认。
+4. 每个标签共享一个 SFTP 面板，可从任意 SSH 窗格打开并拖动边缘调整宽度，进行上传、下载、新建目录、重命名和删除；端口转发在 SSH 设置中集中配置，支持 Local (`-L`)、Remote (`-R`) 和 SOCKS (`-D`) 多规则。
+5. 标签页支持拖拽换位；标签、活动标签、递归分屏布局和终端类型会持久化。重启后本地 Shell/WSL 会自动恢复；SSH 会保留连接配置，并在已安全记住凭据时自动填充认证信息。
+6. 选中文字后右键即可复制，无选区时右键粘贴。会话断开或异常退出后，终端底部会显示重连入口；SSH 正在连接时可直接中断。快捷键可在“设置 → 快捷键 → 终端”中修改并恢复默认。
 
 > 关闭活动窗格、标签页或整个 Terminal 组件前会要求确认；确认后会终止关联 Shell、SSH、SFTP 传输和端口转发。
 

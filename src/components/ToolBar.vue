@@ -47,7 +47,9 @@
         "
         :title="
           logRecordingActive
-            ? (logRecordingPath ? t('app.toolbar.stopRecordPath', { v: logRecordingPath }) : t('app.toolbar.stopRecord'))
+            ? logRecordingPath
+              ? t('app.toolbar.stopRecordPath', { v: logRecordingPath })
+              : t('app.toolbar.stopRecord')
             : t('app.toolbar.recordLog')
         "
         :aria-pressed="logRecordingActive"
@@ -177,7 +179,9 @@
           <div class="input-group">
             <span class="input-label">{{ t('app.toolbar.filePath') }}</span>
             <el-input v-model="filePath" :placeholder="t('app.toolbar.filePathPlaceholder')" />
-            <el-button type="default" @click="triggerFileSelection">{{ t('app.toolbar.selectFile') }}</el-button>
+            <el-button type="default" @click="triggerFileSelection">{{
+              t('app.toolbar.selectFile')
+            }}</el-button>
           </div>
           <div class="input-group compact-input-group">
             <span class="input-label">{{ t('app.toolbar.replaySpeed') }}</span>
@@ -272,8 +276,12 @@
           <div class="input-group">
             <span class="input-label">
               {{ t('app.toolbar.port') }}
-              <el-button @click="searchSerialPorts" class="icon-only-refresh">
-                <el-icon><Refresh /></el-icon>
+              <el-button
+                class="icon-only-refresh"
+                :disabled="serialPortsRefreshing"
+                @click="refreshSerialPorts"
+              >
+                <el-icon :class="{ 'is-refreshing': serialPortsRefreshing }"><Refresh /></el-icon>
               </el-button>
             </span>
             <el-select
@@ -385,7 +393,9 @@
             <span class="source-tab-copy">
               <strong
                 ><span class="tab-name-full">{{ t('app.toolbar.networkTab') }}</span
-                ><span class="tab-name-compact">{{ t('app.toolbar.networkTabShort') }}</span></strong
+                ><span class="tab-name-compact">{{
+                  t('app.toolbar.networkTabShort')
+                }}</span></strong
               >
               <small>TCP / UDP</small>
             </span>
@@ -458,7 +468,6 @@
           </div>
         </div>
       </el-tab-pane>
-
     </el-tabs>
     <template #footer>
       <el-button @click="showInputDialog = false">{{ t('app.cancel') }}</el-button>
@@ -493,16 +502,13 @@ import {
   ElCheckbox,
   ElIcon,
 } from 'element-plus'
-import {
-  Connection,
-  Download,
-  FolderOpened,
-  Monitor,
-  Refresh,
-} from '@element-plus/icons-vue'
+import { Connection, Download, FolderOpened, Monitor, Refresh } from '@element-plus/icons-vue'
 import { useApplicationSelector } from '@/composables/useApplicationSelector'
 import { getPanelIconComponent } from '@/settings/panelIcons'
-import { textDataParserOptions, textDataParserCascaderOptions } from '@/composables/useDataSourceManager'
+import {
+  textDataParserOptions,
+  textDataParserCascaderOptions,
+} from '@/composables/useDataSourceManager'
 import { useFileTimeline } from '@/composables/useFileTimeline'
 import FileTimelineControl from '@/components/FileTimelineControl.vue'
 import { createRecordRegex } from '@/core/data/TextRecordParser'
@@ -582,6 +588,20 @@ const {
   logRecordingPath,
   toggleLogRecording,
 } = deviceInstance
+const serialPortsRefreshing = ref(false)
+
+async function refreshSerialPorts(): Promise<void> {
+  if (serialPortsRefreshing.value) return
+  serialPortsRefreshing.value = true
+  const startedAt = performance.now()
+  try {
+    await searchSerialPorts()
+  } finally {
+    const remaining = Math.max(0, 420 - (performance.now() - startedAt))
+    if (remaining) await new Promise((resolve) => window.setTimeout(resolve, remaining))
+    serialPortsRefreshing.value = false
+  }
+}
 
 const replaySpeedOptions = [0.1, 0.2, 0.5, 1, 2, 5, 10]
 
@@ -1950,5 +1970,13 @@ onUnmounted(() => {
 
 .icon-only-refresh .el-icon {
   font-size: 16px !important;
+}
+.icon-only-refresh .el-icon.is-refreshing {
+  animation: serial-refresh-spin 0.65s linear infinite;
+}
+@keyframes serial-refresh-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 </style>

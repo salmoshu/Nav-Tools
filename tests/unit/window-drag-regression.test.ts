@@ -28,7 +28,11 @@ describe('frameless window dragging regression', () => {
       'const MESSAGE_TOP_OFFSET = APP_HEADER_HEIGHT + MESSAGE_HEADER_GAP',
     )
     expect(rendererMain).toContain('messageConfig.offset = MESSAGE_TOP_OFFSET')
+    expect(rendererMain).toContain('messageConfig.showClose = true')
     expect(rendererMain).toMatch(/message:\s*\{\s*offset:\s*MESSAGE_TOP_OFFSET/)
+    expect(rendererMain).toMatch(
+      /message:\s*\{\s*offset:\s*MESSAGE_TOP_OFFSET,\s*showClose:\s*true/,
+    )
     expect(globalStyle).toMatch(/\.el-message\s*\{\s*z-index:\s*9100 !important/)
   })
 

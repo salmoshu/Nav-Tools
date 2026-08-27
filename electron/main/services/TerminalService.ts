@@ -73,6 +73,7 @@ export class TerminalService {
   private readonly sessions = new Map<string, TerminalSession>()
   private readonly connections = new Map<string, SshConnection>()
   private readonly pendingHostKeys = new Map<string, PendingHostKey>()
+  private readonly pendingCreates = new Map<string, AbortController>()
   private knownHosts: Record<string, string> | undefined
   private capabilitiesCache: TerminalCapabilities | undefined
 
@@ -136,7 +137,24 @@ export class TerminalService {
     if (!Number.isInteger(request.cols) || !Number.isInteger(request.rows)) {
       throw new Error('Terminal dimensions are invalid')
     }
-    return request.kind === 'ssh' ? this.createSshSession(request) : this.createPtySession(request)
+    if (request.kind !== 'ssh') return this.createPtySession(request)
+    const controller = new AbortController()
+    if (request.requestId) this.pendingCreates.set(request.requestId, controller)
+    try {
+      return await this.createSshSession(request, controller.signal)
+    } finally {
+      if (request.requestId && this.pendingCreates.get(request.requestId) === controller) {
+        this.pendingCreates.delete(request.requestId)
+      }
+    }
+  }
+
+  public cancelCreate(requestId: string): boolean {
+    const controller = this.pendingCreates.get(requestId)
+    if (!controller) return false
+    this.pendingCreates.delete(requestId)
+    controller.abort()
+    return true
   }
 
   public async clone(sessionId: string, cols: number, rows: number): Promise<TerminalSessionInfo> {
@@ -175,6 +193,8 @@ export class TerminalService {
   }
 
   public async closeAll(): Promise<void> {
+    for (const controller of this.pendingCreates.values()) controller.abort()
+    this.pendingCreates.clear()
     await Promise.all([...this.sessions.keys()].map((id) => this.close(id)))
     for (const pending of this.pendingHostKeys.values()) {
       clearTimeout(pending.timeout)
@@ -339,12 +359,15 @@ export class TerminalService {
     return { ...info }
   }
 
-  private async createSshSession(request: TerminalCreateRequest): Promise<TerminalSessionInfo> {
+  private async createSshSession(
+    request: TerminalCreateRequest,
+    signal: AbortSignal,
+  ): Promise<TerminalSessionInfo> {
     const profile = request.sshProfile
     if (!profile) throw new Error('SSH connection profile is required')
-    const connection = await this.openSshConnection(profile, request.sshSecrets ?? {}, request)
+    const connection = await this.openSshConnection(profile, request.sshSecrets ?? {}, signal)
     try {
-      const session = await this.openSshShell(connection, request.cols, request.rows)
+      const session = await this.openSshShell(connection, request.cols, request.rows, signal)
       void connection.forwarder.startEnabled(profile.forwards)
       return session
     } catch (error) {
@@ -358,22 +381,29 @@ export class TerminalService {
   private async openSshConnection(
     profile: SshConnectionProfile,
     secrets: SshConnectionSecrets,
-    request: TerminalCreateRequest,
+    signal: AbortSignal,
   ): Promise<SshConnection> {
     validateSshProfile(profile)
     let jumpClient: Client | undefined
     let sock: ClientChannel | undefined
     if (profile.proxyJump.trim()) {
       const jumpProfile = await this.resolveJumpProfile(profile.proxyJump, profile)
-      jumpClient = await this.connectClient(jumpProfile, secrets)
-      sock = await new Promise<ClientChannel>((resolve, reject) =>
-        jumpClient?.forwardOut('127.0.0.1', 0, profile.host, profile.port, (error, stream) =>
-          error ? reject(error) : resolve(stream),
-        ),
-      )
+      jumpClient = await this.connectClient(jumpProfile, secrets, undefined, signal)
+      try {
+        sock = await openForwardSocket(jumpClient, profile, signal)
+      } catch (error) {
+        jumpClient.end()
+        throw error
+      }
     }
 
-    const client = await this.connectClient(profile, secrets, sock)
+    let client: Client
+    try {
+      client = await this.connectClient(profile, secrets, sock, signal)
+    } catch (error) {
+      jumpClient?.end()
+      throw error
+    }
     const connectionId = createTerminalId('ssh-connection')
     const connection: SshConnection = {
       id: connectionId,
@@ -405,33 +435,49 @@ export class TerminalService {
     profile: SshConnectionProfile,
     secrets: SshConnectionSecrets,
     sock?: ClientChannel,
+    signal?: AbortSignal,
   ): Promise<Client> {
     const options = await this.createConnectConfig(profile, secrets, sock)
+    throwIfAborted(signal)
     return new Promise((resolve, reject) => {
       const client = new Client()
       let settled = false
-      const timeout = setTimeout(() => {
-        if (settled) return
-        settled = true
-        client.destroy()
-        reject(new Error(`SSH connection to ${profile.host}:${profile.port} timed out`))
-      }, SSH_CONNECT_TIMEOUT_MS)
+      const cleanup = () => {
+        clearTimeout(timeout)
+        signal?.removeEventListener('abort', abort)
+      }
       const fail = (error: Error) => {
         if (settled) return
         settled = true
-        clearTimeout(timeout)
+        cleanup()
         reject(error)
       }
+      const abort = () => {
+        fail(connectionCancelledError())
+        client.destroy()
+      }
+      const timeout = setTimeout(() => {
+        if (settled) return
+        settled = true
+        cleanup()
+        client.destroy()
+        reject(new Error(`SSH connection to ${profile.host}:${profile.port} timed out`))
+      }, SSH_CONNECT_TIMEOUT_MS)
       client.once('ready', () => {
         if (settled) return
         settled = true
-        clearTimeout(timeout)
+        cleanup()
         resolve(client)
       })
       client.once('error', fail)
       client.once('close', () =>
         fail(new Error(`SSH connection to ${profile.host}:${profile.port} closed before ready`)),
       )
+      signal?.addEventListener('abort', abort, { once: true })
+      if (signal?.aborted) {
+        abort()
+        return
+      }
       try {
         client.connect(options)
       } catch (error) {
@@ -510,16 +556,34 @@ export class TerminalService {
     connection: SshConnection,
     cols: number,
     rows: number,
+    signal?: AbortSignal,
   ): Promise<TerminalSessionInfo> {
+    throwIfAborted(signal)
     const stream = await new Promise<ClientChannel>((resolve, reject) => {
       let settled = false
+      const cleanup = () => {
+        clearTimeout(timeout)
+        signal?.removeEventListener('abort', abort)
+      }
+      const abort = () => {
+        if (settled) return
+        settled = true
+        cleanup()
+        reject(connectionCancelledError())
+      }
       const timeout = setTimeout(() => {
         if (settled) return
         settled = true
+        cleanup()
         reject(
           new Error(`SSH shell on ${connection.profile.host}:${connection.profile.port} timed out`),
         )
       }, SSH_CHANNEL_TIMEOUT_MS)
+      signal?.addEventListener('abort', abort, { once: true })
+      if (signal?.aborted) {
+        abort()
+        return
+      }
       connection.client.shell(
         { term: 'xterm-256color', cols: Math.max(2, cols), rows: Math.max(1, rows) },
         (error, channel) => {
@@ -528,7 +592,7 @@ export class TerminalService {
             return
           }
           settled = true
-          clearTimeout(timeout)
+          cleanup()
           if (error) reject(error)
           else resolve(channel)
         },
@@ -787,6 +851,49 @@ function cleanEnvironment(environment: Record<string, string | undefined>): Reco
 
 function validCwd(cwd?: string): string {
   return cwd?.trim() || os.homedir()
+}
+
+function connectionCancelledError(): Error {
+  const error = new Error('SSH connection cancelled')
+  error.name = 'AbortError'
+  return error
+}
+
+function throwIfAborted(signal?: AbortSignal): void {
+  if (signal?.aborted) throw connectionCancelledError()
+}
+
+function openForwardSocket(
+  client: Client,
+  profile: SshConnectionProfile,
+  signal: AbortSignal,
+): Promise<ClientChannel> {
+  throwIfAborted(signal)
+  return new Promise((resolve, reject) => {
+    let settled = false
+    const cleanup = () => signal.removeEventListener('abort', abort)
+    const abort = () => {
+      if (settled) return
+      settled = true
+      cleanup()
+      reject(connectionCancelledError())
+    }
+    signal.addEventListener('abort', abort, { once: true })
+    if (signal.aborted) {
+      abort()
+      return
+    }
+    client.forwardOut('127.0.0.1', 0, profile.host, profile.port, (error, stream) => {
+      if (settled) {
+        stream?.close()
+        return
+      }
+      settled = true
+      cleanup()
+      if (error) reject(error)
+      else resolve(stream)
+    })
+  })
 }
 
 async function findGitBash(): Promise<string | undefined> {

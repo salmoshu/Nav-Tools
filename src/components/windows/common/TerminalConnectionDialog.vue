@@ -209,15 +209,22 @@
 
     <template #footer>
       <div class="dialog-footer">
-        <el-checkbox
-          v-model="saveConnection"
-          :disabled="connecting || form.source === 'ssh-config'"
-        >
-          {{ t('common.terminal.saveConnectionNoSecrets') }}
-        </el-checkbox>
+        <div class="dialog-footer__options">
+          <el-checkbox
+            v-model="saveConnection"
+            :disabled="connecting || form.source === 'ssh-config'"
+          >
+            {{ t('common.terminal.saveConnection') }}
+          </el-checkbox>
+          <el-checkbox v-model="rememberCredentials" :disabled="connecting">
+            {{ t('common.terminal.rememberCredentialsSecurely') }}
+          </el-checkbox>
+        </div>
         <div class="dialog-footer__actions">
-          <el-button :disabled="connecting" @click="visible = false">
-            {{ t('common.terminal.cancel') }}
+          <el-button @click="connecting ? interruptConnection() : (visible = false)">
+            {{
+              connecting ? t('common.terminal.interruptConnection') : t('common.terminal.cancel')
+            }}
           </el-button>
           <el-button
             v-if="selectedProfile?.source === 'nav-tools'"
@@ -260,7 +267,13 @@ const props = defineProps<{
 }>()
 const emit = defineEmits<{
   'update:modelValue': [value: boolean]
-  connect: [profile: SshConnectionProfile, secrets: SshConnectionSecrets, save: boolean]
+  connect: [
+    profile: SshConnectionProfile,
+    secrets: SshConnectionSecrets,
+    save: boolean,
+    remember: boolean,
+  ]
+  cancel: []
   remove: [id: string]
 }>()
 
@@ -274,6 +287,7 @@ const form = reactive<SshConnectionProfile>(createSshProfile())
 const password = ref('')
 const passphrase = ref('')
 const saveConnection = ref(true)
+const rememberCredentials = ref(true)
 const selectedProfile = computed(() =>
   props.profiles.find((profile) => profile.id === selectedId.value),
 )
@@ -298,10 +312,11 @@ function reset(): void {
   password.value = ''
   passphrase.value = ''
   saveConnection.value = true
+  rememberCredentials.value = true
   expandedSections.value = []
 }
 
-function loadSelected(id: string): void {
+async function loadSelected(id: string): Promise<void> {
   const profile = props.profiles.find((entry) => entry.id === id)
   if (!profile) {
     reset()
@@ -310,8 +325,17 @@ function loadSelected(id: string): void {
   Object.assign(form, cloneProfile(profile))
   password.value = ''
   passphrase.value = ''
+  rememberCredentials.value = true
   saveConnection.value = profile.source === 'nav-tools'
   expandedSections.value = profile.forwards.length ? ['forwarding'] : []
+  try {
+    const secrets = await window.ipcRenderer.invoke('terminal-credential-load', profile.id)
+    if (selectedId.value !== id || !secrets) return
+    password.value = typeof secrets.password === 'string' ? secrets.password : ''
+    passphrase.value = typeof secrets.passphrase === 'string' ? secrets.passphrase : ''
+  } catch {
+    // Secure storage can be unavailable on unsupported desktop sessions.
+  }
 }
 
 function addForward(kind: PortForwardKind): void {
@@ -335,7 +359,12 @@ function connect(): void {
     profile,
     { password: password.value || undefined, passphrase: passphrase.value || undefined },
     saveConnection.value,
+    rememberCredentials.value,
   )
+}
+
+function interruptConnection(): void {
+  emit('cancel')
 }
 
 function cloneProfile(profile: SshConnectionProfile): SshConnectionProfile {
@@ -367,12 +396,18 @@ watch(
       props.profiles.some((profile) => profile.id === props.preferredProfileId)
     ) {
       selectedId.value = props.preferredProfileId
-      loadSelected(props.preferredProfileId)
+      void loadSelected(props.preferredProfileId)
       return
     }
     if (!selectedId.value) reset()
   },
 )
+watch(saveConnection, (enabled) => {
+  if (!enabled && form.source === 'nav-tools') rememberCredentials.value = false
+})
+watch(rememberCredentials, (enabled) => {
+  if (enabled && form.source === 'nav-tools') saveConnection.value = true
+})
 </script>
 
 <style scoped>
@@ -621,11 +656,17 @@ watch(
   justify-content: space-between;
   gap: 18px;
 }
-.dialog-footer :deep(.el-checkbox) {
+.dialog-footer__options {
+  display: flex;
   min-width: 0;
-  margin-right: auto;
+  align-items: center;
+  gap: 12px;
 }
-.dialog-footer :deep(.el-checkbox__label) {
+.dialog-footer__options :deep(.el-checkbox) {
+  min-width: 0;
+  margin-right: 0;
+}
+.dialog-footer__options :deep(.el-checkbox__label) {
   overflow: hidden;
   color: var(--app-text-muted);
   font-size: 11px;
@@ -656,6 +697,7 @@ watch(
     flex-direction: column;
   }
   .forward-toolbar > div,
+  .dialog-footer__options,
   .dialog-footer__actions {
     flex-wrap: wrap;
   }

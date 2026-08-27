@@ -9,6 +9,49 @@ vi.mock('node-pty', () => ({ spawn: vi.fn() }))
 afterEach(() => vi.useRealTimers())
 
 describe('TerminalService SSH timeouts', () => {
+  it('aborts an in-flight SSH creation request by request id', async () => {
+    const service = new TerminalService(
+      path.join(tmpdir(), `nav-tools-cancel-create-${Date.now()}`),
+      () => undefined,
+    )
+    ;(
+      service as unknown as {
+        createSshSession(request: unknown, signal: AbortSignal): Promise<never>
+      }
+    ).createSshSession = vi.fn(
+      (_request: unknown, signal: AbortSignal) =>
+        new Promise((_, reject) =>
+          signal.addEventListener('abort', () =>
+            reject(new DOMException('cancelled', 'AbortError')),
+          ),
+        ),
+    )
+
+    const pending = service.create({
+      requestId: 'connect-request',
+      kind: 'ssh',
+      cols: 80,
+      rows: 24,
+      sshProfile: {
+        id: 'robot',
+        name: 'Robot',
+        source: 'nav-tools',
+        host: '192.0.2.10',
+        port: 22,
+        username: 'root',
+        authMethod: 'password',
+        privateKeyPath: '',
+        proxyJump: '',
+        initialDirectory: '',
+        forwards: [],
+      },
+    })
+
+    expect(service.cancelCreate('connect-request')).toBe(true)
+    await expect(pending).rejects.toMatchObject({ name: 'AbortError' })
+    expect(service.cancelCreate('connect-request')).toBe(false)
+  })
+
   it('ignores a late resize after its terminal session has already been removed', () => {
     const service = new TerminalService(
       path.join(tmpdir(), `nav-tools-late-resize-${Date.now()}`),

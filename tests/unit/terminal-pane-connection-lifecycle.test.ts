@@ -7,6 +7,9 @@ import type { TerminalSessionInfo } from '@/core/terminal/TerminalTypes'
 
 const xtermHarness = vi.hoisted(() => ({
   keyHandler: undefined as ((event: KeyboardEvent) => boolean) | undefined,
+  dataHandler: undefined as ((data: string) => void) | undefined,
+  selection: '',
+  respondToCursorQuery: false,
   paste: vi.fn(),
 }))
 
@@ -16,7 +19,9 @@ vi.mock('@xterm/xterm', () => ({
     rows = 24
     loadAddon() {}
     open() {}
-    onData() {}
+    onData(handler: (data: string) => void) {
+      xtermHarness.dataHandler = handler
+    }
     attachCustomKeyEventHandler(handler: (event: KeyboardEvent) => boolean) {
       xtermHarness.keyHandler = handler
     }
@@ -24,7 +29,13 @@ vi.mock('@xterm/xterm', () => ({
       xtermHarness.paste(text)
     }
     getSelection() {
-      return ''
+      return xtermHarness.selection
+    }
+    write(data: string, callback?: () => void) {
+      if (xtermHarness.respondToCursorQuery && data.includes('\x1b[6n')) {
+        xtermHarness.dataHandler?.('\x1b[1;33R')
+      }
+      callback?.()
     }
     focus() {}
     reset() {}
@@ -54,35 +65,39 @@ vi.mock('../../src/components/windows/common/TerminalConnectionDialog.vue', asyn
         connectionError: String,
         profiles: Array,
       },
-      emits: ['update:modelValue', 'connect', 'remove'],
+      emits: ['update:modelValue', 'connect', 'cancel', 'remove'],
       setup(props, { emit }) {
         return () =>
-          h(
-            'button',
-            {
-              id: 'ssh-connect-stub',
-              onClick: () =>
-                emit(
-                  'connect',
-                  {
-                    id: 'ssh-test',
-                    name: 'SSH Test',
-                    source: 'nav-tools',
-                    host: '192.0.2.10',
-                    port: 22,
-                    username: 'root',
-                    authMethod: 'password',
-                    privateKeyPath: '',
-                    proxyJump: '',
-                    initialDirectory: '',
-                    forwards: [],
-                  },
-                  { password: 'test-only' },
-                  false,
-                ),
-            },
-            props.connecting ? 'connecting' : props.connectionError || 'idle',
-          )
+          h('div', [
+            h(
+              'button',
+              {
+                id: 'ssh-connect-stub',
+                onClick: () =>
+                  emit(
+                    'connect',
+                    {
+                      id: 'ssh-test',
+                      name: 'SSH Test',
+                      source: 'nav-tools',
+                      host: '192.0.2.10',
+                      port: 22,
+                      username: 'root',
+                      authMethod: 'password',
+                      privateKeyPath: '',
+                      proxyJump: '',
+                      initialDirectory: '',
+                      forwards: [],
+                    },
+                    { password: 'test-only' },
+                    false,
+                    true,
+                  ),
+              },
+              props.connecting ? 'connecting' : props.connectionError || 'idle',
+            ),
+            h('button', { id: 'ssh-cancel-stub', onClick: () => emit('cancel') }, 'cancel'),
+          ])
       },
     }),
   }
@@ -106,6 +121,9 @@ describe('TerminalPane connection lifecycle', () => {
     vi.useFakeTimers()
     vi.stubGlobal('ResizeObserver', ResizeObserverStub)
     xtermHarness.keyHandler = undefined
+    xtermHarness.dataHandler = undefined
+    xtermHarness.selection = ''
+    xtermHarness.respondToCursorQuery = false
     xtermHarness.paste.mockReset()
     Object.defineProperty(window, 'ipcRenderer', {
       configurable: true,
@@ -169,6 +187,54 @@ describe('TerminalPane connection lifecycle', () => {
 
     expect(connectButton.textContent).not.toBe('connecting')
     expect(connectButton.textContent).not.toBe('idle')
+    app.unmount()
+  })
+
+  it('interrupts an SSH request that is still connecting', async () => {
+    const host = document.createElement('div')
+    document.body.append(host)
+    const app = createApp(TerminalPane, {
+      pane: createEmptyPane(),
+      focused: true,
+      paneCount: 1,
+      expanded: false,
+      capabilities: { platform: 'win32', localShells: [], wslDistros: [], sshAvailable: true },
+      profiles: [],
+    })
+    for (const name of [
+      'ElAlert',
+      'ElButton',
+      'ElDialog',
+      'ElDropdown',
+      'ElDropdownItem',
+      'ElDropdownMenu',
+      'ElIcon',
+      'ElInput',
+      'ElInputNumber',
+      'ElOption',
+      'ElSelect',
+      'ElSwitch',
+      'ElTooltip',
+      'ElEmpty',
+    ]) {
+      app.component(name, Passthrough)
+    }
+    app.mount(host)
+
+    ;(host.querySelector('.launch-card--ssh') as HTMLButtonElement).click()
+    await nextTick()
+    ;(host.querySelector('#ssh-connect-stub') as HTMLButtonElement).click()
+    await nextTick()
+    ;(host.querySelector('#ssh-cancel-stub') as HTMLButtonElement).click()
+    await nextTick()
+
+    expect(window.ipcRenderer.invoke).toHaveBeenCalledWith(
+      'terminal-session-create-cancel',
+      expect.stringMatching(/^terminal-create-/),
+    )
+    expect((host.querySelector('#ssh-connect-stub') as HTMLButtonElement).textContent).not.toBe(
+      'connecting',
+    )
     app.unmount()
   })
 
@@ -258,7 +324,60 @@ describe('TerminalPane connection lifecycle', () => {
     app.unmount()
   })
 
-  it('pastes clipboard text into the active Windows terminal with Ctrl+V', async () => {
+  it('does not send device-status responses generated while replaying scrollback', async () => {
+    xtermHarness.respondToCursorQuery = true
+    window.ipcRenderer.invoke = vi.fn((channel: string) => {
+      if (channel === 'terminal-session-attach') {
+        return Promise.resolve({
+          id: 'local-session',
+          kind: 'local',
+          title: 'PowerShell',
+          status: 'ready',
+          scrollback: 'prompt\x1b[6n',
+        })
+      }
+      return Promise.resolve()
+    })
+    const host = document.createElement('div')
+    document.body.append(host)
+    const app = createApp(TerminalPane, {
+      pane: { ...createEmptyPane(), sessionId: 'local-session' },
+      focused: true,
+      paneCount: 1,
+      expanded: false,
+      capabilities: { platform: 'win32', localShells: [], wslDistros: [], sshAvailable: true },
+      profiles: [],
+    })
+    for (const name of [
+      'ElAlert',
+      'ElButton',
+      'ElDialog',
+      'ElDropdown',
+      'ElDropdownItem',
+      'ElDropdownMenu',
+      'ElEmpty',
+      'ElIcon',
+      'ElInput',
+      'ElInputNumber',
+      'ElOption',
+      'ElSelect',
+      'ElSwitch',
+      'ElTooltip',
+    ]) {
+      app.component(name, Passthrough)
+    }
+    app.mount(host)
+    await Promise.resolve()
+    await nextTick()
+
+    expect(window.ipcRenderer.invoke).not.toHaveBeenCalledWith(
+      'terminal-session-write',
+      expect.objectContaining({ data: '\x1b[1;33R' }),
+    )
+    app.unmount()
+  })
+
+  it('copies a selection on right click and pastes on right click without a selection', async () => {
     window.ipcRenderer.invoke = vi.fn((channel: string) =>
       channel === 'clipboard-read-text' ? Promise.resolve('Get-Process') : Promise.resolve(),
     )
@@ -292,17 +411,60 @@ describe('TerminalPane connection lifecycle', () => {
     }
     app.mount(host)
 
-    const event = new KeyboardEvent('keydown', {
-      key: 'v',
-      code: 'KeyV',
-      ctrlKey: true,
-    })
-    expect(xtermHarness.keyHandler?.(event)).toBe(false)
+    const terminalHost = host.querySelector('.xterm-host') as HTMLElement
+    xtermHarness.selection = 'selected output'
+    terminalHost.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }))
+    await Promise.resolve()
+    expect(window.ipcRenderer.invoke).toHaveBeenCalledWith(
+      'clipboard-write-text',
+      'selected output',
+    )
+
+    xtermHarness.selection = ''
+    terminalHost.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }))
     await Promise.resolve()
     await Promise.resolve()
 
     expect(window.ipcRenderer.invoke).toHaveBeenCalledWith('clipboard-read-text')
     expect(xtermHarness.paste).toHaveBeenCalledWith('Get-Process')
+    app.unmount()
+  })
+
+  it('does not manually paste for Ctrl+V so xterm handles the shortcut only once', async () => {
+    const host = document.createElement('div')
+    document.body.append(host)
+    const app = createApp(TerminalPane, {
+      pane: { ...createEmptyPane(), sessionId: 'local-session' },
+      focused: true,
+      paneCount: 1,
+      expanded: false,
+      capabilities: { platform: 'win32', localShells: [], wslDistros: [], sshAvailable: true },
+      profiles: [],
+    })
+    for (const name of [
+      'ElAlert',
+      'ElButton',
+      'ElDialog',
+      'ElDropdown',
+      'ElDropdownItem',
+      'ElDropdownMenu',
+      'ElEmpty',
+      'ElIcon',
+      'ElInput',
+      'ElInputNumber',
+      'ElOption',
+      'ElSelect',
+      'ElSwitch',
+      'ElTooltip',
+    ]) {
+      app.component(name, Passthrough)
+    }
+    app.mount(host)
+
+    const event = new KeyboardEvent('keydown', { key: 'v', code: 'KeyV', ctrlKey: true })
+    expect(xtermHarness.keyHandler?.(event)).toBe(true)
+    expect(window.ipcRenderer.invoke).not.toHaveBeenCalledWith('clipboard-read-text')
+    expect(xtermHarness.paste).not.toHaveBeenCalled()
     app.unmount()
   })
 

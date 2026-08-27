@@ -1,92 +1,108 @@
 <template>
   <div ref="workbenchElement" class="terminal-workbench">
     <div class="terminal-tabs">
-      <div class="terminal-tabs__strip" role="tablist">
-        <div
-          v-for="tab in tabs"
-          :key="tab.id"
-          class="terminal-tab"
-          :class="{ active: tab.id === activeTabId }"
-          role="tab"
-          :aria-selected="tab.id === activeTabId"
-          :tabindex="tab.id === activeTabId ? 0 : -1"
-          @click="activateTab(tab.id)"
-          @dblclick="beginRenameTab(tab)"
-          @mousedown.middle.prevent
-          @auxclick="closeTabWithMiddleClick($event, tab.id)"
-          @keydown.enter="activateTab(tab.id)"
-        >
-          <span class="tab-leading" :class="tabStatus(tab)" aria-hidden="true">
-            <i class="tab-status-dot"></i>
-          </span>
-          <input
-            v-if="renamingTabId === tab.id"
-            ref="renameInput"
-            v-model="renameValue"
-            class="tab-rename-input"
-            :aria-label="t('common.terminal.renameTab')"
-            @click.stop
-            @dblclick.stop
-            @blur="commitRenameTab(tab)"
-            @keydown="handleRenameKeydown($event, tab)"
-          />
-          <span v-else class="tab-label" :title="tabDisplayTitle(tab)">{{
-            tabDisplayTitle(tab)
-          }}</span>
-          <button
-            v-if="renamingTabId !== tab.id"
-            type="button"
-            class="tab-close"
-            :aria-label="t('common.terminal.closeTabShortcut')"
-            @click.stop="closeTab(tab.id)"
+      <draggable
+        v-model="tabs"
+        item-key="id"
+        tag="div"
+        class="terminal-tabs__strip"
+        role="tablist"
+        :animation="180"
+        :delay="100"
+        :delay-on-touch-only="true"
+        :disabled="Boolean(renamingTabId)"
+        filter=".tab-close, .tab-rename-input, .terminal-tab-add"
+        :prevent-on-filter="false"
+        ghost-class="terminal-tab--ghost"
+        drag-class="terminal-tab--dragging"
+      >
+        <template #item="{ element: tab }">
+          <div
+            class="terminal-tab"
+            :class="{ active: tab.id === activeTabId }"
+            role="tab"
+            :aria-selected="tab.id === activeTabId"
+            :tabindex="tab.id === activeTabId ? 0 : -1"
+            @click="activateTab(tab.id)"
+            @dblclick="beginRenameTab(tab)"
+            @mousedown.middle.prevent
+            @auxclick="closeTabWithMiddleClick($event, tab.id)"
+            @keydown.enter="activateTab(tab.id)"
           >
-            <el-icon><Close /></el-icon>
-          </button>
-        </div>
-        <el-dropdown
-          trigger="click"
-          placement="bottom-start"
-          popper-class="terminal-new-session-menu"
-          @command="addTerminalTab"
-        >
-          <el-button
-            text
-            class="terminal-tab-add"
-            :aria-label="t('common.terminal.newTabShortcut')"
-            :title="t('common.terminal.newTabShortcut')"
+            <span class="tab-leading" :class="tabStatus(tab)" aria-hidden="true">
+              <i class="tab-status-dot"></i>
+            </span>
+            <input
+              v-if="renamingTabId === tab.id"
+              ref="renameInput"
+              v-model="renameValue"
+              class="tab-rename-input"
+              :aria-label="t('common.terminal.renameTab')"
+              @click.stop
+              @dblclick.stop
+              @blur="commitRenameTab(tab)"
+              @keydown="handleRenameKeydown($event, tab)"
+            />
+            <span v-else class="tab-label" :title="tabDisplayTitle(tab)">{{
+              tabDisplayTitle(tab)
+            }}</span>
+            <button
+              v-if="renamingTabId !== tab.id"
+              type="button"
+              class="tab-close"
+              :aria-label="t('common.terminal.closeTabShortcut')"
+              @click.stop="closeTab(tab.id)"
+            >
+              <el-icon><Close /></el-icon>
+            </button>
+          </div>
+        </template>
+        <template #footer>
+          <el-dropdown
+            trigger="click"
+            placement="bottom-start"
+            popper-class="terminal-new-session-menu"
+            @command="addTerminalTab"
           >
-            <el-icon><Plus /></el-icon>
-          </el-button>
-          <template #dropdown>
-            <el-dropdown-menu>
-              <el-dropdown-item
-                v-for="shell in capabilities.localShells"
-                :key="`local-${shell.kind}`"
-                :command="`local:${shell.kind}`"
-              >
-                <el-icon><Monitor /></el-icon>
-                <span>{{ shell.label }}</span>
-              </el-dropdown-item>
-              <el-dropdown-item
-                v-for="distro in capabilities.wslDistros"
-                :key="`wsl-${distro}`"
-                :command="`wsl:${encodeURIComponent(distro)}`"
-              >
-                <el-icon><Platform /></el-icon>
-                <span>WSL · {{ distro }}</span>
-              </el-dropdown-item>
-              <el-dropdown-item v-if="capabilities.sshAvailable" command="ssh" divided>
-                <el-icon><Connection /></el-icon>
-                <span>SSH</span>
-              </el-dropdown-item>
-              <el-dropdown-item command="empty">
-                <el-icon><Plus /></el-icon>
-                <span>{{ t('common.terminal.emptyTerminal') }}</span>
-              </el-dropdown-item>
-            </el-dropdown-menu>
-          </template>
-        </el-dropdown>
-      </div>
+            <el-button
+              text
+              class="terminal-tab-add"
+              :aria-label="t('common.terminal.newTabShortcut')"
+              :title="t('common.terminal.newTabShortcut')"
+            >
+              <el-icon><Plus /></el-icon>
+            </el-button>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item
+                  v-for="shell in capabilities.localShells"
+                  :key="`local-${shell.kind}`"
+                  :command="`local:${shell.kind}`"
+                >
+                  <el-icon><Monitor /></el-icon>
+                  <span>{{ shell.label }}</span>
+                </el-dropdown-item>
+                <el-dropdown-item
+                  v-for="distro in capabilities.wslDistros"
+                  :key="`wsl-${distro}`"
+                  :command="`wsl:${encodeURIComponent(distro)}`"
+                >
+                  <el-icon><Platform /></el-icon>
+                  <span>WSL · {{ distro }}</span>
+                </el-dropdown-item>
+                <el-dropdown-item v-if="capabilities.sshAvailable" command="ssh" divided>
+                  <el-icon><Connection /></el-icon>
+                  <span>SSH</span>
+                </el-dropdown-item>
+                <el-dropdown-item command="empty">
+                  <el-icon><Plus /></el-icon>
+                  <span>{{ t('common.terminal.emptyTerminal') }}</span>
+                </el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
+        </template>
+      </draggable>
       <div class="terminal-tabs__actions">
         <el-tooltip :content="t('common.terminal.refreshSshConfig')" placement="bottom">
           <el-button text class="tab-action" @click="loadSshConfig">
@@ -97,25 +113,29 @@
     </div>
 
     <div v-if="activeTab && activeLayoutNode" class="terminal-tab-content">
-      <TerminalLayoutNodeComponent
-        :node="activeLayoutNode"
-        :focused-pane-id="activeFocusedPaneId"
-        :pane-count="activePaneCount"
-        :expanded-pane-id="activeExpandedPaneId"
-        :capabilities="capabilities"
-        :profiles="allProfiles"
-        :session-infos="sessionInfos"
-        :auto-open-ssh-pane-id="autoOpenSshPaneId"
-        @session="setPaneSession"
-        @focus="focusPane"
-        @expand="toggleExpandPane"
-        @resize="resizeSplit"
-        @split="splitPane"
-        @close="closePane"
-        @save-profile="saveProfile"
-        @remove-profile="removeProfile"
-        @ssh-dialog-opened="autoOpenSshPaneId = ''"
-      />
+      <TerminalSftpPanel v-if="activeSftpSessionId" :session-id="activeSftpSessionId" />
+      <div class="terminal-tab-content__layout">
+        <TerminalLayoutNodeComponent
+          :node="activeLayoutNode"
+          :focused-pane-id="activeFocusedPaneId"
+          :pane-count="activePaneCount"
+          :expanded-pane-id="activeExpandedPaneId"
+          :capabilities="capabilities"
+          :profiles="allProfiles"
+          :session-infos="sessionInfos"
+          :auto-open-ssh-pane-id="autoOpenSshPaneId"
+          @session="setPaneSession"
+          @focus="focusPane"
+          @expand="toggleExpandPane"
+          @resize="resizeSplit"
+          @split="splitPane"
+          @close="closePane"
+          @save-profile="saveProfile"
+          @remove-profile="removeProfile"
+          @ssh-dialog-opened="autoOpenSshPaneId = ''"
+          @toggle-sftp="toggleTabSftp"
+        />
+      </div>
     </div>
   </div>
 </template>
@@ -124,6 +144,7 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { Close, Connection, Monitor, Platform, Plus, Refresh } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import draggable from 'vuedraggable'
 import { t } from '@/i18n'
 import {
   createEmptyPane,
@@ -158,6 +179,7 @@ import {
 } from '@/core/terminal/TerminalTypes'
 import { TerminalProfileStorage } from '@/core/terminal/TerminalProfileStorage'
 import TerminalLayoutNodeComponent from './TerminalLayoutNode.vue'
+import TerminalSftpPanel from './TerminalSftpPanel.vue'
 
 const SESSION_CREATE_TIMEOUT_MS = 20_000
 const profileStorage = new TerminalProfileStorage(localStorage)
@@ -168,6 +190,7 @@ const activeTabId = ref(initialWorkspace.activeTabId)
 const workbenchElement = ref<HTMLDivElement | null>(null)
 const autoOpenSshPaneId = ref('')
 const expandedPaneByTabId = ref<Record<string, string | undefined>>({})
+const sftpSessionByTabId = ref<Record<string, string | undefined>>({})
 const renamingTabId = ref('')
 const renameValue = ref('')
 const renameInput = ref<HTMLInputElement[]>([])
@@ -202,6 +225,12 @@ const activeLayoutNode = computed<TerminalLayoutNode | undefined>(() => {
   return activeExpandedPaneId.value
     ? findTerminalPane(tab.root, activeExpandedPaneId.value) || tab.root
     : tab.root
+})
+const activeSftpSessionId = computed(() => {
+  const tabId = activeTab.value?.id
+  const sessionId = tabId ? sftpSessionByTabId.value[tabId] : undefined
+  const session = sessionId ? sessionInfos.value[sessionId] : undefined
+  return session?.kind === 'ssh' && session.status === 'ready' ? sessionId : undefined
 })
 const shortcutPlatform = computed(() => capabilities.value.platform || 'win32')
 const allProfiles = computed(() => {
@@ -300,6 +329,9 @@ async function closeTab(tabId: string): Promise<void> {
   const expanded = { ...expandedPaneByTabId.value }
   delete expanded[tabId]
   expandedPaneByTabId.value = expanded
+  const sftpSessions = { ...sftpSessionByTabId.value }
+  delete sftpSessions[tabId]
+  sftpSessionByTabId.value = sftpSessions
   if (tabs.value.length === 0) tabs.value = [createTerminalTab(t('common.terminal.terminal'))]
   if (activeTabId.value === tabId) {
     activeTabId.value = tabs.value[Math.min(tabIndex, tabs.value.length - 1)].id
@@ -387,6 +419,7 @@ function setPaneSession(
 ): void {
   const tab = tabs.value.find((entry) => findTerminalPane(entry.root, paneId))
   if (!tab) return
+  const previousSessionId = findTerminalPane(tab.root, paneId)?.sessionId
   tab.root = updateTerminalPane(tab.root, paneId, {
     sessionId: session.id,
     title: session.title,
@@ -395,6 +428,9 @@ function setPaneSession(
   tab.focusedPaneId = paneId
   activeTabId.value = tab.id
   sessionInfos.value = { ...sessionInfos.value, [session.id]: session }
+  if (previousSessionId && sftpSessionByTabId.value[tab.id] === previousSessionId) {
+    sftpSessionByTabId.value = { ...sftpSessionByTabId.value, [tab.id]: session.id }
+  }
 }
 
 function focusPane(paneId: string): void {
@@ -402,6 +438,17 @@ function focusPane(paneId: string): void {
   if (!tab) return
   tab.focusedPaneId = paneId
   activeTabId.value = tab.id
+}
+
+function toggleTabSftp(paneId: string): void {
+  const tab = tabs.value.find((entry) => findTerminalPane(entry.root, paneId))
+  const pane = tab ? findTerminalPane(tab.root, paneId) : undefined
+  const session = pane?.sessionId ? sessionInfos.value[pane.sessionId] : undefined
+  if (!tab || !pane?.sessionId || session?.kind !== 'ssh' || session.status !== 'ready') return
+  sftpSessionByTabId.value = {
+    ...sftpSessionByTabId.value,
+    [tab.id]: sftpSessionByTabId.value[tab.id] === pane.sessionId ? undefined : pane.sessionId,
+  }
 }
 
 function toggleExpandPane(paneId: string): void {
@@ -469,6 +516,9 @@ async function closePane(paneId: string): Promise<void> {
     const infos = { ...sessionInfos.value }
     delete infos[pane.sessionId]
     sessionInfos.value = infos
+    if (sftpSessionByTabId.value[tab.id] === pane.sessionId) {
+      sftpSessionByTabId.value = { ...sftpSessionByTabId.value, [tab.id]: undefined }
+    }
   }
   const result = removeTerminalPane(tab.root, paneId)
   tab.root = result || createEmptyPane(t('common.terminal.emptyTerminal'))
@@ -564,6 +614,7 @@ function saveProfile(profile: SshConnectionProfile): void {
 function removeProfile(id: string): void {
   profileStorage.remove(id)
   savedProfiles.value = profileStorage.list()
+  void window.ipcRenderer.invoke('terminal-credential-remove', id).catch(() => undefined)
 }
 
 async function loadSshConfig(): Promise<void> {
@@ -808,6 +859,15 @@ function withTimeout<T>(
 .terminal-tab.active::after {
   background: color-mix(in srgb, var(--app-text) 60%, var(--app-surface));
 }
+.terminal-tab--ghost {
+  opacity: 0.36;
+  background: color-mix(in srgb, var(--el-color-primary) 12%, var(--app-surface-muted));
+}
+.terminal-tab--dragging {
+  border-radius: 7px;
+  background: var(--app-surface-raised);
+  box-shadow: 0 7px 20px var(--app-shadow);
+}
 .tab-leading {
   display: flex;
   align-items: center;
@@ -931,6 +991,12 @@ function withTimeout<T>(
 .terminal-tab-content {
   flex: 1;
   min-height: 0;
+  display: flex;
+}
+.terminal-tab-content__layout {
+  min-width: 0;
+  min-height: 0;
+  flex: 1;
   display: flex;
 }
 :global(.terminal-new-session-menu .el-dropdown-menu__item) {

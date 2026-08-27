@@ -44,7 +44,7 @@ export function createSshProfile(): SshConnectionProfile {
     host: '',
     port: 22,
     username: '',
-    authMethod: 'agent',
+    authMethod: 'password',
     privateKeyPath: '',
     proxyJump: '',
     initialDirectory: '',

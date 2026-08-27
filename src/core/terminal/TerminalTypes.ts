@@ -53,6 +53,7 @@ export type TerminalLaunchSpec =
     }
 
 export interface TerminalCreateRequest {
+  requestId?: string
   kind: TerminalSessionKind
   cols: number
   rows: number

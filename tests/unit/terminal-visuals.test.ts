@@ -23,6 +23,27 @@ describe('Terminal v1.4.1 visual controls', () => {
     expect(terminalSource).toContain('.tab-status-dot {\n  width: 7px;\n  height: 7px;')
   })
 
+  it('supports tab reordering and keeps a single SFTP panel at tab scope', () => {
+    expect(terminalSource).toContain('<draggable')
+    expect(terminalSource).toContain('v-model="tabs"')
+    expect(terminalSource).toContain('item-key="id"')
+    expect(terminalSource).toContain('class="terminal-tab-content__layout"')
+    expect(terminalSource).toContain('<TerminalSftpPanel')
+    expect(terminalSource).toContain('@toggle-sftp="toggleTabSftp"')
+    expect(paneSource).not.toContain('<TerminalSftpPanel')
+    expect(paneSource).toContain("emit('toggle-sftp', props.pane.id)")
+  })
+
+  it('removes the floating port-forward control and keeps reconnect at the terminal bottom', () => {
+    expect(paneSource).not.toContain('forwardVisible')
+    expect(paneSource).not.toContain('terminal-forward-start')
+    expect(paneSource).toContain('class="session-disconnected"')
+    expect(paneSource).toContain(
+      '.session-body {\n  position: relative;\n  min-height: 0;\n  flex: 1;\n  display: flex;\n  flex-direction: column;',
+    )
+    expect(paneSource).not.toContain('.session-disconnected {\n  position: absolute;')
+  })
+
   it('offers direct right and down split buttons for every pane', () => {
     expect(paneSource).not.toContain('<el-dropdown')
     expect(paneSource).toContain('class="pane-action pane-action--split-right"')

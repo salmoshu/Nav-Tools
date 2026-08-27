@@ -73,8 +73,7 @@ const logRecordingService = new LogRecordingService(ipc)
 const dataRouter = new IncomingDataRouter({
   appendGnss: addGnssData,
   appendRaw: addFlowConsole,
-  appendPlot: (data) =>
-    addFlowData(data, activeDataParser.value, activeRegexPattern.value),
+  appendPlot: (data) => addFlowData(data, activeDataParser.value, activeRegexPattern.value),
   decodeMotorHex: convertByteArrayToJson,
 })
 const { settings: dataSourceSettings, saveSettings: saveDataSourceSettings } =
@@ -271,12 +270,14 @@ networkService.onDisconnected((connection) => {
 
   globalDevice.value.connected = false
   activeDataTransport.clear('network')
-    ElMessage({
-      message: connection.reason || t('data.netDisconnected', { protocol: connection.protocol.toUpperCase() }),
-      type: 'warning',
-      placement: 'bottom-right',
-      offset: 50,
-    })
+  ElMessage({
+    message:
+      connection.reason ||
+      t('data.netDisconnected', { protocol: connection.protocol.toUpperCase() }),
+    type: 'warning',
+    placement: 'bottom-right',
+    offset: 50,
+  })
 })
 
 filePlaybackService.onStatus((status) => {
@@ -353,7 +354,9 @@ async function toggleLogRecording(): Promise<void> {
     await logRecordingService.start()
   } catch (error) {
     ElMessage({
-      message: t('data.logRecordOpFailed', { error: error instanceof Error ? error.message : String(error) }),
+      message: t('data.logRecordOpFailed', {
+        error: error instanceof Error ? error.message : String(error),
+      }),
       type: 'error',
       placement: 'bottom-right',
       offset: 50,
@@ -522,7 +525,9 @@ function startTimestampPlayback(path: string): void {
         globalDevice.value.connected = false
       }
       ElMessage({
-        message: t('data.tsPlayFailed', { message: error instanceof Error ? error.message : String(error) }),
+        message: t('data.tsPlayFailed', {
+          message: error instanceof Error ? error.message : String(error),
+        }),
         type: 'error',
         placement: 'bottom-right',
         offset: 50,
@@ -762,11 +767,7 @@ export function useDevice() {
       request && typeof request === 'object' && 'protocol' in request
         ? (request as { protocol?: unknown }).protocol
         : undefined
-    if (
-      requestedTab === 'serial' ||
-      requestedTab === 'file' ||
-      requestedTab === 'network'
-    ) {
+    if (requestedTab === 'serial' || requestedTab === 'file' || requestedTab === 'network') {
       activeTab.value = requestedTab
     } else {
       // 未指定 tab 时回到上次确认的数据源：未确认（取消/关闭）的 tab 切换不留存
@@ -780,23 +781,20 @@ export function useDevice() {
   /**
    * 自动检索当前存在的串口设备
    */
-  const searchSerialPorts = (silent: boolean | Event = false) => {
-    serialService
-      .listPorts()
-      .then((ports) => {
-        serialPorts.value = ports
-      })
-      .catch((error) => {
-        console.error('自动检索串口设备失败:', error)
-        if (silent !== true) {
-          ElMessage({
-            message: t('data.serialAutodetectFailed'),
-            type: 'error',
-            placement: 'bottom-right',
-            offset: 50,
-          })
-        }
-      })
+  const searchSerialPorts = async (silent: boolean | Event = false): Promise<void> => {
+    try {
+      serialPorts.value = await serialService.listPorts()
+    } catch (error) {
+      console.error('自动检索串口设备失败:', error)
+      if (silent !== true) {
+        ElMessage({
+          message: t('data.serialAutodetectFailed'),
+          type: 'error',
+          placement: 'bottom-right',
+          offset: 50,
+        })
+      }
+    }
   }
 
   /**
@@ -943,11 +941,12 @@ export function useDevice() {
     void filePlaybackService.stop()
 
     if (activeDataModes.value.includes('gnss')) {
-      const loadTimeline = selectedFile.value && selectedFilePath.value === fileCmd
-        ? loadGnssTimelineFile(selectedFile.value, 'loaded')
-        : window.ipcRenderer
-          ? loadGnssTimelinePath(fileCmd, 'loaded')
-          : null
+      const loadTimeline =
+        selectedFile.value && selectedFilePath.value === fileCmd
+          ? loadGnssTimelineFile(selectedFile.value, 'loaded')
+          : window.ipcRenderer
+            ? loadGnssTimelinePath(fileCmd, 'loaded')
+            : null
 
       if (!loadTimeline) {
         ElMessage({
@@ -1011,12 +1010,12 @@ export function useDevice() {
       reader.readAsText(selectedFile.value)
     } else {
       // 如果没有文件对象，显示提示信息
-        ElMessage({
-          message: t('data.reselectFile'),
-          type: 'warning',
-          placement: 'bottom-right',
-          offset: 50,
-        })
+      ElMessage({
+        message: t('data.reselectFile'),
+        type: 'warning',
+        placement: 'bottom-right',
+        offset: 50,
+      })
     }
 
     return fileCmd
@@ -1056,7 +1055,8 @@ export function useDevice() {
           .then(() => {
             globalDevice.value.connected = true
             activeDataTransport.activate('network')
-            const action = options.protocol === 'tcp' ? t('data.netConnectSuccess') : t('data.netListenSuccess')
+            const action =
+              options.protocol === 'tcp' ? t('data.netConnectSuccess') : t('data.netListenSuccess')
             ElMessage({
               message: `${options.protocol.toUpperCase()} ${options.host}:${options.port} ${action}`,
               type: 'success',
@@ -1073,10 +1073,7 @@ export function useDevice() {
               offset: 50,
             })
           })
-      } else if (
-        globalDevice.value.type === 'file' &&
-        globalDevice.value.path
-      ) {
+      } else if (globalDevice.value.type === 'file' && globalDevice.value.path) {
         if (fileTimeline.active.value) fileTimeline.play()
         else if (fileTimeTag.value) startTimestampPlayback(globalDevice.value.path)
       }

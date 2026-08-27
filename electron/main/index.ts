@@ -7,6 +7,7 @@ import {
   ipcMain,
   Menu,
   powerSaveBlocker,
+  safeStorage,
   screen,
   type Rectangle,
 } from 'electron'
@@ -24,6 +25,7 @@ import { LogRecordingService } from './services/LogRecordingService'
 import { OfflineTileService } from './services/OfflineTileService'
 import { UpdateService } from './services/UpdateService'
 import { TerminalService } from './services/TerminalService'
+import { TerminalCredentialService } from './services/TerminalCredentialService'
 import { registerTerminalIpc } from './terminalIpc'
 
 const require = createRequire(import.meta.url)
@@ -78,7 +80,11 @@ const terminalService = new TerminalService(app.getPath('userData'), (channel, p
     if (!target.isDestroyed()) target.webContents.send(channel, payload)
   }
 })
-registerTerminalIpc(terminalService)
+const terminalCredentialService = new TerminalCredentialService(
+  app.getPath('userData'),
+  safeStorage,
+)
+registerTerminalIpc(terminalService, terminalCredentialService)
 // 自定义瓦片协议必须在 app ready 之前注册为 privileged scheme
 offlineTileService.registerPrivilegedScheme()
 const cameraStreamOwners = new Set<number>()
@@ -308,6 +314,7 @@ ipcMain.handle('update-check', () => updateService.checkForUpdates())
 ipcMain.handle('update-download', () => updateService.downloadUpdate())
 ipcMain.handle('update-quit-and-install', () => updateService.quitAndInstall())
 ipcMain.handle('clipboard-read-text', () => clipboard.readText())
+ipcMain.handle('clipboard-write-text', (_event, text: string) => clipboard.writeText(text))
 ipcMain.on('update-set-prefs', (_event, prefs) => updateService.applyPrefs(prefs))
 
 function createDefaultLogName(): string {

@@ -22,6 +22,7 @@ const MESSAGE_TOP_OFFSET = APP_HEADER_HEIGHT + MESSAGE_HEADER_GAP
 // Command-style messages (ElMessage.error/success/...) use this singleton
 // instead of the plugin's injected configuration.
 messageConfig.offset = MESSAGE_TOP_OFFSET
+messageConfig.showClose = true
 
 // 使用Pinia
 app.use(pinia)
@@ -33,6 +34,7 @@ app.use(VirtualScroller)
 app.use(ElementPlus, {
   message: {
     offset: MESSAGE_TOP_OFFSET,
+    showClose: true,
   },
 })
 

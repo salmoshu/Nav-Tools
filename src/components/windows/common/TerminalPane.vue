@@ -8,18 +8,8 @@
           placement="bottom"
           :show-after="400"
         >
-          <el-button text class="pane-action" @click="sftpVisible = !sftpVisible">
+          <el-button text class="pane-action" @click="emit('toggle-sftp', props.pane.id)">
             <el-icon><FolderOpened /></el-icon>
-          </el-button>
-        </el-tooltip>
-        <el-tooltip
-          v-if="sessionInfo?.kind === 'ssh'"
-          :content="t('common.terminal.portForwarding')"
-          placement="bottom"
-          :show-after="400"
-        >
-          <el-button text class="pane-action" @click="forwardVisible = true">
-            <el-icon><Connection /></el-icon>
           </el-button>
         </el-tooltip>
         <el-tooltip
@@ -167,11 +157,11 @@
     </div>
 
     <div v-show="pane.sessionId" class="session-body">
-      <TerminalSftpPanel
-        v-if="sftpVisible && pane.sessionId && sessionInfo?.kind === 'ssh'"
-        :session-id="pane.sessionId"
-      />
-      <div ref="terminalElement" class="xterm-host"></div>
+      <div
+        ref="terminalElement"
+        class="xterm-host"
+        @contextmenu.prevent="handleTerminalContextMenu"
+      ></div>
       <div v-if="sessionDisconnected" class="session-disconnected" role="status">
         <span class="session-disconnected__icon"><WarningFilled /></span>
         <span class="session-disconnected__copy">
@@ -197,6 +187,7 @@
       :connecting="connecting"
       :connection-error="sshDialogVisible ? launchError : ''"
       @connect="launchSsh"
+      @cancel="cancelConnection"
       @remove="$emit('remove-profile', $event)"
     />
 
@@ -228,72 +219,14 @@
         >
       </template>
     </el-dialog>
-
-    <el-dialog
-      v-model="forwardVisible"
-      :title="t('common.terminal.portForwarding')"
-      class="app-dialog"
-      width="min(900px, 94vw)"
-      append-to-body
-      align-center
-      :z-index="8000"
-    >
-      <div class="forward-dialog-toolbar">
-        <el-button size="small" @click="addRuntimeForward('local')">+ Local</el-button>
-        <el-button size="small" @click="addRuntimeForward('remote')">+ Remote</el-button>
-        <el-button size="small" @click="addRuntimeForward('dynamic')">+ SOCKS</el-button>
-      </div>
-      <div v-for="rule in runtimeForwards" :key="rule.id" class="runtime-forward-row">
-        <el-switch
-          :model-value="forwardActive(rule.id)"
-          @change="(value: boolean) => toggleForward(rule, value)"
-        />
-        <el-select v-model="rule.kind"
-          ><el-option label="Local" value="local" /><el-option
-            label="Remote"
-            value="remote" /><el-option label="SOCKS" value="dynamic"
-        /></el-select>
-        <el-input v-model="rule.name" :placeholder="t('common.terminal.ruleName')" />
-        <el-input v-model="rule.bindAddress" placeholder="127.0.0.1" />
-        <el-input-number v-model="rule.bindPort" :min="0" :max="65535" />
-        <el-input
-          v-if="rule.kind !== 'dynamic'"
-          v-model="rule.targetHost"
-          :placeholder="t('common.terminal.targetHost')"
-        />
-        <el-input-number
-          v-if="rule.kind !== 'dynamic'"
-          v-model="rule.targetPort"
-          :min="1"
-          :max="65535"
-        />
-        <span class="forward-state" :class="forwardStatuses[rule.id]?.status">{{
-          forwardStatuses[rule.id]?.message || forwardStatuses[rule.id]?.status || ''
-        }}</span>
-        <el-button text type="danger" @click="removeRuntimeForward(rule.id)"
-          ><el-icon><Delete /></el-icon
-        ></el-button>
-      </div>
-      <el-empty v-if="!runtimeForwards.length" :description="t('common.terminal.noForwardRules')" />
-      <template #footer>
-        <el-button @click="forwardVisible = false">{{ t('common.terminal.close') }}</el-button>
-        <el-button
-          v-if="activeProfile?.source === 'nav-tools'"
-          type="primary"
-          @click="saveRuntimeForwards"
-          >{{ t('common.terminal.saveRules') }}</el-button
-        >
-      </template>
-    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, ref, toRaw, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import {
   Close,
   Connection,
-  Delete,
   FolderOpened,
   FullScreen,
   Loading,
@@ -305,18 +238,14 @@ import {
   WarningFilled,
 } from '@element-plus/icons-vue'
 import { SquareSplitVertical } from '@lucide/vue'
-import { ElMessage } from 'element-plus'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
 import { t } from '@/i18n'
 import type { TerminalPaneNode, TerminalSplitDirection } from '@/core/terminal/TerminalLayout'
 import {
-  createPortForwardRule,
+  createTerminalId,
   type LocalShellKind,
-  type PortForwardKind,
-  type PortForwardRule,
-  type PortForwardStatusEvent,
   type SshConnectionProfile,
   type SshConnectionSecrets,
   type TerminalCapabilities,
@@ -324,7 +253,6 @@ import {
   type TerminalSessionInfo,
 } from '@/core/terminal/TerminalTypes'
 import TerminalConnectionDialog from './TerminalConnectionDialog.vue'
-import TerminalSftpPanel from './TerminalSftpPanel.vue'
 
 const SESSION_CREATE_TIMEOUT_MS = 20_000
 
@@ -347,20 +275,17 @@ const emit = defineEmits<{
   'save-profile': [profile: SshConnectionProfile]
   'remove-profile': [id: string]
   'ssh-dialog-opened': [paneId: string]
+  'toggle-sftp': [paneId: string]
 }>()
 
 const terminalElement = ref<HTMLDivElement | null>(null)
 const sshDialogVisible = ref(false)
 const wslDialogVisible = ref(false)
-const forwardVisible = ref(false)
-const sftpVisible = ref(false)
 const selectedWsl = ref('')
 const cwd = ref('')
 const connecting = ref(false)
 const connectingTarget = ref('')
 const launchError = ref('')
-const runtimeForwards = ref<PortForwardRule[]>([])
-const forwardStatuses = ref<Record<string, PortForwardStatusEvent>>({})
 const connectionProfiles = computed(() => {
   const restoredProfile =
     props.pane.launch?.kind === 'ssh' ? props.pane.launch.sshProfile : undefined
@@ -373,11 +298,6 @@ const preferredSshProfileId = computed(() => {
   if (props.pane.launch?.kind === 'ssh') return props.pane.launch.sshProfile?.id
   return props.sessionInfo?.profileId
 })
-const activeProfile = computed(() =>
-  connectionProfiles.value.find(
-    (profile) => profile.id === (props.sessionInfo?.profileId || preferredSshProfileId.value),
-  ),
-)
 const sessionDisconnected = computed(
   () => props.sessionInfo?.status === 'closed' || props.sessionInfo?.status === 'error',
 )
@@ -401,12 +321,16 @@ let terminal: Terminal | undefined
 let fitAddon: FitAddon | undefined
 let resizeObserver: ResizeObserver | undefined
 let attachedSessionId = ''
+let terminalInputEnabled = false
+let activeCreateRequestId = ''
 
 async function createSession(
   request: Record<string, unknown>,
   target: string,
   launch: TerminalLaunchSpec,
 ): Promise<boolean> {
+  const requestId = createTerminalId('terminal-create')
+  activeCreateRequestId = requestId
   connecting.value = true
   connectingTarget.value = target
   launchError.value = ''
@@ -414,6 +338,7 @@ async function createSession(
     const session = await withTimeout(
       window.ipcRenderer.invoke('terminal-session-create', {
         ...request,
+        requestId,
         cols: Math.max(2, terminal?.cols || 80),
         rows: Math.max(1, terminal?.rows || 24),
       }),
@@ -421,16 +346,35 @@ async function createSession(
       t('common.terminal.connectionRequestTimeout'),
       (lateSession: TerminalSessionInfo) =>
         void window.ipcRenderer.invoke('terminal-session-close', lateSession.id),
+      () => void window.ipcRenderer.invoke('terminal-session-create-cancel', requestId),
     )
+    if (activeCreateRequestId !== requestId) {
+      void window.ipcRenderer.invoke('terminal-session-close', session.id)
+      return false
+    }
     emit('session', props.pane.id, session, launch)
     return true
   } catch (error) {
+    if (activeCreateRequestId !== requestId) return false
     launchError.value = errorMessage(error)
     return false
   } finally {
-    connecting.value = false
-    connectingTarget.value = ''
+    if (activeCreateRequestId === requestId) {
+      activeCreateRequestId = ''
+      connecting.value = false
+      connectingTarget.value = ''
+    }
   }
+}
+
+function cancelConnection(): void {
+  const requestId = activeCreateRequestId
+  if (!requestId) return
+  activeCreateRequestId = ''
+  connecting.value = false
+  connectingTarget.value = ''
+  launchError.value = t('common.terminal.connectionCancelled')
+  void window.ipcRenderer.invoke('terminal-session-create-cancel', requestId)
 }
 
 function launchLocal(kind: LocalShellKind, label: string): void {
@@ -458,6 +402,7 @@ async function launchSsh(
   profile: SshConnectionProfile,
   secrets: SshConnectionSecrets,
   save: boolean,
+  remember: boolean,
 ): Promise<void> {
   if (save) emit('save-profile', profile)
   const launch: TerminalLaunchSpec = { kind: 'ssh', sshProfile: profile, label: profile.name }
@@ -466,7 +411,20 @@ async function launchSsh(
     `${profile.username}@${profile.host}:${profile.port}`,
     launch,
   )
-  if (connected) sshDialogVisible.value = false
+  if (!connected) return
+  try {
+    if (remember) {
+      await window.ipcRenderer.invoke('terminal-credential-save', {
+        profileId: profile.id,
+        secrets,
+      })
+    } else {
+      await window.ipcRenderer.invoke('terminal-credential-remove', profile.id)
+    }
+  } catch {
+    // The live SSH session is still valid when secure credential storage is unavailable.
+  }
+  sshDialogVisible.value = false
 }
 
 function openSshDialog(): void {
@@ -531,13 +489,26 @@ function focusPane(): void {
 async function attachSession(sessionId: string | undefined): Promise<void> {
   if (!terminal || !sessionId || sessionId === attachedSessionId) return
   attachedSessionId = sessionId
+  terminalInputEnabled = false
   terminal.reset()
   const session = await window.ipcRenderer.invoke('terminal-session-attach', sessionId)
   if (sessionId !== props.pane.sessionId) return
   if (!session) return
-  if (session.scrollback) terminal.write(session.scrollback)
+  if (session.scrollback) await writeTerminalData(session.scrollback)
+  if (sessionId !== props.pane.sessionId) return
+  terminalInputEnabled = true
   await nextTick()
   fitTerminal()
+}
+
+function writeTerminalData(data: string): Promise<void> {
+  return new Promise((resolve) => {
+    if (!terminal) {
+      resolve()
+      return
+    }
+    terminal.write(data, resolve)
+  })
 }
 
 function fitTerminal(): void {
@@ -561,55 +532,6 @@ function handleOutput(_event: unknown, event: { sessionId: string; data: string 
   if (event.sessionId === props.pane.sessionId) terminal?.write(event.data)
 }
 
-function handleForwardStatus(_event: unknown, event: PortForwardStatusEvent): void {
-  forwardStatuses.value = { ...forwardStatuses.value, [event.ruleId]: event }
-}
-
-function addRuntimeForward(kind: PortForwardKind): void {
-  runtimeForwards.value.push(createPortForwardRule(kind))
-}
-
-async function toggleForward(rule: PortForwardRule, active: boolean): Promise<void> {
-  if (!props.pane.sessionId) return
-  try {
-    await window.ipcRenderer.invoke(
-      active ? 'terminal-forward-start' : 'terminal-forward-stop',
-      active
-        ? { sessionId: props.pane.sessionId, rule }
-        : { sessionId: props.pane.sessionId, ruleId: rule.id },
-    )
-  } catch (error) {
-    ElMessage.error(errorMessage(error))
-  }
-}
-
-function forwardActive(ruleId: string): boolean {
-  return forwardStatuses.value[ruleId]?.status === 'active'
-}
-
-async function removeRuntimeForward(ruleId: string): Promise<void> {
-  if (forwardActive(ruleId) && props.pane.sessionId) {
-    await window.ipcRenderer.invoke('terminal-forward-stop', {
-      sessionId: props.pane.sessionId,
-      ruleId,
-    })
-  }
-  runtimeForwards.value = runtimeForwards.value.filter((rule) => rule.id !== ruleId)
-}
-
-function saveRuntimeForwards(): void {
-  if (!activeProfile.value) return
-  emit('save-profile', {
-    ...toRaw(activeProfile.value),
-    forwards: cloneForwardRules(runtimeForwards.value),
-  })
-  ElMessage.success(t('common.terminal.rulesSaved'))
-}
-
-function cloneForwardRules(rules: readonly PortForwardRule[]): PortForwardRule[] {
-  return rules.map((rule) => ({ ...toRaw(rule) }))
-}
-
 async function readClipboardText(): Promise<string> {
   try {
     const text = await window.ipcRenderer.invoke('clipboard-read-text')
@@ -624,10 +546,29 @@ async function readClipboardText(): Promise<string> {
   }
 }
 
+async function writeClipboardText(text: string): Promise<void> {
+  try {
+    await window.ipcRenderer.invoke('clipboard-write-text', text)
+    return
+  } catch {
+    // Fall back to the browser clipboard API when the Electron bridge is unavailable.
+  }
+  await navigator.clipboard?.writeText(text).catch(() => undefined)
+}
+
 function pasteClipboardText(): void {
   void readClipboardText().then((text) => {
     if (text) terminal?.paste(text)
   })
+}
+
+function handleTerminalContextMenu(): void {
+  const selection = terminal?.getSelection() || ''
+  if (selection) {
+    void writeClipboardText(selection)
+    return
+  }
+  pasteClipboardText()
 }
 
 watch(
@@ -641,17 +582,6 @@ watch(
     if (active) void nextTick(() => terminal?.focus())
   },
 )
-watch(
-  activeProfile,
-  (profile) => {
-    runtimeForwards.value = cloneForwardRules(profile?.forwards || [])
-  },
-  { immediate: true },
-)
-watch(forwardVisible, (open) => {
-  if (open) runtimeForwards.value = cloneForwardRules(activeProfile.value?.forwards || [])
-})
-
 onMounted(() => {
   const rootStyle = getComputedStyle(document.documentElement)
   terminal = new Terminal({
@@ -671,7 +601,7 @@ onMounted(() => {
   terminal.loadAddon(fitAddon)
   if (terminalElement.value) terminal.open(terminalElement.value)
   terminal.onData((data) => {
-    if (props.pane.sessionId)
+    if (terminalInputEnabled && props.pane.sessionId)
       void window.ipcRenderer.invoke('terminal-session-write', {
         sessionId: props.pane.sessionId,
         data,
@@ -679,33 +609,11 @@ onMounted(() => {
   })
   terminal.attachCustomKeyEventHandler((event) => {
     if (event.type !== 'keydown') return true
-    if (event.ctrlKey && event.shiftKey && event.code === 'KeyC') {
-      const selection = terminal?.getSelection()
-      if (selection) void navigator.clipboard.writeText(selection)
-      return false
-    }
-    const primaryPasteModifier =
-      props.capabilities.platform === 'darwin'
-        ? event.metaKey && !event.ctrlKey
-        : event.ctrlKey && !event.metaKey
-    const isPasteShortcut =
-      (primaryPasteModifier && !event.altKey && event.code === 'KeyV') ||
-      (props.capabilities.platform !== 'darwin' &&
-        event.shiftKey &&
-        !event.ctrlKey &&
-        !event.metaKey &&
-        !event.altKey &&
-        event.code === 'Insert')
-    if (isPasteShortcut) {
-      pasteClipboardText()
-      return false
-    }
     return true
   })
   resizeObserver = new ResizeObserver(() => fitTerminal())
   if (terminalElement.value) resizeObserver.observe(terminalElement.value)
   window.ipcRenderer?.on('terminal-output', handleOutput)
-  window.ipcRenderer?.on('terminal-forward-status', handleForwardStatus)
   void attachSession(props.pane.sessionId)
   if (props.autoOpenSsh) {
     openSshDialog()
@@ -716,7 +624,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   window.ipcRenderer?.off('terminal-output', handleOutput)
-  window.ipcRenderer?.off('terminal-forward-status', handleForwardStatus)
+  cancelConnection()
   resizeObserver?.disconnect()
   terminal?.dispose()
 })
@@ -730,11 +638,13 @@ function withTimeout<T>(
   timeoutMs: number,
   message: string,
   onLateResolve?: (value: T) => void,
+  onTimeout?: () => void,
 ): Promise<T> {
   return new Promise((resolve, reject) => {
     let settled = false
     const timeout = window.setTimeout(() => {
       settled = true
+      onTimeout?.()
       reject(new Error(message))
     }, timeoutMs)
     promise.then(
@@ -833,22 +743,30 @@ function withTimeout<T>(
   min-height: 0;
   flex: 1;
   display: flex;
+  flex-direction: column;
   background: var(--terminal-bg);
 }
 .session-disconnected {
-  position: absolute;
-  z-index: 4;
-  inset: 0;
+  min-height: 44px;
+  flex: none;
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 12px;
-  padding: 20px;
-  color: var(--app-text);
-  background: color-mix(in srgb, var(--terminal-bg) 86%, transparent);
-  backdrop-filter: blur(3px);
+  gap: 9px;
+  padding: 6px 10px;
+  border-top: 1px solid color-mix(in srgb, var(--terminal-fg) 14%, var(--terminal-bg));
+  color: var(--terminal-fg);
+  background: color-mix(in srgb, var(--terminal-bg) 92%, var(--el-color-warning));
 }
-.session-disconnected__icon,
+.session-disconnected__icon {
+  display: grid;
+  width: 26px;
+  height: 26px;
+  flex: none;
+  border-radius: 7px;
+  color: var(--el-color-warning);
+  background: color-mix(in srgb, var(--el-color-warning) 15%, var(--terminal-bg));
+  place-items: center;
+}
 .launcher-restore__icon {
   display: grid;
   width: 34px;
@@ -877,6 +795,7 @@ function withTimeout<T>(
   font-size: 11px;
 }
 .session-reconnect {
+  flex: none;
   margin-left: 8px;
 }
 .xterm-host {
@@ -1086,34 +1005,6 @@ function withTimeout<T>(
 }
 .connecting strong {
   font-size: 12px;
-}
-.forward-dialog-toolbar {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 10px;
-}
-.runtime-forward-row {
-  display: grid;
-  grid-template-columns:
-    auto 90px minmax(80px, 1fr) minmax(100px, 1fr) 110px minmax(100px, 1fr)
-    110px 110px auto;
-  gap: 6px;
-  align-items: center;
-  margin-bottom: 8px;
-}
-.runtime-forward-row :deep(.el-select),
-.runtime-forward-row :deep(.el-input-number) {
-  width: 100%;
-}
-.forward-state {
-  font-size: 11px;
-  color: var(--app-text-muted);
-}
-.forward-state.active {
-  color: #3fb950;
-}
-.forward-state.error {
-  color: #f85149;
 }
 @media (max-width: 560px) {
   .launcher-grid {

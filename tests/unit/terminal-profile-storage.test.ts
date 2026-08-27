@@ -13,6 +13,10 @@ class MemoryStorage {
 }
 
 describe('TerminalProfileStorage', () => {
+  it('defaults new SSH profiles to password authentication', () => {
+    expect(createSshProfile().authMethod).toBe('password')
+  })
+
   it('persists SSH profiles and all three port-forwarding types without secrets', () => {
     const backend = new MemoryStorage()
     const storage = new TerminalProfileStorage(backend)
@@ -27,8 +31,8 @@ describe('TerminalProfileStorage', () => {
     storage.save(profile)
     const restored = new TerminalProfileStorage(backend).list()[0]
     expect(restored.forwards.map((rule) => rule.kind)).toEqual(['local', 'remote', 'dynamic'])
-    expect(JSON.stringify(restored)).not.toContain('password')
-    expect(JSON.stringify(restored)).not.toContain('passphrase')
+    expect(restored).not.toHaveProperty('password')
+    expect(restored).not.toHaveProperty('passphrase')
   })
 
   it('rejects incomplete profiles', () => {
