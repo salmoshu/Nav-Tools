@@ -47,14 +47,29 @@ jobs:
         run: pnpm install --frozen-lockfile
         timeout-minutes: 15  # 设置依赖安装超时
 
-      # --publish never：发布由 release.yml 负责；tag 构建下 electron-builder
-      # 默认会尝试发布（onTagOrDraft），本 workflow 的 GITHUB_TOKEN 只读会导致失败
+      # 缓存 Electron 二进制与 electron-builder 下载的工具链(含 Windows 本地缓存目录),
+      # 避免构建期访问 GitHub Releases 资源(objects.githubusercontent.com 偶发 403/502)
+      - name: Cache electron-builder downloads
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/electron
+            ~/.cache/electron-builder
+            ~\AppData\Local\electron\Cache
+            ~\AppData\Local\electron-builder\Cache
+          key: ${{ runner.os }}-electron-builder-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-electron-builder-
+
+      # --publish never：发布由 release.yml 负责
+      # 不注入 GITHUB_TOKEN:electron-builder 会拿它去请求其他仓库(electron/electron)的
+      # API,触发限流型 createHttpError;构建期唯一外网请求(Electron zip)走 npmmirror 镜像
       - name: Build Release Files
         run: pnpm run build -- --publish never
         timeout-minutes: 30  # 设置构建超时
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NODE_OPTIONS: --max-old-space-size=8192
+          ELECTRON_MIRROR: https://npmmirror.com/mirrors/electron/
 
       - name: Delete old artifacts
         uses: geekyeggo/delete-artifact@v4

@@ -9,6 +9,7 @@ import * as pty from 'node-pty'
 import { Client, type ClientChannel, type ConnectConfig, type SFTPWrapper } from 'ssh2'
 import {
   createTerminalId,
+  sshConnectionKey,
   type HostKeyMismatchEvent,
   type HostKeyPromptEvent,
   type LocalShellKind,
@@ -19,6 +20,7 @@ import {
   type SshConnectionSecrets,
   type TerminalCapabilities,
   type TerminalCreateRequest,
+  type TerminalCwdEvent,
   type TerminalSessionInfo,
   type TerminalStatusEvent,
 } from '../../../src/core/terminal/TerminalTypes'
@@ -29,10 +31,19 @@ const MAX_SCROLLBACK_CHARS = 1_000_000
 const SSH_CONNECT_TIMEOUT_MS = 35_000
 const SSH_CHANNEL_TIMEOUT_MS = 15_000
 const HOST_KEY_RESPONSE_TIMEOUT_MS = 30_000
+/** 让 bash 在每个提示符前上报 OSC 7 cwd;仅对 bash 注入,zsh/fish 跳过避免报错 */
+const OSC7_PROMPT_COMMAND = 'printf "\\e]7;file://%s%s\\e\\\\" "$HOSTNAME" "$PWD"'
+const OSC7_PROMPT_EXPORT = `test -n "$BASH_VERSION" && export PROMPT_COMMAND='${OSC7_PROMPT_COMMAND}'`
+/** OSC 7: file://host/path;OSC 9;9: ConPTY 的 cwd 上报 */
+const OSC_CWD_PATTERN =
+  // eslint-disable-next-line no-control-regex -- 终端转义序列解析必须匹配控制字符
+  /\x1b\]7;file:\/\/[^/\x07\x1b]*(\/[^\x07\x1b]*?)(?:\x07|\x1b\\)|\x1b\]9;9;"?([^"\x07\x1b]+?)"?(?:\x07|\x1b\\)/g
 
 interface BaseSession {
   info: TerminalSessionInfo
   scrollback: string
+  /** 未完整的 OSC 序列残片,等待下一帧数据拼接后再解析 */
+  oscTail: string
 }
 
 interface LocalSession extends BaseSession {
@@ -339,12 +350,13 @@ export class TerminalService {
       cols: Math.max(2, request.cols),
       rows: Math.max(1, request.rows),
       cwd: validCwd(request.cwd),
-      env: cleanEnvironment(process.env),
+      env: ptyEnvironment(request),
     })
     const session: LocalSession = {
       type: 'pty',
       info,
       scrollback: '',
+      oscTail: '',
       process: processHandle,
       request: { ...request },
     }
@@ -365,17 +377,37 @@ export class TerminalService {
   ): Promise<TerminalSessionInfo> {
     const profile = request.sshProfile
     if (!profile) throw new Error('SSH connection profile is required')
-    const connection = await this.openSshConnection(profile, request.sshSecrets ?? {}, signal)
+    // 相同连接参数复用存活连接:同一 tab 的分割终端共享登录状态,
+    // 一条连接断开/恢复对所有复用它的会话同时生效。
+    const reused = this.findReusableConnection(profile)
+    const connection =
+      reused ?? (await this.openSshConnection(profile, request.sshSecrets ?? {}, signal))
     try {
-      const session = await this.openSshShell(connection, request.cols, request.rows, signal)
+      const session = await this.openSshShell(
+        connection,
+        request.cols,
+        request.rows,
+        signal,
+        profile.initialDirectory,
+      )
       void connection.forwarder.startEnabled(profile.forwards)
       return session
     } catch (error) {
-      connection.client.end()
-      connection.jumpClient?.end()
-      this.connections.delete(connection.id)
+      if (!reused) {
+        connection.client.end()
+        connection.jumpClient?.end()
+        this.connections.delete(connection.id)
+      }
       throw error
     }
+  }
+
+  private findReusableConnection(profile: SshConnectionProfile): SshConnection | undefined {
+    const key = sshConnectionKey(profile)
+    for (const connection of this.connections.values()) {
+      if (sshConnectionKey(connection.profile) === key) return connection
+    }
+    return undefined
   }
 
   private async openSshConnection(
@@ -557,6 +589,7 @@ export class TerminalService {
     cols: number,
     rows: number,
     signal?: AbortSignal,
+    initialDirectory?: string,
   ): Promise<TerminalSessionInfo> {
     throwIfAborted(signal)
     const stream = await new Promise<ClientChannel>((resolve, reject) => {
@@ -607,7 +640,14 @@ export class TerminalService {
       sshConnectionId: connection.id,
       profileId: connection.profile.id,
     }
-    const session: SshSession = { type: 'ssh', info, scrollback: '', stream, connection }
+    const session: SshSession = {
+      type: 'ssh',
+      info,
+      scrollback: '',
+      oscTail: '',
+      stream,
+      connection,
+    }
     this.sessions.set(id, session)
     connection.sessions.add(id)
     stream.on('data', (data: Buffer) => this.handleOutput(session, data.toString('utf8')))
@@ -618,9 +658,10 @@ export class TerminalService {
       this.emitStatus(session)
       void this.releaseSshConnection(connection, id)
     })
-    if (connection.profile.initialDirectory) {
-      stream.write(`cd -- ${shellQuote(connection.profile.initialDirectory)}\r`)
-    }
+    const startupCommands = [OSC7_PROMPT_EXPORT]
+    const directory = (initialDirectory ?? connection.profile.initialDirectory).trim()
+    if (directory) startupCommands.push(`cd -- ${shellQuote(directory)}`)
+    stream.write(`${startupCommands.join('; ')}\r`)
     this.emitStatus(session)
     return { ...info }
   }
@@ -636,7 +677,39 @@ export class TerminalService {
 
   private handleOutput(session: TerminalSession, data: string): void {
     session.scrollback = (session.scrollback + data).slice(-MAX_SCROLLBACK_CHARS)
+    this.trackCwd(session, data)
     this.broadcast('terminal-output', { sessionId: session.info.id, data })
+  }
+
+  /**
+   * 从终端输出里解析 OSC 7(file://host/path,bash/WSL/SSH 注入 PROMPT_COMMAND 上报)
+   * 与 OSC 9;9(ConPTY 风格),把 cwd 记到会话上并广播 'terminal-cwd'。
+   * 序列可能跨数据帧,未完整的残片存进 oscTail 下次拼接。
+   */
+  private trackCwd(session: TerminalSession, data: string): void {
+    const text = session.oscTail + data
+    session.oscTail = ''
+    let cwd: string | undefined
+    for (const match of text.matchAll(OSC_CWD_PATTERN)) {
+      cwd = match[1] ?? match[2]
+    }
+    const tailStart = text.lastIndexOf('\x1b]')
+    if (tailStart >= 0) {
+      const tail = text.slice(tailStart)
+      if (!tail.includes('\x07') && !tail.includes('\x1b\\')) {
+        session.oscTail = tail.slice(0, 256)
+      }
+    }
+    if (!cwd) return
+    try {
+      cwd = decodeURIComponent(cwd)
+    } catch {
+      // 注入的 PROMPT_COMMAND 不做 URL 编码,非法百分号序列按原文保留
+    }
+    if (session.type === 'pty') cwd = normalizeMsysPath(cwd)
+    if (!cwd || session.info.cwd === cwd) return
+    session.info.cwd = cwd
+    this.broadcast('terminal-cwd', { sessionId: session.info.id, cwd } satisfies TerminalCwdEvent)
   }
 
   private emitStatus(session: TerminalSession, message?: string, exitCode?: number): void {
@@ -847,6 +920,29 @@ function cleanEnvironment(environment: Record<string, string | undefined>): Reco
       (entry): entry is [string, string] => typeof entry[1] === 'string',
     ),
   )
+}
+
+/**
+ * bash 系终端注入 PROMPT_COMMAND 以上报 OSC 7 cwd:
+ * - WSL 需要经 WSLENV(冒号分隔)把变量透传进发行版;
+ * - git-bash 是 MSYS bash,直接继承环境变量;
+ * - powershell/cmd 无可靠的 OSC 7 机制,不注入。
+ */
+function ptyEnvironment(request: TerminalCreateRequest): Record<string, string> {
+  const env = cleanEnvironment(process.env)
+  if (request.kind === 'wsl') {
+    env.PROMPT_COMMAND = OSC7_PROMPT_COMMAND
+    env.WSLENV = env.WSLENV ? `${env.WSLENV}:PROMPT_COMMAND` : 'PROMPT_COMMAND'
+  } else if (request.kind === 'local' && request.localShell === 'git-bash') {
+    env.PROMPT_COMMAND = OSC7_PROMPT_COMMAND
+  }
+  return env
+}
+
+/** git-bash(MSYS)上报 /c/Users/... 风格路径,还原为 Windows 路径供下次启动 cwd 使用 */
+function normalizeMsysPath(cwd: string): string {
+  const match = /^\/([a-zA-Z])\/(.+)$/.exec(cwd)
+  return match ? `${match[1].toUpperCase()}:/${match[2]}` : cwd
 }
 
 function validCwd(cwd?: string): string {

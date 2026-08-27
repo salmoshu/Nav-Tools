@@ -140,7 +140,6 @@
               <span v-if="updaterPrefs.autoDownload" class="version-status-hint">
                 {{ t('update.backgroundDownloading') }}
               </span>
-              <pre v-if="updateNotesSummary" class="version-notes">{{ updateNotesSummary }}</pre>
             </div>
             <el-progress
               v-else-if="updaterEvent?.type === 'download-progress'"
@@ -208,7 +207,6 @@ import {
 import { getBrowserWindowService } from '@/core/window/browserWindowService'
 import { getUpdaterService } from '@/core/update/browserUpdaterService'
 import type { UpdateStatusEvent, UpdaterPrefs } from '@/core/update/UpdaterService'
-import { summarizeReleaseNotes } from '@/core/update/releaseNotes'
 import { t, type AppLocale } from '@/i18n'
 import ThemeModeIcon from './ThemeModeIcon.vue'
 
@@ -362,10 +360,6 @@ const updateActionText = computed(() => {
   if (updaterEvent.value?.type === 'update-available') return t('update.downloadNow')
   return t('update.check')
 })
-
-const updateNotesSummary = computed(() =>
-  summarizeReleaseNotes(updaterEvent.value?.releaseNotes ?? ''),
-)
 
 async function handleUpdateAction() {
   const event = updaterEvent.value
@@ -704,20 +698,6 @@ function handleUpdaterPrefChange(
 
 .version-status-error {
   color: var(--el-color-error);
-}
-
-.version-notes {
-  max-height: 120px;
-  margin: 8px 0 0;
-  padding: 8px 10px;
-  overflow: auto;
-  border: 1px solid var(--app-border);
-  border-radius: 6px;
-  background: var(--app-surface-muted);
-  font-family: inherit;
-  font-size: 12px;
-  white-space: pre-wrap;
-  color: var(--app-text-secondary);
 }
 
 .version-progress {

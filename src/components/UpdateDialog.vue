@@ -16,11 +16,10 @@
       </div>
     </template>
 
-    <!-- 发现新版本：仅自动下载关闭时出现 -->
+    <!-- 发现新版本：仅自动下载关闭时出现;不展示版本 note,只提醒有更新 -->
     <template v-else-if="phase === 'available'">
       <div class="update-dialog-title">{{ t('update.newVersionTitle') }}</div>
       <p class="update-dialog-desc">{{ t('update.newVersionDesc', { version }) }}</p>
-      <pre v-if="releaseNotesSummary" class="update-dialog-notes">{{ releaseNotesSummary }}</pre>
       <div class="update-dialog-actions">
         <el-button size="small" @click="handleIgnore">{{ t('update.ignoreVersion') }}</el-button>
         <el-button size="small" type="primary" :icon="Download" :loading="manualDownloading" @click="handleDownload">
@@ -42,7 +41,6 @@ import { computed, onUnmounted, ref } from 'vue'
 import { Close, Download, RefreshRight } from '@element-plus/icons-vue'
 import { t } from '@/i18n'
 import { getUpdaterService } from '@/core/update/browserUpdaterService'
-import { summarizeReleaseNotes } from '@/core/update/releaseNotes'
 import { compareVersions } from '@/core/update/version'
 import type { UpdateStatusEvent } from '@/core/update/UpdaterService'
 
@@ -92,11 +90,6 @@ const ignored = computed(
     Boolean(prefs.value.ignoredVersion) &&
     Boolean(version.value) &&
     compareVersions(version.value, prefs.value.ignoredVersion ?? '') <= 0,
-)
-
-/** releaseNotes 摘要:与设置页版本区共用 summarizeReleaseNotes */
-const releaseNotesSummary = computed(() =>
-  summarizeReleaseNotes(event.value?.releaseNotes ?? ''),
 )
 
 type Phase = 'available' | 'progress' | 'ready'
@@ -181,20 +174,6 @@ function handleIgnore(): void {
 .update-dialog-desc {
   margin: 6px 0 12px;
   font-size: 13px;
-  color: var(--app-text-secondary);
-}
-
-.update-dialog-notes {
-  max-height: 120px;
-  margin: 0 0 12px;
-  padding: 8px 10px;
-  overflow: auto;
-  border: 1px solid var(--app-border);
-  border-radius: 6px;
-  background: var(--app-surface-muted);
-  font-family: inherit;
-  font-size: 12px;
-  white-space: pre-wrap;
   color: var(--app-text-secondary);
 }
 

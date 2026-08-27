@@ -244,14 +244,18 @@ import '@xterm/xterm/css/xterm.css'
 import { t } from '@/i18n'
 import type { TerminalPaneNode, TerminalSplitDirection } from '@/core/terminal/TerminalLayout'
 import {
+  TERMINAL_SSH_RECOVERED_EVENT,
   createTerminalId,
+  sshConnectionKey,
   type LocalShellKind,
   type SshConnectionProfile,
   type SshConnectionSecrets,
   type TerminalCapabilities,
   type TerminalLaunchSpec,
   type TerminalSessionInfo,
+  type TerminalSshRecoveredEvent,
 } from '@/core/terminal/TerminalTypes'
+import emitter from '@/hooks/useMitt'
 import TerminalConnectionDialog from './TerminalConnectionDialog.vue'
 
 const SESSION_CREATE_TIMEOUT_MS = 20_000
@@ -478,6 +482,44 @@ async function reconnectSession(): Promise<void> {
   await createSession(launch, launch.label || launch.localShell, launch)
 }
 
+/**
+ * 同 tab 内另一个相同连接参数的 SSH pane 上线后,本 pane 若处于断开/未连接状态,
+ * 用 safeStorage 里保存的凭据静默重连;没有可用凭据(如密码未保存)时保持原状,
+ * 用户仍可通过断开横幅/恢复卡片手动重连。
+ */
+function handleSshRecovered(raw: unknown): void {
+  const payload = raw as TerminalSshRecoveredEvent | undefined
+  if (!payload || payload.sourcePaneId === props.pane.id) return
+  const launch = props.pane.launch
+  if (launch?.kind !== 'ssh' || !launch.sshProfile) return
+  if (sshConnectionKey(launch.sshProfile) !== payload.key) return
+  const status = props.sessionInfo?.status
+  const disconnected = !props.pane.sessionId || status === 'closed' || status === 'error'
+  if (!disconnected || connecting.value) return
+  void silentSshReconnect(launch)
+}
+
+async function silentSshReconnect(
+  launch: Extract<TerminalLaunchSpec, { kind: 'ssh' }>,
+): Promise<void> {
+  const profile = launch.sshProfile
+  if (!profile) return
+  const secrets = await window.ipcRenderer
+    .invoke('terminal-credential-load', profile.id)
+    .catch(() => undefined)
+  if (profile.authMethod === 'password' && !secrets?.password) return
+  if (props.pane.sessionId) {
+    await window.ipcRenderer
+      .invoke('terminal-session-close', props.pane.sessionId)
+      .catch(() => undefined)
+  }
+  await createSession(
+    { kind: 'ssh', sshProfile: profile, sshSecrets: secrets ?? {} },
+    `${profile.username}@${profile.host}:${profile.port}`,
+    launch,
+  )
+}
+
 function emitSplit(direction: TerminalSplitDirection, inherit: boolean): void {
   emit('split', props.pane.id, direction, inherit)
 }
@@ -595,6 +637,23 @@ onMounted(() => {
       foreground: rootStyle.getPropertyValue('--terminal-fg').trim() || '#d8dee9',
       cursor: '#7aa2f7',
       selectionBackground: '#33467c',
+      // ANSI 16 色:Nord 调色板(与现有前景 #d8dee9 同源),让 ls/grep/git 等着色输出多彩可读
+      black: '#3b4252',
+      red: '#bf616a',
+      green: '#a3be8c',
+      yellow: '#ebcb8b',
+      blue: '#81a1c1',
+      magenta: '#b48ead',
+      cyan: '#88c0d0',
+      white: '#e5e9f0',
+      brightBlack: '#4c566a',
+      brightRed: '#d08770',
+      brightGreen: '#a3be8c',
+      brightYellow: '#ebcb8b',
+      brightBlue: '#81a1c1',
+      brightMagenta: '#b48ead',
+      brightCyan: '#8fbcbb',
+      brightWhite: '#eceff4',
     },
   })
   fitAddon = new FitAddon()
@@ -614,6 +673,7 @@ onMounted(() => {
   resizeObserver = new ResizeObserver(() => fitTerminal())
   if (terminalElement.value) resizeObserver.observe(terminalElement.value)
   window.ipcRenderer?.on('terminal-output', handleOutput)
+  emitter.on(TERMINAL_SSH_RECOVERED_EVENT, handleSshRecovered)
   void attachSession(props.pane.sessionId)
   if (props.autoOpenSsh) {
     openSshDialog()
@@ -624,6 +684,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   window.ipcRenderer?.off('terminal-output', handleOutput)
+  emitter.off(TERMINAL_SSH_RECOVERED_EVENT, handleSshRecovered)
   cancelConnection()
   resizeObserver?.disconnect()
   terminal?.dispose()

@@ -29,7 +29,7 @@
             @auxclick="closeTabWithMiddleClick($event, tab.id)"
             @keydown.enter="activateTab(tab.id)"
           >
-            <span class="tab-leading" :class="tabStatus(tab)" aria-hidden="true">
+            <span class="tab-leading" :class="[tabStatus(tab), { busy: tabBusy(tab) }]" aria-hidden="true">
               <i class="tab-status-dot"></i>
             </span>
             <input
@@ -169,19 +169,28 @@ import {
   TerminalWorkspaceStorage,
 } from '@/core/terminal/TerminalWorkspaceStorage'
 import {
+  TERMINAL_SSH_RECOVERED_EVENT,
+  sshConnectionKey,
   type HostKeyMismatchEvent,
   type HostKeyPromptEvent,
   type SshConnectionProfile,
   type TerminalCapabilities,
+  type TerminalCwdEvent,
   type TerminalLaunchSpec,
   type TerminalSessionInfo,
   type TerminalStatusEvent,
 } from '@/core/terminal/TerminalTypes'
 import { TerminalProfileStorage } from '@/core/terminal/TerminalProfileStorage'
+import emitter from '@/hooks/useMitt'
 import TerminalLayoutNodeComponent from './TerminalLayoutNode.vue'
 import TerminalSftpPanel from './TerminalSftpPanel.vue'
 
 const SESSION_CREATE_TIMEOUT_MS = 20_000
+/** 输出后保持「忙」状态的时长;指示环比输出本身多停留一会儿,避免闪烁 */
+const TERMINAL_BUSY_HOLD_MS = 800
+/** 单个会话上报忙状态的最小间隔,防止高频输出引发频繁重渲染 */
+const TERMINAL_BUSY_THROTTLE_MS = 300
+const TERMINAL_BUSY_SWEEP_MS = 400
 const profileStorage = new TerminalProfileStorage(localStorage)
 const workspaceStorage = new TerminalWorkspaceStorage(localStorage)
 const initialWorkspace = workspaceStorage.load()
@@ -204,6 +213,9 @@ let shortcutSettings = new TerminalShortcutSettings(localStorage, capabilities.v
 const savedProfiles = ref<SshConnectionProfile[]>(profileStorage.list())
 const sshConfigProfiles = ref<SshConnectionProfile[]>([])
 const sessionInfos = ref<Record<string, TerminalSessionInfo>>({})
+/** sessionId → 忙状态截止时间戳;由 'terminal-output' 节流更新,sweep 定时清除过期项 */
+const busyUntilBySession = ref<Record<string, number>>({})
+let busySweepTimer: number | undefined
 const activeTab = computed(
   () => tabs.value.find((tab) => tab.id === activeTabId.value) || tabs.value[0],
 )
@@ -396,6 +408,47 @@ function tabStatus(tab: TerminalTabLayout): 'empty' | 'connecting' | 'ready' | '
   return 'empty'
 }
 
+/** tab 下任一会话在近期有输出即视为忙,状态点变为旋转的残缺环 */
+function tabBusy(tab: TerminalTabLayout): boolean {
+  const busy = busyUntilBySession.value
+  const now = Date.now()
+  return listTerminalPanes(tab.root).some((pane) => {
+    const until = pane.sessionId ? busy[pane.sessionId] : undefined
+    return until !== undefined && until > now
+  })
+}
+
+function handleOutputActivity(_event: unknown, value: { sessionId?: string }): void {
+  const sessionId = value?.sessionId
+  if (!sessionId) return
+  const until = Date.now() + TERMINAL_BUSY_HOLD_MS
+  const existing = busyUntilBySession.value[sessionId]
+  if (existing && existing > until - TERMINAL_BUSY_THROTTLE_MS) return
+  busyUntilBySession.value = { ...busyUntilBySession.value, [sessionId]: until }
+}
+
+function sweepBusySessions(): void {
+  const entries = Object.entries(busyUntilBySession.value)
+  if (entries.length === 0) return
+  const now = Date.now()
+  const alive = entries.filter(([, until]) => until > now)
+  if (alive.length === entries.length) return
+  busyUntilBySession.value = Object.fromEntries(alive)
+}
+
+/** 主进程上报的运行时 cwd:写回 launch,随工作区持久化,供重连/重启恢复 */
+function handleCwdUpdate(_event: unknown, value: TerminalCwdEvent): void {
+  if (!value?.sessionId || typeof value.cwd !== 'string' || !value.cwd) return
+  for (const tab of tabs.value) {
+    const pane = listTerminalPanes(tab.root).find((entry) => entry.sessionId === value.sessionId)
+    if (!pane?.launch || pane.launch.kind === 'ssh' || pane.launch.cwd === value.cwd) continue
+    tab.root = updateTerminalPane(tab.root, pane.id, {
+      launch: { ...pane.launch, cwd: value.cwd },
+    })
+    return
+  }
+}
+
 function tabDisplayTitle(tab: TerminalTabLayout): string {
   const storedTitle = tab.title.trim()
   if (storedTitle && !isDefaultTerminalTitle(storedTitle)) return storedTitle
@@ -430,6 +483,35 @@ function setPaneSession(
   sessionInfos.value = { ...sessionInfos.value, [session.id]: session }
   if (previousSessionId && sftpSessionByTabId.value[tab.id] === previousSessionId) {
     sftpSessionByTabId.value = { ...sftpSessionByTabId.value, [tab.id]: session.id }
+  }
+  if (launch?.kind === 'ssh' && session.status === 'ready') {
+    notifySshSessionReady(tab.id, paneId, launch)
+  }
+}
+
+/**
+ * 某个 SSH pane 上线后,若同一 tab 内还有使用相同连接参数的断开/未连接 pane,
+ * 广播事件让它们静默重连(凭据来自 safeStorage,缺失时对应 pane 保持原状)。
+ */
+function notifySshSessionReady(
+  tabId: string,
+  sourcePaneId: string,
+  launch: Extract<TerminalLaunchSpec, { kind: 'ssh' }>,
+): void {
+  const key = launch.sshProfile ? sshConnectionKey(launch.sshProfile) : ''
+  if (!key) return
+  const tab = tabs.value.find((entry) => entry.id === tabId)
+  if (!tab) return
+  const hasDisconnectedSibling = listTerminalPanes(tab.root).some((pane) => {
+    if (pane.id === sourcePaneId || pane.launch?.kind !== 'ssh') return false
+    const profile = pane.launch.sshProfile
+    if (!profile || sshConnectionKey(profile) !== key) return false
+    if (!pane.sessionId) return true
+    const status = sessionInfos.value[pane.sessionId]?.status
+    return status === 'closed' || status === 'error'
+  })
+  if (hasDisconnectedSibling) {
+    emitter.emit(TERMINAL_SSH_RECOVERED_EVENT, { key, sourcePaneId })
   }
 }
 
@@ -727,6 +809,9 @@ onMounted(async () => {
   window.ipcRenderer?.on('terminal-host-key-prompt', handleHostKeyPrompt)
   window.ipcRenderer?.on('terminal-host-key-mismatch', handleHostKeyMismatch)
   window.ipcRenderer?.on('terminal-status', handleStatus)
+  window.ipcRenderer?.on('terminal-output', handleOutputActivity)
+  window.ipcRenderer?.on('terminal-cwd', handleCwdUpdate)
+  busySweepTimer = window.setInterval(sweepBusySessions, TERMINAL_BUSY_SWEEP_MS)
   try {
     capabilities.value = await window.ipcRenderer.invoke('terminal-capabilities')
     shortcutSettings = new TerminalShortcutSettings(localStorage, shortcutPlatform.value)
@@ -741,6 +826,9 @@ onUnmounted(() => {
   window.ipcRenderer?.off('terminal-host-key-prompt', handleHostKeyPrompt)
   window.ipcRenderer?.off('terminal-host-key-mismatch', handleHostKeyMismatch)
   window.ipcRenderer?.off('terminal-status', handleStatus)
+  window.ipcRenderer?.off('terminal-output', handleOutputActivity)
+  window.ipcRenderer?.off('terminal-cwd', handleCwdUpdate)
+  window.clearInterval(busySweepTimer)
 })
 
 function errorMessage(error: unknown): string {
@@ -901,6 +989,18 @@ function withTimeout<T>(
 }
 .tab-leading.closed .tab-status-dot {
   background: #f0883e;
+}
+/* 忙状态:与原状态点同盒尺寸(7px + 1.5px 边框)的橙色残缺环,旋转指示输出/刷新 */
+.tab-leading.busy .tab-status-dot {
+  border-color: #f0883e;
+  border-top-color: transparent;
+  background: transparent;
+  animation: tab-status-spin 0.8s linear infinite;
+}
+@keyframes tab-status-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 .tab-label {
   flex: 1;

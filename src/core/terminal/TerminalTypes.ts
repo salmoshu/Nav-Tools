@@ -72,6 +72,8 @@ export interface TerminalSessionInfo {
   sshConnectionId?: string
   profileId?: string
   scrollback?: string
+  /** 运行时捕获的当前工作目录(经 OSC 7 / OSC 9;9 上报,可能为空) */
+  cwd?: string
 }
 
 export interface TerminalCapabilities {
@@ -90,6 +92,35 @@ export interface TerminalStatusEvent {
   session: TerminalSessionInfo
   message?: string
   exitCode?: number
+}
+
+/** 主进程捕获到会话 cwd 变化时广播('terminal-cwd') */
+export interface TerminalCwdEvent {
+  sessionId: string
+  cwd: string
+}
+
+/**
+ * 渲染层内部事件(useMitt):同一 tab 内某个 SSH 会话上线,
+ * 通知其他使用相同连接参数的断开 pane 静默重连。
+ */
+export const TERMINAL_SSH_RECOVERED_EVENT = 'terminal-ssh-recovered'
+
+export interface TerminalSshRecoveredEvent {
+  key: string
+  sourcePaneId: string
+}
+
+/** SSH 连接身份:同一 tab 下相同连接参数的 pane 共享登录状态 */
+export function sshConnectionKey(profile: SshConnectionProfile): string {
+  return [
+    profile.host.toLowerCase(),
+    profile.port,
+    profile.username,
+    profile.authMethod,
+    profile.privateKeyPath,
+    profile.proxyJump,
+  ].join('|')
 }
 
 export interface HostKeyPromptEvent {
