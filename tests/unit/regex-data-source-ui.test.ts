@@ -9,10 +9,7 @@ import { t } from '@/i18n'
 describe('regex data-source UI integration', () => {
   const toolbar = readFileSync('src/components/ToolBar.vue', 'utf8')
   const device = readFileSync('src/hooks/useDevice.ts', 'utf8')
-  const messages = readFileSync(
-    'src/components/windows/common/RawMessages.vue',
-    'utf8',
-  )
+  const messages = readFileSync('src/components/windows/common/RawMessages.vue', 'utf8')
 
   it('offers Regex as a persisted parser option', () => {
     expect(textDataParserOptions.map((option) => option.value)).toContain('regex')
@@ -37,26 +34,18 @@ describe('regex data-source UI integration', () => {
     expect(first?.children).toBeUndefined()
 
     const grouped = textDataParserCascaderOptions.slice(1)
-    expect(grouped.map((option) => option.value)).toEqual([
-      'structured',
-      'protocol',
-      'custom',
-    ])
+    expect(grouped.map((option) => option.value)).toEqual(['structured', 'protocol', 'custom'])
     expect(
-      grouped.find((option) => option.value === 'structured')?.children?.map(
-        (child) => child.value,
-      ),
+      grouped
+        .find((option) => option.value === 'structured')
+        ?.children?.map((child) => child.value),
     ).toEqual(['json', 'csv'])
   })
 
   it('routes the active regex definition to Flow and Messages', () => {
-    expect(device).toContain(
-      'addFlowData(data, activeDataParser.value, activeRegexPattern.value)',
-    )
+    expect(device).toContain('addFlowData(data, activeDataParser.value, activeRegexPattern.value)')
     expect(device).toContain('flowRegexPattern.value = regexPattern')
-    expect(messages).toContain(
-      "activeDataParser.value === 'raw' ? 'none' : activeDataParser.value",
-    )
+    expect(messages).toContain("activeDataParser.value === 'raw' ? 'none' : activeDataParser.value")
   })
 
   it('renames the raw parser label to 无 and wires the parser-config highlight', () => {

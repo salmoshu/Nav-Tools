@@ -29,9 +29,7 @@ export class JpegStreamParser {
 
     if (this.buffered.length > this.maxBufferedBytes) {
       const latestStart = this.buffered.lastIndexOf(JPEG_START)
-      this.buffered = latestStart >= 0
-        ? this.buffered.subarray(latestStart)
-        : Buffer.alloc(0)
+      this.buffered = latestStart >= 0 ? this.buffered.subarray(latestStart) : Buffer.alloc(0)
     }
 
     return frames

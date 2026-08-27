@@ -74,10 +74,7 @@ test('keeps legacy configuration dialogs polished and inside a narrow viewport',
   await expect(dialog.locator('.config-tool-card').getByText('载入配置')).toBeVisible()
   await expect(dialog.locator('.el-dialog__footer').getByText('载入配置')).toHaveCount(0)
   await expect(dialog.locator('.el-dialog__footer').getByText('取消')).toBeVisible()
-  const headerInput = dialog
-    .locator('.message-field')
-    .filter({ hasText: '报头' })
-    .locator('input')
+  const headerInput = dialog.locator('.message-field').filter({ hasText: '报头' }).locator('input')
   const originalHeader = await headerInput.inputValue()
   await page.screenshot({ path: 'test-results/ui-audit-motor-config-mobile.png' })
   await headerInput.fill('FF')

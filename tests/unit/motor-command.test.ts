@@ -62,16 +62,12 @@ describe('motor command configuration', () => {
 
     command.data = manager.decimalToHex('4660', 'int16', 'little')
     expect(command.data).toBe('3412')
-    expect(manager.buildWriteCommandMessage(command, manager.configForm)).toBe(
-      'A501060100023412',
-    )
+    expect(manager.buildWriteCommandMessage(command, manager.configForm)).toBe('A501060100023412')
 
     manager.reencodeWriteCommandData('little', 'big')
     manager.configForm.dataEndianness = 'big'
     expect(command.data).toBe('1234')
-    expect(manager.buildWriteCommandMessage(command, manager.configForm)).toBe(
-      'A501060100021234',
-    )
+    expect(manager.buildWriteCommandMessage(command, manager.configForm)).toBe('A501060100021234')
   })
 
   it('normalizes integer input and implements the configured checksum methods', () => {
@@ -79,12 +75,8 @@ describe('motor command configuration', () => {
 
     expect(manager.decimalToHex('1.9', 'int16', 'little')).toBe('0100')
     expect(manager.calculateChecksum('313233343536373839', 'crc8', 0)).toBe('F4')
-    expect(manager.calculateChecksum('313233343536373839', 'crc16', 0, 'big')).toBe(
-      '4B37',
-    )
-    expect(manager.calculateChecksum('313233343536373839', 'crc16', 0, 'little')).toBe(
-      '374B',
-    )
+    expect(manager.calculateChecksum('313233343536373839', 'crc16', 0, 'big')).toBe('4B37')
+    expect(manager.calculateChecksum('313233343536373839', 'crc16', 0, 'little')).toBe('374B')
   })
 
   it('parses responses with the active field order and rejects a bad checksum', () => {

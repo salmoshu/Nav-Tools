@@ -113,7 +113,11 @@ function findBoxTops(rgb: Uint8Array, width: number, height: number): BoxTop[] {
   const merged: BoxTop[] = []
   for (const candidate of candidates) {
     const last = merged[merged.length - 1]
-    if (last && Math.abs(candidate.y - last.y) <= 3 && candidate.x0 - last.x1 <= CONFIG.boxMergeGap) {
+    if (
+      last &&
+      Math.abs(candidate.y - last.y) <= 3 &&
+      candidate.x0 - last.x1 <= CONFIG.boxMergeGap
+    ) {
       last.x1 = Math.max(last.x1, candidate.x1)
       continue
     }
@@ -152,11 +156,7 @@ export async function recognizeLabels(
         otherIndex !== index && Math.abs(other.y - box.y) <= 6 && other.x0 > box.x0,
     )
     const stripX0 = Math.max(0, box.x0 - stripLeftPad)
-    const stripX1 = Math.min(
-      width,
-      box.x0 + stripScanWidth,
-      neighbor ? neighbor.x0 - 2 : width,
-    )
+    const stripX1 = Math.min(width, box.x0 + stripScanWidth, neighbor ? neighbor.x0 - 2 : width)
     const stripY0 = Math.max(0, box.y - stripAbove)
     const stripY1 = Math.min(height, box.y + stripBelow)
     const regionW = stripX1 - stripX0

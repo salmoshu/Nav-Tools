@@ -193,7 +193,10 @@ export class MultiSeriesWebGLTrajectoryRenderer implements MultiSeriesTrajectory
     gl.linkProgram(program)
     if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
       // eslint-disable-next-line no-console
-      console.error('MultiSeriesTrajectoryRenderer program link error:', gl.getProgramInfoLog(program))
+      console.error(
+        'MultiSeriesTrajectoryRenderer program link error:',
+        gl.getProgramInfoLog(program),
+      )
       this.dispose()
       return false
     }
@@ -385,7 +388,7 @@ export class MultiSeriesWebGLTrajectoryRenderer implements MultiSeriesTrajectory
       1e-9,
     )
 
-    let best: PickedPoint & { screenDistSq: number } | null = null
+    let best: (PickedPoint & { screenDistSq: number }) | null = null
 
     for (const state of this.series.values()) {
       if (!state.visible || state.pointCount === 0 || !state.quadTree) continue
@@ -507,7 +510,10 @@ export class MultiSeriesWebGLTrajectoryRenderer implements MultiSeriesTrajectory
     this.gl.compileShader(shader)
     if (!this.gl.getShaderParameter(shader, this.gl.COMPILE_STATUS)) {
       // eslint-disable-next-line no-console
-      console.error('MultiSeriesTrajectoryRenderer shader compile error:', this.gl.getShaderInfoLog(shader))
+      console.error(
+        'MultiSeriesTrajectoryRenderer shader compile error:',
+        this.gl.getShaderInfoLog(shader),
+      )
       this.gl.deleteShader(shader)
       return null
     }
@@ -532,7 +538,13 @@ export class MultiSeriesWebGLTrajectoryRenderer implements MultiSeriesTrajectory
     }
   }
 
-  private writeVertex(state: SeriesState, index: number, x: number, y: number, _quality: number): void {
+  private writeVertex(
+    state: SeriesState,
+    index: number,
+    x: number,
+    y: number,
+    _quality: number,
+  ): void {
     const [r, g, b, a] = state.color
     const off = index * VERTEX_STRIDE
     state.vertexData[off] = x
@@ -581,7 +593,13 @@ export class MultiSeriesWebGLTrajectoryRenderer implements MultiSeriesTrajectory
     }
   }
 
-  private insertIntoQuadTree(state: SeriesState, x: number, y: number, index: number, quality: number): void {
+  private insertIntoQuadTree(
+    state: SeriesState,
+    x: number,
+    y: number,
+    index: number,
+    quality: number,
+  ): void {
     if (!state.quadTree) {
       this.rebuildQuadTree(state)
     }
@@ -620,7 +638,10 @@ export class MultiSeriesWebGLTrajectoryRenderer implements MultiSeriesTrajectory
   }
 
   private dataToScreenY(y: number): number {
-    return this.cssHeight - ((y - this.viewport.minY) / (this.viewport.maxY - this.viewport.minY)) * this.cssHeight
+    return (
+      this.cssHeight -
+      ((y - this.viewport.minY) / (this.viewport.maxY - this.viewport.minY)) * this.cssHeight
+    )
   }
 
   private draw(): void {
@@ -642,7 +663,14 @@ export class MultiSeriesWebGLTrajectoryRenderer implements MultiSeriesTrajectory
 
       if (this.positionLoc >= 0) {
         gl.enableVertexAttribArray(this.positionLoc)
-        gl.vertexAttribPointer(this.positionLoc, 2, gl.FLOAT, false, VERTEX_STRIDE * BYTES_PER_FLOAT, 0)
+        gl.vertexAttribPointer(
+          this.positionLoc,
+          2,
+          gl.FLOAT,
+          false,
+          VERTEX_STRIDE * BYTES_PER_FLOAT,
+          0,
+        )
       }
       if (this.colorLoc >= 0) {
         gl.enableVertexAttribArray(this.colorLoc)
@@ -825,7 +853,7 @@ export class MultiSeriesCanvasTrajectoryRenderer implements MultiSeriesTrajector
       1e-9,
     )
 
-    let best: PickedPoint & { screenDistSq: number } | null = null
+    let best: (PickedPoint & { screenDistSq: number }) | null = null
 
     for (const state of this.series.values()) {
       if (!state.visible || state.points.length === 0 || !state.quadTree) continue
@@ -918,7 +946,13 @@ export class MultiSeriesCanvasTrajectoryRenderer implements MultiSeriesTrajector
     }
   }
 
-  private insertIntoQuadTree(state: CanvasSeriesState, x: number, y: number, index: number, quality: number): void {
+  private insertIntoQuadTree(
+    state: CanvasSeriesState,
+    x: number,
+    y: number,
+    index: number,
+    quality: number,
+  ): void {
     if (!state.quadTree) {
       this.rebuildQuadTree(state)
     }
@@ -957,7 +991,10 @@ export class MultiSeriesCanvasTrajectoryRenderer implements MultiSeriesTrajector
   }
 
   private dataToScreenY(y: number): number {
-    return this.cssHeight - ((y - this.viewport.minY) / (this.viewport.maxY - this.viewport.minY)) * this.cssHeight
+    return (
+      this.cssHeight -
+      ((y - this.viewport.minY) / (this.viewport.maxY - this.viewport.minY)) * this.cssHeight
+    )
   }
 
   private applyTransform(): void {

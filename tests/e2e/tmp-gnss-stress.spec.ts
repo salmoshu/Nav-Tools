@@ -113,100 +113,103 @@ test.describe('gnss stress', () => {
       let result: any
       try {
         result = await page.evaluate(
-        async ({ epochList, speed, feedRaw }) => {
-          const nmeaMod = await import('/src/composables/gnss/useNmea.ts')
-          const nmea = nmeaMod.useNmea()
+          async ({ epochList, speed, feedRaw }) => {
+            const nmeaMod = await import('/src/composables/gnss/useNmea.ts')
+            const nmea = nmeaMod.useNmea()
 
-          let consoleApi: any = null
-          if (feedRaw) {
-            const cmod = await import('/src/composables/flow/useConsole.ts')
-            consoleApi = cmod.useConsole(true)
-            consoleApi.dataFormat.value = 'nmea'
-          }
-
-          let getUtc: () => string = () => ''
-          try {
-            const smod = await import('/src/stores/gnss.ts')
-            const store = smod.useGnssStore()
-            getUtc = () => String(store.status.utcTime ?? '')
-          } catch {
-          }
-
-          const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
-          const interval = 100 / speed
-          const lt = (window as any).__lt
-
-          let rafCount = 0
-          let rafAlive = true
-          const rafLoop = () => {
-            rafCount += 1
-            if (rafAlive) requestAnimationFrame(rafLoop)
-          }
-          requestAnimationFrame(rafLoop)
-
-          const samples: any[] = []
-          ;(window as any).__samples = samples
-          const t0 = performance.now()
-          let bucketStart = t0
-          let bucketRafStart = 0
-          let bucketLtCount = 0
-          let bucketLtTotal = 0
-
-          for (let i = 0; i < epochList.length; i++) {
-            const epochStart = performance.now()
-            nmea.processRawData(epochList[i])
-            if (consoleApi) consoleApi.addMessage(epochList[i])
-
-            const now = performance.now()
-            if (now - bucketStart >= 1000) {
-              // 事件循环延迟
-              const lag0 = performance.now()
-              await sleep(0)
-              const lagMs = performance.now() - lag0
-              // 同步 DOM 操作延迟（强制布局）
-              const d0 = performance.now()
-              const el = document.createElement('div')
-              el.style.cssText = 'position:absolute;left:-9999px;width:10px;height:10px'
-              document.body.appendChild(el)
-              void el.offsetHeight
-              el.remove()
-              const domMs = performance.now() - d0
-
-              const span = now - bucketStart
-              samples.push({
-                tSec: Math.round((now - t0) / 1000),
-                epoch: i + 1,
-                fps: Math.round(((rafCount - bucketRafStart) * 1000) / span),
-                ltCount: lt.count - bucketLtCount,
-                ltMs: Math.round(lt.total - bucketLtTotal),
-                heapMB: (performance as any).memory
-                  ? Math.round((performance as any).memory.usedJSHeapSize / 1048576)
-                  : -1,
-                lagMs: Math.round(lagMs * 10) / 10,
-                domMs: Math.round(domMs * 100) / 100,
-                nmeaCount: nmea.nmeaData.value.length,
-                rawMsgCount: consoleApi ? consoleApi.messages.value.length : null,
-                utc: getUtc(),
-              })
-              bucketStart = now
-              bucketRafStart = rafCount
-              bucketLtCount = lt.count
-              bucketLtTotal = lt.total
+            let consoleApi: any = null
+            if (feedRaw) {
+              const cmod = await import('/src/composables/flow/useConsole.ts')
+              consoleApi = cmod.useConsole(true)
+              consoleApi.dataFormat.value = 'nmea'
             }
 
-            const elapsed = performance.now() - epochStart
-            const delay = interval - elapsed
-            await sleep(delay > 0 ? delay : 0)
-          }
-          rafAlive = false
+            let getUtc: () => string = () => ''
+            try {
+              const smod = await import('/src/stores/gnss.ts')
+              const store = smod.useGnssStore()
+              getUtc = () => String(store.status.utcTime ?? '')
+            } catch {}
 
-          return {
-            samples,
-            totalLt: { count: lt.count, totalMs: Math.round(lt.total), maxMs: Math.round(lt.max) },
-            wallMs: Math.round(performance.now() - t0),
-          }
-        },
-        { epochList: epochs, speed: SPEED, feedRaw },
+            const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
+            const interval = 100 / speed
+            const lt = (window as any).__lt
+
+            let rafCount = 0
+            let rafAlive = true
+            const rafLoop = () => {
+              rafCount += 1
+              if (rafAlive) requestAnimationFrame(rafLoop)
+            }
+            requestAnimationFrame(rafLoop)
+
+            const samples: any[] = []
+            ;(window as any).__samples = samples
+            const t0 = performance.now()
+            let bucketStart = t0
+            let bucketRafStart = 0
+            let bucketLtCount = 0
+            let bucketLtTotal = 0
+
+            for (let i = 0; i < epochList.length; i++) {
+              const epochStart = performance.now()
+              nmea.processRawData(epochList[i])
+              if (consoleApi) consoleApi.addMessage(epochList[i])
+
+              const now = performance.now()
+              if (now - bucketStart >= 1000) {
+                // 事件循环延迟
+                const lag0 = performance.now()
+                await sleep(0)
+                const lagMs = performance.now() - lag0
+                // 同步 DOM 操作延迟（强制布局）
+                const d0 = performance.now()
+                const el = document.createElement('div')
+                el.style.cssText = 'position:absolute;left:-9999px;width:10px;height:10px'
+                document.body.appendChild(el)
+                void el.offsetHeight
+                el.remove()
+                const domMs = performance.now() - d0
+
+                const span = now - bucketStart
+                samples.push({
+                  tSec: Math.round((now - t0) / 1000),
+                  epoch: i + 1,
+                  fps: Math.round(((rafCount - bucketRafStart) * 1000) / span),
+                  ltCount: lt.count - bucketLtCount,
+                  ltMs: Math.round(lt.total - bucketLtTotal),
+                  heapMB: (performance as any).memory
+                    ? Math.round((performance as any).memory.usedJSHeapSize / 1048576)
+                    : -1,
+                  lagMs: Math.round(lagMs * 10) / 10,
+                  domMs: Math.round(domMs * 100) / 100,
+                  nmeaCount: nmea.nmeaData.value.length,
+                  rawMsgCount: consoleApi ? consoleApi.messages.value.length : null,
+                  utc: getUtc(),
+                })
+                bucketStart = now
+                bucketRafStart = rafCount
+                bucketLtCount = lt.count
+                bucketLtTotal = lt.total
+              }
+
+              const elapsed = performance.now() - epochStart
+              const delay = interval - elapsed
+              await sleep(delay > 0 ? delay : 0)
+            }
+            rafAlive = false
+
+            return {
+              samples,
+              totalLt: {
+                count: lt.count,
+                totalMs: Math.round(lt.total),
+                maxMs: Math.round(lt.max),
+              },
+              wallMs: Math.round(performance.now() - t0),
+            }
+          },
+          { epochList: epochs, speed: SPEED, feedRaw },
         )
       } catch (err) {
         // evaluate 失败/超时时，尽量回收页面内已采集的样本
@@ -216,8 +219,7 @@ test.describe('gnss stress', () => {
             page.evaluate(() => (window as any).__samples ?? []),
             new Promise<any[]>((r) => setTimeout(() => r([]), 10_000)),
           ])
-        } catch {
-        }
+        } catch {}
         const lt = await Promise.race([
           page.evaluate(() => (window as any).__lt ?? null).catch(() => null),
           new Promise<any>((r) => setTimeout(() => r(null), 10_000)),

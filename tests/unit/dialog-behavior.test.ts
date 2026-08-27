@@ -103,9 +103,7 @@ describe('dialog interaction policy', () => {
     ).toBe(true)
     expect(deviationSelectTags).toHaveLength(2)
     expect(
-      deviationSelectTags.every((tag) =>
-        tag.includes('popper-class="app-dialog-select-popper"'),
-      ),
+      deviationSelectTags.every((tag) => tag.includes('popper-class="app-dialog-select-popper"')),
     ).toBe(true)
   })
 

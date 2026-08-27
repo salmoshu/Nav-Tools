@@ -51,7 +51,10 @@ function parseJpegSize(frame: Uint8Array): { width: number; height: number } | u
     if (frame[i] !== 0xff) continue
     const marker = frame[i + 1]
     if (marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc) {
-      return { height: (frame[i + 5] << 8) | frame[i + 6], width: (frame[i + 7] << 8) | frame[i + 8] }
+      return {
+        height: (frame[i + 5] << 8) | frame[i + 6],
+        width: (frame[i + 7] << 8) | frame[i + 8],
+      }
     }
   }
   return undefined
@@ -75,29 +78,50 @@ export class CameraStreamService {
     return { ok: true }
   }
 
-  private attempt(id: number, url: string, target: CameraStreamTarget, transportIndex: number): void {
+  private attempt(
+    id: number,
+    url: string,
+    target: CameraStreamTarget,
+    transportIndex: number,
+  ): void {
     const transport = CameraStreamService.transports[transportIndex]
     // 两路输出:pipe:1 = MJPEG 显示流;pipe:3 = 原始 rgb24 裸帧,供标签识别
-    const process = spawn(this.ffmpegExecutable, [
-      '-hide_banner',
-      '-loglevel', 'warning',
-      '-rtsp_transport', transport,
-      '-fflags', 'nobuffer',
-      '-flags', 'low_delay',
-      '-i', url,
-      '-an',
-      '-filter_complex',
-      `[0:v]split=2[va][vb];[va]fps=15[outv];[vb]fps=4,format=rgb24[outm]`,
-      '-map', '[outv]',
-      '-q:v', '2',
-      '-f', 'image2pipe',
-      '-vcodec', 'mjpeg',
-      'pipe:1',
-      '-map', '[outm]',
-      '-f', 'rawvideo',
-      '-pix_fmt', 'rgb24',
-      'pipe:3',
-    ], { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe', 'pipe'] })
+    const process = spawn(
+      this.ffmpegExecutable,
+      [
+        '-hide_banner',
+        '-loglevel',
+        'warning',
+        '-rtsp_transport',
+        transport,
+        '-fflags',
+        'nobuffer',
+        '-flags',
+        'low_delay',
+        '-i',
+        url,
+        '-an',
+        '-filter_complex',
+        `[0:v]split=2[va][vb];[va]fps=15[outv];[vb]fps=4,format=rgb24[outm]`,
+        '-map',
+        '[outv]',
+        '-q:v',
+        '2',
+        '-f',
+        'image2pipe',
+        '-vcodec',
+        'mjpeg',
+        'pipe:1',
+        '-map',
+        '[outm]',
+        '-f',
+        'rawvideo',
+        '-pix_fmt',
+        'rgb24',
+        'pipe:3',
+      ],
+      { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe', 'pipe'] },
+    )
 
     const session: CameraStreamSession = {
       process,
@@ -149,7 +173,9 @@ export class CameraStreamService {
       const { frameWidth: width, frameHeight: height } = session
       if (!width || !height || session.ocrBusy) return
 
-      session.ocrBuffer = session.ocrBuffer.length ? Buffer.concat([session.ocrBuffer, chunk]) : chunk
+      session.ocrBuffer = session.ocrBuffer.length
+        ? Buffer.concat([session.ocrBuffer, chunk])
+        : chunk
       const frameSize = width * height * 3
       while (session.ocrBuffer.length >= frameSize && !session.ocrBusy) {
         // 只分析最新帧:推理若掉队,丢弃积压的旧帧,避免标签与画面产生时间差
@@ -182,7 +208,10 @@ export class CameraStreamService {
               target.send('camera-stream-labels', { labels: stable })
             }
           } catch (error) {
-            console.error('[CameraStream] 标签识别异常:', error instanceof Error ? error.message : error)
+            console.error(
+              '[CameraStream] 标签识别异常:',
+              error instanceof Error ? error.message : error,
+            )
           } finally {
             session.ocrBusy = false
           }
@@ -194,14 +223,14 @@ export class CameraStreamService {
       session.errorOutput = `${session.errorOutput}${chunk.toString('utf8')}`.slice(-3000)
     })
 
-    process.on('error', error => {
+    process.on('error', (error) => {
       if (this.sessions.get(id) !== session) return
       this.sessions.delete(id)
       if (session.watchdog) clearTimeout(session.watchdog)
       this.sendStatus(session, 'error', formatProcessError(error.message, this.ffmpegExecutable))
     })
 
-    process.on('close', code => {
+    process.on('close', (code) => {
       if (this.sessions.get(id) !== session) return
       if (session.watchdog) clearTimeout(session.watchdog)
       if (session.stopping) {
@@ -254,7 +283,11 @@ export class CameraStreamService {
     for (const id of [...this.sessions.keys()]) this.stop(id)
   }
 
-  private sendStatus(session: CameraStreamSession, status: CameraStreamStatus, message: string): void {
+  private sendStatus(
+    session: CameraStreamSession,
+    status: CameraStreamStatus,
+    message: string,
+  ): void {
     if (!session.target.isDestroyed()) {
       session.target.send('camera-stream-status', { status, message })
     }
@@ -280,10 +313,12 @@ export function validateRtspUrl(rawUrl: unknown): CameraStreamStartResult & { ur
 function cleanFfmpegError(output: string): string {
   const lines = output
     .split(/\r?\n/)
-    .map(line => line.trim())
+    .map((line) => line.trim())
     .filter(Boolean)
   // 跳过 "Error number -135 occurred"、"Error opening input file..." 这类无信息量的包装行,取其前的具体原因
-  const informative = [...lines].reverse().find(line => !/^Error (number|opening input)/i.test(line))
+  const informative = [...lines]
+    .reverse()
+    .find((line) => !/^Error (number|opening input)/i.test(line))
   const message = informative ?? lines.at(-1) ?? ''
   return message.length > 220 ? `${message.slice(0, 217)}…` : message
 }

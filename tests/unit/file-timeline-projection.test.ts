@@ -23,9 +23,7 @@ describe('GNSS file replay projection', () => {
 
     for (const [time, latitude, longitude] of samples) {
       nmea.parseNmea(
-        withChecksum(
-          `$GPGGA,${time},${latitude},N,${longitude},E,1,08,0.9,545.4,M,46.9,M,,`,
-        ),
+        withChecksum(`$GPGGA,${time},${latitude},N,${longitude},E,1,08,0.9,545.4,M,46.9,M,,`),
       )
     }
 
@@ -53,9 +51,7 @@ describe('GNSS file replay projection', () => {
     const nmea = useNmea()
     for (const time of ['123519.10', '123519.20']) {
       nmea.parseNmea(
-        withChecksum(
-          `$GPGGA,${time},4807.038,N,01131.000,E,1,08,0.9,545.4,M,46.9,M,,`,
-        ),
+        withChecksum(`$GPGGA,${time},4807.038,N,01131.000,E,1,08,0.9,545.4,M,46.9,M,,`),
       )
     }
 

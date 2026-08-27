@@ -23,10 +23,7 @@ export class TextFileStreamService {
 
     try {
       while (true) {
-        const chunk = await this.ipc.invoke<TextFileStreamChunk>(
-          'text-file-stream-read',
-          requestId,
-        )
+        const chunk = await this.ipc.invoke<TextFileStreamChunk>('text-file-stream-read', requestId)
         if (chunk.data) callbacks.onChunk(chunk.data)
         callbacks.onProgress(
           chunk.totalBytes <= 0 ? 100 : (chunk.processedBytes / chunk.totalBytes) * 100,

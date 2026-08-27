@@ -168,7 +168,10 @@ export class CanvasTrajectoryRenderer implements TrajectoryRenderer {
     this.setViewport(minX - padX, maxX + padX, minY - padY, maxY + padY)
   }
 
-  pickPoint(screenX: number, screenY: number): { pointIndex: number; x: number; y: number; quality: number } | null {
+  pickPoint(
+    screenX: number,
+    screenY: number,
+  ): { pointIndex: number; x: number; y: number; quality: number } | null {
     if (!this.dataBounds || this.points.length === 0 || this.cssWidth <= 0 || this.cssHeight <= 0) {
       return null
     }
@@ -257,7 +260,11 @@ export class CanvasTrajectoryRenderer implements TrajectoryRenderer {
 
   private maybeRebuildGrid(): void {
     if (!this.dataBounds) return
-    const range = Math.max(1e-9, this.dataBounds.maxX - this.dataBounds.minX, this.dataBounds.maxY - this.dataBounds.minY)
+    const range = Math.max(
+      1e-9,
+      this.dataBounds.maxX - this.dataBounds.minX,
+      this.dataBounds.maxY - this.dataBounds.minY,
+    )
     if (this.grid.isEmpty() || range > this.lastGridRange * 1.5) {
       this.rebuildGrid()
       this.lastGridRange = range

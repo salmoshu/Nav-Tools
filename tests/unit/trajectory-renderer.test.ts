@@ -1,7 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { CanvasTrajectoryRenderer } from '../../src/core/render/CanvasTrajectoryRenderer'
 import { createTrajectoryRenderer } from '../../src/core/render/createTrajectoryRenderer'
-import { TrajectoryRenderer, WebGLTrajectoryRenderer } from '../../src/core/render/TrajectoryRenderer'
+import {
+  TrajectoryRenderer,
+  WebGLTrajectoryRenderer,
+} from '../../src/core/render/TrajectoryRenderer'
 
 function createMockWebGLContext() {
   return {

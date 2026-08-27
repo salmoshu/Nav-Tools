@@ -2,8 +2,7 @@ export type TextDataParser = 'raw' | 'json' | 'nmea' | 'regex' | 'csv'
 export type ParsedTextValue = string | number | boolean | null
 export type ParsedTextRecord = Record<string, ParsedTextValue>
 
-export const DEFAULT_KEY_VALUE_REGEX =
-  String.raw`(?<key>[^\s=]+)=(?<value>"[^"]*"|'[^']*'|[^\s]+)`
+export const DEFAULT_KEY_VALUE_REGEX = String.raw`(?<key>[^\s=]+)=(?<value>"[^"]*"|'[^']*'|[^\s]+)`
 
 export interface TextRecordParseResult {
   valid: boolean
@@ -57,9 +56,7 @@ export function parseTextValue(rawValue: string): ParsedTextValue {
     return value.slice(1, -1)
   }
 
-  const enumNumber = value.match(
-    /\(([-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[-+]?\d+)?)\)\s*$/i,
-  )
+  const enumNumber = value.match(/\(([-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[-+]?\d+)?)\)\s*$/i)
   if (enumNumber) return Number(enumNumber[1])
 
   const numberWithOptionalUnit = value.match(

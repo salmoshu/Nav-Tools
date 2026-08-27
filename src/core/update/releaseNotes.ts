@@ -6,7 +6,12 @@ export function summarizeReleaseNotes(notes: string, maxLines = 5): string {
   if (!notes) return ''
   return notes
     .split(/\r?\n/)
-    .map((line) => line.replace(/^#+\s*/, '').replace(/^[-*]\s*/, '').trim())
+    .map((line) =>
+      line
+        .replace(/^#+\s*/, '')
+        .replace(/^[-*]\s*/, '')
+        .trim(),
+    )
     .filter(Boolean)
     .slice(0, maxLines)
     .join('\n')

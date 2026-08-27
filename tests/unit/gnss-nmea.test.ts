@@ -93,18 +93,10 @@ describe('NMEA GNSS status extraction', () => {
   it('records one status snapshot per 10 Hz epoch and restores a selected epoch', () => {
     const { parseNmea, statusEpochHistory, applyStatusEpoch, clearData } = useNmea()
     const store = useGnssStore()
-    const rmc30 = withChecksum(
-      '$GPRMC,123519.30,A,4807.038,N,01131.000,E,10.0,0.0,230394,003.1,W',
-    )
-    const gga30 = withChecksum(
-      '$GPGGA,123519.30,4807.038,N,01131.000,E,1,08,0.9,545.4,M,46.9,M,,',
-    )
-    const rmc40 = withChecksum(
-      '$GPRMC,123519.40,A,4807.039,N,01131.001,E,20.0,0.0,230394,003.1,W',
-    )
-    const gga40 = withChecksum(
-      '$GPGGA,123519.40,4807.039,N,01131.001,E,1,09,0.8,546.4,M,46.9,M,,',
-    )
+    const rmc30 = withChecksum('$GPRMC,123519.30,A,4807.038,N,01131.000,E,10.0,0.0,230394,003.1,W')
+    const gga30 = withChecksum('$GPGGA,123519.30,4807.038,N,01131.000,E,1,08,0.9,545.4,M,46.9,M,,')
+    const rmc40 = withChecksum('$GPRMC,123519.40,A,4807.039,N,01131.001,E,20.0,0.0,230394,003.1,W')
+    const gga40 = withChecksum('$GPGGA,123519.40,4807.039,N,01131.001,E,1,09,0.8,546.4,M,46.9,M,,')
 
     ;[rmc30, gga30, rmc40, gga40].forEach(parseNmea)
 
@@ -128,12 +120,8 @@ describe('NMEA GNSS status extraction', () => {
   })
 
   it('coalesces matching RMC and GGA map positions with GGA solution quality', () => {
-    const {
-      parseNmea,
-      mapTrackPoints,
-      speedEpochHistory,
-      rebuildMapTrackFromPositionHistory,
-    } = useNmea()
+    const { parseNmea, mapTrackPoints, speedEpochHistory, rebuildMapTrackFromPositionHistory } =
+      useNmea()
     const store = useGnssStore()
     const rmc30 = withChecksum(
       '$GPRMC,091214.30,A,3110.7353943,N,12124.3158362,E,1.26,0.00,030723,0.0,E,R,V',
@@ -198,11 +186,7 @@ describe('NMEA GNSS status extraction', () => {
   })
 
   it('builds an extrema-preserving deviation overview spanning the complete position history', () => {
-    const {
-      positionEpochHistory,
-      deviationPoints,
-      rebuildDeviationFromPositionHistory,
-    } = useNmea()
+    const { positionEpochHistory, deviationPoints, rebuildDeviationFromPositionHistory } = useNmea()
     for (let index = 0; index < 10; index += 1) {
       positionEpochHistory.value.append(`12000${index}.0`, {
         E: index === 3 ? 100 : index,
@@ -233,9 +217,7 @@ describe('NMEA GNSS status extraction', () => {
       const time = `${String(hh).padStart(2, '0')}${String(mm).padStart(2, '0')}${String(ss).padStart(2, '0')}.${tenth}`
       const latitude = (4807.038 + index * 0.00001).toFixed(5)
       const longitude = (1131 + index * 0.00001).toFixed(5)
-      return withChecksum(
-        `$GPGGA,${time},${latitude},N,0${longitude},E,4,12,0.8,545.4,M,46.9,M,,`,
-      )
+      return withChecksum(`$GPGGA,${time},${latitude},N,0${longitude},E,4,12,0.8,545.4,M,46.9,M,,`)
     })
 
     nmea.beginBulkImport()

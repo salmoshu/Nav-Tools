@@ -36,13 +36,12 @@ describe('numeric data field selection', () => {
   })
 
   it('is shared by Deviation and StatusView field candidates', () => {
-    const deviation = readFileSync(
-      'src/components/windows/common/FlowDeviation.vue',
-      'utf8',
-    )
+    const deviation = readFileSync('src/components/windows/common/FlowDeviation.vue', 'utf8')
     const statusView = readFileSync('src/components/StatusBar.vue', 'utf8')
 
-    expect(deviation).toContain('const { deviationConfig, availableSources } = useDataConfig(flowData)')
+    expect(deviation).toContain(
+      'const { deviationConfig, availableSources } = useDataConfig(flowData)',
+    )
     expect(statusView).toContain('getNumericDataFieldNames(flowData.value)')
   })
 })

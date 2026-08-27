@@ -7,17 +7,29 @@ import { initRec } from '@/core/camera/PaddleRec'
 
 function loadFrame(jpg: string): Uint8Array {
   const args = [
-    '-hide_banner', '-loglevel', 'error',
-    '-i', jpg,
-    '-f', 'rawvideo', '-pix_fmt', 'rgb24', 'pipe:1',
+    '-hide_banner',
+    '-loglevel',
+    'error',
+    '-i',
+    jpg,
+    '-f',
+    'rawvideo',
+    '-pix_fmt',
+    'rgb24',
+    'pipe:1',
   ]
-  const result = spawnSync((ffmpegStatic as unknown as string) || 'ffmpeg', args, { maxBuffer: 64 * 1024 * 1024 })
+  const result = spawnSync((ffmpegStatic as unknown as string) || 'ffmpeg', args, {
+    maxBuffer: 64 * 1024 * 1024,
+  })
   return new Uint8Array(result.stdout)
 }
 
 describe('recognizeLabels(PP-OCR)', () => {
   it('识别真实帧中的检测框标签', async () => {
-    const ok = await initRec('resources/ocr/ch_PP-OCRv3_rec_infer.onnx', 'resources/ocr/ppocr_keys_v1.txt')
+    const ok = await initRec(
+      'resources/ocr/ch_PP-OCRv3_rec_infer.onnx',
+      'resources/ocr/ppocr_keys_v1.txt',
+    )
     expect(ok).toBe(true)
 
     const rgb = loadFrame('tmp/ocr-assets/local-live.jpg')

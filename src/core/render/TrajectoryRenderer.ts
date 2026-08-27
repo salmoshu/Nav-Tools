@@ -12,7 +12,10 @@ export interface TrajectoryRenderer {
   /** 重置视口以自适应全部点 */
   fitToData(): void
   /** 屏幕坐标 → 最近的数据点（四叉树拾取） */
-  pickPoint(screenX: number, screenY: number): { pointIndex: number; x: number; y: number; quality: number } | null
+  pickPoint(
+    screenX: number,
+    screenY: number,
+  ): { pointIndex: number; x: number; y: number; quality: number } | null
   /** 设置点尺寸（px） */
   setPointSize(px: number): void
   /** 设置颜色映射函数 */
@@ -271,7 +274,10 @@ export class WebGLTrajectoryRenderer implements TrajectoryRenderer {
     this.setViewport(minX - padX, maxX + padX, minY - padY, maxY + padY)
   }
 
-  pickPoint(screenX: number, screenY: number): { pointIndex: number; x: number; y: number; quality: number } | null {
+  pickPoint(
+    screenX: number,
+    screenY: number,
+  ): { pointIndex: number; x: number; y: number; quality: number } | null {
     if (!this.quadTree || this.pointCount === 0 || this.cssWidth <= 0 || this.cssHeight <= 0) {
       return null
     }
@@ -436,7 +442,11 @@ export class WebGLTrajectoryRenderer implements TrajectoryRenderer {
     }
     if (this.pointCount > 0 && this.gl && this.buffer) {
       this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.buffer)
-      this.gl.bufferSubData(this.gl.ARRAY_BUFFER, 0, this.vertexData.subarray(0, this.pointCount * VERTEX_STRIDE))
+      this.gl.bufferSubData(
+        this.gl.ARRAY_BUFFER,
+        0,
+        this.vertexData.subarray(0, this.pointCount * VERTEX_STRIDE),
+      )
     }
   }
 
@@ -502,7 +512,14 @@ export class WebGLTrajectoryRenderer implements TrajectoryRenderer {
 
     if (this.positionLoc >= 0) {
       gl.enableVertexAttribArray(this.positionLoc)
-      gl.vertexAttribPointer(this.positionLoc, 2, gl.FLOAT, false, VERTEX_STRIDE * BYTES_PER_FLOAT, 0)
+      gl.vertexAttribPointer(
+        this.positionLoc,
+        2,
+        gl.FLOAT,
+        false,
+        VERTEX_STRIDE * BYTES_PER_FLOAT,
+        0,
+      )
     }
     if (this.colorLoc >= 0) {
       gl.enableVertexAttribArray(this.colorLoc)

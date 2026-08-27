@@ -38,11 +38,7 @@ export class SatelliteEpochAssembler {
   public addGsv(fragment: GsvEpochFragment): void {
     const totalMessages = Math.trunc(fragment.totalMessages)
     const messageNumber = Math.trunc(fragment.messageNumber)
-    if (
-      totalMessages < 1 ||
-      messageNumber < 1 ||
-      messageNumber > totalMessages
-    ) return
+    if (totalMessages < 1 || messageNumber < 1 || messageNumber > totalMessages) return
 
     const source = fragment.source || fragment.constellation || 'UNKNOWN'
     let cycle = this.cycles.get(source)
@@ -121,7 +117,7 @@ function createEmptyCounts(): Record<SatelliteEpochConstellation, number> {
 
 function normalizeConstellation(value: string): SatelliteEpochConstellation {
   return SATELLITE_EPOCH_CONSTELLATIONS.includes(value as SatelliteEpochConstellation)
-    ? value as SatelliteEpochConstellation
+    ? (value as SatelliteEpochConstellation)
     : 'OTHER'
 }
 

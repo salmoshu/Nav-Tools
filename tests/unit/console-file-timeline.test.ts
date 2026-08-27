@@ -68,9 +68,7 @@ describe('file replay message projection', () => {
 
   it('keeps the full list outside replay mode', () => {
     consoleState.beginFileReplayMessages()
-    consoleState.addFileReplayData(
-      '$GPGGA,120000.000,first\n$GPGGA,120001.000,second\n',
-    )
+    consoleState.addFileReplayData('$GPGGA,120000.000,first\n$GPGGA,120001.000,second\n')
     consoleState.endFileReplayMessages()
 
     timeline.indexing.value = false
@@ -86,8 +84,7 @@ describe('file replay message projection', () => {
     consoleState.endFileReplayMessages()
 
     expect(consoleState.messages.value.map((message) => message.fileElapsedMilliseconds)).toEqual([
-      0,
-      1000,
+      0, 1000,
     ])
   })
 
@@ -124,19 +121,14 @@ describe('file replay message projection', () => {
 
   it('keeps the beginning of large files available when replay starts at zero', () => {
     consoleState.beginFileReplayMessages()
-    const lines = Array.from(
-      { length: consoleState.maxMessages + 2 },
-      (_, index) => {
-        const totalSeconds = 12 * 60 * 60 + index
-        const hours = Math.floor(totalSeconds / 3600)
-        const minutes = Math.floor((totalSeconds % 3600) / 60)
-        const seconds = totalSeconds % 60
-        const time = [hours, minutes, seconds]
-          .map((value) => String(value).padStart(2, '0'))
-          .join('')
-        return `$GPGGA,${time},message-${index}`
-      },
-    )
+    const lines = Array.from({ length: consoleState.maxMessages + 2 }, (_, index) => {
+      const totalSeconds = 12 * 60 * 60 + index
+      const hours = Math.floor(totalSeconds / 3600)
+      const minutes = Math.floor((totalSeconds % 3600) / 60)
+      const seconds = totalSeconds % 60
+      const time = [hours, minutes, seconds].map((value) => String(value).padStart(2, '0')).join('')
+      return `$GPGGA,${time},message-${index}`
+    })
     consoleState.addFileReplayData(`${lines.join('\n')}\n`)
     consoleState.endFileReplayMessages()
 

@@ -68,8 +68,7 @@ describe('GNSS cache clearing', () => {
 
   it('coalesces repeated satellite reports into the latest satellite snapshot', () => {
     const nmea = useNmea()
-    const sentence =
-      '$GPGSV,1,1,03,13,50,034,00,18,42,315,00,24,40,179,00,,,,,0*53\r\n'
+    const sentence = '$GPGSV,1,1,03,13,50,034,00,18,42,315,00,24,40,179,00,,,,,0*53\r\n'
 
     nmea.processRawData(sentence.repeat(100))
 

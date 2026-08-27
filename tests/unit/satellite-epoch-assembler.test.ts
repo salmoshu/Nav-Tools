@@ -1,8 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  SatelliteEpochAssembler,
-  formatNmeaEpochTime,
-} from '@/core/gnss/SatelliteEpochAssembler'
+import { SatelliteEpochAssembler, formatNmeaEpochTime } from '@/core/gnss/SatelliteEpochAssembler'
 
 describe('SatelliteEpochAssembler', () => {
   it('assembles complete multi-sentence GSV cycles and preserves fractional time', () => {

@@ -29,11 +29,7 @@ export function getNumericDataFieldNames(data: unknown): string[] {
   if (!data || typeof data !== 'object') return []
 
   return Object.entries(data).flatMap(([key, value]) => {
-    if (
-      NON_DATA_FIELD_NAMES.has(key) ||
-      !Array.isArray(value) ||
-      !isNumericDataSeries(value)
-    ) {
+    if (NON_DATA_FIELD_NAMES.has(key) || !Array.isArray(value) || !isNumericDataSeries(value)) {
       return []
     }
     return [key]

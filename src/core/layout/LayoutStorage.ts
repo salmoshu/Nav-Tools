@@ -143,7 +143,7 @@ function isLayoutDocument(value: unknown): value is LayoutDocument {
       document.statusbarPosition === 'right') &&
     (document.removedWindowIds === undefined ||
       (Array.isArray(document.removedWindowIds) &&
-        document.removedWindowIds.every(id => typeof id === 'string')))
+        document.removedWindowIds.every((id) => typeof id === 'string')))
   )
 }
 

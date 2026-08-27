@@ -21,26 +21,38 @@ function buildEpoch(): string {
     {
       talker: 'GPGSV',
       sats: [
-        [3, 45, 20, 42], [7, 60, 120, 38], [12, 30, 200, 35], [19, 70, 300, 45],
+        [3, 45, 20, 42],
+        [7, 60, 120, 38],
+        [12, 30, 200, 35],
+        [19, 70, 300, 45],
       ],
     },
     {
       talker: 'GPGSV',
       sats: [
-        [24, 15, 40, 30], [28, 50, 260, 40], [32, 25, 320, 33], [5, 80, 90, 48],
+        [24, 15, 40, 30],
+        [28, 50, 260, 40],
+        [32, 25, 320, 33],
+        [5, 80, 90, 48],
       ],
     },
     {
       talker: 'GBGSV',
       sats: [
-        [1, 55, 30, 44], [6, 35, 150, 36], [11, 65, 240, 41], [16, 20, 280, 28],
+        [1, 55, 30, 44],
+        [6, 35, 150, 36],
+        [11, 65, 240, 41],
+        [16, 20, 280, 28],
       ],
     },
   ]
   const lines: string[] = []
   for (const { talker, sats } of groups) {
     const fields = sats.flatMap(([prn, el, az, snr]) => [
-      String(prn).padStart(2, '0'), String(el), String(az), String(snr),
+      String(prn).padStart(2, '0'),
+      String(el),
+      String(az),
+      String(snr),
     ])
     lines.push(nmea([talker, '1', '1', '08', ...fields].join(',')))
   }
@@ -71,7 +83,7 @@ function expectFilled(m: NonNullable<Awaited<ReturnType<typeof measurePolar>>>, 
   expect(Math.abs(m.cx - m.w / 2), `${label} center x`).toBeLessThan(m.w * 0.03)
   expect(Math.abs(m.cy - m.h / 2), `${label} center y`).toBeLessThan(m.h * 0.03)
   // 半径 = 85% * min(w,h)/2（允许 10% 误差）
-  const expectedR = 0.85 * Math.min(m.w, m.h) / 2
+  const expectedR = (0.85 * Math.min(m.w, m.h)) / 2
   expect(Math.abs(m.r - expectedR) / expectedR, `${label} radius`).toBeLessThan(0.1)
 }
 

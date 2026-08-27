@@ -14,9 +14,12 @@ export interface NetworkDisconnectEvent extends NetworkConnectionOptions {
 }
 
 export function validateNetworkOptions(options: NetworkConnectionOptions): string | undefined {
-  if (options.protocol !== 'tcp' && options.protocol !== 'udp') return t('core.network.protocolRequired')
+  if (options.protocol !== 'tcp' && options.protocol !== 'udp')
+    return t('core.network.protocolRequired')
   if (!options.host.trim()) {
-    return options.protocol === 'tcp' ? t('core.network.remoteHostRequired') : t('core.network.listenHostRequired')
+    return options.protocol === 'tcp'
+      ? t('core.network.remoteHostRequired')
+      : t('core.network.listenHostRequired')
   }
   if (!Number.isInteger(options.port) || options.port < 1 || options.port > 65_535) {
     return t('core.network.portRange')

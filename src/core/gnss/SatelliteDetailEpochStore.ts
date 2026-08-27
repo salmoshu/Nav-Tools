@@ -74,11 +74,7 @@ export class SatelliteDetailEpochStore {
       }
     }
 
-    this.epochs.append(
-      time,
-      { SNAPSHOT_ID: this.lastSnapshotId },
-      { replaceLast: true },
-    )
+    this.epochs.append(time, { SNAPSHOT_ID: this.lastSnapshotId }, { replaceLast: true })
   }
 
   public clear(): void {

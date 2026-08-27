@@ -97,7 +97,12 @@ function unsharpMask(src: Uint8Array, width: number, height: number): Uint8Array
 }
 
 /** 预处理:高度缩到 48(保持比例),宽度不足右侧补黑,过宽则压缩到 320 */
-function preprocess(strip: Uint8Array, width: number, height: number, sharpen: boolean): Float32Array {
+function preprocess(
+  strip: Uint8Array,
+  width: number,
+  height: number,
+  sharpen: boolean,
+): Float32Array {
   const ratio = MODEL_HEIGHT / height
   let resizedW = Math.round(width * ratio)
   const resizedH = MODEL_HEIGHT
