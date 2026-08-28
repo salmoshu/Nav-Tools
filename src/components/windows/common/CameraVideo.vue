@@ -38,7 +38,11 @@
       </div>
     </div>
 
-    <div v-if="labels.length" class="label-hints" :aria-label="t('common.video.recognizedLabelsDesc')">
+    <div
+      v-if="labels.length"
+      class="label-hints"
+      :aria-label="t('common.video.recognizedLabelsDesc')"
+    >
       <span class="hints-title">{{ t('common.video.recognizedLabels') }}</span>
       <span v-for="(label, index) in labels" :key="index" class="label-chip">{{ label }}</span>
     </div>
@@ -66,14 +70,16 @@
       >
         {{ t('common.video.play') }}
       </el-button>
-      <el-button v-else :icon="VideoPause" @click="pauseStream">{{ t('common.video.pause') }}</el-button>
+      <el-button v-else :icon="VideoPause" @click="pauseStream">{{
+        t('common.video.pause')
+      }}</el-button>
       <span class="loop-toggle" :title="t('common.video.loopReconnectHint')">
         <span class="loop-toggle-label">{{ t('common.video.loopReconnect') }}</span>
         <el-switch
-          v-model="autoReconnect"
+          v-model="dataSourceSettings.network.loop"
           size="small"
           :aria-label="t('common.video.loopReconnect')"
-          @change="handleAutoReconnectChange"
+          @change="handleSharedLoopChange"
         />
       </span>
     </div>
@@ -91,11 +97,28 @@
       <div class="camera-source-config">
         <p>{{ t('common.video.rtspSettingsDesc') }}</p>
         <label>
-          <span>{{ t('common.video.rtspAddress') }}</span>
+          <span>{{ t('common.video.streamProtocol') }}</span>
+          <el-select v-model="streamProtocolDraft" :aria-label="t('common.video.streamProtocol')">
+            <el-option label="RTSP" value="rtsp" />
+          </el-select>
+        </label>
+        <label>
+          <span>{{ t('common.video.streamPort') }}</span>
           <el-input
-            v-model="streamUrlDraft"
-            :aria-label="t('common.video.rtspAddress')"
-            placeholder="rtsp://192.168.3.14:8554/rgbstream"
+            v-model="streamPortDraft"
+            :aria-label="t('common.video.streamPort')"
+            inputmode="numeric"
+            maxlength="5"
+            placeholder="8554"
+            @keydown.enter.prevent="saveCameraSourceSettings"
+          />
+        </label>
+        <label>
+          <span>{{ t('common.video.streamSuffix') }}</span>
+          <el-input
+            v-model="streamSuffixDraft"
+            :aria-label="t('common.video.streamSuffix')"
+            placeholder="rgbstream"
             clearable
             @keydown.enter.prevent="saveCameraSourceSettings"
           />
@@ -117,20 +140,35 @@ import { ElMessage } from 'element-plus'
 import { Link, Loading, VideoCamera, VideoPause, VideoPlay } from '@element-plus/icons-vue'
 import { t } from '@/i18n'
 import {
+  buildCameraStreamUrl,
   CameraVideoStorage,
   normalizeRtspUrl,
 } from '@/core/camera/CameraVideoStorage'
 import { JsonStorage } from '@/core/storage/JsonStorage'
+import { useDataSourceManager } from '@/composables/useDataSourceManager'
 
 type StreamStatus = 'idle' | 'connecting' | 'playing' | 'stopped' | 'error' | 'unavailable'
 type StreamStatusPayload = { status?: StreamStatus; message?: string }
 
+// IP 与循环重连开关与数据接入 NETWORK 共用，相机只持久化协议/端口/后缀
+const { settings: dataSourceSettings, saveSettings: saveDataSourceSettings } =
+  useDataSourceManager()
 const videoStorage = new CameraVideoStorage(new JsonStorage(window.localStorage))
 const initialSettings = videoStorage.load()
-const streamUrl = ref(initialSettings.streamUrl)
-const streamUrlDraft = ref(streamUrl.value)
-/** 循环重连开关:断开后自动重新拉起视频流,面向频繁插拔设备的场景 */
-const autoReconnect = ref(initialSettings.autoReconnect)
+const streamProtocol = ref(initialSettings.protocol)
+const streamPort = ref(initialSettings.port)
+const streamSuffix = ref(initialSettings.suffix)
+const streamProtocolDraft = ref(initialSettings.protocol)
+const streamPortDraft = ref(String(initialSettings.port))
+const streamSuffixDraft = ref(initialSettings.suffix)
+/** 完整流地址：协议://共享 NETWORK 主机:端口/后缀 */
+const streamUrl = computed(
+  () =>
+    buildCameraStreamUrl(
+      { protocol: streamProtocol.value, port: streamPort.value, suffix: streamSuffix.value },
+      dataSourceSettings.network.host,
+    ) ?? '',
+)
 const showCameraSourceDialog = ref(false)
 const status = ref<StreamStatus>('idle')
 const statusMessage = ref(t('common.video.waitingToPlay'))
@@ -148,7 +186,7 @@ function clearReconnectTimer() {
 }
 
 function scheduleReconnect() {
-  if (!autoReconnect.value || status.value !== 'error') return
+  if (!dataSourceSettings.network.loop || status.value !== 'error') return
   clearReconnectTimer()
   statusMessage.value = t('common.video.reconnectWait')
   reconnectTimer = setTimeout(() => {
@@ -157,8 +195,8 @@ function scheduleReconnect() {
   }, RECONNECT_DELAY_MS)
 }
 
-function handleAutoReconnectChange(enabled: boolean) {
-  persistSettings()
+function handleSharedLoopChange(enabled: boolean) {
+  saveDataSourceSettings()
   if (!enabled) {
     clearReconnectTimer()
   } else if (status.value === 'error') {
@@ -167,7 +205,12 @@ function handleAutoReconnectChange(enabled: boolean) {
 }
 
 function persistSettings() {
-  videoStorage.save({ version: 1, streamUrl: streamUrl.value, autoReconnect: autoReconnect.value })
+  videoStorage.save({
+    version: 1,
+    protocol: streamProtocol.value,
+    port: streamPort.value,
+    suffix: streamSuffix.value,
+  })
 }
 
 // 缩放/平移:滚轮以光标为中心缩放,左键拖拽平移,双击复位
@@ -248,7 +291,6 @@ async function startStream() {
     ElMessage.warning(t('common.video.errInvalidRtsp'))
     return
   }
-
   if (!window.electronAPI?.startCameraStream) {
     status.value = 'unavailable'
     statusMessage.value = t('common.video.errDesktopOnly')
@@ -271,19 +313,24 @@ async function startStream() {
 }
 
 function openCameraSourceSettings() {
-  streamUrlDraft.value = streamUrl.value
+  streamProtocolDraft.value = streamProtocol.value
+  streamPortDraft.value = String(streamPort.value)
+  streamSuffixDraft.value = streamSuffix.value
   showCameraSourceDialog.value = true
 }
 
 function saveCameraSourceSettings() {
-  const url = normalizeRtspUrl(streamUrlDraft.value)
-  if (!url) {
+  const portDigits = streamPortDraft.value.replace(/\D/g, '')
+  const port = Number(portDigits)
+  const suffix = streamSuffixDraft.value.trim().replace(/^\/+/, '')
+  if (!portDigits || !Number.isInteger(port) || port < 1 || port > 65535 || !suffix) {
     ElMessage.warning(t('common.video.errInvalidRtsp'))
     return
   }
 
-  streamUrl.value = url
-  streamUrlDraft.value = url
+  streamProtocol.value = streamProtocolDraft.value
+  streamPort.value = port
+  streamSuffix.value = suffix
   persistSettings()
   showCameraSourceDialog.value = false
   ElMessage.success(t('data.cameraRtspSaved'))

@@ -422,7 +422,9 @@ describe('DataSourceStorage', () => {
       'camera',
     )
     expect(JSON.parse(memory.getItem(CAMERA_VIDEO_SETTINGS_KEY) ?? '{}')).toMatchObject({
-      streamUrl: 'rtsp://10.0.0.8:8554/camera',
+      protocol: 'rtsp',
+      port: 8554,
+      suffix: 'camera',
     })
   })
 

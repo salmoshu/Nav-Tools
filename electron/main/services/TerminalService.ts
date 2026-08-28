@@ -33,7 +33,8 @@ const SSH_CHANNEL_TIMEOUT_MS = 15_000
 const HOST_KEY_RESPONSE_TIMEOUT_MS = 30_000
 /** 让 bash 在每个提示符前上报 OSC 7 cwd;仅对 bash 注入,zsh/fish 跳过避免报错 */
 const OSC7_PROMPT_COMMAND = 'printf "\\e]7;file://%s%s\\e\\\\" "$HOSTNAME" "$PWD"'
-const OSC7_PROMPT_EXPORT = `test -n "$BASH_VERSION" && export PROMPT_COMMAND='${OSC7_PROMPT_COMMAND}'`
+/** 输入回显抑制窗口:写入后的这段时间内到达的输出视为回显,不驱动 tab 活动动画 */
+const INPUT_ECHO_WINDOW_MS = 600
 /** OSC 7: file://host/path;OSC 9;9: ConPTY 的 cwd 上报 */
 const OSC_CWD_PATTERN =
   // eslint-disable-next-line no-control-regex -- 终端转义序列解析必须匹配控制字符
@@ -44,6 +45,8 @@ interface BaseSession {
   scrollback: string
   /** 未完整的 OSC 序列残片,等待下一帧数据拼接后再解析 */
   oscTail: string
+  /** 最近一次用户输入时间,用于把紧随的回显标记为非活动输出 */
+  lastInputAt?: number
 }
 
 interface LocalSession extends BaseSession {
@@ -177,6 +180,7 @@ export class TerminalService {
 
   public write(sessionId: string, data: string): void {
     const session = this.requireSession(sessionId)
+    session.lastInputAt = Date.now()
     if (session.type === 'pty') session.process.write(data)
     else session.stream.write(data)
   }
@@ -658,10 +662,10 @@ export class TerminalService {
       this.emitStatus(session)
       void this.releaseSshConnection(connection, id)
     })
-    const startupCommands = [OSC7_PROMPT_EXPORT]
+    // 不再向 shell 注入 PROMPT_COMMAND 启动命令:注入文本会被回显/写进 scrollback,
+    // 恢复终端时被当作奇怪打印再次回放。cwd 上报只保留 PTY 的环境变量注入。
     const directory = (initialDirectory ?? connection.profile.initialDirectory).trim()
-    if (directory) startupCommands.push(`cd -- ${shellQuote(directory)}`)
-    stream.write(`${startupCommands.join('; ')}\r`)
+    if (directory) stream.write(`cd -- ${shellQuote(directory)}\r`)
     this.emitStatus(session)
     return { ...info }
   }
@@ -678,7 +682,11 @@ export class TerminalService {
   private handleOutput(session: TerminalSession, data: string): void {
     session.scrollback = (session.scrollback + data).slice(-MAX_SCROLLBACK_CHARS)
     this.trackCwd(session, data)
-    this.broadcast('terminal-output', { sessionId: session.info.id, data })
+    // 紧随用户输入到达的输出基本是终端回显,标记 activity:false,
+    // 渲染层据此跳过 tab 忙碌动画,只有真实输出才驱动活动状态
+    const activity =
+      session.lastInputAt === undefined || Date.now() - session.lastInputAt > INPUT_ECHO_WINDOW_MS
+    this.broadcast('terminal-output', { sessionId: session.info.id, data, activity })
   }
 
   /**

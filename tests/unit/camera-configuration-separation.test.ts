@@ -38,9 +38,11 @@ describe('camera configuration separation', () => {
     expect(deviceSource).not.toContain("case 'camera'")
   })
 
-  it('configures the RTSP URL in a dedicated Camera Video dialog', () => {
+  it('configures the RTSP stream parts in a dedicated Camera Video dialog', () => {
     expect(cameraVideoSource).toContain('camera-video-source-dialog')
-    expect(cameraVideoSource).toContain('v-model="streamUrlDraft"')
+    expect(cameraVideoSource).toContain('v-model="streamProtocolDraft"')
+    expect(cameraVideoSource).toContain('v-model="streamPortDraft"')
+    expect(cameraVideoSource).toContain('v-model="streamSuffixDraft"')
     expect(cameraVideoSource).toContain('saveCameraSourceSettings')
     expect(cameraVideoSource).toContain('CameraVideoStorage')
     expect(cameraVideoSource).not.toContain("emitter.emit('input-event'")
@@ -120,21 +122,25 @@ describe('camera configuration separation', () => {
 
     expect(settings).toEqual({
       version: 1,
-      streamUrl: 'rtsp://10.0.0.8:8554/camera',
-      autoReconnect: false,
+      protocol: 'rtsp',
+      port: 8554,
+      suffix: 'camera',
     })
     expect(memory.getItem(CAMERA_VIDEO_SETTINGS_KEY)).toBe(JSON.stringify(settings))
   })
 
-  it('normalizes invalid saved video settings to the default RTSP URL', () => {
+  it('normalizes invalid saved video settings to the default stream parts', () => {
     const memory = new MemoryStorage()
     memory.setItem(
       CAMERA_VIDEO_SETTINGS_KEY,
       JSON.stringify({ version: 1, streamUrl: 'http://invalid.example/video' }),
     )
 
-    expect(new CameraVideoStorage(new JsonStorage(memory)).load().streamUrl).toBe(
-      'rtsp://192.168.3.14:8554/rgbstream',
-    )
+    expect(new CameraVideoStorage(new JsonStorage(memory)).load()).toEqual({
+      version: 1,
+      protocol: 'rtsp',
+      port: 8554,
+      suffix: 'rgbstream',
+    })
   })
 })

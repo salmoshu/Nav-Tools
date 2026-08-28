@@ -86,6 +86,8 @@ export interface TerminalCapabilities {
 export interface TerminalOutputEvent {
   sessionId: string
   data: string
+  /** false 表示输入回显(紧随用户输入),不应驱动 tab 活动动画;缺省/true 为真实输出 */
+  activity?: boolean
 }
 
 export interface TerminalStatusEvent {

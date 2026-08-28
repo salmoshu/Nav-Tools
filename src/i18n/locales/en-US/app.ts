@@ -86,6 +86,7 @@ export default {
     listenAddr: 'Listen Address',
     networkPort: 'Network Port',
     networkPortPlaceholder: 'Enter port',
+    networkLoop: 'Auto Reconnect',
     cameraTab: 'Camera',
     cameraTabShort: 'Camera',
     cameraSource: 'Camera',

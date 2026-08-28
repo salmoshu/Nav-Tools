@@ -29,7 +29,11 @@
             @auxclick="closeTabWithMiddleClick($event, tab.id)"
             @keydown.enter="activateTab(tab.id)"
           >
-            <span class="tab-leading" :class="[tabStatus(tab), { busy: tabBusy(tab) }]" aria-hidden="true">
+            <span
+              class="tab-leading"
+              :class="[tabStatus(tab), { busy: tabBusy(tab) }]"
+              aria-hidden="true"
+            >
               <i class="tab-status-dot"></i>
             </span>
             <input
@@ -418,7 +422,11 @@ function tabBusy(tab: TerminalTabLayout): boolean {
   })
 }
 
-function handleOutputActivity(_event: unknown, value: { sessionId?: string }): void {
+function handleOutputActivity(
+  _event: unknown,
+  value: { sessionId?: string; activity?: boolean },
+): void {
+  if (value.activity === false) return
   const sessionId = value?.sessionId
   if (!sessionId) return
   const until = Date.now() + TERMINAL_BUSY_HOLD_MS
@@ -666,6 +674,13 @@ function runShortcut(action: TerminalShortcutAction): void {
   }
 }
 
+/** 仅拦截真实可见的模态遮罩(display:none 的隐藏层不算),避免快捷键被残留 overlay 误杀 */
+function hasVisibleTerminalOverlay(): boolean {
+  return Array.from(document.querySelectorAll('.el-overlay')).some(
+    (overlay) => overlay instanceof HTMLElement && overlay.checkVisibility(),
+  )
+}
+
 function handleTerminalShortcut(event: KeyboardEvent): void {
   const target = event.target
   if (!(target instanceof Node) || !workbenchElement.value?.contains(target)) return
@@ -675,7 +690,7 @@ function handleTerminalShortcut(event: KeyboardEvent): void {
     element?.isContentEditable ||
     element?.matches('input, textarea, select, [contenteditable="true"]')
   if (isEditable && !isTerminalInput) return
-  if (document.querySelector('.el-overlay')) return
+  if (hasVisibleTerminalOverlay()) return
   shortcutSettings.reload()
   const action = shortcutSettings.resolve(terminalShortcutInputFromKeyboardEvent(event))
   if (!action) return

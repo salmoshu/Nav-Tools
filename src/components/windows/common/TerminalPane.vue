@@ -466,14 +466,17 @@ async function reconnectSession(): Promise<void> {
     launchError.value = t('common.terminal.reconnectTypeUnavailable')
     return
   }
+  if (launch.kind === 'ssh') {
+    // 优先用当前 profile + 安全存储里的凭据直接重连,不再弹出连接对话框;
+    // 仅当凭据缺失(如密码未保存)时才回退到对话框
+    if (launch.sshProfile && (await silentSshReconnect(launch))) return
+    openSshDialog()
+    return
+  }
   if (props.pane.sessionId) {
     await window.ipcRenderer
       .invoke('terminal-session-close', props.pane.sessionId)
       .catch(() => undefined)
-  }
-  if (launch.kind === 'ssh') {
-    openSshDialog()
-    return
   }
   if (launch.kind === 'wsl') {
     await createSession(launch, launch.label || `WSL · ${launch.wslDistro}`, launch)
@@ -501,13 +504,13 @@ function handleSshRecovered(raw: unknown): void {
 
 async function silentSshReconnect(
   launch: Extract<TerminalLaunchSpec, { kind: 'ssh' }>,
-): Promise<void> {
+): Promise<boolean> {
   const profile = launch.sshProfile
-  if (!profile) return
+  if (!profile) return false
   const secrets = await window.ipcRenderer
     .invoke('terminal-credential-load', profile.id)
     .catch(() => undefined)
-  if (profile.authMethod === 'password' && !secrets?.password) return
+  if (profile.authMethod === 'password' && !secrets?.password) return false
   if (props.pane.sessionId) {
     await window.ipcRenderer
       .invoke('terminal-session-close', props.pane.sessionId)
@@ -518,6 +521,7 @@ async function silentSshReconnect(
     `${profile.username}@${profile.host}:${profile.port}`,
     launch,
   )
+  return true
 }
 
 function emitSplit(direction: TerminalSplitDirection, inherit: boolean): void {
@@ -528,6 +532,19 @@ function focusPane(): void {
   emit('focus', props.pane.id)
 }
 
+/**
+ * 恢复 scrollback 前剥离终端查询/应答序列(DSR `\x1b[5n`/`\x1b[6n`、DA `\x1b[c`、
+ * 光标位置报告 `\x1b[{row};{col}R` 等)。这些序列在重放时既没有显示意义,
+ * 又可能被 xterm 重新应答或回显成乱码(恢复终端出现奇怪打印的来源之一)。
+ * 着色(SGR)与光标移动等正常序列保留。
+ */
+// eslint-disable-next-line no-control-regex -- 终端转义序列净化必须匹配控制字符
+const RESTORED_QUERY_PATTERN = /\x1b\[[\d;?]*[cnR]/g
+
+function sanitizeRestoredScrollback(data: string): string {
+  return data.replace(RESTORED_QUERY_PATTERN, '')
+}
+
 async function attachSession(sessionId: string | undefined): Promise<void> {
   if (!terminal || !sessionId || sessionId === attachedSessionId) return
   attachedSessionId = sessionId
@@ -536,7 +553,7 @@ async function attachSession(sessionId: string | undefined): Promise<void> {
   const session = await window.ipcRenderer.invoke('terminal-session-attach', sessionId)
   if (sessionId !== props.pane.sessionId) return
   if (!session) return
-  if (session.scrollback) await writeTerminalData(session.scrollback)
+  if (session.scrollback) await writeTerminalData(sanitizeRestoredScrollback(session.scrollback))
   if (sessionId !== props.pane.sessionId) return
   terminalInputEnabled = true
   await nextTick()

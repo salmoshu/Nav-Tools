@@ -3,9 +3,20 @@ import { describe, expect, it } from 'vitest'
 
 const terminalSource = readFileSync('src/components/windows/common/Terminal.vue', 'utf8')
 const paneSource = readFileSync('src/components/windows/common/TerminalPane.vue', 'utf8')
+const terminalServiceSource = readFileSync('electron/main/services/TerminalService.ts', 'utf8')
 const sftpSource = readFileSync('src/components/windows/common/TerminalSftpPanel.vue', 'utf8')
 
 describe('Terminal v1.4.1 visual controls', () => {
+  it('uses only real output for tab activity and ignores hidden overlays for shortcuts', () => {
+    expect(terminalSource).toContain('value.activity === false')
+    expect(terminalSource).toContain('hasVisibleTerminalOverlay()')
+    expect(terminalSource).not.toContain("document.querySelector('.el-overlay')")
+  })
+
+  it('does not inject a visible PROMPT_COMMAND into restored SSH shells', () => {
+    expect(terminalServiceSource).not.toContain('const startupCommands = [OSC7_PROMPT_EXPORT]')
+    expect(terminalServiceSource).not.toContain('stream.write(`${startupCommands.join')
+  })
   it('keeps the tab status dot centered and places add-tab beside the last tab', () => {
     const stripStart = terminalSource.indexOf('class="terminal-tabs__strip"')
     const actionsStart = terminalSource.indexOf('class="terminal-tabs__actions"')

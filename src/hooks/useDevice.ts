@@ -119,6 +119,7 @@ const serialAdvanced = toRef(dataSourceSettings.serial, 'advanced')
 const networkProtocol = toRef(dataSourceSettings.network, 'protocol')
 const networkIp = toRef(dataSourceSettings.network, 'host')
 const networkPort = toRef(dataSourceSettings.network, 'port')
+const networkLoop = toRef(dataSourceSettings.network, 'loop')
 
 // 文件配置
 const filePath = toRef(dataSourceSettings.file, 'path')
@@ -144,6 +145,7 @@ const globalDevice = ref<{
   protocol?: NetworkProtocol
   host?: string
   port?: number
+  connecting?: boolean
   connected: null | boolean
 }>({ connected: null })
 
@@ -156,6 +158,11 @@ watch(fileTimeline.playing, (playing) => {
 
 const deviceConnected = computed(() => {
   return globalDevice.value.connected === true
+})
+
+// 连接尝试进行中（点击开关到成功/失败之间），用于工具栏即时 pending 反馈
+const deviceConnecting = computed(() => {
+  return globalDevice.value.connecting === true
 })
 
 const activeDataParser = computed<TextDataParser>(() => {
@@ -211,6 +218,69 @@ function currentNetworkOptions(): NetworkConnectionOptions | undefined {
     host: device.host,
     port: device.port,
   }
+}
+
+// NETWORK 自动重连（loop 开关）：失败或断线后按固定间隔重试，
+// 手动关闭/移除设备或关闭 loop 时取消调度
+const NETWORK_RECONNECT_DELAY_MS = 3000
+let networkReconnectTimer: ReturnType<typeof setTimeout> | null = null
+
+function cancelNetworkReconnect(): void {
+  if (networkReconnectTimer) {
+    clearTimeout(networkReconnectTimer)
+    networkReconnectTimer = null
+  }
+}
+
+function scheduleNetworkReconnect(): void {
+  cancelNetworkReconnect()
+  if (!networkLoop.value) return
+  if (globalDevice.value.type !== 'network' || globalDevice.value.connected !== false) return
+  networkReconnectTimer = setTimeout(() => {
+    networkReconnectTimer = null
+    if (
+      networkLoop.value &&
+      globalDevice.value.type === 'network' &&
+      globalDevice.value.connected === false &&
+      !globalDevice.value.connecting
+    ) {
+      openNetworkDevice()
+    }
+  }, NETWORK_RECONNECT_DELAY_MS)
+}
+
+function openNetworkDevice(): void {
+  const options = currentNetworkOptions()
+  if (!options) return
+  // 点击后立即置为 connecting，工具栏马上给出 pending 反馈，
+  // 避免失败时长时间无反应让用户误以为没点上
+  globalDevice.value.connecting = true
+  networkService
+    .open(options)
+    .then(() => {
+      globalDevice.value.connecting = false
+      globalDevice.value.connected = true
+      activeDataTransport.activate('network')
+      const action =
+        options.protocol === 'tcp' ? t('data.netConnectSuccess') : t('data.netListenSuccess')
+      ElMessage({
+        message: `${options.protocol.toUpperCase()} ${options.host}:${options.port} ${action}`,
+        type: 'success',
+        placement: 'bottom-right',
+        offset: 50,
+      })
+    })
+    .catch((error) => {
+      globalDevice.value.connecting = false
+      globalDevice.value.connected = false
+      ElMessage({
+        message: error instanceof Error ? error.message : String(error),
+        type: 'error',
+        placement: 'bottom-right',
+        offset: 50,
+      })
+      scheduleNetworkReconnect()
+    })
 }
 
 function routeIncomingData(data: string): void {
@@ -278,6 +348,7 @@ networkService.onDisconnected((connection) => {
     placement: 'bottom-right',
     offset: 50,
   })
+  scheduleNetworkReconnect()
 })
 
 filePlaybackService.onStatus((status) => {
@@ -1023,12 +1094,15 @@ export function useDevice() {
 
   const openCurrDevice = () => {
     if (globalDevice.value.connected === false) {
+      if (globalDevice.value.connecting === true) return
       if (globalDevice.value.type === 'serial') {
         const options = currentSerialOptions()
         if (!options) return
+        globalDevice.value.connecting = true
         serialService
           .open(options)
           .then(() => {
+            globalDevice.value.connecting = false
             globalDevice.value.connected = true
             activeDataTransport.activate('serial')
 
@@ -1040,6 +1114,7 @@ export function useDevice() {
             })
           })
           .catch((error) => {
+            globalDevice.value.connecting = false
             ElMessage({
               message: `${error.message}`,
               type: 'error',
@@ -1048,31 +1123,7 @@ export function useDevice() {
             })
           })
       } else if (globalDevice.value.type === 'network') {
-        const options = currentNetworkOptions()
-        if (!options) return
-        networkService
-          .open(options)
-          .then(() => {
-            globalDevice.value.connected = true
-            activeDataTransport.activate('network')
-            const action =
-              options.protocol === 'tcp' ? t('data.netConnectSuccess') : t('data.netListenSuccess')
-            ElMessage({
-              message: `${options.protocol.toUpperCase()} ${options.host}:${options.port} ${action}`,
-              type: 'success',
-              placement: 'bottom-right',
-              offset: 50,
-            })
-          })
-          .catch((error) => {
-            globalDevice.value.connected = false
-            ElMessage({
-              message: error instanceof Error ? error.message : String(error),
-              type: 'error',
-              placement: 'bottom-right',
-              offset: 50,
-            })
-          })
+        openNetworkDevice()
       } else if (globalDevice.value.type === 'file' && globalDevice.value.path) {
         if (fileTimeline.active.value) fileTimeline.play()
         else if (fileTimeTag.value) startTimestampPlayback(globalDevice.value.path)
@@ -1090,6 +1141,7 @@ export function useDevice() {
           globalDevice.value = { connected: null }
         })
       } else if (globalDevice.value.type === 'network') {
+        cancelNetworkReconnect()
         networkService.close().then(() => {
           activeDataTransport.clear('network')
           globalDevice.value = { connected: null }
@@ -1115,6 +1167,7 @@ export function useDevice() {
           }
         })
       } else if (globalDevice.value.type === 'network') {
+        cancelNetworkReconnect()
         networkService.close().then(() => {
           activeDataTransport.clear('network')
           if (globalDevice.value.type === 'network') globalDevice.value.connected = false
@@ -1199,6 +1252,7 @@ export function useDevice() {
     networkIp,
     networkPort,
     networkProtocol,
+    networkLoop,
     sourceParser,
     sourceRegexPattern,
     activeDataParser,
@@ -1208,6 +1262,7 @@ export function useDevice() {
     stopBits,
     parities,
     deviceConnected,
+    deviceConnecting,
     logRecordingActive,
     logRecordingPath,
     globalDevice,

@@ -85,6 +85,7 @@ export default {
     listenAddr: '监听地址',
     networkPort: '网络端口',
     networkPortPlaceholder: '请输入端口',
+    networkLoop: '循环重连',
     cameraTab: 'Camera',
     cameraTabShort: '相机',
     cameraSource: 'Camera',

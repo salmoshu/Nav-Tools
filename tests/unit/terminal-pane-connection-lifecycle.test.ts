@@ -11,6 +11,7 @@ const xtermHarness = vi.hoisted(() => ({
   selection: '',
   respondToCursorQuery: false,
   paste: vi.fn(),
+  writes: [] as string[],
 }))
 
 vi.mock('@xterm/xterm', () => ({
@@ -32,6 +33,7 @@ vi.mock('@xterm/xterm', () => ({
       return xtermHarness.selection
     }
     write(data: string, callback?: () => void) {
+      xtermHarness.writes.push(data)
       if (xtermHarness.respondToCursorQuery && data.includes('\x1b[6n')) {
         xtermHarness.dataHandler?.('\x1b[1;33R')
       }
@@ -125,6 +127,7 @@ describe('TerminalPane connection lifecycle', () => {
     xtermHarness.selection = ''
     xtermHarness.respondToCursorQuery = false
     xtermHarness.paste.mockReset()
+    xtermHarness.writes = []
     Object.defineProperty(window, 'ipcRenderer', {
       configurable: true,
       value: {
@@ -373,6 +376,131 @@ describe('TerminalPane connection lifecycle', () => {
     expect(window.ipcRenderer.invoke).not.toHaveBeenCalledWith(
       'terminal-session-write',
       expect.objectContaining({ data: '\x1b[1;33R' }),
+    )
+    app.unmount()
+  })
+
+  it('removes terminal device queries before replaying restored scrollback', async () => {
+    window.ipcRenderer.invoke = vi.fn((channel: string) => {
+      if (channel === 'terminal-session-attach') {
+        return Promise.resolve({
+          id: 'ssh-restored',
+          kind: 'ssh',
+          title: 'Robot',
+          status: 'ready',
+          scrollback: 'Welcome\r\n\x1b[6nroot@robot:~# ',
+        })
+      }
+      return Promise.resolve()
+    })
+    const host = document.createElement('div')
+    document.body.append(host)
+    const app = createApp(TerminalPane, {
+      pane: { ...createEmptyPane(), sessionId: 'ssh-restored' },
+      focused: true,
+      paneCount: 1,
+      expanded: false,
+      capabilities: { platform: 'win32', localShells: [], wslDistros: [], sshAvailable: true },
+      profiles: [],
+    })
+    for (const name of [
+      'ElAlert',
+      'ElButton',
+      'ElDialog',
+      'ElDropdown',
+      'ElDropdownItem',
+      'ElDropdownMenu',
+      'ElEmpty',
+      'ElIcon',
+      'ElInput',
+      'ElInputNumber',
+      'ElOption',
+      'ElSelect',
+      'ElSwitch',
+      'ElTooltip',
+    ]) {
+      app.component(name, Passthrough)
+    }
+    app.mount(host)
+    await Promise.resolve()
+    await nextTick()
+
+    expect(xtermHarness.writes.join('')).toBe('Welcome\r\nroot@robot:~# ')
+    app.unmount()
+  })
+
+  it('reconnects SSH from the current profile and stored credential without opening the dialog', async () => {
+    const profile = createSshProfile({
+      id: 'robot-profile',
+      name: 'Robot',
+      host: '192.0.2.10',
+      username: 'root',
+      authMethod: 'password',
+    })
+    const closedSession: TerminalSessionInfo = {
+      id: 'ssh-closed',
+      kind: 'ssh',
+      title: 'Robot',
+      status: 'closed',
+      profileId: profile.id,
+    }
+    const readySession: TerminalSessionInfo = {
+      id: 'ssh-ready',
+      kind: 'ssh',
+      title: 'Robot',
+      status: 'ready',
+      profileId: profile.id,
+    }
+    window.ipcRenderer.invoke = vi.fn((channel: string) => {
+      if (channel === 'terminal-session-attach') return Promise.resolve(closedSession)
+      if (channel === 'terminal-credential-load') return Promise.resolve({ password: 'test-only' })
+      if (channel === 'terminal-session-create') return Promise.resolve(readySession)
+      return Promise.resolve()
+    })
+    const host = document.createElement('div')
+    document.body.append(host)
+    const app = createApp(TerminalPane, {
+      pane: {
+        ...createEmptyPane(),
+        sessionId: closedSession.id,
+        launch: { kind: 'ssh', label: 'Robot', sshProfile: profile },
+      },
+      focused: true,
+      paneCount: 1,
+      expanded: false,
+      capabilities: { platform: 'win32', localShells: [], wslDistros: [], sshAvailable: true },
+      profiles: [profile],
+      sessionInfo: closedSession,
+    })
+    for (const name of [
+      'ElAlert',
+      'ElButton',
+      'ElDialog',
+      'ElDropdown',
+      'ElDropdownItem',
+      'ElDropdownMenu',
+      'ElEmpty',
+      'ElIcon',
+      'ElInput',
+      'ElInputNumber',
+      'ElOption',
+      'ElSelect',
+      'ElSwitch',
+      'ElTooltip',
+    ]) {
+      app.component(name, Passthrough)
+    }
+    app.mount(host)
+    await nextTick()
+
+    ;(host.querySelector('.session-reconnect') as HTMLButtonElement).click()
+    for (let i = 0; i < 10; i++) await Promise.resolve()
+    await nextTick()
+
+    expect(window.ipcRenderer.invoke).toHaveBeenCalledWith('terminal-credential-load', profile.id)
+    expect(window.ipcRenderer.invoke).toHaveBeenCalledWith(
+      'terminal-session-create',
+      expect.objectContaining({ kind: 'ssh', sshProfile: profile }),
     )
     app.unmount()
   })

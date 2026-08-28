@@ -15,9 +15,10 @@
       <div class="toggle-switch-container">
         <div
           class="toggle-switch"
-          :class="{ 'toggle-on': deviceConnected }"
-          @click="handleDeviceConnected"
+          :class="{ 'toggle-on': deviceConnected, 'toggle-pending': deviceConnecting }"
+          :aria-busy="deviceConnecting"
           :title="deviceConnected ? t('app.toolbar.disconnect') : t('app.toolbar.connect')"
+          @click="handleDeviceConnected"
         >
           <div class="toggle-slider">
             <span
@@ -405,10 +406,10 @@
           <strong>{{ t('app.toolbar.networkSource') }}</strong>
           <span>{{ t('app.toolbar.networkSourceDesc') }}</span>
         </div>
-        <div class="source-config-card">
+        <div class="source-config-card network-config-card">
           <div class="input-group">
             <span class="input-label">{{ t('app.toolbar.networkProtocol') }}</span>
-            <el-select v-model="networkProtocol" style="flex: 1" :teleported="false">
+            <el-select v-model="networkProtocol" :teleported="false">
               <el-option label="TCP" value="tcp" />
               <el-option label="UDP" value="udp" />
             </el-select>
@@ -429,8 +430,11 @@
               inputmode="numeric"
               maxlength="5"
               :placeholder="t('app.toolbar.networkPortPlaceholder')"
-              style="flex: 1; width: 100%"
             />
+          </div>
+          <div class="input-group">
+            <span class="input-label">{{ t('app.toolbar.networkLoop') }}</span>
+            <el-switch v-model="networkLoop" :aria-label="t('app.toolbar.networkLoop')" />
           </div>
           <div class="parser-card" :class="{ 'parser-flash': parserFlash }">
             <div class="parser-copy">
@@ -554,6 +558,7 @@ import { useDevice } from '@/hooks/useDevice'
 
 const deviceInstance = useDevice()
 const deviceConnected = deviceInstance.deviceConnected
+const deviceConnecting = deviceInstance.deviceConnecting
 
 // 从useDevice获取对话框相关状态和方法
 const {
@@ -574,6 +579,7 @@ const {
   networkIp,
   networkPort,
   networkProtocol,
+  networkLoop,
   sourceParser,
   sourceRegexPattern,
   serialPorts,
@@ -1406,6 +1412,21 @@ onUnmounted(() => {
   transform: translate(18px, -50%);
 }
 
+/* 连接进行中：滑块脉冲高亮，点击开关后立即给出反馈 */
+.toggle-switch.toggle-pending .toggle-slider {
+  animation: toggle-pending-pulse 1s ease-in-out infinite;
+}
+
+@keyframes toggle-pending-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
 /* 更新滑块图标大小 */
 .slider-icon {
   font-size: 12px; /* 从14px减小到12px */
@@ -1696,6 +1717,26 @@ onUnmounted(() => {
 .input-group :deep(.el-select),
 .input-group :deep(.el-input-number) {
   flex: 1;
+}
+
+/* NETWORK 配置卡片：所有行统一两列 grid（标签 94px + 控件占满），
+   保证多行输入框左边界一致，不再依赖 flex/内联宽度混用 */
+.network-config-card .input-group {
+  display: grid;
+  grid-template-columns: 94px minmax(0, 1fr);
+  column-gap: 12px;
+  align-items: center;
+}
+
+.network-config-card .input-group .input-label {
+  min-width: 0;
+  margin-right: 0;
+}
+
+.network-config-card .input-group .el-input,
+.network-config-card .input-group :deep(.el-select) {
+  width: 100%;
+  margin-right: 0;
 }
 
 :global(.data-input-dialog .el-input-number .el-input__inner) {

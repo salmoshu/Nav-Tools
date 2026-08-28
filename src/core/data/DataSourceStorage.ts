@@ -32,6 +32,7 @@ export interface DataSourceSettings {
     protocol: 'tcp' | 'udp'
     host: string
     port?: number
+    loop: boolean
     parser: TextDataParser
     regexPattern: string
   }
@@ -64,6 +65,7 @@ export function createDefaultDataSourceSettings(): DataSourceSettings {
       protocol: 'tcp',
       host: '127.0.0.1',
       port: undefined,
+      loop: false,
       parser: 'raw',
       regexPattern: DEFAULT_KEY_VALUE_REGEX,
     },
@@ -142,6 +144,7 @@ function normalizeSettings(value: unknown): DataSourceSettings {
       protocol: network.protocol === 'udp' ? 'udp' : 'tcp',
       host: stringValue(network.host, defaults.network.host),
       port: portValue(network.port),
+      loop: typeof network.loop === 'boolean' ? network.loop : defaults.network.loop,
       parser: parserValue(network.parser, defaults.network.parser),
       regexPattern: stringValue(network.regexPattern, defaults.network.regexPattern),
     },
