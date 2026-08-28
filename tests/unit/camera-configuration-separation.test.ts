@@ -65,6 +65,11 @@ describe('camera configuration separation', () => {
     expect(cameraParametersSource).toContain('const status = computed<Status>')
     expect(cameraParametersSource).not.toContain("const status = ref<Status>('disconnected')")
     expect(cameraParametersSource).not.toContain("status.value = 'disconnected'")
+    expect(cameraParametersSource).toContain("if (status.value !== 'connected')")
+    const commandRequest = cameraParametersSource.match(/sendCameraCommand\(\{([\s\S]*?)\}\)/)?.[1]
+    expect(commandRequest).toBeDefined()
+    expect(commandRequest).not.toContain('host:')
+    expect(commandRequest).not.toContain('port:')
 
     expect(
       isCameraTcpDataConnected(

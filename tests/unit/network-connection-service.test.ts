@@ -29,6 +29,36 @@ describe('NetworkConnectionService', () => {
     await new Promise<void>((resolve) => server.close(() => resolve()))
   })
 
+  it('writes binary camera commands through the existing toolbar TCP connection', async () => {
+    let connectionCount = 0
+    let resolvePacket: (packet: Buffer) => void = () => undefined
+    const receivedPacket = new Promise<Buffer>((resolve) => {
+      resolvePacket = resolve
+    })
+    const server = net.createServer((socket) => {
+      connectionCount += 1
+      socket.once('data', resolvePacket)
+    })
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+    const address = server.address()
+    if (!address || typeof address === 'string') throw new Error('TCP test server did not bind')
+
+    await service.open(
+      { protocol: 'tcp', host: '127.0.0.1', port: address.port },
+      { onData: vi.fn(), onDisconnected: vi.fn() },
+    )
+    await service.sendTcp(Uint8Array.from([0xab, 0xcd, 0x12, 0x34]))
+
+    await expect(receivedPacket).resolves.toEqual(Buffer.from([0xab, 0xcd, 0x12, 0x34]))
+    expect(connectionCount).toBe(1)
+    await service.close()
+    await new Promise<void>((resolve) => server.close(() => resolve()))
+  })
+
+  it('rejects camera commands when the toolbar TCP connection is closed', async () => {
+    await expect(service.sendTcp(Uint8Array.from([0x01]))).rejects.toThrow('工具栏 TCP 连接不可用')
+  })
+
   it('receives UDP datagrams on the configured local endpoint', async () => {
     const port = await findFreeUdpPort()
     const received = new Promise<string>((resolve) => {

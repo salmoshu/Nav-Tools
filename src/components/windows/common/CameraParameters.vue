@@ -38,7 +38,11 @@
           </label>
           <label>
             <span>{{ t('common.camera.loginCommand') }}</span>
-            <el-input model-value="0x00000001" :aria-label="t('common.camera.loginCommand')" readonly />
+            <el-input
+              model-value="0x00000001"
+              :aria-label="t('common.camera.loginCommand')"
+              readonly
+            />
           </label>
         </div>
       </div>
@@ -94,7 +98,12 @@
 
           <div class="command-actions">
             <span>{{ t('common.camera.ctrlEnterHint') }}</span>
-            <el-button type="primary" :loading="sending" @click="sendCommand">
+            <el-button
+              type="primary"
+              :loading="sending"
+              :disabled="status !== 'connected'"
+              @click="sendCommand"
+            >
               <el-icon v-if="!sending"><Promotion /></el-icon>
               {{ sending ? t('common.camera.sending') : t('common.camera.sendCommand') }}
             </el-button>
@@ -108,9 +117,9 @@
             ><el-icon><Document /></el-icon
           ></span>
           <strong class="section-title">{{ t('common.camera.outputResult') }}</strong>
-          <el-button text :disabled="logs.length === 0 || sending" @click="clearOutput"
-            >{{ t('common.camera.clear') }}</el-button
-          >
+          <el-button text :disabled="logs.length === 0 || sending" @click="clearOutput">{{
+            t('common.camera.clear')
+          }}</el-button>
         </div>
         <pre ref="outputElement" class="output-console">{{ outputText }}</pre>
       </div>
@@ -166,7 +175,6 @@ const parametersStorage = new CameraParametersStorage(new JsonStorage(window.loc
 const savedSettings = parametersStorage.load()
 const { settings: dataSourceSettings } = useDataSourceManager()
 const { globalDevice } = useDevice()
-const networkProtocol = computed(() => dataSourceSettings.network.protocol)
 const host = computed(() => dataSourceSettings.network.host)
 const port = computed(() => dataSourceSettings.network.port ?? 0)
 const portText = computed(() => (port.value > 0 ? String(port.value) : '—'))
@@ -211,9 +219,7 @@ const statusText = computed(
 )
 
 const contentPlaceholder = computed(() =>
-  contentIsHex.value
-    ? t('common.camera.placeholderHex')
-    : t('common.camera.placeholderUtf8'),
+  contentIsHex.value ? t('common.camera.placeholderHex') : t('common.camera.placeholderUtf8'),
 )
 
 const outputText = computed(() =>
@@ -233,11 +239,7 @@ async function openNetworkSettings() {
 }
 
 function validateInput(): string | undefined {
-  if (networkProtocol.value !== 'tcp') return t('common.camera.errTcpConfigurationRequired')
-  if (!host.value.trim()) return t('common.camera.errEnterServerAddress')
-  if (!Number.isInteger(port.value) || port.value < 1 || port.value > 65535) {
-    return t('common.camera.errPortRange')
-  }
+  if (status.value !== 'connected') return t('common.camera.errTcpConfigurationRequired')
   if (!subCommand.value) return t('common.camera.errSelectSubCommand')
   if (!content.value.trim()) return t('common.camera.errEnterSubCommandContent')
   if (contentIsHex.value) {
@@ -277,6 +279,7 @@ async function sendCommand() {
     t('common.camera.logLoginHeader'),
     t('common.camera.logMainCmd'),
     t('common.camera.logServer', { host: `${host.value.trim()}:${port.value}` }),
+    t('common.camera.logTransport'),
     t('common.camera.logSubCommand', { sub: subCommand.value }),
     t('common.camera.logContentFormat', {
       fmt: contentIsHex.value
@@ -289,8 +292,6 @@ async function sendCommand() {
 
   try {
     const result = await window.electronAPI.sendCameraCommand({
-      host: host.value.trim(),
-      port: port.value,
       subCommand: subCommand.value,
       content: content.value,
       contentFormat: contentIsHex.value ? 'hex' : 'text',
@@ -301,14 +302,15 @@ async function sendCommand() {
       t('common.camera.logContentByte', { hex: formatHex(result.contentHex) || '(空)' }),
       t('common.camera.logTotalLen', { n: result.dataLength }),
       t('common.camera.logFullPacket', { hex: formatHex(result.packetHex) }),
-      t('common.camera.logResponse', { resp: result.response || '(空响应)' }),
-      t('common.camera.logResponseByte', { hex: formatHex(result.responseHex) || '(空)' }),
       t('common.camera.logBigSeparator'),
     )
     ElMessage.success(t('common.camera.sentSuccess'))
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
-    await appendLog(t('common.camera.logError', { msg: message }), t('common.camera.logBigSeparator'))
+    await appendLog(
+      t('common.camera.logError', { msg: message }),
+      t('common.camera.logBigSeparator'),
+    )
     ElMessage.error(t('common.camera.sendFailed') + message)
   } finally {
     sending.value = false

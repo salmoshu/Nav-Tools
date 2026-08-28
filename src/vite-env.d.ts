@@ -36,14 +36,10 @@ interface Window {
     startCameraStream: (url: string) => Promise<{ ok: boolean; message?: string }>
     stopCameraStream: () => Promise<void>
     sendCameraCommand: (request: {
-      host: string
-      port: number
       subCommand: string
       content: string
       contentFormat: 'text' | 'hex'
     }) => Promise<{
-      response: string
-      responseHex: string
       packetHex: string
       subCommandHex: string
       contentHex: string

@@ -1,7 +1,6 @@
 // @vitest-environment node
 
-import net from 'node:net'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   CAMERA_COMMAND_PREFIX,
   CAMERA_LOGIN_COMMAND,
@@ -12,8 +11,6 @@ import {
 describe('CameraCommandService', () => {
   it('encodes the Python client protocol with a padded 16-byte sub-command', () => {
     const encoded = encodeCameraCommand({
-      host: '192.168.3.14',
-      port: 8080,
       subCommand: 'bbox_draw',
       content: '06 04 02',
       contentFormat: 'hex',
@@ -26,40 +23,39 @@ describe('CameraCommandService', () => {
     expect(encoded.packet.subarray(26)).toEqual(Buffer.from([0x06, 0x04, 0x02]))
   })
 
-  it('sends one TCP command and returns the first server response', async () => {
-    let resolvePacket: (packet: Buffer) => void = () => undefined
-    const receivedPacket = new Promise<Buffer>((resolve) => {
-      resolvePacket = resolve
-    })
-    const server = net.createServer((socket) => {
-      socket.once('data', (packet) => {
-        resolvePacket(packet)
-        socket.end('camera-ok')
-      })
-    })
-    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
-    const address = server.address()
-    if (!address || typeof address === 'string') throw new Error('TCP test server did not bind')
-
-    const result = await new CameraCommandService().send({
-      host: '127.0.0.1',
-      port: address.port,
+  it('writes the encoded packet through the toolbar-owned TCP transport', async () => {
+    const write = vi.fn(async (_packet: Uint8Array) => undefined)
+    const result = await new CameraCommandService({ write }).send({
       subCommand: 'read_params',
       content: 'request',
       contentFormat: 'text',
     })
 
-    expect(result.response).toBe('camera-ok')
-    expect(result.responseHex).toBe(Buffer.from('camera-ok').toString('hex').toUpperCase())
-    expect((await receivedPacket).toString('hex').toUpperCase()).toBe(result.packetHex)
-    await new Promise<void>((resolve) => server.close(() => resolve()))
+    expect(write).toHaveBeenCalledOnce()
+    expect(Buffer.from(write.mock.calls[0][0]).toString('hex').toUpperCase()).toBe(result.packetHex)
+    expect(result).not.toHaveProperty('response')
+    expect(result).not.toHaveProperty('responseHex')
+  })
+
+  it('reports a disconnected toolbar TCP transport instead of opening another connection', async () => {
+    const service = new CameraCommandService({
+      write: vi.fn(async () => {
+        throw new Error('工具栏 TCP 连接不可用')
+      }),
+    })
+
+    await expect(
+      service.send({
+        subCommand: 'set_params',
+        content: '0.55,62.292,-20',
+        contentFormat: 'text',
+      }),
+    ).rejects.toThrow('工具栏 TCP 连接不可用')
   })
 
   it('rejects incomplete hexadecimal bytes before opening a connection', () => {
     expect(() =>
       encodeCameraCommand({
-        host: '127.0.0.1',
-        port: 8080,
         subCommand: 'bbox_draw',
         content: 'ABC',
         contentFormat: 'hex',

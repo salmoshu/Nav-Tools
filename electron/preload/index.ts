@@ -16,8 +16,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   startCameraStream: (url: string) => ipcRenderer.invoke('camera-stream-start', url),
   stopCameraStream: () => ipcRenderer.invoke('camera-stream-stop'),
   sendCameraCommand: (request: {
-    host: string
-    port: number
     subCommand: string
     content: string
     contentFormat: 'text' | 'hex'

@@ -7,9 +7,13 @@ import {
   NetworkConnectionService,
   type NetworkConnectionOptions,
 } from './services/NetworkConnectionService'
+import { CameraCommandService, type CameraCommandRequest } from './services/CameraCommandService'
 
 const serialService = new SerialPortService()
 const networkService = new NetworkConnectionService()
+const cameraCommandService = new CameraCommandService({
+  write: (packet) => networkService.sendTcp(packet),
+})
 const iapUpgradeService = new IapUpgradeService(serialService)
 
 export interface SendDataChunkRequest {
@@ -30,6 +34,7 @@ const eventsMap = {
   'close-network-connection': closeNetworkConnection,
   'send-network-hex-data': sendNetworkHexData,
   'send-network-ascii-data': sendNetworkAsciiData,
+  'camera-command-send': sendCameraCommand,
   'send-data-chunk': sendDataChunk,
   'iap-upgrade-start': startIapUpgrade,
   'iap-upgrade-cancel': cancelIapUpgrade,
@@ -48,8 +53,8 @@ function searchSerialPorts() {
 
 function openSerialPort(event: IpcMainInvokeEvent, options: SerialPortOptions) {
   return serialService.open(options, {
-    onData: data => event.sender.send('serial-data-to-renderer', data),
-    onDisconnected: path => event.sender.send('serial-disconnected', { path }),
+    onData: (data) => event.sender.send('serial-data-to-renderer', data),
+    onDisconnected: (path) => event.sender.send('serial-disconnected', { path }),
   })
 }
 
@@ -82,7 +87,7 @@ function changeSerialDataFormat(_event: IpcMainEvent, format: string) {
 
 function openNetworkConnection(event: IpcMainInvokeEvent, options: NetworkConnectionOptions) {
   return networkService.open(options, {
-    onData: data => event.sender.send('network-data-to-renderer', data),
+    onData: (data) => event.sender.send('network-data-to-renderer', data),
     onDisconnected: (connection, reason) => {
       event.sender.send('network-disconnected', { ...connection, reason })
     },
@@ -111,7 +116,14 @@ async function sendNetworkData(event: IpcMainEvent, data: string, format: 'hex' 
   }
 }
 
-async function sendDataChunk(_event: IpcMainInvokeEvent, request: SendDataChunkRequest): Promise<void> {
+function sendCameraCommand(_event: IpcMainInvokeEvent, request: CameraCommandRequest) {
+  return cameraCommandService.send(request)
+}
+
+async function sendDataChunk(
+  _event: IpcMainInvokeEvent,
+  request: SendDataChunkRequest,
+): Promise<void> {
   const { data, format, transport } = request
   if (transport === 'network') {
     await networkService.send(data, format)

@@ -62,12 +62,20 @@ export class NetworkConnectionService {
     this.dataFormat = format === 'hex' ? 'hex' : 'ascii'
   }
 
+  public async sendTcp(data: Uint8Array): Promise<void> {
+    const socket = this.tcpSocket
+    if (!socket || socket.destroyed)
+      throw new Error('工具栏 TCP 连接不可用，请先在数据接入中建立连接')
+
+    await new Promise<void>((resolve, reject) => {
+      socket.write(Buffer.from(data), (error) => (error ? reject(error) : resolve()))
+    })
+  }
+
   public async send(data: string, format: NetworkDataFormat): Promise<void> {
     const buffer = Buffer.from(data, format === 'hex' ? 'hex' : 'utf8')
     if (this.tcpSocket && !this.tcpSocket.destroyed) {
-      await new Promise<void>((resolve, reject) => {
-        this.tcpSocket?.write(buffer, (error) => (error ? reject(error) : resolve()))
-      })
+      await this.sendTcp(buffer)
       return
     }
 

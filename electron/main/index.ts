@@ -17,7 +17,6 @@ import path from 'node:path'
 import os from 'node:os'
 import ffmpegStatic from 'ffmpeg-static'
 import { eventsMap, iapUpgradeService } from './events'
-import { CameraCommandService } from './services/CameraCommandService'
 import { CameraStreamService } from './services/CameraStreamService'
 import { FilePlaybackService } from './services/FilePlaybackService'
 import { TextFileStreamService } from './services/TextFileStreamService'
@@ -69,7 +68,6 @@ const ffmpegExecutable = (ffmpegStatic || 'ffmpeg').replace(
   'app.asar.unpacked',
 )
 const cameraStreamService = new CameraStreamService(ffmpegExecutable)
-const cameraCommandService = new CameraCommandService()
 const filePlaybackService = new FilePlaybackService()
 const textFileStreamService = new TextFileStreamService()
 const logRecordingService = new LogRecordingService()
@@ -249,8 +247,6 @@ ipcMain.handle('camera-stream-start', (event, url: unknown) => {
 ipcMain.handle('camera-stream-stop', (event) => {
   cameraStreamService.stop(event.sender.id)
 })
-
-ipcMain.handle('camera-command-send', (_event, request) => cameraCommandService.send(request))
 
 ipcMain.handle('file-playback-start', (event, request) => {
   if (!filePlaybackOwners.has(event.sender.id)) {
@@ -581,3 +577,4 @@ ipcMain.handle('open-network-connection', eventsMap['open-network-connection'])
 ipcMain.handle('close-network-connection', eventsMap['close-network-connection'])
 ipcMain.on('send-network-hex-data', eventsMap['send-network-hex-data'])
 ipcMain.on('send-network-ascii-data', eventsMap['send-network-ascii-data'])
+ipcMain.handle('camera-command-send', eventsMap['camera-command-send'])
