@@ -87,38 +87,55 @@ function isWideChar(code: number): boolean {
 }
 
 /**
- * 把终端输出流还原为保留版面语义的纯文本。
- * 以「行单元」模型解释常见序列,而非简单追加:
- * - 同行重写有覆盖语义:\r 回到列 0 后新文本覆盖旧文本,进度条类输出
- *   (apt/dpkg/下载器)只保留每行最终状态,不再首尾粘连;
- * - CUP(\x1b[r;cH)跟踪绝对行号:同行号 = 重写当前行(覆盖),不同行号
- *   = 提交当前行并开始新行——ConPTY 对全屏重绘的逐行回放因此保持行结构,
- *   而同处一行的进度帧互相覆盖;
+ * 把终端输出流还原为保留版面语义的纯文本,目标是「终端最终屏幕的忠实
+ * 文本快照」,而非字节流的历史流水。以「转录行 + 屏幕行号映射」模型解释:
+ * - 同行重写有覆盖语义:\r 回到列 0 后新文本覆盖旧文本(无 EL 时较短重写
+ *   保留旧行尾部,与真实终端一致),apt/dpkg 的进度重写不再首尾粘连;
+ * - CUP(\x1b[r;cH)按绝对行号映射到转录行:回访同一屏幕行 = 原址重写
+ *   (dpkg 状态行、less 帧等反复重绘只保留最新内容),新行号 = 追加新行;
+ * - CUP 列号等于终端列数且紧接已提交行 = ConPTY 的延迟折行续写(长行折行
+ *   的续段被画在上一行最后一列),接回上一行末尾而非开新行;
  * - CUF(\x1b[nC)只移动列,落字时才补空格;ECH(\x1b[nX)原位擦除;
  *   EL(\x1b[K 系列)按参数清行;tab 展开到 8 列;宽字符(CJK/全角/emoji)
- *   按 2 列计。
- * 以单个块的输出为单位调用;行为目标是「终端最终屏幕的忠实文本快照」,
- * 而非字节流的历史流水。
+ *   按 2 列计;行尾空白与连续空行(≥2)在输出时收敛。
+ * 以单个块的输出为单位调用;cols 为终端列数,用于识别折行续写。
  */
-export function normalizeTerminalLayout(data: string): string {
-  const lines: string[] = []
-  /** 当前行单元:每个条目一个字符(宽字符占两格,次格为 '') */
-  let cur: string[] = []
+export function normalizeTerminalLayout(data: string, cols = 80): string {
+  /** 转录行:每行是字符单元数组(宽字符占两格,次格为 '') */
+  const lines: string[][] = []
+  /** 当前打开的行(已在 lines 中);undefined 表示行间静止状态 */
+  let cur: string[] | undefined
   let col = 0
-  /** 最近一次 CUP 的绝对行号;同行号 CUP 表示重写当前行 */
+  /** cur 对应的绝对屏幕行号(来自 CUP) */
   let curRow: number | undefined
+  /** 屏幕行号 → 转录行索引;CUP 回访同一屏幕行时原址重写 */
+  const rowToLine = new Map<number, number>()
 
-  const commit = (force = false): void => {
-    if (!force && cur.length === 0 && col === 0) return
-    lines.push(cur.join('').replace(/\s+$/u, ''))
-    cur = []
+  const openLine = (): string[] => {
+    if (!cur) {
+      lines.push([])
+      cur = lines[lines.length - 1]
+    }
+    return cur
+  }
+  /** \n:结束当前行并下移;无打开行时补空行,保留段落结构 */
+  const newline = (): void => {
+    openLine()
+    cur = undefined
+    col = 0
+    curRow = undefined
+  }
+  /** CUP 换行:收起当前行(不补空行) */
+  const suspend = (): void => {
+    cur = undefined
     col = 0
     curRow = undefined
   }
   const writeCell = (text: string, width: number): void => {
-    while (cur.length < col) cur.push(' ')
-    cur[col] = text
-    if (width === 2) cur[col + 1] = ''
+    const line = openLine()
+    while (line.length < col) line.push(' ')
+    line[col] = text
+    if (width === 2) line[col + 1] = ''
     col += width
   }
   const padTo = (target: number): void => {
@@ -149,28 +166,48 @@ export function normalizeTerminalLayout(data: string): string {
           col += firstParam(params, 1)
         } else if (final === 'X') {
           // ECH:原位擦除 n 格,不移动光标
-          for (let k = col; k < col + firstParam(params, 1); k += 1) {
-            if (k < cur.length) cur[k] = ' '
+          if (cur) {
+            for (let k = col; k < col + firstParam(params, 1); k += 1) {
+              if (k < cur.length) cur[k] = ' '
+            }
           }
         } else if (final === 'K') {
           // EL:0=清到行尾 1=清到光标 2=清整行(光标不动)
-          const mode = firstParam(params, 0)
-          if (mode === 2) cur = []
-          else if (mode === 1) {
-            for (let k = 0; k < col && k < cur.length; k += 1) cur[k] = ' '
-          } else cur.length = Math.min(cur.length, col)
+          if (cur) {
+            const mode = firstParam(params, 0)
+            if (mode === 2) cur.length = 0
+            else if (mode === 1) {
+              for (let k = 0; k < col && k < cur.length; k += 1) cur[k] = ' '
+            } else cur.length = Math.min(cur.length, col)
+          }
         } else if (final === 'G' || final === '`') {
           col = firstParam(params, 1) - 1
         } else if (final === 'H' || final === 'f') {
           const rowParam = Number.parseInt(params.split(';')[0] ?? '', 10)
           const colParam = Number.parseInt(params.split(';')[1] ?? '', 10)
           const row = Number.isInteger(rowParam) && rowParam > 0 ? rowParam : 1
-          if (curRow === row) {
-            col = (Number.isInteger(colParam) && colParam > 0 ? colParam : 1) - 1
-          } else {
-            commit()
+          const targetCol = (Number.isInteger(colParam) && colParam > 0 ? colParam : 1) - 1
+          if (colParam === cols && !cur && lines.length > 0) {
+            // 延迟折行续写:接回上一行,落笔在续写列(1 基转 0 基);
+            // 末列字符可能已随首帧发出(autowrap 挂起),同字符原位覆盖,不会重复
+            cur = lines[lines.length - 1]
+            col = targetCol
             curRow = row
-            col = (Number.isInteger(colParam) && colParam > 0 ? colParam : 1) - 1
+          } else if (rowToLine.has(row)) {
+            // 回访同一屏幕行:原址重写,内容靠覆盖/EL 更新
+            cur = lines[rowToLine.get(row) as number]
+            col = targetCol
+            curRow = row
+          } else if (cur && curRow === row) {
+            col = targetCol
+          } else {
+            suspend()
+            openLine()
+            rowToLine.set(row, lines.length - 1)
+            // 滚动后屏幕行号会被复用,映射过大时清空防误重写
+            if (rowToLine.size > 200) rowToLine.clear()
+            col = targetCol
+            curRow = row
           }
         }
         i = j + 1
@@ -195,7 +232,7 @@ export function normalizeTerminalLayout(data: string): string {
       continue
     }
     if (data[i] === '\n') {
-      commit(true)
+      newline()
       i += 1
       continue
     }
@@ -222,8 +259,11 @@ export function normalizeTerminalLayout(data: string): string {
     writeCell(data[i], isWideChar(code) ? 2 : 1)
     i += 1
   }
-  commit()
-  return lines.join('\n')
+  // 行尾空白随提交收敛;连续空行(≥2)压成一行——清行序列在转录里只留痕迹不占地
+  return lines
+    .map((line) => line.join('').replace(/\s+$/u, ''))
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
 }
 
 /** base64(UTF-8) → 文本;C 标记的命令参数与富内容文本负载共用 */

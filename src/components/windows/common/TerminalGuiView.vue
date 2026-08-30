@@ -115,6 +115,8 @@ const props = defineProps<{
   blocks: TerminalCommandBlock[]
   /** 当前会话最近上报的工作目录,显示在输入行,告诉用户下一条命令在哪个目录执行 */
   cwd?: string
+  /** xterm 当前列宽,用于折行续写判定;未知时按 80 列处理 */
+  cols?: number
 }>()
 const emit = defineEmits<{
   rerun: [command: string]
@@ -166,7 +168,7 @@ function handleInputKeydown(event: KeyboardEvent): void {
 }
 
 function displayOutput(block: TerminalCommandBlock): string {
-  return normalizeTerminalLayout(block.output).trim()
+  return normalizeTerminalLayout(block.output, props.cols ?? 80).trim()
 }
 
 function blockStatus(block: TerminalCommandBlock): string {

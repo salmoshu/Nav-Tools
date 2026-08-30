@@ -225,6 +225,26 @@ describe('normalizeTerminalLayout', () => {
     expect(normalizeTerminalLayout('你好\x1b[2C!')).toBe(`你好${' '.repeat(2)}!`)
     expect(normalizeTerminalLayout('你好\x1b[6G!')).toBe(`你好 !`)
   })
+
+  it('stitches delayed-wrap continuations drawn at the last column of the previous row', () => {
+    // 真实捕获(cols=80):占满整行的 Get 行被 ConPTY 分帧为
+    // 首帧 80 字符(含末列 '.')+ \r\n + CUP(下一行;80) 续写 '.10.0-...'——
+    // 续写首字符与末列字符相同,原位覆盖,结果不出现重复
+    expect(normalizeTerminalLayout('abcdefgh\n\x1b[2;8Hij\n', 8)).toBe('abcdefgij')
+  })
+
+  it('converges dpkg progress frames repainted on one absolute screen row', () => {
+    // 真实捕获:dpkg 的 \x1b[s\x1b[24;1H...\x1b[u 经 ConPTY 翻译为
+    // CUP(24;1)进度文本 EL0 CUP(10;1) 循环对——同一绝对行号反复重绘,只保留最后一帧
+    const raw =
+      'Unpacking ninja-build ...\n' +
+      '\x1b[24;1HProgress: [ 20%] [####....]\x1b[K\x1b[10;1H' +
+      '\x1b[24;1HProgress: [ 40%] [########....]\x1b[K\x1b[10;1H' +
+      'DONE-MARK\r\n'
+    expect(normalizeTerminalLayout(raw)).toBe(
+      'Unpacking ninja-build ...\nProgress: [ 40%] [########....]\nDONE-MARK',
+    )
+  })
 })
 
 describe('CommandBlockAssembler cwd tracking', () => {

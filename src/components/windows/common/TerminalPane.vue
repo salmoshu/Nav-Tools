@@ -184,6 +184,7 @@
         v-if="isGui && !guiDegraded"
         :blocks="commandBlocks"
         :cwd="guiCwd"
+        :cols="termCols"
         @rerun="rerunCommand"
         @copy="writeClipboardText"
         @submit="rerunCommand"
@@ -384,6 +385,8 @@ function rerunCommand(command: string): void {
 let terminal: Terminal | undefined
 let fitAddon: FitAddon | undefined
 let resizeObserver: ResizeObserver | undefined
+/** xterm 当前列宽,GUI 视图折行续写判定用;fit 后同步 */
+const termCols = shallowRef(80)
 let attachedSessionId = ''
 let terminalInputEnabled = false
 let activeCreateRequestId = ''
@@ -645,6 +648,7 @@ function fitTerminal(): void {
   if (!terminal || !fitAddon || !sessionId || !terminalElement.value?.clientWidth) return
   try {
     fitAddon.fit()
+    termCols.value = terminal.cols
     void window.ipcRenderer
       .invoke('terminal-session-resize', {
         sessionId,
@@ -739,6 +743,7 @@ onMounted(() => {
   fitAddon = new FitAddon()
   terminal.loadAddon(fitAddon)
   if (terminalElement.value) terminal.open(terminalElement.value)
+  termCols.value = terminal.cols
   terminal.onData((data) => {
     if (terminalInputEnabled && props.pane.sessionId)
       void window.ipcRenderer.invoke('terminal-session-write', {
