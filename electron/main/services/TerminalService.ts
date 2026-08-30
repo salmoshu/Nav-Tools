@@ -35,25 +35,39 @@ const HOST_KEY_RESPONSE_TIMEOUT_MS = 30_000
 const OSC7_PROMPT_COMMAND = 'printf "\\e]7;file://%s%s\\e\\\\" "$HOSTNAME" "$PWD"'
 /**
  * bash 命令块标记(OSC 133):PROMPT_COMMAND 在每个提示符处上报上一条命令的
- * 退出码(D)与提示符起点(A);DEBUG trap 在用户命令执行前触发一次并上报
- * base64 编码的命令文本(C),触发后即自行解除。定义在 PROMPT_COMMAND 内,
- * 随环境变量传入,不落盘、不修改用户的 shell 配置文件。
+ * 退出码(D)与提示符起点(A);DEBUG trap 在用户命令执行前触发并上报 base64
+ * 编码的命令文本(C)。定义在 PROMPT_COMMAND 内,随环境变量传入,不落盘、
+ * 不修改用户的 shell 配置文件。
  *
- * PROMPT_COMMAND 自身执行期间必须摘掉 DEBUG trap:空回车/Ctrl+C 不会消耗
- * trap,若不先解除,下面的 OSC7 printf 与 trap 语句会被当成「用户命令」上报,
- * GUI 视图出现 printf 幻影块。注意 trap - DEBUG 必须是 PROMPT_COMMAND 里的
- * 直接语句——包成函数调用不生效(bash 实测),它自身靠过滤器的 trap * 模式
- * 放行;__nav_e=$? 保持最先执行以拿到真实退出码。
+ * 三条不变量(均被真实会话验证过):
+ * 1. C 标记必须写到启动时用 exec {fd}>&1 保存的终端 fd——若写 stdout,
+ *    用户命令的重定向(for ... done > f、echo x > f)会把标记吞进文件,
+ *    终端反而收不到,GUI 出现「(未捕获命令)」且用户文件被控制字节污染。
+ * 2. __nav133_emit 保证每条命令行只发一次 C:复合命令(for/while)会对
+ *    循环体每条子命令反复触发 DEBUG,靠标志位去重;PROMPT_COMMAND 末尾
+ *    重新置位,该赋值自身触发 trap 时 emit=0,被静默跳过。
+ * 3. PROMPT_COMMAND 自身执行期间必须摘掉 DEBUG trap:空回车/Ctrl+C 不会
+ *    消耗 trap,若不先解除,下面的 OSC7 printf 与 trap 语句会被当成
+ *    「用户命令」上报,GUI 出现 printf 幻影块。注意 trap - DEBUG 必须是
+ *    PROMPT_COMMAND 里的直接语句——包成函数调用不生效(bash 实测),它
+ *    自身靠过滤器的 trap * 模式放行;__nav_e=$? 保持最先执行以拿到真实
+ *    退出码。handler 内部不要再放 trap - DEBUG(同样因函数包裹而无效)。
  */
 const OSC133_BASH_INTEGRATION = [
   '__nav_e=$?',
   'trap - DEBUG',
   'printf "\\e]133;D;%s\\a\\e]133;A\\a" "$__nav_e"',
   OSC7_PROMPT_COMMAND,
-  '__nav133_fire() { if [ -z "$COMP_LINE" ]; then case "$BASH_COMMAND" in __nav133*|*__nav_e*|"trap "*) ;; *) __nav_c=$(printf %s "$BASH_COMMAND" | base64 2>/dev/null); printf "\\e]133;C;%s\\a" "$__nav_c"; trap - DEBUG;; esac; fi; }',
+  // 首次提示符时保存终端 fd;此后所有 C 标记写这里,不受用户重定向影响
+  '[ -n "${__nav133_fd:-}" ] || exec {__nav133_fd}>&1 2>/dev/null',
+  '__nav133_fire() { if [ -z "$COMP_LINE" ] && [ "$__nav133_emit" = 1 ]; then case "$BASH_COMMAND" in __nav133*|*__nav_e*|"trap "*) ;; *) __nav133_emit=0; __nav_c=$(printf %s "$BASH_COMMAND" | base64 2>/dev/null); printf "\\e]133;C;%s\\a" "$__nav_c" >&$__nav133_fd;; esac; fi; }',
   'trap __nav133_fire DEBUG',
   // nav-render <file> [mime]:把文件内容作为 OSC 1338 富内容块上报,GUI 视图按 MIME 渲染
   'nav-render() { local f="$1" m="$2"; if [ -z "$f" ] || [ ! -f "$f" ]; then echo "nav-render: file not found: $f" >&2; return 2; fi; if [ -z "$m" ]; then case "${f##*.}" in md|markdown) m=text/markdown;; json) m=application/json;; csv) m=text/csv;; png) m=image/png;; jpg|jpeg) m=image/jpeg;; svg) m=image/svg+xml;; *) m=text/plain;; esac; fi; printf "\\e]1338;%s;" "$m"; base64 "$f" 2>/dev/null | tr -d "\\n"; printf "\\a"; }',
+  // 必须是 PROMPT_COMMAND 的最后一条:该赋值自身会触发一次 DEBUG(此时
+  // emit=0 被静默跳过),执行完才置位;若后面还有语句,它们会以 emit=1
+  // 触发 trap,产生幻影块
+  '__nav133_emit=1',
 ].join('; ')
 /**
  * PowerShell 提示符集成:prompt 函数在每次提示符处上报上一条命令的退出码(D)
