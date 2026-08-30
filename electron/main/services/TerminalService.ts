@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { existsSync } from 'node:fs'
+import { existsSync, statSync } from 'node:fs'
 import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
@@ -35,6 +35,8 @@ const HOST_KEY_RESPONSE_TIMEOUT_MS = 30_000
 const OSC7_PROMPT_COMMAND = 'printf "\\e]7;file://%s%s\\e\\\\" "$HOSTNAME" "$PWD"'
 /** 输入回显抑制窗口:写入后的这段时间内到达的输出视为回显,不驱动 tab 活动动画 */
 const INPUT_ECHO_WINDOW_MS = 600
+/** Terminal redraws emitted immediately after a PTY resize are layout feedback, not user activity. */
+const RESIZE_REDRAW_WINDOW_MS = 250
 /** OSC 7: file://host/path;OSC 9;9: ConPTY 的 cwd 上报 */
 const OSC_CWD_PATTERN =
   // eslint-disable-next-line no-control-regex -- 终端转义序列解析必须匹配控制字符
@@ -47,6 +49,8 @@ interface BaseSession {
   oscTail: string
   /** 最近一次用户输入时间,用于把紧随的回显标记为非活动输出 */
   lastInputAt?: number
+  /** 最近一次尺寸调整时间,用于忽略 shell 因窗口变化产生的重绘活动 */
+  lastResizeAt?: number
 }
 
 interface LocalSession extends BaseSession {
@@ -191,6 +195,7 @@ export class TerminalService {
     // Resizing is best-effort, so a missing session is an expected lifecycle race.
     const session = this.sessions.get(sessionId)
     if (!session) return
+    session.lastResizeAt = Date.now()
     if (session.type === 'pty') session.process.resize(cols, rows)
     else session.stream.setWindow(rows, cols, 0, 0)
   }
@@ -684,8 +689,12 @@ export class TerminalService {
     this.trackCwd(session, data)
     // 紧随用户输入到达的输出基本是终端回显,标记 activity:false,
     // 渲染层据此跳过 tab 忙碌动画,只有真实输出才驱动活动状态
-    const activity =
-      session.lastInputAt === undefined || Date.now() - session.lastInputAt > INPUT_ECHO_WINDOW_MS
+    const now = Date.now()
+    const followsInput =
+      session.lastInputAt !== undefined && now - session.lastInputAt <= INPUT_ECHO_WINDOW_MS
+    const followsResize =
+      session.lastResizeAt !== undefined && now - session.lastResizeAt <= RESIZE_REDRAW_WINDOW_MS
+    const activity = !followsInput && !followsResize
     this.broadcast('terminal-output', { sessionId: session.info.id, data, activity })
   }
 
@@ -954,7 +963,11 @@ function normalizeMsysPath(cwd: string): string {
 }
 
 function validCwd(cwd?: string): string {
-  return cwd?.trim() || os.homedir()
+  const trimmed = cwd?.trim()
+  // 恢复的工作目录可能已被删除/移动,直接用作 spawn cwd 会报 error code 267,
+  // 校验失败时回退到用户主目录
+  if (trimmed && existsSync(trimmed) && statSync(trimmed).isDirectory()) return trimmed
+  return os.homedir()
 }
 
 function connectionCancelledError(): Error {

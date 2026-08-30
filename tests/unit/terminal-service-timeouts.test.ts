@@ -4,7 +4,20 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { TerminalService } from '../../electron/main/services/TerminalService'
 import type { HostKeyPromptEvent } from '@/core/terminal/TerminalTypes'
 
-vi.mock('node-pty', () => ({ spawn: vi.fn() }))
+const ptyHarness = vi.hoisted(() => ({
+  dataHandler: undefined as ((data: string) => void) | undefined,
+  process: {
+    onData: vi.fn((handler: (data: string) => void) => {
+      ptyHarness.dataHandler = handler
+    }),
+    onExit: vi.fn(),
+    resize: vi.fn(),
+    write: vi.fn(),
+    kill: vi.fn(),
+  },
+}))
+
+vi.mock('node-pty', () => ({ spawn: vi.fn(() => ptyHarness.process) }))
 
 afterEach(() => vi.useRealTimers())
 
@@ -59,6 +72,46 @@ describe('TerminalService SSH timeouts', () => {
     )
 
     expect(() => service.resize('removed-session', 80, 24)).not.toThrow()
+  })
+
+  it('does not classify terminal redraw output caused by a resize as tab activity', async () => {
+    vi.useFakeTimers()
+    const broadcasts: Array<{ channel: string; payload: unknown }> = []
+    const service = new TerminalService(
+      path.join(tmpdir(), `nav-tools-resize-output-${Date.now()}`),
+      (channel, payload) => broadcasts.push({ channel, payload }),
+    )
+    const session = await service.create({
+      kind: 'local',
+      localShell: 'powershell',
+      cols: 80,
+      rows: 24,
+    })
+    broadcasts.length = 0
+
+    service.resize(session.id, 100, 30)
+    ptyHarness.dataHandler?.('\u001b[2J\u001b[HPS> ')
+
+    expect(broadcasts).toContainEqual({
+      channel: 'terminal-output',
+      payload: {
+        sessionId: session.id,
+        data: '\u001b[2J\u001b[HPS> ',
+        activity: false,
+      },
+    })
+
+    await vi.advanceTimersByTimeAsync(251)
+    ptyHarness.dataHandler?.('build finished\r\n')
+
+    expect(broadcasts).toContainEqual({
+      channel: 'terminal-output',
+      payload: {
+        sessionId: session.id,
+        data: 'build finished\r\n',
+        activity: true,
+      },
+    })
   })
 
   it('rejects an unanswered host-key prompt instead of waiting forever', async () => {

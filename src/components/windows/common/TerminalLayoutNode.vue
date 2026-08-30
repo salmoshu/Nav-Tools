@@ -17,7 +17,6 @@
     @save-profile="(profile) => $emit('save-profile', profile)"
     @remove-profile="(id) => $emit('remove-profile', id)"
     @ssh-dialog-opened="(id) => $emit('ssh-dialog-opened', id)"
-    @toggle-sftp="(id) => $emit('toggle-sftp', id)"
   />
   <div v-else ref="splitElement" class="split-node" :class="node.direction">
     <TerminalLayoutNode
@@ -40,7 +39,6 @@
       @save-profile="(profile) => $emit('save-profile', profile)"
       @remove-profile="(id) => $emit('remove-profile', id)"
       @ssh-dialog-opened="(id) => $emit('ssh-dialog-opened', id)"
-      @toggle-sftp="(id) => $emit('toggle-sftp', id)"
     />
     <div
       ref="dividerElement"
@@ -81,7 +79,6 @@
       @save-profile="(profile) => $emit('save-profile', profile)"
       @remove-profile="(id) => $emit('remove-profile', id)"
       @ssh-dialog-opened="(id) => $emit('ssh-dialog-opened', id)"
-      @toggle-sftp="(id) => $emit('toggle-sftp', id)"
     />
   </div>
 </template>
@@ -118,7 +115,6 @@ const emit = defineEmits<{
   'save-profile': [profile: SshConnectionProfile]
   'remove-profile': [id: string]
   'ssh-dialog-opened': [paneId: string]
-  'toggle-sftp': [paneId: string]
 }>()
 
 const splitElement = ref<HTMLDivElement | null>(null)

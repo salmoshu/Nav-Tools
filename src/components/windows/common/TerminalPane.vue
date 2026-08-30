@@ -3,16 +3,6 @@
     <header class="pane-header">
       <div class="pane-actions">
         <el-tooltip
-          v-if="sessionInfo?.kind === 'ssh'"
-          :content="t('common.terminal.openSftp')"
-          placement="bottom"
-          :show-after="400"
-        >
-          <el-button text class="pane-action" @click="emit('toggle-sftp', props.pane.id)">
-            <el-icon><FolderOpened /></el-icon>
-          </el-button>
-        </el-tooltip>
-        <el-tooltip
           v-if="paneCount > 1"
           :content="
             expanded ? t('common.terminal.restorePane') : t('common.terminal.maximizePaneShortcut')
@@ -279,7 +269,6 @@ const emit = defineEmits<{
   'save-profile': [profile: SshConnectionProfile]
   'remove-profile': [id: string]
   'ssh-dialog-opened': [paneId: string]
-  'toggle-sftp': [paneId: string]
 }>()
 
 const terminalElement = ref<HTMLDivElement | null>(null)
@@ -516,8 +505,11 @@ async function silentSshReconnect(
       .invoke('terminal-session-close', props.pane.sessionId)
       .catch(() => undefined)
   }
+  // launch 里的 profile 是 Vue 响应式代理,直接过 IPC 会报 "An object could not be cloned",
+  // 序列化一次去掉代理
+  const plainProfile = JSON.parse(JSON.stringify(profile)) as SshConnectionProfile
   await createSession(
-    { kind: 'ssh', sshProfile: profile, sshSecrets: secrets ?? {} },
+    { kind: 'ssh', sshProfile: plainProfile, sshSecrets: secrets ?? {} },
     `${profile.username}@${profile.host}:${profile.port}`,
     launch,
   )
@@ -755,7 +747,6 @@ function withTimeout<T>(
   display: flex;
   flex-direction: column;
   background: var(--app-bg);
-  border: 1px solid transparent;
   opacity: 0.92;
   overflow: hidden;
   transition: opacity 0.12s ease;

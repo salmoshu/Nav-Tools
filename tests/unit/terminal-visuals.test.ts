@@ -34,15 +34,17 @@ describe('Terminal v1.4.1 visual controls', () => {
     expect(terminalSource).toContain('.tab-status-dot {\n  width: 7px;\n  height: 7px;')
   })
 
-  it('supports tab reordering and keeps a single SFTP panel at tab scope', () => {
+  it('supports tab reordering and exposes one SFTP control at tab scope', () => {
     expect(terminalSource).toContain('<draggable')
     expect(terminalSource).toContain('v-model="tabs"')
     expect(terminalSource).toContain('item-key="id"')
     expect(terminalSource).toContain('class="terminal-tab-content__layout"')
     expect(terminalSource).toContain('<TerminalSftpPanel')
-    expect(terminalSource).toContain('@toggle-sftp="toggleTabSftp"')
+    expect(terminalSource).toContain('class="tab-action tab-action--sftp"')
+    expect(terminalSource).toContain('@click="toggleActiveTabSftp"')
     expect(paneSource).not.toContain('<TerminalSftpPanel')
-    expect(paneSource).toContain("emit('toggle-sftp', props.pane.id)")
+    expect(paneSource).not.toContain("t('common.terminal.openSftp')")
+    expect(paneSource).not.toContain("emit('toggle-sftp', props.pane.id)")
   })
 
   it('removes the floating port-forward control and keeps reconnect at the terminal bottom', () => {
