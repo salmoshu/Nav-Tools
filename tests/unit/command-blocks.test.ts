@@ -75,6 +75,33 @@ describe('CommandBlockAssembler', () => {
     expect(blocks[0].finishedAt).toBeTypeOf('number')
   })
 
+  it('exposes the in-flight block before D so long-running commands stay visible', () => {
+    const assembler = new CommandBlockAssembler()
+    assembler.feed(`${osc('A')}$ git log\r\n${osc('C', base64('git log'))}`)
+    assembler.feed('commit abc123\r\nAuthor: Tester\r\n')
+    // git log 走分页器,less 退出前不会有 D——块必须已在列表中且输出实时可见
+    let blocks = assembler.getBlocks()
+    expect(blocks).toHaveLength(1)
+    expect(blocks[0].command).toBe('git log')
+    expect(blocks[0].output).toBe('commit abc123\r\nAuthor: Tester\r\n')
+    expect(blocks[0].finishedAt).toBeUndefined()
+
+    // 输出继续流入同一块,id 保持稳定;D 到达后块转为完成态
+    assembler.feed('Date: today\r\n')
+    assembler.feed(`${osc('D', '0')}${osc('A')}$ `)
+    blocks = assembler.getBlocks()
+    expect(blocks).toHaveLength(1)
+    expect(blocks[0].output).toContain('Date: today')
+    expect(blocks[0].exitCode).toBe(0)
+    expect(blocks[0].finishedAt).toBeTypeOf('number')
+  })
+
+  it('does not surface the bare prompt as a block while idle', () => {
+    const assembler = new CommandBlockAssembler()
+    assembler.feed(`${osc('A')}$ `)
+    expect(assembler.getBlocks()).toHaveLength(0)
+  })
+
   it('ignores output outside any command cycle', () => {
     const assembler = new CommandBlockAssembler()
     assembler.feed('welcome banner\r\n')

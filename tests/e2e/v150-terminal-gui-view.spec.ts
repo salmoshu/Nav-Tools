@@ -105,6 +105,26 @@ test('renders command blocks in GUI view and toggles back to the terminal view',
     .toContain('"presentation":"terminal"')
 })
 
+test('shows live output for a command still running in a pager (git log)', async ({ page }) => {
+  // git log 会进入 less 分页器,用户按 q 前不会有 D 标记;块与输出必须实时可见
+  const scrollback = `${osc133('A')}$ git log\r\n${osc133('C', btoa('git log'))}commit abc123\r\nAuthor: Tester\r\n`
+  await seedTerminalApp(page, {
+    appId: 'terminal-gui-running',
+    paneId: 'gui-pane',
+    session: { id: 'gui-running-session', kind: 'local', title: 'Git Bash', status: 'ready' },
+    presentation: 'gui',
+    scrollback,
+  })
+
+  await page.goto('/#app/terminal-gui-running')
+  const block = page.locator('.command-block')
+  await expect(block).toHaveCount(1)
+  await expect(block).toHaveClass(/running/)
+  await expect(block.locator('.command-block__command')).toHaveText('git log')
+  await expect(block.locator('.command-block__output')).toContainText('commit abc123')
+  await expect(block.locator('.command-block__output')).toContainText('Author: Tester')
+})
+
 test('degrades to the terminal view with a hint for sessions without structured events', async ({
   page,
 }) => {

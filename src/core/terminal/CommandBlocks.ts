@@ -104,9 +104,14 @@ export class CommandBlockAssembler {
   /** 是否见过任何 OSC 133 标记;用于 GUI 视图区分「无事件源」与「尚无输出」 */
   public hasMarkers = false
 
-  /** 返回当前块列表;每次 feed 后调用方应重新读取以驱动视图更新 */
+  /**
+   * 返回当前块列表;每次 feed 后调用方应重新读取以驱动视图更新。
+   * 末尾包含仍在进行的命令块(已收到 C、尚未收到 D 或下一个 A),
+   * 其 finishedAt 为空、输出随数据帧实时增长——git log 分页器、tail -f 等
+   * 长运行命令因此在 GUI 视图中立即可见。
+   */
   public getBlocks(): TerminalCommandBlock[] {
-    return this.blocks
+    return this.current ? [...this.blocks, this.current] : this.blocks
   }
 
   public reset(): void {
