@@ -2,8 +2,14 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
 describe('Terminal pane chrome', () => {
-  const paneSource = readFileSync('src/components/windows/common/TerminalPane.vue', 'utf8')
-  const workbenchSource = readFileSync('src/components/windows/common/Terminal.vue', 'utf8')
+  const paneSource = readFileSync('src/components/windows/common/TerminalPane.vue', 'utf8').replace(
+    /\r\n/g,
+    '\n',
+  )
+  const workbenchSource = readFileSync('src/components/windows/common/Terminal.vue', 'utf8').replace(
+    /\r\n/g,
+    '\n',
+  )
 
   it('moves the pane controls into an overlay instead of consuming a second row', () => {
     expect(paneSource).toContain('.pane-header {\n  position: absolute;')

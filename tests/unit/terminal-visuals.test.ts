@@ -1,8 +1,14 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
-const terminalSource = readFileSync('src/components/windows/common/Terminal.vue', 'utf8')
-const paneSource = readFileSync('src/components/windows/common/TerminalPane.vue', 'utf8')
+const terminalSource = readFileSync('src/components/windows/common/Terminal.vue', 'utf8').replace(
+  /\r\n/g,
+  '\n',
+)
+const paneSource = readFileSync('src/components/windows/common/TerminalPane.vue', 'utf8').replace(
+  /\r\n/g,
+  '\n',
+)
 const terminalServiceSource = readFileSync('electron/main/services/TerminalService.ts', 'utf8')
 const sftpSource = readFileSync('src/components/windows/common/TerminalSftpPanel.vue', 'utf8')
 const terminalThemeSource = readFileSync('src/core/terminal/TerminalTheme.ts', 'utf8')
