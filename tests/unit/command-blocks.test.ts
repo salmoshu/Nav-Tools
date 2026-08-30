@@ -1,0 +1,139 @@
+import { describe, expect, it } from 'vitest'
+import {
+  CommandBlockAssembler,
+  MAX_BLOCK_OUTPUT_CHARS,
+  MAX_COMMAND_BLOCKS,
+  stripAnsiSequences,
+} from '@/core/terminal/CommandBlocks'
+
+const BEL = '\x07'
+const ST = '\x1b\\'
+const osc = (letter: string, params = '', terminator = BEL) =>
+  `\x1b]133;${letter}${params ? `;${params}` : ''}${terminator}`
+
+function base64(text: string): string {
+  return btoa(String.fromCharCode(...new TextEncoder().encode(text)))
+}
+
+describe('CommandBlockAssembler', () => {
+  it('assembles a full A→C→D cycle into one block with command and exit code', () => {
+    const assembler = new CommandBlockAssembler()
+    assembler.feed(`${osc('A')}$ `)
+    assembler.feed(`ls -la\r\n`)
+    assembler.feed(`${osc('C', base64('ls -la'))}file1\r\nfile2\r\n`)
+    assembler.feed(`${osc('D', '0')}${osc('A')}$ `)
+
+    const blocks = assembler.getBlocks()
+    expect(blocks).toHaveLength(1)
+    expect(blocks[0].command).toBe('ls -la')
+    expect(blocks[0].output).toBe('file1\r\nfile2\r\n')
+    expect(blocks[0].exitCode).toBe(0)
+    expect(blocks[0].finishedAt).toBeTypeOf('number')
+  })
+
+  it('decodes UTF-8 command text carried in the C marker', () => {
+    const assembler = new CommandBlockAssembler()
+    assembler.feed(`${osc('C', base64('echo 你好'))}你好\r\n${osc('D', '0')}${osc('A')}`)
+    expect(assembler.getBlocks()[0].command).toBe('echo 你好')
+  })
+
+  it('handles markers split across chunks', () => {
+    const assembler = new CommandBlockAssembler()
+    assembler.feed('\x1b]13')
+    assembler.feed('3;A')
+    expect(assembler.hasMarkers).toBe(false)
+    assembler.feed(`$ echo hi\r${osc('C')}`)
+    assembler.feed('hi\r\n')
+    assembler.feed(`\x1b]133;D;0${ST}`)
+    assembler.feed(osc('A'))
+    const blocks = assembler.getBlocks()
+    expect(blocks).toHaveLength(1)
+    expect(blocks[0].output).toBe('hi\r\n')
+    expect(blocks[0].exitCode).toBe(0)
+  })
+
+  it('keeps the whole cycle as block content for shells without C markers (PowerShell)', () => {
+    const assembler = new CommandBlockAssembler()
+    assembler.feed(`${osc('A')}PS C:\\> echo hi\r\nhi\r\n${osc('D', '0')}${osc('A')}`)
+    assembler.feed(`PS C:\\> exit 3\r\n${osc('D', '3')}${osc('A')}`)
+    const blocks = assembler.getBlocks()
+    expect(blocks).toHaveLength(2)
+    expect(blocks[0].command).toBeUndefined()
+    expect(blocks[0].output).toContain('PS C:\\> echo hi')
+    expect(blocks[0].exitCode).toBeUndefined()
+    expect(blocks[1].exitCode).toBeUndefined()
+  })
+
+  it('closes a running block at the next prompt when D is missing (Ctrl+C)', () => {
+    const assembler = new CommandBlockAssembler()
+    assembler.feed(`${osc('A')}$ sleep 99\r\n${osc('C', base64('sleep 99'))}partial\r\n`)
+    assembler.feed(osc('A'))
+    const blocks = assembler.getBlocks()
+    expect(blocks).toHaveLength(1)
+    expect(blocks[0].command).toBe('sleep 99')
+    expect(blocks[0].exitCode).toBeUndefined()
+    expect(blocks[0].finishedAt).toBeTypeOf('number')
+  })
+
+  it('ignores output outside any command cycle', () => {
+    const assembler = new CommandBlockAssembler()
+    assembler.feed('welcome banner\r\n')
+    expect(assembler.getBlocks()).toHaveLength(0)
+    expect(assembler.hasMarkers).toBe(false)
+  })
+
+  it('tolerates malformed params and unknown markers', () => {
+    const assembler = new CommandBlockAssembler()
+    assembler.feed(`${osc('C', '!!!not-base64!!!')}out${osc('D', 'abc')}${osc('A')}`)
+    assembler.feed(`${osc('B')}${osc('E', 'x')}${osc('A')}`)
+    const blocks = assembler.getBlocks()
+    expect(blocks).toHaveLength(1)
+    expect(blocks[0].command).toBeUndefined()
+    expect(blocks[0].exitCode).toBeUndefined()
+  })
+
+  it('caps the number of retained blocks', () => {
+    const assembler = new CommandBlockAssembler()
+    for (let i = 0; i < MAX_COMMAND_BLOCKS + 20; i += 1) {
+      assembler.feed(`${osc('C', base64(`cmd${i}`))}out${i}${osc('D', '0')}${osc('A')}`)
+    }
+    const blocks = assembler.getBlocks()
+    expect(blocks).toHaveLength(MAX_COMMAND_BLOCKS)
+    expect(blocks[blocks.length - 1].command).toBe(`cmd${MAX_COMMAND_BLOCKS + 19}`)
+  })
+
+  it('caps per-block output and marks truncation', () => {
+    const assembler = new CommandBlockAssembler()
+    assembler.feed(osc('C'))
+    assembler.feed('x'.repeat(MAX_BLOCK_OUTPUT_CHARS + 1000))
+    assembler.feed(`${osc('D', '0')}${osc('A')}`)
+    const block = assembler.getBlocks()[0]
+    expect(block.output).toHaveLength(MAX_BLOCK_OUTPUT_CHARS)
+    expect(block.truncated).toBe(true)
+  })
+
+  it('accepts ST-terminated markers', () => {
+    const assembler = new CommandBlockAssembler()
+    assembler.feed(`${osc('A', '', ST)}$ x\r${osc('C', '', ST)}ok${osc('D', '1', ST)}${osc('A', '', ST)}`)
+    const blocks = assembler.getBlocks()
+    expect(blocks).toHaveLength(1)
+    expect(blocks[0].exitCode).toBe(1)
+  })
+
+  it('reset clears all state', () => {
+    const assembler = new CommandBlockAssembler()
+    assembler.feed(`${osc('C')}out${osc('D', '0')}${osc('A')}`)
+    assembler.reset()
+    expect(assembler.getBlocks()).toHaveLength(0)
+    expect(assembler.hasMarkers).toBe(false)
+    assembler.feed('plain text only')
+    expect(assembler.getBlocks()).toHaveLength(0)
+  })
+})
+
+describe('stripAnsiSequences', () => {
+  it('removes SGR, cursor and OSC sequences for plain-text rendering', () => {
+    expect(stripAnsiSequences('\x1b[31mred\x1b[0m plain \x1b[2Kdone')).toBe('red plain done')
+    expect(stripAnsiSequences('\x1b]7;file://host/path\x07text')).toBe('text')
+  })
+})

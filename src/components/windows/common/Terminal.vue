@@ -151,6 +151,7 @@
             @resize="resizeSplit"
             @split="splitPane"
             @close="closePane"
+            @toggle-presentation="togglePanePresentation"
             @save-profile="saveProfile"
             @remove-profile="removeProfile"
             @ssh-dialog-opened="autoOpenSshPaneId = ''"
@@ -568,6 +569,16 @@ function focusPane(paneId: string): void {
   if (!tab) return
   tab.focusedPaneId = paneId
   activeTabId.value = tab.id
+}
+
+/** 两态视图切换:terminal(xterm) ↔ gui(命令块视图),随工作区 watch 自动持久化 */
+function togglePanePresentation(paneId: string): void {
+  const tab = tabs.value.find((entry) => findTerminalPane(entry.root, paneId))
+  const pane = tab ? findTerminalPane(tab.root, paneId) : undefined
+  if (!tab || !pane) return
+  tab.root = updateTerminalPane(tab.root, paneId, {
+    presentation: pane.presentation === 'gui' ? 'terminal' : 'gui',
+  })
 }
 
 function toggleActiveTabSftp(): void {

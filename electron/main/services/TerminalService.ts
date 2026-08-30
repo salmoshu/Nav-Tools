@@ -33,6 +33,31 @@ const SSH_CHANNEL_TIMEOUT_MS = 15_000
 const HOST_KEY_RESPONSE_TIMEOUT_MS = 30_000
 /** 让 bash 在每个提示符前上报 OSC 7 cwd;仅对 bash 注入,zsh/fish 跳过避免报错 */
 const OSC7_PROMPT_COMMAND = 'printf "\\e]7;file://%s%s\\e\\\\" "$HOSTNAME" "$PWD"'
+/**
+ * bash 命令块标记(OSC 133):PROMPT_COMMAND 在每个提示符处上报上一条命令的
+ * 退出码(D)与提示符起点(A);DEBUG trap 在用户命令执行前触发一次并上报
+ * base64 编码的命令文本(C),触发后即自行解除。定义在 PROMPT_COMMAND 内,
+ * 随环境变量传入,不落盘、不修改用户的 shell 配置文件。
+ */
+const OSC133_BASH_INTEGRATION = [
+  '__nav_e=$?',
+  'printf "\\e]133;D;%s\\a\\e]133;A\\a" "$__nav_e"',
+  OSC7_PROMPT_COMMAND,
+  '__nav133_fire() { if [ -z "$COMP_LINE" ]; then case "$BASH_COMMAND" in __nav133_fire*|*__nav_e*) ;; *) __nav_c=$(printf %s "$BASH_COMMAND" | base64 2>/dev/null); printf "\\e]133;C;%s\\a" "$__nav_c"; trap - DEBUG;; esac; fi; }',
+  'trap __nav133_fire DEBUG',
+].join('; ')
+/**
+ * PowerShell 提示符集成:prompt 函数在每次提示符处上报上一条命令的退出码(D)
+ * 与提示符起点(A)。经 -Command 启动参数注入,不会作为输入回显进 scrollback。
+ * 注意:这会覆盖用户 $PROFILE 里的自定义 prompt。
+ */
+const POWERSHELL_PROMPT_INTEGRATION =
+  'function global:prompt { ' +
+  '$e = $global:LASTEXITCODE; ' +
+  '$c = 0; if ($null -ne $e) { $c = $e }; ' +
+  '$s = [char]27; $b = [char]7; ' +
+  '[Console]::Out.Write("$s]133;D;$c$b$s]133;A$b"); ' +
+  '"PS $((Get-Location).Path)> " }'
 /** 输入回显抑制窗口:写入后的这段时间内到达的输出视为回显,不驱动 tab 活动动画 */
 const INPUT_ECHO_WINDOW_MS = 600
 /** Terminal redraws emitted immediately after a PTY resize are layout feedback, not user activity. */
@@ -915,7 +940,13 @@ function resolvePtyLaunch(request: TerminalCreateRequest): {
   }
   const kind: LocalShellKind = request.localShell || 'system'
   if (kind === 'powershell')
-    return { executable: 'powershell.exe', args: ['-NoLogo'], title: 'PowerShell' }
+    return {
+      executable: 'powershell.exe',
+      // 经启动参数注入 prompt 函数,上报 OSC 133 提示符/退出码标记;
+      // PowerShell 无 preexec 机制,无法上报 C(命令开始),GUI 视图按周期整段成块
+      args: ['-NoLogo', '-NoExit', '-Command', POWERSHELL_PROMPT_INTEGRATION],
+      title: 'PowerShell',
+    }
   if (kind === 'cmd') return { executable: 'cmd.exe', args: ['/K', 'chcp 65001>nul'], title: 'CMD' }
   if (kind === 'git-bash') {
     return { executable: resolveGitBashSync(), args: ['--login', '-i'], title: 'Git Bash' }
@@ -940,18 +971,19 @@ function cleanEnvironment(environment: Record<string, string | undefined>): Reco
 }
 
 /**
- * bash 系终端注入 PROMPT_COMMAND 以上报 OSC 7 cwd:
+ * bash 系终端注入 PROMPT_COMMAND 以上报 OSC 7 cwd 与 OSC 133 命令块标记:
  * - WSL 需要经 WSLENV(冒号分隔)把变量透传进发行版;
  * - git-bash 是 MSYS bash,直接继承环境变量;
- * - powershell/cmd 无可靠的 OSC 7 机制,不注入。
+ * - powershell 在 resolvePtyLaunch 用启动参数注入 prompt 函数;cmd 无可靠机制,不注入;
+ * - SSH 远端 shell 不注入(v1.4.4 起不再向远端写入启动命令,避免污染 scrollback 回放)。
  */
 function ptyEnvironment(request: TerminalCreateRequest): Record<string, string> {
   const env = cleanEnvironment(process.env)
   if (request.kind === 'wsl') {
-    env.PROMPT_COMMAND = OSC7_PROMPT_COMMAND
+    env.PROMPT_COMMAND = OSC133_BASH_INTEGRATION
     env.WSLENV = env.WSLENV ? `${env.WSLENV}:PROMPT_COMMAND` : 'PROMPT_COMMAND'
   } else if (request.kind === 'local' && request.localShell === 'git-bash') {
-    env.PROMPT_COMMAND = OSC7_PROMPT_COMMAND
+    env.PROMPT_COMMAND = OSC133_BASH_INTEGRATION
   }
   return env
 }

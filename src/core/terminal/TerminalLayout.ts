@@ -2,12 +2,16 @@ import { createTerminalId, type TerminalLaunchSpec } from './TerminalTypes'
 
 export type TerminalSplitDirection = 'horizontal' | 'vertical'
 
+/** pane 的呈现方式:缺省为终端(xterm);gui 为结构化命令块视图 */
+export type TerminalPresentation = 'terminal' | 'gui'
+
 export interface TerminalPaneNode {
   kind: 'pane'
   id: string
   sessionId?: string
   title: string
   launch?: TerminalLaunchSpec
+  presentation?: TerminalPresentation
 }
 
 export interface TerminalSplitNode {

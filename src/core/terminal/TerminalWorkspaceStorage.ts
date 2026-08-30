@@ -119,6 +119,7 @@ function normalizeLayoutNode(value: unknown, allowLaunch: boolean): TerminalLayo
       title: typeof record.title === 'string' ? record.title : 'Terminal',
       sessionId: typeof record.sessionId === 'string' ? record.sessionId : undefined,
       launch: allowLaunch ? normalizeLaunchSpec(record.launch) : undefined,
+      presentation: record.presentation === 'gui' ? 'gui' : undefined,
     }
   }
   if (record.kind !== 'split' || typeof record.id !== 'string') return null

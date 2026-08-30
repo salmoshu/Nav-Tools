@@ -3,6 +3,23 @@
     <header class="pane-header">
       <div class="pane-actions">
         <el-tooltip
+          :content="
+            isGui ? t('common.terminal.switchToTerminalView') : t('common.terminal.switchToGuiView')
+          "
+          placement="bottom"
+          :show-after="400"
+        >
+          <el-button
+            text
+            class="pane-action pane-action--toggle-presentation"
+            :aria-label="t('common.terminal.togglePresentation')"
+            :aria-pressed="isGui"
+            @click="$emit('toggle-presentation', pane.id)"
+          >
+            <el-icon><component :is="isGui ? TerminalIcon : LayoutGrid" /></el-icon>
+          </el-button>
+        </el-tooltip>
+        <el-tooltip
           v-if="paneCount > 1"
           :content="
             expanded ? t('common.terminal.restorePane') : t('common.terminal.maximizePaneShortcut')
@@ -147,11 +164,28 @@
     </div>
 
     <div v-show="pane.sessionId" class="session-body">
+      <div v-if="guiDegraded" class="gui-degraded" role="status">
+        <span class="gui-degraded__hint">{{ t('common.terminal.guiDegradedHint') }}</span>
+        <el-button
+          class="gui-degraded__action"
+          size="small"
+          @click="$emit('toggle-presentation', pane.id)"
+        >
+          {{ t('common.terminal.switchToTerminalView') }}
+        </el-button>
+      </div>
       <div
+        v-show="!isGui || guiDegraded"
         ref="terminalElement"
         class="xterm-host"
         @contextmenu.prevent="handleTerminalContextMenu"
       ></div>
+      <TerminalGuiView
+        v-if="isGui && !guiDegraded"
+        :blocks="commandBlocks"
+        @rerun="rerunCommand"
+        @copy="writeClipboardText"
+      />
       <div v-if="sessionDisconnected" class="session-disconnected" role="status">
         <span class="session-disconnected__icon"><WarningFilled /></span>
         <span class="session-disconnected__copy">
@@ -213,7 +247,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, shallowRef, watch } from 'vue'
 import {
   Close,
   Connection,
@@ -227,11 +261,12 @@ import {
   ScaleToOriginal,
   WarningFilled,
 } from '@element-plus/icons-vue'
-import { SquareSplitVertical } from '@lucide/vue'
+import { SquareSplitVertical, LayoutGrid, Terminal as TerminalIcon } from '@lucide/vue'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
 import { t } from '@/i18n'
+import { CommandBlockAssembler, type TerminalCommandBlock } from '@/core/terminal/CommandBlocks'
 import type { TerminalPaneNode, TerminalSplitDirection } from '@/core/terminal/TerminalLayout'
 import {
   TERMINAL_SSH_RECOVERED_EVENT,
@@ -248,6 +283,7 @@ import {
 import emitter from '@/hooks/useMitt'
 import { ORCA_TERMINAL_THEME } from '@/core/terminal/TerminalTheme'
 import TerminalConnectionDialog from './TerminalConnectionDialog.vue'
+import TerminalGuiView from './TerminalGuiView.vue'
 
 const SESSION_CREATE_TIMEOUT_MS = 20_000
 
@@ -267,6 +303,7 @@ const emit = defineEmits<{
   expand: [paneId: string]
   split: [paneId: string, direction: TerminalSplitDirection, inherit: boolean]
   close: [paneId: string]
+  'toggle-presentation': [paneId: string]
   'save-profile': [profile: SshConnectionProfile]
   'remove-profile': [id: string]
   'ssh-dialog-opened': [paneId: string]
@@ -310,6 +347,34 @@ const launchDescription = computed(() => {
   if (launch.kind === 'local') return launch.label || launch.localShell
   return 'SSH'
 })
+
+/** OSC 133 命令块装配:实时输出与恢复回放都经过它,与 xterm 渲染互不干扰 */
+const commandBlockAssembler = new CommandBlockAssembler()
+const commandBlocks = shallowRef<TerminalCommandBlock[]>([])
+const isGui = computed(() => props.pane.presentation === 'gui')
+/**
+ * SSH 远端 shell(v1.4.4 起不注入标记)与 cmd 不产生 OSC 133 事件,
+ * GUI 视图对这类会话降级为终端渲染并给出切回提示。
+ */
+const guiDegraded = computed(() => {
+  if (!isGui.value) return false
+  const kind = props.pane.launch?.kind ?? props.sessionInfo?.kind
+  if (kind === 'ssh') return true
+  return props.pane.launch?.kind === 'local' && props.pane.launch.localShell === 'cmd'
+})
+
+function feedCommandBlocks(data: string): void {
+  commandBlockAssembler.feed(data)
+  commandBlocks.value = [...commandBlockAssembler.getBlocks()]
+}
+
+/** GUI 视图的「重新运行」:把命令文本写回当前会话,效果等同在终端里再次输入 */
+function rerunCommand(command: string): void {
+  if (!command || !props.pane.sessionId || !terminalInputEnabled) return
+  void window.ipcRenderer
+    .invoke('terminal-session-write', { sessionId: props.pane.sessionId, data: `${command}\r` })
+    .catch(() => undefined)
+}
 
 let terminal: Terminal | undefined
 let fitAddon: FitAddon | undefined
@@ -543,10 +608,16 @@ async function attachSession(sessionId: string | undefined): Promise<void> {
   attachedSessionId = sessionId
   terminalInputEnabled = false
   terminal.reset()
+  commandBlockAssembler.reset()
+  commandBlocks.value = []
   const session = await window.ipcRenderer.invoke('terminal-session-attach', sessionId)
   if (sessionId !== props.pane.sessionId) return
   if (!session) return
-  if (session.scrollback) await writeTerminalData(sanitizeRestoredScrollback(session.scrollback))
+  if (session.scrollback) {
+    const restored = sanitizeRestoredScrollback(session.scrollback)
+    feedCommandBlocks(restored)
+    await writeTerminalData(restored)
+  }
   if (sessionId !== props.pane.sessionId) return
   terminalInputEnabled = true
   await nextTick()
@@ -581,7 +652,9 @@ function fitTerminal(): void {
 }
 
 function handleOutput(_event: unknown, event: { sessionId: string; data: string }): void {
-  if (event.sessionId === props.pane.sessionId) terminal?.write(event.data)
+  if (event.sessionId !== props.pane.sessionId) return
+  feedCommandBlocks(event.data)
+  terminal?.write(event.data)
 }
 
 async function readClipboardText(): Promise<string> {
@@ -634,6 +707,13 @@ watch(
     if (active) void nextTick(() => terminal?.focus())
   },
 )
+// 切回终端视图后 xterm 刚从 display:none 恢复,需要重新适配尺寸并夺回焦点
+watch(isGui, async (gui) => {
+  if (gui) return
+  await nextTick()
+  fitTerminal()
+  if (props.focused) terminal?.focus()
+})
 onMounted(() => {
   const rootStyle = getComputedStyle(document.documentElement)
   terminal = new Terminal({
@@ -877,6 +957,25 @@ function withTimeout<T>(
   background: var(--terminal-bg);
   direction: ltr;
   text-align: left;
+}
+.gui-degraded {
+  min-height: 40px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 5px 10px;
+  border-bottom: 1px solid color-mix(in srgb, var(--terminal-fg) 14%, var(--terminal-bg));
+  color: var(--terminal-fg);
+  background: color-mix(in srgb, var(--terminal-bg) 92%, var(--el-color-warning));
+}
+.gui-degraded__hint {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+}
+.gui-degraded__action {
+  flex: none;
 }
 .xterm-host :deep(.xterm) {
   height: 100%;

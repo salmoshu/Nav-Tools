@@ -14,6 +14,7 @@
     @expand="(id) => $emit('expand', id)"
     @split="(...args) => $emit('split', ...args)"
     @close="(id) => $emit('close', id)"
+    @toggle-presentation="(id) => $emit('toggle-presentation', id)"
     @save-profile="(profile) => $emit('save-profile', profile)"
     @remove-profile="(id) => $emit('remove-profile', id)"
     @ssh-dialog-opened="(id) => $emit('ssh-dialog-opened', id)"
@@ -36,6 +37,7 @@
       @resize="(...args) => $emit('resize', ...args)"
       @split="(...args) => $emit('split', ...args)"
       @close="(id) => $emit('close', id)"
+      @toggle-presentation="(id) => $emit('toggle-presentation', id)"
       @save-profile="(profile) => $emit('save-profile', profile)"
       @remove-profile="(id) => $emit('remove-profile', id)"
       @ssh-dialog-opened="(id) => $emit('ssh-dialog-opened', id)"
@@ -76,6 +78,7 @@
       @resize="(...args) => $emit('resize', ...args)"
       @split="(...args) => $emit('split', ...args)"
       @close="(id) => $emit('close', id)"
+      @toggle-presentation="(id) => $emit('toggle-presentation', id)"
       @save-profile="(profile) => $emit('save-profile', profile)"
       @remove-profile="(id) => $emit('remove-profile', id)"
       @ssh-dialog-opened="(id) => $emit('ssh-dialog-opened', id)"
@@ -112,6 +115,7 @@ const emit = defineEmits<{
   resize: [splitId: string, ratio: number]
   split: [paneId: string, direction: TerminalSplitDirection, inherit: boolean]
   close: [paneId: string]
+  'toggle-presentation': [paneId: string]
   'save-profile': [profile: SshConnectionProfile]
   'remove-profile': [id: string]
   'ssh-dialog-opened': [paneId: string]

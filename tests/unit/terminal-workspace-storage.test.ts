@@ -62,6 +62,47 @@ describe('TerminalWorkspaceStorage', () => {
     expect(findTerminalPane(restored.tabs[0].root, 'legacy-pane')?.launch).toBeUndefined()
   })
 
+  it('persists the per-pane GUI presentation and drops malformed values', () => {
+    const storage = new TerminalWorkspaceStorage(localStorage)
+    const tab = createTerminalTab('Terminal')
+    if (tab.root.kind !== 'pane') throw new Error('Expected a pane')
+    tab.root.presentation = 'gui'
+
+    storage.save({ tabs: [tab], activeTabId: tab.id })
+    const restored = storage.load()
+
+    expect(findTerminalPane(restored.tabs[0].root, tab.root.id)?.presentation).toBe('gui')
+  })
+
+  it('defaults missing or malformed presentation to the terminal view', () => {
+    localStorage.setItem(
+      'nav-tools:terminal-layout:v3',
+      JSON.stringify({
+        version: 3,
+        tabs: [
+          {
+            id: 'tab',
+            title: 'Terminal',
+            focusedPaneId: 'pane-a',
+            root: {
+              kind: 'split',
+              id: 'split',
+              direction: 'horizontal',
+              ratio: 0.5,
+              first: { kind: 'pane', id: 'pane-a', title: 'A', presentation: 'gui' },
+              second: { kind: 'pane', id: 'pane-b', title: 'B', presentation: 'side' },
+            },
+          },
+        ],
+      }),
+    )
+
+    const restored = new TerminalWorkspaceStorage(localStorage).load()
+
+    expect(findTerminalPane(restored.tabs[0].root, 'pane-a')?.presentation).toBe('gui')
+    expect(findTerminalPane(restored.tabs[0].root, 'pane-b')?.presentation).toBeUndefined()
+  })
+
   it('plans recreation of a missing local process while preserving its pane and layout', () => {
     const tab = createTerminalTab('PowerShell')
     if (tab.root.kind !== 'pane') throw new Error('Expected a pane')
