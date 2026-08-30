@@ -38,12 +38,19 @@ const OSC7_PROMPT_COMMAND = 'printf "\\e]7;file://%s%s\\e\\\\" "$HOSTNAME" "$PWD
  * 退出码(D)与提示符起点(A);DEBUG trap 在用户命令执行前触发一次并上报
  * base64 编码的命令文本(C),触发后即自行解除。定义在 PROMPT_COMMAND 内,
  * 随环境变量传入,不落盘、不修改用户的 shell 配置文件。
+ *
+ * PROMPT_COMMAND 自身执行期间必须摘掉 DEBUG trap:空回车/Ctrl+C 不会消耗
+ * trap,若不先解除,下面的 OSC7 printf 与 trap 语句会被当成「用户命令」上报,
+ * GUI 视图出现 printf 幻影块。注意 trap - DEBUG 必须是 PROMPT_COMMAND 里的
+ * 直接语句——包成函数调用不生效(bash 实测),它自身靠过滤器的 trap * 模式
+ * 放行;__nav_e=$? 保持最先执行以拿到真实退出码。
  */
 const OSC133_BASH_INTEGRATION = [
   '__nav_e=$?',
+  'trap - DEBUG',
   'printf "\\e]133;D;%s\\a\\e]133;A\\a" "$__nav_e"',
   OSC7_PROMPT_COMMAND,
-  '__nav133_fire() { if [ -z "$COMP_LINE" ]; then case "$BASH_COMMAND" in __nav133_fire*|*__nav_e*) ;; *) __nav_c=$(printf %s "$BASH_COMMAND" | base64 2>/dev/null); printf "\\e]133;C;%s\\a" "$__nav_c"; trap - DEBUG;; esac; fi; }',
+  '__nav133_fire() { if [ -z "$COMP_LINE" ]; then case "$BASH_COMMAND" in __nav133*|*__nav_e*|"trap "*) ;; *) __nav_c=$(printf %s "$BASH_COMMAND" | base64 2>/dev/null); printf "\\e]133;C;%s\\a" "$__nav_c"; trap - DEBUG;; esac; fi; }',
   'trap __nav133_fire DEBUG',
   // nav-render <file> [mime]:把文件内容作为 OSC 1338 富内容块上报,GUI 视图按 MIME 渲染
   'nav-render() { local f="$1" m="$2"; if [ -z "$f" ] || [ ! -f "$f" ]; then echo "nav-render: file not found: $f" >&2; return 2; fi; if [ -z "$m" ]; then case "${f##*.}" in md|markdown) m=text/markdown;; json) m=application/json;; csv) m=text/csv;; png) m=image/png;; jpg|jpeg) m=image/jpeg;; svg) m=image/svg+xml;; *) m=text/plain;; esac; fi; printf "\\e]1338;%s;" "$m"; base64 "$f" 2>/dev/null | tr -d "\\n"; printf "\\a"; }',
