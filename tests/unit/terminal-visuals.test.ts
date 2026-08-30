@@ -5,8 +5,21 @@ const terminalSource = readFileSync('src/components/windows/common/Terminal.vue'
 const paneSource = readFileSync('src/components/windows/common/TerminalPane.vue', 'utf8')
 const terminalServiceSource = readFileSync('electron/main/services/TerminalService.ts', 'utf8')
 const sftpSource = readFileSync('src/components/windows/common/TerminalSftpPanel.vue', 'utf8')
+const terminalThemeSource = readFileSync('src/core/terminal/TerminalTheme.ts', 'utf8')
 
 describe('Terminal v1.4.1 visual controls', () => {
+  it('uses Orca Ghostty colors for the terminal and ANSI output', () => {
+    expect(paneSource).toContain('...ORCA_TERMINAL_THEME')
+    expect(terminalThemeSource).toContain("background: '#282c34'")
+    expect(terminalThemeSource).toContain("foreground: '#ffffff'")
+    expect(terminalThemeSource).toContain("red: '#cc6666'")
+    expect(terminalThemeSource).toContain("green: '#b5bd68'")
+    expect(terminalThemeSource).toContain("yellow: '#f0c674'")
+    expect(terminalThemeSource).toContain("brightBlue: '#7aa6da'")
+    expect(terminalThemeSource).toContain("brightMagenta: '#c397d8'")
+    expect(terminalThemeSource).toContain("brightCyan: '#70c0b1'")
+  })
+
   it('uses only real output for tab activity and ignores hidden overlays for shortcuts', () => {
     expect(terminalSource).toContain('value.activity === false')
     expect(terminalSource).toContain('hasVisibleTerminalOverlay()')

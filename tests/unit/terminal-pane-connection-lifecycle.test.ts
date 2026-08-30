@@ -558,7 +558,10 @@ describe('TerminalPane connection lifecycle', () => {
     app.unmount()
   })
 
-  it('does not manually paste for Ctrl+V so xterm handles the shortcut only once', async () => {
+  it('pastes through the Electron clipboard exactly once for Ctrl+V', async () => {
+    window.ipcRenderer.invoke = vi.fn((channel: string) =>
+      channel === 'clipboard-read-text' ? Promise.resolve('Get-Process') : Promise.resolve(),
+    )
     const host = document.createElement('div')
     document.body.append(host)
     const app = createApp(TerminalPane, {
@@ -589,10 +592,24 @@ describe('TerminalPane connection lifecycle', () => {
     }
     app.mount(host)
 
-    const event = new KeyboardEvent('keydown', { key: 'v', code: 'KeyV', ctrlKey: true })
-    expect(xtermHarness.keyHandler?.(event)).toBe(true)
-    expect(window.ipcRenderer.invoke).not.toHaveBeenCalledWith('clipboard-read-text')
-    expect(xtermHarness.paste).not.toHaveBeenCalled()
+    const event = new KeyboardEvent('keydown', {
+      key: 'v',
+      code: 'KeyV',
+      ctrlKey: true,
+      cancelable: true,
+    })
+    expect(xtermHarness.keyHandler?.(event)).toBe(false)
+    expect(event.defaultPrevented).toBe(true)
+    await Promise.resolve()
+    await Promise.resolve()
+
+    const clipboardReads = vi
+      .mocked(window.ipcRenderer.invoke)
+      .mock.calls.filter(([channel]) => channel === 'clipboard-read-text')
+    expect(clipboardReads).toHaveLength(1)
+    expect(window.ipcRenderer.invoke).toHaveBeenCalledWith('clipboard-read-text')
+    expect(xtermHarness.paste).toHaveBeenCalledTimes(1)
+    expect(xtermHarness.paste).toHaveBeenCalledWith('Get-Process')
     app.unmount()
   })
 

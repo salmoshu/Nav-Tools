@@ -29,8 +29,8 @@
   --app-toolbar: #2c3e50;
   --app-toolbar-control: #34495e;
   --app-shadow: rgba(15, 23, 42, 0.14);
-  --terminal-bg: #171a21;
-  --terminal-fg: #d8dee9;
+  --terminal-bg: #282c34;
+  --terminal-fg: #ffffff;
 }
 
 :root.dark {
@@ -51,8 +51,8 @@
   --app-toolbar: #181b21;
   --app-toolbar-control: #292e38;
   --app-shadow: rgba(0, 0, 0, 0.36);
-  --terminal-bg: #111318;
-  --terminal-fg: #d8dee9;
+  --terminal-bg: #282c34;
+  --terminal-fg: #ffffff;
 }
 
 html,

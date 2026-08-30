@@ -246,6 +246,7 @@ import {
   type TerminalSshRecoveredEvent,
 } from '@/core/terminal/TerminalTypes'
 import emitter from '@/hooks/useMitt'
+import { ORCA_TERMINAL_THEME } from '@/core/terminal/TerminalTheme'
 import TerminalConnectionDialog from './TerminalConnectionDialog.vue'
 
 const SESSION_CREATE_TIMEOUT_MS = 20_000
@@ -642,27 +643,11 @@ onMounted(() => {
     fontSize: 13,
     scrollback: 10_000,
     theme: {
-      background: rootStyle.getPropertyValue('--terminal-bg').trim() || '#111318',
-      foreground: rootStyle.getPropertyValue('--terminal-fg').trim() || '#d8dee9',
-      cursor: '#7aa2f7',
-      selectionBackground: '#33467c',
-      // ANSI 16 色:Nord 调色板(与现有前景 #d8dee9 同源),让 ls/grep/git 等着色输出多彩可读
-      black: '#3b4252',
-      red: '#bf616a',
-      green: '#a3be8c',
-      yellow: '#ebcb8b',
-      blue: '#81a1c1',
-      magenta: '#b48ead',
-      cyan: '#88c0d0',
-      white: '#e5e9f0',
-      brightBlack: '#4c566a',
-      brightRed: '#d08770',
-      brightGreen: '#a3be8c',
-      brightYellow: '#ebcb8b',
-      brightBlue: '#81a1c1',
-      brightMagenta: '#b48ead',
-      brightCyan: '#8fbcbb',
-      brightWhite: '#eceff4',
+      ...ORCA_TERMINAL_THEME,
+      background:
+        rootStyle.getPropertyValue('--terminal-bg').trim() || ORCA_TERMINAL_THEME.background,
+      foreground:
+        rootStyle.getPropertyValue('--terminal-fg').trim() || ORCA_TERMINAL_THEME.foreground,
     },
   })
   fitAddon = new FitAddon()
@@ -677,6 +662,23 @@ onMounted(() => {
   })
   terminal.attachCustomKeyEventHandler((event) => {
     if (event.type !== 'keydown') return true
+    const primaryPasteModifier =
+      props.capabilities.platform === 'darwin'
+        ? event.metaKey && !event.ctrlKey
+        : event.ctrlKey && !event.metaKey
+    const isPasteShortcut =
+      primaryPasteModifier &&
+      !event.altKey &&
+      !event.shiftKey &&
+      (event.code === 'KeyV' || event.key.toLowerCase() === 'v')
+    if (isPasteShortcut) {
+      // Returning false stops xterm from sending ^V; preventDefault also suppresses the
+      // browser paste event so the explicit Electron clipboard path runs exactly once.
+      event.preventDefault()
+      event.stopPropagation()
+      pasteClipboardText()
+      return false
+    }
     return true
   })
   resizeObserver = new ResizeObserver(() => fitTerminal())
