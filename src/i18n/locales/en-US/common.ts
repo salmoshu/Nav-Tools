@@ -240,6 +240,7 @@ export default {
     expandBlock: 'Expand output',
     collapseBlock: 'Collapse output',
     guiOutputTruncated: '(output truncated)',
+    guiInputPlaceholder: 'Type a command, press Enter to run (↑↓ for history)',
     startSession: 'Choose a session type',
     startSessionDescription: 'Start a local shell or connect to a remote device in this pane',
     localShellDescription: 'Local command line',

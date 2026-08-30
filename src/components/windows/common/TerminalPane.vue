@@ -185,6 +185,7 @@
         :blocks="commandBlocks"
         @rerun="rerunCommand"
         @copy="writeClipboardText"
+        @submit="rerunCommand"
       />
       <div v-if="sessionDisconnected" class="session-disconnected" role="status">
         <span class="session-disconnected__icon"><WarningFilled /></span>
@@ -368,7 +369,7 @@ function feedCommandBlocks(data: string): void {
   commandBlocks.value = [...commandBlockAssembler.getBlocks()]
 }
 
-/** GUI 视图的「重新运行」:把命令文本写回当前会话,效果等同在终端里再次输入 */
+/** GUI 视图的命令写入:块上的「重新运行」与底部输入框都经此写回当前会话 */
 function rerunCommand(command: string): void {
   if (!command || !props.pane.sessionId || !terminalInputEnabled) return
   void window.ipcRenderer

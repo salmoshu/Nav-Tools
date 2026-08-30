@@ -62,12 +62,13 @@ const imageSrc = computed(() => `data:${props.payload.mime};base64,${props.paylo
 <style scoped>
 .rich-content {
   padding: 8px 10px;
-  border-top: 1px solid color-mix(in srgb, var(--app-border) 60%, transparent);
-  color: var(--app-text);
-  background: color-mix(in srgb, var(--terminal-bg) 70%, var(--app-surface));
+  border-top: 1px solid color-mix(in srgb, var(--terminal-fg) 8%, transparent);
+  color: color-mix(in srgb, var(--terminal-fg) 88%, transparent);
+  background: var(--terminal-bg);
   font-size: 12px;
   line-height: 1.6;
   overflow-x: auto;
+  text-align: left;
 }
 .rich-text {
   margin: 0;
@@ -87,12 +88,12 @@ const imageSrc = computed(() => `data:${props.payload.mime};base64,${props.paylo
 .rich-csv th,
 .rich-csv td {
   padding: 3px 10px;
-  border: 1px solid var(--app-border);
+  border: 1px solid color-mix(in srgb, var(--terminal-fg) 14%, transparent);
   text-align: left;
   white-space: pre-wrap;
 }
 .rich-csv th {
-  background: color-mix(in srgb, var(--app-surface-muted) 80%, transparent);
+  background: color-mix(in srgb, var(--terminal-fg) 8%, transparent);
   font-weight: 650;
 }
 .rich-markdown {
@@ -125,7 +126,7 @@ const imageSrc = computed(() => `data:${props.payload.mime};base64,${props.paylo
 .rich-markdown :deep(code) {
   padding: 1px 5px;
   border-radius: 4px;
-  background: color-mix(in srgb, var(--app-surface-muted) 85%, transparent);
+  background: color-mix(in srgb, var(--terminal-fg) 9%, transparent);
   font-family: 'Cascadia Mono', Consolas, 'Noto Sans Mono', monospace;
   font-size: 11px;
 }
@@ -133,7 +134,7 @@ const imageSrc = computed(() => `data:${props.payload.mime};base64,${props.paylo
   margin: 8px 0;
   padding: 8px 10px;
   border-radius: 7px;
-  background: color-mix(in srgb, var(--app-surface-muted) 85%, transparent);
+  background: color-mix(in srgb, var(--terminal-fg) 9%, transparent);
   overflow-x: auto;
 }
 .rich-markdown :deep(.md-code code) {
@@ -146,7 +147,7 @@ const imageSrc = computed(() => `data:${props.payload.mime};base64,${props.paylo
   margin: 6px 0;
   padding: 2px 10px;
   border-left: 3px solid var(--el-color-primary);
-  color: var(--app-text-muted);
+  color: color-mix(in srgb, var(--terminal-fg) 60%, transparent);
 }
 .rich-markdown :deep(a) {
   color: var(--el-color-primary);
@@ -158,15 +159,15 @@ const imageSrc = computed(() => `data:${props.payload.mime};base64,${props.paylo
 .rich-markdown :deep(.md-table th),
 .rich-markdown :deep(.md-table td) {
   padding: 3px 10px;
-  border: 1px solid var(--app-border);
+  border: 1px solid color-mix(in srgb, var(--terminal-fg) 14%, transparent);
   text-align: left;
 }
 .rich-markdown :deep(.md-table th) {
-  background: color-mix(in srgb, var(--app-surface-muted) 80%, transparent);
+  background: color-mix(in srgb, var(--terminal-fg) 8%, transparent);
 }
 .rich-markdown :deep(hr) {
   border: 0;
-  border-top: 1px solid var(--app-border);
+  border-top: 1px solid color-mix(in srgb, var(--terminal-fg) 12%, transparent);
   margin: 10px 0;
 }
 </style>

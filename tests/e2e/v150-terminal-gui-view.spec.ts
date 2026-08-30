@@ -49,7 +49,11 @@ function seedTerminalApp(page: import('@playwright/test').Page, options: {
       Object.defineProperty(window, 'ipcRenderer', {
         configurable: true,
         value: {
-          invoke: async (channel: string) => {
+          invoke: async (channel: string, payload: unknown) => {
+            const w = window as unknown as {
+              __ipcInvokeLog?: Array<{ channel: string; payload: unknown }>
+            }
+            ;(w.__ipcInvokeLog ??= []).push({ channel, payload })
             if (channel === 'terminal-capabilities') {
               return { platform: 'win32', localShells: [], wslDistros: [], sshAvailable: true }
             }
@@ -151,4 +155,44 @@ test('renders rich MIME payloads (OSC 1338) inside command blocks', async ({ pag
   await expect(block.locator('.rich-markdown strong')).toHaveText('加粗')
   await expect(block.locator('.rich-csv th').first()).toHaveText('name')
   await expect(block.locator('.rich-csv td').nth(1)).toHaveText('42')
+})
+
+test('submits commands from the GUI input bar and recalls them with arrow keys', async ({
+  page,
+}) => {
+  const scrollback = `${osc133('A')}$ `
+  await seedTerminalApp(page, {
+    appId: 'terminal-gui-input',
+    paneId: 'gui-pane',
+    session: { id: 'gui-input-session', kind: 'local', title: 'Git Bash', status: 'ready' },
+    presentation: 'gui',
+    scrollback,
+  })
+
+  await page.goto('/#app/terminal-gui-input')
+  const input = page.locator('.gui-input')
+  await expect(input).toBeVisible()
+
+  // 回车把命令写入当前会话(等同在终端里输入),随后清空输入框
+  await input.fill('echo hello')
+  await input.press('Enter')
+  await expect(input).toHaveValue('')
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (
+            window as unknown as {
+              __ipcInvokeLog?: Array<{ channel: string; payload: unknown }>
+            }
+          )
+            .__ipcInvokeLog?.filter((call) => call.channel === 'terminal-session-write')
+            .map((call) => call.payload),
+      ),
+    )
+    .toEqual([{ sessionId: 'gui-input-session', data: 'echo hello\r' }])
+
+  // ↑ 翻阅会话内输入历史
+  await input.press('ArrowUp')
+  await expect(input).toHaveValue('echo hello')
 })

@@ -238,6 +238,7 @@ export default {
     expandBlock: '展开输出',
     collapseBlock: '折叠输出',
     guiOutputTruncated: '（输出过长，已截断）',
+    guiInputPlaceholder: '输入命令，回车执行（↑↓ 翻阅历史）',
     startSession: '选择会话类型',
     startSessionDescription: '在当前窗格启动本地终端或连接远程设备',
     localShellDescription: '本机命令行',
