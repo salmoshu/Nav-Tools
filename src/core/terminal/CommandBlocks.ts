@@ -87,36 +87,49 @@ function isWideChar(code: number): boolean {
 }
 
 /**
- * 把终端输出流还原为保留版面空白的纯文本。
- * ConPTY 的重绘优化会把连续空格压缩成 CUF(\x1b[nC) 等光标序列,直接
- * strip 会让 ls 这类列对齐输出塌陷;这里按字符流解释常见序列,把光标
- * 移动还原为空格与换行,其余控制序列剥离。ECH(\x1b[nX)只擦除不移动
- * 光标——擦除区要么被随后的 CUF 跳过(空格由 CUF 补齐),要么被后续文本
- * 覆盖,因此按无操作处理。
- * 以单个块的输出为单位调用,列状态从 0 开始;同行情形的回退改写
- * (进度条等)不做覆盖语义,直接忽略反向移动。
+ * 把终端输出流还原为保留版面语义的纯文本。
+ * 以「行单元」模型解释常见序列,而非简单追加:
+ * - 同行重写有覆盖语义:\r 回到列 0 后新文本覆盖旧文本,进度条类输出
+ *   (apt/dpkg/下载器)只保留每行最终状态,不再首尾粘连;
+ * - CUP(\x1b[r;cH)跟踪绝对行号:同行号 = 重写当前行(覆盖),不同行号
+ *   = 提交当前行并开始新行——ConPTY 对全屏重绘的逐行回放因此保持行结构,
+ *   而同处一行的进度帧互相覆盖;
+ * - CUF(\x1b[nC)只移动列,落字时才补空格;ECH(\x1b[nX)原位擦除;
+ *   EL(\x1b[K 系列)按参数清行;tab 展开到 8 列;宽字符(CJK/全角/emoji)
+ *   按 2 列计。
+ * 以单个块的输出为单位调用;行为目标是「终端最终屏幕的忠实文本快照」,
+ * 而非字节流的历史流水。
  */
 export function normalizeTerminalLayout(data: string): string {
-  let out = ''
+  const lines: string[] = []
+  /** 当前行单元:每个条目一个字符(宽字符占两格,次格为 '') */
+  let cur: string[] = []
   let col = 0
-  let i = 0
-  const pad = (count: number): void => {
-    if (count <= 0) return
-    out += ' '.repeat(count)
-    col += count
+  /** 最近一次 CUP 的绝对行号;同行号 CUP 表示重写当前行 */
+  let curRow: number | undefined
+
+  const commit = (force = false): void => {
+    if (!force && cur.length === 0 && col === 0) return
+    lines.push(cur.join('').replace(/\s+$/u, ''))
+    cur = []
+    col = 0
+    curRow = undefined
   }
-  const moveTo = (target: number): void => {
-    if (target > col) pad(target - col)
-    else if (target < col) {
-      out += '\n'
-      col = 0
-      pad(target)
-    }
+  const writeCell = (text: string, width: number): void => {
+    while (cur.length < col) cur.push(' ')
+    cur[col] = text
+    if (width === 2) cur[col + 1] = ''
+    col += width
+  }
+  const padTo = (target: number): void => {
+    while (col < target) writeCell(' ', 1)
   }
   const firstParam = (params: string, fallback: number): number => {
     const value = Number.parseInt(params.split(';')[0], 10)
     return Number.isInteger(value) && value > 0 ? value : fallback
   }
+
+  let i = 0
   while (i < data.length) {
     const code = data.charCodeAt(i)
     if (code === 0x1b) {
@@ -132,12 +145,33 @@ export function normalizeTerminalLayout(data: string): string {
         if (j >= data.length) break
         const final = data[j]
         if (final === 'C') {
-          pad(firstParam(params, 1))
+          // CUF:只移动列,空格在后续落字时补
+          col += firstParam(params, 1)
+        } else if (final === 'X') {
+          // ECH:原位擦除 n 格,不移动光标
+          for (let k = col; k < col + firstParam(params, 1); k += 1) {
+            if (k < cur.length) cur[k] = ' '
+          }
+        } else if (final === 'K') {
+          // EL:0=清到行尾 1=清到光标 2=清整行(光标不动)
+          const mode = firstParam(params, 0)
+          if (mode === 2) cur = []
+          else if (mode === 1) {
+            for (let k = 0; k < col && k < cur.length; k += 1) cur[k] = ' '
+          } else cur.length = Math.min(cur.length, col)
         } else if (final === 'G' || final === '`') {
-          moveTo(firstParam(params, 1) - 1)
+          col = firstParam(params, 1) - 1
         } else if (final === 'H' || final === 'f') {
-          const column = Number.parseInt(params.split(';')[1] ?? '', 10)
-          moveTo((Number.isInteger(column) && column > 0 ? column : 1) - 1)
+          const rowParam = Number.parseInt(params.split(';')[0] ?? '', 10)
+          const colParam = Number.parseInt(params.split(';')[1] ?? '', 10)
+          const row = Number.isInteger(rowParam) && rowParam > 0 ? rowParam : 1
+          if (curRow === row) {
+            col = (Number.isInteger(colParam) && colParam > 0 ? colParam : 1) - 1
+          } else {
+            commit()
+            curRow = row
+            col = (Number.isInteger(colParam) && colParam > 0 ? colParam : 1) - 1
+          }
         }
         i = j + 1
         continue
@@ -161,8 +195,7 @@ export function normalizeTerminalLayout(data: string): string {
       continue
     }
     if (data[i] === '\n') {
-      out += '\n'
-      col = 0
+      commit(true)
       i += 1
       continue
     }
@@ -172,7 +205,7 @@ export function normalizeTerminalLayout(data: string): string {
       continue
     }
     if (data[i] === '\t') {
-      pad(8 - (col % 8))
+      padTo(col + (8 - (col % 8)))
       i += 1
       continue
     }
@@ -181,17 +214,16 @@ export function normalizeTerminalLayout(data: string): string {
       continue
     }
     if (code >= 0xd800 && code <= 0xdbff && i + 1 < data.length) {
-      // 代理对(emoji 等 astral 字符)整体输出,按 2 列计
-      out += data[i] + data[i + 1]
-      col += 2
+      // 代理对(emoji 等 astral 字符)整体写入,按 2 列计
+      writeCell(data[i] + data[i + 1], 2)
       i += 2
       continue
     }
-    out += data[i]
-    col += isWideChar(code) ? 2 : 1
+    writeCell(data[i], isWideChar(code) ? 2 : 1)
     i += 1
   }
-  return out
+  commit()
+  return lines.join('\n')
 }
 
 /** base64(UTF-8) → 文本;C 标记的命令参数与富内容文本负载共用 */

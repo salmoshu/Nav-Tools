@@ -179,15 +179,37 @@ describe('normalizeTerminalLayout', () => {
     // ECH(\x1b[11X)只擦除不移动光标,空白由随后的 \x1b[11C 跳过补齐
     const raw =
       '\x1b[34m\x1b[1mE-Wagon\x1b[m\x1b[11X\x1b[34m\x1b[1m\x1b[11CE-Wagon-Lidar\x1b[m   Env-Tools\r\n'
-    expect(normalizeTerminalLayout(raw)).toBe(
-      `E-Wagon${' '.repeat(11)}E-Wagon-Lidar   Env-Tools\n`,
-    )
+    expect(normalizeTerminalLayout(raw)).toBe(`E-Wagon${' '.repeat(11)}E-Wagon-Lidar   Env-Tools`)
   })
 
-  it('turns cursor positioning (CUP/CHA) into newlines and padding', () => {
+  it('turns cursor positioning (CUP/CHA) into line structure and padding', () => {
+    // CUP 换行号 = 提交当前行并开始新行
     expect(normalizeTerminalLayout('ab\x1b[3;1Hcd')).toBe('ab\ncd')
-    expect(normalizeTerminalLayout('ab\x1b[1;6Hcd')).toBe('ab   cd')
+    expect(normalizeTerminalLayout('ab\x1b[1;6Hcd')).toBe('ab\n     cd')
+    // CHA 只移动列,仍在同一行
     expect(normalizeTerminalLayout('ab\x1b[5Gcd')).toBe('ab  cd')
+  })
+
+  it('overwrites on carriage return so progress rewrites keep only the final state', () => {
+    // apt 风格:\r 同行重写(ConPTY 透传 CR)
+    expect(normalizeTerminalLayout('Reading package lists... 0%\rReading package lists... Done\n'))
+      .toBe('Reading package lists... Done')
+    // 真实捕获:进度循环 Progress: [ n%]\r 反复重写
+    expect(
+      normalizeTerminalLayout('Progress: [ 1%]\rProgress: [ 2%]\rProgress: [ 3%]\r\r\n'),
+    ).toBe('Progress: [ 3%]')
+    // 无 EL 时较短的重写保留旧行尾部——与真实终端一致
+    expect(normalizeTerminalLayout('aaaa bbbb\rxy\n')).toBe('xyaa bbbb')
+  })
+
+  it('collapses same-row CUP repaints into one line', () => {
+    // dpkg 进度帧风格:ConPTY 对同一屏幕行的反复 CUP 重绘
+    expect(normalizeTerminalLayout('one\n\x1b[2;1Htwo\x1b[2;1Hthree\n')).toBe('one\nthree')
+  })
+
+  it('honors EL erase-in-line before rewrites', () => {
+    expect(normalizeTerminalLayout('aaaa bbbb cccc\r\x1b[Kshort\n')).toBe('short')
+    expect(normalizeTerminalLayout('abcdef\r\x1b[3X\n')).toBe('   def')
   })
 
   it('expands tabs to the next multiple of 8 columns', () => {
