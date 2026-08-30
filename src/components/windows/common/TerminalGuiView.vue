@@ -18,6 +18,9 @@
             block.command || t('common.terminal.guiUnknownCommand')
           }}</span>
           <span class="command-block__meta">
+            <span v-if="block.cwd" class="command-block__cwd" :title="block.cwd">{{
+              block.cwd
+            }}</span>
             <span
               v-if="block.exitCode !== undefined && block.exitCode !== 0"
               class="command-block__exit-code"
@@ -85,6 +88,7 @@
     </div>
     <div class="gui-input-row">
       <el-icon class="gui-input-row__prompt"><ChevronRight /></el-icon>
+      <span v-if="cwd" class="gui-input-row__cwd" :title="cwd">{{ cwd }}</span>
       <input
         v-model="draft"
         class="gui-input"
@@ -104,11 +108,13 @@ import { nextTick, ref, watch } from 'vue'
 import { ArrowDownBold, ArrowUpBold, CopyDocument, RefreshRight } from '@element-plus/icons-vue'
 import { ChevronRight, LayoutGrid } from '@lucide/vue'
 import { t } from '@/i18n'
-import { stripAnsiSequences, type TerminalCommandBlock } from '@/core/terminal/CommandBlocks'
+import { normalizeTerminalLayout, type TerminalCommandBlock } from '@/core/terminal/CommandBlocks'
 import TerminalRichContent from './TerminalRichContent.vue'
 
 const props = defineProps<{
   blocks: TerminalCommandBlock[]
+  /** 当前会话最近上报的工作目录,显示在输入行,告诉用户下一条命令在哪个目录执行 */
+  cwd?: string
 }>()
 const emit = defineEmits<{
   rerun: [command: string]
@@ -160,7 +166,7 @@ function handleInputKeydown(event: KeyboardEvent): void {
 }
 
 function displayOutput(block: TerminalCommandBlock): string {
-  return stripAnsiSequences(block.output).replace(/\r\n/g, '\n').replace(/\r/g, '\n').trim()
+  return normalizeTerminalLayout(block.output).trim()
 }
 
 function blockStatus(block: TerminalCommandBlock): string {
@@ -312,6 +318,15 @@ watch(scrollElement, (element, previous) => {
   color: color-mix(in srgb, var(--terminal-fg) 45%, transparent);
   font-size: 10px;
 }
+.command-block__cwd {
+  max-width: 240px;
+  overflow: hidden;
+  color: color-mix(in srgb, var(--terminal-fg) 55%, transparent);
+  font-family: 'Cascadia Mono', Consolas, 'Noto Sans Mono', monospace;
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .command-block__actions {
   display: flex;
   flex: none;
@@ -373,6 +388,17 @@ watch(scrollElement, (element, previous) => {
   flex: none;
   color: var(--el-color-primary);
   font-size: 14px;
+}
+.gui-input-row__cwd {
+  flex: none;
+  max-width: 40%;
+  overflow: hidden;
+  color: color-mix(in srgb, var(--terminal-fg) 60%, transparent);
+  font-family: 'Cascadia Mono', Consolas, 'Noto Sans Mono', monospace;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  user-select: text;
 }
 .gui-input {
   flex: 1;

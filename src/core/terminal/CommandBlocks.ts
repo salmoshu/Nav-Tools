@@ -27,6 +27,8 @@ export interface TerminalCommandBlock {
   output: string
   /** 命令周期内上报的富内容(nav-render 等),白名单 MIME 之外的一律丢弃 */
   rich?: TerminalRichPayload[]
+  /** 命令执行时的工作目录(来自 OSC 7 / 9;9,格式 host:path 或裸 path) */
+  cwd?: string
   exitCode?: number
   startedAt: number
   finishedAt?: number
@@ -54,10 +56,11 @@ export const MAX_RICH_PAYLOAD_CHARS = 4_000_000
 /** 跨帧拼接 OSC 序列的尾缓冲上限,超长视为垃圾数据丢弃 */
 const MAX_TAIL_CHARS = 4096
 
-/** 统一标记匹配:g1/g2 = OSC 133 字母与参数;g3/g4 = OSC 1338 富内容的 MIME 与 base64 */
+/** 统一标记匹配:g1/g2 = OSC 133 字母与参数;g3/g4 = OSC 1338 富内容的 MIME 与 base64;
+ *  g5/g6 = OSC 7 cwd 的 host 与 path;g7 = ConPTY OSC 9;9 的 Windows cwd */
 const MARKER_PATTERN =
   // eslint-disable-next-line no-control-regex -- 终端转义序列解析必须匹配控制字符
-  /\x1b\]133;([A-Za-z])(?:;([^\x07\x1b]*))?(?:\x07|\x1b\\)|\x1b\]1338;([a-z0-9.+-]+\/[a-z0-9.+-]+);([A-Za-z0-9+/=]*)(?:\x07|\x1b\\)/gi
+  /\x1b\]133;([A-Za-z])(?:;([^\x07\x1b]*))?(?:\x07|\x1b\\)|\x1b\]1338;([a-z0-9.+-]+\/[a-z0-9.+-]+);([A-Za-z0-9+/=]*)(?:\x07|\x1b\\)|\x1b\]7;file:\/\/([^\x07\x1b/]*)(\/[^\x07\x1b]*?)(?:\x07|\x1b\\)|\x1b\]9;9;"?([^"\x07\x1b]+?)"?(?:\x07|\x1b\\)/gi
 // eslint-disable-next-line no-control-regex -- 同上
 const PARTIAL_OSC_TAIL = /\x1b(?:\][^\x07\x1b]*)?$/
 
@@ -68,6 +71,127 @@ const ANSI_PATTERN =
 
 export function stripAnsiSequences(data: string): string {
   return data.replace(ANSI_PATTERN, '')
+}
+
+/** 常见宽字符(CJK/全角/emoji)按 2 列计,逼近终端网格宽度 */
+function isWideChar(code: number): boolean {
+  return (
+    (code >= 0x1100 && code <= 0x115f) ||
+    (code >= 0x2e80 && code <= 0xa4cf) ||
+    (code >= 0xac00 && code <= 0xd7a3) ||
+    (code >= 0xf900 && code <= 0xfaff) ||
+    (code >= 0xfe30 && code <= 0xfe6f) ||
+    (code >= 0xff00 && code <= 0xff60) ||
+    (code >= 0xffe0 && code <= 0xffe6)
+  )
+}
+
+/**
+ * 把终端输出流还原为保留版面空白的纯文本。
+ * ConPTY 的重绘优化会把连续空格压缩成 CUF(\x1b[nC) 等光标序列,直接
+ * strip 会让 ls 这类列对齐输出塌陷;这里按字符流解释常见序列,把光标
+ * 移动还原为空格与换行,其余控制序列剥离。ECH(\x1b[nX)只擦除不移动
+ * 光标——擦除区要么被随后的 CUF 跳过(空格由 CUF 补齐),要么被后续文本
+ * 覆盖,因此按无操作处理。
+ * 以单个块的输出为单位调用,列状态从 0 开始;同行情形的回退改写
+ * (进度条等)不做覆盖语义,直接忽略反向移动。
+ */
+export function normalizeTerminalLayout(data: string): string {
+  let out = ''
+  let col = 0
+  let i = 0
+  const pad = (count: number): void => {
+    if (count <= 0) return
+    out += ' '.repeat(count)
+    col += count
+  }
+  const moveTo = (target: number): void => {
+    if (target > col) pad(target - col)
+    else if (target < col) {
+      out += '\n'
+      col = 0
+      pad(target)
+    }
+  }
+  const firstParam = (params: string, fallback: number): number => {
+    const value = Number.parseInt(params.split(';')[0], 10)
+    return Number.isInteger(value) && value > 0 ? value : fallback
+  }
+  while (i < data.length) {
+    const code = data.charCodeAt(i)
+    if (code === 0x1b) {
+      const introducer = data[i + 1]
+      if (introducer === '[') {
+        let j = i + 2
+        let params = ''
+        while (j < data.length && /[0-9;?]/.test(data[j])) {
+          params += data[j]
+          j += 1
+        }
+        while (j < data.length && data[j] >= ' ' && data[j] <= '/') j += 1
+        if (j >= data.length) break
+        const final = data[j]
+        if (final === 'C') {
+          pad(firstParam(params, 1))
+        } else if (final === 'G' || final === '`') {
+          moveTo(firstParam(params, 1) - 1)
+        } else if (final === 'H' || final === 'f') {
+          const column = Number.parseInt(params.split(';')[1] ?? '', 10)
+          moveTo((Number.isInteger(column) && column > 0 ? column : 1) - 1)
+        }
+        i = j + 1
+        continue
+      }
+      if (introducer === ']') {
+        // OSC:消费到 BEL 或 ESC\,内容丢弃(cwd 等标记已在装配阶段提取)
+        let j = i + 2
+        while (j < data.length && data[j] !== '\x07') {
+          if (data[j] === '\x1b' && data[j + 1] === '\\') break
+          j += 1
+        }
+        if (j >= data.length) break
+        i = data[j] === '\x07' ? j + 1 : j + 2
+        continue
+      }
+      if (introducer === '(' || introducer === ')') {
+        i += 3
+        continue
+      }
+      i += 2
+      continue
+    }
+    if (data[i] === '\n') {
+      out += '\n'
+      col = 0
+      i += 1
+      continue
+    }
+    if (data[i] === '\r') {
+      col = 0
+      i += 1
+      continue
+    }
+    if (data[i] === '\t') {
+      pad(8 - (col % 8))
+      i += 1
+      continue
+    }
+    if (code < 0x20 || code === 0x7f) {
+      i += 1
+      continue
+    }
+    if (code >= 0xd800 && code <= 0xdbff && i + 1 < data.length) {
+      // 代理对(emoji 等 astral 字符)整体输出,按 2 列计
+      out += data[i] + data[i + 1]
+      col += 2
+      i += 2
+      continue
+    }
+    out += data[i]
+    col += isWideChar(code) ? 2 : 1
+    i += 1
+  }
+  return out
 }
 
 /** base64(UTF-8) → 文本;C 标记的命令参数与富内容文本负载共用 */
@@ -101,8 +225,15 @@ export class CommandBlockAssembler {
   private current: TerminalCommandBlock | undefined
   private nextId = 1
   private blocks: TerminalCommandBlock[] = []
+  /** 最近一次 OSC 7 / 9;9 上报的工作目录,新块在 C 时刻盖章 */
+  private lastCwd = ''
   /** 是否见过任何 OSC 133 标记;用于 GUI 视图区分「无事件源」与「尚无输出」 */
   public hasMarkers = false
+
+  /** 当前工作目录(OSC 7 → host:path,OSC 9;9 → 裸路径);供 GUI 视图输入行展示 */
+  public get currentCwd(): string {
+    return this.lastCwd
+  }
 
   /**
    * 返回当前块列表;每次 feed 后调用方应重新读取以驱动视图更新。
@@ -122,6 +253,7 @@ export class CommandBlockAssembler {
     this.current = undefined
     this.blocks = []
     this.hasMarkers = false
+    this.lastCwd = ''
   }
 
   public feed(data: string): void {
@@ -134,6 +266,10 @@ export class CommandBlockAssembler {
       this.appendText(input.slice(cursor, match.index))
       if (match[3] !== undefined) {
         this.handleRich(match[3], match[4] || '')
+      } else if (match[5] !== undefined) {
+        this.handleCwd(match[5], match[6] || '')
+      } else if (match[7] !== undefined) {
+        this.handleCwd('', match[7])
       } else {
         this.handleMarker(match[1], match[2])
       }
@@ -153,6 +289,16 @@ export class CommandBlockAssembler {
     }
   }
 
+  /** OSC 7(file://host/path)与 ConPTY OSC 9;9(裸 Windows 路径)的 cwd 上报 */
+  private handleCwd(host: string, rawPath: string): void {
+    const path = rawPath.trim()
+    if (!path) return
+    // /home/<user> 前缀压缩为 ~,贴近 shell 提示符里用户熟悉的样式
+    const homePrefix = /^\/home\/[^/]+/.exec(path)
+    const shortPath = homePrefix ? `~${path.slice(homePrefix[0].length)}` : path
+    this.lastCwd = host ? `${host}:${shortPath}` : shortPath
+  }
+
   /** OSC 1338 富内容:命令周期内归属当前块,否则自成一块并立即入列;白名单外 MIME 忽略 */
   private handleRich(mime: string, data: string): void {
     const normalized = mime.toLowerCase()
@@ -166,6 +312,7 @@ export class CommandBlockAssembler {
         id: this.nextId++,
         output: '',
         rich: [{ mime: normalized, data }],
+        cwd: this.lastCwd || undefined,
         startedAt: Date.now(),
         finishedAt: Date.now(),
         truncated: false,
@@ -192,6 +339,7 @@ export class CommandBlockAssembler {
           id: this.nextId++,
           command: decodeCommand(params),
           output: '',
+          cwd: this.lastCwd || undefined,
           startedAt: Date.now(),
           truncated: false,
         }
@@ -220,10 +368,13 @@ export class CommandBlockAssembler {
       this.current.finishedAt = Date.now()
       this.pushBlock(this.current)
       this.current = undefined
-    } else if (this.pending.trim()) {
+    } else if (normalizeTerminalLayout(this.pending).trim()) {
+      // pending 只有提示符重绘的转义序列时(无可见文本)不成块,
+      // 否则 GUI 会出现内容全空的「(未捕获命令)」幻影块
       this.pushBlock({
         id: this.nextId++,
         output: this.pending,
+        cwd: this.lastCwd || undefined,
         startedAt: this.pendingStartedAt || Date.now(),
         finishedAt: Date.now(),
         truncated: this.pendingTruncated,

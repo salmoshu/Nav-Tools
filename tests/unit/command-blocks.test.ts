@@ -3,6 +3,7 @@ import {
   CommandBlockAssembler,
   MAX_BLOCK_OUTPUT_CHARS,
   MAX_COMMAND_BLOCKS,
+  normalizeTerminalLayout,
   stripAnsiSequences,
 } from '@/core/terminal/CommandBlocks'
 
@@ -102,6 +103,13 @@ describe('CommandBlockAssembler', () => {
     expect(assembler.getBlocks()).toHaveLength(0)
   })
 
+  it('drops cycles whose pending holds only prompt-repaint escape sequences', () => {
+    const assembler = new CommandBlockAssembler()
+    // ConPTY 提示符行重绘:整段都是 CSI/SGR,strip 后无可见文本
+    assembler.feed(`${osc('A')}\x1b[1;1H\x1b[32m\x1b[1m\x1b[K${osc('A')}`)
+    expect(assembler.getBlocks()).toHaveLength(0)
+  })
+
   it('ignores output outside any command cycle', () => {
     const assembler = new CommandBlockAssembler()
     assembler.feed('welcome banner\r\n')
@@ -162,5 +170,65 @@ describe('stripAnsiSequences', () => {
   it('removes SGR, cursor and OSC sequences for plain-text rendering', () => {
     expect(stripAnsiSequences('\x1b[31mred\x1b[0m plain \x1b[2Kdone')).toBe('red plain done')
     expect(stripAnsiSequences('\x1b]7;file://host/path\x07text')).toBe('text')
+  })
+})
+
+describe('normalizeTerminalLayout', () => {
+  it('expands ConPTY CUF space shorthand so columnar output stays aligned', () => {
+    // 真实捕获:wsl ls --color=auto 经 ConPTY 的重绘优化片段;
+    // ECH(\x1b[11X)只擦除不移动光标,空白由随后的 \x1b[11C 跳过补齐
+    const raw =
+      '\x1b[34m\x1b[1mE-Wagon\x1b[m\x1b[11X\x1b[34m\x1b[1m\x1b[11CE-Wagon-Lidar\x1b[m   Env-Tools\r\n'
+    expect(normalizeTerminalLayout(raw)).toBe(
+      `E-Wagon${' '.repeat(11)}E-Wagon-Lidar   Env-Tools\n`,
+    )
+  })
+
+  it('turns cursor positioning (CUP/CHA) into newlines and padding', () => {
+    expect(normalizeTerminalLayout('ab\x1b[3;1Hcd')).toBe('ab\ncd')
+    expect(normalizeTerminalLayout('ab\x1b[1;6Hcd')).toBe('ab   cd')
+    expect(normalizeTerminalLayout('ab\x1b[5Gcd')).toBe('ab  cd')
+  })
+
+  it('expands tabs to the next multiple of 8 columns', () => {
+    expect(normalizeTerminalLayout('a\tb')).toBe(`a${' '.repeat(7)}b`)
+  })
+
+  it('strips SGR/OSC and normalizes CR to line starts', () => {
+    expect(normalizeTerminalLayout('\x1b[31mred\x1b[0m\r\nplain')).toBe('red\nplain')
+    expect(normalizeTerminalLayout('\x1b]0;title\x07text')).toBe('text')
+  })
+
+  it('counts wide CJK characters as two columns when padding', () => {
+    expect(normalizeTerminalLayout('你好\x1b[2C!')).toBe(`你好${' '.repeat(2)}!`)
+    expect(normalizeTerminalLayout('你好\x1b[6G!')).toBe(`你好 !`)
+  })
+})
+
+describe('CommandBlockAssembler cwd tracking', () => {
+  it('stamps blocks with the OSC 7 cwd and compresses the home prefix', () => {
+    const assembler = new CommandBlockAssembler()
+    assembler.feed('\x1b]7;file://LAPTOP-P70CKHGG/home/winchell/E-Wagon\x07')
+    assembler.feed(`${osc('A')}$ ls\r${osc('C', base64('ls'))}out\r\n${osc('D', '0')}${osc('A')}`)
+    const blocks = assembler.getBlocks()
+    expect(blocks[0].cwd).toBe('LAPTOP-P70CKHGG:~/E-Wagon')
+    expect(assembler.currentCwd).toBe('LAPTOP-P70CKHGG:~/E-Wagon')
+  })
+
+  it('accepts ConPTY OSC 9;9 Windows paths', () => {
+    const assembler = new CommandBlockAssembler()
+    assembler.feed('\x1b]9;9;"C:\\Users\\Salmos"\x07')
+    assembler.feed(`${osc('C', base64('dir'))}out${osc('D', '0')}${osc('A')}`)
+    expect(assembler.getBlocks()[0].cwd).toBe('C:\\Users\\Salmos')
+    expect(assembler.currentCwd).toBe('C:\\Users\\Salmos')
+  })
+
+  it('keeps cwd sequences out of block output and resets with the session', () => {
+    const assembler = new CommandBlockAssembler()
+    assembler.feed('\x1b]7;file://h/home/u\x07')
+    assembler.feed(`${osc('C')}text${osc('D', '0')}${osc('A')}`)
+    expect(assembler.getBlocks()[0].output).toBe('text')
+    assembler.reset()
+    expect(assembler.currentCwd).toBe('')
   })
 })

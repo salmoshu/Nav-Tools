@@ -183,6 +183,7 @@
       <TerminalGuiView
         v-if="isGui && !guiDegraded"
         :blocks="commandBlocks"
+        :cwd="guiCwd"
         @rerun="rerunCommand"
         @copy="writeClipboardText"
         @submit="rerunCommand"
@@ -352,6 +353,8 @@ const launchDescription = computed(() => {
 /** OSC 133 命令块装配:实时输出与恢复回放都经过它,与 xterm 渲染互不干扰 */
 const commandBlockAssembler = new CommandBlockAssembler()
 const commandBlocks = shallowRef<TerminalCommandBlock[]>([])
+/** 会话最近上报的工作目录(OSC 7 / 9;9),随数据帧更新,GUI 输入行展示用 */
+const guiCwd = shallowRef('')
 const isGui = computed(() => props.pane.presentation === 'gui')
 /**
  * SSH 远端 shell(v1.4.4 起不注入标记)与 cmd 不产生 OSC 133 事件,
@@ -367,6 +370,7 @@ const guiDegraded = computed(() => {
 function feedCommandBlocks(data: string): void {
   commandBlockAssembler.feed(data)
   commandBlocks.value = [...commandBlockAssembler.getBlocks()]
+  guiCwd.value = commandBlockAssembler.currentCwd
 }
 
 /** GUI 视图的命令写入:块上的「重新运行」与底部输入框都经此写回当前会话 */
@@ -611,6 +615,7 @@ async function attachSession(sessionId: string | undefined): Promise<void> {
   terminal.reset()
   commandBlockAssembler.reset()
   commandBlocks.value = []
+  guiCwd.value = ''
   const session = await window.ipcRenderer.invoke('terminal-session-attach', sessionId)
   if (sessionId !== props.pane.sessionId) return
   if (!session) return
