@@ -12,12 +12,21 @@
  * 作为块内容保留,命令行文本留空。
  */
 
+/** 富内容负载:程序经 OSC 1338 主动上报的 MIME 内容,数据为 base64 */
+export interface TerminalRichPayload {
+  mime: string
+  /** base64 编码的原始内容;文本类渲染时解码,图片类直接作 data URL */
+  data: string
+}
+
 export interface TerminalCommandBlock {
   id: number
   /** 注入脚本捕获的命令文本;无 C 标记或未携带参数时为空 */
   command?: string
   /** 命令产生的原始输出(可能含 ANSI 序列),不含提示符与输入回显 */
   output: string
+  /** 命令周期内上报的富内容(nav-render 等),白名单 MIME 之外的一律丢弃 */
+  rich?: TerminalRichPayload[]
   exitCode?: number
   startedAt: number
   finishedAt?: number
@@ -25,15 +34,30 @@ export interface TerminalCommandBlock {
   truncated: boolean
 }
 
+/** GUI 视图白名单 renderer 覆盖的 MIME 类型;未列入的序列直接忽略 */
+export const SUPPORTED_RICH_MIMES = [
+  'text/plain',
+  'text/markdown',
+  'application/json',
+  'text/csv',
+  'image/png',
+  'image/jpeg',
+  'image/svg+xml',
+] as const
+
 /** 单 pane 保留的最大块数,防止长时间会话无限增长 */
 export const MAX_COMMAND_BLOCKS = 200
 /** 单块最大输出字符数,超出后丢弃后续输出 */
 export const MAX_BLOCK_OUTPUT_CHARS = 100_000
+/** 单条富内容 base64 上限(约 3MB 原始数据),超限整条丢弃 */
+export const MAX_RICH_PAYLOAD_CHARS = 4_000_000
 /** 跨帧拼接 OSC 序列的尾缓冲上限,超长视为垃圾数据丢弃 */
 const MAX_TAIL_CHARS = 4096
 
-// eslint-disable-next-line no-control-regex -- 终端转义序列解析必须匹配控制字符
-const OSC133_PATTERN = /\x1b\]133;([A-Za-z])(?:;([^\x07\x1b]*))?(?:\x07|\x1b\\)/g
+/** 统一标记匹配:g1/g2 = OSC 133 字母与参数;g3/g4 = OSC 1338 富内容的 MIME 与 base64 */
+const MARKER_PATTERN =
+  // eslint-disable-next-line no-control-regex -- 终端转义序列解析必须匹配控制字符
+  /\x1b\]133;([A-Za-z])(?:;([^\x07\x1b]*))?(?:\x07|\x1b\\)|\x1b\]1338;([a-z0-9.+-]+\/[a-z0-9.+-]+);([A-Za-z0-9+/=]*)(?:\x07|\x1b\\)/gi
 // eslint-disable-next-line no-control-regex -- 同上
 const PARTIAL_OSC_TAIL = /\x1b(?:\][^\x07\x1b]*)?$/
 
@@ -46,15 +70,20 @@ export function stripAnsiSequences(data: string): string {
   return data.replace(ANSI_PATTERN, '')
 }
 
-function decodeCommand(encoded: string | undefined): string | undefined {
-  if (!encoded) return undefined
+/** base64(UTF-8) → 文本;C 标记的命令参数与富内容文本负载共用 */
+export function decodeBase64Text(encoded: string): string {
   try {
     const bytes = Uint8Array.from(atob(encoded), (char) => char.charCodeAt(0))
-    const text = new TextDecoder().decode(bytes).trim()
-    return text || undefined
+    return new TextDecoder().decode(bytes)
   } catch {
-    return undefined
+    return ''
   }
+}
+
+function decodeCommand(encoded: string | undefined): string | undefined {
+  if (!encoded) return undefined
+  const text = decodeBase64Text(encoded).trim()
+  return text || undefined
 }
 
 function takeCapped(existing: string, text: string): { value: string; truncated: boolean } {
@@ -94,21 +123,53 @@ export class CommandBlockAssembler {
     if (!data) return
     const input = this.tail + data
     this.tail = ''
-    OSC133_PATTERN.lastIndex = 0
+    MARKER_PATTERN.lastIndex = 0
     let cursor = 0
-    for (let match = OSC133_PATTERN.exec(input); match; match = OSC133_PATTERN.exec(input)) {
+    for (let match = MARKER_PATTERN.exec(input); match; match = MARKER_PATTERN.exec(input)) {
       this.appendText(input.slice(cursor, match.index))
-      this.handleMarker(match[1], match[2])
+      if (match[3] !== undefined) {
+        this.handleRich(match[3], match[4] || '')
+      } else {
+        this.handleMarker(match[1], match[2])
+      }
       cursor = match.index + match[0].length
     }
     const rest = input.slice(cursor)
     const partial = PARTIAL_OSC_TAIL.exec(rest)
     if (partial) {
-      this.tail = partial[0].length <= MAX_TAIL_CHARS ? partial[0] : ''
+      // 富内容负载可能跨多个数据帧且体积大,给它单独的尾缓冲上限
+      const cap = partial[0].startsWith('\x1b]1338;')
+        ? MAX_RICH_PAYLOAD_CHARS + 1024
+        : MAX_TAIL_CHARS
+      this.tail = partial[0].length <= cap ? partial[0] : ''
       this.appendText(rest.slice(0, rest.length - partial[0].length))
     } else {
       this.appendText(rest)
     }
+  }
+
+  /** OSC 1338 富内容:命令周期内归属当前块,否则自成一块并立即入列;白名单外 MIME 忽略 */
+  private handleRich(mime: string, data: string): void {
+    const normalized = mime.toLowerCase()
+    if (!(SUPPORTED_RICH_MIMES as readonly string[]).includes(normalized)) return
+    if (data.length > MAX_RICH_PAYLOAD_CHARS) return
+    this.hasMarkers = true
+    this.pending = ''
+    this.pendingTruncated = false
+    if (!this.current) {
+      this.pushBlock({
+        id: this.nextId++,
+        output: '',
+        rich: [{ mime: normalized, data }],
+        startedAt: Date.now(),
+        finishedAt: Date.now(),
+        truncated: false,
+      })
+      return
+    }
+    const rich = this.current.rich ?? []
+    rich.push({ mime: normalized, data })
+    this.current.rich = rich
   }
 
   private handleMarker(letter: string, params?: string): void {

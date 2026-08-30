@@ -127,3 +127,28 @@ test('degrades to the terminal view with a hint for sessions without structured 
   await expect(page.locator('.gui-degraded')).toHaveCount(0)
   await expect(page.locator('.xterm-host')).toBeVisible()
 })
+
+test('renders rich MIME payloads (OSC 1338) inside command blocks', async ({ page }) => {
+  const encode = (text: string) => btoa(String.fromCharCode(...new TextEncoder().encode(text)))
+  const osc1338 = (mime: string, text: string) => `${ESC}]1338;${mime};${encode(text)}${BEL}`
+  const scrollback =
+    `${osc133('A')}$ nav-render report.md\r\n${osc133('C', btoa('nav-render report.md'))}` +
+    `${osc1338('text/markdown', '# 报告\n\n**加粗** 内容')}` +
+    `${osc1338('text/csv', 'name,value\nfoo,42')}` +
+    `${osc133('D', '0')}${osc133('A')}$ `
+  await seedTerminalApp(page, {
+    appId: 'terminal-gui-rich',
+    paneId: 'gui-pane',
+    session: { id: 'gui-rich-session', kind: 'local', title: 'Git Bash', status: 'ready' },
+    presentation: 'gui',
+    scrollback,
+  })
+
+  await page.goto('/#app/terminal-gui-rich')
+  const block = page.locator('.command-block')
+  await expect(block).toHaveCount(1)
+  await expect(block.locator('.rich-markdown h1')).toHaveText('报告')
+  await expect(block.locator('.rich-markdown strong')).toHaveText('加粗')
+  await expect(block.locator('.rich-csv th').first()).toHaveText('name')
+  await expect(block.locator('.rich-csv td').nth(1)).toHaveText('42')
+})

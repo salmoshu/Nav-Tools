@@ -68,7 +68,14 @@
           </el-tooltip>
         </span>
       </header>
-      <pre v-if="!collapsed.has(block.id)" class="command-block__output">{{ displayOutput(block) }}<span v-if="block.truncated" class="command-block__truncated">{{ t('common.terminal.guiOutputTruncated') }}</span></pre>
+      <template v-if="!collapsed.has(block.id)">
+        <TerminalRichContent
+          v-for="(payload, index) in block.rich ?? []"
+          :key="`${block.id}-${index}`"
+          :payload="payload"
+        />
+        <pre v-if="displayOutput(block)" class="command-block__output">{{ displayOutput(block) }}<span v-if="block.truncated" class="command-block__truncated">{{ t('common.terminal.guiOutputTruncated') }}</span></pre>
+      </template>
     </article>
   </div>
 </template>
@@ -79,6 +86,7 @@ import { ArrowDownBold, ArrowUpBold, CopyDocument, RefreshRight } from '@element
 import { LayoutGrid } from '@lucide/vue'
 import { t } from '@/i18n'
 import { stripAnsiSequences, type TerminalCommandBlock } from '@/core/terminal/CommandBlocks'
+import TerminalRichContent from './TerminalRichContent.vue'
 
 const props = defineProps<{
   blocks: TerminalCommandBlock[]

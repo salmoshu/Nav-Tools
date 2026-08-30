@@ -45,13 +45,25 @@ const OSC133_BASH_INTEGRATION = [
   OSC7_PROMPT_COMMAND,
   '__nav133_fire() { if [ -z "$COMP_LINE" ]; then case "$BASH_COMMAND" in __nav133_fire*|*__nav_e*) ;; *) __nav_c=$(printf %s "$BASH_COMMAND" | base64 2>/dev/null); printf "\\e]133;C;%s\\a" "$__nav_c"; trap - DEBUG;; esac; fi; }',
   'trap __nav133_fire DEBUG',
+  // nav-render <file> [mime]:把文件内容作为 OSC 1338 富内容块上报,GUI 视图按 MIME 渲染
+  'nav-render() { local f="$1" m="$2"; if [ -z "$f" ] || [ ! -f "$f" ]; then echo "nav-render: file not found: $f" >&2; return 2; fi; if [ -z "$m" ]; then case "${f##*.}" in md|markdown) m=text/markdown;; json) m=application/json;; csv) m=text/csv;; png) m=image/png;; jpg|jpeg) m=image/jpeg;; svg) m=image/svg+xml;; *) m=text/plain;; esac; fi; printf "\\e]1338;%s;" "$m"; base64 "$f" 2>/dev/null | tr -d "\\n"; printf "\\a"; }',
 ].join('; ')
 /**
  * PowerShell 提示符集成:prompt 函数在每次提示符处上报上一条命令的退出码(D)
- * 与提示符起点(A)。经 -Command 启动参数注入,不会作为输入回显进 scrollback。
+ * 与提示符起点(A);同时注入 nav-render 函数上报 OSC 1338 富内容块。
+ * 经 -Command 启动参数注入,不会作为输入回显进 scrollback。
  * 注意:这会覆盖用户 $PROFILE 里的自定义 prompt。
  */
 const POWERSHELL_PROMPT_INTEGRATION =
+  'function global:nav-render { param($f, $m) ' +
+  'if (-not $f -or -not (Test-Path $f)) { Write-Host "nav-render: file not found: $f"; return } ' +
+  'if (-not $m) { switch -Regex ([IO.Path]::GetExtension($f)) { ' +
+  '"^\\.(md|markdown)$" { $m = "text/markdown" } "^\\.json$" { $m = "application/json" } ' +
+  '"^\\.csv$" { $m = "text/csv" } "^\\.png$" { $m = "image/png" } ' +
+  '"^\\.(jpg|jpeg)$" { $m = "image/jpeg" } "^\\.svg$" { $m = "image/svg+xml" } ' +
+  'default { $m = "text/plain" } } } ' +
+  '$b64 = [Convert]::ToBase64String([IO.File]::ReadAllBytes((Resolve-Path $f).Path)); ' +
+  '$s = [char]27; $b = [char]7; [Console]::Out.Write("$s]1338;$m;$b64$b") }; ' +
   'function global:prompt { ' +
   '$e = $global:LASTEXITCODE; ' +
   '$c = 0; if ($null -ne $e) { $c = $e }; ' +
