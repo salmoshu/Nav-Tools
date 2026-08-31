@@ -240,6 +240,8 @@ export default {
     presetCommand: '命令',
     presetCwd: '工作目录（可选）',
     presetCwdHint: '留空则在会话当前目录执行',
+    presetCommandHint: '可用 {{参数名:默认值|选项1|选项2}} 生成运行时填写的表单',
+    presetParameters: '填写命令参数',
     presetEmpty: '还没有预设命令。点击「新增预设」把常用命令存下来。',
     presetDelete: '删除预设',
     presetDeleteConfirm: '删除预设「{name}」？',

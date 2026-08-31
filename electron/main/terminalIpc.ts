@@ -120,6 +120,22 @@ export function registerTerminalIpc(
       service.readSessionPath(request.sessionId, request.path, request.maxBytes),
   )
 
+  // 预设命令:主进程按会话自己的 shell 家族转义参数值后再写入,渲染层不参与转义
+  ipcMain.handle(
+    'terminal-session-run-command',
+    (_event, request: {
+      sessionId: string
+      command: string
+      cwd?: string
+      values?: Record<string, string>
+    }) =>
+      service.runSessionCommand(request.sessionId, {
+        command: request.command,
+        cwd: request.cwd,
+        values: request.values,
+      }),
+  )
+
   // 文件树面板:按会话类型列目录(本机/WSL/SSH 三通道)
   ipcMain.handle(
     'terminal-session-list-dir',

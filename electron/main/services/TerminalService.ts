@@ -29,6 +29,8 @@ import {
   type TerminalStatusEvent,
 } from '../../../src/core/terminal/TerminalTypes'
 import { parseFindListing, sortDirectoryEntries } from '../../../src/core/terminal/DirectoryListing'
+import { interpolateCommandTemplate } from '../../../src/core/terminal/CommandTemplate'
+import { buildShellCommand, shellFamilyFor, type ShellFamily } from '../../../src/core/terminal/ShellQuote'
 import { mimeFromPath } from '../../../src/core/terminal/FileMime'
 import { SshPortForwardService } from './SshPortForwardService'
 
@@ -255,6 +257,36 @@ export class TerminalService {
     session.lastInputAt = Date.now()
     if (session.type === 'pty') session.process.write(data)
     else session.stream.write(data)
+  }
+
+  /**
+   * 渲染预设命令模板并把结果写进会话输入。
+   *
+   * 参数值在这里按**会话自己的** shell 家族转义：家族由主进程从会话类型与启动
+   * 参数推导，渲染层传不进来，也就无法谎报或漏转义。这是 L2 相对 L1 的关键
+   * 差别——参数值由用户在表单里填，等于把可注入文本拼进命令。
+   */
+  public runSessionCommand(
+    sessionId: string,
+    request: { command: string; cwd?: string; values?: Record<string, string> },
+  ): void {
+    const session = this.requireSession(sessionId)
+    const family = this.shellFamilyForSession(session)
+    const command = buildShellCommand(
+      interpolateCommandTemplate(request.command, request.values ?? {}, family),
+      request.cwd,
+      family,
+    )
+    if (!command) return
+    this.write(sessionId, `${command}\r`)
+  }
+
+  /** 从会话自身推导 shell 家族；本机会话看启动时选定的 shell */
+  private shellFamilyForSession(session: TerminalSession): ShellFamily {
+    return shellFamilyFor(
+      session.info.kind,
+      session.type === 'pty' ? session.request.localShell : undefined,
+    )
   }
 
   public resize(sessionId: string, cols: number, rows: number): void {

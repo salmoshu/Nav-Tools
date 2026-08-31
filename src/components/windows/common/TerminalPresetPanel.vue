@@ -51,6 +51,7 @@
         <el-form-item :label="t('common.terminal.presetCommand')">
           <el-input v-model="form.command" type="textarea" :rows="3" />
         </el-form-item>
+        <p class="preset-hint">{{ t('common.terminal.presetCommandHint') }}</p>
         <el-form-item :label="t('common.terminal.presetCwd')">
           <el-input v-model="form.cwd" :placeholder="t('common.terminal.presetCwdHint')" />
         </el-form-item>
@@ -58,6 +59,39 @@
       <template #footer>
         <el-button @click="dialogVisible = false">{{ t('common.terminal.cancel') }}</el-button>
         <el-button type="primary" @click="commit">{{ t('common.terminal.save') }}</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 命令带 {{...}} 占位符时先收参数;转义在主进程按会话 shell 家族做 -->
+    <el-dialog
+      v-model="paramDialogVisible"
+      :title="t('common.terminal.presetParameters')"
+      width="420px"
+      :close-on-click-modal="false"
+      append-to-body
+    >
+      <el-form label-width="90px" @submit.prevent>
+        <el-form-item v-for="field in paramFields" :key="field.name" :label="field.name">
+          <el-select
+            v-if="field.options.length > 1"
+            v-model="paramValues[field.name]"
+            :placeholder="field.defaultValue"
+          >
+            <el-option
+              v-for="option in field.options"
+              :key="option"
+              :label="option"
+              :value="option"
+            />
+          </el-select>
+          <el-input v-else v-model="paramValues[field.name]" :placeholder="field.defaultValue" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="paramDialogVisible = false">{{ t('common.terminal.cancel') }}</el-button>
+        <el-button type="primary" @click="runWithParameters">
+          {{ t('common.terminal.presetRun') }}
+        </el-button>
       </template>
     </el-dialog>
   </aside>
@@ -68,19 +102,16 @@ import { reactive, ref } from 'vue'
 import { CaretRight, Delete, Edit, Plus } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { t } from '@/i18n'
-import { buildShellCommand, shellFamilyFor } from '@/core/terminal/ShellQuote'
+import { parseCommandTemplate } from '@/core/terminal/CommandTemplate'
 import {
   TerminalPresetStorage,
   createTerminalPreset,
   type TerminalPresetCommand,
 } from '@/core/terminal/TerminalPresetStorage'
-import type { LocalShellKind, TerminalSessionKind } from '@/core/terminal/TerminalTypes'
 
 const props = defineProps<{
   /** 运行目标:为空(没有就绪会话)时只允许增删改,不允许运行 */
   sessionId?: string
-  kind: TerminalSessionKind
-  localShell?: LocalShellKind
 }>()
 
 const storage = new TerminalPresetStorage(localStorage)
@@ -88,6 +119,12 @@ const presets = ref<TerminalPresetCommand[]>(storage.list())
 const dialogVisible = ref(false)
 const editing = ref(false)
 const form = reactive({ id: '', name: '', command: '', cwd: '' })
+const paramDialogVisible = ref(false)
+const paramFields = ref(parseCommandTemplate(''))
+/** 上次填过的参数值,下次打开表单时回填(仅内存,不做持久化) */
+const lastValuesByPresetId = new Map<string, Record<string, string>>()
+let paramTarget: TerminalPresetCommand | null = null
+const paramValues = reactive<Record<string, string>>({})
 
 function beginCreate(): void {
   editing.value = false
@@ -132,21 +169,48 @@ async function remove(preset: TerminalPresetCommand): Promise<void> {
 }
 
 /**
- * 把预设写进会话。命令与工作目录都是用户输入,可能含空格/引号/分号,
- * 必须按目标 shell 家族转义后再拼,否则 `cd` 会被截断成注入入口。
+ * 运行预设。无参数占位符时直接执行;有则先弹表单收参数。
+ *
+ * 转义不在渲染层做——命令原样与参数值一起交给主进程的
+ * `terminal-session-run-command`,由主进程按**会话自己的** shell 家族转义后写入。
+ * 这样渲染层既不需要知道 shell 家族,也没有漏转义的机会。
  */
 async function run(preset: TerminalPresetCommand): Promise<void> {
   if (!props.sessionId) return
-  const command = buildShellCommand(
-    preset.command,
-    preset.cwd,
-    shellFamilyFor(props.kind, props.localShell),
-  )
-  if (!command) return
+  const fields = parseCommandTemplate(preset.command)
+  if (fields.length === 0) {
+    await execute(preset, {})
+    return
+  }
+  paramTarget = preset
+  paramFields.value = fields
+  const previous = lastValuesByPresetId.get(preset.id) ?? {}
+  for (const key of Object.keys(paramValues)) delete paramValues[key]
+  for (const field of fields) {
+    paramValues[field.name] = previous[field.name] ?? field.defaultValue
+  }
+  paramDialogVisible.value = true
+}
+
+function runWithParameters(): void {
+  const preset = paramTarget
+  if (!preset) return
+  lastValuesByPresetId.set(preset.id, { ...paramValues })
+  paramDialogVisible.value = false
+  void execute(preset, { ...paramValues })
+}
+
+async function execute(
+  preset: TerminalPresetCommand,
+  values: Record<string, string>,
+): Promise<void> {
+  if (!props.sessionId) return
   try {
-    await window.ipcRenderer.invoke('terminal-session-write', {
+    await window.ipcRenderer.invoke('terminal-session-run-command', {
       sessionId: props.sessionId,
-      data: `${command}\r`,
+      command: preset.command,
+      cwd: preset.cwd,
+      values,
     })
   } catch (error) {
     ElMessage.error(errorMessage(error))
@@ -241,6 +305,12 @@ function errorMessage(error: unknown): string {
   gap: 0;
   opacity: 0;
   transition: opacity 0.12s ease;
+}
+.preset-hint {
+  margin: -6px 0 12px 84px;
+  color: var(--app-text-muted);
+  font-size: 10px;
+  line-height: 1.5;
 }
 .preset-item:hover .preset-item__actions,
 .preset-item:focus-within .preset-item__actions {

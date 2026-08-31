@@ -6,6 +6,7 @@ import {
   quoteShellArg,
   shellFamilyFor,
 } from '@/core/terminal/ShellQuote'
+import { splitPosixCommands } from '../helpers/shell-tokens'
 
 describe('shellFamilyFor', () => {
   it('maps session kinds to families', () => {
@@ -71,46 +72,3 @@ describe('joinShellCommands / buildShellCommand', () => {
     ])
   })
 })
-
-/**
- * 极简 POSIX 分词:按未被引号包裹的分号切命令,再按空白切参数。
- * 认识 `'...'\''...'`(闭合 + 转义字面引号 + 重新开引号)这一转义形式。
- */
-function splitPosixCommands(line: string): string[][] {
-  const commands: string[][] = []
-  let words: string[] = []
-  let current = ''
-  let inSingle = false
-  const pushWord = () => {
-    if (current) words.push(current)
-    current = ''
-  }
-  const pushCommand = () => {
-    pushWord()
-    commands.push(words)
-    words = []
-  }
-  for (let i = 0; i < line.length; i++) {
-    const ch = line[i]
-    if (ch === "'") {
-      if (inSingle && line.slice(i + 1, i + 4) === `\\''`) {
-        current += "'"
-        i += 3
-        continue
-      }
-      inSingle = !inSingle
-      continue
-    }
-    if (!inSingle && ch === ';') {
-      pushCommand()
-      continue
-    }
-    if (!inSingle && /\s/.test(ch)) {
-      pushWord()
-      continue
-    }
-    current += ch
-  }
-  pushCommand()
-  return commands
-}

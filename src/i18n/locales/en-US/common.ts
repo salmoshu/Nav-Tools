@@ -240,6 +240,8 @@ export default {
     presetCommand: 'Command',
     presetCwd: 'Working directory (optional)',
     presetCwdHint: 'Blank runs in the session current directory',
+    presetCommandHint: 'Use {{name:default|opt1|opt2}} to turn it into a form filled at run time',
+    presetParameters: 'Command Parameters',
     presetEmpty: 'No presets yet. Use "New Preset" to save a frequent command.',
     presetDelete: 'Delete Preset',
     presetDeleteConfirm: 'Delete preset "{name}"?',

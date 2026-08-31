@@ -193,12 +193,8 @@
         </div>
       </div>
     </div>
-    <TerminalPresetPanel
-      v-if="activePresetsOpen"
-      :session-id="activeReadySessionId"
-      :kind="activeReadyKind"
-      :local-shell="activeReadyLocalShell"
-    />
+    <!-- 预设命令的转义在主进程按会话 shell 家族做,这里只传会话 id -->
+    <TerminalPresetPanel v-if="activePresetsOpen" :session-id="activeReadySessionId" />
   </div>
 </template>
 
@@ -349,8 +345,6 @@ const activeReadySession = computed<TerminalSessionInfo | undefined>(() => {
     .find((session) => session?.status === 'ready')
 })
 const activeReadySessionId = computed(() => activeReadySession.value?.id)
-const activeReadyKind = computed(() => activeReadySession.value?.kind ?? 'local')
-const activeReadyLocalShell = computed(() => localShellForSession(activeReadySessionId.value))
 const activeFileTreeSessionId = computed(() => {
   const tabId = activeTab.value?.id
   const sessionId = tabId ? fileTreeSessionByTabId.value[tabId] : undefined
