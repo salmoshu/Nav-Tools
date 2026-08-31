@@ -276,6 +276,14 @@ export function decodeBase64Text(encoded: string): string {
   }
 }
 
+/** 文本 → base64(UTF-8);嗅探富化把输出文本包装成富内容负载时使用 */
+export function encodeTextBase64(text: string): string {
+  const bytes = new TextEncoder().encode(text)
+  let binary = ''
+  for (const byte of bytes) binary += String.fromCharCode(byte)
+  return btoa(binary)
+}
+
 function decodeCommand(encoded: string | undefined): string | undefined {
   if (!encoded) return undefined
   const text = decodeBase64Text(encoded).trim()

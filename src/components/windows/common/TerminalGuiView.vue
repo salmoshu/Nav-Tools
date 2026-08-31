@@ -30,6 +30,24 @@
           </span>
           <span class="command-block__actions" @click.stop>
             <el-tooltip
+              v-if="entry.sniffedPayload"
+              :content="
+                rawView.has(entry.block.id)
+                  ? t('common.terminal.guiShowRendered')
+                  : t('common.terminal.guiShowRaw')
+              "
+              placement="bottom"
+              :show-after="400"
+            >
+              <el-button
+                text
+                class="command-block__action"
+                :aria-label="t('common.terminal.guiShowRaw')"
+                @click="toggleRawView(entry.block.id)"
+                ><el-icon><View /></el-icon
+              ></el-button>
+            </el-tooltip>
+            <el-tooltip
               :content="t('common.terminal.copyOutput')"
               placement="bottom"
               :show-after="400"
@@ -38,7 +56,7 @@
                 text
                 class="command-block__action"
                 :aria-label="t('common.terminal.copyOutput')"
-                @click="$emit('copy', displayOutput(entry.block))"
+                @click="$emit('copy', entry.output)"
                 ><el-icon><CopyDocument /></el-icon
               ></el-button>
             </el-tooltip>
@@ -84,7 +102,12 @@
             :key="`${entry.block.id}-${index}`"
             :payload="payload"
           />
-          <div v-if="displayOutput(entry.block)" class="command-block__output">
+          <!-- 嗅探命中且未被用户切回原始:富化渲染;否则按可点击路径的普通文本 -->
+          <TerminalRichContent
+            v-if="entry.sniffedPayload && !rawView.has(entry.block.id)"
+            :payload="entry.sniffedPayload"
+          />
+          <div v-else-if="entry.output" class="command-block__output">
             <template v-for="(segment, index) in entry.segments" :key="index">
               <a
                 v-if="segment.path && isExistingPath(segment.path.path)"
@@ -157,11 +180,12 @@
 
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue'
-import { ArrowDownBold, ArrowUpBold, CloseBold, CopyDocument, RefreshRight } from '@element-plus/icons-vue'
+import { ArrowDownBold, ArrowUpBold, CloseBold, CopyDocument, RefreshRight, View } from '@element-plus/icons-vue'
 import { ChevronRight, LayoutGrid } from '@lucide/vue'
 import { t } from '@/i18n'
-import { normalizeTerminalLayout, type TerminalCommandBlock } from '@/core/terminal/CommandBlocks'
+import { normalizeTerminalLayout, encodeTextBase64, type TerminalCommandBlock } from '@/core/terminal/CommandBlocks'
 import { splitOutputByPaths, type DetectedPath } from '@/core/terminal/PathDetection'
+import { sniffContent, type SniffedContent } from '@/core/terminal/ContentSniff'
 import type { TerminalRichPayload } from '@/core/terminal/CommandBlocks'
 import TerminalRichContent from './TerminalRichContent.vue'
 
@@ -242,14 +266,38 @@ function displayOutput(block: TerminalCommandBlock): string {
  * 归一化后的输出按路径候选切片,供模板直接渲染成可点击片段。
  *
  * 用 computed 而不是在模板里调函数,顺带修掉原来「同一块在一个渲染周期里
- * 做两次 normalizeTerminalLayout」的浪费。
+ * 做两次 normalizeTerminalLayout」的浪费。sniffed 是渲染侧内容嗅探结论:
+ * 已有程序主动上报的富内容时不嗅探,避免同一份内容渲染两遍。
  */
 const renderedBlocks = computed(() =>
-  props.blocks.map((block) => ({
-    block,
-    segments: splitOutputByPaths(displayOutput(block)),
-  })),
+  props.blocks.map((block) => {
+    const output = displayOutput(block)
+    const sniffed = block.rich?.length ? null : sniffContent(output)
+    return {
+      block,
+      output,
+      segments: splitOutputByPaths(output),
+      /** 嗅探命中时的等价富内容负载;未命中为 undefined,模板按普通文本渲染 */
+      sniffedPayload: sniffed ? buildSniffedPayload(sniffed, output) : undefined,
+    }
+  }),
 )
+
+/** 用户显式要求看原始输出的块;嗅探富化一律可一键撤销 */
+const rawView = ref(new Set<number>())
+
+function toggleRawView(id: number): void {
+  const next = new Set(rawView.value)
+  if (next.has(id)) next.delete(id)
+  else next.add(id)
+  rawView.value = next
+}
+
+/** 嗅探结论 → 富内容负载;MIME 与程序主动上报的 OSC 1338 保持同一套映射 */
+function buildSniffedPayload(type: NonNullable<SniffedContent>, text: string): TerminalRichPayload {
+  const mime = type === 'markdown' ? 'text/markdown' : type === 'json' ? 'application/json' : 'text/csv'
+  return { mime, data: encodeTextBase64(text) }
+}
 
 /** 路径存在性缓存:键为 `会话|路径`——同一路径在不同会话里结论不同 */
 const pathExists = ref(new Map<string, boolean>())

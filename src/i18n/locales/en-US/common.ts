@@ -241,6 +241,8 @@ export default {
     collapseBlock: 'Collapse output',
     guiOutputTruncated: '(output truncated)',
     guiPathClickHint: 'Click to preview this file',
+    guiShowRaw: 'Show raw output',
+    guiShowRendered: 'Show rendered output',
     guiPreviewClose: 'Close preview',
     guiPreviewLoading: 'Reading file…',
     guiPreviewUnavailable: 'Unable to read this file (deleted, directory, or unsupported)',

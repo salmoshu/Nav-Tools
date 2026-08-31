@@ -239,6 +239,8 @@ export default {
     collapseBlock: '折叠输出',
     guiOutputTruncated: '（输出过长，已截断）',
     guiPathClickHint: '点击预览该文件',
+    guiShowRaw: '查看原始输出',
+    guiShowRendered: '查看渲染输出',
     guiPreviewClose: '关闭预览',
     guiPreviewLoading: '正在读取文件…',
     guiPreviewUnavailable: '无法读取该文件（可能已删除、是目录或不支持预览）',
