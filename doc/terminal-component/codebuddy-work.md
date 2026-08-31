@@ -1,9 +1,9 @@
 # CodeBuddy 工作交接：终端命令感知渲染（批次 1–4 + xterm buffer 轨道）
 
 > 本文档由 AI 在会话中断点整理，反映 **工作区实际状态**（已用 `git status` / `git log` / 只读文件检查核对）。
-> 状态时间锚点：本地分支 `main`，HEAD = `34db6112f`（批次 2 提交）。
-> 批次 1 已 push 到 `origin/main`（截至 `67bc23319`）；批次 2 的两个提交（`e935fb907`、`34db6112f`）
-> **仅本地提交，未 push**。
+> 状态时间锚点：本地分支 `main`，HEAD = `8b84211bc`（批次 3 提交）。
+> 批次 1 已 push 到 `origin/main`（截至 `67bc23319`）；批次 2（`e935fb907`、`34db6112f`）与
+> 批次 3（`8b84211bc`）、批次 3 的文档提交（`c5eb3f5a9`）**仅本地提交，未 push**。
 > 应用内人工验证**仍未做**——用户要求所有批次做完后统一验证。
 
 ---
@@ -15,7 +15,7 @@
 - **策略来源**：只抄 Warp 的**策略**，绝不复制/改写其 AGPL 代码（见 §7 许可边界）。
 - **实施顺序决策**（来自 `doc/terminal-component/05-roadmap.md` 与 `04-design.md §8`）：
   - **L1 嗅探先于 L2 包装**。先用零侵入的内容嗅探覆盖长尾 + SSH 会话，再考虑 shell 函数包装 `ls`/`cat`。
-  - 批次 1（B1–B4）已按此完成；批次 2（C1 文件树 + C2 预设命令 L1）已完成；下一步是批次 3（C3）。
+  - 批次 1（B1–B4）已按此完成；批次 2（C1 文件树 + C2 预设命令 L1）已完成；批次 3（C3 预设命令 L2）已完成；下一步是批次 4（C4 补全 + C5 块间导航）。
 - **默认开关**：命令感知渲染（若后续做 L2 包装）应先默认关，dogfood 后再默认开。
 - **验证节奏**：用户明确要求**所有批次先一起做完，最后统一验证**，中途不跑应用验证。
 - **提交纪律**（历史约定）：阶段工作只做**本地 commit**，push / PR 前必须询问用户。
@@ -72,19 +72,36 @@ C2 预设命令 L1（同一提交）
 
 **批次 2 验证情况**：`pnpm run typecheck` 通过；`npx vite build`（renderer + electron main + preload）全绿；`eslint` 与 `prettier --check` 对所改文件零问题；终端相关单测 **94 个全绿**（新增 directory-listing 7、preset-storage 7，shell-quote 修复后 9 全过）。**未运行应用内人工验证。**
 
+### 批次 3：C3 预设命令 L2 表单工作流（commit `8b84211bc`）
+
+- `src/core/terminal/CommandTemplate.ts`（新增）：纯函数模块，照 `ContentSniff` / `DirectoryListing` 的写法。
+  - `parseCommandTemplate(command)` → `CommandTemplateField[]`：字段格式为 `{{name:默认值|选项1|选项2}}`，按首个 `:` 切 name/default、再按 `|` 切候选；**只取首个 `:`**，所以默认值里可以再含 `:`；同名占位符去重（以第一次出现为准）。
+  - `interpolateCommandTemplate(command, values, family)` → 用 `quoteShellArg(value, family)` 转义后回填。缺值的字段回填其 `defaultValue`。
+  - 12 个单测（`tests/unit/command-template.test.ts`）。
+- `electron/main/services/TerminalService.ts`：新增 `runSessionCommand(sessionId, {command, cwd?, values?})` 与私有 `shellFamilyForSession(session)`。**shell 家族由主进程从会话自身推导**（`shellFamilyFor(session.info.kind, 本机会话的 localShell)`），渲染层传不进来，**无法谎报或漏转义**——这是对路线图 §3.2「转义要在主进程/写入前统一做」的落实。
+- `electron/main/terminalIpc.ts`：新增 `terminal-session-run-command`。
+- `src/components/windows/common/TerminalPresetPanel.vue`：移除 `kind` / `localShell` 两个 props（转义不再由渲染层决定，props 只留 `sessionId?`）；运行分两路——命令无 `{{...}}` 占位符直接执行，有则先弹 `el-dialog` 参数表单（候选 >1 用 `el-select` 下拉，否则 `el-input`，placeholder 显示默认值）；填过的值按预设 id 存进内存 Map（`lastValuesByPresetId`）下次回填，**不做持久化**。`execute()` 走 `terminal-session-run-command`，命令与参数值原样下发，转义交给主进程。
+- `src/components/windows/common/Terminal.vue`：`TerminalPresetPanel` 改为 `<TerminalPresetPanel v-if="activePresetsOpen" :session-id="activeReadySessionId" />`；删掉 `activeReadyKind` / `activeReadyLocalShell` 两个 computed。
+- `src/i18n/locales/{zh-CN,en-US}/common.ts`：新增 `presetCwdHint`、`presetCommandHint`（提示 `可用 {{参数名:默认值|选项1|选项2}} 生成运行时填写的表单`）、`presetParameters`。
+- `tests/helpers/shell-tokens.ts`（新增）：共享测试助手 `splitPosixCommands(line): string[][]`，认识 `'...'\''...'` 转义，只用于测试断言。
+- `tests/unit/shell-quote.test.ts`：hostile 用例改为导入共享 `splitPosixCommands`，不再在文件内各自实现一份分词。
+
+**批次 3 验证情况**：`pnpm run typecheck` 通过；`npx vite build` 全绿；`eslint` 对所改文件零问题；`prettier --write` 已格式化；终端相关单测 **106 个全绿**（新增 command-template 12）；全量 `vitest run` 84 文件过 / 2 文件失败，均为 §4.1 的存量失败。**未运行应用内人工验证。**
+
 ---
 
 ## 3. 当前工作区中已修改/新增但未完成或未验证的内容
 
-仅以下两个**未跟踪新文件**（其余批次 1 工作已全部提交，无未提交改动）：
+**无。工作区干净**（`git status` 无输出）。
 
-- `src/core/terminal/ShellQuote.ts`（新增，58 行，未提交）：按目标 shell 家族转义/拼接命令片段的纯函数模块。
-  - `ShellFamily = 'posix' | 'powershell' | 'cmd'`
-  - `shellFamilyFor(sessionKind, localShell?)`、`quoteShellArg(text, family)`、`buildShellCdCommand`、`joinShellCommands`、`buildShellCommand(command, cwd, family)`
-  - 用途：文件树「在终端打开」与预设命令（C2）会把用户可控文本（路径/参数）写进会话输入，**必须按 shell 转义**防注入。
-- `tests/unit/shell-quote.test.ts`（新增，70 行，未提交）：9 个用例。
+批次 1 / 2 / 3 的全部代码都已本地提交。此前本节列出的两个未跟踪文件
+（`src/core/terminal/ShellQuote.ts` 与 `tests/unit/shell-quote.test.ts`）已随批次 2 提交
+（`34db6112f` / `e935fb907`）落库，不再是未跟踪状态。
 
-**未完成原因**：这是批次 2（C1 文件树 + C2 预设命令 L1）的前置基础设施，刚建好，尚未接后续 IPC / 面板。
+`src/core/terminal/ShellQuote.ts` 仍是理解后续工作的关键模块（58 行）：
+- `ShellFamily = 'posix' | 'powershell' | 'cmd'`
+- `shellFamilyFor(sessionKind, localShell?)`、`quoteShellArg(text, family)`、`buildShellCdCommand`、`joinShellCommands`、`buildShellCommand(command, cwd, family)`
+- 用途：文件树「在终端打开」、预设命令（C2）、L2 参数值（C3）都会把用户可控文本写进会话输入，**必须按 shell 转义**防注入。C3 起转义统一在主进程完成。
 
 **git status 注意**：
 - `D doc/Nav-Tools*.docx/pdf` 与 `D doc/note.md` 是用户的文档清理改动，**与本终端工作无关，提交时勿纳入**。
@@ -96,12 +113,12 @@ C2 预设命令 L1（同一提交）
 
 | 范围 | 结果 | 说明 |
 |---|---|---|
-| `pnpm run typecheck` | ✅ 通过 | 批次 1 + 批次 2 当前状态 |
+| `pnpm run typecheck` | ✅ 通过 | 批次 1 + 2 + 3 当前状态 |
 | `npx vite build` | ✅ 通过 | renderer + electron main + preload 全部编译成功 |
-| 终端相关单测 | ✅ **94 个全绿** | path-detection 20、content-sniff 15、fuzzy-match 8、shell-quote 9、directory-listing 7、preset-storage 7、command-blocks、rich-content |
+| 终端相关单测 | ✅ **106 个全绿** | path-detection 20、content-sniff 15、fuzzy-match 8、shell-quote 9、directory-listing 7、preset-storage 7、command-template 12、command-blocks、rich-content |
 | `eslint`（所改文件） | ✅ 零问题 | 仓库存量 4 个 error 在非改动文件 |
 | `prettier --check`（所改文件） | ✅ 零问题 | 仓库里 `TerminalGuiView.vue` / `TerminalPane.vue` / `terminalIpc.ts` 等**存量文件本就不合规**，不要顺手格式化，否则 diff 爆炸 |
-| 全量 `vitest run` | ⚠️ 546 过 / 1 失败 / 1 文件收集失败 | 两个失败**与终端无关**，见 §4.1 |
+| 全量 `vitest run` | ⚠️ 558 过 / 1 失败 / 1 文件收集失败 | 两个失败**与终端无关**，见 §4.1 |
 | 应用内人工验证 | ❌ 未做 | 用户要求所有批次做完后统一验证 |
 
 ### 4.1 两个存量失败（非本次改动引入，勿在终端任务里顺手修）
@@ -115,22 +132,27 @@ C2 预设命令 L1（同一提交）
 
 ## 5. 当前中断点
 
-- 批次 1（B1–B4）与批次 2（C1 文件树 + C2 预设命令 L1）**均已完成并本地提交**，工作区干净（`git status` 无输出）。
-- 批次 2 的两个提交**未 push**（`e935fb907`、`34db6112f`），按提交纪律 push 前需询问用户。
-- 下一步是**批次 3（C3 预设命令 L2 表单工作流）**，尚未开始。
-- 仍未做应用内人工验证——累计已有 6 个功能未真机点过（见 §7 已知风险）。
+- 批次 1（B1–B4）、批次 2（C1 文件树 + C2 预设命令 L1）、批次 3（C3 预设命令 L2 表单工作流）
+  **均已完成并本地提交**，工作区干净（`git status` 无输出）。
+- 批次 2、3 的提交**未 push**（`e935fb907`、`34db6112f`、`c5eb3f5a9`、`8b84211bc`），按提交纪律 push 前需询问用户。
+- 下一步是**批次 4（C4 命令补全 + C5 块间导航）**，尚未开始。
+- 仍未做应用内人工验证——累计已有 7 个功能未真机点过（见 §7 已知风险）。
 
 ---
 
 ## 6. 后续待办（按优先级与批次）
 
-### 批次 3（C3，独立版本）
-- 预设命令 **L2 表单工作流**：模板 `{{name:default|opt1|opt2}}` → 下拉/输入/勾选控件；填完拼成命令。
-  - 起点：`TerminalPresetStorage` 的 `command` 字段已可承载模板串，`TerminalPresetPanel.vue` 的运行路径已统一走 `buildShellCommand`。
-  - 建议把「模板解析 → 参数控件描述」做成 `src/core/terminal/` 下的纯函数模块（照 `ContentSniff` / `DirectoryListing` 的写法），配单测，UI 只消费结果。
-- **安全红线（来自路线图 §3.2）**：参数值插值进 shell 命令**必须按目标 shell 语义转义**（已备 `ShellQuote.ts`），bash 与 PowerShell 规则不同；转义要在主进程/写入前统一做，不散落 UI。需为「恶意参数值」补契约测试（参考 `shell-quote.test.ts` 的 hostile 用例写法——**用分词断言结构，别手算转义串**）。
+### ~~批次 3（C3，独立版本）~~ ✅ 已完成（commit `8b84211bc`）
 
-### 批次 4（C4 + C5）
+- 预设命令 **L2 表单工作流**已落地：模板 `{{name:default|opt1|opt2}}` → 下拉/输入控件，填完拼成命令。
+- 实现落在 `src/core/terminal/CommandTemplate.ts`（纯函数 + 12 单测），UI 只消费结果。
+- **安全红线已落实**：参数值插值前按目标 shell 语义转义（`ShellQuote.quoteShellArg`），
+  且转义在**主进程** `TerminalService.runSessionCommand` 里按会话自身 shell 家族完成，
+  渲染层不参与、也无法谎报家族。已补「恶意参数值」契约测试
+  （`command-template.test.ts`，用共享 `splitPosixCommands` 分词断言结构，未手算转义串）。
+
+### 批次 4（C4 + C5）—— 下一步
+
 - **C4 命令补全**：数据源用 **withfig（MIT 许可，可用）**；**禁止**用 Warp 的 `command-signatures-v2`（AGPL）。建议先做会话内历史补全（零数据依赖）打底，再接 withfig。
 - **C5 块间导航**：命令块模型已就绪，加快捷键在块间跳转（上一块/下一块/跳到出错块）。
 
@@ -154,14 +176,15 @@ C2 预设命令 L1（同一提交）
 - **Shell 注入**：所有把用户文本写回会话的命令（文件树 `cd`、预设命令、L2 表单）必须经 `ShellQuote.ts` 转义，且转义在写入前于主进程/统一处完成。
 
 ### 已知风险
-- **批次 1 + 2 均未做应用内验证**，累计 6 处只在单元/类型/构建层面验证过，未真机点过：
+- **批次 1 + 2 + 3 均未做应用内验证**，累计 7 处只在单元/类型/构建层面验证过，未真机点过：
   1. 路径预览三通道（本机 / WSL / SSH）
   2. 内容嗅探（JSON/CSV/Markdown 富化 + 渲染/原始切换）
   3. Ctrl+R 历史模糊搜索
   4. Ctrl+F 搜索（终端视图 SearchAddon / GUI 视图自实现两套）
   5. 文件树面板三通道列目录 + 文件预览 + 「在终端打开」写 `cd`
   6. 预设命令面板增删改运行
-  统一验证时应重点试：**WSL 路径预览与文件树列目录**（`find -printf` 是否真能跑通、含空格/制表符的文件名）、**SSH 会话的嗅探与搜索**、**cmd 会话的 `cd /d` 是否正确**、大文件预览截断提示。
+  7. 预设命令 **L2 参数表单**：占位符解析出下拉/输入控件、填值回填拼命令、主进程转义后写入
+  统一验证时应重点试：**WSL 路径预览与文件树列目录**（`find -printf` 是否真能跑通、含空格/制表符的文件名）、**SSH 会话的嗅探与搜索**、**cmd 会话的 `cd /d` 是否正确**、大文件预览截断提示、**L2 表单在 PowerShell / cmd 会话里的转义结果**（同一条预设在 posix 与 powershell 下应得到不同转义串）。
 - **`@xterm/addon-search` 已补装**：之前只在 `package.json` / lockfile 里、实际未进 `node_modules`，导致 `pnpm typecheck` 报 `Cannot find module '@xterm/addon-search'`。已 `pnpm install` 装上（该命令末尾对 `@esbuild/linux-x64` 报 EACCES 权限错，但目标包已落地，不影响）。`vite build` 已通过，但**仍未启动应用确认 SearchAddon 实际装载**。
 - **electron 侧没有真正的类型检查**：`tsconfig.json` 的 `include` 只有 `src`，`pnpm typecheck`（= `vue-tsc --noEmit`）**不覆盖 `electron/`**；`tsconfig.node.json` 配置不完整（缺 `target`，直接跑有一堆 `downlevelIteration` 之类报错），处于废弃状态。改 `electron/main/**` 时**类型错误不会被 CI 抓到**，只能靠 `vite build`（只查语法/导入，不查类型）与人工审阅。
 - **`resolveSessionPath` 在会话 cwd 未知时行为可疑**：WSL/SSH 分支里 `cwd` 兜底为 `'~'`，再 `path.posix.resolve('~', '.')` 会解析到**主进程 cwd 下的字面 `~` 目录**，而不是用户家目录。B1 的路径预览与 C1 的文件树共用此逻辑，所以 WSL 会话若没上报 OSC 7 cwd，两条功能都会拿到错路径。修它属于独立小修，别混在 C3 里。
@@ -183,16 +206,22 @@ cd d:/projects/03-上位机/Nav-Tools     # 注意：仓库实际路径是 d: �
 pnpm run typecheck                     # 应全过（注意：不覆盖 electron/，见 §7）
 npx vite build                         # renderer + electron main + preload，应全过
 git status --short                     # 应无输出（工作区干净）
-git log --oneline -6                   # 确认批次 1 的 4 个提交 + 批次 2 的 2 个提交
+git log --oneline -8                   # 确认批次 1 的 4 个提交 + 批次 2 的 2 个 + 文档提交 + 批次 3
 npx vitest run tests/unit/shell-quote.test.ts tests/unit/directory-listing.test.ts \
-  tests/unit/preset-storage.test.ts    # 23 个用例应全绿
+  tests/unit/preset-storage.test.ts tests/unit/command-template.test.ts   # 35 个用例应全绿
 ```
 全量 `vitest run` 会有 2 个与终端无关的存量失败（`label-ocr`、`nsat-perf`），见 §4.1，**不要误判成自己改坏了**。
 
-**续做批次 3（C3 预设命令 L2 表单）的起点文件**
-- `src/components/windows/common/TerminalPresetPanel.vue` —— 运行路径已统一走 `buildShellCommand`，加表单只需在「运行」前插入模板解析与参数收集。
-- `src/core/terminal/TerminalPresetStorage.ts` —— `command` 字段可直接承载模板串，无需改存储结构（除非想单独存模板元数据）。
-- `src/core/terminal/ShellQuote.ts` —— 参数值转义的唯一入口，L2 的参数值同样必须经它。
+**续做批次 4（C4 补全 + C5 块间导航）的起点文件**
+- `src/components/windows/common/TerminalGuiView.vue` —— GUI 的输入行与块列表都在这里：C4 的候选弹层要挂在输入行上（Ctrl+R 历史搜索面板已有同构实现可参照），C5 的块跳转靠块的 `scrollIntoView`。
+- `src/core/terminal/FuzzyMatch.ts` —— 补全候选的过滤/排序可直接复用其模糊匹配（C4 不另造一套打分）。
+- `src/core/terminal/CommandBlocks.ts` —— 块模型；C5 需要「上一块 / 下一块 / 出错块」的索引，先看这里已有的块结构与状态字段。
+- `src/core/terminal/CommandTemplate.ts` —— 批次 3 新增的模板解析，C4 若要补命令模板参数名可复用其字段解析。
+
+**批次 3 已落地的代码（改动时先看这些）**
+- `src/core/terminal/CommandTemplate.ts` —— `parseCommandTemplate` / `interpolateCommandTemplate`；参数值经 `quoteShellArg` 转义。
+- `electron/main/services/TerminalService.ts` —— `runSessionCommand` + `shellFamilyForSession`，**转义的唯一落点**。
+- `src/components/windows/common/TerminalPresetPanel.vue` —— 参数表单对话框；运行走 `terminal-session-run-command`。
 
 **批次 2 已落地的代码（改动时先看这些）**
 - `electron/main/services/TerminalService.ts` —— `listSessionPath`，与 `statSessionPath` / `readSessionPath` 共用 `resolveSessionPath`。
