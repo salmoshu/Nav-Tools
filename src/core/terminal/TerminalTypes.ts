@@ -159,6 +159,27 @@ export interface SftpTransferEvent {
   error?: string
 }
 
+/**
+ * 会话上下文中一个路径的属性。
+ * `resolvedPath` 的形态随会话类型而变:本机为 Windows 路径,WSL/SSH 为 POSIX 路径。
+ */
+export interface TerminalPathStat {
+  exists: boolean
+  directory: boolean
+  resolvedPath: string
+  size: number
+}
+
+/** 按扩展名猜出的 MIME;用于复用富内容渲染器做块内预览 */
+export interface TerminalPathRead {
+  mime: string
+  /** base64 编码的文件内容(可能已按上限截断) */
+  data: string
+  /** 文件原始大小 */
+  size: number
+  truncated: boolean
+}
+
 export interface PortForwardStatusEvent {
   sessionId: string
   ruleId: string

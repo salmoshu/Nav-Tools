@@ -108,6 +108,18 @@ export function registerTerminalIpc(
       service.sftpDownload(request.sessionId, request.remotePath, request.localPath),
   )
 
+  // 输出里的路径候选:先确认存在性,再按上限读取内容做块内预览
+  ipcMain.handle(
+    'terminal-path-stat',
+    (_event, request: { sessionId: string; path: string }) =>
+      service.statSessionPath(request.sessionId, request.path),
+  )
+  ipcMain.handle(
+    'terminal-path-read',
+    (_event, request: { sessionId: string; path: string; maxBytes?: number }) =>
+      service.readSessionPath(request.sessionId, request.path, request.maxBytes),
+  )
+
   ipcMain.handle(
     'terminal-forward-start',
     (_event, request: { sessionId: string; rule: PortForwardRule }) =>

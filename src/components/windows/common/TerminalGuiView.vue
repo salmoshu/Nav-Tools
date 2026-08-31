@@ -7,26 +7,26 @@
         <small>{{ t('common.terminal.guiEmptyDescription') }}</small>
       </div>
       <article
-        v-for="block in blocks"
-        :key="block.id"
+        v-for="entry in renderedBlocks"
+        :key="entry.block.id"
         class="command-block"
-        :class="blockStatus(block)"
+        :class="blockStatus(entry.block)"
       >
-        <header class="command-block__header" @click="toggleCollapsed(block.id)">
+        <header class="command-block__header" @click="toggleCollapsed(entry.block.id)">
           <span class="command-block__status" aria-hidden="true"></span>
-          <span class="command-block__command" :title="block.command">{{
-            block.command || t('common.terminal.guiUnknownCommand')
+          <span class="command-block__command" :title="entry.block.command">{{
+            entry.block.command || t('common.terminal.guiUnknownCommand')
           }}</span>
           <span class="command-block__meta">
-            <span v-if="block.cwd" class="command-block__cwd" :title="block.cwd">{{
-              block.cwd
+            <span v-if="entry.block.cwd" class="command-block__cwd" :title="entry.block.cwd">{{
+              entry.block.cwd
             }}</span>
             <span
-              v-if="block.exitCode !== undefined && block.exitCode !== 0"
+              v-if="entry.block.exitCode !== undefined && entry.block.exitCode !== 0"
               class="command-block__exit-code"
-              >{{ t('common.terminal.guiExitCode', { code: block.exitCode }) }}</span
+              >{{ t('common.terminal.guiExitCode', { code: entry.block.exitCode }) }}</span
             >
-            <span class="command-block__time">{{ formatTime(block.startedAt) }}</span>
+            <span class="command-block__time">{{ formatTime(entry.block.startedAt) }}</span>
           </span>
           <span class="command-block__actions" @click.stop>
             <el-tooltip
@@ -38,12 +38,12 @@
                 text
                 class="command-block__action"
                 :aria-label="t('common.terminal.copyOutput')"
-                @click="$emit('copy', displayOutput(block))"
+                @click="$emit('copy', displayOutput(entry.block))"
                 ><el-icon><CopyDocument /></el-icon
               ></el-button>
             </el-tooltip>
             <el-tooltip
-              v-if="block.command"
+              v-if="entry.block.command"
               :content="t('common.terminal.rerunCommand')"
               placement="bottom"
               :show-after="400"
@@ -52,13 +52,13 @@
                 text
                 class="command-block__action"
                 :aria-label="t('common.terminal.rerunCommand')"
-                @click="$emit('rerun', block.command || '')"
+                @click="$emit('rerun', entry.block.command || '')"
                 ><el-icon><RefreshRight /></el-icon
               ></el-button>
             </el-tooltip>
             <el-tooltip
               :content="
-                collapsed.has(block.id)
+                collapsed.has(entry.block.id)
                   ? t('common.terminal.expandBlock')
                   : t('common.terminal.collapseBlock')
               "
@@ -69,20 +69,72 @@
                 text
                 class="command-block__action"
                 :aria-label="t('common.terminal.collapseBlock')"
-                @click="toggleCollapsed(block.id)"
+                @click="toggleCollapsed(entry.block.id)"
                 ><el-icon
-                  ><component :is="collapsed.has(block.id) ? ArrowDownBold : ArrowUpBold" /></el-icon
+                  ><component
+                    :is="collapsed.has(entry.block.id) ? ArrowDownBold : ArrowUpBold"
+                  /></el-icon
               ></el-button>
             </el-tooltip>
           </span>
         </header>
-        <template v-if="!collapsed.has(block.id)">
+        <template v-if="!collapsed.has(entry.block.id)">
           <TerminalRichContent
-            v-for="(payload, index) in block.rich ?? []"
-            :key="`${block.id}-${index}`"
+            v-for="(payload, index) in entry.block.rich ?? []"
+            :key="`${entry.block.id}-${index}`"
             :payload="payload"
           />
-          <pre v-if="displayOutput(block)" class="command-block__output">{{ displayOutput(block) }}<span v-if="block.truncated" class="command-block__truncated">{{ t('common.terminal.guiOutputTruncated') }}</span></pre>
+          <div v-if="displayOutput(entry.block)" class="command-block__output">
+            <template v-for="(segment, index) in entry.segments" :key="index">
+              <a
+                v-if="segment.path && isExistingPath(segment.path.path)"
+                class="command-block__path"
+                :title="t('common.terminal.guiPathClickHint')"
+                href="#"
+                @click.prevent="togglePreview(entry.block, segment.path)"
+                >{{ segment.text }}</a
+              >
+              <span
+                v-else-if="segment.path"
+                class="command-block__path-candidate"
+                @mouseenter="probePath(segment.path)"
+                >{{ segment.text }}</span
+              >
+              <span v-else>{{ segment.text }}</span>
+            </template>
+            <span v-if="entry.block.truncated" class="command-block__truncated">{{
+              t('common.terminal.guiOutputTruncated')
+            }}</span>
+          </div>
+          <div v-if="previews.get(entry.block.id)" class="command-block__preview">
+            <div class="command-block__preview-header">
+              <span class="command-block__preview-path">{{ previews.get(entry.block.id)!.path }}</span>
+              <el-button
+                text
+                class="command-block__action"
+                :aria-label="t('common.terminal.guiPreviewClose')"
+                @click="closePreview(entry.block.id)"
+                ><el-icon><CloseBold /></el-icon
+              ></el-button>
+            </div>
+            <div v-if="previews.get(entry.block.id)!.status === 'loading'" class="command-block__preview-note">
+              {{ t('common.terminal.guiPreviewLoading') }}
+            </div>
+            <div
+              v-else-if="previews.get(entry.block.id)!.status === 'unavailable'"
+              class="command-block__preview-note"
+            >
+              {{ t('common.terminal.guiPreviewUnavailable') }}
+            </div>
+            <template v-else>
+              <TerminalRichContent :payload="previews.get(entry.block.id)!.payload!" />
+              <span
+                v-if="previews.get(entry.block.id)!.truncated"
+                class="command-block__preview-note"
+                >{{ t('common.terminal.guiPreviewTruncated') }}</span
+              >
+            </template>
+          </div>
         </template>
       </article>
     </div>
@@ -104,11 +156,13 @@
 </template>
 
 <script setup lang="ts">
-import { nextTick, ref, watch } from 'vue'
-import { ArrowDownBold, ArrowUpBold, CopyDocument, RefreshRight } from '@element-plus/icons-vue'
+import { computed, nextTick, ref, watch } from 'vue'
+import { ArrowDownBold, ArrowUpBold, CloseBold, CopyDocument, RefreshRight } from '@element-plus/icons-vue'
 import { ChevronRight, LayoutGrid } from '@lucide/vue'
 import { t } from '@/i18n'
 import { normalizeTerminalLayout, type TerminalCommandBlock } from '@/core/terminal/CommandBlocks'
+import { splitOutputByPaths, type DetectedPath } from '@/core/terminal/PathDetection'
+import type { TerminalRichPayload } from '@/core/terminal/CommandBlocks'
 import TerminalRichContent from './TerminalRichContent.vue'
 
 const props = defineProps<{
@@ -117,12 +171,25 @@ const props = defineProps<{
   cwd?: string
   /** xterm 当前列宽,用于折行续写判定;未知时按 80 列处理 */
   cols?: number
+  /** 会话标识,用于把输出里的路径候选解析到正确的文件系统(本机 / WSL / SSH) */
+  sessionId?: string
 }>()
 const emit = defineEmits<{
   rerun: [command: string]
   copy: [text: string]
   submit: [text: string]
 }>()
+
+/** 路径预览最大读取字节数:预览不需要整个文件,超限时交给 truncated 提示 */
+const PREVIEW_MAX_BYTES = 512 * 1024
+
+interface PreviewState {
+  path: string
+  status: 'loading' | 'ready' | 'unavailable'
+  payload?: TerminalRichPayload
+  size?: number
+  truncated?: boolean
+}
 
 const scrollElement = ref<HTMLDivElement | null>(null)
 const collapsed = ref<Set<number>>(new Set())
@@ -169,6 +236,99 @@ function handleInputKeydown(event: KeyboardEvent): void {
 
 function displayOutput(block: TerminalCommandBlock): string {
   return normalizeTerminalLayout(block.output, props.cols ?? 80).trim()
+}
+
+/**
+ * 归一化后的输出按路径候选切片,供模板直接渲染成可点击片段。
+ *
+ * 用 computed 而不是在模板里调函数,顺带修掉原来「同一块在一个渲染周期里
+ * 做两次 normalizeTerminalLayout」的浪费。
+ */
+const renderedBlocks = computed(() =>
+  props.blocks.map((block) => ({
+    block,
+    segments: splitOutputByPaths(displayOutput(block)),
+  })),
+)
+
+/** 路径存在性缓存:键为 `会话|路径`——同一路径在不同会话里结论不同 */
+const pathExists = ref(new Map<string, boolean>())
+const probing = new Set<string>()
+
+function pathKey(path: string): string {
+  return `${props.sessionId ?? ''}|${path}`
+}
+
+function isExistingPath(path: string): boolean {
+  return pathExists.value.get(pathKey(path)) === true
+}
+
+/**
+ * 悬停时确认路径是否真实存在,只有确认过的才给「可点击」外观。
+ * 纯语法判断无法区分 `foo.txt` 是文件名还是普通文本,这一步是必需的。
+ */
+async function probePath(found: DetectedPath): Promise<void> {
+  if (!props.sessionId) return
+  const key = pathKey(found.path)
+  if (pathExists.value.has(key) || probing.has(key)) return
+  probing.add(key)
+  try {
+    const stat = (await window.ipcRenderer.invoke('terminal-path-stat', {
+      sessionId: props.sessionId,
+      path: found.path,
+    })) as { exists?: boolean } | null
+    const next = new Map(pathExists.value)
+    next.set(key, stat?.exists === true)
+    pathExists.value = next
+  } catch {
+    // 探测失败保持"不可点击":宁可不给入口,也不给一个点了报错的入口
+  } finally {
+    probing.delete(key)
+  }
+}
+
+const previews = ref(new Map<number, PreviewState>())
+
+function closePreview(blockId: number): void {
+  const next = new Map(previews.value)
+  next.delete(blockId)
+  previews.value = next
+}
+
+async function togglePreview(block: TerminalCommandBlock, found: DetectedPath): Promise<void> {
+  const current = previews.value.get(block.id)
+  if (current?.path === found.path) {
+    closePreview(block.id)
+    return
+  }
+  if (!props.sessionId) return
+
+  const next = new Map(previews.value)
+  next.set(block.id, { path: found.path, status: 'loading' })
+  previews.value = next
+
+  let state: PreviewState
+  try {
+    const read = (await window.ipcRenderer.invoke('terminal-path-read', {
+      sessionId: props.sessionId,
+      path: found.path,
+      maxBytes: PREVIEW_MAX_BYTES,
+    })) as { mime: string; data: string; size: number; truncated: boolean } | null
+    state = read
+      ? {
+          path: found.path,
+          status: 'ready',
+          payload: { mime: read.mime, data: read.data },
+          size: read.size,
+          truncated: read.truncated,
+        }
+      : { path: found.path, status: 'unavailable' }
+  } catch {
+    state = { path: found.path, status: 'unavailable' }
+  }
+  const applied = new Map(previews.value)
+  applied.set(block.id, state)
+  previews.value = applied
 }
 
 function blockStatus(block: TerminalCommandBlock): string {
@@ -373,6 +533,44 @@ watch(scrollElement, (element, previous) => {
   margin-top: 4px;
   color: var(--el-color-warning);
   font-size: 10px;
+}
+/* 已确认存在的路径:可点击展开块内预览 */
+.command-block__path {
+  color: var(--el-color-primary);
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.command-block__path:hover {
+  text-decoration-style: solid;
+}
+.command-block__preview {
+  border-top: 1px solid color-mix(in srgb, var(--terminal-fg) 12%, transparent);
+  background: color-mix(in srgb, var(--terminal-fg) 3%, var(--terminal-bg));
+}
+.command-block__preview-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 8px;
+}
+.command-block__preview-path {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: color-mix(in srgb, var(--terminal-fg) 70%, transparent);
+  font-family: 'Cascadia Mono', Consolas, 'Noto Sans Mono', monospace;
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  user-select: text;
+}
+.command-block__preview-note {
+  display: block;
+  padding: 6px 10px;
+  color: var(--el-color-warning);
+  font-size: 11px;
 }
 .gui-input-row {
   flex: none;

@@ -21,15 +21,21 @@ import {
   type TerminalCapabilities,
   type TerminalCreateRequest,
   type TerminalCwdEvent,
+  type TerminalPathRead,
+  type TerminalPathStat,
   type TerminalSessionInfo,
+  type TerminalSessionKind,
   type TerminalStatusEvent,
 } from '../../../src/core/terminal/TerminalTypes'
+import { mimeFromPath } from '../../../src/core/terminal/FileMime'
 import { SshPortForwardService } from './SshPortForwardService'
 
 const execFileAsync = promisify(execFile)
 const MAX_SCROLLBACK_CHARS = 1_000_000
 const SSH_CONNECT_TIMEOUT_MS = 35_000
 const SSH_CHANNEL_TIMEOUT_MS = 15_000
+/** WSL 侧命令回传的字节上限(预览用,与 readSessionPath 的 maxBytes 对齐) */
+const WSL_OUTPUT_MAX_BYTES = 8 * 1024 * 1024
 const HOST_KEY_RESPONSE_TIMEOUT_MS = 30_000
 /** 让 bash 在每个提示符前上报 OSC 7 cwd;仅对 bash 注入,zsh/fish 跳过避免报错 */
 const OSC7_PROMPT_COMMAND = 'printf "\\e]7;file://%s%s\\e\\\\" "$HOSTNAME" "$PWD"'
@@ -344,6 +350,185 @@ export class TerminalService {
     } catch {
       return null
     }
+  }
+
+  /**
+   * 在会话上下文中解析路径并取属性,用于把输出里的路径候选确认为真实文件/目录。
+   *
+   * 三种通道:本机走 `fs`、WSL 走 `wsl.exe` 转发、SSH 走 SFTP。路径按会话类型
+   * 解析(本机 Windows 语义,WSL/SSH POSIX 语义),相对路径以会话运行时 cwd 为基准。
+   */
+  public async statSessionPath(
+    sessionId: string,
+    rawPath: string,
+  ): Promise<TerminalPathStat | null> {
+    const session = this.sessions.get(sessionId)
+    if (!session) return null
+    const target = this.resolveSessionPath(session, rawPath)
+    if (!target) return null
+
+    const missing: TerminalPathStat = {
+      exists: false,
+      directory: false,
+      resolvedPath: target.path,
+      size: 0,
+    }
+    try {
+      if (target.kind === 'ssh') {
+        const entry = await this.sftpStat(sessionId, target.path)
+        return entry
+          ? { exists: true, directory: entry.directory, resolvedPath: entry.path, size: entry.size }
+          : missing
+      }
+      if (target.kind === 'wsl') {
+        // `%F` 给出类型文本(regular file / directory),避免依赖 stat 的数值位
+        const output = await this.wslExec(target.distro, 'stat -c "%F|%s" -- "$1"', [target.path])
+        const [type, sizeText] = output.trim().split('|')
+        const size = Number.parseInt(sizeText ?? '', 10)
+        return {
+          exists: true,
+          directory: type === 'directory',
+          resolvedPath: target.path,
+          size: Number.isFinite(size) ? size : 0,
+        }
+      }
+      const stats = await fs.stat(target.path)
+      return {
+        exists: true,
+        directory: stats.isDirectory(),
+        resolvedPath: target.path,
+        size: stats.size,
+      }
+    } catch {
+      return missing
+    }
+  }
+
+  /**
+   * 读取会话上下文中的一个文件,回传可直接交给富内容渲染器的 MIME + base64。
+   *
+   * 上限 `maxBytes` 由调用方给出:预览不需要整个文件,二进制大文件读全量既慢又占内存。
+   */
+  public async readSessionPath(
+    sessionId: string,
+    rawPath: string,
+    maxBytes = 512 * 1024,
+  ): Promise<TerminalPathRead | null> {
+    const session = this.sessions.get(sessionId)
+    if (!session) return null
+    const target = this.resolveSessionPath(session, rawPath)
+    if (!target) return null
+
+    try {
+      let buffer: Buffer
+      let size: number
+      if (target.kind === 'ssh') {
+        const sftp = await this.getSftp(sessionId)
+        const stat = await this.sftpStat(sessionId, target.path)
+        if (!stat || stat.directory) return null
+        size = stat.size
+        buffer = await new Promise<Buffer>((resolve, reject) => {
+          const chunks: Buffer[] = []
+          const stream = sftp.createReadStream(target.path, {
+            start: 0,
+            end: Math.max(0, maxBytes - 1),
+          })
+          stream.on('data', (chunk: Buffer) => chunks.push(chunk))
+          stream.on('error', reject)
+          stream.on('end', () => resolve(Buffer.concat(chunks)))
+        })
+      } else if (target.kind === 'wsl') {
+        const stat = await this.statSessionPath(sessionId, rawPath)
+        if (!stat?.exists || stat.directory) return null
+        size = stat.size
+        // head -c 直接截断,避免把整个大文件从 WSL 拉到 Windows 侧
+        buffer = await this.wslExecBuffer(
+          target.distro,
+          `head -c ${Math.max(1, Math.floor(maxBytes))} -- "$1"`,
+          [target.path],
+        )
+      } else {
+        const stats = await fs.stat(target.path)
+        if (stats.isDirectory()) return null
+        size = stats.size
+        const handle = await fs.open(target.path, 'r')
+        try {
+          const chunk = Buffer.alloc(Math.min(maxBytes, size))
+          const { bytesRead } = await handle.read(chunk, 0, chunk.length, 0)
+          buffer = chunk.subarray(0, bytesRead)
+        } finally {
+          await handle.close()
+        }
+      }
+      return {
+        mime: mimeFromPath(target.path),
+        data: buffer.toString('base64'),
+        size,
+        truncated: size > maxBytes,
+      }
+    } catch {
+      return null
+    }
+  }
+
+  /** 把输出里的路径候选解析成「会话语义下的绝对路径」 */
+  private resolveSessionPath(
+    session: TerminalSession,
+    rawPath: string,
+  ): { kind: TerminalSessionKind; path: string; distro?: string } | null {
+    const trimmed = rawPath.trim()
+    if (!trimmed) return null
+
+    const kind = session.info.kind
+    if (kind === 'ssh') {
+      const cwd = session.info.cwd || '/'
+      return {
+        kind,
+        path: path.posix.isAbsolute(trimmed)
+          ? path.posix.normalize(trimmed)
+          : path.posix.resolve(cwd, expandHomePosix(trimmed)),
+      }
+    }
+    if (kind === 'wsl') {
+      const distro = (session as LocalSession).request.wslDistro
+      if (!distro) return null
+      const cwd = session.info.cwd || '~'
+      return {
+        kind,
+        distro,
+        path: path.posix.isAbsolute(trimmed)
+          ? path.posix.normalize(trimmed)
+          : path.posix.resolve(cwd, expandHomePosix(trimmed)),
+      }
+    }
+    // 本机:cwd 已由 normalizeMsysPath 统一成 Windows 路径
+    const cwd = session.info.cwd || os.homedir()
+    const expanded = expandHome(trimmed)
+    return {
+      kind: 'local',
+      path: path.win32.isAbsolute(expanded)
+        ? path.win32.normalize(expanded)
+        : path.win32.resolve(cwd, expanded),
+    }
+  }
+
+  /**
+   * 在 WSL 发行版内执行一段 sh 脚本。
+   *
+   * 参数以 `$1` 传入而不是拼进脚本字符串,避免对路径做 shell 转义——
+   * 这是唯一需要小心的地方:路径来自终端输出,属于不可信输入。
+   */
+  private async wslExec(distro: string, script: string, args: string[]): Promise<string> {
+    return (await this.wslExecBuffer(distro, script, args)).toString('utf8')
+  }
+
+  private async wslExecBuffer(distro: string, script: string, args: string[]): Promise<Buffer> {
+    const { stdout } = await execFileAsync(
+      'wsl.exe',
+      ['--distribution', distro, '--', 'sh', '-c', script, 'sh', ...args],
+      { encoding: 'buffer', maxBuffer: WSL_OUTPUT_MAX_BYTES },
+    )
+    return stdout as Buffer
   }
 
   public async sftpMkdir(sessionId: string, remotePath: string): Promise<void> {
@@ -1161,6 +1346,12 @@ function expandHome(value: string): string {
     : value.startsWith('~/') || value.startsWith('~\\')
       ? path.join(os.homedir(), value.slice(2))
       : value
+}
+
+/** POSIX 侧的 `~` 展开:WSL/SSH 会话里换行符为 `\`,且不以盘符开头 */
+function expandHomePosix(value: string): string {
+  if (value === '~') return '.'
+  return value.startsWith('~/') ? value.slice(2) : value
 }
 
 function hostKey(host: string, port: number): string {

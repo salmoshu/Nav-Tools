@@ -185,6 +185,7 @@
         :blocks="commandBlocks"
         :cwd="guiCwd"
         :cols="termCols"
+        :session-id="sessionInfo?.id"
         @rerun="rerunCommand"
         @copy="writeClipboardText"
         @submit="rerunCommand"
