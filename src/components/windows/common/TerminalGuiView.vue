@@ -162,6 +162,31 @@
       </article>
     </div>
     <div class="gui-input-row">
+      <!-- Ctrl+R 历史模糊搜索:输入行即查询框,回车选中回填,Esc 关闭 -->
+      <div v-if="historySearchOpen" class="history-search" role="listbox">
+        <div v-if="historyMatches.length === 0" class="history-search__empty">
+          {{ t('common.terminal.guiHistorySearchEmpty') }}
+        </div>
+        <button
+          v-for="(match, index) in historyMatches"
+          :key="match.text + index"
+          class="history-search__item"
+          :class="{ 'is-active': index === historySearchIndex }"
+          type="button"
+          role="option"
+          :aria-selected="index === historySearchIndex"
+          @click="pickHistory(match.text)"
+          @mousemove="historySearchIndex = index"
+        >
+          <span
+            v-for="(char, charIndex) in match.text"
+            :key="charIndex"
+            class="history-search__char"
+            :class="{ 'is-hit': match.positions.includes(charIndex) }"
+            >{{ char }}</span
+          >
+        </button>
+      </div>
       <el-icon class="gui-input-row__prompt"><ChevronRight /></el-icon>
       <span v-if="cwd" class="gui-input-row__cwd" :title="cwd">{{ cwd }}</span>
       <input
@@ -186,6 +211,7 @@ import { t } from '@/i18n'
 import { normalizeTerminalLayout, encodeTextBase64, type TerminalCommandBlock } from '@/core/terminal/CommandBlocks'
 import { splitOutputByPaths, type DetectedPath } from '@/core/terminal/PathDetection'
 import { sniffContent, type SniffedContent } from '@/core/terminal/ContentSniff'
+import { fuzzySearch } from '@/core/terminal/FuzzyMatch'
 import type { TerminalRichPayload } from '@/core/terminal/CommandBlocks'
 import TerminalRichContent from './TerminalRichContent.vue'
 
@@ -225,9 +251,72 @@ const draft = ref('')
 const history: string[] = []
 let historyIndex = -1
 
+/** Ctrl+R 历史模糊搜索的开关与选中项 */
+const historySearchOpen = ref(false)
+const historySearchIndex = ref(0)
+const historyMatches = computed(() =>
+  historySearchOpen.value ? fuzzySearch(draft.value.trim(), history, 10) : [],
+)
+
+function closeHistorySearch(): void {
+  historySearchOpen.value = false
+  historySearchIndex.value = 0
+}
+
+/** 查询词变化后选中项可能越界,回到第一条 */
+watch(draft, () => {
+  if (historySearchOpen.value) historySearchIndex.value = 0
+})
+
+/** 选中一条历史:回填输入行但不直接执行,让用户确认后再回车 */
+function pickHistory(command: string): void {
+  draft.value = command
+  historyIndex = -1
+  closeHistorySearch()
+}
+
 function handleInputKeydown(event: KeyboardEvent): void {
   // 输入法组词期间的回车是选词,不应提交
   if (event.isComposing) return
+
+  // Ctrl+R:开/续历史模糊搜索;搜索已开时按键移到下一条
+  if (event.ctrlKey && (event.key === 'r' || event.key === 'R')) {
+    if (history.length === 0) return
+    event.preventDefault()
+    if (!historySearchOpen.value) {
+      historySearchOpen.value = true
+      historySearchIndex.value = 0
+    } else if (historyMatches.value.length > 0) {
+      historySearchIndex.value = (historySearchIndex.value + 1) % historyMatches.value.length
+    }
+    return
+  }
+
+  if (historySearchOpen.value) {
+    if (event.key === 'Escape') {
+      event.preventDefault()
+      closeHistorySearch()
+      return
+    }
+    if (event.key === 'Enter') {
+      // 搜索态回车 = 选中回填;再按一次回车才执行
+      const match = historyMatches.value[historySearchIndex.value]
+      if (match) {
+        event.preventDefault()
+        pickHistory(match.text)
+      }
+      return
+    }
+    if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+      if (historyMatches.value.length === 0) return
+      event.preventDefault()
+      const delta = event.key === 'ArrowUp' ? -1 : 1
+      const count = historyMatches.value.length
+      historySearchIndex.value = (historySearchIndex.value + delta + count) % count
+      return
+    }
+  }
+
   if (event.key === 'Enter') {
     const command = draft.value.trim()
     if (!command) return
@@ -235,6 +324,7 @@ function handleInputKeydown(event: KeyboardEvent): void {
     if (history.length > 100) history.shift()
     historyIndex = -1
     draft.value = ''
+    closeHistorySearch()
     emit('submit', command)
     return
   }
@@ -621,6 +711,7 @@ watch(scrollElement, (element, previous) => {
   font-size: 11px;
 }
 .gui-input-row {
+  position: relative;
   flex: none;
   display: flex;
   align-items: center;
@@ -628,6 +719,50 @@ watch(scrollElement, (element, previous) => {
   padding: 7px 12px;
   border-top: 1px solid color-mix(in srgb, var(--terminal-fg) 10%, transparent);
   background: color-mix(in srgb, var(--terminal-fg) 4%, var(--terminal-bg));
+}
+.history-search {
+  position: absolute;
+  right: 12px;
+  bottom: 100%;
+  left: 12px;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  max-height: 260px;
+  margin-bottom: 6px;
+  padding: 4px;
+  overflow-y: auto;
+  border: 1px solid color-mix(in srgb, var(--terminal-fg) 16%, transparent);
+  border-radius: 8px;
+  background: var(--terminal-bg);
+  box-shadow: 0 6px 18px rgb(0 0 0 / 35%);
+}
+.history-search__empty {
+  padding: 8px 10px;
+  color: color-mix(in srgb, var(--terminal-fg) 50%, transparent);
+  font-size: 11px;
+}
+.history-search__item {
+  display: block;
+  padding: 4px 8px;
+  border: none;
+  border-radius: 6px;
+  color: color-mix(in srgb, var(--terminal-fg) 80%, transparent);
+  background: transparent;
+  font-family: 'Cascadia Mono', Consolas, 'Noto Sans Mono', monospace;
+  font-size: 12px;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+.history-search__item.is-active {
+  background: color-mix(in srgb, var(--el-color-primary) 22%, var(--terminal-bg));
+}
+.history-search__char.is-hit {
+  color: var(--el-color-primary);
+  font-weight: 700;
 }
 .gui-input-row:focus-within {
   background: color-mix(in srgb, var(--terminal-fg) 7%, var(--terminal-bg));
