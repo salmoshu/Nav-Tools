@@ -1,5 +1,10 @@
 <template>
-  <div class="terminal-pane" :class="{ focused }" @pointerdown="focusPane">
+  <div
+    class="terminal-pane"
+    :class="{ focused }"
+    @pointerdown="focusPane"
+    @keydown="handlePaneKeydown"
+  >
     <header class="pane-header">
       <div class="pane-actions">
         <el-tooltip
@@ -17,6 +22,21 @@
             @click="$emit('toggle-presentation', pane.id)"
           >
             <el-icon><component :is="isGui ? TerminalIcon : LayoutGrid" /></el-icon>
+          </el-button>
+        </el-tooltip>
+        <el-tooltip
+          v-if="pane.sessionId"
+          :content="t('common.terminal.searchPlaceholder')"
+          placement="bottom"
+          :show-after="400"
+        >
+          <el-button
+            text
+            class="pane-action"
+            :aria-label="t('common.terminal.searchPlaceholder')"
+            @click="openSearch"
+          >
+            <el-icon><Search /></el-icon>
           </el-button>
         </el-tooltip>
         <el-tooltip
@@ -164,6 +184,44 @@
     </div>
 
     <div v-show="pane.sessionId" class="session-body">
+      <!-- Ctrl+F 搜索条:终端视图走 SearchAddon,GUI 视图把查询词下传做块内高亮导航 -->
+      <div v-if="searchVisible" class="session-search">
+        <el-icon class="session-search__icon"><Search /></el-icon>
+        <input
+          ref="searchInputElement"
+          v-model="searchQuery"
+          class="session-search__input"
+          type="text"
+          spellcheck="false"
+          autocomplete="off"
+          :placeholder="t('common.terminal.searchPlaceholder')"
+          :aria-label="t('common.terminal.searchPlaceholder')"
+          @keydown="handleSearchKeydown"
+          @input="handleSearchInput"
+        />
+        <span v-if="searchStatus" class="session-search__status">{{ searchStatus }}</span>
+        <el-button
+          text
+          class="session-search__action"
+          :aria-label="t('common.terminal.searchPrevious')"
+          @click="searchPrevious"
+          ><el-icon><ArrowUpBold /></el-icon
+        ></el-button>
+        <el-button
+          text
+          class="session-search__action"
+          :aria-label="t('common.terminal.searchNext')"
+          @click="searchNext"
+          ><el-icon><ArrowDownBold /></el-icon
+        ></el-button>
+        <el-button
+          text
+          class="session-search__action"
+          :aria-label="t('common.terminal.searchClose')"
+          @click="closeSearch"
+          ><el-icon><CloseBold /></el-icon
+        ></el-button>
+      </div>
       <div v-if="guiDegraded" class="gui-degraded" role="status">
         <span class="gui-degraded__hint">{{ t('common.terminal.guiDegradedHint') }}</span>
         <el-button
@@ -186,9 +244,13 @@
         :cwd="guiCwd"
         :cols="termCols"
         :session-id="sessionInfo?.id"
+        :search-query="searchVisible ? searchQuery : ''"
+        :search-next-tick="searchNextTick"
+        :search-prev-tick="searchPrevTick"
         @rerun="rerunCommand"
         @copy="writeClipboardText"
         @submit="rerunCommand"
+        @search-status="handleSearchStatus"
       />
       <div v-if="sessionDisconnected" class="session-disconnected" role="status">
         <span class="session-disconnected__icon"><WarningFilled /></span>
@@ -253,7 +315,10 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, shallowRef, watch } from 'vue'
 import {
+  ArrowDownBold,
+  ArrowUpBold,
   Close,
+  CloseBold,
   Connection,
   FolderOpened,
   FullScreen,
@@ -263,11 +328,13 @@ import {
   RefreshRight,
   Right,
   ScaleToOriginal,
+  Search,
   WarningFilled,
 } from '@element-plus/icons-vue'
 import { SquareSplitVertical, LayoutGrid, Terminal as TerminalIcon } from '@lucide/vue'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
+import { SearchAddon } from '@xterm/addon-search'
 import '@xterm/xterm/css/xterm.css'
 import { t } from '@/i18n'
 import { CommandBlockAssembler, type TerminalCommandBlock } from '@/core/terminal/CommandBlocks'
@@ -385,6 +452,83 @@ function rerunCommand(command: string): void {
 
 let terminal: Terminal | undefined
 let fitAddon: FitAddon | undefined
+let searchAddon: SearchAddon | undefined
+
+/** 搜索条状态:查询词与导航计数下传给 GUI 视图;终端视图直接驱动 SearchAddon */
+const searchVisible = ref(false)
+const searchQuery = ref('')
+const searchNextTick = ref(0)
+const searchPrevTick = ref(0)
+const searchInputElement = ref<HTMLInputElement | null>(null)
+/** GUI 视图回报的命中状态,如 `3/17`;终端视图无此回报,保持空 */
+const searchStatus = ref('')
+
+function focusSearchInput(): void {
+  void nextTick(() => searchInputElement.value?.focus())
+}
+
+function openSearch(): void {
+  searchVisible.value = true
+  focusSearchInput()
+}
+
+function closeSearch(): void {
+  searchVisible.value = false
+  searchQuery.value = ''
+  searchStatus.value = ''
+  if (isGui.value && !guiDegraded.value) return
+  terminal?.focus()
+}
+
+/** 终端视图下的增量搜索:每敲一个字立即重新定位 */
+function handleSearchInput(): void {
+  if (isGui.value || guiDegraded.value || !searchAddon) return
+  if (!searchQuery.value) return
+  searchAddon.findNext(searchQuery.value, { incremental: true })
+}
+
+function searchNext(): void {
+  if (isGui.value && !guiDegraded.value) {
+    searchNextTick.value += 1
+    return
+  }
+  if (searchQuery.value) searchAddon?.findNext(searchQuery.value)
+}
+
+function searchPrevious(): void {
+  if (isGui.value && !guiDegraded.value) {
+    searchPrevTick.value += 1
+    return
+  }
+  if (searchQuery.value) searchAddon?.findPrevious(searchQuery.value)
+}
+
+function handleSearchKeydown(event: KeyboardEvent): void {
+  if (event.isComposing) return
+  if (event.key === 'Enter') {
+    event.preventDefault()
+    if (event.shiftKey) searchPrevious()
+    else searchNext()
+    return
+  }
+  if (event.key === 'Escape') {
+    event.preventDefault()
+    closeSearch()
+  }
+}
+
+function handleSearchStatus(total: number, current: number): void {
+  searchStatus.value = total > 0 ? `${current}/${total}` : ''
+}
+
+/** GUI 视图没有 xterm 键处理链,靠组件根上的按键捕获打开搜索 */
+function handlePaneKeydown(event: KeyboardEvent): void {
+  if (event.isComposing) return
+  if (event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 'f') {
+    event.preventDefault()
+    openSearch()
+  }
+}
 let resizeObserver: ResizeObserver | undefined
 /** xterm 当前列宽,GUI 视图折行续写判定用;fit 后同步 */
 const termCols = shallowRef(80)
@@ -743,6 +887,8 @@ onMounted(() => {
   })
   fitAddon = new FitAddon()
   terminal.loadAddon(fitAddon)
+  searchAddon = new SearchAddon()
+  terminal.loadAddon(searchAddon)
   if (terminalElement.value) terminal.open(terminalElement.value)
   termCols.value = terminal.cols
   terminal.onData((data) => {
@@ -758,6 +904,17 @@ onMounted(() => {
       props.capabilities.platform === 'darwin'
         ? event.metaKey && !event.ctrlKey
         : event.ctrlKey && !event.metaKey
+    // Ctrl/Cmd+F 打开搜索条,交给搜索输入框,不再透传给 shell
+    if (
+      primaryPasteModifier &&
+      !event.altKey &&
+      !event.shiftKey &&
+      (event.code === 'KeyF' || event.key.toLowerCase() === 'f')
+    ) {
+      event.preventDefault()
+      openSearch()
+      return false
+    }
     const isPasteShortcut =
       primaryPasteModifier &&
       !event.altKey &&
@@ -908,6 +1065,60 @@ function withTimeout<T>(
   display: flex;
   flex-direction: column;
   background: var(--terminal-bg);
+}
+.session-search {
+  position: absolute;
+  top: 8px;
+  right: 16px;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 6px;
+  border: 1px solid color-mix(in srgb, var(--terminal-fg) 18%, transparent);
+  border-radius: 8px;
+  background: var(--terminal-bg);
+  box-shadow: 0 4px 14px rgb(0 0 0 / 35%);
+}
+.session-search__icon {
+  flex: none;
+  color: color-mix(in srgb, var(--terminal-fg) 55%, transparent);
+  font-size: 13px;
+}
+.session-search__input {
+  width: 200px;
+  padding: 0 4px;
+  border: none;
+  outline: none;
+  color: var(--terminal-fg);
+  background: transparent;
+  font-family: 'Cascadia Mono', Consolas, 'Noto Sans Mono', monospace;
+  font-size: 12px;
+  line-height: 20px;
+}
+.session-search__input::placeholder {
+  color: color-mix(in srgb, var(--terminal-fg) 38%, transparent);
+}
+.session-search__status {
+  flex: none;
+  min-width: 36px;
+  color: color-mix(in srgb, var(--terminal-fg) 55%, transparent);
+  font-family: 'Cascadia Mono', Consolas, 'Noto Sans Mono', monospace;
+  font-size: 11px;
+  text-align: center;
+  user-select: none;
+}
+.session-search__action {
+  width: 22px;
+  height: 22px;
+  margin: 0;
+  padding: 0;
+  border-radius: 5px;
+  color: color-mix(in srgb, var(--terminal-fg) 60%, transparent);
+}
+.session-search__action:hover {
+  color: var(--terminal-fg);
+  background: color-mix(in srgb, var(--terminal-fg) 10%, transparent);
 }
 .session-disconnected {
   min-height: 44px;

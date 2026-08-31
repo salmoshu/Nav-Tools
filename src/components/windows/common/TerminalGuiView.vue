@@ -11,6 +11,7 @@
         :key="entry.block.id"
         class="command-block"
         :class="blockStatus(entry.block)"
+        :data-block-id="entry.block.id"
       >
         <header class="command-block__header" @click="toggleCollapsed(entry.block.id)">
           <span class="command-block__status" aria-hidden="true"></span>
@@ -115,13 +116,40 @@
                 :title="t('common.terminal.guiPathClickHint')"
                 href="#"
                 @click.prevent="togglePreview(entry.block, segment.path)"
-                >{{ segment.text }}</a
+                ><template v-if="segment.parts.length">
+                  <span
+                    v-for="(part, partIndex) in segment.parts"
+                    :key="partIndex"
+                    class="search-hit"
+                    :class="{ 'is-hit': part.hit, 'is-current': part.current }"
+                    >{{ part.text }}</span
+                  >
+                </template>
+                <template v-else>{{ segment.text }}</template></a
               >
               <span
                 v-else-if="segment.path"
                 class="command-block__path-candidate"
                 @mouseenter="probePath(segment.path)"
-                >{{ segment.text }}</span
+                ><template v-if="segment.parts.length">
+                  <span
+                    v-for="(part, partIndex) in segment.parts"
+                    :key="partIndex"
+                    class="search-hit"
+                    :class="{ 'is-hit': part.hit, 'is-current': part.current }"
+                    >{{ part.text }}</span
+                  >
+                </template>
+                <template v-else>{{ segment.text }}</template></span
+              >
+              <span v-else-if="segment.parts.length"
+                ><span
+                  v-for="(part, partIndex) in segment.parts"
+                  :key="partIndex"
+                  class="search-hit"
+                  :class="{ 'is-hit': part.hit, 'is-current': part.current }"
+                  >{{ part.text }}</span
+                ></span
               >
               <span v-else>{{ segment.text }}</span>
             </template>
@@ -223,11 +251,19 @@ const props = defineProps<{
   cols?: number
   /** 会话标识,用于把输出里的路径候选解析到正确的文件系统(本机 / WSL / SSH) */
   sessionId?: string
+  /** 父级搜索条的查询词;空串表示搜索未激活 */
+  searchQuery?: string
+  /** 「下一条」触发计数,父级每点击/回车一次自增 */
+  searchNextTick?: number
+  /** 「上一条」触发计数 */
+  searchPrevTick?: number
 }>()
 const emit = defineEmits<{
   rerun: [command: string]
   copy: [text: string]
   submit: [text: string]
+  /** 搜索状态回报:命中总数与当前序号(1 起);总数为 0 表示无命中 */
+  'search-status': [total: number, current: number]
 }>()
 
 /** 路径预览最大读取字节数:预览不需要整个文件,超限时交给 truncated 提示 */
@@ -352,26 +388,149 @@ function displayOutput(block: TerminalCommandBlock): string {
   return normalizeTerminalLayout(block.output, props.cols ?? 80).trim()
 }
 
+/** 每块归一化输出:搜索与切片共用,避免同一周期重复做布局归一化 */
+const blockOutputs = computed(() => props.blocks.map((block) => displayOutput(block)))
+
+/** 文本搜索的命中:块下标 + 在该块归一化输出里的绝对区间(供高亮与导航) */
+interface SearchMatch {
+  blockIndex: number
+  start: number
+  end: number
+}
+
+const searchMatches = computed<SearchMatch[]>(() => {
+  const query = props.searchQuery?.trim() ?? ''
+  if (!query) return []
+  const needle = query.toLowerCase()
+  const matches: SearchMatch[] = []
+  blockOutputs.value.forEach((output, blockIndex) => {
+    const haystack = output.toLowerCase()
+    let cursor = 0
+    for (;;) {
+      const found = haystack.indexOf(needle, cursor)
+      if (found === -1) break
+      matches.push({ blockIndex, start: found, end: found + needle.length })
+      cursor = found + Math.max(1, needle.length)
+    }
+  })
+  return matches
+})
+
+const activeMatchIndex = ref(0)
+
+function emitSearchStatus(): void {
+  const total = searchMatches.value.length
+  emit('search-status', total, total > 0 ? activeMatchIndex.value + 1 : 0)
+}
+
+/** 把当前命中滚动进可视区;用户在导航历史,吸底逻辑应让位 */
+function scrollActiveMatchIntoView(): void {
+  const match = searchMatches.value[activeMatchIndex.value]
+  if (!match) return
+  const block = props.blocks[match.blockIndex]
+  scrollElement.value
+    ?.querySelector(`[data-block-id="${block?.id}"]`)
+    ?.scrollIntoView({ block: 'center' })
+}
+
+function stepActiveMatch(direction: 1 | -1): void {
+  const total = searchMatches.value.length
+  if (total === 0) return
+  activeMatchIndex.value = (activeMatchIndex.value + direction + total) % total
+  emitSearchStatus()
+  scrollActiveMatchIntoView()
+}
+
+watch(
+  () => props.searchQuery,
+  async () => {
+    activeMatchIndex.value = 0
+    emitSearchStatus()
+    if (searchMatches.value.length > 0) {
+      await nextTick()
+      scrollActiveMatchIntoView()
+    }
+  },
+)
+watch(
+  searchMatches,
+  () => {
+    if (activeMatchIndex.value >= searchMatches.value.length) activeMatchIndex.value = 0
+    emitSearchStatus()
+  },
+)
+watch(
+  () => props.searchNextTick,
+  () => stepActiveMatch(1),
+)
+watch(
+  () => props.searchPrevTick,
+  () => stepActiveMatch(-1),
+)
+
+/** 搜索高亮切片:一段文本按命中区间切成小段,命中段标 hit,当前段标 current */
+interface SearchPart {
+  text: string
+  hit: boolean
+  current: boolean
+}
+
+function buildSearchParts(
+  text: string,
+  segmentStart: number,
+  blockMatches: SearchMatch[],
+  currentMatch: SearchMatch | undefined,
+): SearchPart[] {
+  if (blockMatches.length === 0) return []
+  const parts: SearchPart[] = []
+  let cursor = 0
+  for (const match of blockMatches) {
+    if (match.end <= segmentStart) continue
+    if (match.start >= segmentStart + text.length) break
+    const relStart = Math.max(0, match.start - segmentStart)
+    const relEnd = Math.min(text.length, match.end - segmentStart)
+    if (relStart > cursor) parts.push({ text: text.slice(cursor, relStart), hit: false, current: false })
+    parts.push({
+      text: text.slice(relStart, relEnd),
+      hit: true,
+      current: match === currentMatch,
+    })
+    cursor = relEnd
+  }
+  if (cursor < text.length) parts.push({ text: text.slice(cursor), hit: false, current: false })
+  return parts
+}
+
 /**
  * 归一化后的输出按路径候选切片,供模板直接渲染成可点击片段。
- *
- * 用 computed 而不是在模板里调函数,顺带修掉原来「同一块在一个渲染周期里
- * 做两次 normalizeTerminalLayout」的浪费。sniffed 是渲染侧内容嗅探结论:
- * 已有程序主动上报的富内容时不嗅探,避免同一份内容渲染两遍。
+ * 段带绝对起始下标,搜索激活时按命中区间再细分为高亮切片。
+ * sniffed 是渲染侧内容嗅探结论:已有程序主动上报的富内容时不嗅探,
+ * 避免同一份内容渲染两遍。
  */
-const renderedBlocks = computed(() =>
-  props.blocks.map((block) => {
-    const output = displayOutput(block)
+const renderedBlocks = computed(() => {
+  const queryActive = (props.searchQuery?.trim() ?? '').length > 0
+  return props.blocks.map((block, blockIndex) => {
+    const output = blockOutputs.value[blockIndex] ?? ''
     const sniffed = block.rich?.length ? null : sniffContent(output)
+    const blockMatches = queryActive
+      ? searchMatches.value.filter((match) => match.blockIndex === blockIndex)
+      : []
+    const currentMatch = queryActive ? searchMatches.value[activeMatchIndex.value] : undefined
+    let offset = 0
+    const segments = splitOutputByPaths(output).map((segment) => {
+      const parts = buildSearchParts(segment.text, offset, blockMatches, currentMatch)
+      offset += segment.text.length
+      return { ...segment, parts }
+    })
     return {
       block,
       output,
-      segments: splitOutputByPaths(output),
+      segments,
       /** 嗅探命中时的等价富内容负载;未命中为 undefined,模板按普通文本渲染 */
       sniffedPayload: sniffed ? buildSniffedPayload(sniffed, output) : undefined,
     }
-  }),
-)
+  })
+})
 
 /** 用户显式要求看原始输出的块;嗅探富化一律可一键撤销 */
 const rawView = ref(new Set<number>())
@@ -709,6 +868,17 @@ watch(scrollElement, (element, previous) => {
   padding: 6px 10px;
   color: var(--el-color-warning);
   font-size: 11px;
+}
+/* 文本搜索命中:全部命中给淡底,当前命中给主题色底 */
+.search-hit.is-hit {
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--el-color-warning) 40%, transparent);
+  color: var(--terminal-fg);
+}
+.search-hit.is-current {
+  border-radius: 3px;
+  background: var(--el-color-primary);
+  color: var(--terminal-bg);
 }
 .gui-input-row {
   position: relative;
