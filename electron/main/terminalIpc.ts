@@ -120,6 +120,13 @@ export function registerTerminalIpc(
       service.readSessionPath(request.sessionId, request.path, request.maxBytes),
   )
 
+  // 文件树面板:按会话类型列目录(本机/WSL/SSH 三通道)
+  ipcMain.handle(
+    'terminal-session-list-dir',
+    (_event, request: { sessionId: string; path: string }) =>
+      service.listSessionPath(request.sessionId, request.path),
+  )
+
   ipcMain.handle(
     'terminal-forward-start',
     (_event, request: { sessionId: string; rule: PortForwardRule }) =>

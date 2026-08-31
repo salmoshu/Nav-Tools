@@ -170,6 +170,12 @@ export interface TerminalPathStat {
   size: number
 }
 
+/** 会话上下文中的一个目录列表;`resolvedPath` 形态随会话类型而变(见 TerminalPathStat) */
+export interface TerminalSessionDir {
+  resolvedPath: string
+  entries: SftpEntry[]
+}
+
 /** 按扩展名猜出的 MIME;用于复用富内容渲染器做块内预览 */
 export interface TerminalPathRead {
   mime: string

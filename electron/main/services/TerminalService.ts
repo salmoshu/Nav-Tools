@@ -23,10 +23,12 @@ import {
   type TerminalCwdEvent,
   type TerminalPathRead,
   type TerminalPathStat,
+  type TerminalSessionDir,
   type TerminalSessionInfo,
   type TerminalSessionKind,
   type TerminalStatusEvent,
 } from '../../../src/core/terminal/TerminalTypes'
+import { parseFindListing, sortDirectoryEntries } from '../../../src/core/terminal/DirectoryListing'
 import { mimeFromPath } from '../../../src/core/terminal/FileMime'
 import { SshPortForwardService } from './SshPortForwardService'
 
@@ -36,6 +38,8 @@ const SSH_CONNECT_TIMEOUT_MS = 35_000
 const SSH_CHANNEL_TIMEOUT_MS = 15_000
 /** WSL 侧命令回传的字节上限(预览用,与 readSessionPath 的 maxBytes 对齐) */
 const WSL_OUTPUT_MAX_BYTES = 8 * 1024 * 1024
+/** 单次列目录的条目上限:`/` 或 `node_modules` 这类目录不设限会拖死面板 */
+const MAX_DIR_ENTRIES = 2000
 const HOST_KEY_RESPONSE_TIMEOUT_MS = 30_000
 /** 让 bash 在每个提示符前上报 OSC 7 cwd;仅对 bash 注入,zsh/fish 跳过避免报错 */
 const OSC7_PROMPT_COMMAND = 'printf "\\e]7;file://%s%s\\e\\\\" "$HOSTNAME" "$PWD"'
@@ -466,6 +470,62 @@ export class TerminalService {
         size,
         truncated: size > maxBytes,
       }
+    } catch {
+      return null
+    }
+  }
+
+  /**
+   * 列出会话上下文中的一个目录,供文件树面板使用。
+   *
+   * 与 `statSessionPath` / `readSessionPath` 共用路径解析与三通道(本机 fs、
+   * WSL 转发、SSH SFTP),条目类型统一为 `SftpEntry`。列不出来返回 null,
+   * 由面板决定怎么提示。
+   */
+  public async listSessionPath(
+    sessionId: string,
+    rawPath: string,
+  ): Promise<TerminalSessionDir | null> {
+    const session = this.sessions.get(sessionId)
+    if (!session) return null
+    const target = this.resolveSessionPath(session, rawPath)
+    if (!target) return null
+
+    try {
+      if (target.kind === 'ssh') {
+        return { resolvedPath: target.path, entries: await this.listSftp(sessionId, target.path) }
+      }
+      if (target.kind === 'wsl') {
+        if (!target.distro) return null
+        // 单次 find 同时取类型/大小/时间,省掉逐条 stat 的跨系统往返(GNU find 各发行版都有)
+        const output = await this.wslExec(
+          target.distro,
+          'find "$1" -mindepth 1 -maxdepth 1 -printf "%y\t%s\t%T@\t%f\n"',
+          [target.path],
+        )
+        return { resolvedPath: target.path, entries: parseFindListing(output, target.path) }
+      }
+      const names = await fs.readdir(target.path)
+      const entries = await Promise.all(
+        names.slice(0, MAX_DIR_ENTRIES).map(async (name) => {
+          const entryPath = path.win32.join(target.path, name)
+          try {
+            const stats = await fs.stat(entryPath)
+            return {
+              name,
+              path: entryPath,
+              directory: stats.isDirectory(),
+              size: stats.size,
+              modifiedAt: stats.mtimeMs,
+              mode: stats.mode,
+            }
+          } catch {
+            // 权限不足或文件在列表期间已消失:仍列出条目,不拖垮整个目录
+            return { name, path: entryPath, directory: false, size: 0, modifiedAt: 0, mode: 0 }
+          }
+        }),
+      )
+      return { resolvedPath: target.path, entries: sortDirectoryEntries(entries) }
     } catch {
       return null
     }

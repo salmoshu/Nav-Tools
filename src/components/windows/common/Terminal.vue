@@ -1,6 +1,12 @@
 <template>
   <div ref="workbenchElement" class="terminal-workbench">
     <TerminalSftpPanel v-if="activeSftpSessionId" :session-id="activeSftpSessionId" />
+    <TerminalFileTreePanel
+      v-if="activeFileTreeSessionId"
+      :session-id="activeFileTreeSessionId"
+      :kind="activeFileTreeKind"
+      :local-shell="activeFileTreeLocalShell"
+    />
     <div class="terminal-workbench__main">
       <div class="terminal-tabs">
         <draggable
@@ -111,6 +117,34 @@
         </draggable>
         <div class="terminal-tabs__actions">
           <el-tooltip
+            v-if="activeReadySessionId"
+            :content="t('common.terminal.openFileTree')"
+            placement="bottom"
+          >
+            <el-button
+              text
+              class="tab-action tab-action--files"
+              :class="{ active: Boolean(activeFileTreeSessionId) }"
+              :aria-label="t('common.terminal.openFileTree')"
+              :aria-pressed="Boolean(activeFileTreeSessionId)"
+              @click="toggleActiveTabFileTree"
+            >
+              <el-icon><Files /></el-icon>
+            </el-button>
+          </el-tooltip>
+          <el-tooltip :content="t('common.terminal.openPresets')" placement="bottom">
+            <el-button
+              text
+              class="tab-action tab-action--presets"
+              :class="{ active: activePresetsOpen }"
+              :aria-label="t('common.terminal.openPresets')"
+              :aria-pressed="activePresetsOpen"
+              @click="toggleActiveTabPresets"
+            >
+              <el-icon><Lightning /></el-icon>
+            </el-button>
+          </el-tooltip>
+          <el-tooltip
             v-if="activeSftpTargetSessionId"
             :content="t('common.terminal.openSftp')"
             placement="bottom"
@@ -159,6 +193,12 @@
         </div>
       </div>
     </div>
+    <TerminalPresetPanel
+      v-if="activePresetsOpen"
+      :session-id="activeReadySessionId"
+      :kind="activeReadyKind"
+      :local-shell="activeReadyLocalShell"
+    />
   </div>
 </template>
 
@@ -167,7 +207,9 @@ import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import {
   Close,
   Connection,
+  Files,
   FolderOpened,
+  Lightning,
   Monitor,
   Platform,
   Plus,
@@ -203,6 +245,7 @@ import {
   sshConnectionKey,
   type HostKeyMismatchEvent,
   type HostKeyPromptEvent,
+  type LocalShellKind,
   type SshConnectionProfile,
   type TerminalCapabilities,
   type TerminalCwdEvent,
@@ -212,7 +255,9 @@ import {
 } from '@/core/terminal/TerminalTypes'
 import { TerminalProfileStorage } from '@/core/terminal/TerminalProfileStorage'
 import emitter from '@/hooks/useMitt'
+import TerminalFileTreePanel from './TerminalFileTreePanel.vue'
 import TerminalLayoutNodeComponent from './TerminalLayoutNode.vue'
+import TerminalPresetPanel from './TerminalPresetPanel.vue'
 import TerminalSftpPanel from './TerminalSftpPanel.vue'
 
 const SESSION_CREATE_TIMEOUT_MS = 20_000
@@ -230,6 +275,9 @@ const workbenchElement = ref<HTMLDivElement | null>(null)
 const autoOpenSshPaneId = ref('')
 const expandedPaneByTabId = ref<Record<string, string | undefined>>({})
 const sftpSessionByTabId = ref<Record<string, string | undefined>>({})
+/** tab → 文件树面板绑定的会话;任意类型的就绪会话都可用,不限于 SSH */
+const fileTreeSessionByTabId = ref<Record<string, string | undefined>>({})
+const presetOpenByTabId = ref<Record<string, boolean | undefined>>({})
 const renamingTabId = ref('')
 const renameValue = ref('')
 const renameInput = ref<HTMLInputElement[]>([])
@@ -289,6 +337,46 @@ const activeSftpTargetSessionId = computed(() => {
     return session?.kind === 'ssh' && session.status === 'ready'
   })?.sessionId
 })
+/** 当前 tab 里可写入命令的会话:优先聚焦窗格,否则取第一个就绪会话 */
+const activeReadySession = computed<TerminalSessionInfo | undefined>(() => {
+  const focusedPane = activeFocusedPaneId.value
+    ? findTerminalPane(activeTab.value?.root, activeFocusedPaneId.value)
+    : undefined
+  const focused = focusedPane?.sessionId ? sessionInfos.value[focusedPane.sessionId] : undefined
+  if (focused?.status === 'ready') return focused
+  return activePanes.value
+    .map((pane) => (pane.sessionId ? sessionInfos.value[pane.sessionId] : undefined))
+    .find((session) => session?.status === 'ready')
+})
+const activeReadySessionId = computed(() => activeReadySession.value?.id)
+const activeReadyKind = computed(() => activeReadySession.value?.kind ?? 'local')
+const activeReadyLocalShell = computed(() => localShellForSession(activeReadySessionId.value))
+const activeFileTreeSessionId = computed(() => {
+  const tabId = activeTab.value?.id
+  const sessionId = tabId ? fileTreeSessionByTabId.value[tabId] : undefined
+  const session = sessionId ? sessionInfos.value[sessionId] : undefined
+  return session?.status === 'ready' ? sessionId : undefined
+})
+const activeFileTreeKind = computed(
+  () =>
+    (activeFileTreeSessionId.value
+      ? sessionInfos.value[activeFileTreeSessionId.value]?.kind
+      : undefined) ?? 'local',
+)
+const activeFileTreeLocalShell = computed(() => localShellForSession(activeFileTreeSessionId.value))
+const activePresetsOpen = computed(() =>
+  activeTab.value ? presetOpenByTabId.value[activeTab.value.id] === true : false,
+)
+
+/** 预设命令与文件树的 cd 都要按 shell 家族转义,本机会话的家族取决于启动的 shell */
+function localShellForSession(sessionId: string | undefined): LocalShellKind | undefined {
+  if (!sessionId) return undefined
+  for (const tab of tabs.value) {
+    const pane = listTerminalPanes(tab.root).find((entry) => entry.sessionId === sessionId)
+    if (pane) return pane.launch?.kind === 'local' ? pane.launch.localShell : undefined
+  }
+  return undefined
+}
 const shortcutPlatform = computed(() => capabilities.value.platform || 'win32')
 const allProfiles = computed(() => {
   const savedIds = new Set(savedProfiles.value.map((profile) => profile.id))
@@ -389,6 +477,12 @@ async function closeTab(tabId: string): Promise<void> {
   const sftpSessions = { ...sftpSessionByTabId.value }
   delete sftpSessions[tabId]
   sftpSessionByTabId.value = sftpSessions
+  const fileTreeSessions = { ...fileTreeSessionByTabId.value }
+  delete fileTreeSessions[tabId]
+  fileTreeSessionByTabId.value = fileTreeSessions
+  const presetPanels = { ...presetOpenByTabId.value }
+  delete presetPanels[tabId]
+  presetOpenByTabId.value = presetPanels
   if (tabs.value.length === 0) tabs.value = [createTerminalTab(t('common.terminal.terminal'))]
   if (activeTabId.value === tabId) {
     activeTabId.value = tabs.value[Math.min(tabIndex, tabs.value.length - 1)].id
@@ -533,6 +627,9 @@ function setPaneSession(
   if (previousSessionId && sftpSessionByTabId.value[tab.id] === previousSessionId) {
     sftpSessionByTabId.value = { ...sftpSessionByTabId.value, [tab.id]: session.id }
   }
+  if (previousSessionId && fileTreeSessionByTabId.value[tab.id] === previousSessionId) {
+    fileTreeSessionByTabId.value = { ...fileTreeSessionByTabId.value, [tab.id]: session.id }
+  }
   if (launch?.kind === 'ssh' && session.status === 'ready') {
     notifySshSessionReady(tab.id, paneId, launch)
   }
@@ -588,6 +685,25 @@ function toggleActiveTabSftp(): void {
   sftpSessionByTabId.value = {
     ...sftpSessionByTabId.value,
     [tab.id]: activeSftpSessionId.value ? undefined : sessionId,
+  }
+}
+
+function toggleActiveTabFileTree(): void {
+  const tab = activeTab.value
+  const sessionId = activeReadySessionId.value
+  if (!tab || !sessionId) return
+  fileTreeSessionByTabId.value = {
+    ...fileTreeSessionByTabId.value,
+    [tab.id]: activeFileTreeSessionId.value ? undefined : sessionId,
+  }
+}
+
+function toggleActiveTabPresets(): void {
+  const tab = activeTab.value
+  if (!tab) return
+  presetOpenByTabId.value = {
+    ...presetOpenByTabId.value,
+    [tab.id]: !presetOpenByTabId.value[tab.id],
   }
 }
 
@@ -658,6 +774,9 @@ async function closePane(paneId: string): Promise<void> {
     sessionInfos.value = infos
     if (sftpSessionByTabId.value[tab.id] === pane.sessionId) {
       sftpSessionByTabId.value = { ...sftpSessionByTabId.value, [tab.id]: undefined }
+    }
+    if (fileTreeSessionByTabId.value[tab.id] === pane.sessionId) {
+      fileTreeSessionByTabId.value = { ...fileTreeSessionByTabId.value, [tab.id]: undefined }
     }
   }
   const result = removeTerminalPane(tab.root, paneId)
@@ -1159,7 +1278,9 @@ function withTimeout<T>(
   color: var(--app-text);
   background: var(--app-hover);
 }
-.terminal-tabs__actions :deep(.tab-action--sftp.active) {
+.terminal-tabs__actions :deep(.tab-action--sftp.active),
+.terminal-tabs__actions :deep(.tab-action--files.active),
+.terminal-tabs__actions :deep(.tab-action--presets.active) {
   color: var(--el-color-primary);
   background: color-mix(in srgb, var(--el-color-primary) 12%, transparent);
 }
