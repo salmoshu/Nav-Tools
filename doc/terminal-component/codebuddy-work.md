@@ -356,3 +356,39 @@ npx vitest run tests/unit/shell-quote.test.ts tests/unit/directory-listing.test.
   关键坑：`.command-block` 的 `overflow: hidden` 会把块变成滚动容器、sticky 失效，
   改为 `overflow: clip`（同样裁圆角但不创建滚动容器）。
 - **待统一验证**：吸顶视觉效果、与「渲染/原始」切换、搜索高亮、块内预览共存时的表现。
+  （自动化：构建通过；真机点击待用户本地 `pnpm dev` 验收，见 §10.3。）
+
+### 10.3 统一验证结论（2026-09-01，随 v1.5.0 收尾）
+
+用户授权后执行操作 1（应用内统一验证的自动化部分）；操作 2（目录点击就地展开文件树）按用户要求暂不做。
+本机环境无法驱动 Electron GUI（无显示器），故「真机点击」仅列出待用户本地验收项，自动化部分已全部跑通。
+
+**自动化验证（CLI 全绿项）：**
+
+| 检查项 | 结果 | 说明 |
+|---|---|---|
+| `vue-tsc --noEmit` 类型检查 | ✅ 通过 | 渲染进程无类型错误 |
+| `vitest run` 全量测试 | ✅ 574 通过 / ⚠️ 2 存量失败 | `label-ocr`（OCR 断言）、`nsat-perf`（缺失 ESSZ 桌面 `rs.txt` fixture）均为环境依赖型存量失败，与本次批次无关 |
+| `eslint` 全量 | ⚠️ 1 error + 128 warn（**存量**） | 唯一 error 在 `src/core/file/TextFileStreamService.ts:25`（`no-constant-condition`），该文件不在本分支改动内（最近改动于 v1.2.0），属历史债务；warn 多为 `vue/attributes-order` 全仓通病 |
+| `prettier --check` | ⚠️ 96 文件标红（**存量**） | 全仓历史风格债务；本批次新建文件已格式化，未顺手改存量文件以免 diff 爆炸 |
+| `build:dir`（vue-tsc + vite 渲染/main/preload）| ✅ 通过 | 三端均成功编译打包，无导入/模板错误（chunk 体积告警为存量非错误）|
+
+**9 处功能逐项映射：**
+
+| # | 功能 | 自动化覆盖 | 仍需用户真机点击 |
+|---|---|---|---|
+| 1 | 文件树面板（三通道/懒加载）| 路径解析 `resolveSessionPath` 间接覆盖 | ✅ 面板展开/点击 |
+| 2 | 预设命令面板 | `preset-storage.test.ts` 覆盖存储 | ✅ 面板弹出/执行 |
+| 3 | 预设 L2 表单（主进程转义）| `command-template.test.ts` 覆盖模板解析 + shell 转义 | 表单交互 |
+| 4 | 命令补全 | `command-completion.test.ts`（16 例）✅ | 输入触发 UI |
+| 5 | 块间导航 | `command-blocks.test.ts` 覆盖块模型 | Alt+↑↓/Alt+E 跳转 |
+| 6 | 回显 bug 修复 | 仅构建验证 + 修复逻辑 | ✅ **必须真机**：原始视图输入 `ls` 可见 |
+| 7 | 块头吸顶 | 仅构建验证（CSS）| ✅ **必须真机**：`cat` 长文档滚动看吸顶 |
+| 8 | 目录嗅探呈现 | `content-sniff.test.ts` ✅ | 嗅探触发 UI |
+| 9 | `cat` Markdown 渲染 | `terminal-rich-content.test.ts` ✅ | 渲染样式核对 |
+
+**结论：** 纯逻辑层（3/4/5/8/9）已被单测覆盖并能通过构建；1/2 有存储层测试；
+6（回显）与 7（吸顶）为结构性修复，只能靠真机确认。
+
+**待用户本地 `pnpm dev` 验收：** 原始视图输入命令可见（#6）、`cat` 长文档块头吸顶（#7），
+及文件树/预设/补全/块导航（#1-5）。操作 2 待用户需要时再补。
