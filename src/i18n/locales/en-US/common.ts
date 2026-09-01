@@ -224,6 +224,7 @@ export default {
     maximizePaneShortcut: 'Maximize pane (Ctrl/Cmd+Shift+Enter)',
     restorePane: 'Restore Pane',
     closePaneShortcut: 'Close Pane (Ctrl+W)',
+    movePaneActions: 'Drag to move the action bar (snapped to the right)',
     openSftp: 'Open SFTP File Panel',
     refresh: 'Refresh',
     fileTree: 'File Tree',

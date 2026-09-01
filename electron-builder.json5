@@ -58,9 +58,10 @@
     "icon": "public/logo_transparent.png"
   },
   "nsis": {
-    "oneClick": false,
+    // oneClick 安装器:更新安装(非静默)时显示一个只有进度条的小窗口,
+    // 带标准标题栏可最小化,没有向导页;手动双击 exe 同样直接安装到默认目录
+    "oneClick": true,
     "perMachine": false,
-    "allowToChangeInstallationDirectory": true,
     "deleteAppDataOnUninstall": false,
     "installerIcon": "public/favicon.ico",
     "uninstallerIcon": "public/favicon.ico"

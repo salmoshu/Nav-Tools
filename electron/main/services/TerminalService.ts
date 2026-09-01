@@ -30,7 +30,11 @@ import {
 } from '../../../src/core/terminal/TerminalTypes'
 import { parseFindListing, sortDirectoryEntries } from '../../../src/core/terminal/DirectoryListing'
 import { interpolateCommandTemplate } from '../../../src/core/terminal/CommandTemplate'
-import { buildShellCommand, shellFamilyFor, type ShellFamily } from '../../../src/core/terminal/ShellQuote'
+import {
+  buildShellCommand,
+  shellFamilyFor,
+  type ShellFamily,
+} from '../../../src/core/terminal/ShellQuote'
 import { mimeFromPath } from '../../../src/core/terminal/FileMime'
 import { SshPortForwardService } from './SshPortForwardService'
 
@@ -588,13 +592,20 @@ export class TerminalService {
     if (kind === 'wsl') {
       const distro = (session as LocalSession).request.wslDistro
       if (!distro) return null
-      const cwd = session.info.cwd || '~'
+      const cwd = session.info.cwd
+      // cwd 未知(非 bash shell 或首个提示符之前)时不能用 path.posix.resolve:
+      // 它会把宿主(Windows)进程 cwd 拼进结果,该路径在 WSL 内不存在,
+      // find/stat 必然失败(文件树报 "unable to list directory" 的来源)。
+      // 此时保留相对路径,交给 WSL shell 在自己的起始目录解析。
+      if (!cwd && !path.posix.isAbsolute(trimmed)) {
+        return { kind, distro, path: expandHomePosix(trimmed) || '.' }
+      }
       return {
         kind,
         distro,
         path: path.posix.isAbsolute(trimmed)
           ? path.posix.normalize(trimmed)
-          : path.posix.resolve(cwd, expandHomePosix(trimmed)),
+          : path.posix.resolve(cwd ?? '~', expandHomePosix(trimmed)),
       }
     }
     // 本机:cwd 已由 normalizeMsysPath 统一成 Windows 路径

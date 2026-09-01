@@ -61,11 +61,14 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-electron-builder-
 
-      # --publish never：发布由 release.yml 负责
+      # 构建产物但不发布:发布由 release.yml 负责
+      # 不用 pnpm run build -- --publish never:pnpm 在 ubuntu 下会把 `--` 原样拼进
+      # 脚本尾部(electron-builder -- --publish never),参数被当作位置参数忽略,
+      # 导致 electron-builder 因检测到 tag 仍尝试发布并报 GH_TOKEN 缺失。
       # 不注入 GITHUB_TOKEN:electron-builder 会拿它去请求其他仓库(electron/electron)的
       # API,触发限流型 createHttpError;构建期唯一外网请求(Electron zip)走 npmmirror 镜像
       - name: Build Release Files
-        run: pnpm run build -- --publish never
+        run: pnpm run build:dir && pnpm exec electron-builder --publish never
         timeout-minutes: 30  # 设置构建超时
         env:
           NODE_OPTIONS: --max-old-space-size=8192

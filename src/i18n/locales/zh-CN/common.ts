@@ -224,6 +224,7 @@ export default {
     maximizePaneShortcut: '最大化窗格（Ctrl/Cmd+Shift+Enter）',
     restorePane: '还原窗格',
     closePaneShortcut: '关闭窗格（Ctrl+W）',
+    movePaneActions: '拖动移动操作栏（吸附右侧）',
     openSftp: '打开 SFTP 文件面板',
     refresh: '刷新',
     fileTree: '文件树',

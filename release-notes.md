@@ -1,5 +1,12 @@
 # Nav-Tools 更新日志
 
+## v1.5.1
+
+- 更新安装改为 oneClick 进度条窗口：点击“立即重启”后显示安装进度，窗口可最小化，不再有安装向导页（手动运行安装包同样直接安装到默认目录）
+- 修复 GitHub Actions Ubuntu 构建失败：pnpm 在 Linux 下会把 `--` 原样拼入脚本尾部，导致 `--publish never` 失效、electron-builder 误尝试发布并报 GH_TOKEN 缺失；改为显式 `build:dir` + `electron-builder --publish never`
+- 终端窗格的操作栏（向右/向下分割等图标）新增拖动手柄，可沿右侧上下移动，水平方向始终吸附右侧
+- 修复 WSL 终端在未知当前目录时打开文件树报 “unable to list directory”：相对路径不再错误拼接宿主机进程目录
+
 ## v1.5.0
 
 - 终端命令感知渲染（批次 1-4）：嗅探命令语义，对 `ls` 等目录列举呈现文件树视图，`cat` 渲染 Markdown 为格式化内容，按 Warp 风格策略实现而非复制其代码

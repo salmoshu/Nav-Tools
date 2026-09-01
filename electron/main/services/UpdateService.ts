@@ -120,12 +120,11 @@ export class UpdateService {
 
   /**
    * 重启并安装已下载的更新。
-   * isSilent=true:以 /S 调起 NSIS 安装器,更新过程不弹安装向导;
-   * 安装引导页只在用户自行双击 exe 时出现(assisted installer 非 /S 运行)。
-   * isForceRunAfter=true:静默安装完成后自动重启应用。
+   * isSilent=false:oneClick NSIS 安装器以进度条窗口运行(可最小化,无向导页),
+   * 让用户看到安装进度;isForceRunAfter=true:安装完成后自动重启应用。
    */
   public quitAndInstall(): void {
-    autoUpdater.quitAndInstall(true, true)
+    autoUpdater.quitAndInstall(false, true)
   }
 
   private wireEvents(): void {

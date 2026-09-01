@@ -6,7 +6,19 @@
     @keydown="handlePaneKeydown"
   >
     <header class="pane-header">
-      <div class="pane-actions">
+      <div class="pane-actions" :style="{ transform: `translateY(${actionsDragOffset}px)` }">
+        <span
+          class="pane-actions-grip"
+          role="button"
+          :aria-label="t('common.terminal.movePaneActions')"
+          :title="t('common.terminal.movePaneActions')"
+          @pointerdown="startActionsDrag"
+          @pointermove="onActionsDrag"
+          @pointerup="endActionsDrag"
+          @pointercancel="endActionsDrag"
+        >
+          <el-icon><GripVertical /></el-icon>
+        </span>
         <el-tooltip
           :content="
             isGui ? t('common.terminal.switchToTerminalView') : t('common.terminal.switchToGuiView')
@@ -334,7 +346,12 @@ import {
   Search,
   WarningFilled,
 } from '@element-plus/icons-vue'
-import { SquareSplitVertical, LayoutGrid, Terminal as TerminalIcon } from '@lucide/vue'
+import {
+  SquareSplitVertical,
+  LayoutGrid,
+  Terminal as TerminalIcon,
+  GripVertical,
+} from '@lucide/vue'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { SearchAddon } from '@xterm/addon-search'
@@ -770,6 +787,39 @@ function focusPane(): void {
 }
 
 /**
+ * 窗格操作栏(分割/关闭等图标所在工具栏)拖动手柄:
+ * 只允许沿右侧上下移动(水平始终吸附右侧),拖动范围限制在窗格内部。
+ */
+const actionsDragOffset = ref(0)
+let actionsDrag: { pointerId: number; startY: number; startOffset: number } | null = null
+
+function startActionsDrag(event: PointerEvent): void {
+  const grip = event.currentTarget as HTMLElement
+  actionsDrag = {
+    pointerId: event.pointerId,
+    startY: event.clientY,
+    startOffset: actionsDragOffset.value,
+  }
+  grip.setPointerCapture(event.pointerId)
+  event.preventDefault()
+}
+
+function onActionsDrag(event: PointerEvent): void {
+  if (!actionsDrag || event.pointerId !== actionsDrag.pointerId) return
+  const grip = event.currentTarget as HTMLElement
+  const bar = grip.parentElement
+  const pane = bar?.closest('.terminal-pane')
+  if (!bar || !pane) return
+  const max = Math.max(0, pane.clientHeight - bar.clientHeight - 10)
+  const next = actionsDrag.startOffset + event.clientY - actionsDrag.startY
+  actionsDragOffset.value = Math.min(max, Math.max(0, next))
+}
+
+function endActionsDrag(event: PointerEvent): void {
+  if (actionsDrag && event.pointerId === actionsDrag.pointerId) actionsDrag = null
+}
+
+/**
  * 恢复 scrollback 前剥离终端查询/应答序列(DSR `\x1b[5n`/`\x1b[6n`、DA `\x1b[c`、
  * 光标位置报告 `\x1b[{row};{col}R` 等)。这些序列在重放时既没有显示意义,
  * 又可能被 xterm 重新应答或回显成乱码(恢复终端出现奇怪打印的来源之一)。
@@ -1071,6 +1121,28 @@ function withTimeout<T>(
   padding: 0;
   border-radius: 6px;
   color: var(--app-text-muted);
+}
+.pane-actions-grip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 12px;
+  height: 22px;
+  margin-right: 1px;
+  border-radius: 6px;
+  color: var(--app-text-muted);
+  cursor: grab;
+  touch-action: none;
+}
+.pane-actions-grip:active {
+  cursor: grabbing;
+}
+.pane-actions-grip:hover {
+  color: var(--app-text);
+  background: var(--app-hover);
+}
+.pane-actions-grip .el-icon {
+  font-size: 11px;
 }
 .pane-actions :deep(.pane-action:hover),
 .pane-actions :deep(.pane-action:focus-visible) {
