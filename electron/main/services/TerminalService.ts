@@ -70,8 +70,12 @@ const OSC133_BASH_INTEGRATION = [
   'trap - DEBUG',
   'printf "\\e]133;D;%s\\a\\e]133;A\\a" "$__nav_e"',
   OSC7_PROMPT_COMMAND,
-  // 首次提示符时保存终端 fd;此后所有 C 标记写这里,不受用户重定向影响
-  '[ -n "${__nav133_fd:-}" ] || exec {__nav133_fd}>&1 2>/dev/null',
+  // 首次提示符时保存终端 fd;此后所有 C 标记写这里,不受用户重定向影响。
+  // 必须包成 { ...; } 2>/dev/null:直接写 exec {fd}>&1 2>/dev/null 会让 2>/dev/null
+  // 成为 exec 自身的重定向——exec 的 IO 重定向对整个会话持久生效,shell 的 stderr
+  // 会被永久丢进 /dev/null;bash 交互提示符与键入回显都走 stderr,曾因此导致
+  // 「输入不可见、命令 stderr 全部丢失」(git-bash/WSL 实测复现,见 tmp/repro-echo.cjs)。
+  '[ -n "${__nav133_fd:-}" ] || { exec {__nav133_fd}>&1; } 2>/dev/null',
   '__nav133_fire() { if [ -z "$COMP_LINE" ] && [ "$__nav133_emit" = 1 ]; then case "$BASH_COMMAND" in __nav133*|*__nav_e*|"trap "*) ;; *) __nav133_emit=0; __nav_c=$(printf %s "$BASH_COMMAND" | base64 2>/dev/null); printf "\\e]133;C;%s\\a" "$__nav_c" >&$__nav133_fd;; esac; fi; }',
   'trap __nav133_fire DEBUG',
   // nav-render <file> [mime]:把文件内容作为 OSC 1338 富内容块上报,GUI 视图按 MIME 渲染
