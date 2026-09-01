@@ -1,10 +1,14 @@
 # v1.5.0 终端 GUI 视图：设计与实现记录
 
-> 状态：**P1/P2/P3 + 打磨已全部实现**，本地 10 个提交，**未推送远程**。
+> 状态：**P1/P2/P3 + 打磨已全部实现**，已推送远程。
 > AI agent 集成（ACP）已明确移出范围——用户不需要接入 AI 助手，
 > GUI 视图的目标聚焦在「终端富文本化」本身。
 > 调研依据见 `research/research-notes.md`；需求口径见 `01-requirements.md`；
 > 下一步设计见 `04-design.md`。
+>
+> 本文只覆盖 **v1.5.0（GUI 块视图）**。其后的命令感知渲染批次 1–4
+> （路径预览 / 嗅探 / 搜索 / 文件树 / 预设命令 / 补全 / 块导航）的逐文件实现记录
+> 见 **`codebuddy-work.md`**；与原设计的偏离见 `04-design.md` §11。
 
 ## 0. 实现速览（先读这一节）
 
@@ -17,6 +21,8 @@ xterm 或 `TerminalGuiView`。视图切换只换消费者。
 
 ### 0.2 关键文件
 
+v1.5.0 本体：
+
 | 层 | 文件 | 职责 |
 |---|---|---|
 | 装配 | `src/core/terminal/CommandBlocks.ts` | `CommandBlockAssembler`（OSC 133/1338/OSC 7/OSC 9;9 解析、块装配）、`normalizeTerminalLayout`（文本归一化） |
@@ -28,6 +34,21 @@ xterm 或 `TerminalGuiView`。视图切换只换消费者。
 | 持久化 | `src/core/terminal/TerminalLayout.ts`、`TerminalWorkspaceStorage.ts` | `TerminalPaneNode.presentation` |
 | i18n | `src/i18n/locales/{zh-CN,en-US}/common.ts` | `terminal.*` 键（含 `guiDegradedHint`、`guiInputPlaceholder` 等） |
 | 测试 | `tests/unit/command-blocks.test.ts`、`tests/unit/terminal-rich-content.test.ts`、`tests/e2e/v150-terminal-gui-view.spec.ts` | |
+
+批次 1–4（命令感知渲染）新增模块，详见 `codebuddy-work.md`：
+
+| 层 | 文件 | 职责 |
+|---|---|---|
+| 路径 | `src/core/terminal/PathDetection.ts` | 输出内路径候选检测（两级策略）+ 按路径切片 |
+| 嗅探 | `src/core/terminal/ContentSniff.ts` | 高置信度内容识别（JSON / CSV / Markdown） |
+| 搜索 | `src/core/terminal/FuzzyMatch.ts` | 历史模糊搜索打分 |
+| 目录 | `src/core/terminal/DirectoryListing.ts` | WSL `find -printf` 输出解析 + 排序 |
+| 转义 | `src/core/terminal/ShellQuote.ts` | 按 shell 家族（posix/powershell/cmd）转义与拼命令 |
+| 预设 | `src/core/terminal/TerminalPresetStorage.ts`、`CommandTemplate.ts` | 预设持久化；`{{name:默认|选项}}` 模板解析与插值 |
+| 补全 | `src/core/terminal/CommandCompletion.ts` | 光标 token 前缀补全（历史 + 手写规格表） |
+| 面板 | `TerminalFileTreePanel.vue`、`TerminalPresetPanel.vue` | 侧边文件树（懒加载）、预设列表 + L2 参数表单 |
+| IPC | `electron/main/terminalIpc.ts` | `terminal-path-stat/read`、`terminal-session-list-dir/run-command` |
+| 测试 | `tests/unit/path-detection / content-sniff / fuzzy-match / directory-listing / shell-quote / preset-storage / command-template / command-completion .test.ts` | 终端单测共 122 个 |
 
 ### 0.3 三条不变量（踩坑得来，改注入前必读）
 
@@ -57,6 +78,9 @@ xterm 或 `TerminalGuiView`。视图切换只换消费者。
   （用户已知，未处理；如需再按 `?1049` 单开）。
 - **SSH / cmd 会话不注入** → GUI 视图降级为终端渲染 + 提示条（`guiDegraded`）。
 - **PowerShell 只上报 A/D**（无 preexec），命令文本拿不到，整段成块。
+- **输出内路径点击对目录无效**：`terminal-path-stat` 已返回 `directory` 字段，
+  但 `TerminalGuiView` 只消费 `exists`，点目录会走读文件失败提示「是目录」；
+  就地展开文件树未做（`04-design.md` §11.3），目录浏览走侧边文件树面板。
 - 单元测试外的既有失败项与本特性无关（`nsat-perf`、`label-ocr`）。
 - **P4（富结果接入 Dashboard/CardWindow 布局）待实施**。
 

@@ -3,9 +3,10 @@
 > 本文档由 AI 在会话中断点整理，反映 **工作区实际状态**（已用 `git status` / `git log` / 只读文件检查核对）。
 > 状态时间锚点：本地分支 `main`，HEAD = `ad97bf759`（批次 4 提交）。
 > **批次 1–4 全部完成**，工作区干净。
-> 批次 1 已 push 到 `origin/main`（截至 `67bc23319`）；批次 2–4 与两次文档提交
-> （`e935fb907`、`34db6112f`、`c5eb3f5a9`、`8b84211bc`、`2e7eabb97`、`ad97bf759`）**仅本地提交，未 push**。
+> 批次 1 已 push 到 `origin/main`（截至 `67bc23319`）；批次 2–4 与文档提交（`e935fb907`、
+> `34db6112f`、`c5eb3f5a9`、`8b84211bc`、`2e7eabb97`、`ad97bf759` 及本次文档同步）**仅本地提交，未 push**。
 > 应用内人工验证**仍未做**——用户要求所有批次做完后统一验证（见 §5，这是当前唯一待办）。
+> 本目录其余文档（README / 01 / 03 / 04 / 05）已同步至实现后状态，见 §9。
 
 ---
 
@@ -290,3 +291,38 @@ npx vitest run tests/unit/shell-quote.test.ts tests/unit/directory-listing.test.
 - `SftpEntry`（`src/core/terminal/TerminalTypes.ts`）—— 文件树条目复用此类型，避免新造。
 - `TerminalGuiView.vue` 的 `terminal-path-read` 调用与 `TerminalRichContent` —— 文件树预览直接复用。
 - `TerminalProfileStorage`（localStorage 模式）—— 预设命令 `TerminalPresetStorage` 已照此写好。
+
+---
+
+## 9. 设计文档同步记录（2026-09-01，批次 4 之后补）
+
+四批做完后，本目录其余设计/路线图文档还停留在「未开工」状态，已逐一同步：
+
+| 文档 | 同步内容 |
+|---|---|
+| `README.md` | 状态快照改为「实现完成，待统一验证」；决策记录补实际落地情况；5 个待拍板问题标注实现给出的答案（多数被绕过或已回答） |
+| `01-requirements.md` §5 | 4 个待拍板问题标注结论——**「是否覆盖内建命令」因未做包装而消解** |
+| `03-implementation.md` | 头部注明本文只覆盖 v1.5.0、批次 1–4 见本文档；§0.2 关键文件表补批次 1–4 新增的 8 个核心模块与 2 个面板；§0.4 补「目录点击无效」边界 |
+| `04-design.md` | 状态改「已实现但有偏离」；**新增 §11 实施结果对照**：实际走「嗅探 + 路径检测→直读文件系统 + 侧边文件树」，未按原设计的「包装 `ls`/`cat`」走，原因与影响全记录 |
+| `05-roadmap.md` | 状态改「批次 1–4 已全部实现」；§1 决策表补落地情况（决策 2 未落地）；§2 现状基线的「缺失」清单标记已补齐；§3/§4 逐项标注完成状态；§6 待定更新 |
+
+### 9.1 同步过程中发现的重要 gap：目录点击不能就地展开文件树
+
+这是**路线图 §1 决策 2**（「目录点击 = 就地展开文件树」）与**用户核心原话**
+（「我执行了 `ls`，下面会呈现一个文件树」）的残余差距，此前各批交接记录里没有显式记过：
+
+- 现状：块输出里的**文件**名点击可预览；**目录**名点击后走 `terminal-path-read`，
+  读目录失败，显示「无法读取该文件（可能已删除、**是目录**或不支持预览）」。
+- 根因：`terminal-path-stat` 明明已返回 `TerminalPathStat.directory`
+  （`src/core/terminal/TerminalTypes.ts`），但 `TerminalGuiView.vue` 的
+  `probePath` / `togglePreview` 只消费了 `exists`，从未检查 `directory`。
+- 目录浏览目前由 C1 侧边文件树面板承担，所以功能上「能浏览目录」，
+  但「敲 `ls` 后在命令块下面直接长出树」这个最初诉求没有闭环。
+
+**若要补齐**（改动很小，数据通道全现成）：`togglePreview` 里对 `directory: true`
+的路径改走 `terminal-session-list-dir`（批次 2 已建好三通道列目录 IPC），
+预览区复用 `TerminalFileTreePanel` 的 `el-tree` 就地懒加载展开。
+是否做、什么时候做待用户拍板（已记入 `05-roadmap.md` §6 与 `04-design.md` §11.3）。
+
+**统一验证时注意**：点目录出现「无法读取」提示**不是 bug**，是上述已知 gap；
+验证清单（§7 第 5 项）里「文件预览」应理解为文件而非目录。
