@@ -247,6 +247,9 @@
         :search-query="searchVisible ? searchQuery : ''"
         :search-next-tick="searchNextTick"
         :search-prev-tick="searchPrevTick"
+        :nav-prev-tick="navPrevTick"
+        :nav-next-tick="navNextTick"
+        :nav-error-tick="navErrorTick"
         @rerun="rerunCommand"
         @copy="writeClipboardText"
         @submit="rerunCommand"
@@ -462,6 +465,10 @@ const searchPrevTick = ref(0)
 const searchInputElement = ref<HTMLInputElement | null>(null)
 /** GUI 视图回报的命中状态,如 `3/17`;终端视图无此回报,保持空 */
 const searchStatus = ref('')
+/** 块间导航计数,下传给 GUI 视图;自增即触发一次跳转 */
+const navPrevTick = ref(0)
+const navNextTick = ref(0)
+const navErrorTick = ref(0)
 
 function focusSearchInput(): void {
   void nextTick(() => searchInputElement.value?.focus())
@@ -521,12 +528,31 @@ function handleSearchStatus(total: number, current: number): void {
   searchStatus.value = total > 0 ? `${current}/${total}` : ''
 }
 
-/** GUI 视图没有 xterm 键处理链,靠组件根上的按键捕获打开搜索 */
+/** GUI 视图没有 xterm 键处理链,靠组件根上的按键捕获打开搜索与块间导航 */
 function handlePaneKeydown(event: KeyboardEvent): void {
   if (event.isComposing) return
   if (event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 'f') {
     event.preventDefault()
     openSearch()
+    return
+  }
+  // 块间导航只在 GUI 视图有意义:终端视图没有块边界
+  if (!isGui.value || guiDegraded.value) return
+  if (event.altKey && !event.ctrlKey && !event.metaKey) {
+    if (event.key === 'ArrowUp') {
+      event.preventDefault()
+      navPrevTick.value += 1
+      return
+    }
+    if (event.key === 'ArrowDown') {
+      event.preventDefault()
+      navNextTick.value += 1
+      return
+    }
+    if (event.key.toLowerCase() === 'e') {
+      event.preventDefault()
+      navErrorTick.value += 1
+    }
   }
 }
 let resizeObserver: ResizeObserver | undefined
