@@ -963,9 +963,15 @@ watch(scrollElement, (element, previous) => {
   border: 1px solid color-mix(in srgb, var(--terminal-fg) 9%, transparent);
   border-radius: 8px;
   background: color-mix(in srgb, var(--terminal-fg) 4%, var(--terminal-bg));
-  overflow: hidden;
+  /* 必须是 clip 不是 hidden:overflow:hidden 会把本块变成滚动容器,
+     sticky 块头就吸不到外层滚动区;clip 同样把内容裁进圆角,但不创建滚动容器 */
+  overflow: clip;
 }
 .command-block__header {
+  /* 长块滚动时块头吸在块内顶部,折叠/复制/重跑按钮始终可点 */
+  position: sticky;
+  top: 0;
+  z-index: 1;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -973,6 +979,8 @@ watch(scrollElement, (element, previous) => {
   padding: 3px 8px;
   cursor: pointer;
   user-select: none;
+  /* 吸顶时下方内容会从块头后面滚过,必须给不透明底色 */
+  background: color-mix(in srgb, var(--terminal-fg) 4%, var(--terminal-bg));
 }
 .command-block__status {
   width: 8px;
