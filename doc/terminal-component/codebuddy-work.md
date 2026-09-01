@@ -1,10 +1,11 @@
 # CodeBuddy 工作交接：终端命令感知渲染（批次 1–4 + xterm buffer 轨道）
 
 > 本文档由 AI 在会话中断点整理，反映 **工作区实际状态**（已用 `git status` / `git log` / 只读文件检查核对）。
-> 状态时间锚点：本地分支 `main`，HEAD = `8b84211bc`（批次 3 提交）。
-> 批次 1 已 push 到 `origin/main`（截至 `67bc23319`）；批次 2（`e935fb907`、`34db6112f`）与
-> 批次 3（`8b84211bc`）、批次 3 的文档提交（`c5eb3f5a9`）**仅本地提交，未 push**。
-> 应用内人工验证**仍未做**——用户要求所有批次做完后统一验证。
+> 状态时间锚点：本地分支 `main`，HEAD = `ad97bf759`（批次 4 提交）。
+> **批次 1–4 全部完成**，工作区干净。
+> 批次 1 已 push 到 `origin/main`（截至 `67bc23319`）；批次 2–4 与两次文档提交
+> （`e935fb907`、`34db6112f`、`c5eb3f5a9`、`8b84211bc`、`2e7eabb97`、`ad97bf759`）**仅本地提交，未 push**。
+> 应用内人工验证**仍未做**——用户要求所有批次做完后统一验证（见 §5，这是当前唯一待办）。
 
 ---
 
@@ -15,7 +16,8 @@
 - **策略来源**：只抄 Warp 的**策略**，绝不复制/改写其 AGPL 代码（见 §7 许可边界）。
 - **实施顺序决策**（来自 `doc/terminal-component/05-roadmap.md` 与 `04-design.md §8`）：
   - **L1 嗅探先于 L2 包装**。先用零侵入的内容嗅探覆盖长尾 + SSH 会话，再考虑 shell 函数包装 `ls`/`cat`。
-  - 批次 1（B1–B4）已按此完成；批次 2（C1 文件树 + C2 预设命令 L1）已完成；批次 3（C3 预设命令 L2）已完成；下一步是批次 4（C4 补全 + C5 块间导航）。
+  - 批次 1（B1–B4）、批次 2（C1 + C2）、批次 3（C3）、批次 4（C4 + C5）**全部完成**。
+  - 四批之外的**独立轨道**（删除 `normalizeTerminalLayout`）**未做**，也未被要求做，见 §6。
 - **默认开关**：命令感知渲染（若后续做 L2 包装）应先默认关，dogfood 后再默认开。
 - **验证节奏**：用户明确要求**所有批次先一起做完，最后统一验证**，中途不跑应用验证。
 - **提交纪律**（历史约定）：阶段工作只做**本地 commit**，push / PR 前必须询问用户。
@@ -88,6 +90,38 @@ C2 预设命令 L1（同一提交）
 
 **批次 3 验证情况**：`pnpm run typecheck` 通过；`npx vite build` 全绿；`eslint` 对所改文件零问题；`prettier --write` 已格式化；终端相关单测 **106 个全绿**（新增 command-template 12）；全量 `vitest run` 84 文件过 / 2 文件失败，均为 §4.1 的存量失败。**未运行应用内人工验证。**
 
+### 批次 4：C4 命令补全 + C5 块间导航（commit `ad97bf759`）
+
+C4 命令补全
+- `src/core/terminal/CommandCompletion.ts`（新增）：纯函数模块，照 `ContentSniff` / `DirectoryListing` 的写法。
+  - `completionToken(input, cursor)`：取光标所在 token 的区间**只按空白切分，不做引号解析**——引号内的 token 带着引号参与前缀匹配，自然匹配不到任何候选，于是不会在引号里弹出无意义的补全。
+  - `completeCommandLine(input, cursor, history, specs?, limit?)`：**前缀匹配**（不是模糊匹配）。shell 补全的惯例就是前缀，Ctrl+R 已经提供模糊搜索，两者混在一个弹层里会让排序难以预测。
+    - 命令位：内置规格的命令名在前，历史里用过的命令名补在后（最近优先），重名时以内置为准。
+    - 第一个参数位：补子命令。以 `-` 开头：只补选项。更靠后的参数位没有规格可依，只取历史里**同命令、同参数位**出现过的 token。
+  - `BUILTIN_SPECS`：手写的高频命令规格（git / npm / pnpm / yarn / docker / systemctl / ls / cat / cp / mv / rm / mkdir / grep / find / curl / ssh / scp / tar / unzip / make / python / node / chmod / chown / ps / kill / df / du / sed / jq / xargs / wsl / code）。
+    - **许可边界**：命令名与选项是功能性事实，不受版权保护；这张表是按通用 CLI 常识手写的，**没有复制 withfig 或任何数据集的文件**。路线图 §3 C4 允许的数据源是 withfig（MIT）；若要覆盖长尾命令，将来应接 withfig 的数据文件，**禁止**用 Warp 的 `command-signatures-v2`（AGPL）。
+  - 16 个单测（`tests/unit/command-completion.test.ts`）。
+- `src/components/windows/common/TerminalGuiView.vue`：输入行新增补全弹层（浮层样式与 Ctrl+R 历史搜索同款）。
+  - 触发：`Ctrl+Space` 显式唤起/收起；`Tab` 在有候选时唤起。接受：`Tab` 或 `Enter`。`↑↓` 换选，`Esc` 关闭，鼠标点击/mousemove 也可选。
+  - 接受时替换**光标所在的那个 token**（`applyCompletion`），补到行尾时多补一个空格，这样 `gi`→`git `→`st`→`status` 的连续补全走得通。
+  - 两个可达性/手感上的坑（已处理，改动时别退回去）：
+    1. **空 token 上不拦 `Tab`**——否则光标停在空输入行时 Tab 会被永久吞掉，焦点出不去。
+    2. **候选被输入过滤空时收起弹层并让按键按原义继续**，否则弹层空着时回车会被吞、什么都不发生。
+  - 输入框补了 `ref="inputElement"`：候选要按光标位置算，接受后还要把光标移到替换文本末尾。
+  - 补全与 Ctrl+R 互斥：开一个会关掉另一个。
+
+C5 块间导航
+- `src/components/windows/common/TerminalGuiView.vue`：**沿用搜索已有的「父级自增计数下传」模式**（`navPrevTick` / `navNextTick` / `navErrorTick`），所以快捷键在窗格内任意有焦点的位置都生效，不要求焦点一定在输入行。
+  - `navIndex` 是当前选中块的下标，`-1` 表示还没导航过；没导航过时两个方向都从**最后一块（最新）**起算。
+  - `jumpToErrorBlock()` 从后往前找第一个 `exitCode !== 0 && !== undefined` 的块；没有失败块就保持不动。
+  - 选中块加主题色描边（`.is-nav-target`）；块列表变短时夹紧 `navIndex`。
+  - 输入行右侧给了三个可点入口（仅 `blocks.length > 0` 时显示）——纯快捷键的功能等于藏起来了。
+- `src/components/windows/common/TerminalPane.vue`：`handlePaneKeydown` 新增 `Alt+↑` / `Alt+↓` / `Alt+E`，且**仅在 GUI 视图生效**（终端视图没有块边界）。
+- `src/i18n/locales/{zh-CN,en-US}/common.ts`：新增 `guiCompletionEmpty`、`completionCommand` / `completionSubcommand` / `completionOption` / `completionHistory`、`navPrevBlock` / `navNextBlock` / `navErrorBlock`；`guiInputPlaceholder` 补了 Tab 提示。
+
+**批次 4 验证情况**：`pnpm run typecheck` 通过；`npx vite build` 全绿；`eslint` 对所改文件零问题；终端相关单测 **122 个全绿**（新增 command-completion 16）；全量 `vitest run` 85 文件过 / 574 测试过，2 个失败仍是 §4.1 的存量失败。**未运行应用内人工验证。**
+- `prettier` 注意：本批改动里 `TerminalGuiView.vue` / `TerminalPane.vue` / `en-US/common.ts` 都被 `--check` 标红，但**这三个文件在 HEAD 上本来就不合规**（已用 `git show HEAD:<file>` 核对），所以只格式化了本批新建的两个文件，没顺手格式化存量文件。
+
 ---
 
 ## 3. 当前工作区中已修改/新增但未完成或未验证的内容
@@ -113,13 +147,13 @@ C2 预设命令 L1（同一提交）
 
 | 范围 | 结果 | 说明 |
 |---|---|---|
-| `pnpm run typecheck` | ✅ 通过 | 批次 1 + 2 + 3 当前状态 |
+| `pnpm run typecheck` | ✅ 通过 | 批次 1 + 2 + 3 + 4 当前状态 |
 | `npx vite build` | ✅ 通过 | renderer + electron main + preload 全部编译成功 |
-| 终端相关单测 | ✅ **106 个全绿** | path-detection 20、content-sniff 15、fuzzy-match 8、shell-quote 9、directory-listing 7、preset-storage 7、command-template 12、command-blocks、rich-content |
+| 终端相关单测 | ✅ **122 个全绿** | path-detection 20、content-sniff 15、fuzzy-match 8、shell-quote 9、directory-listing 7、preset-storage 7、command-template 12、command-completion 16、command-blocks、rich-content |
 | `eslint`（所改文件） | ✅ 零问题 | 仓库存量 4 个 error 在非改动文件 |
-| `prettier --check`（所改文件） | ✅ 零问题 | 仓库里 `TerminalGuiView.vue` / `TerminalPane.vue` / `terminalIpc.ts` 等**存量文件本就不合规**，不要顺手格式化，否则 diff 爆炸 |
-| 全量 `vitest run` | ⚠️ 558 过 / 1 失败 / 1 文件收集失败 | 两个失败**与终端无关**，见 §4.1 |
-| 应用内人工验证 | ❌ 未做 | 用户要求所有批次做完后统一验证 |
+| `prettier --check`（所改文件） | ⚠️ 见 §2 批次 4 | `TerminalGuiView.vue` / `TerminalPane.vue` / `en-US/common.ts` **在 HEAD 上本就不合规**，只格式化了本批新建文件，未顺手格式化存量 |
+| 全量 `vitest run` | ⚠️ 574 过 / 1 失败 / 1 文件收集失败 | 两个失败**与终端无关**，见 §4.1 |
+| 应用内人工验证 | ❌ 未做 | 用户要求所有批次做完后统一验证；**四批已全部完成，这是当前唯一待办** |
 
 ### 4.1 两个存量失败（非本次改动引入，勿在终端任务里顺手修）
 - `tests/unit/label-ocr.test.ts` —— OCR 模型断言失败（`expected 0 to be greater than or equal to 1`），属 `src/core/camera/LabelOcr` 范畴。
@@ -132,11 +166,14 @@ C2 预设命令 L1（同一提交）
 
 ## 5. 当前中断点
 
-- 批次 1（B1–B4）、批次 2（C1 文件树 + C2 预设命令 L1）、批次 3（C3 预设命令 L2 表单工作流）
-  **均已完成并本地提交**，工作区干净（`git status` 无输出）。
-- 批次 2、3 的提交**未 push**（`e935fb907`、`34db6112f`、`c5eb3f5a9`、`8b84211bc`），按提交纪律 push 前需询问用户。
-- 下一步是**批次 4（C4 命令补全 + C5 块间导航）**，尚未开始。
-- 仍未做应用内人工验证——累计已有 7 个功能未真机点过（见 §7 已知风险）。
+- **批次 1–4 全部完成并本地提交**，工作区干净（`git status` 无输出）：
+  - 批次 1：B1 路径预览、B4 内容嗅探、B3 历史搜索、B2 搜索（4 个提交，已 push）
+  - 批次 2：C1 文件树 + C2 预设命令 L1（`e935fb907`、`34db6112f`）
+  - 批次 3：C3 预设命令 L2 表单工作流（`8b84211bc`）
+  - 批次 4：C4 命令补全 + C5 块间导航（`ad97bf759`）
+- 批次 2–4 与两次文档提交（`c5eb3f5a9`、`2e7eabb97`）**未 push**，按提交纪律 push 前需询问用户。
+- **剩下的唯一一件事是应用内人工验证**——累计 9 处功能只在单元/类型/构建层面验证过，
+  一次都没真机点过（见 §7 已知风险）。这步要由用户发起，不在 AI 这边自动跑。
 
 ---
 
@@ -151,12 +188,14 @@ C2 预设命令 L1（同一提交）
   渲染层不参与、也无法谎报家族。已补「恶意参数值」契约测试
   （`command-template.test.ts`，用共享 `splitPosixCommands` 分词断言结构，未手算转义串）。
 
-### 批次 4（C4 + C5）—— 下一步
+### ~~批次 4（C4 + C5）~~ ✅ 已完成（commit `ad97bf759`）
 
-- **C4 命令补全**：数据源用 **withfig（MIT 许可，可用）**；**禁止**用 Warp 的 `command-signatures-v2`（AGPL）。建议先做会话内历史补全（零数据依赖）打底，再接 withfig。
-- **C5 块间导航**：命令块模型已就绪，加快捷键在块间跳转（上一块/下一块/跳到出错块）。
+- ~~**C4 命令补全**~~：已做。数据源策略见 §2 批次 4——**没有引入 withfig 的庞大数据集**，
+  而是「历史补全打底 + 手写的高频命令规格」，纯前端零依赖。
+  withfig（MIT）仍是后续要覆盖长尾命令时的合规升级路径；Warp `command-signatures-v2`（AGPL）依旧禁用。
+- ~~**C5 块间导航**~~：已做。上一块 / 下一块 / 跳到最近出错块，快捷键 + 输入行可点入口双通道。
 
-### 独立轨道（无用户可见收益，但终结 bug 源）
+### 独立轨道（无用户可见收益，但终结 bug 源）—— 未做，也未被要求做
 - 删除 `normalizeTerminalLayout`，块内容改从 `xterm.buffer.active` 派生（见 `04-design.md §8` 第 4 步）。应在 L1/L2 已覆盖多数高频命令、清楚「还有哪些命令仍依赖文本块」后再做。
 
 ---
@@ -176,7 +215,7 @@ C2 预设命令 L1（同一提交）
 - **Shell 注入**：所有把用户文本写回会话的命令（文件树 `cd`、预设命令、L2 表单）必须经 `ShellQuote.ts` 转义，且转义在写入前于主进程/统一处完成。
 
 ### 已知风险
-- **批次 1 + 2 + 3 均未做应用内验证**，累计 7 处只在单元/类型/构建层面验证过，未真机点过：
+- **批次 1 + 2 + 3 + 4 均未做应用内验证**，累计 9 处只在单元/类型/构建层面验证过，未真机点过：
   1. 路径预览三通道（本机 / WSL / SSH）
   2. 内容嗅探（JSON/CSV/Markdown 富化 + 渲染/原始切换）
   3. Ctrl+R 历史模糊搜索
@@ -184,6 +223,10 @@ C2 预设命令 L1（同一提交）
   5. 文件树面板三通道列目录 + 文件预览 + 「在终端打开」写 `cd`
   6. 预设命令面板增删改运行
   7. 预设命令 **L2 参数表单**：占位符解析出下拉/输入控件、填值回填拼命令、主进程转义后写入
+  8. **命令补全**：`gi`→Tab→`git `→`st`→Tab→`status` 的连续补全、选项补全（`git --`）、
+     ↑↓ 换选、鼠标点选、以及**空输入行按 Tab 仍能移出焦点**
+  9. **块间导航**：Alt+↑↓ 在多个块之间跳转、`Alt+E` 跳到出错块、选中块的描边是否可见、
+     跳转到**被折叠的块**时是否仍滚到位
   统一验证时应重点试：**WSL 路径预览与文件树列目录**（`find -printf` 是否真能跑通、含空格/制表符的文件名）、**SSH 会话的嗅探与搜索**、**cmd 会话的 `cd /d` 是否正确**、大文件预览截断提示、**L2 表单在 PowerShell / cmd 会话里的转义结果**（同一条预设在 posix 与 powershell 下应得到不同转义串）。
 - **`@xterm/addon-search` 已补装**：之前只在 `package.json` / lockfile 里、实际未进 `node_modules`，导致 `pnpm typecheck` 报 `Cannot find module '@xterm/addon-search'`。已 `pnpm install` 装上（该命令末尾对 `@esbuild/linux-x64` 报 EACCES 权限错，但目标包已落地，不影响）。`vite build` 已通过，但**仍未启动应用确认 SearchAddon 实际装载**。
 - **electron 侧没有真正的类型检查**：`tsconfig.json` 的 `include` 只有 `src`，`pnpm typecheck`（= `vue-tsc --noEmit`）**不覆盖 `electron/`**；`tsconfig.node.json` 配置不完整（缺 `target`，直接跑有一堆 `downlevelIteration` 之类报错），处于废弃状态。改 `electron/main/**` 时**类型错误不会被 CI 抓到**，只能靠 `vite build`（只查语法/导入，不查类型）与人工审阅。
@@ -206,22 +249,36 @@ cd d:/projects/03-上位机/Nav-Tools     # 注意：仓库实际路径是 d: �
 pnpm run typecheck                     # 应全过（注意：不覆盖 electron/，见 §7）
 npx vite build                         # renderer + electron main + preload，应全过
 git status --short                     # 应无输出（工作区干净）
-git log --oneline -8                   # 确认批次 1 的 4 个提交 + 批次 2 的 2 个 + 文档提交 + 批次 3
+git log --oneline -10                  # 批次 1 的 4 个 + 批次 2 的 2 个 + 文档 + 批次 3 + 文档 + 批次 4
 npx vitest run tests/unit/shell-quote.test.ts tests/unit/directory-listing.test.ts \
-  tests/unit/preset-storage.test.ts tests/unit/command-template.test.ts   # 35 个用例应全绿
+  tests/unit/preset-storage.test.ts tests/unit/command-template.test.ts \
+  tests/unit/command-completion.test.ts    # 51 个用例应全绿
 ```
 全量 `vitest run` 会有 2 个与终端无关的存量失败（`label-ocr`、`nsat-perf`），见 §4.1，**不要误判成自己改坏了**。
 
-**续做批次 4（C4 补全 + C5 块间导航）的起点文件**
-- `src/components/windows/common/TerminalGuiView.vue` —— GUI 的输入行与块列表都在这里：C4 的候选弹层要挂在输入行上（Ctrl+R 历史搜索面板已有同构实现可参照），C5 的块跳转靠块的 `scrollIntoView`。
-- `src/core/terminal/FuzzyMatch.ts` —— 补全候选的过滤/排序可直接复用其模糊匹配（C4 不另造一套打分）。
-- `src/core/terminal/CommandBlocks.ts` —— 块模型；C5 需要「上一块 / 下一块 / 出错块」的索引，先看这里已有的块结构与状态字段。
-- `src/core/terminal/CommandTemplate.ts` —— 批次 3 新增的模板解析，C4 若要补命令模板参数名可复用其字段解析。
+**接手后唯一待办（应用内统一验证）的入手顺序**
 
-**批次 3 已落地的代码（改动时先看这些）**
-- `src/core/terminal/CommandTemplate.ts` —— `parseCommandTemplate` / `interpolateCommandTemplate`；参数值经 `quoteShellArg` 转义。
-- `electron/main/services/TerminalService.ts` —— `runSessionCommand` + `shellFamilyForSession`，**转义的唯一落点**。
-- `src/components/windows/common/TerminalPresetPanel.vue` —— 参数表单对话框；运行走 `terminal-session-run-command`。
+四批代码都已提交且自动化检查全绿，所以接下来不是写代码，而是**真机点一遍 §7 列的 9 处**。
+建议按「先高风险、后低风险」排：
+
+1. **WSL 会话**：路径预览、文件树列目录（`find -printf` 是否真能跑通、含空格/制表符的文件名）——
+   这是唯一有解析逻辑且跨进程的通道，最可能出问题。
+2. **L2 参数表单的转义**：同一条预设分别在 Git Bash（posix）与 PowerShell / cmd 会话里跑一遍，
+   确认参数值被正确转义、没有截断注入。
+3. **SSH 会话**：内容嗅探、搜索、文件树三通道。
+4. **GUI 视图交互**：Ctrl+R、Ctrl+F、补全（含连续补全与空行 Tab 不卡焦点）、块间导航。
+5. **cmd 会话**的文件树「在终端打开」是否写出正确的 `cd /d`。
+
+**验证时可能要改的文件（以及对应的坑）**
+- `src/components/windows/common/TerminalGuiView.vue` —— GUI 视图的交互都在这里（补全弹层、
+  块导航、Ctrl+R、Ctrl+F、路径预览、嗅探）。**注意这个文件在 HEAD 上就不符合 prettier**，
+  改完后别对整个文件跑 `prettier --write`，否则 diff 爆炸。
+- `src/components/windows/common/TerminalPane.vue` —— 窗格根按键捕获（Ctrl+F、Alt+↑↓、Alt+E）
+  与下传计数。**同样本就不符合 prettier。**
+- `src/core/terminal/CommandCompletion.ts` —— 补全候选计算；`BUILTIN_SPECS` 要加命令就改这张表。
+- `src/core/terminal/CommandTemplate.ts`（批次 3）—— L2 模板解析与参数转义。
+- `electron/main/services/TerminalService.ts` —— **shell 转义的唯一落点**（`runSessionCommand`）。
+  注意 `electron/` 不在 `pnpm typecheck` 覆盖范围内（见 §7），改完必须人工审阅 + `vite build`。
 
 **批次 2 已落地的代码（改动时先看这些）**
 - `electron/main/services/TerminalService.ts` —— `listSessionPath`，与 `statSessionPath` / `readSessionPath` 共用 `resolveSessionPath`。
