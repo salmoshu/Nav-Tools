@@ -2,9 +2,8 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { TerminalService } from '../../electron/main/services/TerminalService'
+import { createNodeTerminalServiceHost } from '../../electron/main/services/TerminalServiceHost'
 import { sshConnectionKey, type SshConnectionProfile } from '@/core/terminal/TerminalTypes'
-
-vi.mock('node-pty', () => ({ spawn: vi.fn() }))
 
 interface TrackedSession {
   type: 'pty' | 'ssh'
@@ -14,8 +13,10 @@ interface TrackedSession {
 
 function createService() {
   const broadcasts: Array<{ channel: string; payload: unknown }> = []
-  const service = new TerminalService(path.join(tmpdir(), `nav-tools-cwd-${Date.now()}`), (c, p) =>
-    broadcasts.push({ channel: c, payload: p }),
+  const service = new TerminalService(
+    path.join(tmpdir(), `nav-tools-cwd-${Date.now()}`),
+    (c, p) => broadcasts.push({ channel: c, payload: p }),
+    createNodeTerminalServiceHost(),
   )
   const trackCwd = (session: TrackedSession, data: string) =>
     (

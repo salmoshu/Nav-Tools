@@ -356,7 +356,6 @@ import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { SearchAddon } from '@xterm/addon-search'
 import '@xterm/xterm/css/xterm.css'
-import { t } from '@/i18n'
 import { CommandBlockAssembler, type TerminalCommandBlock } from '@/core/terminal/CommandBlocks'
 import type { TerminalPaneNode, TerminalSplitDirection } from '@/core/terminal/TerminalLayout'
 import {
@@ -371,12 +370,15 @@ import {
   type TerminalSessionInfo,
   type TerminalSshRecoveredEvent,
 } from '@/core/terminal/TerminalTypes'
-import emitter from '@/hooks/useMitt'
+import { useTerminalEventBus } from '@/core/terminal/TerminalEventBus'
+import { useTerminalTranslate } from '@/core/terminal/TerminalI18n'
 import { ORCA_TERMINAL_THEME } from '@/core/terminal/TerminalTheme'
 import TerminalConnectionDialog from './TerminalConnectionDialog.vue'
 import TerminalGuiView from './TerminalGuiView.vue'
 
 const SESSION_CREATE_TIMEOUT_MS = 20_000
+const terminalEventBus = useTerminalEventBus()
+const t = useTerminalTranslate()
 
 const props = defineProps<{
   pane: TerminalPaneNode
@@ -548,7 +550,13 @@ function handleSearchStatus(total: number, current: number): void {
 /** GUI 视图没有 xterm 键处理链,靠组件根上的按键捕获打开搜索与块间导航 */
 function handlePaneKeydown(event: KeyboardEvent): void {
   if (event.isComposing) return
-  if (event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 'f') {
+  if (
+    event.ctrlKey &&
+    !event.metaKey &&
+    !event.altKey &&
+    !event.shiftKey &&
+    event.key.toLowerCase() === 'f'
+  ) {
     event.preventDefault()
     openSearch()
     return
@@ -741,9 +749,8 @@ async function reconnectSession(): Promise<void> {
  * 用 safeStorage 里保存的凭据静默重连;没有可用凭据(如密码未保存)时保持原状,
  * 用户仍可通过断开横幅/恢复卡片手动重连。
  */
-function handleSshRecovered(raw: unknown): void {
-  const payload = raw as TerminalSshRecoveredEvent | undefined
-  if (!payload || payload.sourcePaneId === props.pane.id) return
+function handleSshRecovered(payload: TerminalSshRecoveredEvent): void {
+  if (payload.sourcePaneId === props.pane.id) return
   const launch = props.pane.launch
   if (launch?.kind !== 'ssh' || !launch.sshProfile) return
   if (sshConnectionKey(launch.sshProfile) !== payload.key) return
@@ -1009,7 +1016,7 @@ onMounted(() => {
   resizeObserver = new ResizeObserver(() => fitTerminal())
   if (terminalElement.value) resizeObserver.observe(terminalElement.value)
   window.ipcRenderer?.on('terminal-output', handleOutput)
-  emitter.on(TERMINAL_SSH_RECOVERED_EVENT, handleSshRecovered)
+  terminalEventBus.on(TERMINAL_SSH_RECOVERED_EVENT, handleSshRecovered)
   void attachSession(props.pane.sessionId)
   if (props.autoOpenSsh) {
     openSshDialog()
@@ -1020,7 +1027,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   window.ipcRenderer?.off('terminal-output', handleOutput)
-  emitter.off(TERMINAL_SSH_RECOVERED_EVENT, handleSshRecovered)
+  terminalEventBus.off(TERMINAL_SSH_RECOVERED_EVENT, handleSshRecovered)
   cancelConnection()
   resizeObserver?.disconnect()
   terminal?.dispose()

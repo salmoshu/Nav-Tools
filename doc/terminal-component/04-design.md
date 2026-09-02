@@ -326,7 +326,7 @@ Markdown 渲染器、表格）。
 | 本文设计 | 实际落地 | 偏离原因 |
 |---|---|---|
 | §1 路线 A：注入 shell 函数包装 `ls` / `cat`，经 OSC 1338 上报结构化载荷 | **未做**。改为：渲染侧**路径检测**（`PathDetection.ts`）找出输出里的路径候选 → `terminal-path-stat` 确认存在 → 点击时 `terminal-path-read` 走**三通道**（本机 `fs` / WSL `wsl.exe head -c` / SSH `sftp` 流）读真实文件系统 | 包装要处理 sudo/管道/重定向/别名/退出码保持（§7.1 全部风险）；路径检测 + 直读文件系统一次解决「文件 vs 目录」语义，且**对 SSH/WSL 会话同样可用**（包装做不到——SSH 不注入） |
-| §3 `ls` → **块内**文件树（OSC 1338 `application/x-nav-filelist` 载荷 + 懒加载回查） | **侧边文件树面板**（`TerminalFileTreePanel.vue`，`el-tree` 懒加载），列目录走 `terminal-session-list-dir` 三通道 IPC | 侧边面板不依赖命令包装，任意就绪会话可用；块内树依赖「用户刚好敲了 ls」，面板是常驻入口。`application/x-nav-filelist` MIME 未引入 |
+| §3 `ls` → **块内**文件树（OSC 1338 `application/x-nav-filelist` 载荷 + 懒加载回查） | **侧边文件树面板 + 路径点击块内树**：二者共用 `TerminalFileTree.vue`，列目录走 `terminal-session-list-dir` 三通道 IPC | 不包装 `ls`、不引入 `application/x-nav-filelist` MIME；任意输出中的真实目录路径都可点击展开，侧边面板仍是常驻入口 |
 | §4 `cat` → Markdown（包装器复用扩展名映射） | **未包装**。`cat *.md` 的输出经 **B4 内容嗅探**（`ContentSniff.ts`）识别为 Markdown 后富化渲染，块头「渲染 / 原始」可撤销 | 嗅探零侵入、对 SSH 同样有效，且覆盖的不止 `cat`（任何输出像 Markdown/JSON/CSV 的命令都受益） |
 | §5 嗅探兜底 | ✅ 按设计实现（高置信度特征：整体 JSON / 列数一致 CSV / Markdown 特征行），未做 diff 视图与「低置信度手动按树查看」 | diff 视图暂无需求；低置信度猜测易误报，先不做 |
 | §3.2/§3.3 关联键 + 降级规则（包装器遇到不认识的标志跳过） | 不适用（未做包装，无此风险面） | — |
@@ -335,20 +335,23 @@ Markdown 渲染器、表格）。
 
 - **B1** 路径检测 + 块内预览；**B2** Ctrl+F 搜索（终端视图 SearchAddon / GUI 视图自实现两套）；
   **B3** Ctrl+R 历史模糊搜索；**B4** 内容嗅探 + 渲染/原始切换（批次 1）
-- **C1** 侧边文件树面板（三通道）；**C2** 预设命令 L1（localStorage 持久化）（批次 2）
-- **C3** 预设命令 L2 表单（`{{name:默认|选项}}` 模板，参数转义在**主进程**按会话 shell 家族完成）（批次 3）
+- **C1** 侧边文件树面板（三通道）；**C2** 预设命令 L1（localStorage 持久化），T9 增加活动会话
+  cwd 下 `.nav-tools/terminal-presets.json` 的项目级只读作用域，并与全局项合并显示（批次 2 + T9）
+- **T1** 目录路径点击块内懒加载树，与 C1 共用树组件及三通道（2026-09-02）
+- **C3** 预设命令 L2 表单（`{{name:默认|选项}}` 文本/下拉，T5 补充
+  `{{name:bool}}` 布尔勾选；参数转义在**主进程**按会话 shell 家族完成）（批次 3 + T5）
 - **C4** 命令补全（历史 + 手写规格，`CommandCompletion.ts`）；**C5** 块间导航（Alt+↑↓ / Alt+E）（批次 4）
 
-### 11.3 残余 gap（对用户核心诉求而言）
+### 11.3 残余 gap 已补齐（2026-09-02 T1）
 
-用户原话是「执行了 `ls`，下面会呈现一个文件树」。现状：`ls` 输出里的**文件**名可点击预览，
-**目录**名点击后只提示「无法读取（是目录）」——`terminal-path-stat` 明明已返回
-`TerminalPathStat.directory`（`TerminalTypes.ts`），但 `TerminalGuiView` 只消费了 `exists`，
-从未检查 `directory`。目录浏览目前要开侧边文件树面板。
+此前 `TerminalGuiView` 只消费 `terminal-path-stat` 的 `exists`，目录也误走
+`terminal-path-read`，因此显示「无法读取（是目录）」。T1 将路径缓存升级为完整
+`TerminalPathStat`，在 `togglePreview` 按 `directory` 分流：文件保持原有受限预览，
+目录改走 `terminal-session-list-dir` 并在命令块内就地展开。
 
-**补齐方案（若要做）**：块内预览区对 `directory: true` 的路径改走
-`terminal-session-list-dir`，复用 `TerminalFileTreePanel` 的树组件就地展开；
-数据通道、IPC、树组件全部现成，只差 GUI 视图里的一处分支。
+侧边面板原有 `el-tree` 已抽为 `TerminalFileTree.vue`，块内树与侧边树共用同一套懒加载、
+条目文本渲染与本机 fs / WSL find / SSH sftp 三通道。此实现不会把整段 `ls` 输出自动替换为树；
+用户点击输出中经真实 stat 确认的目录后展开，保留了低误报策略与原始文本。
 
 ### 11.4 与本文约束的关系
 

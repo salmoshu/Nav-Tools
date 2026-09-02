@@ -78,14 +78,14 @@ C2 预设命令 L1（同一提交）
 ### 批次 3：C3 预设命令 L2 表单工作流（commit `8b84211bc`）
 
 - `src/core/terminal/CommandTemplate.ts`（新增）：纯函数模块，照 `ContentSniff` / `DirectoryListing` 的写法。
-  - `parseCommandTemplate(command)` → `CommandTemplateField[]`：字段格式为 `{{name:默认值|选项1|选项2}}`，按首个 `:` 切 name/default、再按 `|` 切候选；**只取首个 `:`**，所以默认值里可以再含 `:`；同名占位符去重（以第一次出现为准）。
+  - `parseCommandTemplate(command)` → `CommandTemplateField[]`：字段格式为 `{{name:默认值|选项1|选项2}}`，按首个 `:` 切 name/default、再按 `|` 切候选；**只取首个 `:`**，所以默认值里可以再含 `:`；同名占位符去重（以第一次出现为准）。T5 增加 `{{name:bool}}` / `{{name:bool=true}}`，分别表示默认未勾选 / 勾选的布尔字段。
   - `interpolateCommandTemplate(command, values, family)` → 用 `quoteShellArg(value, family)` 转义后回填。缺值的字段回填其 `defaultValue`。
-  - 12 个单测（`tests/unit/command-template.test.ts`）。
+  - T5 后 15 个纯函数单测（`tests/unit/command-template.test.ts`），另有 1 个勾选框到 IPC 参数的组件单测（`terminal-preset-boolean.test.ts`）。
 - `electron/main/services/TerminalService.ts`：新增 `runSessionCommand(sessionId, {command, cwd?, values?})` 与私有 `shellFamilyForSession(session)`。**shell 家族由主进程从会话自身推导**（`shellFamilyFor(session.info.kind, 本机会话的 localShell)`），渲染层传不进来，**无法谎报或漏转义**——这是对路线图 §3.2「转义要在主进程/写入前统一做」的落实。
 - `electron/main/terminalIpc.ts`：新增 `terminal-session-run-command`。
-- `src/components/windows/common/TerminalPresetPanel.vue`：移除 `kind` / `localShell` 两个 props（转义不再由渲染层决定，props 只留 `sessionId?`）；运行分两路——命令无 `{{...}}` 占位符直接执行，有则先弹 `el-dialog` 参数表单（候选 >1 用 `el-select` 下拉，否则 `el-input`，placeholder 显示默认值）；填过的值按预设 id 存进内存 Map（`lastValuesByPresetId`）下次回填，**不做持久化**。`execute()` 走 `terminal-session-run-command`，命令与参数值原样下发，转义交给主进程。
+- `src/components/windows/common/TerminalPresetPanel.vue`：移除 `kind` / `localShell` 两个 props（转义不再由渲染层决定，props 只留 `sessionId?`）；运行分两路——命令无 `{{...}}` 占位符直接执行，有则先弹 `el-dialog` 参数表单（候选 >1 用 `el-select`，布尔字段用 `el-checkbox`，其余用 `el-input`）；填过的值按预设 id 存进内存 Map（`lastValuesByPresetId`）下次回填，**不做持久化**。`execute()` 走 `terminal-session-run-command`，命令与参数值原样下发，转义交给主进程。
 - `src/components/windows/common/Terminal.vue`：`TerminalPresetPanel` 改为 `<TerminalPresetPanel v-if="activePresetsOpen" :session-id="activeReadySessionId" />`；删掉 `activeReadyKind` / `activeReadyLocalShell` 两个 computed。
-- `src/i18n/locales/{zh-CN,en-US}/common.ts`：新增 `presetCwdHint`、`presetCommandHint`（提示 `可用 {{参数名:默认值|选项1|选项2}} 生成运行时填写的表单`）、`presetParameters`。
+- `src/i18n/locales/{zh-CN,en-US}/common.ts`：新增 `presetCwdHint`、`presetCommandHint`、`presetParameters`；T5 后提示同时覆盖文本/下拉与 `{{参数名:bool}}` 勾选语法。
 - `tests/helpers/shell-tokens.ts`（新增）：共享测试助手 `splitPosixCommands(line): string[][]`，认识 `'...'\''...'` 转义，只用于测试断言。
 - `tests/unit/shell-quote.test.ts`：hostile 用例改为导入共享 `splitPosixCommands`，不再在文件内各自实现一份分词。
 
@@ -182,8 +182,10 @@ C5 块间导航
 
 ### ~~批次 3（C3，独立版本）~~ ✅ 已完成（commit `8b84211bc`）
 
-- 预设命令 **L2 表单工作流**已落地：模板 `{{name:default|opt1|opt2}}` → 下拉/输入控件，填完拼成命令。
-- 实现落在 `src/core/terminal/CommandTemplate.ts`（纯函数 + 12 单测），UI 只消费结果。
+- 预设命令 **L2 表单工作流**已落地：模板 `{{name:default|opt1|opt2}}` → 下拉/输入控件；
+  T5 追加 `{{name:bool}}` / `{{name:bool=true}}` → 默认未勾选 / 勾选的布尔控件。
+- 实现落在 `src/core/terminal/CommandTemplate.ts`（T5 后 15 个纯函数单测），UI 只消费结果；
+  `terminal-preset-boolean.test.ts` 覆盖勾选值进入 IPC 请求。
 - **安全红线已落实**：参数值插值前按目标 shell 语义转义（`ShellQuote.quoteShellArg`），
   且转义在**主进程** `TerminalService.runSessionCommand` 里按会话自身 shell 家族完成，
   渲染层不参与、也无法谎报家族。已补「恶意参数值」契约测试
@@ -221,19 +223,41 @@ C5 块间导航
   2. 内容嗅探（JSON/CSV/Markdown 富化 + 渲染/原始切换）
   3. Ctrl+R 历史模糊搜索
   4. Ctrl+F 搜索（终端视图 SearchAddon / GUI 视图自实现两套）
-  5. 文件树面板三通道列目录 + 文件预览 + 「在终端打开」写 `cd`
-  6. 预设命令面板增删改运行
-  7. 预设命令 **L2 参数表单**：占位符解析出下拉/输入控件、填值回填拼命令、主进程转义后写入
+  5. 文件树面板三通道列目录 + 文件预览 + 「在终端打开」写 `cd`；块内目录树展开/折叠
+  6. 预设命令面板增删改运行；T9 项目文件与全局项合并、作用域标签、切换 cwd 后刷新
+  7. 预设命令 **L2 参数表单**：占位符解析出下拉/输入/布尔勾选控件、填值回填拼命令、主进程转义后写入
   8. **命令补全**：`gi`→Tab→`git `→`st`→Tab→`status` 的连续补全、选项补全（`git --`）、
      ↑↓ 换选、鼠标点选、以及**空输入行按 Tab 仍能移出焦点**
   9. **块间导航**：Alt+↑↓ 在多个块之间跳转、`Alt+E` 跳到出错块、选中块的描边是否可见、
      跳转到**被折叠的块**时是否仍滚到位
   统一验证时应重点试：**WSL 路径预览与文件树列目录**（`find -printf` 是否真能跑通、含空格/制表符的文件名）、**SSH 会话的嗅探与搜索**、**cmd 会话的 `cd /d` 是否正确**、大文件预览截断提示、**L2 表单在 PowerShell / cmd 会话里的转义结果**（同一条预设在 posix 与 powershell 下应得到不同转义串）。
 - **`@xterm/addon-search` 已补装**：之前只在 `package.json` / lockfile 里、实际未进 `node_modules`，导致 `pnpm typecheck` 报 `Cannot find module '@xterm/addon-search'`。已 `pnpm install` 装上（该命令末尾对 `@esbuild/linux-x64` 报 EACCES 权限错，但目标包已落地，不影响）。`vite build` 已通过，但**仍未启动应用确认 SearchAddon 实际装载**。
-- **electron 侧没有真正的类型检查**：`tsconfig.json` 的 `include` 只有 `src`，`pnpm typecheck`（= `vue-tsc --noEmit`）**不覆盖 `electron/`**；`tsconfig.node.json` 配置不完整（缺 `target`，直接跑有一堆 `downlevelIteration` 之类报错），处于废弃状态。改 `electron/main/**` 时**类型错误不会被 CI 抓到**，只能靠 `vite build`（只查语法/导入，不查类型）与人工审阅。
+- **electron 侧已纳入严格类型检查（2026-09-02 T4）**：重建 `tsconfig.node.json`，显式覆盖
+  `electron/main/**/*.ts` 与 `electron/preload/**/*.ts`，并按 Vite 构建语义使用 ESNext + Bundler 解析；
+  `pnpm typecheck`、`build` 与 `build:dir` 现在均串行执行 `vue-tsc --noEmit` 和 Electron 专用 `tsc`。
+  首次启用后暴露的对话框重载、IPC 事件、子进程流、WSL 路径判别联合与 SSH
+  回调等类型错误均已修复，tag 构建工作流经 `build:dir` 自动覆盖 Electron 类型检查。
+- **终端事件总线已改为依赖注入（2026-09-02 T6）**：新增类型化 `TerminalEventBus` 注入协议，
+  `App.vue` 在组合根把既有 `useMitt` emitter 适配后提供；`Terminal.vue` 与 `TerminalPane.vue`
+  只注入协议，不再直接 import app hook。SSH 同参数 pane 恢复事件的既有行为保持不变。
+- **终端 i18n 已显式注入（2026-09-02 T7）**：新增最小 `TerminalTranslate` 注入接口，
+  `App.vue` 在组合根提供应用翻译函数；9 个 `Terminal*.vue` 只消费该接口，不再直接 import
+  `@/i18n`。翻译键、命名参数与语言切换行为保持不变。
+- **主进程宿主能力已改为构造函数注入（2026-09-02 T8）**：`TerminalService` 只消费
+  `TerminalServiceHost` 接口，不再内部创建或直接读取文件系统、外部进程、PTY、SSH client、
+  端口转发器、运行时环境/时钟/ID；`TerminalServiceHost.ts` 提供 Node 生产适配器并由
+  `electron/main/index.ts` 组合根注入。公开会话接口保持不变，测试可用内存 PTY/SSH 适配器覆盖
+  本地与远端创建路径，无需模块级 mock。
+- **预设命令已支持项目级作用域（2026-09-02 T9）**：活动会话 cwd 下的
+  `.nav-tools/terminal-presets.json` 作为 256 KiB 以内的只读项目配置，与 localStorage 全局项
+  合并并显示作用域标签；切换会话/cwd 自动刷新，项目项不在 UI 编辑或删除。初始本地 cwd 与
+  SSH `initialDirectory` 已写入 `TerminalSessionInfo`，后续沿用 cwd 事件更新。项目命令仍走
+  `terminal-session-run-command`，没有新增写回通道或绕过主进程 `ShellQuote`。
 - **`resolveSessionPath` 在会话 cwd 未知时行为可疑**：WSL/SSH 分支里 `cwd` 兜底为 `'~'`，再 `path.posix.resolve('~', '.')` 会解析到**主进程 cwd 下的字面 `~` 目录**，而不是用户家目录。B1 的路径预览与 C1 的文件树共用此逻辑，所以 WSL 会话若没上报 OSC 7 cwd，两条功能都会拿到错路径。修它属于独立小修，别混在 C3 里。
-- **localShell 家族判定**：`ShellQuote.shellFamilyFor` 对 `system` 家族回退为 `powershell`（假设 Windows 默认 shell 为 PowerShell）；若平台为 macOS/Linux 且用 `system`，会有误判风险，需按 `capabilities.platform` 再校准。
-- **`MAX_DIR_ENTRIES = 2000` 是静默截断**：`listSessionPath` 超过上限直接丢尾部，不回传标志。若在 `/` 或 `node_modules` 上列目录，用户会以为文件「不见了」。要不要给 `TerminalSessionDir` 加 `truncated` 字段，留给验证时看实际观感再定。
+- **localShell 家族判定已按平台校准（2026-09-02 T3）**：`ShellQuote.shellFamilyFor` 现在要求显式平台；`system` 与旧会话缺省本地 shell 在 Windows 按 PowerShell、macOS/Linux 按 POSIX 处理。主进程预设命令使用 `process.platform`，文件树「在终端打开」使用 `capabilities.platform`，两条写回通道保持一致。
+- **目录列举截断已显式提示（2026-09-02 T2）**：`TerminalSessionDir` 已增加 `truncated` 字段，
+  本机 fs / WSL `find` / SSH SFTP 三通道统一最多返回 2000 条；超过上限时，共享文件树顶部显示
+  「仅显示前 N 条」，侧边文件树与块内目录树同步生效，不再静默丢弃尾部。
 
 ---
 
@@ -247,7 +271,7 @@ C5 块间导航
 **先跑命令确认基线（不修改任何东西）**
 ```bash
 cd d:/projects/03-上位机/Nav-Tools     # 注意：仓库实际路径是 d: 盘，旧文档里的 e:/Proj-Enhanced/... 已失效
-pnpm run typecheck                     # 应全过（注意：不覆盖 electron/，见 §7）
+pnpm run typecheck                     # 应全过（renderer + electron main/preload，见 §7）
 npx vite build                         # renderer + electron main + preload，应全过
 git status --short                     # 应无输出（工作区干净）
 git log --oneline -10                  # 批次 1 的 4 个 + 批次 2 的 2 个 + 文档 + 批次 3 + 文档 + 批次 4
@@ -306,10 +330,10 @@ npx vitest run tests/unit/shell-quote.test.ts tests/unit/directory-listing.test.
 | `04-design.md` | 状态改「已实现但有偏离」；**新增 §11 实施结果对照**：实际走「嗅探 + 路径检测→直读文件系统 + 侧边文件树」，未按原设计的「包装 `ls`/`cat`」走，原因与影响全记录 |
 | `05-roadmap.md` | 状态改「批次 1–4 已全部实现」；§1 决策表补落地情况（决策 2 未落地）；§2 现状基线的「缺失」清单标记已补齐；§3/§4 逐项标注完成状态；§6 待定更新 |
 
-### 9.1 同步过程中发现的重要 gap：目录点击不能就地展开文件树
+### 9.1 同步过程中发现的重要 gap：目录点击不能就地展开文件树（T1 已补齐）
 
 这是**路线图 §1 决策 2**（「目录点击 = 就地展开文件树」）与**用户核心原话**
-（「我执行了 `ls`，下面会呈现一个文件树」）的残余差距，此前各批交接记录里没有显式记过：
+（「我执行了 `ls`，下面会呈现一个文件树」）曾存在的残余差距：
 
 - 现状：块输出里的**文件**名点击可预览；**目录**名点击后走 `terminal-path-read`，
   读目录失败，显示「无法读取该文件（可能已删除、**是目录**或不支持预览）」。
@@ -319,13 +343,11 @@ npx vitest run tests/unit/shell-quote.test.ts tests/unit/directory-listing.test.
 - 目录浏览目前由 C1 侧边文件树面板承担，所以功能上「能浏览目录」，
   但「敲 `ls` 后在命令块下面直接长出树」这个最初诉求没有闭环。
 
-**若要补齐**（改动很小，数据通道全现成）：`togglePreview` 里对 `directory: true`
-的路径改走 `terminal-session-list-dir`（批次 2 已建好三通道列目录 IPC），
-预览区复用 `TerminalFileTreePanel` 的 `el-tree` 就地懒加载展开。
-是否做、什么时候做待用户拍板（已记入 `05-roadmap.md` §6 与 `04-design.md` §11.3）。
-
-**统一验证时注意**：点目录出现「无法读取」提示**不是 bug**，是上述已知 gap；
-验证清单（§7 第 5 项）里「文件预览」应理解为文件而非目录。
+**2026-09-02 T1 补齐**：`probePath` 缓存完整 `TerminalPathStat`，`togglePreview` 对
+`directory: true` 改走 `terminal-session-list-dir`；侧边面板的树抽成共享
+`TerminalFileTree.vue`，块内与侧边均复用其 `el-tree` 懒加载和三通道。
+目录条目再次点击会收起块内树；文件仍走带 `PREVIEW_MAX_BYTES` 上限的原预览通道。
+相关单测同时验证目录/文件分流、懒加载节点标志与恶意文件名只按文本渲染。
 
 ---
 
@@ -360,7 +382,7 @@ npx vitest run tests/unit/shell-quote.test.ts tests/unit/directory-listing.test.
 
 ### 10.3 统一验证结论（2026-09-01，随 v1.5.0 收尾）
 
-用户授权后执行操作 1（应用内统一验证的自动化部分）；操作 2（目录点击就地展开文件树）按用户要求暂不做。
+用户授权后执行操作 1（应用内统一验证的自动化部分）；操作 2（目录点击就地展开文件树）当时按用户要求暂不做，之后于 2026-09-02 的 T1 补齐。
 本机环境无法驱动 Electron GUI（无显示器），故「真机点击」仅列出待用户本地验收项，自动化部分已全部跑通。
 
 **自动化验证（CLI 全绿项）：**
@@ -379,7 +401,7 @@ npx vitest run tests/unit/shell-quote.test.ts tests/unit/directory-listing.test.
 |---|---|---|---|
 | 1 | 文件树面板（三通道/懒加载）| 路径解析 `resolveSessionPath` 间接覆盖 | ✅ 面板展开/点击 |
 | 2 | 预设命令面板 | `preset-storage.test.ts` 覆盖存储 | ✅ 面板弹出/执行 |
-| 3 | 预设 L2 表单（主进程转义）| `command-template.test.ts` 覆盖模板解析 + shell 转义 | 表单交互 |
+| 3 | 预设 L2 表单（主进程转义）| `command-template.test.ts` 覆盖模板解析 + shell 转义；`terminal-preset-boolean.test.ts` 覆盖勾选值进入 IPC | 文本/下拉表单交互仍需真机点验 |
 | 4 | 命令补全 | `command-completion.test.ts`（16 例）✅ | 输入触发 UI |
 | 5 | 块间导航 | `command-blocks.test.ts` 覆盖块模型 | Alt+↑↓/Alt+E 跳转 |
 | 6 | 回显 bug 修复 | 仅构建验证 + 修复逻辑 | ✅ **必须真机**：原始视图输入 `ls` 可见 |
@@ -391,4 +413,4 @@ npx vitest run tests/unit/shell-quote.test.ts tests/unit/directory-listing.test.
 6（回显）与 7（吸顶）为结构性修复，只能靠真机确认。
 
 **待用户本地 `pnpm dev` 验收：** 原始视图输入命令可见（#6）、`cat` 长文档块头吸顶（#7），
-及文件树/预设/补全/块导航（#1-5）。操作 2 待用户需要时再补。
+及文件树/预设/补全/块导航（#1-5）。操作 2 后续已由 2026-09-02 的 T1 补齐。

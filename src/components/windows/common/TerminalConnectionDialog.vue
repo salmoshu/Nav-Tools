@@ -249,7 +249,7 @@ import { computed, reactive, ref, toRaw, watch } from 'vue'
 import { Connection, Delete, Loading } from '@element-plus/icons-vue'
 import { ElMessageBox } from 'element-plus'
 import AppDialogTitle from '@/components/AppDialogTitle.vue'
-import { t } from '@/i18n'
+import { useTerminalTranslate } from '@/core/terminal/TerminalI18n'
 import {
   createPortForwardRule,
   type PortForwardKind,
@@ -257,6 +257,8 @@ import {
   type SshConnectionSecrets,
 } from '@/core/terminal/TerminalTypes'
 import { createSshProfile } from '@/core/terminal/TerminalProfileStorage'
+
+const t = useTerminalTranslate()
 
 const props = defineProps<{
   modelValue: boolean

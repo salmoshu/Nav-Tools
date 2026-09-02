@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, provide, ref } from 'vue'
 import { ElConfigProvider } from 'element-plus'
 import zhCn from 'element-plus/es/locale/lang/zh-cn'
 import en from 'element-plus/es/locale/lang/en'
@@ -13,6 +13,22 @@ import emitter from '@/hooks/useMitt'
 import { useApplicationSelector } from '@/composables/useApplicationSelector'
 import { useLocale } from '@/composables/useLocale'
 import { t } from '@/i18n'
+import { TERMINAL_EVENT_BUS_KEY, type TerminalEventBus } from '@/core/terminal/TerminalEventBus'
+import { TERMINAL_TRANSLATE_KEY } from '@/core/terminal/TerminalI18n'
+
+const terminalEventBus: TerminalEventBus = {
+  on(event, handler) {
+    emitter.on(event, handler as (payload: unknown) => void)
+  },
+  off(event, handler) {
+    emitter.off(event, handler as (payload: unknown) => void)
+  },
+  emit(event, payload) {
+    emitter.emit(event, payload)
+  },
+}
+provide(TERMINAL_EVENT_BUS_KEY, terminalEventBus)
+provide(TERMINAL_TRANSLATE_KEY, t)
 
 const { locale } = useLocale()
 const epLocale = computed(() => (locale.value === 'en-US' ? en : zhCn))
@@ -46,7 +62,7 @@ const contextTitle = computed(() => {
 
   if (settingsOpen.value) return t('app.settings')
 
-    return currentApplication.value?.name
+  return currentApplication.value?.name
 })
 
 const panelTitleFallback = computed(() => t('app.panel'))

@@ -24,6 +24,7 @@ import { LogRecordingService } from './services/LogRecordingService'
 import { OfflineTileService } from './services/OfflineTileService'
 import { UpdateService } from './services/UpdateService'
 import { TerminalService } from './services/TerminalService'
+import { createNodeTerminalServiceHost } from './services/TerminalServiceHost'
 import { TerminalCredentialService } from './services/TerminalCredentialService'
 import { registerTerminalIpc } from './terminalIpc'
 
@@ -50,9 +51,8 @@ export const MAIN_DIST = path.join(process.env.APP_ROOT, 'dist-electron')
 export const RENDERER_DIST = path.join(process.env.APP_ROOT, 'dist')
 export const VITE_DEV_SERVER_URL = process.env.VITE_DEV_SERVER_URL
 
-process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL
-  ? path.join(process.env.APP_ROOT, 'public')
-  : RENDERER_DIST
+const VITE_PUBLIC = VITE_DEV_SERVER_URL ? path.join(process.env.APP_ROOT, 'public') : RENDERER_DIST
+process.env.VITE_PUBLIC = VITE_PUBLIC
 
 // Disable GPU Acceleration for Windows 7
 if (os.release().startsWith('6.1')) app.disableHardwareAcceleration()
@@ -73,11 +73,15 @@ const textFileStreamService = new TextFileStreamService()
 const logRecordingService = new LogRecordingService()
 const offlineTileService = new OfflineTileService()
 const updateService = new UpdateService()
-const terminalService = new TerminalService(app.getPath('userData'), (channel, payload) => {
-  for (const target of BrowserWindow.getAllWindows()) {
-    if (!target.isDestroyed()) target.webContents.send(channel, payload)
-  }
-})
+const terminalService = new TerminalService(
+  app.getPath('userData'),
+  (channel, payload) => {
+    for (const target of BrowserWindow.getAllWindows()) {
+      if (!target.isDestroyed()) target.webContents.send(channel, payload)
+    }
+  },
+  createNodeTerminalServiceHost(),
+)
 const terminalCredentialService = new TerminalCredentialService(
   app.getPath('userData'),
   safeStorage,
@@ -279,14 +283,17 @@ ipcMain.handle('text-file-stream-close', (event, requestId) =>
 
 ipcMain.handle('log-recording-start', async (event) => {
   const targetWindow = BrowserWindow.fromWebContents(event.sender)
-  const result = await dialog.showSaveDialog(targetWindow ?? undefined, {
+  const options = {
     title: '录制日志',
     defaultPath: createDefaultLogName(),
     filters: [
       { name: '日志文件', extensions: ['log'] },
       { name: '所有文件', extensions: ['*'] },
     ],
-  })
+  }
+  const result = targetWindow
+    ? await dialog.showSaveDialog(targetWindow, options)
+    : await dialog.showSaveDialog(options)
   if (result.canceled || !result.filePath) return { started: false }
 
   if (!logRecordingOwners.has(event.sender.id)) {
@@ -330,7 +337,7 @@ async function createWindow() {
     frame: false,
     backgroundColor: '#f3f5f7',
     title: `Nav-Tools ${appVersion}`,
-    icon: path.join(process.env.VITE_PUBLIC, 'favicon.ico'),
+    icon: path.join(VITE_PUBLIC, 'favicon.ico'),
     webPreferences: {
       preload,
       // Warning: Enable nodeIntegration and disable contextIsolation is not secure in production
@@ -535,7 +542,7 @@ ipcMain.handle('open-application-window', async (_, request) => {
     minHeight: 600,
     frame: false,
     backgroundColor: '#f3f5f7',
-    icon: path.join(process.env.VITE_PUBLIC, 'favicon.ico'),
+    icon: path.join(VITE_PUBLIC, 'favicon.ico'),
     webPreferences: {
       preload,
       nodeIntegration: false,

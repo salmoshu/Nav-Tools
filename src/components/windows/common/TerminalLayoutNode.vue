@@ -88,7 +88,7 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
-import { t } from '@/i18n'
+import { useTerminalTranslate } from '@/core/terminal/TerminalI18n'
 import type { TerminalLayoutNode, TerminalSplitDirection } from '@/core/terminal/TerminalLayout'
 import type {
   SshConnectionProfile,
@@ -97,6 +97,8 @@ import type {
   TerminalSessionInfo,
 } from '@/core/terminal/TerminalTypes'
 import TerminalPane from './TerminalPane.vue'
+
+const t = useTerminalTranslate()
 
 const props = defineProps<{
   node: TerminalLayoutNode

@@ -20,24 +20,16 @@
     </div>
     <div class="file-tree-root" :title="resolvedRoot">{{ resolvedRoot }}</div>
 
-    <el-tree
+    <TerminalFileTree
       :key="treeKey"
       class="file-tree"
-      :props="treeProps"
-      :load="loadNode"
-      node-key="path"
-      lazy
-      highlight-current
+      :session-id="sessionId"
+      :root-path="rootPath"
+      @loading="loading = $event"
+      @root-resolved="resolvedRoot = $event"
+      @load-error="handleTreeLoadError"
       @node-click="handleNodeClick"
-    >
-      <template #default="{ data }">
-        <el-icon class="file-tree__icon">
-          <Folder v-if="data.directory" />
-          <Document v-else />
-        </el-icon>
-        <span class="file-tree__name">{{ data.name }}</span>
-      </template>
-    </el-tree>
+    />
 
     <div v-if="preview" class="file-tree-preview">
       <header class="file-tree-preview__bar">
@@ -66,30 +58,29 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { Close, Document, Folder, Position, Refresh } from '@element-plus/icons-vue'
+import { Close, Position, Refresh } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
-import { t } from '@/i18n'
 import type { TerminalRichPayload } from '@/core/terminal/CommandBlocks'
+import { useTerminalTranslate } from '@/core/terminal/TerminalI18n'
 import { buildShellCdCommand, shellFamilyFor } from '@/core/terminal/ShellQuote'
-import type {
-  LocalShellKind,
-  SftpEntry,
-  TerminalSessionDir,
-  TerminalSessionKind,
-} from '@/core/terminal/TerminalTypes'
+import type { LocalShellKind, SftpEntry, TerminalSessionKind } from '@/core/terminal/TerminalTypes'
+import TerminalFileTree from './TerminalFileTree.vue'
 import TerminalRichContent from './TerminalRichContent.vue'
+
+const t = useTerminalTranslate()
 
 const props = defineProps<{
   sessionId: string
   /** 决定路径语义与 shell 家族;本机会话要看 localShell 才能选对转义规则 */
   kind: TerminalSessionKind
   localShell?: LocalShellKind
+  /** system 本地 shell 需按宿主平台区分 PowerShell 与 POSIX */
+  platform: string
 }>()
 
 /** 预览读文件上限,与 GUI 视图的块内预览一致 */
 const PREVIEW_MAX_BYTES = 512 * 1024
 
-type FileTreeNode = SftpEntry & { isLeaf: boolean }
 type PreviewState =
   | { status: 'loading'; path: string }
   | { status: 'ready'; path: string; payload: TerminalRichPayload; truncated: boolean }
@@ -103,60 +94,24 @@ const loading = ref(false)
 const preview = ref<PreviewState | null>(null)
 /** 变更即重挂载 el-tree:懒加载树的根节点只在挂载时拉一次 */
 const treeKey = ref(0)
-const currentNode = ref<FileTreeNode | null>(null)
-
-const treeProps = { label: 'name', children: 'children', isLeaf: 'isLeaf' }
+const currentNode = ref<SftpEntry | null>(null)
 const openTarget = computed(() => {
   const node = currentNode.value
   if (!node) return resolvedRoot.value
   return node.directory ? node.path : parentOf(node.path)
 })
 
-async function listDirectory(path: string): Promise<TerminalSessionDir | null> {
-  loading.value = true
-  try {
-    const result = (await window.ipcRenderer.invoke('terminal-session-list-dir', {
-      sessionId: props.sessionId,
-      path,
-    })) as TerminalSessionDir | null
-    if (!result) ElMessage.error(t('common.terminal.fileTreeLoadFailed'))
-    return result
-  } catch (error) {
-    ElMessage.error(errorMessage(error))
-    return null
-  } finally {
-    loading.value = false
-  }
-}
-
-interface LazyNode {
-  level: number
-  data?: FileTreeNode
-}
-
-async function loadNode(node: LazyNode, resolve: (data: FileTreeNode[]) => void): Promise<void> {
-  if (node.level === 0) {
-    const dir = await listDirectory(rootPath.value)
-    if (dir) resolvedRoot.value = dir.resolvedPath
-    resolve(toNodes(dir?.entries ?? []))
-    return
-  }
-  const path = node.data?.path
-  const dir = path ? await listDirectory(path) : null
-  resolve(toNodes(dir?.entries ?? []))
-}
-
-function toNodes(entries: SftpEntry[]): FileTreeNode[] {
-  return entries.map((entry) => ({ ...entry, isLeaf: !entry.directory }))
-}
-
-function handleNodeClick(data: FileTreeNode): void {
+function handleNodeClick(data: SftpEntry): void {
   currentNode.value = data
   if (data.directory) {
     preview.value = null
     return
   }
   void showPreview(data.path)
+}
+
+function handleTreeLoadError(_path: string, _root: boolean, error?: unknown): void {
+  ElMessage.error(error ? errorMessage(error) : t('common.terminal.fileTreeLoadFailed'))
 }
 
 async function showPreview(path: string): Promise<void> {
@@ -187,7 +142,10 @@ async function showPreview(path: string): Promise<void> {
 async function openInTerminal(): Promise<void> {
   const target = openTarget.value
   if (!target) return
-  const command = buildShellCdCommand(target, shellFamilyFor(props.kind, props.localShell))
+  const command = buildShellCdCommand(
+    target,
+    shellFamilyFor(props.kind, props.localShell, props.platform),
+  )
   try {
     await window.ipcRenderer.invoke('terminal-session-write', {
       sessionId: props.sessionId,
@@ -200,6 +158,8 @@ async function openInTerminal(): Promise<void> {
 
 function applyRoot(): void {
   rootPath.value = pathInput.value.trim() || '.'
+  resolvedRoot.value = rootPath.value
+  loading.value = false
   preview.value = null
   currentNode.value = null
   treeKey.value += 1
@@ -207,6 +167,7 @@ function applyRoot(): void {
 
 function reload(): void {
   pathInput.value = rootPath.value
+  loading.value = false
   preview.value = null
   treeKey.value += 1
 }
@@ -216,7 +177,10 @@ watch(
   () => {
     rootPath.value = '.'
     pathInput.value = '.'
+    resolvedRoot.value = '.'
+    loading.value = false
     preview.value = null
+    currentNode.value = null
     treeKey.value += 1
   },
 )
@@ -269,16 +233,6 @@ function errorMessage(error: unknown): string {
   flex: 1;
   min-height: 0;
   overflow: auto;
-}
-.file-tree__icon {
-  margin-right: 4px;
-  color: var(--app-text-muted);
-  vertical-align: -2px;
-}
-.file-tree__name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 .file-tree-preview {
   display: flex;

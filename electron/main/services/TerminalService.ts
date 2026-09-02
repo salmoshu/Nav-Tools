@@ -1,14 +1,8 @@
-import { execFile } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { existsSync, statSync } from 'node:fs'
-import fs from 'node:fs/promises'
-import os from 'node:os'
 import path from 'node:path'
-import { promisify } from 'node:util'
-import * as pty from 'node-pty'
-import { Client, type ClientChannel, type ConnectConfig, type SFTPWrapper } from 'ssh2'
+import type { IPty } from 'node-pty'
+import type { Client, ClientChannel, ConnectConfig, HostVerifier, SFTPWrapper } from 'ssh2'
 import {
-  createTerminalId,
   sshConnectionKey,
   type HostKeyMismatchEvent,
   type HostKeyPromptEvent,
@@ -25,7 +19,6 @@ import {
   type TerminalPathStat,
   type TerminalSessionDir,
   type TerminalSessionInfo,
-  type TerminalSessionKind,
   type TerminalStatusEvent,
 } from '../../../src/core/terminal/TerminalTypes'
 import { parseFindListing, sortDirectoryEntries } from '../../../src/core/terminal/DirectoryListing'
@@ -36,9 +29,8 @@ import {
   type ShellFamily,
 } from '../../../src/core/terminal/ShellQuote'
 import { mimeFromPath } from '../../../src/core/terminal/FileMime'
-import { SshPortForwardService } from './SshPortForwardService'
+import type { TerminalPortForwarder, TerminalServiceHost } from './TerminalServiceHost'
 
-const execFileAsync = promisify(execFile)
 const MAX_SCROLLBACK_CHARS = 1_000_000
 const SSH_CONNECT_TIMEOUT_MS = 35_000
 const SSH_CHANNEL_TIMEOUT_MS = 15_000
@@ -133,7 +125,7 @@ interface BaseSession {
 
 interface LocalSession extends BaseSession {
   type: 'pty'
-  process: pty.IPty
+  process: IPty
   request: TerminalCreateRequest
 }
 
@@ -145,13 +137,16 @@ interface SshSession extends BaseSession {
 
 type TerminalSession = LocalSession | SshSession
 
+type SessionPathTarget =
+  { kind: 'local' | 'ssh'; path: string } | { kind: 'wsl'; path: string; distro: string }
+
 interface SshConnection {
   id: string
   client: Client
   jumpClient?: Client
   profile: SshConnectionProfile
   sessions: Set<string>
-  forwarder: SshPortForwardService
+  forwarder: TerminalPortForwarder
   sftp?: Promise<SFTPWrapper>
 }
 
@@ -176,6 +171,7 @@ export class TerminalService {
   constructor(
     private readonly userDataPath: string,
     private readonly broadcast: Broadcast,
+    private readonly host: TerminalServiceHost,
   ) {}
 
   public async getCapabilities(): Promise<TerminalCapabilities> {
@@ -183,17 +179,15 @@ export class TerminalService {
     const localShells: TerminalCapabilities['localShells'] = []
     const wslDistros: string[] = []
 
-    if (process.platform === 'win32') {
+    if (this.host.platform === 'win32') {
       localShells.push({ kind: 'powershell', label: 'PowerShell', executable: 'powershell.exe' })
       localShells.push({ kind: 'cmd', label: 'Command Prompt', executable: 'cmd.exe' })
-      const gitBash = await findGitBash()
+      const gitBash = await findGitBash(this.host)
       if (gitBash) localShells.push({ kind: 'git-bash', label: 'Git Bash', executable: gitBash })
       try {
-        const result = await execFileAsync('wsl.exe', ['--list', '--quiet'], {
+        const raw = await this.host.executeFile('wsl.exe', ['--list', '--quiet'], {
           windowsHide: true,
-          encoding: 'buffer',
         })
-        const raw = Buffer.isBuffer(result.stdout) ? result.stdout : Buffer.from(result.stdout)
         const decoded = raw.includes(0) ? raw.toString('utf16le') : raw.toString('utf8')
         wslDistros.push(
           ...decoded
@@ -207,12 +201,12 @@ export class TerminalService {
       }
     } else {
       const executable =
-        process.env.SHELL || (process.platform === 'darwin' ? '/bin/zsh' : '/bin/bash')
+        this.host.environment.SHELL || (this.host.platform === 'darwin' ? '/bin/zsh' : '/bin/bash')
       localShells.push({ kind: 'system', label: path.basename(executable), executable })
     }
 
     this.capabilitiesCache = {
-      platform: process.platform,
+      platform: this.host.platform,
       localShells,
       wslDistros,
       sshAvailable: true,
@@ -262,7 +256,7 @@ export class TerminalService {
 
   public write(sessionId: string, data: string): void {
     const session = this.requireSession(sessionId)
-    session.lastInputAt = Date.now()
+    session.lastInputAt = this.host.now()
     if (session.type === 'pty') session.process.write(data)
     else session.stream.write(data)
   }
@@ -289,11 +283,12 @@ export class TerminalService {
     this.write(sessionId, `${command}\r`)
   }
 
-  /** 从会话自身推导 shell 家族；本机会话看启动时选定的 shell */
+  /** 从会话自身推导 shell 家族；system/缺省本地 shell 再按宿主平台校准 */
   private shellFamilyForSession(session: TerminalSession): ShellFamily {
     return shellFamilyFor(
       session.info.kind,
       session.type === 'pty' ? session.request.localShell : undefined,
+      this.host.platform,
     )
   }
 
@@ -303,7 +298,7 @@ export class TerminalService {
     // Resizing is best-effort, so a missing session is an expected lifecycle race.
     const session = this.sessions.get(sessionId)
     if (!session) return
-    session.lastResizeAt = Date.now()
+    session.lastResizeAt = this.host.now()
     if (session.type === 'pty') session.process.resize(cols, rows)
     else session.stream.setWindow(rows, cols, 0, 0)
   }
@@ -325,7 +320,7 @@ export class TerminalService {
     this.pendingCreates.clear()
     await Promise.all([...this.sessions.keys()].map((id) => this.close(id)))
     for (const pending of this.pendingHostKeys.values()) {
-      clearTimeout(pending.timeout)
+      this.host.clearTimeout(pending.timeout)
       pending.callback(false)
     }
     this.pendingHostKeys.clear()
@@ -335,13 +330,17 @@ export class TerminalService {
     const pending = this.pendingHostKeys.get(requestId)
     if (!pending) return
     this.pendingHostKeys.delete(requestId)
-    clearTimeout(pending.timeout)
+    this.host.clearTimeout(pending.timeout)
     if (accepted) {
       try {
         const knownHosts = await this.loadKnownHosts()
         knownHosts[hostKey(pending.host, pending.port)] = pending.fingerprint
-        await fs.mkdir(this.userDataPath, { recursive: true })
-        await fs.writeFile(this.knownHostsPath(), JSON.stringify(knownHosts, null, 2), 'utf8')
+        await this.host.fileSystem.mkdir(this.userDataPath, { recursive: true })
+        await this.host.fileSystem.writeFile(
+          this.knownHostsPath(),
+          JSON.stringify(knownHosts, null, 2),
+          'utf8',
+        )
       } catch (error) {
         pending.callback(false)
         throw error
@@ -351,9 +350,13 @@ export class TerminalService {
   }
 
   public async listSshConfigProfiles(): Promise<SshConnectionProfile[]> {
-    const configPath = path.join(os.homedir(), '.ssh', 'config')
+    const configPath = path.join(this.host.homedir(), '.ssh', 'config')
     try {
-      return parseSshConfig(await fs.readFile(configPath, 'utf8'))
+      return parseSshConfig(
+        await this.host.fileSystem.readFile(configPath, 'utf8'),
+        this.host.homedir(),
+        this.host.username(),
+      )
     } catch {
       return []
     }
@@ -436,7 +439,7 @@ export class TerminalService {
           size: Number.isFinite(size) ? size : 0,
         }
       }
-      const stats = await fs.stat(target.path)
+      const stats = await this.host.fileSystem.stat(target.path)
       return {
         exists: true,
         directory: stats.isDirectory(),
@@ -492,10 +495,10 @@ export class TerminalService {
           [target.path],
         )
       } else {
-        const stats = await fs.stat(target.path)
+        const stats = await this.host.fileSystem.stat(target.path)
         if (stats.isDirectory()) return null
         size = stats.size
-        const handle = await fs.open(target.path, 'r')
+        const handle = await this.host.fileSystem.open(target.path, 'r')
         try {
           const chunk = Buffer.alloc(Math.min(maxBytes, size))
           const { bytesRead } = await handle.read(chunk, 0, chunk.length, 0)
@@ -533,7 +536,8 @@ export class TerminalService {
 
     try {
       if (target.kind === 'ssh') {
-        return { resolvedPath: target.path, entries: await this.listSftp(sessionId, target.path) }
+        const entries = await this.listSftp(sessionId, target.path)
+        return { resolvedPath: target.path, ...limitDirectoryEntries(entries) }
       }
       if (target.kind === 'wsl') {
         if (!target.distro) return null
@@ -543,14 +547,16 @@ export class TerminalService {
           'find "$1" -mindepth 1 -maxdepth 1 -printf "%y\t%s\t%T@\t%f\n"',
           [target.path],
         )
-        return { resolvedPath: target.path, entries: parseFindListing(output, target.path) }
+        const entries = parseFindListing(output, target.path)
+        return { resolvedPath: target.path, ...limitDirectoryEntries(entries) }
       }
-      const names = await fs.readdir(target.path)
+      const names = await this.host.fileSystem.readdir(target.path)
+      const truncated = names.length > MAX_DIR_ENTRIES
       const entries = await Promise.all(
         names.slice(0, MAX_DIR_ENTRIES).map(async (name) => {
           const entryPath = path.win32.join(target.path, name)
           try {
-            const stats = await fs.stat(entryPath)
+            const stats = await this.host.fileSystem.stat(entryPath)
             return {
               name,
               path: entryPath,
@@ -565,17 +571,14 @@ export class TerminalService {
           }
         }),
       )
-      return { resolvedPath: target.path, entries: sortDirectoryEntries(entries) }
+      return { resolvedPath: target.path, entries: sortDirectoryEntries(entries), truncated }
     } catch {
       return null
     }
   }
 
   /** 把输出里的路径候选解析成「会话语义下的绝对路径」 */
-  private resolveSessionPath(
-    session: TerminalSession,
-    rawPath: string,
-  ): { kind: TerminalSessionKind; path: string; distro?: string } | null {
+  private resolveSessionPath(session: TerminalSession, rawPath: string): SessionPathTarget | null {
     const trimmed = rawPath.trim()
     if (!trimmed) return null
 
@@ -609,8 +612,8 @@ export class TerminalService {
       }
     }
     // 本机:cwd 已由 normalizeMsysPath 统一成 Windows 路径
-    const cwd = session.info.cwd || os.homedir()
-    const expanded = expandHome(trimmed)
+    const cwd = session.info.cwd || this.host.homedir()
+    const expanded = expandHome(trimmed, this.host.homedir())
     return {
       kind: 'local',
       path: path.win32.isAbsolute(expanded)
@@ -630,12 +633,11 @@ export class TerminalService {
   }
 
   private async wslExecBuffer(distro: string, script: string, args: string[]): Promise<Buffer> {
-    const { stdout } = await execFileAsync(
+    return this.host.executeFile(
       'wsl.exe',
       ['--distribution', distro, '--', 'sh', '-c', script, 'sh', ...args],
-      { encoding: 'buffer', maxBuffer: WSL_OUTPUT_MAX_BYTES },
+      { maxBuffer: WSL_OUTPUT_MAX_BYTES },
     )
-    return stdout as Buffer
   }
 
   public async sftpMkdir(sessionId: string, remotePath: string): Promise<void> {
@@ -696,20 +698,23 @@ export class TerminalService {
   }
 
   private createPtySession(request: TerminalCreateRequest): TerminalSessionInfo {
-    const launch = resolvePtyLaunch(request)
-    const id = createTerminalId('term')
+    const launch = resolvePtyLaunch(request, this.host)
+    const spawnCwd = validCwd(request.cwd, this.host)
+    const initialCwd = request.kind === 'wsl' ? request.cwd?.trim() || undefined : spawnCwd
+    const id = this.host.createId('term')
     const info: TerminalSessionInfo = {
       id,
       kind: request.kind,
       title: launch.title,
       status: 'ready',
+      ...(initialCwd ? { cwd: initialCwd } : {}),
     }
-    const processHandle = pty.spawn(launch.executable, launch.args, {
+    const processHandle = this.host.spawnPty(launch.executable, launch.args, {
       name: 'xterm-256color',
       cols: Math.max(2, request.cols),
       rows: Math.max(1, request.rows),
-      cwd: validCwd(request.cwd),
-      env: ptyEnvironment(request),
+      cwd: spawnCwd,
+      env: ptyEnvironment(request, this.host.environment),
     })
     const session: LocalSession = {
       type: 'pty',
@@ -795,14 +800,14 @@ export class TerminalService {
       jumpClient?.end()
       throw error
     }
-    const connectionId = createTerminalId('ssh-connection')
+    const connectionId = this.host.createId('ssh-connection')
     const connection: SshConnection = {
       id: connectionId,
       client,
       jumpClient,
       profile: structuredClone(profile),
       sessions: new Set(),
-      forwarder: new SshPortForwardService(client, connectionId, (event) =>
+      forwarder: this.host.createPortForwarder(client, connectionId, (event) =>
         this.broadcast('terminal-forward-status', event),
       ),
     }
@@ -831,10 +836,10 @@ export class TerminalService {
     const options = await this.createConnectConfig(profile, secrets, sock)
     throwIfAborted(signal)
     return new Promise((resolve, reject) => {
-      const client = new Client()
+      const client = this.host.createSshClient()
       let settled = false
       const cleanup = () => {
-        clearTimeout(timeout)
+        this.host.clearTimeout(timeout)
         signal?.removeEventListener('abort', abort)
       }
       const fail = (error: Error) => {
@@ -847,7 +852,7 @@ export class TerminalService {
         fail(connectionCancelledError())
         client.destroy()
       }
-      const timeout = setTimeout(() => {
+      const timeout = this.host.setTimeout(() => {
         if (settled) return
         settled = true
         cleanup()
@@ -882,6 +887,8 @@ export class TerminalService {
     secrets: SshConnectionSecrets,
     sock?: ClientChannel,
   ): Promise<ConnectConfig> {
+    const hostVerifier: HostVerifier = (key, callback) =>
+      void this.verifyHostKey(profile.host, profile.port, key, callback)
     const options: ConnectConfig = {
       host: profile.host,
       port: profile.port,
@@ -889,17 +896,18 @@ export class TerminalService {
       readyTimeout: 20_000,
       keepaliveInterval: 15_000,
       keepaliveCountMax: 3,
-      hostVerifier: (key, callback) =>
-        void this.verifyHostKey(profile.host, profile.port, key, callback),
+      hostVerifier,
     }
     if (sock) options.sock = sock
     if (profile.authMethod === 'password') options.password = secrets.password
     else if (profile.authMethod === 'private-key') {
       if (!profile.privateKeyPath) throw new Error('Private key path is required')
-      options.privateKey = await fs.readFile(expandHome(profile.privateKeyPath))
+      options.privateKey = await this.host.fileSystem.readFile(
+        expandHome(profile.privateKeyPath, this.host.homedir()),
+      )
       if (secrets.passphrase) options.passphrase = secrets.passphrase
     } else {
-      options.agent = process.env.SSH_AUTH_SOCK || '\\\\.\\pipe\\openssh-ssh-agent'
+      options.agent = this.host.environment.SSH_AUTH_SOCK || '\\\\.\\pipe\\openssh-ssh-agent'
     }
     return options
   }
@@ -927,8 +935,8 @@ export class TerminalService {
       callback(false)
       return
     }
-    const requestId = createTerminalId('host-key')
-    const timeout = setTimeout(() => {
+    const requestId = this.host.createId('host-key')
+    const timeout = this.host.setTimeout(() => {
       const pending = this.pendingHostKeys.get(requestId)
       if (!pending) return
       this.pendingHostKeys.delete(requestId)
@@ -954,7 +962,7 @@ export class TerminalService {
     const stream = await new Promise<ClientChannel>((resolve, reject) => {
       let settled = false
       const cleanup = () => {
-        clearTimeout(timeout)
+        this.host.clearTimeout(timeout)
         signal?.removeEventListener('abort', abort)
       }
       const abort = () => {
@@ -963,7 +971,7 @@ export class TerminalService {
         cleanup()
         reject(connectionCancelledError())
       }
-      const timeout = setTimeout(() => {
+      const timeout = this.host.setTimeout(() => {
         if (settled) return
         settled = true
         cleanup()
@@ -990,7 +998,8 @@ export class TerminalService {
         },
       )
     })
-    const id = createTerminalId('term')
+    const directory = (initialDirectory ?? connection.profile.initialDirectory).trim()
+    const id = this.host.createId('term')
     const info: TerminalSessionInfo = {
       id,
       kind: 'ssh',
@@ -998,6 +1007,7 @@ export class TerminalService {
       status: 'ready',
       sshConnectionId: connection.id,
       profileId: connection.profile.id,
+      ...(directory ? { cwd: directory } : {}),
     }
     const session: SshSession = {
       type: 'ssh',
@@ -1019,7 +1029,6 @@ export class TerminalService {
     })
     // 不再向 shell 注入 PROMPT_COMMAND 启动命令:注入文本会被回显/写进 scrollback,
     // 恢复终端时被当作奇怪打印再次回放。cwd 上报只保留 PTY 的环境变量注入。
-    const directory = (initialDirectory ?? connection.profile.initialDirectory).trim()
     if (directory) stream.write(`cd -- ${shellQuote(directory)}\r`)
     this.emitStatus(session)
     return { ...info }
@@ -1039,7 +1048,7 @@ export class TerminalService {
     this.trackCwd(session, data)
     // 紧随用户输入到达的输出基本是终端回显,标记 activity:false,
     // 渲染层据此跳过 tab 忙碌动画,只有真实输出才驱动活动状态
-    const now = Date.now()
+    const now = this.host.now()
     const followsInput =
       session.lastInputAt !== undefined && now - session.lastInputAt <= INPUT_ECHO_WINDOW_MS
     const followsResize =
@@ -1115,10 +1124,10 @@ export class TerminalService {
     localPath: string,
     remotePath: string,
   ): Promise<void> {
-    const stats = await fs.stat(localPath)
+    const stats = await this.host.fileSystem.stat(localPath)
     if (stats.isDirectory()) {
       await sftpMkdir(sftp, remotePath).catch(() => undefined)
-      for (const name of await fs.readdir(localPath)) {
+      for (const name of await this.host.fileSystem.readdir(localPath)) {
         await this.uploadEntry(
           sftp,
           sessionId,
@@ -1128,7 +1137,7 @@ export class TerminalService {
       }
       return
     }
-    const operationId = createTerminalId('sftp')
+    const operationId = this.host.createId('sftp')
     await new Promise<void>((resolve, reject) => {
       sftp.fastPut(
         localPath,
@@ -1167,7 +1176,7 @@ export class TerminalService {
   ): Promise<void> {
     const attrs = await sftpStat(sftp, remotePath)
     if (attrs.isDirectory()) {
-      await fs.mkdir(localPath, { recursive: true })
+      await this.host.fileSystem.mkdir(localPath, { recursive: true })
       const entries = await sftpReadDir(sftp, remotePath)
       for (const entry of entries) {
         await this.downloadEntry(
@@ -1179,8 +1188,8 @@ export class TerminalService {
       }
       return
     }
-    const operationId = createTerminalId('sftp')
-    await fs.mkdir(path.dirname(localPath), { recursive: true })
+    const operationId = this.host.createId('sftp')
+    await this.host.fileSystem.mkdir(path.dirname(localPath), { recursive: true })
     await new Promise<void>((resolve, reject) => {
       sftp.fastGet(
         remotePath,
@@ -1228,7 +1237,7 @@ export class TerminalService {
     if (!match?.groups?.host) throw new Error(`Invalid ProxyJump: ${proxyJump}`)
     return {
       ...fallback,
-      id: createTerminalId('proxy-jump'),
+      id: this.host.createId('proxy-jump'),
       name: proxyJump,
       host: match.groups.host.replace(/^\[|\]$/g, ''),
       port: Number(match.groups.port || 22),
@@ -1240,12 +1249,14 @@ export class TerminalService {
 
   private async loadKnownHosts(): Promise<Record<string, string>> {
     if (this.knownHosts) return this.knownHosts
+    let knownHosts: Record<string, string>
     try {
-      this.knownHosts = JSON.parse(await fs.readFile(this.knownHostsPath(), 'utf8'))
+      knownHosts = JSON.parse(await this.host.fileSystem.readFile(this.knownHostsPath(), 'utf8'))
     } catch {
-      this.knownHosts = {}
+      knownHosts = {}
     }
-    return this.knownHosts
+    this.knownHosts = knownHosts
+    return knownHosts
   }
 
   private knownHostsPath(): string {
@@ -1253,7 +1264,10 @@ export class TerminalService {
   }
 }
 
-function resolvePtyLaunch(request: TerminalCreateRequest): {
+function resolvePtyLaunch(
+  request: TerminalCreateRequest,
+  host: TerminalServiceHost,
+): {
   executable: string
   args: string[]
   title: string
@@ -1274,9 +1288,10 @@ function resolvePtyLaunch(request: TerminalCreateRequest): {
     }
   if (kind === 'cmd') return { executable: 'cmd.exe', args: ['/K', 'chcp 65001>nul'], title: 'CMD' }
   if (kind === 'git-bash') {
-    return { executable: resolveGitBashSync(), args: ['--login', '-i'], title: 'Git Bash' }
+    return { executable: resolveGitBashSync(host), args: ['--login', '-i'], title: 'Git Bash' }
   }
-  const executable = process.env.SHELL || (process.platform === 'darwin' ? '/bin/zsh' : '/bin/bash')
+  const executable =
+    host.environment.SHELL || (host.platform === 'darwin' ? '/bin/zsh' : '/bin/bash')
   return { executable, args: ['-l'], title: path.basename(executable) }
 }
 
@@ -1302,8 +1317,11 @@ function cleanEnvironment(environment: Record<string, string | undefined>): Reco
  * - powershell 在 resolvePtyLaunch 用启动参数注入 prompt 函数;cmd 无可靠机制,不注入;
  * - SSH 远端 shell 不注入(v1.4.4 起不再向远端写入启动命令,避免污染 scrollback 回放)。
  */
-function ptyEnvironment(request: TerminalCreateRequest): Record<string, string> {
-  const env = cleanEnvironment(process.env)
+function ptyEnvironment(
+  request: TerminalCreateRequest,
+  environment: TerminalServiceHost['environment'],
+): Record<string, string> {
+  const env = cleanEnvironment(environment)
   if (request.kind === 'wsl') {
     env.PROMPT_COMMAND = OSC133_BASH_INTEGRATION
     env.WSLENV = env.WSLENV ? `${env.WSLENV}:PROMPT_COMMAND` : 'PROMPT_COMMAND'
@@ -1319,12 +1337,28 @@ function normalizeMsysPath(cwd: string): string {
   return match ? `${match[1].toUpperCase()}:/${match[2]}` : cwd
 }
 
-function validCwd(cwd?: string): string {
+/** 三种目录通道共用同一上限，并把超出上限的情况转成显式截断状态。 */
+function limitDirectoryEntries(
+  entries: SftpEntry[],
+): Pick<TerminalSessionDir, 'entries' | 'truncated'> {
+  return {
+    entries: entries.slice(0, MAX_DIR_ENTRIES),
+    truncated: entries.length > MAX_DIR_ENTRIES,
+  }
+}
+
+function validCwd(cwd: string | undefined, host: TerminalServiceHost): string {
   const trimmed = cwd?.trim()
   // 恢复的工作目录可能已被删除/移动,直接用作 spawn cwd 会报 error code 267,
   // 校验失败时回退到用户主目录
-  if (trimmed && existsSync(trimmed) && statSync(trimmed).isDirectory()) return trimmed
-  return os.homedir()
+  if (
+    trimmed &&
+    host.fileSystem.existsSync(trimmed) &&
+    host.fileSystem.statSync(trimmed).isDirectory()
+  ) {
+    return trimmed
+  }
+  return host.homedir()
 }
 
 function connectionCancelledError(): Error {
@@ -1370,10 +1404,10 @@ function openForwardSocket(
   })
 }
 
-async function findGitBash(): Promise<string | undefined> {
-  for (const candidate of gitBashCandidates()) {
+async function findGitBash(host: TerminalServiceHost): Promise<string | undefined> {
+  for (const candidate of gitBashCandidates(host.environment)) {
     try {
-      await fs.access(candidate)
+      await host.fileSystem.access(candidate)
       return candidate
     } catch {
       // Continue searching.
@@ -1382,22 +1416,30 @@ async function findGitBash(): Promise<string | undefined> {
   return undefined
 }
 
-function resolveGitBashSync(): string {
-  return gitBashCandidates().find((candidate) => existsSync(candidate)) || 'bash.exe'
+function resolveGitBashSync(host: TerminalServiceHost): string {
+  return (
+    gitBashCandidates(host.environment).find((candidate) =>
+      host.fileSystem.existsSync(candidate),
+    ) || 'bash.exe'
+  )
 }
 
-function gitBashCandidates(): string[] {
+function gitBashCandidates(environment: TerminalServiceHost['environment']): string[] {
   const candidates = [
-    process.env.ProgramFiles && path.join(process.env.ProgramFiles, 'Git', 'bin', 'bash.exe'),
-    process.env['ProgramFiles(x86)'] &&
-      path.join(process.env['ProgramFiles(x86)'], 'Git', 'bin', 'bash.exe'),
-    process.env.LOCALAPPDATA &&
-      path.join(process.env.LOCALAPPDATA, 'Programs', 'Git', 'bin', 'bash.exe'),
+    environment.ProgramFiles && path.join(environment.ProgramFiles, 'Git', 'bin', 'bash.exe'),
+    environment['ProgramFiles(x86)'] &&
+      path.join(environment['ProgramFiles(x86)'], 'Git', 'bin', 'bash.exe'),
+    environment.LOCALAPPDATA &&
+      path.join(environment.LOCALAPPDATA, 'Programs', 'Git', 'bin', 'bash.exe'),
   ]
   return candidates.filter((candidate): candidate is string => Boolean(candidate))
 }
 
-function parseSshConfig(source: string): SshConnectionProfile[] {
+function parseSshConfig(
+  source: string,
+  homeDirectory: string,
+  defaultUsername: string,
+): SshConnectionProfile[] {
   const profiles: SshConnectionProfile[] = []
   let currentAliases: string[] = []
   let values: Record<string, string> = {}
@@ -1405,14 +1447,14 @@ function parseSshConfig(source: string): SshConnectionProfile[] {
     for (const alias of currentAliases.filter(
       (value) => !value.includes('*') && !value.includes('?'),
     )) {
-      const identity = expandHome(values.identityfile || '')
+      const identity = expandHome(values.identityfile || '', homeDirectory)
       profiles.push({
         id: `ssh-config:${alias}`,
         name: alias,
         source: 'ssh-config',
         host: values.hostname || alias,
         port: Number(values.port || 22),
-        username: values.user || os.userInfo().username,
+        username: values.user || defaultUsername,
         authMethod: identity ? 'private-key' : 'agent',
         privateKeyPath: identity,
         proxyJump: values.proxyjump || '',
@@ -1446,12 +1488,12 @@ function unquote(value: string): string {
   return value.replace(/^(['"])(.*)\1$/, '$2')
 }
 
-function expandHome(value: string): string {
+function expandHome(value: string, homeDirectory: string): string {
   if (!value) return ''
   return value === '~'
-    ? os.homedir()
+    ? homeDirectory
     : value.startsWith('~/') || value.startsWith('~\\')
-      ? path.join(os.homedir(), value.slice(2))
+      ? path.join(homeDirectory, value.slice(2))
       : value
 }
 

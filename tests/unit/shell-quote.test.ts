@@ -10,13 +10,18 @@ import { splitPosixCommands } from '../helpers/shell-tokens'
 
 describe('shellFamilyFor', () => {
   it('maps session kinds to families', () => {
-    expect(shellFamilyFor('ssh')).toBe('posix')
-    expect(shellFamilyFor('wsl')).toBe('posix')
-    expect(shellFamilyFor('local', 'cmd')).toBe('cmd')
-    expect(shellFamilyFor('local', 'git-bash')).toBe('posix')
-    expect(shellFamilyFor('local', 'powershell')).toBe('powershell')
-    expect(shellFamilyFor('local', 'system')).toBe('powershell')
-    expect(shellFamilyFor('local')).toBe('powershell')
+    expect(shellFamilyFor('ssh', undefined, 'win32')).toBe('posix')
+    expect(shellFamilyFor('wsl', undefined, 'win32')).toBe('posix')
+    expect(shellFamilyFor('local', 'cmd', 'win32')).toBe('cmd')
+    expect(shellFamilyFor('local', 'git-bash', 'win32')).toBe('posix')
+    expect(shellFamilyFor('local', 'powershell', 'win32')).toBe('powershell')
+  })
+
+  it('按运行平台校准 system 与缺省本地 shell 家族', () => {
+    expect(shellFamilyFor('local', 'system', 'win32')).toBe('powershell')
+    expect(shellFamilyFor('local', 'system', 'linux')).toBe('posix')
+    expect(shellFamilyFor('local', 'system', 'darwin')).toBe('posix')
+    expect(shellFamilyFor('local', undefined, 'linux')).toBe('posix')
   })
 })
 

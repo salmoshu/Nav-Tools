@@ -9,6 +9,7 @@
  * - posix:bash / zsh / git-bash / WSL / SSH 远端(默认 POSIX shell)
  * - powershell:单引号字符串,内嵌单引号翻倍
  * - cmd:双引号包裹;cmd 没有真正的转义机制,带引号的路径属于病态输入
+ * - system:Windows 按 PowerShell,macOS/Linux 等平台按 POSIX shell
  */
 
 import type { LocalShellKind, TerminalSessionKind } from './TerminalTypes'
@@ -17,13 +18,15 @@ export type ShellFamily = 'posix' | 'powershell' | 'cmd'
 
 export function shellFamilyFor(
   sessionKind: TerminalSessionKind,
-  localShell?: LocalShellKind,
+  localShell: LocalShellKind | undefined,
+  platform: string,
 ): ShellFamily {
   if (sessionKind === 'ssh' || sessionKind === 'wsl') return 'posix'
   if (localShell === 'cmd') return 'cmd'
   if (localShell === 'git-bash') return 'posix'
-  // powershell 与 system(跟随系统默认,Windows 上即 PowerShell)同族
-  return 'powershell'
+  if (localShell === 'powershell') return 'powershell'
+  // system 与旧会话缺省值都跟随宿主平台；Windows 的系统入口仍按 PowerShell 处理。
+  return platform === 'win32' ? 'powershell' : 'posix'
 }
 
 /** 把一个参数转义成目标 shell 里的安全单词 */

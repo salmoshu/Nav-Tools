@@ -151,7 +151,7 @@ function openFileDialog() {
   })
 }
 
-async function readFileEvent(event: IpcMainEvent, filePath: string) {
+async function readFileEvent(event: IpcMainInvokeEvent, filePath: string) {
   try {
     const fileContent = await fs.promises.readFile(filePath, 'utf8')
     event.sender.send('read-file-success', fileContent)

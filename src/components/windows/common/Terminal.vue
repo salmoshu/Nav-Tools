@@ -6,6 +6,7 @@
       :session-id="activeFileTreeSessionId"
       :kind="activeFileTreeKind"
       :local-shell="activeFileTreeLocalShell"
+      :platform="capabilities.platform"
     />
     <div class="terminal-workbench__main">
       <div class="terminal-tabs">
@@ -193,8 +194,12 @@
         </div>
       </div>
     </div>
-    <!-- 预设命令的转义在主进程按会话 shell 家族做,这里只传会话 id -->
-    <TerminalPresetPanel v-if="activePresetsOpen" :session-id="activeReadySessionId" />
+    <!-- 预设命令的转义在主进程按会话 shell 家族做；cwd 只驱动项目预设随目录刷新 -->
+    <TerminalPresetPanel
+      v-if="activePresetsOpen"
+      :session-id="activeReadySessionId"
+      :project-cwd="activeReadySession?.cwd"
+    />
   </div>
 </template>
 
@@ -213,7 +218,6 @@ import {
 } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import draggable from 'vuedraggable'
-import { t } from '@/i18n'
 import {
   createEmptyPane,
   createTerminalTab,
@@ -250,7 +254,8 @@ import {
   type TerminalStatusEvent,
 } from '@/core/terminal/TerminalTypes'
 import { TerminalProfileStorage } from '@/core/terminal/TerminalProfileStorage'
-import emitter from '@/hooks/useMitt'
+import { useTerminalEventBus } from '@/core/terminal/TerminalEventBus'
+import { useTerminalTranslate } from '@/core/terminal/TerminalI18n'
 import TerminalFileTreePanel from './TerminalFileTreePanel.vue'
 import TerminalLayoutNodeComponent from './TerminalLayoutNode.vue'
 import TerminalPresetPanel from './TerminalPresetPanel.vue'
@@ -262,6 +267,8 @@ const TERMINAL_BUSY_HOLD_MS = 800
 /** 单个会话上报忙状态的最小间隔,防止高频输出引发频繁重渲染 */
 const TERMINAL_BUSY_THROTTLE_MS = 300
 const TERMINAL_BUSY_SWEEP_MS = 400
+const terminalEventBus = useTerminalEventBus()
+const t = useTerminalTranslate()
 const profileStorage = new TerminalProfileStorage(localStorage)
 const workspaceStorage = new TerminalWorkspaceStorage(localStorage)
 const initialWorkspace = workspaceStorage.load()
@@ -576,6 +583,13 @@ function sweepBusySessions(): void {
 /** 主进程上报的运行时 cwd:写回 launch,随工作区持久化,供重连/重启恢复 */
 function handleCwdUpdate(_event: unknown, value: TerminalCwdEvent): void {
   if (!value?.sessionId || typeof value.cwd !== 'string' || !value.cwd) return
+  const sessionInfo = sessionInfos.value[value.sessionId]
+  if (sessionInfo && sessionInfo.cwd !== value.cwd) {
+    sessionInfos.value = {
+      ...sessionInfos.value,
+      [value.sessionId]: { ...sessionInfo, cwd: value.cwd },
+    }
+  }
   for (const tab of tabs.value) {
     const pane = listTerminalPanes(tab.root).find((entry) => entry.sessionId === value.sessionId)
     if (!pane?.launch || pane.launch.kind === 'ssh' || pane.launch.cwd === value.cwd) continue
@@ -651,7 +665,7 @@ function notifySshSessionReady(
     return status === 'closed' || status === 'error'
   })
   if (hasDisconnectedSibling) {
-    emitter.emit(TERMINAL_SSH_RECOVERED_EVENT, { key, sourcePaneId })
+    terminalEventBus.emit(TERMINAL_SSH_RECOVERED_EVENT, { key, sourcePaneId })
   }
 }
 

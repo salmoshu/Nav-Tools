@@ -5,19 +5,33 @@ import { splitPosixCommands } from '../helpers/shell-tokens'
 describe('parseCommandTemplate', () => {
   it('splits name, default and extra options', () => {
     expect(parseCommandTemplate('make -j{{jobs:8|4|16}} TARGET={{target:arm64|amd64}}')).toEqual([
-      { name: 'jobs', defaultValue: '8', options: ['8', '4', '16'] },
-      { name: 'target', defaultValue: 'arm64', options: ['arm64', 'amd64'] },
+      { name: 'jobs', type: 'select', defaultValue: '8', options: ['8', '4', '16'] },
+      {
+        name: 'target',
+        type: 'select',
+        defaultValue: 'arm64',
+        options: ['arm64', 'amd64'],
+      },
     ])
   })
 
   it('treats a single option as a free-text field', () => {
     const fields = parseCommandTemplate('git checkout {{branch:main}}')
-    expect(fields).toEqual([{ name: 'branch', defaultValue: 'main', options: ['main'] }])
+    expect(fields).toEqual([
+      { name: 'branch', type: 'text', defaultValue: 'main', options: ['main'] },
+    ])
   })
 
   it('accepts a placeholder without a default', () => {
     expect(parseCommandTemplate('echo {{msg}}')).toEqual([
-      { name: 'msg', defaultValue: '', options: [] },
+      { name: 'msg', type: 'text', defaultValue: '', options: [] },
+    ])
+  })
+
+  it('parses boolean fields with unchecked and checked defaults', () => {
+    expect(parseCommandTemplate('deploy {{dryRun:bool}} {{force:bool=true}}')).toEqual([
+      { name: 'dryRun', type: 'boolean', defaultValue: 'false', options: [] },
+      { name: 'force', type: 'boolean', defaultValue: 'true', options: [] },
     ])
   })
 
@@ -62,6 +76,19 @@ describe('interpolateCommandTemplate', () => {
     expect(interpolateCommandTemplate("echo {{value:it's}}", {}, 'powershell')).toBe("echo 'it''s'")
   })
 
+  it('interpolates boolean fields as canonical true or false values', () => {
+    expect(interpolateCommandTemplate('deploy --force={{force:bool}}', {}, 'posix')).toBe(
+      "deploy --force='false'",
+    )
+    expect(
+      interpolateCommandTemplate(
+        'deploy --force={{force:bool}} --confirm={{confirm:bool=true}}',
+        { force: 'true', confirm: 'false' },
+        'posix',
+      ),
+    ).toBe("deploy --force='true' --confirm='false'")
+  })
+
   /**
    * 恶意参数值的契约测试：与 `shell-quote.test.ts` 的 hostile 用例同一思路——
    * 不逐字符比转义串，而是分词后断言「分号没有把命令行切成多条命令」。
@@ -87,5 +114,15 @@ describe('interpolateCommandTemplate', () => {
       'posix',
     )
     expect(splitPosixCommands(result)).toEqual([['git', 'checkout', 'main && echo pwned']])
+  })
+
+  it('rejects a hostile boolean value instead of interpolating it', () => {
+    const result = interpolateCommandTemplate(
+      'deploy --force={{force:bool}}',
+      { force: 'true; rm -rf ~' },
+      'posix',
+    )
+    expect(result).toBe("deploy --force='false'")
+    expect(splitPosixCommands(result)).toEqual([['deploy', '--force=false']])
   })
 })

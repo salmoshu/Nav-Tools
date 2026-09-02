@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { TerminalPresetStorage, createTerminalPreset } from '@/core/terminal/TerminalPresetStorage'
+import {
+  TerminalPresetStorage,
+  createTerminalPreset,
+  mergeTerminalPresets,
+  parseTerminalProjectPresets,
+} from '@/core/terminal/TerminalPresetStorage'
 
 function fakeStorage(): Pick<Storage, 'getItem' | 'setItem'> & { dump(): string | null } {
   let value: string | null = null
@@ -24,7 +29,9 @@ describe('TerminalPresetStorage', () => {
     const storage = new TerminalPresetStorage(fakeStorage())
     const saved = storage.save({ ...createTerminalPreset(), name: 'build', command: 'pnpm build' })
     expect(saved.id).toBeTruthy()
-    expect(storage.list()).toEqual([{ id: saved.id, name: 'build', command: 'pnpm build' }])
+    expect(storage.list()).toEqual([
+      { id: saved.id, name: 'build', command: 'pnpm build', scope: 'global' },
+    ])
   })
 
   it('updates in place when the id already exists', () => {
@@ -70,5 +77,45 @@ describe('TerminalPresetStorage', () => {
     storage.save({ ...createTerminalPreset(), name: 'b', command: 'll' })
     storage.remove(first.id)
     expect(storage.list().map((preset) => preset.name)).toEqual(['b'])
+  })
+
+  it('parses project presets and skips dirty entries', () => {
+    const presets = parseTerminalProjectPresets(
+      JSON.stringify({
+        version: 1,
+        presets: [
+          { id: 'build', name: '项目构建', command: 'pnpm build', cwd: 'packages/app' },
+          { name: '缺少命令' },
+          { name: '测试', command: 'pnpm test' },
+        ],
+      }),
+    )
+
+    expect(presets).toHaveLength(2)
+    expect(presets.map(({ name, command, cwd, scope }) => ({ name, command, cwd, scope }))).toEqual(
+      [
+        { name: '项目构建', command: 'pnpm build', cwd: 'packages/app', scope: 'project' },
+        { name: '测试', command: 'pnpm test', cwd: undefined, scope: 'project' },
+      ],
+    )
+    expect(new Set(presets.map((preset) => preset.id)).size).toBe(2)
+  })
+
+  it('rejects an unsupported project preset document', () => {
+    expect(() => parseTerminalProjectPresets('{"version":2,"presets":[]}')).toThrow()
+    expect(() => parseTerminalProjectPresets('{"version":1,"presets":{}}')).toThrow()
+  })
+
+  it('merges project presets before global presets without changing their scopes', () => {
+    const globalPresets = [
+      { id: 'global-1', name: '全局', command: 'pwd', scope: 'global' as const },
+    ]
+    const projectPresets = parseTerminalProjectPresets(
+      '{"version":1,"presets":[{"name":"项目","command":"pnpm test"}]}',
+    )
+
+    expect(
+      mergeTerminalPresets(globalPresets, projectPresets).map((preset) => preset.scope),
+    ).toEqual(['project', 'global'])
   })
 })

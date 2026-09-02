@@ -1,5 +1,6 @@
 /**
- * 预设命令模板：`{{name:default|opt1|opt2}}` 是命令里的一处可填参数。
+ * 预设命令模板：`{{name:default|opt1|opt2}}` 是命令里的一处可填参数；
+ * `{{name:bool}}` / `{{name:bool=true}}` 分别是默认未勾选 / 勾选的布尔参数。
  *
  * 解析与插值都是纯函数，可单测。插值时**参数值一律按目标 shell 家族转义**——
  * 这是 L2 与 L1 的唯一本质差别：L1 的命令串是作者写死的，L2 的参数值来自
@@ -15,12 +16,16 @@ import { quoteShellArg, type ShellFamily } from './ShellQuote'
 
 /** `{{...}}` 占位符；内部不允许再出现花括号，避免嵌套歧义 */
 const FIELD_PATTERN = /\{\{([^{}]*)\}\}/g
+const BOOLEAN_TYPE_PATTERN = /^bool(?:=(true|false))?$/
+
+export type CommandTemplateFieldType = 'text' | 'select' | 'boolean'
 
 export interface CommandTemplateField {
   name: string
+  type: CommandTemplateFieldType
   /** 未填时的取值，也是候选列表的第一项 */
   defaultValue: string
-  /** 候选值；长度 > 1 时 UI 渲染成下拉，否则渲染成自由输入 */
+  /** 下拉候选值；文本与布尔字段为空 */
   options: string[]
 }
 
@@ -46,7 +51,11 @@ export function interpolateCommandTemplate(
   return command.replace(FIELD_PATTERN, (whole, body: string) => {
     const field = parseField(body)
     if (!field) return whole
-    return quoteShellArg(values[field.name] ?? field.defaultValue, family)
+    const value =
+      field.type === 'boolean'
+        ? normalizeBooleanValue(values[field.name], field.defaultValue)
+        : (values[field.name] ?? field.defaultValue)
+    return quoteShellArg(value, family)
   })
 }
 
@@ -62,6 +71,26 @@ function parseField(body: string): CommandTemplateField | null {
   const name = (colon >= 0 ? head.slice(0, colon) : head).trim()
   if (!name) return null
   const first = colon >= 0 ? head.slice(colon + 1).trim() : ''
+  const booleanType = segments.length === 1 ? BOOLEAN_TYPE_PATTERN.exec(first) : null
+  if (booleanType) {
+    return {
+      name,
+      type: 'boolean',
+      defaultValue: booleanType[1] ?? 'false',
+      options: [],
+    }
+  }
   const options = [first, ...segments.slice(1)].filter(Boolean)
-  return { name, defaultValue: options[0] ?? '', options }
+  return {
+    name,
+    type: options.length > 1 ? 'select' : 'text',
+    defaultValue: options[0] ?? '',
+    options,
+  }
+}
+
+/** 布尔值只接受白名单字面量；篡改后的任意字符串退回模板默认值 */
+function normalizeBooleanValue(value: string | undefined, defaultValue: string): string {
+  if (value === 'true' || value === 'false') return value
+  return defaultValue === 'true' ? 'true' : 'false'
 }

@@ -1,12 +1,14 @@
 import os from 'node:os'
 import path from 'node:path'
 import { beforeAll, describe, expect, it, vi } from 'vitest'
+import type { SftpEntry } from '../../src/core/terminal/TerminalTypes'
 
 vi.mock('electron', () => ({
   app: { getPath: () => os.tmpdir(), isPackaged: false },
 }))
 
 import { TerminalService } from '../../electron/main/services/TerminalService'
+import { createNodeTerminalServiceHost } from '../../electron/main/services/TerminalServiceHost'
 
 interface FakeSessionOptions {
   kind: 'local' | 'wsl' | 'ssh'
@@ -49,7 +51,7 @@ describe('terminal file tree listSessionPath', () => {
   let service: TerminalService
 
   beforeAll(() => {
-    service = new TerminalService(os.tmpdir(), () => {})
+    service = new TerminalService(os.tmpdir(), () => {}, createNodeTerminalServiceHost())
   })
 
   it('lists a local session directory relative to its runtime cwd', async () => {
@@ -60,15 +62,24 @@ describe('terminal file tree listSessionPath', () => {
     expect(result).not.toBeNull()
     expect(result?.resolvedPath).toBe(path.win32.normalize(os.tmpdir()))
     expect(result?.entries.length).toBeGreaterThan(0)
+    expect(result?.truncated).toBe(false)
   })
 
   it('falls back to the home directory when a local session has no cwd', async () => {
+    // CI/沙箱可能禁止读取真实用户目录；把“home”固定为可读临时目录，
+    // 仍然验证无 cwd 时确实选择 os.homedir() 的返回值。
+    const home = os.tmpdir()
+    const homedir = vi.spyOn(os, 'homedir').mockReturnValue(home)
     injectSession(service, 'local-home', { kind: 'local' })
 
-    const result = await service.listSessionPath('local-home', '.')
+    try {
+      const result = await service.listSessionPath('local-home', '.')
 
-    expect(result).not.toBeNull()
-    expect(result?.resolvedPath).toBe(path.win32.normalize(os.homedir()))
+      expect(result).not.toBeNull()
+      expect(result?.resolvedPath).toBe(path.win32.normalize(home))
+    } finally {
+      homedir.mockRestore()
+    }
   })
 
   it('resolves WSL relative paths without cwd to a plain relative path, not host-cwd garbage', () => {
@@ -89,5 +100,27 @@ describe('terminal file tree listSessionPath', () => {
     const target = resolveSessionPath(service, 'wsl-cwd', 'logs')
 
     expect(target?.path).toBe('/home/robot/logs')
+  })
+
+  it('caps SSH directory listings and reports the truncation explicitly', async () => {
+    injectSession(service, 'ssh-large-dir', { kind: 'ssh', cwd: '/workspace' })
+    const entries: SftpEntry[] = Array.from({ length: 2001 }, (_, index) => ({
+      name: `file-${index}`,
+      path: `/workspace/file-${index}`,
+      directory: false,
+      size: 0,
+      modifiedAt: 0,
+      mode: 0,
+    }))
+    const listSftp = vi.spyOn(service, 'listSftp').mockResolvedValue(entries)
+
+    try {
+      const result = await service.listSessionPath('ssh-large-dir', '.')
+
+      expect(result?.entries).toHaveLength(2000)
+      expect(result?.truncated).toBe(true)
+    } finally {
+      listSftp.mockRestore()
+    }
   })
 })

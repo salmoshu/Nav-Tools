@@ -124,8 +124,10 @@ import {
   Upload,
 } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { t } from '@/i18n'
+import { useTerminalTranslate } from '@/core/terminal/TerminalI18n'
 import type { SftpEntry, SftpTransferEvent } from '@/core/terminal/TerminalTypes'
+
+const t = useTerminalTranslate()
 
 const props = defineProps<{ sessionId: string }>()
 const MIN_SFTP_WIDTH = 220

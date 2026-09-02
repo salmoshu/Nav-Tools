@@ -1,5 +1,5 @@
 import path from 'node:path'
-import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
+import { spawn, type ChildProcess } from 'node:child_process'
 import { JpegStreamParser } from '../../../src/core/camera/JpegStreamParser'
 import { LabelVoter, recognizeLabels } from '../../../src/core/camera/LabelOcr'
 import { initRec } from '../../../src/core/camera/PaddleRec'
@@ -14,7 +14,7 @@ export interface CameraStreamTarget {
 }
 
 interface CameraStreamSession {
-  process: ChildProcessWithoutNullStreams
+  process: ChildProcess
   parser: JpegStreamParser
   target: CameraStreamTarget
   url: string
@@ -148,7 +148,7 @@ export class CameraStreamService {
       this.retryOrFail(id, session, transportIndex, '连接超时:未收到视频帧')
     }, CameraStreamService.frameWatchdogMs)
 
-    process.stdout.on('data', (chunk: Buffer) => {
+    process.stdout?.on('data', (chunk: Buffer) => {
       if (this.sessions.get(id) !== session || target.isDestroyed()) return
       for (const frame of session.parser.push(chunk)) {
         if (!session.receivedFrame) {
@@ -219,7 +219,7 @@ export class CameraStreamService {
       }
     })
 
-    process.stderr.on('data', (chunk: Buffer) => {
+    process.stderr?.on('data', (chunk: Buffer) => {
       session.errorOutput = `${session.errorOutput}${chunk.toString('utf8')}`.slice(-3000)
     })
 

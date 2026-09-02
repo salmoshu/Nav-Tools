@@ -91,8 +91,7 @@
                 @click="toggleCollapsed(entry.block.id)"
                 ><el-icon
                   ><component
-                    :is="collapsed.has(entry.block.id) ? ArrowDownBold : ArrowUpBold"
-                  /></el-icon
+                    :is="collapsed.has(entry.block.id) ? ArrowDownBold : ArrowUpBold" /></el-icon
               ></el-button>
             </el-tooltip>
           </span>
@@ -159,7 +158,9 @@
           </div>
           <div v-if="previews.get(entry.block.id)" class="command-block__preview">
             <div class="command-block__preview-header">
-              <span class="command-block__preview-path">{{ previews.get(entry.block.id)!.path }}</span>
+              <span class="command-block__preview-path">{{
+                previews.get(entry.block.id)!.path
+              }}</span>
               <el-button
                 text
                 class="command-block__action"
@@ -168,7 +169,10 @@
                 ><el-icon><CloseBold /></el-icon
               ></el-button>
             </div>
-            <div v-if="previews.get(entry.block.id)!.status === 'loading'" class="command-block__preview-note">
+            <div
+              v-if="previews.get(entry.block.id)!.status === 'loading'"
+              class="command-block__preview-note"
+            >
               {{ t('common.terminal.guiPreviewLoading') }}
             </div>
             <div
@@ -177,6 +181,13 @@
             >
               {{ t('common.terminal.guiPreviewUnavailable') }}
             </div>
+            <TerminalFileTree
+              v-else-if="previews.get(entry.block.id)!.kind === 'directory'"
+              class="command-block__preview-tree"
+              :session-id="sessionId!"
+              :root-path="previews.get(entry.block.id)!.path"
+              @load-error="(path, root) => handleInlineTreeLoadError(entry.block.id, path, root)"
+            />
             <template v-else>
               <TerminalRichContent :payload="previews.get(entry.block.id)!.payload!" />
               <span
@@ -250,11 +261,7 @@
       />
       <!-- 块间导航:快捷键之外也给个可点的入口,否则这功能等于藏起来了 -->
       <span v-if="blocks.length > 0" class="gui-input-row__nav">
-        <el-tooltip
-          :content="t('common.terminal.navPrevBlock')"
-          placement="top"
-          :show-after="400"
-        >
+        <el-tooltip :content="t('common.terminal.navPrevBlock')" placement="top" :show-after="400">
           <el-button
             text
             class="gui-input-row__nav-action"
@@ -263,11 +270,7 @@
             ><el-icon><ArrowUpBold /></el-icon
           ></el-button>
         </el-tooltip>
-        <el-tooltip
-          :content="t('common.terminal.navNextBlock')"
-          placement="top"
-          :show-after="400"
-        >
+        <el-tooltip :content="t('common.terminal.navNextBlock')" placement="top" :show-after="400">
           <el-button
             text
             class="gui-input-row__nav-action"
@@ -276,11 +279,7 @@
             ><el-icon><ArrowDownBold /></el-icon
           ></el-button>
         </el-tooltip>
-        <el-tooltip
-          :content="t('common.terminal.navErrorBlock')"
-          placement="top"
-          :show-after="400"
-        >
+        <el-tooltip :content="t('common.terminal.navErrorBlock')" placement="top" :show-after="400">
           <el-button
             text
             class="gui-input-row__nav-action"
@@ -306,8 +305,11 @@ import {
   WarningFilled,
 } from '@element-plus/icons-vue'
 import { ChevronRight, LayoutGrid } from '@lucide/vue'
-import { t } from '@/i18n'
-import { normalizeTerminalLayout, encodeTextBase64, type TerminalCommandBlock } from '@/core/terminal/CommandBlocks'
+import {
+  normalizeTerminalLayout,
+  encodeTextBase64,
+  type TerminalCommandBlock,
+} from '@/core/terminal/CommandBlocks'
 import { splitOutputByPaths, type DetectedPath } from '@/core/terminal/PathDetection'
 import { sniffContent, type SniffedContent } from '@/core/terminal/ContentSniff'
 import { fuzzySearch } from '@/core/terminal/FuzzyMatch'
@@ -317,8 +319,13 @@ import {
   type CompletionCandidate,
   type CompletionKind,
 } from '@/core/terminal/CommandCompletion'
+import { useTerminalTranslate } from '@/core/terminal/TerminalI18n'
 import type { TerminalRichPayload } from '@/core/terminal/CommandBlocks'
+import type { TerminalPathStat } from '@/core/terminal/TerminalTypes'
+import TerminalFileTree from './TerminalFileTree.vue'
 import TerminalRichContent from './TerminalRichContent.vue'
+
+const t = useTerminalTranslate()
 
 const props = defineProps<{
   blocks: TerminalCommandBlock[]
@@ -354,6 +361,7 @@ const PREVIEW_MAX_BYTES = 512 * 1024
 
 interface PreviewState {
   path: string
+  kind: 'file' | 'directory'
   status: 'loading' | 'ready' | 'unavailable'
   payload?: TerminalRichPayload
   size?: number
@@ -630,13 +638,10 @@ watch(
     }
   },
 )
-watch(
-  searchMatches,
-  () => {
-    if (activeMatchIndex.value >= searchMatches.value.length) activeMatchIndex.value = 0
-    emitSearchStatus()
-  },
-)
+watch(searchMatches, () => {
+  if (activeMatchIndex.value >= searchMatches.value.length) activeMatchIndex.value = 0
+  emitSearchStatus()
+})
 watch(
   () => props.searchNextTick,
   () => stepActiveMatch(1),
@@ -731,7 +736,8 @@ function buildSearchParts(
     if (match.start >= segmentStart + text.length) break
     const relStart = Math.max(0, match.start - segmentStart)
     const relEnd = Math.min(text.length, match.end - segmentStart)
-    if (relStart > cursor) parts.push({ text: text.slice(cursor, relStart), hit: false, current: false })
+    if (relStart > cursor)
+      parts.push({ text: text.slice(cursor, relStart), hit: false, current: false })
     parts.push({
       text: text.slice(relStart, relEnd),
       hit: true,
@@ -786,12 +792,13 @@ function toggleRawView(id: number): void {
 
 /** 嗅探结论 → 富内容负载;MIME 与程序主动上报的 OSC 1338 保持同一套映射 */
 function buildSniffedPayload(type: NonNullable<SniffedContent>, text: string): TerminalRichPayload {
-  const mime = type === 'markdown' ? 'text/markdown' : type === 'json' ? 'application/json' : 'text/csv'
+  const mime =
+    type === 'markdown' ? 'text/markdown' : type === 'json' ? 'application/json' : 'text/csv'
   return { mime, data: encodeTextBase64(text) }
 }
 
-/** 路径存在性缓存:键为 `会话|路径`——同一路径在不同会话里结论不同 */
-const pathExists = ref(new Map<string, boolean>())
+/** 路径属性缓存:键为 `会话|路径`——同一路径在不同会话里结论不同 */
+const pathStats = ref(new Map<string, TerminalPathStat>())
 const probing = new Set<string>()
 
 function pathKey(path: string): string {
@@ -799,7 +806,7 @@ function pathKey(path: string): string {
 }
 
 function isExistingPath(path: string): boolean {
-  return pathExists.value.get(pathKey(path)) === true
+  return pathStats.value.get(pathKey(path))?.exists === true
 }
 
 /**
@@ -809,16 +816,16 @@ function isExistingPath(path: string): boolean {
 async function probePath(found: DetectedPath): Promise<void> {
   if (!props.sessionId) return
   const key = pathKey(found.path)
-  if (pathExists.value.has(key) || probing.has(key)) return
+  if (pathStats.value.has(key) || probing.has(key)) return
   probing.add(key)
   try {
     const stat = (await window.ipcRenderer.invoke('terminal-path-stat', {
       sessionId: props.sessionId,
       path: found.path,
-    })) as { exists?: boolean } | null
-    const next = new Map(pathExists.value)
-    next.set(key, stat?.exists === true)
-    pathExists.value = next
+    })) as TerminalPathStat | null
+    const next = new Map(pathStats.value)
+    next.set(key, stat ?? { exists: false, directory: false, resolvedPath: found.path, size: 0 })
+    pathStats.value = next
   } catch {
     // 探测失败保持"不可点击":宁可不给入口,也不给一个点了报错的入口
   } finally {
@@ -842,8 +849,15 @@ async function togglePreview(block: TerminalCommandBlock, found: DetectedPath): 
   }
   if (!props.sessionId) return
 
+  const stat = pathStats.value.get(pathKey(found.path))
   const next = new Map(previews.value)
-  next.set(block.id, { path: found.path, status: 'loading' })
+  if (stat?.directory) {
+    next.set(block.id, { path: found.path, kind: 'directory', status: 'ready' })
+    previews.value = next
+    return
+  }
+
+  next.set(block.id, { path: found.path, kind: 'file', status: 'loading' })
   previews.value = next
 
   let state: PreviewState
@@ -856,17 +870,32 @@ async function togglePreview(block: TerminalCommandBlock, found: DetectedPath): 
     state = read
       ? {
           path: found.path,
+          kind: 'file',
           status: 'ready',
           payload: { mime: read.mime, data: read.data },
           size: read.size,
           truncated: read.truncated,
         }
-      : { path: found.path, status: 'unavailable' }
+      : { path: found.path, kind: 'file', status: 'unavailable' }
   } catch {
-    state = { path: found.path, status: 'unavailable' }
+    state = { path: found.path, kind: 'file', status: 'unavailable' }
+  }
+  // 读取期间用户可能已经关闭预览或改点目录；旧请求不得把新树/关闭状态覆盖掉。
+  const currentPreview = previews.value.get(block.id)
+  if (!currentPreview || currentPreview.kind !== 'file' || currentPreview.path !== found.path) {
+    return
   }
   const applied = new Map(previews.value)
   applied.set(block.id, state)
+  previews.value = applied
+}
+
+function handleInlineTreeLoadError(blockId: number, path: string, root: boolean): void {
+  if (!root) return
+  const current = previews.value.get(blockId)
+  if (!current || current.kind !== 'directory' || current.path !== path) return
+  const applied = new Map(previews.value)
+  applied.set(blockId, { ...current, status: 'unavailable' })
   previews.value = applied
 }
 
@@ -1118,6 +1147,14 @@ watch(scrollElement, (element, previous) => {
   padding: 6px 10px;
   color: var(--el-color-warning);
   font-size: 11px;
+}
+.command-block__preview-tree {
+  max-height: 320px;
+  padding: 4px 6px 8px;
+  color: color-mix(in srgb, var(--terminal-fg) 88%, transparent);
+  background: var(--terminal-bg);
+  font-family: 'Cascadia Mono', Consolas, 'Noto Sans Mono', monospace;
+  font-size: 12px;
 }
 /* 文本搜索命中:全部命中给淡底,当前命中给主题色底 */
 .search-hit.is-hit {

@@ -8,13 +8,27 @@
     </header>
 
     <div class="preset-panel__body">
+      <p v-if="projectPresetIssue" class="preset-panel__notice">
+        {{ t('common.terminal.presetProjectLoadFailed') }}
+      </p>
       <p v-if="presets.length === 0" class="preset-panel__empty">
         {{ t('common.terminal.presetEmpty') }}
       </p>
       <ul v-else class="preset-list">
         <li v-for="preset in presets" :key="preset.id" class="preset-item">
           <div class="preset-item__text">
-            <span class="preset-item__name" :title="preset.name">{{ preset.name }}</span>
+            <div class="preset-item__heading">
+              <span class="preset-item__name" :title="preset.name">{{ preset.name }}</span>
+              <span class="preset-item__scope">
+                {{
+                  t(
+                    preset.scope === 'project'
+                      ? 'common.terminal.presetScopeProject'
+                      : 'common.terminal.presetScopeGlobal',
+                  )
+                }}
+              </span>
+            </div>
             <code class="preset-item__command" :title="preset.command">{{ preset.command }}</code>
             <span v-if="preset.cwd" class="preset-item__cwd" :title="preset.cwd">{{
               preset.cwd
@@ -26,10 +40,15 @@
                 <el-icon><CaretRight /></el-icon>
               </el-button>
             </el-tooltip>
-            <el-button text size="small" @click="beginEdit(preset)">
+            <el-button
+              v-if="preset.scope === 'global'"
+              text
+              size="small"
+              @click="beginEdit(preset)"
+            >
               <el-icon><Edit /></el-icon>
             </el-button>
-            <el-button text size="small" @click="remove(preset)">
+            <el-button v-if="preset.scope === 'global'" text size="small" @click="remove(preset)">
               <el-icon><Delete /></el-icon>
             </el-button>
           </div>
@@ -72,8 +91,16 @@
     >
       <el-form label-width="90px" @submit.prevent>
         <el-form-item v-for="field in paramFields" :key="field.name" :label="field.name">
+          <el-checkbox
+            v-if="field.type === 'boolean'"
+            v-model="paramValues[field.name]"
+            true-value="true"
+            false-value="false"
+          >
+            {{ t('common.terminal.presetBooleanEnabled') }}
+          </el-checkbox>
           <el-select
-            v-if="field.options.length > 1"
+            v-else-if="field.type === 'select'"
             v-model="paramValues[field.name]"
             :placeholder="field.defaultValue"
           >
@@ -98,24 +125,37 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, ref } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { CaretRight, Delete, Edit, Plus } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { t } from '@/i18n'
+import { decodeBase64Text } from '@/core/terminal/CommandBlocks'
 import { parseCommandTemplate } from '@/core/terminal/CommandTemplate'
+import { useTerminalTranslate } from '@/core/terminal/TerminalI18n'
 import {
+  TERMINAL_PROJECT_PRESET_MAX_BYTES,
+  TERMINAL_PROJECT_PRESET_PATH,
   TerminalPresetStorage,
   createTerminalPreset,
+  mergeTerminalPresets,
+  parseTerminalProjectPresets,
   type TerminalPresetCommand,
 } from '@/core/terminal/TerminalPresetStorage'
+import type { TerminalPathRead } from '@/core/terminal/TerminalTypes'
+
+const t = useTerminalTranslate()
 
 const props = defineProps<{
   /** 运行目标:为空(没有就绪会话)时只允许增删改,不允许运行 */
   sessionId?: string
+  /** 仅用于在会话 cwd 变化时重新装载项目配置；实际路径解析仍由主进程完成 */
+  projectCwd?: string
 }>()
 
 const storage = new TerminalPresetStorage(localStorage)
-const presets = ref<TerminalPresetCommand[]>(storage.list())
+const globalPresets = ref<TerminalPresetCommand[]>(storage.list())
+const projectPresets = ref<TerminalPresetCommand[]>([])
+const presets = computed(() => mergeTerminalPresets(globalPresets.value, projectPresets.value))
+const projectPresetIssue = ref(false)
 const dialogVisible = ref(false)
 const editing = ref(false)
 const form = reactive({ id: '', name: '', command: '', cwd: '' })
@@ -125,6 +165,41 @@ const paramFields = ref(parseCommandTemplate(''))
 const lastValuesByPresetId = new Map<string, Record<string, string>>()
 let paramTarget: TerminalPresetCommand | null = null
 const paramValues = reactive<Record<string, string>>({})
+let projectLoadGeneration = 0
+
+watch(
+  [() => props.sessionId, () => props.projectCwd],
+  () => {
+    void loadProjectPresets()
+  },
+  { immediate: true },
+)
+
+async function loadProjectPresets(): Promise<void> {
+  const generation = ++projectLoadGeneration
+  projectPresets.value = []
+  projectPresetIssue.value = false
+  if (paramTarget?.scope === 'project') {
+    paramTarget = null
+    paramDialogVisible.value = false
+  }
+  if (!props.sessionId || !props.projectCwd) return
+  try {
+    const result = (await window.ipcRenderer.invoke('terminal-path-read', {
+      sessionId: props.sessionId,
+      path: TERMINAL_PROJECT_PRESET_PATH,
+      maxBytes: TERMINAL_PROJECT_PRESET_MAX_BYTES,
+    })) as TerminalPathRead | null
+    if (generation !== projectLoadGeneration || !result) return
+    if (result.truncated) {
+      projectPresetIssue.value = true
+      return
+    }
+    projectPresets.value = parseTerminalProjectPresets(decodeBase64Text(result.data))
+  } catch {
+    if (generation === projectLoadGeneration) projectPresetIssue.value = true
+  }
+}
 
 function beginCreate(): void {
   editing.value = false
@@ -133,6 +208,7 @@ function beginCreate(): void {
 }
 
 function beginEdit(preset: TerminalPresetCommand): void {
+  if (preset.scope !== 'global') return
   editing.value = true
   Object.assign(form, {
     id: preset.id,
@@ -150,11 +226,12 @@ function commit(): void {
     ElMessage.error(t('common.terminal.presetNameRequired'))
     return
   }
-  presets.value = storage.list()
+  globalPresets.value = storage.list()
   dialogVisible.value = false
 }
 
 async function remove(preset: TerminalPresetCommand): Promise<void> {
+  if (preset.scope !== 'global') return
   try {
     await ElMessageBox.confirm(
       t('common.terminal.presetDeleteConfirm', { name: preset.name }),
@@ -165,7 +242,7 @@ async function remove(preset: TerminalPresetCommand): Promise<void> {
     return
   }
   storage.remove(preset.id)
-  presets.value = storage.list()
+  globalPresets.value = storage.list()
 }
 
 /**
@@ -258,6 +335,14 @@ function errorMessage(error: unknown): string {
   font-size: 11px;
   line-height: 1.6;
 }
+.preset-panel__notice {
+  margin: 0;
+  padding: 8px 10px;
+  color: var(--el-color-warning);
+  font-size: 10px;
+  line-height: 1.5;
+  border-bottom: 1px solid var(--app-border);
+}
 .preset-list {
   margin: 0;
   padding: 0;
@@ -278,11 +363,28 @@ function errorMessage(error: unknown): string {
   flex: 1;
   display: grid;
 }
+.preset-item__heading {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
 .preset-item__name {
+  min-width: 0;
   overflow: hidden;
+  flex: 1;
   font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.preset-item__scope {
+  flex: none;
+  padding: 0 4px;
+  border: 1px solid var(--app-border);
+  border-radius: 3px;
+  color: var(--app-text-muted);
+  font-size: 9px;
+  line-height: 14px;
 }
 .preset-item__command {
   overflow: hidden;

@@ -1,9 +1,16 @@
 /* eslint-disable vue/one-component-per-file, vue/require-default-prop */
-import { createApp, defineComponent, h, nextTick, reactive, ref } from 'vue'
+import { createApp, defineComponent, h, nextTick, reactive, ref, type App } from 'vue'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { TERMINAL_EVENT_BUS_KEY, type TerminalEventBus } from '@/core/terminal/TerminalEventBus'
+import { TERMINAL_TRANSLATE_KEY } from '@/core/terminal/TerminalI18n'
 import { createEmptyPane } from '@/core/terminal/TerminalLayout'
 import { createSshProfile } from '@/core/terminal/TerminalProfileStorage'
-import type { TerminalSessionInfo } from '@/core/terminal/TerminalTypes'
+import {
+  TERMINAL_SSH_RECOVERED_EVENT,
+  sshConnectionKey,
+  type TerminalSessionInfo,
+  type TerminalSshRecoveredEvent,
+} from '@/core/terminal/TerminalTypes'
 
 const xtermHarness = vi.hoisted(() => ({
   keyHandler: undefined as ((event: KeyboardEvent) => boolean) | undefined,
@@ -112,6 +119,35 @@ class ResizeObserverStub {
   disconnect() {}
 }
 
+class TerminalEventBusHarness implements TerminalEventBus {
+  private readonly handlers = new Set<(payload: TerminalSshRecoveredEvent) => void>()
+
+  on(
+    _event: typeof TERMINAL_SSH_RECOVERED_EVENT,
+    handler: (payload: TerminalSshRecoveredEvent) => void,
+  ): void {
+    this.handlers.add(handler)
+  }
+
+  off(
+    _event: typeof TERMINAL_SSH_RECOVERED_EVENT,
+    handler: (payload: TerminalSshRecoveredEvent) => void,
+  ): void {
+    this.handlers.delete(handler)
+  }
+
+  emit(_event: typeof TERMINAL_SSH_RECOVERED_EVENT, payload: TerminalSshRecoveredEvent): void {
+    for (const handler of [...this.handlers]) handler(payload)
+  }
+}
+
+let terminalEventBus: TerminalEventBusHarness
+
+function provideTerminalDependencies(app: App): void {
+  app.provide(TERMINAL_EVENT_BUS_KEY, terminalEventBus)
+  app.provide(TERMINAL_TRANSLATE_KEY, (key) => key)
+}
+
 const Passthrough = defineComponent({
   setup(_, { slots }) {
     return () => h('div', slots.default?.())
@@ -122,6 +158,7 @@ describe('TerminalPane connection lifecycle', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     vi.stubGlobal('ResizeObserver', ResizeObserverStub)
+    terminalEventBus = new TerminalEventBusHarness()
     xtermHarness.keyHandler = undefined
     xtermHarness.dataHandler = undefined
     xtermHarness.selection = ''
@@ -158,6 +195,7 @@ describe('TerminalPane connection lifecycle', () => {
       capabilities: { platform: 'win32', localShells: [], wslDistros: [], sshAvailable: true },
       profiles: [],
     })
+    provideTerminalDependencies(app)
     for (const name of [
       'ElAlert',
       'ElButton',
@@ -204,6 +242,7 @@ describe('TerminalPane connection lifecycle', () => {
       capabilities: { platform: 'win32', localShells: [], wslDistros: [], sshAvailable: true },
       profiles: [],
     })
+    provideTerminalDependencies(app)
     for (const name of [
       'ElAlert',
       'ElButton',
@@ -293,6 +332,7 @@ describe('TerminalPane connection lifecycle', () => {
     const host = document.createElement('div')
     document.body.append(host)
     const app = createApp(Host)
+    provideTerminalDependencies(app)
     app.config.errorHandler = (error) => errors.push(error)
     for (const name of [
       'ElAlert',
@@ -351,6 +391,7 @@ describe('TerminalPane connection lifecycle', () => {
       capabilities: { platform: 'win32', localShells: [], wslDistros: [], sshAvailable: true },
       profiles: [],
     })
+    provideTerminalDependencies(app)
     for (const name of [
       'ElAlert',
       'ElButton',
@@ -403,6 +444,7 @@ describe('TerminalPane connection lifecycle', () => {
       capabilities: { platform: 'win32', localShells: [], wslDistros: [], sshAvailable: true },
       profiles: [],
     })
+    provideTerminalDependencies(app)
     for (const name of [
       'ElAlert',
       'ElButton',
@@ -472,6 +514,7 @@ describe('TerminalPane connection lifecycle', () => {
       profiles: [profile],
       sessionInfo: closedSession,
     })
+    provideTerminalDependencies(app)
     for (const name of [
       'ElAlert',
       'ElButton',
@@ -505,6 +548,86 @@ describe('TerminalPane connection lifecycle', () => {
     app.unmount()
   })
 
+  it('uses the injected terminal event bus to recover a matching SSH pane', async () => {
+    const profile = createSshProfile({
+      id: 'robot-profile',
+      name: 'Robot',
+      host: '192.0.2.10',
+      username: 'root',
+      authMethod: 'password',
+    })
+    const closedSession: TerminalSessionInfo = {
+      id: 'ssh-closed',
+      kind: 'ssh',
+      title: 'Robot',
+      status: 'closed',
+      profileId: profile.id,
+    }
+    const readySession: TerminalSessionInfo = {
+      id: 'ssh-ready',
+      kind: 'ssh',
+      title: 'Robot',
+      status: 'ready',
+      profileId: profile.id,
+    }
+    window.ipcRenderer.invoke = vi.fn((channel: string) => {
+      if (channel === 'terminal-session-attach') return Promise.resolve(closedSession)
+      if (channel === 'terminal-credential-load') return Promise.resolve({ password: 'test-only' })
+      if (channel === 'terminal-session-create') return Promise.resolve(readySession)
+      return Promise.resolve()
+    })
+    const host = document.createElement('div')
+    document.body.append(host)
+    const app = createApp(TerminalPane, {
+      pane: {
+        ...createEmptyPane(),
+        sessionId: closedSession.id,
+        launch: { kind: 'ssh', label: 'Robot', sshProfile: profile },
+      },
+      focused: true,
+      paneCount: 1,
+      expanded: false,
+      capabilities: { platform: 'win32', localShells: [], wslDistros: [], sshAvailable: true },
+      profiles: [profile],
+      sessionInfo: closedSession,
+    })
+    provideTerminalDependencies(app)
+    for (const name of [
+      'ElAlert',
+      'ElButton',
+      'ElDialog',
+      'ElDropdown',
+      'ElDropdownItem',
+      'ElDropdownMenu',
+      'ElEmpty',
+      'ElIcon',
+      'ElInput',
+      'ElInputNumber',
+      'ElOption',
+      'ElSelect',
+      'ElSwitch',
+      'ElTooltip',
+    ]) {
+      app.component(name, Passthrough)
+    }
+    app.mount(host)
+    await nextTick()
+
+    terminalEventBus.emit(TERMINAL_SSH_RECOVERED_EVENT, {
+      key: sshConnectionKey(profile),
+      sourcePaneId: 'another-pane',
+    })
+    for (let i = 0; i < 10; i++) await Promise.resolve()
+    await nextTick()
+
+    expect(window.ipcRenderer.invoke).toHaveBeenCalledWith('terminal-credential-load', profile.id)
+    expect(window.ipcRenderer.invoke).toHaveBeenCalledWith(
+      'terminal-session-create',
+      expect.objectContaining({ kind: 'ssh', sshProfile: profile }),
+    )
+    app.unmount()
+  })
+
   it('copies a selection on right click and pastes on right click without a selection', async () => {
     window.ipcRenderer.invoke = vi.fn((channel: string) =>
       channel === 'clipboard-read-text' ? Promise.resolve('Get-Process') : Promise.resolve(),
@@ -519,6 +642,7 @@ describe('TerminalPane connection lifecycle', () => {
       capabilities: { platform: 'win32', localShells: [], wslDistros: [], sshAvailable: true },
       profiles: [],
     })
+    provideTerminalDependencies(app)
     for (const name of [
       'ElAlert',
       'ElButton',
@@ -572,6 +696,7 @@ describe('TerminalPane connection lifecycle', () => {
       capabilities: { platform: 'win32', localShells: [], wslDistros: [], sshAvailable: true },
       profiles: [],
     })
+    provideTerminalDependencies(app)
     for (const name of [
       'ElAlert',
       'ElButton',
@@ -652,6 +777,7 @@ describe('TerminalPane connection lifecycle', () => {
       profiles: [],
       sessionInfo: closedSession,
     })
+    provideTerminalDependencies(app)
     for (const name of [
       'ElAlert',
       'ElButton',

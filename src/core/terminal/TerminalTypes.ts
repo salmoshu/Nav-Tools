@@ -103,7 +103,7 @@ export interface TerminalCwdEvent {
 }
 
 /**
- * 渲染层内部事件(useMitt):同一 tab 内某个 SSH 会话上线,
+ * 渲染层内部事件(TerminalEventBus):同一 tab 内某个 SSH 会话上线,
  * 通知其他使用相同连接参数的断开 pane 静默重连。
  */
 export const TERMINAL_SSH_RECOVERED_EVENT = 'terminal-ssh-recovered'
@@ -174,6 +174,8 @@ export interface TerminalPathStat {
 export interface TerminalSessionDir {
   resolvedPath: string
   entries: SftpEntry[]
+  /** 目录条目超过单次列举上限时为 true；entries 仅包含开头部分 */
+  truncated: boolean
 }
 
 /** 按扩展名猜出的 MIME;用于复用富内容渲染器做块内预览 */

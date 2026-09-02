@@ -2,6 +2,7 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { TerminalService } from '../../electron/main/services/TerminalService'
+import { createNodeTerminalServiceHost } from '../../electron/main/services/TerminalServiceHost'
 import type { HostKeyPromptEvent } from '@/core/terminal/TerminalTypes'
 
 const ptyHarness = vi.hoisted(() => ({
@@ -17,7 +18,12 @@ const ptyHarness = vi.hoisted(() => ({
   },
 }))
 
-vi.mock('node-pty', () => ({ spawn: vi.fn(() => ptyHarness.process) }))
+function createHost() {
+  return {
+    ...createNodeTerminalServiceHost(),
+    spawnPty: vi.fn(() => ptyHarness.process),
+  } as ReturnType<typeof createNodeTerminalServiceHost>
+}
 
 afterEach(() => vi.useRealTimers())
 
@@ -26,6 +32,7 @@ describe('TerminalService SSH timeouts', () => {
     const service = new TerminalService(
       path.join(tmpdir(), `nav-tools-cancel-create-${Date.now()}`),
       () => undefined,
+      createHost(),
     )
     ;(
       service as unknown as {
@@ -69,6 +76,7 @@ describe('TerminalService SSH timeouts', () => {
     const service = new TerminalService(
       path.join(tmpdir(), `nav-tools-late-resize-${Date.now()}`),
       () => undefined,
+      createHost(),
     )
 
     expect(() => service.resize('removed-session', 80, 24)).not.toThrow()
@@ -80,6 +88,7 @@ describe('TerminalService SSH timeouts', () => {
     const service = new TerminalService(
       path.join(tmpdir(), `nav-tools-resize-output-${Date.now()}`),
       (channel, payload) => broadcasts.push({ channel, payload }),
+      createHost(),
     )
     const session = await service.create({
       kind: 'local',
@@ -120,6 +129,7 @@ describe('TerminalService SSH timeouts', () => {
     const service = new TerminalService(
       path.join(tmpdir(), `nav-tools-host-key-${Date.now()}`),
       (channel, payload) => broadcasts.push({ channel, payload }),
+      createHost(),
     )
     const decision = vi.fn()
 

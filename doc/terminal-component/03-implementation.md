@@ -46,7 +46,7 @@ v1.5.0 本体：
 | 转义 | `src/core/terminal/ShellQuote.ts` | 按 shell 家族（posix/powershell/cmd）转义与拼命令 |
 | 预设 | `src/core/terminal/TerminalPresetStorage.ts`、`CommandTemplate.ts` | 预设持久化；`{{name:默认|选项}}` 模板解析与插值 |
 | 补全 | `src/core/terminal/CommandCompletion.ts` | 光标 token 前缀补全（历史 + 手写规格表） |
-| 面板 | `TerminalFileTreePanel.vue`、`TerminalPresetPanel.vue` | 侧边文件树（懒加载）、预设列表 + L2 参数表单 |
+| 面板 | `TerminalFileTree.vue`、`TerminalFileTreePanel.vue`、`TerminalPresetPanel.vue` | 共享会话文件树、侧边文件树面板、预设列表 + L2 参数表单 |
 | IPC | `electron/main/terminalIpc.ts` | `terminal-path-stat/read`、`terminal-session-list-dir/run-command` |
 | 测试 | `tests/unit/path-detection / content-sniff / fuzzy-match / directory-listing / shell-quote / preset-storage / command-template / command-completion .test.ts` | 终端单测共 122 个 |
 
@@ -78,9 +78,8 @@ v1.5.0 本体：
   （用户已知，未处理；如需再按 `?1049` 单开）。
 - **SSH / cmd 会话不注入** → GUI 视图降级为终端渲染 + 提示条（`guiDegraded`）。
 - **PowerShell 只上报 A/D**（无 preexec），命令文本拿不到，整段成块。
-- **输出内路径点击对目录无效**：`terminal-path-stat` 已返回 `directory` 字段，
-  但 `TerminalGuiView` 只消费 `exists`，点目录会走读文件失败提示「是目录」；
-  就地展开文件树未做（`04-design.md` §11.3），目录浏览走侧边文件树面板。
+- **输出内路径点击已区分文件与目录**（2026-09-02 T1）：文件继续走有大小上限的块内预览；
+  目录走共享 `TerminalFileTree.vue` 就地懒加载，与侧边面板复用同一三通道列目录能力。
 - 单元测试外的既有失败项与本特性无关（`nsat-perf`、`label-ocr`）。
 - **P4（富结果接入 Dashboard/CardWindow 布局）待实施**。
 

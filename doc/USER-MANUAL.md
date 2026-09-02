@@ -294,6 +294,12 @@ restarts:
   output. Cards can be collapsed, copied, and re-run. A fixed input row at the
   bottom sends commands to the session (`↑`/`↓` walks the in-session history).
 
+Paths detected in plain block output are verified against the active session.
+Click a file to preview it inside the block; click a directory to show or hide a
+lazy, collapsible file tree in place. Directory listing uses the matching local,
+WSL, or SSH channel, so names are displayed as filesystem text rather than shell
+commands.
+
 Rich content: a program (or you) can push structured content into a block with
 the injected `nav-render` helper:
 
