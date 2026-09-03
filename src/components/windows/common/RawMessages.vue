@@ -83,7 +83,7 @@
     </div>
 
     <!-- 虚拟滚动消息列表 -->
-    <div class="console-content-virtual" ref="consoleContent">
+    <div class="console-content-virtual" ref="consoleContent" @mousedown="sortMessageRows">
       <RecycleScroller
         ref="scrollerRef"
         class="scroller"
@@ -373,6 +373,16 @@ const clearSearch = () => {
   searchQuery.value = ''
   searchResults.value = []
   currentResultIndex.value = -1
+}
+
+// RecycleScroller 复用 DOM 节点,行的 DOM 顺序与视觉顺序经常不一致——库自己只在滚动
+// 停止约 300ms 后才重排(sortViews)。若用户在重排前拖选,浏览器按 DOM 顺序序列化选区,
+// 会把夹在中间的十几行无关消息一起复制走。拖选开始前主动重排一次,让 DOM 顺序对齐视觉
+// 顺序,原生复制即为所见即所选。
+const sortMessageRows = (event: MouseEvent) => {
+  if (event.button !== 0) return
+  const scroller = scrollerRef.value
+  if (scroller && typeof scroller.sortViews === 'function') scroller.sortViews()
 }
 
 // UI 控制方法
