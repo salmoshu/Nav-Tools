@@ -1,9 +1,10 @@
 /**
  * 命令补全的候选计算(纯函数,可单测)。
  *
- * 服务于 GUI 输入行的补全弹层:按光标所在 token 做前缀补全,候选来源两类——
+ * 服务于 GUI 输入行的补全弹层:按光标所在 token 做前缀补全,候选来源三类——
  * 1. 内置命令规格(git/npm/docker 等的子命令与常用选项)
  * 2. 会话内输入历史里同命令、同参数位出现过的 token(越近越优先)
+ * 3. 会话当前目录与输入路径下的文件/目录
  *
  * 用前缀匹配而非模糊匹配:shell 补全的惯例就是前缀,且 Ctrl+R 已经提供模糊搜索。
  * 两者混在一个弹层里会让排序难以预测。
@@ -13,7 +14,7 @@
  * 长尾命令,应接 withfig 的数据文件,**禁止**使用 Warp 的 command-signatures-v2(AGPL)。
  */
 
-export type CompletionKind = 'command' | 'subcommand' | 'option' | 'history'
+export type CompletionKind = 'command' | 'subcommand' | 'option' | 'history' | 'path'
 
 export interface CompletionCandidate {
   /** 用于替换 [CompletionToken.start, 光标) 区间的文本 */
@@ -31,6 +32,18 @@ export interface CommandSpec {
 export interface CompletionToken {
   start: number
   text: string
+}
+
+export interface CompletionPathEntry {
+  name: string
+  directory: boolean
+}
+
+export interface CompletionPathContext {
+  /** 交给会话目录通道解析；`.` 表示当前目录 */
+  directory: string
+  /** 当前路径最后一段，用于过滤目录条目 */
+  prefix: string
 }
 
 /** 手写的高频命令规格;顺序即补全弹层的展示顺序 */
@@ -286,6 +299,26 @@ export function completionToken(input: string, cursor: number): CompletionToken 
   return { start, text: input.slice(start, end) }
 }
 
+/** 参数位的路径查询上下文；命令位、选项与带引号 token 交给 shell 自己处理。 */
+export function completionPathContext(
+  input: string,
+  cursor: number,
+): CompletionPathContext | undefined {
+  const token = completionToken(input, cursor)
+  if (
+    !input.slice(0, token.start).trim() ||
+    token.text.startsWith('-') ||
+    /^["']/.test(token.text)
+  ) {
+    return undefined
+  }
+  const separator = Math.max(token.text.lastIndexOf('/'), token.text.lastIndexOf('\\'))
+  return {
+    directory: separator < 0 ? '.' : token.text.slice(0, separator + 1),
+    prefix: token.text.slice(separator + 1),
+  }
+}
+
 /**
  * 计算补全候选。
  *
@@ -294,6 +327,7 @@ export function completionToken(input: string, cursor: number): CompletionToken 
  * @param history 会话内输入历史,越靠后越新
  * @param specs 命令规格;默认用内置规格表
  * @param limit 最多返回条数
+ * @param paths 当前待补全目录中的条目
  */
 export function completeCommandLine(
   input: string,
@@ -301,6 +335,7 @@ export function completeCommandLine(
   history: readonly string[],
   specs: readonly CommandSpec[] = BUILTIN_SPECS,
   limit = 20,
+  paths: readonly CompletionPathEntry[] = [],
 ): CompletionCandidate[] {
   const token = completionToken(input, cursor)
   const prefix = token.text
@@ -313,6 +348,17 @@ export function completeCommandLine(
     if (seen.has(text)) return
     seen.add(text)
     results.push({ text, kind })
+  }
+  const pushPaths = (): void => {
+    const context = completionPathContext(input, cursor)
+    if (!context) return
+    const base = context.directory === '.' ? '' : context.directory
+    const separator = context.directory.endsWith('\\') ? '\\' : '/'
+    for (const entry of paths) {
+      // ponytail: quoting is shell-specific; add whitespace paths when the GUI knows the shell family.
+      if (/\s/.test(entry.name) || !entry.name.startsWith(context.prefix)) continue
+      push(`${base}${entry.name}${entry.directory ? separator : ''}`, 'path')
+    }
   }
 
   // 命令位:内置规格的命令名在前,历史里用过的命令名补在后(最近优先)
@@ -353,5 +399,26 @@ export function completeCommandLine(
     if (candidate && candidate.startsWith(prefix)) push(candidate, 'history')
   }
 
+  pushPaths()
+
   return results.slice(0, limit)
+}
+
+/** Warp 风格行内提示：最近的完整历史命令优先，没有时取当前最高优先级补全。 */
+export function suggestCommandLine(
+  input: string,
+  history: readonly string[],
+  specs: readonly CommandSpec[] = BUILTIN_SPECS,
+  paths: readonly CompletionPathEntry[] = [],
+): string | undefined {
+  if (!input.trim()) return undefined
+  for (let index = history.length - 1; index >= 0; index -= 1) {
+    const command = history[index]
+    if (command !== input && command.startsWith(input)) return command
+  }
+  const candidate = completeCommandLine(input, input.length, history, specs, 1, paths)[0]
+  if (!candidate) return undefined
+  const { start } = completionToken(input, input.length)
+  const suggestion = input.slice(0, start) + candidate.text
+  return suggestion === input ? undefined : suggestion
 }

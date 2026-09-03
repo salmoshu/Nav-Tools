@@ -226,7 +226,7 @@
           >
         </button>
       </div>
-      <!-- 命令补全:Ctrl+Space 或 Tab 唤起,Tab/Enter 接受,候选来自内置规格与输入历史 -->
+      <!-- 命令补全:Ctrl+Space 或 Tab 唤起，候选来自内置规格、输入历史与会话路径 -->
       <div v-if="completionOpen" class="completion" role="listbox">
         <div v-if="completionCandidates.length === 0" class="completion__empty">
           {{ t('common.terminal.guiCompletionEmpty') }}
@@ -248,17 +248,31 @@
       </div>
       <el-icon class="gui-input-row__prompt"><ChevronRight /></el-icon>
       <span v-if="cwd" class="gui-input-row__cwd" :title="cwd">{{ cwd }}</span>
-      <input
-        ref="inputElement"
-        v-model="draft"
-        class="gui-input"
-        type="text"
-        spellcheck="false"
-        autocomplete="off"
-        :placeholder="t('common.terminal.guiInputPlaceholder')"
-        :aria-label="t('common.terminal.guiInputPlaceholder')"
-        @keydown="handleInputKeydown"
-      />
+      <div class="gui-input-editor">
+        <input
+          v-if="suggestedLine"
+          class="gui-autosuggestion"
+          type="text"
+          :value="suggestedLine"
+          tabindex="-1"
+          readonly
+          aria-hidden="true"
+        />
+        <input
+          ref="inputElement"
+          v-model="draft"
+          class="gui-input"
+          type="text"
+          spellcheck="false"
+          autocomplete="off"
+          :placeholder="t('common.terminal.guiInputPlaceholder')"
+          :aria-label="t('common.terminal.guiInputPlaceholder')"
+          @input="syncCaret"
+          @click="syncCaret"
+          @keyup="syncCaret"
+          @keydown="handleInputKeydown"
+        />
+      </div>
       <!-- 块间导航:快捷键之外也给个可点的入口,否则这功能等于藏起来了 -->
       <span v-if="blocks.length > 0" class="gui-input-row__nav">
         <el-tooltip :content="t('common.terminal.navPrevBlock')" placement="top" :show-after="400">
@@ -294,7 +308,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, nextTick, reactive, ref, watch } from 'vue'
 import {
   ArrowDownBold,
   ArrowUpBold,
@@ -314,14 +328,18 @@ import { splitOutputByPaths, type DetectedPath } from '@/core/terminal/PathDetec
 import { sniffContent, type SniffedContent } from '@/core/terminal/ContentSniff'
 import { fuzzySearch } from '@/core/terminal/FuzzyMatch'
 import {
+  BUILTIN_SPECS,
   completeCommandLine,
+  completionPathContext,
   completionToken,
+  suggestCommandLine,
   type CompletionCandidate,
   type CompletionKind,
+  type CompletionPathEntry,
 } from '@/core/terminal/CommandCompletion'
 import { useTerminalTranslate } from '@/core/terminal/TerminalI18n'
 import type { TerminalRichPayload } from '@/core/terminal/CommandBlocks'
-import type { TerminalPathStat } from '@/core/terminal/TerminalTypes'
+import type { TerminalPathStat, TerminalSessionDir } from '@/core/terminal/TerminalTypes'
 import TerminalFileTree from './TerminalFileTree.vue'
 import TerminalRichContent from './TerminalRichContent.vue'
 
@@ -376,8 +394,36 @@ let stickToBottom = true
 
 const draft = ref('')
 /** 会话内输入历史,↑/↓ 翻阅;仅存内存,不持久化 */
-const history: string[] = []
+const history = reactive<string[]>([])
 let historyIndex = -1
+
+function rememberCommand(command: string): void {
+  const previous = history.indexOf(command)
+  if (previous >= 0) history.splice(previous, 1)
+  history.push(command)
+  if (history.length > 100) history.shift()
+}
+
+/** 把同一会话已经捕获的命令也纳入提示，不局限于 GUI 输入行提交的命令。 */
+const rememberedBlockIds = new Set<number>()
+let rememberedSessionId = props.sessionId
+watch(
+  [() => props.sessionId, () => props.blocks],
+  ([sessionId, blocks]) => {
+    if (sessionId !== rememberedSessionId) {
+      rememberedSessionId = sessionId
+      rememberedBlockIds.clear()
+      history.splice(0)
+      historyIndex = -1
+    }
+    for (const block of blocks) {
+      if (!block.command || rememberedBlockIds.has(block.id)) continue
+      rememberedBlockIds.add(block.id)
+      rememberCommand(block.command)
+    }
+  },
+  { immediate: true },
+)
 
 /** Ctrl+R 历史模糊搜索的开关与选中项 */
 const historySearchOpen = ref(false)
@@ -394,34 +440,119 @@ function closeHistorySearch(): void {
 /** 查询词变化后选中项可能越界,回到第一条 */
 watch(draft, () => {
   if (historySearchOpen.value) historySearchIndex.value = 0
-  if (completionOpen.value) completionIndex.value = 0
+  if (completionOpen.value) completionIndex.value = -1
+  void nextTick(syncCaret)
 })
 
 /** 命令补全:候选计算交给 CommandCompletion 纯函数,这里只管开关与选中项 */
 const completionOpen = ref(false)
-const completionIndex = ref(0)
+const completionIndex = ref(-1)
+const caret = ref(0)
+const completionPaths = ref<CompletionPathEntry[]>([])
+const loadedPathKey = ref('')
+let pendingPathKey = ''
+let pathRequest = 0
 
 /** 光标位置;补全按光标所在 token 计算,而不是整行 */
 function caretPosition(): number {
   return inputElement.value?.selectionStart ?? draft.value.length
 }
 
+function syncCaret(): void {
+  caret.value = caretPosition()
+}
+
+const availableCompletionPaths = computed(() => {
+  const context = completionPathContext(draft.value, caret.value)
+  const key =
+    context && props.sessionId
+      ? `${props.sessionId}\0${props.cwd ?? ''}\0${context.directory}`
+      : ''
+  return key === loadedPathKey.value ? completionPaths.value : []
+})
+
+async function loadCompletionPaths(): Promise<void> {
+  const context = completionPathContext(draft.value, caret.value)
+  const sessionId = props.sessionId
+  if (!context || !sessionId) {
+    pathRequest += 1
+    pendingPathKey = ''
+    loadedPathKey.value = ''
+    completionPaths.value = []
+    return
+  }
+  const key = `${sessionId}\0${props.cwd ?? ''}\0${context.directory}`
+  if (key === loadedPathKey.value || key === pendingPathKey) return
+  const request = ++pathRequest
+  pendingPathKey = key
+  try {
+    const result = (await window.ipcRenderer.invoke('terminal-session-list-dir', {
+      sessionId,
+      path: context.directory,
+    })) as TerminalSessionDir | null
+    if (request !== pathRequest) return
+    loadedPathKey.value = key
+    completionPaths.value = result?.entries ?? []
+  } catch {
+    if (request !== pathRequest) return
+    loadedPathKey.value = key
+    completionPaths.value = []
+  } finally {
+    if (request === pathRequest) pendingPathKey = ''
+  }
+}
+
+watch([draft, caret, () => props.sessionId, () => props.cwd], () => void loadCompletionPaths(), {
+  immediate: true,
+  flush: 'post',
+})
+
 const completionCandidates = computed<CompletionCandidate[]>(() =>
-  completionOpen.value ? completeCommandLine(draft.value, caretPosition(), history) : [],
+  completionOpen.value
+    ? completeCommandLine(
+        draft.value,
+        caret.value,
+        history,
+        BUILTIN_SPECS,
+        20,
+        availableCompletionPaths.value,
+      )
+    : [],
 )
+
+const suggestedLine = computed(() => {
+  if (
+    historySearchOpen.value ||
+    completionOpen.value ||
+    caret.value !== draft.value.length
+  ) {
+    return undefined
+  }
+  return suggestCommandLine(draft.value, history, BUILTIN_SPECS, availableCompletionPaths.value)
+})
 
 /** 有候选才开弹层;返回是否打开,供 Tab 决定要不要拦住焦点移动 */
 function openCompletion(): boolean {
-  if (completeCommandLine(draft.value, caretPosition(), history).length === 0) return false
+  const candidates = completeCommandLine(
+    draft.value,
+    caret.value,
+    history,
+    BUILTIN_SPECS,
+    20,
+    availableCompletionPaths.value,
+  )
+  const canLoadPaths = Boolean(props.sessionId && completionPathContext(draft.value, caret.value))
+  if (candidates.length === 0 && !canLoadPaths) return false
   closeHistorySearch()
   completionOpen.value = true
-  completionIndex.value = 0
+  completionIndex.value = -1
+  void loadCompletionPaths()
   return true
 }
 
 function closeCompletion(): void {
   completionOpen.value = false
-  completionIndex.value = 0
+  completionIndex.value = -1
 }
 
 /**
@@ -429,19 +560,25 @@ function closeCompletion(): void {
  * 补到行尾时多补一个空格,这样 `gi`→`git `→`st`→`status` 的连续补全走得通。
  */
 function applyCompletion(candidate: CompletionCandidate): void {
-  const caret = caretPosition()
-  const { start } = completionToken(draft.value, caret)
-  const inserted = caret >= draft.value.length ? `${candidate.text} ` : candidate.text
-  draft.value = draft.value.slice(0, start) + inserted + draft.value.slice(caret)
+  const position = caretPosition()
+  const { start } = completionToken(draft.value, position)
+  const addSpace =
+    position >= draft.value.length && !(candidate.kind === 'path' && candidate.text.endsWith('/'))
+  const inserted = addSpace ? `${candidate.text} ` : candidate.text
+  draft.value = draft.value.slice(0, start) + inserted + draft.value.slice(position)
   const cursor = start + inserted.length
   closeCompletion()
-  void nextTick(() => inputElement.value?.setSelectionRange(cursor, cursor))
+  void nextTick(() => {
+    inputElement.value?.setSelectionRange(cursor, cursor)
+    caret.value = cursor
+  })
 }
 
 function completionKindLabel(kind: CompletionKind): string {
   if (kind === 'command') return t('common.terminal.completionCommand')
   if (kind === 'subcommand') return t('common.terminal.completionSubcommand')
   if (kind === 'option') return t('common.terminal.completionOption')
+  if (kind === 'path') return t('common.terminal.completionPath')
   return t('common.terminal.completionHistory')
 }
 
@@ -478,7 +615,26 @@ function handleInputKeydown(event: KeyboardEvent): void {
     return
   }
 
-  // 补全弹层开着时独占 Tab/Enter/↑↓/Esc:Tab 与 Enter 都是「接受当前候选」
+  // Warp 风格灰字提示:光标在行尾时按 → 接受整条建议。
+  if (
+    event.key === 'ArrowRight' &&
+    !event.ctrlKey &&
+    !event.altKey &&
+    !event.metaKey &&
+    caretPosition() === draft.value.length &&
+    suggestedLine.value
+  ) {
+    event.preventDefault()
+    draft.value = suggestedLine.value
+    const cursor = draft.value.length
+    void nextTick(() => {
+      inputElement.value?.setSelectionRange(cursor, cursor)
+      caret.value = cursor
+    })
+    return
+  }
+
+  // 初始不预选候选，避免 Enter 误补全；方向键或再次 Tab 才选择。
   if (completionOpen.value) {
     if (event.key === 'Escape') {
       event.preventDefault()
@@ -490,7 +646,12 @@ function handleInputKeydown(event: KeyboardEvent): void {
       event.preventDefault()
       const delta = event.key === 'ArrowUp' ? -1 : 1
       const count = completionCandidates.value.length
-      completionIndex.value = (completionIndex.value + delta + count) % count
+      completionIndex.value =
+        completionIndex.value < 0
+          ? event.key === 'ArrowUp'
+            ? count - 1
+            : 0
+          : (completionIndex.value + delta + count) % count
       return
     }
     if (event.key === 'Tab' || event.key === 'Enter') {
@@ -500,7 +661,12 @@ function handleInputKeydown(event: KeyboardEvent): void {
         applyCompletion(candidate)
         return
       }
-      // 候选被输入过滤空了:收起弹层,让按键按原义继续走(回车提交、Tab 移焦点)
+      if (event.key === 'Tab') {
+        event.preventDefault()
+        if (completionCandidates.value.length > 0) completionIndex.value = 0
+        return
+      }
+      // 候选被输入过滤空了：收起弹层，让 Enter 按原义提交。
       closeCompletion()
     }
   }
@@ -508,7 +674,11 @@ function handleInputKeydown(event: KeyboardEvent): void {
   // Tab 未开弹层时:有候选就开并拦下焦点移动;没候选就放行,不破坏键盘可达性。
   // 空 token 上一律放行——否则光标停在空输入行时 Tab 会被永久吞掉,焦点出不去
   if (event.key === 'Tab' && !completionOpen.value) {
-    if (completionToken(draft.value, caretPosition()).text.length > 0 && openCompletion()) {
+    const position = caretPosition()
+    const hasCompletableToken =
+      completionToken(draft.value, position).text.length > 0 ||
+      Boolean(completionPathContext(draft.value, position))
+    if (hasCompletableToken && openCompletion()) {
       event.preventDefault()
     }
     return
@@ -542,8 +712,7 @@ function handleInputKeydown(event: KeyboardEvent): void {
   if (event.key === 'Enter') {
     const command = draft.value.trim()
     if (!command) return
-    history.push(command)
-    if (history.length > 100) history.shift()
+    rememberCommand(command)
     historyIndex = -1
     draft.value = ''
     closeHistorySearch()
@@ -1315,8 +1484,15 @@ watch(scrollElement, (element, previous) => {
   white-space: nowrap;
   user-select: text;
 }
-.gui-input {
+.gui-input-editor {
+  position: relative;
   flex: 1;
+  min-width: 0;
+}
+.gui-input,
+.gui-autosuggestion {
+  display: block;
+  width: 100%;
   min-width: 0;
   padding: 0;
   border: none;
@@ -1326,6 +1502,19 @@ watch(scrollElement, (element, previous) => {
   font-family: 'Cascadia Mono', Consolas, 'Noto Sans Mono', monospace;
   font-size: 12px;
   line-height: 20px;
+}
+.gui-input {
+  position: relative;
+  z-index: 1;
+}
+.gui-autosuggestion {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  overflow: hidden;
+  color: color-mix(in srgb, var(--terminal-fg) 34%, transparent);
+  white-space: nowrap;
+  pointer-events: none;
 }
 .gui-input::placeholder {
   color: color-mix(in srgb, var(--terminal-fg) 38%, transparent);

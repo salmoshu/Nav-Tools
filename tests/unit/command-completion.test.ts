@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
   completeCommandLine,
+  completionPathContext,
   completionToken,
+  suggestCommandLine,
   type CommandSpec,
 } from '@/core/terminal/CommandCompletion'
 
@@ -96,6 +98,36 @@ describe('completeCommandLine 参数位', () => {
 
   it('无子命令的命令在第一个参数位不内联选项', () => {
     expect(completeCommandLine('cat readme', 10, [], SPECS)).toEqual([])
+  })
+
+  it('补全当前目录与子目录中的路径', () => {
+    const paths = [
+      { name: 'README.md', directory: false },
+      { name: 'reports', directory: true },
+      { name: 'with space.txt', directory: false },
+    ]
+    expect(completionPathContext('cat RE', 6)).toEqual({ directory: '.', prefix: 'RE' })
+    expect(completionPathContext('cat docs/re', 11)).toEqual({
+      directory: 'docs/',
+      prefix: 're',
+    })
+    expect(completeCommandLine('cat R', 5, [], SPECS, 20, paths)).toEqual([
+      { text: 'README.md', kind: 'path' },
+    ])
+    expect(completeCommandLine('cat docs/re', 11, [], SPECS, 20, paths)).toEqual([
+      { text: 'docs/reports/', kind: 'path' },
+    ])
+    expect(completeCommandLine('cat docs\\re', 11, [], SPECS, 20, paths)).toEqual([
+      { text: 'docs\\reports\\', kind: 'path' },
+    ])
+  })
+})
+
+describe('suggestCommandLine', () => {
+  it('优先提示最近的完整历史命令,再回退到规格补全', () => {
+    expect(suggestCommandLine('git s', ['git stash', 'git status'], SPECS)).toBe('git status')
+    expect(suggestCommandLine('gi', [], SPECS)).toBe('git')
+    expect(suggestCommandLine('', ['git status'], SPECS)).toBeUndefined()
   })
 })
 

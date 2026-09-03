@@ -82,8 +82,9 @@ const OSC133_BASH_INTEGRATION = [
   '__nav133_emit=1',
 ].join('; ')
 /**
- * PowerShell 提示符集成:prompt 函数在每次提示符处上报上一条命令的退出码(D)
- * 与提示符起点(A);同时注入 nav-render 函数上报 OSC 1338 富内容块。
+ * PowerShell 提示符集成:PSReadLine 在执行前上报命令文本(C),prompt 函数在
+ * 每次提示符处上报上一条命令的退出码(D)与提示符起点(A);同时注入
+ * nav-render 函数上报 OSC 1338 富内容块。
  * 经 -Command 启动参数注入,不会作为输入回显进 scrollback。
  * 注意:这会覆盖用户 $PROFILE 里的自定义 prompt。
  */
@@ -102,7 +103,12 @@ const POWERSHELL_PROMPT_INTEGRATION =
   '$c = 0; if ($null -ne $e) { $c = $e }; ' +
   '$s = [char]27; $b = [char]7; ' +
   '[Console]::Out.Write("$s]133;D;$c$b$s]133;A$b"); ' +
-  '"PS $((Get-Location).Path)> " }'
+  '"PS $((Get-Location).Path)> " }; ' +
+  'if (Get-Module PSReadLine) { Set-PSReadLineKeyHandler -Chord Enter -ScriptBlock { param($key, $arg) ' +
+  '$line = ""; $cursor = 0; [Microsoft.PowerShell.PSConsoleReadLine]::GetBufferState([ref]$line, [ref]$cursor); ' +
+  'if ($line.Trim()) { $encoded = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($line)); ' +
+  '$s = [char]27; $b = [char]7; [Console]::Out.Write("$s]133;C;$encoded$b") }; ' +
+  '[Microsoft.PowerShell.PSConsoleReadLine]::AcceptLine($key, $arg) } }'
 /** 输入回显抑制窗口:写入后的这段时间内到达的输出视为回显,不驱动 tab 活动动画 */
 const INPUT_ECHO_WINDOW_MS = 600
 /** Terminal redraws emitted immediately after a PTY resize are layout feedback, not user activity. */
@@ -1281,8 +1287,7 @@ function resolvePtyLaunch(
   if (kind === 'powershell')
     return {
       executable: 'powershell.exe',
-      // 经启动参数注入 prompt 函数,上报 OSC 133 提示符/退出码标记;
-      // PowerShell 无 preexec 机制,无法上报 C(命令开始),GUI 视图按周期整段成块
+      // 经启动参数注入 PSReadLine/prompt 钩子,上报 OSC 133 命令/提示符/退出码标记
       args: ['-NoLogo', '-NoExit', '-Command', POWERSHELL_PROMPT_INTEGRATION],
       title: 'PowerShell',
     }

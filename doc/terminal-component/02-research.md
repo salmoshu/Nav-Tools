@@ -8,6 +8,7 @@
 > | `research/wave-notes.md` | 第二轮：Wave Terminal 源码级对比（后端 PTY 管线、前端块模型、widgets、补全） |
 > | `research/cmux-notes.md` | 第三轮：cmux 对比（注意力/通知系统、自定义侧栏、CLI/socket、会话恢复） |
 > | `research/survey-notes.md` | 第四轮：生态延续调研（Warp 开源、libghostty-vt、Zellij、富内容协议清单） |
+> | [`research/warp-command-completion.md`](research/warp-command-completion.md) | Warp 官方命令提示/补全交互与源码行为；提炼 Nav-Tools 最小切片 |
 
 所有项目状态均于 **2026-08-30 经 GitHub API 核实**，不依赖记忆。
 
@@ -71,6 +72,16 @@ pane 蓝环 + 侧栏徽标 + 通知面板 + 跳转未读。
 我们目前 `MARKER_PATTERN` 不覆盖 OSC 9 / 777，全仓无通知基础设施（**空白**）。
 详见 `research/cmux-notes.md` §1。
 
+### 3.5 Warp 的输入辅助是三个独立状态
+
+Warp 明确分开：单条灰字 **autosuggestion**、`Tab` **completion menu**、
+`↑` / `Ctrl+R` **history**。对我们最划算的落地方式是：GUI 输入行用
+会话历史做灰字整行建议，Tab 菜单只放命令规格 + 当前会话路径，
+xterm 视图不拦截按键、继续使用 Shell 原生补全。排序保持「完全匹配 → 前缀 →
+模糊」；菜单初始不预选，避免 `Enter` 误接受第一项。行为证据、键位、
+Shell/SSH 边界与 AGPL 源码禁复制说明见
+[`research/warp-command-completion.md`](research/warp-command-completion.md)。
+
 ## 4. 可抄清单（按性价比）
 
 | 项 | 来源 | 成本 | 说明 |
@@ -84,7 +95,7 @@ pane 蓝环 + 侧栏徽标 + 通知面板 + 跳转未读。
 | **Zellij 的「读回看 + 文本高亮 + Alt+Click 回调」** | Zellij | 中 | 唯一被验证过的终端内 GUI 交互接口集 |
 | **OSC 16162 的 `R` 命令**（强制退出备用缓冲，自愈卡屏） | Wave | 低 | vim/less 崩溃后的恢复 |
 | **会话恢复**（布局 + cwd + 回滚，重启后重连） | cmux | 中 | 对 SSH 窗格体验提升明显 |
-| **补全交互**（浮动 widget、Tab 补全、reqnum 丢弃过期结果） | Wave | 中 | 数据源走 withfig，别学它的自研 |
+| **补全交互**（灰字建议 + Tab 菜单 + 独立历史） | Warp；Wave 的 reqnum | 中 | 先用内置规格 + 会话路径/历史；不复制 Warp AGPL 代码 |
 
 ## 5. 不要抄清单
 

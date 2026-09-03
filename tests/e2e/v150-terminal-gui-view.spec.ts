@@ -11,8 +11,9 @@ function seedTerminalApp(page: import('@playwright/test').Page, options: {
   session: Record<string, unknown>
   presentation?: 'gui'
   scrollback: string
+  directoryEntries?: Array<Record<string, unknown>>
 }) {
-  const { appId, paneId, session, presentation, scrollback } = options
+  const { appId, paneId, session, presentation, scrollback, directoryEntries = [] } = options
   const application = {
     id: appId,
     name: 'Terminal GUI View',
@@ -22,7 +23,7 @@ function seedTerminalApp(page: import('@playwright/test').Page, options: {
     windowIds: ['terminal'],
   }
   return page.addInitScript(
-    ({ application, paneId, session, presentation, scrollback }) => {
+    ({ application, paneId, session, presentation, scrollback, directoryEntries }) => {
       localStorage.setItem('nav-tools:custom-applications', JSON.stringify([application]))
       localStorage.setItem('nav-tools:selected-application', application.id)
       localStorage.setItem(
@@ -60,6 +61,9 @@ function seedTerminalApp(page: import('@playwright/test').Page, options: {
             if (channel === 'terminal-session-list') return [session]
             if (channel === 'terminal-session-attach') return { ...session, scrollback }
             if (channel === 'terminal-ssh-config-list') return []
+            if (channel === 'terminal-session-list-dir') {
+              return { resolvedPath: '.', entries: directoryEntries, truncated: false }
+            }
             return undefined
           },
           on: () => undefined,
@@ -68,7 +72,7 @@ function seedTerminalApp(page: import('@playwright/test').Page, options: {
         },
       })
     },
-    { application, paneId, session, presentation, scrollback },
+    { application, paneId, session, presentation, scrollback, directoryEntries },
   )
 }
 
@@ -215,4 +219,65 @@ test('submits commands from the GUI input bar and recalls them with arrow keys',
   // ↑ 翻阅会话内输入历史
   await input.press('ArrowUp')
   await expect(input).toHaveValue('echo hello')
+})
+
+test('suggests history and completes command specs and paths in the GUI input', async ({
+  page,
+}) => {
+  const scrollback =
+    `${osc133('A')}$ git status\r\n${osc133('C', btoa('git status'))}` +
+    `clean\r\n${osc133('D', '0')}${osc133('A')}$ `
+  await seedTerminalApp(page, {
+    appId: 'terminal-gui-completion',
+    paneId: 'gui-pane',
+    session: { id: 'gui-completion-session', kind: 'local', title: 'Git Bash', status: 'ready' },
+    presentation: 'gui',
+    scrollback,
+    directoryEntries: [
+      {
+        name: 'README.md',
+        path: 'C:\\workspace\\README.md',
+        directory: false,
+        size: 10,
+        modifiedAt: 0,
+        mode: 0,
+      },
+    ],
+  })
+
+  await page.goto('/#app/terminal-gui-completion')
+  const input = page.locator('.gui-input')
+
+  await input.fill('git s')
+  const autosuggestion = page.locator('.gui-autosuggestion')
+  await expect(autosuggestion).toHaveValue('git status')
+  const inputLayers = await page.locator('.gui-input-editor input').evaluateAll((elements) =>
+    elements.map((element) => {
+      const rect = element.getBoundingClientRect()
+      const style = getComputedStyle(element)
+      return {
+        x: rect.x,
+        y: rect.y,
+        width: rect.width,
+        height: rect.height,
+        font: style.font,
+        padding: style.padding,
+      }
+    }),
+  )
+  expect(inputLayers[0]).toEqual(inputLayers[1])
+  await input.press('ArrowRight')
+  await expect(input).toHaveValue('git status')
+
+  await input.fill('git st')
+  await input.press('Tab')
+  await expect(page.locator('.completion__item')).toHaveCount(2)
+  await expect(page.locator('.completion__item.is-active')).toHaveCount(0)
+  await expect(page.locator('.completion__text').first()).toHaveText('stash')
+
+  await input.press('Escape')
+  await input.fill('cat RE')
+  await expect(page.locator('.gui-autosuggestion')).toHaveValue('cat README.md')
+  await input.press('Tab')
+  await expect(page.locator('.completion__text')).toHaveText('README.md')
 })
