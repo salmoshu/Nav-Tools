@@ -260,6 +260,12 @@ export class TerminalService {
     return this.openSshShell(session.connection, cols, rows)
   }
 
+  public getSshHost(sessionId: string): string {
+    const session = this.requireSshSession(sessionId)
+    if (session.info.status !== 'ready') throw new Error('SSH 会话未就绪')
+    return session.connection.profile.host
+  }
+
   public write(sessionId: string, data: string): void {
     const session = this.requireSession(sessionId)
     session.lastInputAt = this.host.now()

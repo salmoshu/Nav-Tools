@@ -8,11 +8,19 @@ import {
   type NetworkConnectionOptions,
 } from './services/NetworkConnectionService'
 import { CameraCommandService, type CameraCommandRequest } from './services/CameraCommandService'
+import { CameraCalibrationService } from './services/CameraCalibrationService'
 
 const serialService = new SerialPortService()
 const networkService = new NetworkConnectionService()
 const cameraCommandService = new CameraCommandService({
   write: (packet) => networkService.sendTcp(packet),
+})
+const cameraCalibrationService = new CameraCalibrationService({
+  now: () => performance.now(),
+  tcpTarget: () => networkService.getTcpTarget(),
+  writeParams: async (content) => {
+    await cameraCommandService.send({ subCommand: 'set_params', content, contentFormat: 'text' })
+  },
 })
 const iapUpgradeService = new IapUpgradeService(serialService)
 
@@ -86,15 +94,18 @@ function changeSerialDataFormat(_event: IpcMainEvent, format: string) {
 }
 
 function openNetworkConnection(event: IpcMainInvokeEvent, options: NetworkConnectionOptions) {
+  cameraCalibrationService.stop('控制连接正在改变，已停止自动标定')
   return networkService.open(options, {
     onData: (data) => event.sender.send('network-data-to-renderer', data),
     onDisconnected: (connection, reason) => {
+      cameraCalibrationService.stop('控制连接已断开，设备参数需人工核实')
       event.sender.send('network-disconnected', { ...connection, reason })
     },
   })
 }
 
 function closeNetworkConnection() {
+  cameraCalibrationService.stop('控制连接已关闭，已停止自动标定')
   return networkService.close()
 }
 
@@ -108,7 +119,7 @@ function sendNetworkAsciiData(event: IpcMainEvent, data: string) {
 
 async function sendNetworkData(event: IpcMainEvent, data: string, format: 'hex' | 'ascii') {
   try {
-    await networkService.send(data, format)
+    await cameraCalibrationService.manual(() => networkService.send(data, format))
     event.sender.send('network-send-success', { data })
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
@@ -117,7 +128,7 @@ async function sendNetworkData(event: IpcMainEvent, data: string, format: 'hex' 
 }
 
 function sendCameraCommand(_event: IpcMainInvokeEvent, request: CameraCommandRequest) {
-  return cameraCommandService.send(request)
+  return cameraCalibrationService.manual(() => cameraCommandService.send(request))
 }
 
 async function sendDataChunk(
@@ -126,7 +137,7 @@ async function sendDataChunk(
 ): Promise<void> {
   const { data, format, transport } = request
   if (transport === 'network') {
-    await networkService.send(data, format)
+    await cameraCalibrationService.manual(() => networkService.send(data, format))
     return
   }
   await serialService.send(data, format)
@@ -160,4 +171,4 @@ async function readFileEvent(event: IpcMainInvokeEvent, filePath: string) {
   }
 }
 
-export { eventsMap, iapUpgradeService }
+export { eventsMap, iapUpgradeService, cameraCalibrationService }

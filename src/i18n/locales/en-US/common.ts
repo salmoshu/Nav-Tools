@@ -59,8 +59,6 @@ export default {
     liveVideoAlt: 'Live camera video',
     connecting: 'Connecting to video stream…',
     zoomResetHint: 'Double-click to reset',
-    recognizedLabels: 'Recognized Labels',
-    recognizedLabelsDesc: 'Recognized label information',
     play: 'Play',
     pause: 'Pause',
     loopReconnect: 'Loop',

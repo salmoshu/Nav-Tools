@@ -84,7 +84,6 @@
     "mitt": "^3.0.1",
     "monaco-editor": "^0.53.0",
     "node-pty": "^1.1.0",
-    "onnxruntime-node": "^1.27.0",
     "pinia": "^3.0.3",
     "serialport": "^13.0.0",
     "ssh2": "^1.17.0",

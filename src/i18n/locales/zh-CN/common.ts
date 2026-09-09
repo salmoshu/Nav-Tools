@@ -59,8 +59,6 @@ export default {
     liveVideoAlt: '相机实时视频',
     connecting: '正在连接视频流…',
     zoomResetHint: '双击复位',
-    recognizedLabels: '识别标签',
-    recognizedLabelsDesc: '识别到的标签信息',
     play: '播放',
     pause: '暂停',
     loopReconnect: '循环',

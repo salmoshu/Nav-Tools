@@ -16,7 +16,9 @@ import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import os from 'node:os'
 import ffmpegStatic from 'ffmpeg-static'
-import { eventsMap, iapUpgradeService } from './events'
+import { eventsMap, iapUpgradeService, cameraCalibrationService } from './events'
+import { registerCameraCalibrationIpc } from './cameraCalibrationIpc'
+import type { TerminalOutputEvent } from '../../src/core/terminal/TerminalTypes'
 import { CameraStreamService } from './services/CameraStreamService'
 import { FilePlaybackService } from './services/FilePlaybackService'
 import { TextFileStreamService } from './services/TextFileStreamService'
@@ -76,6 +78,10 @@ const updateService = new UpdateService()
 const terminalService = new TerminalService(
   app.getPath('userData'),
   (channel, payload) => {
+    if (channel === 'terminal-output') {
+      const output = payload as TerminalOutputEvent
+      if (output.activity !== false) cameraCalibrationService.receive(output.sessionId, output.data)
+    }
     for (const target of BrowserWindow.getAllWindows()) {
       if (!target.isDestroyed()) target.webContents.send(channel, payload)
     }
@@ -87,6 +93,7 @@ const terminalCredentialService = new TerminalCredentialService(
   safeStorage,
 )
 registerTerminalIpc(terminalService, terminalCredentialService)
+registerCameraCalibrationIpc(cameraCalibrationService, terminalService)
 // 自定义瓦片协议必须在 app ready 之前注册为 privileged scheme
 offlineTileService.registerPrivilegedScheme()
 const cameraStreamOwners = new Set<number>()
@@ -416,6 +423,7 @@ app.on('window-all-closed', () => {
 })
 
 app.on('before-quit', () => {
+  cameraCalibrationService.close()
   iapUpgradeService.cancel()
   void terminalService.closeAll()
   cameraStreamService.stopAll()

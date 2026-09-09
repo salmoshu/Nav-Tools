@@ -62,6 +62,11 @@ export class NetworkConnectionService {
     this.dataFormat = format === 'hex' ? 'hex' : 'ascii'
   }
 
+  public getTcpTarget(): { host: string; port: number } | undefined {
+    if (this.tcpSocket?.readyState !== 'open' || this.currentOptions?.protocol !== 'tcp') return
+    return { host: this.currentOptions.host, port: this.currentOptions.port }
+  }
+
   public async sendTcp(data: Uint8Array): Promise<void> {
     const socket = this.tcpSocket
     if (!socket || socket.destroyed)

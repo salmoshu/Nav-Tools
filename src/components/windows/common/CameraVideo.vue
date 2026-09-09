@@ -38,15 +38,6 @@
       </div>
     </div>
 
-    <div
-      v-if="labels.length"
-      class="label-hints"
-      :aria-label="t('common.video.recognizedLabelsDesc')"
-    >
-      <span class="hints-title">{{ t('common.video.recognizedLabels') }}</span>
-      <span v-for="(label, index) in labels" :key="index" class="label-chip">{{ label }}</span>
-    </div>
-
     <div class="camera-controls">
       <button
         class="source-reference"
@@ -173,8 +164,6 @@ const showCameraSourceDialog = ref(false)
 const status = ref<StreamStatus>('idle')
 const statusMessage = ref(t('common.video.waitingToPlay'))
 const frameUrl = ref('')
-/** 主进程标签识别结果(模板匹配 + 时序投票) */
-const labels = ref<string[]>([])
 
 const RECONNECT_DELAY_MS = 3000
 let reconnectTimer: ReturnType<typeof setTimeout> | undefined
@@ -340,7 +329,6 @@ async function pauseStream() {
   clearReconnectTimer()
   await window.electronAPI?.stopCameraStream?.()
   revokeFrameUrl()
-  labels.value = []
   status.value = 'stopped'
   statusMessage.value = t('common.video.paused')
 }
@@ -362,27 +350,19 @@ const statusListener = (_event: unknown, payload: StreamStatusPayload) => {
   if (payload.message) statusMessage.value = payload.message
   if (payload.status === 'error') {
     revokeFrameUrl()
-    labels.value = []
     scheduleReconnect()
   }
-}
-
-const labelListener = (_event: unknown, payload: { labels?: unknown }) => {
-  if (!payload || !Array.isArray(payload.labels)) return
-  labels.value = payload.labels.filter((item): item is string => typeof item === 'string')
 }
 
 onMounted(() => {
   window.ipcRenderer?.on('camera-stream-frame', frameListener)
   window.ipcRenderer?.on('camera-stream-status', statusListener)
-  window.ipcRenderer?.on('camera-stream-labels', labelListener)
 })
 
 onUnmounted(() => {
   clearReconnectTimer()
   window.ipcRenderer?.off('camera-stream-frame', frameListener)
   window.ipcRenderer?.off('camera-stream-status', statusListener)
-  window.ipcRenderer?.off('camera-stream-labels', labelListener)
   void window.electronAPI?.stopCameraStream?.()
   revokeFrameUrl()
 })
@@ -436,33 +416,6 @@ onUnmounted(() => {
   gap: 7px;
   color: var(--app-text-secondary);
   font-size: 12px;
-}
-
-.label-hints {
-  display: flex;
-  flex: 0 0 auto;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 6px;
-  padding: 6px 10px;
-  border-top: 1px solid var(--app-border);
-  background: var(--app-surface);
-}
-
-.hints-title {
-  font-size: 12px;
-  color: var(--app-text-muted);
-}
-
-.label-chip {
-  padding: 2px 8px;
-  border: 1px solid var(--app-border);
-  border-radius: 999px;
-  background: var(--app-surface-muted);
-  color: var(--el-color-danger);
-  font-size: 12px;
-  font-family: 'Courier New', monospace;
-  font-weight: 600;
 }
 
 .source-reference {

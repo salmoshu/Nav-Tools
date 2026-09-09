@@ -5,9 +5,7 @@
   "asar": true,
   "asarUnpack": [
     "node_modules/ffmpeg-static/**",
-    "node_modules/node-pty/**",
-    "node_modules/onnxruntime-node/**",
-    "resources/ocr/**"
+    "node_modules/node-pty/**"
   ],
   "productName": "Nav-Tools",
   "releaseInfo": {
@@ -35,8 +33,7 @@
   },
   "files": [
     "dist",
-    "dist-electron",
-    "resources/ocr"
+    "dist-electron"
   ],
   "icon": "public/logo_transparent",
   "mac": {

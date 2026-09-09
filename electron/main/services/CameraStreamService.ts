@@ -1,8 +1,5 @@
-import path from 'node:path'
 import { spawn, type ChildProcess } from 'node:child_process'
 import { JpegStreamParser } from '../../../src/core/camera/JpegStreamParser'
-import { LabelVoter, recognizeLabels } from '../../../src/core/camera/LabelOcr'
-import { initRec } from '../../../src/core/camera/PaddleRec'
 
 export type CameraStreamStatus = 'connecting' | 'playing' | 'stopped' | 'error'
 
@@ -23,41 +20,11 @@ interface CameraStreamSession {
   receivedFrame: boolean
   stopping: boolean
   watchdog?: ReturnType<typeof setTimeout>
-  /** 标签识别:原始 rgb24 帧缓冲与帧尺寸(取自首帧 JPEG SOF) */
-  voter: LabelVoter
-  ocrBuffer: Buffer
-  frameWidth: number
-  frameHeight: number
-  lastLabelsKey: string
-  ocrBusy: boolean
 }
 
 export interface CameraStreamStartResult {
   ok: boolean
   message?: string
-}
-
-/** PP-OCR rec 模型与字典路径(打包后位于 app.asar.unpacked) */
-function resolveOcrResource(fileName: string): string {
-  const appRoot = process.env.APP_ROOT ?? process.cwd()
-  return path
-    .join(appRoot, 'resources', 'ocr', fileName)
-    .replace(/app\.asar(?=[\\/])/, 'app.asar.unpacked')
-}
-
-/** 从 JPEG 数据中解析帧尺寸(SOF0~SOF15,排除 DHT/DAC/RST) */
-function parseJpegSize(frame: Uint8Array): { width: number; height: number } | undefined {
-  for (let i = 0; i + 9 < frame.length; i++) {
-    if (frame[i] !== 0xff) continue
-    const marker = frame[i + 1]
-    if (marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc) {
-      return {
-        height: (frame[i + 5] << 8) | frame[i + 6],
-        width: (frame[i + 7] << 8) | frame[i + 8],
-      }
-    }
-  }
-  return undefined
 }
 
 export class CameraStreamService {
@@ -85,7 +52,6 @@ export class CameraStreamService {
     transportIndex: number,
   ): void {
     const transport = CameraStreamService.transports[transportIndex]
-    // 两路输出:pipe:1 = MJPEG 显示流;pipe:3 = 原始 rgb24 裸帧,供标签识别
     const process = spawn(
       this.ffmpegExecutable,
       [
@@ -101,10 +67,8 @@ export class CameraStreamService {
         '-i',
         url,
         '-an',
-        '-filter_complex',
-        `[0:v]split=2[va][vb];[va]fps=15[outv];[vb]fps=4,format=rgb24[outm]`,
-        '-map',
-        '[outv]',
+        '-vf',
+        'fps=15',
         '-q:v',
         '2',
         '-f',
@@ -112,15 +76,8 @@ export class CameraStreamService {
         '-vcodec',
         'mjpeg',
         'pipe:1',
-        '-map',
-        '[outm]',
-        '-f',
-        'rawvideo',
-        '-pix_fmt',
-        'rgb24',
-        'pipe:3',
       ],
-      { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe', 'pipe'] },
+      { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] },
     )
 
     const session: CameraStreamSession = {
@@ -132,12 +89,6 @@ export class CameraStreamService {
       errorOutput: '',
       receivedFrame: false,
       stopping: false,
-      voter: new LabelVoter(),
-      ocrBuffer: Buffer.alloc(0),
-      frameWidth: 0,
-      frameHeight: 0,
-      lastLabelsKey: '',
-      ocrBusy: false,
     }
     this.sessions.set(id, session)
     this.sendStatus(session, 'connecting', '正在连接相机…')
@@ -156,66 +107,7 @@ export class CameraStreamService {
           if (session.watchdog) clearTimeout(session.watchdog)
           this.sendStatus(session, 'playing', '直播中')
         }
-        if (!session.frameWidth) {
-          const size = parseJpegSize(frame)
-          if (size) {
-            session.frameWidth = size.width
-            session.frameHeight = size.height
-          }
-        }
         target.send('camera-stream-frame', frame)
-      }
-    })
-
-    const ocrStream = process.stdio[3]
-    ocrStream?.on('data', (chunk: Buffer) => {
-      if (this.sessions.get(id) !== session || target.isDestroyed()) return
-      const { frameWidth: width, frameHeight: height } = session
-      if (!width || !height || session.ocrBusy) return
-
-      session.ocrBuffer = session.ocrBuffer.length
-        ? Buffer.concat([session.ocrBuffer, chunk])
-        : chunk
-      const frameSize = width * height * 3
-      while (session.ocrBuffer.length >= frameSize && !session.ocrBusy) {
-        // 只分析最新帧:推理若掉队,丢弃积压的旧帧,避免标签与画面产生时间差
-        if (session.ocrBuffer.length >= frameSize * 2) {
-          session.ocrBuffer = session.ocrBuffer.subarray(session.ocrBuffer.length - frameSize)
-        }
-        const frame = session.ocrBuffer.subarray(0, frameSize)
-        session.ocrBuffer = session.ocrBuffer.subarray(frameSize)
-
-        session.ocrBusy = true
-        void (async () => {
-          try {
-            // 模型懒加载;加载失败仅记日志,不影响播放
-            const ready = await initRec(
-              resolveOcrResource('ch_PP-OCRv3_rec_infer.onnx'),
-              resolveOcrResource('ppocr_keys_v1.txt'),
-            )
-            if (!ready || this.sessions.get(id) !== session || target.isDestroyed()) return
-
-            const labels = await recognizeLabels(
-              new Uint8Array(frame.buffer, frame.byteOffset, frameSize),
-              width,
-              height,
-            )
-            session.voter.push(labels)
-            const stable = session.voter.getStable()
-            const key = stable.join('|')
-            if (key !== session.lastLabelsKey) {
-              session.lastLabelsKey = key
-              target.send('camera-stream-labels', { labels: stable })
-            }
-          } catch (error) {
-            console.error(
-              '[CameraStream] 标签识别异常:',
-              error instanceof Error ? error.message : error,
-            )
-          } finally {
-            session.ocrBusy = false
-          }
-        })()
       }
     })
 
