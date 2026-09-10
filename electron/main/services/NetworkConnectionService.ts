@@ -22,6 +22,13 @@ export class NetworkConnectionService {
   private lastUdpRemote: RemoteInfo | undefined
   private dataFormat: NetworkDataFormat = 'ascii'
   private intentionalClose = false
+  private readonly rawDataListeners = new Set<(data: Uint8Array) => void>()
+
+  /** 原始字节流订阅:不受控制台 hex/ascii 显示格式切换影响 */
+  public onRawData(listener: (data: Uint8Array) => void): () => void {
+    this.rawDataListeners.add(listener)
+    return () => this.rawDataListeners.delete(listener)
+  }
 
   public async open(options: NetworkConnectionOptions, callbacks: NetworkCallbacks): Promise<void> {
     await this.close()
@@ -110,7 +117,10 @@ export class NetworkConnectionService {
         opened = true
         resolve()
       })
-      socket.on('data', (chunk) => callbacks.onData(this.formatData(chunk)))
+      socket.on('data', (chunk) => {
+        for (const listener of this.rawDataListeners) listener(chunk)
+        callbacks.onData(this.formatData(chunk))
+      })
       socket.on('error', (error) => {
         if (!settled) {
           settled = true
@@ -140,6 +150,7 @@ export class NetworkConnectionService {
 
       socket.on('message', (message, remote) => {
         this.lastUdpRemote = remote
+        for (const listener of this.rawDataListeners) listener(message)
         callbacks.onData(this.formatData(message))
       })
       socket.once('listening', () => {

@@ -46,6 +46,35 @@ interface Window {
       contentBytes: number
       dataLength: number
     }>
+    cameraCalibrationSnapshot: () => Promise<import('./core/camera/CameraCalibrationTypes').CameraCalibrationSnapshot>
+    cameraCalibrationAccess: () => Promise<{
+      host?: string
+      port?: number
+      username?: string
+      hasPassword: boolean
+    }>
+    cameraCalibrationReadParams: () => Promise<import('./core/camera/CameraParamReadback').CameraParamSnapshot>
+    cameraCalibrationObserve: (request: {
+      host: string
+      port: number
+      username: string
+      password?: string
+    }) => Promise<import('./core/camera/CameraCalibrationTypes').CameraCalibrationSnapshot>
+    cameraCalibrationStart: (
+      config: import('./core/camera/CameraCalibrationTypes').CameraCalibrationConfig,
+    ) => Promise<import('./core/camera/CameraCalibrationTypes').CameraCalibrationSnapshot>
+    cameraCalibrationStop: () => Promise<import('./core/camera/CameraCalibrationTypes').CameraCalibrationSnapshot>
+    cameraCalibrationRestore: () => Promise<import('./core/camera/CameraCalibrationTypes').CameraCalibrationSnapshot>
+    cameraCalibrationClose: () => Promise<import('./core/camera/CameraCalibrationTypes').CameraCalibrationSnapshot>
+    cameraScriptRun: (request: {
+      host: string
+      port: number
+      username: string
+      password?: string
+      localPath: string
+      timeoutS: number
+    }) => Promise<{ ok: boolean }>
+    cameraScriptStop: () => Promise<void>
     checkForUpdates: () => Promise<void>
     downloadUpdate: () => Promise<void>
     quitAndInstall: () => Promise<void>

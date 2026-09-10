@@ -18,7 +18,9 @@ import os from 'node:os'
 import ffmpegStatic from 'ffmpeg-static'
 import { eventsMap, iapUpgradeService, cameraCalibrationService } from './events'
 import { registerCameraCalibrationIpc } from './cameraCalibrationIpc'
-import type { TerminalOutputEvent } from '../../src/core/terminal/TerminalTypes'
+import { registerCameraScriptIpc } from './cameraScriptIpc'
+import { CameraMeasurementAccessStore } from './services/CameraMeasurementAccessStore'
+import { CameraScriptInjector } from './services/CameraScriptInjector'
 import { CameraStreamService } from './services/CameraStreamService'
 import { FilePlaybackService } from './services/FilePlaybackService'
 import { TextFileStreamService } from './services/TextFileStreamService'
@@ -78,10 +80,6 @@ const updateService = new UpdateService()
 const terminalService = new TerminalService(
   app.getPath('userData'),
   (channel, payload) => {
-    if (channel === 'terminal-output') {
-      const output = payload as TerminalOutputEvent
-      if (output.activity !== false) cameraCalibrationService.receive(output.sessionId, output.data)
-    }
     for (const target of BrowserWindow.getAllWindows()) {
       if (!target.isDestroyed()) target.webContents.send(channel, payload)
     }
@@ -93,7 +91,9 @@ const terminalCredentialService = new TerminalCredentialService(
   safeStorage,
 )
 registerTerminalIpc(terminalService, terminalCredentialService)
-registerCameraCalibrationIpc(cameraCalibrationService, terminalService)
+const cameraMeasurementStore = new CameraMeasurementAccessStore(app.getPath('userData'))
+registerCameraCalibrationIpc(cameraCalibrationService, cameraMeasurementStore)
+registerCameraScriptIpc(new CameraScriptInjector(), cameraMeasurementStore)
 // 自定义瓦片协议必须在 app ready 之前注册为 privileged scheme
 offlineTileService.registerPrivilegedScheme()
 const cameraStreamOwners = new Set<number>()
@@ -593,3 +593,4 @@ ipcMain.handle('close-network-connection', eventsMap['close-network-connection']
 ipcMain.on('send-network-hex-data', eventsMap['send-network-hex-data'])
 ipcMain.on('send-network-ascii-data', eventsMap['send-network-ascii-data'])
 ipcMain.handle('camera-command-send', eventsMap['camera-command-send'])
+ipcMain.handle('camera-calibration-read-params', eventsMap['camera-calibration-read-params'])

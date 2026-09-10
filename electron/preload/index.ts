@@ -20,6 +20,28 @@ contextBridge.exposeInMainWorld('electronAPI', {
     content: string
     contentFormat: 'text' | 'hex'
   }) => ipcRenderer.invoke('camera-command-send', request),
+  cameraCalibrationSnapshot: () => ipcRenderer.invoke('camera-calibration-snapshot'),
+  cameraCalibrationAccess: () => ipcRenderer.invoke('camera-calibration-access'),
+  cameraCalibrationReadParams: () => ipcRenderer.invoke('camera-calibration-read-params'),
+  cameraCalibrationObserve: (request: {
+    host: string
+    port: number
+    username: string
+    password?: string
+  }) => ipcRenderer.invoke('camera-calibration-observe', request),
+  cameraCalibrationStart: (config: unknown) => ipcRenderer.invoke('camera-calibration-start', config),
+  cameraCalibrationStop: () => ipcRenderer.invoke('camera-calibration-stop'),
+  cameraCalibrationRestore: () => ipcRenderer.invoke('camera-calibration-restore'),
+  cameraCalibrationClose: () => ipcRenderer.invoke('camera-calibration-close'),
+  cameraScriptRun: (request: {
+    host: string
+    port: number
+    username: string
+    password?: string
+    localPath: string
+    timeoutS: number
+  }) => ipcRenderer.invoke('camera-script-run', request),
+  cameraScriptStop: () => ipcRenderer.invoke('camera-script-stop'),
   checkForUpdates: () => ipcRenderer.invoke('update-check'),
   downloadUpdate: () => ipcRenderer.invoke('update-download'),
   quitAndInstall: () => ipcRenderer.invoke('update-quit-and-install'),

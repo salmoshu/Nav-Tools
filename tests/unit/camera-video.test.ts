@@ -37,12 +37,12 @@ describe('camera panels', () => {
     )
   })
 
-  it('uses compact horizontal command fields without heading descriptions', () => {
+  it('keeps command editing, byte-format switching, and help available', () => {
     const source = readFileSync('src/components/windows/common/CameraParameters.vue', 'utf8')
 
     expect(source).toContain("t('common.camera.subCommandType')")
     expect(source).toContain("t('common.camera.subCommandContent')")
-    expect(source).toContain('<el-switch v-model="contentIsHex"')
+    expect(source).toMatch(/<el-switch\s+v-model="contentIsHex"/)
     expect(source).toContain(':rows="3"')
     expect(source).toContain("t('common.camera.loginCommand')")
     expect(source).toContain('model-value="0x00000001"')
