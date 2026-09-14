@@ -44,6 +44,7 @@ export const applicationIconComponents: Record<ApplicationIcon, Component> = {
   target: Aim,
   gauge: Odometer,
   chart: PieChart,
+  radar: Aim,
 }
 
 export const applicationIconOptions: readonly { value: ApplicationIcon; label: string }[] = [
@@ -61,6 +62,7 @@ export const applicationIconOptions: readonly { value: ApplicationIcon; label: s
   { value: 'robot', label: 'app.icon.robot' },
   { value: 'vehicle', label: 'app.icon.vehicle' },
   { value: 'camera', label: 'app.icon.camera' },
+  { value: 'radar', label: 'app.icon.radar' },
   { value: 'connection', label: 'app.icon.connection' },
   { value: 'power', label: 'app.icon.power' },
   { value: 'cpu', label: 'app.icon.cpu' },

@@ -13,7 +13,9 @@ import { test } from '@playwright/test'
 import * as fs from 'fs'
 import * as path from 'path'
 
+// 数据样本只存在于特定测试机；缺失时整组跳过，不阻塞全量 e2e
 const DATA_PATH = 'C:/Users/ESSZ/Desktop/gnss-test/rs.txt'
+const HAS_DATA = fs.existsSync(DATA_PATH)
 const SPEED = Number(process.env.GNSS_SPEED || 10)
 const MAX_EPOCHS = Number(process.env.GNSS_MAX_EPOCHS || 0)
 
@@ -48,10 +50,11 @@ function loadEpochs(): string[] {
   return MAX_EPOCHS > 0 ? epochs.slice(0, MAX_EPOCHS) : epochs
 }
 
-const epochs = loadEpochs()
+const epochs = HAS_DATA ? loadEpochs() : []
 const FEED_SECONDS = epochs.length / 10 / SPEED
 
 test.describe('gnss stress', () => {
+  test.skip(!HAS_DATA, 'GNSS 压测数据样本只存在于特定测试机')
   for (const label of Object.keys(SUBSETS)) {
     if (!enabled.includes(label)) continue
     const windowIds = SUBSETS[label]
@@ -129,7 +132,9 @@ test.describe('gnss stress', () => {
               const smod = await import('/src/stores/gnss.ts')
               const store = smod.useGnssStore()
               getUtc = () => String(store.status.utcTime ?? '')
-            } catch {}
+            } catch {
+              // store 不可用时保持默认取值器
+            }
 
             const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
             const interval = 100 / speed
@@ -219,7 +224,9 @@ test.describe('gnss stress', () => {
             page.evaluate(() => (window as any).__samples ?? []),
             new Promise<any[]>((r) => setTimeout(() => r([]), 10_000)),
           ])
-        } catch {}
+        } catch {
+          // 超时兜底：salvaged 保持空数组
+        }
         const lt = await Promise.race([
           page.evaluate(() => (window as any).__lt ?? null).catch(() => null),
           new Promise<any>((r) => setTimeout(() => r(null), 10_000)),

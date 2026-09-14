@@ -25,6 +25,7 @@ import { parseFindListing, sortDirectoryEntries } from '../../../src/core/termin
 import { interpolateCommandTemplate } from '../../../src/core/terminal/CommandTemplate'
 import {
   buildShellCommand,
+  quoteShellArg,
   shellFamilyFor,
   type ShellFamily,
 } from '../../../src/core/terminal/ShellQuote'
@@ -440,8 +441,11 @@ export class TerminalService {
           : missing
       }
       if (target.kind === 'wsl') {
-        // `%F` 给出类型文本(regular file / directory),避免依赖 stat 的数值位
-        const output = await this.wslExec(target.distro, 'stat -c "%F|%s" -- "$1"', [target.path])
+        // `%F` 给出类型文本(regular file / directory),避免依赖 stat 的数值位。
+        // 路径内联进脚本并按 POSIX 单引号转义: wsl.exe -- 经 interop 传参时
+        // sh -c 的位置参数($1)会丢失(实测), 无法用 "$1" 传路径
+        const quoted = quoteShellArg(target.path, 'posix')
+        const output = await this.wslExec(target.distro, `stat -c '%F|%s' -- ${quoted}`, [])
         const [type, sizeText] = output.trim().split('|')
         const size = Number.parseInt(sizeText ?? '', 10)
         return {
@@ -503,8 +507,8 @@ export class TerminalService {
         // head -c 直接截断,避免把整个大文件从 WSL 拉到 Windows 侧
         buffer = await this.wslExecBuffer(
           target.distro,
-          `head -c ${Math.max(1, Math.floor(maxBytes))} -- "$1"`,
-          [target.path],
+          `head -c ${Math.max(1, Math.floor(maxBytes))} -- ${quoteShellArg(target.path, 'posix')}`,
+          [],
         )
       } else {
         const stats = await this.host.fileSystem.stat(target.path)
@@ -556,8 +560,9 @@ export class TerminalService {
         // 单次 find 同时取类型/大小/时间,省掉逐条 stat 的跨系统往返(GNU find 各发行版都有)
         const output = await this.wslExec(
           target.distro,
-          'find "$1" -mindepth 1 -maxdepth 1 -printf "%y\t%s\t%T@\t%f\n"',
-          [target.path],
+          `find ${quoteShellArg(target.path, 'posix')} -mindepth 1 -maxdepth 1 -printf '%y	%s	%T@	%f
+'`,
+          [],
         )
         const entries = parseFindListing(output, target.path)
         return { resolvedPath: target.path, ...limitDirectoryEntries(entries) }
@@ -697,6 +702,67 @@ export class TerminalService {
   ): Promise<void> {
     const sftp = await this.getSftp(sessionId)
     await this.downloadEntry(sftp, sessionId, remotePath, localPath)
+  }
+
+  /**
+   * 会话文件下载(三通道统一入口):本机/WSL/SSH 按会话语义解析路径后落盘到本地。
+   * 目录递归复制;WSL 经 tar 流式打包传输,规避 wsl.exe 输出上限与编码问题。
+   */
+  public async downloadSessionPath(
+    sessionId: string,
+    rawPath: string,
+    localPath: string,
+  ): Promise<void> {
+    const session = this.sessions.get(sessionId)
+    if (!session) throw new Error('终端会话不存在')
+    const target = this.resolveSessionPath(session, rawPath)
+    if (!target) throw new Error('路径无法解析')
+
+    if (target.kind === 'local') {
+      const stats = await this.host.fileSystem.stat(target.path)
+      if (stats.isDirectory()) {
+        await this.host.fileSystem.mkdir(localPath, { recursive: true })
+        const names = await this.host.fileSystem.readdir(target.path)
+        for (const name of names) {
+          await this.downloadSessionPath(
+            sessionId, path.win32.join(target.path, name), path.win32.join(localPath, name))
+        }
+        return
+      }
+      await this.host.fileSystem.copyFile(target.path, localPath)
+      return
+    }
+
+    if (target.kind === 'wsl') {
+      // tar -cf - 输出二进制流到 stdout;文件名可能含换行等病态字符时以 tar 结构保证完整
+      const buffer = await this.wslExecBuffer(
+        target.distro,
+        `tar -cf - ${quoteShellArg(target.path, 'posix')}`,
+        [],
+      )
+      // GNU tar 在 stderr 干扰时可能混入告警;tar 结构本身带长度校验,提取时失败会抛错
+      const tarPath = `${localPath}.navtools.tar`
+      await this.host.fileSystem.writeFile(tarPath, buffer)
+      try {
+        await this.extractTarToDirectory(tarPath, path.dirname(localPath))
+      } finally {
+        await this.host.fileSystem.rm(tarPath, { force: true }).catch(() => undefined)
+      }
+      return
+    }
+
+    const sftp = await this.getSftp(sessionId)
+    await this.downloadEntry(sftp, sessionId, target.path, localPath)
+  }
+
+  /** 用系统 tar 从流中提取(Windows 10+ 自带 bsdtar;WSL 场景宿主必有 tar) */
+  private async extractTarToDirectory(tarPath: string, destDir: string): Promise<void> {
+    await this.host.fileSystem.mkdir(destDir, { recursive: true })
+    await this.host.executeFile(
+      'tar',
+      ['-xf', tarPath, '-C', destDir],
+      { maxBuffer: WSL_OUTPUT_MAX_BYTES },
+    )
   }
 
   public async startForward(sessionId: string, rule: PortForwardRule): Promise<void> {

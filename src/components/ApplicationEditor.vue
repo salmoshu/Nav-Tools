@@ -182,6 +182,7 @@ const catalogGroupNames: Record<string, string> = {
   flow: 'Flow',
   gnss: 'GNSS',
   camera: 'Camera',
+  lidar: 'LiDAR',
 }
 
 const formatCatalogGroup = (catalogGroup: string) =>

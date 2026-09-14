@@ -25,8 +25,8 @@ export interface CameraParametersSettings {
 export function createDefaultCameraParametersSettings(): CameraParametersSettings {
   return {
     version: 1,
-    subCommand: '',
-    content: '',
+    subCommand: 'set_params',
+    content: '0.55,62.292,-22',
     contentIsHex: false,
   }
 }

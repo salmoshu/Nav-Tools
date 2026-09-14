@@ -20,7 +20,7 @@ function stubGlobals(): void {
   rafId = 0
   pendingCallback = null
 
-  vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback): number => {
+  vi.stubGlobal('requestAnimationFrame', (callback: (time: number) => void): number => {
     pendingCallback = callback as (time: number) => void
     rafId += 1
     return rafId

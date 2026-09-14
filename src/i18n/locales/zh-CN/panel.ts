@@ -43,4 +43,20 @@ export default {
     title: 'Hex报文',
     desc: '读取和配置参数',
   },
+  'lidar-scene': {
+    title: '雷达场景',
+    desc: 'MCAP 回放三维场景：点云、轨迹、轮廓与目标',
+  },
+  'lidar-plot': {
+    title: '执行曲线',
+    desc: '指令/里程/评分时间序列与播放头联动',
+  },
+  'lidar-scores': {
+    title: '决策评分',
+    desc: 'DWA 逐候选评分明细与淘汰原因',
+  },
+  'lidar-inspector': {
+    title: '消息检查',
+    desc: '查看当前帧各话题的解码消息',
+  },
 }

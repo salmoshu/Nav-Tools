@@ -121,6 +121,12 @@ export function registerTerminalIpc(
     (_event, request: { sessionId: string; remotePath: string; localPath: string }) =>
       service.sftpDownload(request.sessionId, request.remotePath, request.localPath),
   )
+  // 文件树下载:本机/WSL/SSH 按会话语义解析路径后统一落盘
+  ipcMain.handle(
+    'terminal-session-download',
+    (_event, request: { sessionId: string; sessionPath: string; localPath: string }) =>
+      service.downloadSessionPath(request.sessionId, request.sessionPath, request.localPath),
+  )
 
   // 输出里的路径候选:先确认存在性,再按上限读取内容做块内预览
   ipcMain.handle(

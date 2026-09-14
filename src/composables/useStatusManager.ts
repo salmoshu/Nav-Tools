@@ -1,15 +1,16 @@
 import { nextTick, ref, watch } from "vue";
-import { useGnssStore } from "@/stores/gnss";
-import { useFlowStore } from "@/stores/flow";
 import { useApplicationSelector } from '@/composables/useApplicationSelector'
 import { useTheme } from '@/composables/useTheme'
 import { JsonStorage } from '@/core/storage/JsonStorage'
-import { filterDisplayableStatusEntries } from '@/core/status/statusValue'
+import { getStatusSources } from '@/core/status/registry'
+import { aggregateStatusSources } from '@/core/status/aggregate'
+// side-effect import：保证内置 status source（flow/gnss/…）完成注册
+import '@/core/status/sources'
 import { t } from '@/i18n'
 
 const STATUS_ORDER_KEY = 'nav-tools:status-order'
 const statusOrderStorage = new JsonStorage(localStorage)
-const { activeDataModes } = useApplicationSelector()
+const { activeModuleIds } = useApplicationSelector()
 const { resolvedTheme } = useTheme()
 
 /**
@@ -40,43 +41,13 @@ const statusOrder = ref<string[]>(
 
 watch(statusOrder, order => statusOrderStorage.write(STATUS_ORDER_KEY, order), { deep: true })
 
-function orderEntries(entries: [string, any][]): [string, any][] {
-  const orderMap = new Map(statusOrder.value.map((key, index) => [key, index]))
-  return entries.sort((a, b) => {
-    const indexA = orderMap.get(a[0])
-    const indexB = orderMap.get(b[0])
-    if (indexA !== undefined && indexB !== undefined) return indexA - indexB
-    if (indexA !== undefined) return -1
-    if (indexB !== undefined) return 1
-    return 0
-  })
-}
-
+// 数据源的命中、布尔过滤、前缀拼接与排序统一在 core/status/aggregate.ts（纯函数，可单测）；
+// 数据源声明在各组件模块（stores/flow.ts、stores/gnss.ts），经 core/status/sources.ts 加载注册
 function getMonitorStatus() {
-  const modes = activeDataModes.value
-  const uniqueStatusSources = [
-    ...(modes.some(mode => mode === 'flow' || mode === 'motor')
-      ? [{ label: 'Flow', status: useFlowStore().status }]
-      : []),
-    ...(modes.includes('gnss')
-      ? [{ label: 'GNSS', status: useGnssStore().status }]
-      : []),
-  ]
-
-  if (uniqueStatusSources.length === 1) {
-    return Object.fromEntries(
-      orderEntries(filterDisplayableStatusEntries(Object.entries(uniqueStatusSources[0].status))),
-    )
-  }
-
-  return Object.fromEntries(
-    orderEntries(
-      uniqueStatusSources.flatMap(source =>
-        filterDisplayableStatusEntries(Object.entries(source.status)).map(
-          ([key, value]): [string, unknown] => [`${source.label}.${key}`, value],
-        ),
-      ),
-    ),
+  return aggregateStatusSources(
+    getStatusSources(),
+    activeModuleIds.value,
+    statusOrder.value,
   )
 }
 

@@ -27,7 +27,7 @@ class MemoryStorage implements StorageLike {
 }
 
 describe('panel and application persistence', () => {
-  it('seeds editable Serial, GNSS, Flow, and Camera applications on first launch', () => {
+  it('seeds editable Serial, GNSS, Flow, Camera, and LiDAR applications on first launch', () => {
     const memory = new MemoryStorage()
     const applications = new ApplicationStorage(new JsonStorage(memory)).loadApplications()
 
@@ -36,6 +36,7 @@ describe('panel and application persistence', () => {
       'GNSS',
       'Flow',
       'Camera',
+      'LiDAR',
     ])
     expect(applications[0]).toMatchObject({
       id: 'serial',
@@ -56,6 +57,11 @@ describe('panel and application persistence', () => {
       id: 'camera',
       icon: 'camera',
       windowIds: ['camera-video', 'camera-parameters', 'terminal'],
+    })
+    expect(applications[4]).toMatchObject({
+      id: 'lidar',
+      icon: 'radar',
+      windowIds: ['lidar-scene', 'lidar-scores', 'lidar-plot', 'lidar-inspector'],
     })
     expect(memory.getItem('nav-tools:custom-applications')).not.toBeNull()
   })
@@ -84,9 +90,11 @@ describe('panel and application persistence', () => {
     )
     const storage = new ApplicationStorage(new JsonStorage(memory))
 
-    expect(storage.loadApplications().map(({ id }) => id)).toEqual(['custom', 'camera', 'serial'])
+    expect(storage.loadApplications().map(({ id }) => id)).toEqual(['custom', 'camera', 'serial', 'lidar'])
     storage.saveApplications(
-      storage.loadApplications().filter(({ id }) => id !== 'camera' && id !== 'serial'),
+      storage
+        .loadApplications()
+        .filter(({ id }) => id !== 'camera' && id !== 'serial' && id !== 'lidar'),
     )
     expect(storage.loadApplications().map(({ id }) => id)).toEqual(['custom'])
   })
@@ -167,8 +175,10 @@ describe('panel and application persistence', () => {
     )
     const storage = new ApplicationStorage(new JsonStorage(memory))
 
-    expect(storage.loadApplications().map(({ id }) => id)).toEqual(['gnss', 'serial'])
-    storage.saveApplications(storage.loadApplications().filter(({ id }) => id !== 'serial'))
+    expect(storage.loadApplications().map(({ id }) => id)).toEqual(['gnss', 'serial', 'lidar'])
+    storage.saveApplications(
+      storage.loadApplications().filter(({ id }) => id !== 'serial' && id !== 'lidar'),
+    )
     expect(storage.loadApplications().map(({ id }) => id)).toEqual(['gnss'])
   })
 
@@ -238,12 +248,14 @@ describe('panel and application persistence', () => {
       'gnss',
       'motor',
       'camera',
+      'lidar',
     ])
     expect(storage.loadApplications().map((application) => application.id)).toEqual([
       'serial',
       'gnss',
       'motor',
       'camera',
+      'lidar',
     ])
   })
 
@@ -254,13 +266,13 @@ describe('panel and application persistence', () => {
 
     const reordered = storage.reorderApplications(initial, 3, 0)
 
-    expect(reordered.map(({ id }) => id)).toEqual(['camera', 'serial', 'gnss', 'motor'])
+    expect(reordered.map(({ id }) => id)).toEqual(['camera', 'serial', 'gnss', 'motor', 'lidar'])
     expect(
       new ApplicationStorage(new JsonStorage(memory)).loadApplications().map(({ id }) => id),
-    ).toEqual(['camera', 'serial', 'gnss', 'motor'])
+    ).toEqual(['camera', 'serial', 'gnss', 'motor', 'lidar'])
 
     const partial = storage.reorderApplications(reordered, 0, 2)
-    expect(partial.map(({ id }) => id)).toEqual(['serial', 'gnss', 'camera', 'motor'])
+    expect(partial.map(({ id }) => id)).toEqual(['serial', 'gnss', 'camera', 'motor', 'lidar'])
   })
 
   it('migrates legacy panel ids and filters unknown panels', () => {
@@ -517,8 +529,8 @@ describe('CameraParametersStorage', () => {
     )
 
     expect(new CameraParametersStorage(new JsonStorage(memory)).load()).toMatchObject({
-      subCommand: '',
-      content: '',
+      subCommand: 'set_params',
+      content: '0.55,62.292,-22',
       contentIsHex: false,
     })
     expect(new CameraParametersStorage(new JsonStorage(memory)).load()).not.toHaveProperty('host')

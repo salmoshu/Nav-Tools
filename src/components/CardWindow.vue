@@ -25,6 +25,7 @@ const modules = import.meta.glob([
   './windows/common/*.vue',
   './windows/gnss/*.vue',
   './windows/motor/*.vue',
+  './windows/lidar/*.vue',
 ])
 
 const cardComponent = ref<Component | null>(null)

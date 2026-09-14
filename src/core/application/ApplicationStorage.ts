@@ -9,6 +9,7 @@ const SERIAL_DEFAULT_MIGRATION_KEY = 'nav-tools:migration:serial-default-v1'
 const GNSS_MESSAGES_MIGRATION_KEY = 'nav-tools:migration:gnss-messages-v1'
 const FLOW_DEFAULT_MIGRATION_KEY = 'nav-tools:migration:flow-default-v1'
 const CAMERA_TERMINAL_MIGRATION_KEY = 'nav-tools:migration:camera-terminal-v1'
+const LIDAR_DEFAULT_MIGRATION_KEY = 'nav-tools:migration:lidar-default-v1'
 
 export const DEFAULT_APPLICATIONS: readonly UserApplication[] = [
   {
@@ -42,6 +43,14 @@ export const DEFAULT_APPLICATIONS: readonly UserApplication[] = [
     icon: 'camera',
     accent: '#14b8a6',
     windowIds: ['camera-video', 'camera-parameters', 'terminal'],
+  },
+  {
+    id: 'lidar',
+    name: 'LiDAR',
+    description: 'E-Wagon MCAP replay: scene, DWA scores, curves, playback',
+    icon: 'radar',
+    accent: '#06b6d4',
+    windowIds: ['lidar-scene', 'lidar-scores', 'lidar-plot', 'lidar-inspector'],
   },
 ]
 
@@ -129,6 +138,17 @@ export class ApplicationStorage {
       }
       this.storage.writeRaw(CAMERA_TERMINAL_MIGRATION_KEY, '1')
     }
+    if (this.storage.readRaw(LIDAR_DEFAULT_MIGRATION_KEY) === null) {
+      const lidarDefault = DEFAULT_APPLICATIONS.find((application) => application.id === 'lidar')
+      if (
+        applications.length > 0 &&
+        lidarDefault &&
+        !applications.some(({ id }) => id === 'lidar')
+      ) {
+        applications.push(cloneApplications([lidarDefault])[0])
+      }
+      this.storage.writeRaw(LIDAR_DEFAULT_MIGRATION_KEY, '1')
+    }
     this.saveApplications(applications)
     return applications
   }
@@ -171,6 +191,7 @@ export class ApplicationStorage {
     this.storage.writeRaw(GNSS_MESSAGES_MIGRATION_KEY, '1')
     this.storage.writeRaw(FLOW_DEFAULT_MIGRATION_KEY, '1')
     this.storage.writeRaw(CAMERA_TERMINAL_MIGRATION_KEY, '1')
+    this.storage.writeRaw(LIDAR_DEFAULT_MIGRATION_KEY, '1')
     return defaults
   }
 

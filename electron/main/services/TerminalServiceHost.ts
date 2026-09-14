@@ -16,7 +16,15 @@ const execFileAsync = promisify(execFile)
 
 type TerminalFileSystem = Pick<
   typeof fs,
-  'access' | 'mkdir' | 'open' | 'readFile' | 'readdir' | 'stat' | 'writeFile'
+  | 'access'
+  | 'copyFile'
+  | 'mkdir'
+  | 'open'
+  | 'readFile'
+  | 'readdir'
+  | 'rm'
+  | 'stat'
+  | 'writeFile'
 > & {
   existsSync: typeof existsSync
   statSync: typeof statSync
@@ -68,6 +76,8 @@ export function createNodeTerminalServiceHost(): TerminalServiceHost {
       readdir: fs.readdir,
       stat: fs.stat,
       writeFile: fs.writeFile,
+      copyFile: fs.copyFile,
+      rm: fs.rm,
       existsSync,
       statSync,
     },

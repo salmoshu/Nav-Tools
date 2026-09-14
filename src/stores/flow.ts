@@ -3,6 +3,8 @@ import { useFlow } from '@/composables/flow/useFlow'
 import { defineStore } from 'pinia'
 import { create, all } from 'mathjs';
 import { t } from '@/i18n';
+import { registerStatusSource } from '@/core/status/registry'
+import { createStatusSource } from '@/core/status/createStatusSource'
 
 const math = create(all);
 math.import({
@@ -326,3 +328,14 @@ export const useFlowStore = defineStore('flow', () => {
     clearAllCustomStatus
     }
   })
+
+// Status View 数据源：就近声明，聚合层（core/status）按当前应用的 moduleId 命中；
+// Flow 面板覆盖 flow 与 motor 两个模块（motor-parameters 与流数据同源）
+registerStatusSource(
+  createStatusSource({
+    id: 'flow',
+    label: 'Flow',
+    match: moduleIds => moduleIds.has('flow') || moduleIds.has('motor'),
+    status: () => useFlowStore().status,
+  }),
+)

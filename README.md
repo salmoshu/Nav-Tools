@@ -11,7 +11,7 @@ Nav-Tools 是一个基于 Electron + Vue 3 的机器人开发调试工作台。�
 
 ## 特性
 
-- **应用工作区**：内置 GNSS、Motor 和 Camera 应用，也可自定义应用名称、描述、主题色、图标及所包含的窗口。
+- **应用工作区**：内置 GNSS、Motor、Camera 和 LiDAR 应用，也可自定义应用名称、描述、主题色、图标及所包含的窗口。
 - **丰富的应用选择器**：提供 20 种应用图标；窗口选项展示图标、说明和所属类别；应用卡片支持拖拽排序并持久化自定义顺序。
 - **灵活的窗口布局**：支持拖动、缩放、自动布局、布局保存和全屏展示；全屏 Header 会适配明暗主题。
 - **多窗口协同**：应用可单独打开，组件也可分离为独立窗口；独立窗口显示组件名称，并支持还原到主窗口和保持置顶。
@@ -33,6 +33,11 @@ Nav-Tools 是一个基于 Electron + Vue 3 的机器人开发调试工作台。�
 | 通用  | Raw Messages     | 查看、筛选、暂停、保存原始消息，并通过当前串口执行 IAP   |
 | 通用  | Terminal         | 本地、WSL、SSH 终端，支持分屏、SFTP 和 SSH 端口转发      |
 | 通用  | Camera Video     | 播放 RTSP 实时视频，支持缩放、平移和画面标签提示         |
+| LiDAR | LiDAR Scene      | MCAP 回放三维场景：点云、候选/最优轨迹、轮廓与目标       |
+| LiDAR | DWA Scores       | DWA 逐候选评分明细、淘汰原因与决策摘要                   |
+| LiDAR | Command Curves   | 指令/里程/评分时间序列，与播放头联动，点击定位           |
+| LiDAR | Message Inspector| 查看当前帧各话题的解码消息（JSON 树）                    |
+| LiDAR | Playback         | 打开 MCAP 录像、时间轴拖拽、逐帧步进与倍速回放           |
 | Flow  | Flow Deviation   | 分析 Flow 轨迹与偏差                                     |
 | GNSS  | GNSS Deviation   | 展示定位轨迹和定位状态                                   |
 | GNSS  | GNSS Signals     | 查看卫星信号强度与状态                                   |

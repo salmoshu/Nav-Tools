@@ -22,7 +22,7 @@ export class TextFileStreamService {
     await this.ipc.invoke('text-file-stream-open', { path, requestId })
 
     try {
-      while (true) {
+      for (;;) {
         const chunk = await this.ipc.invoke<TextFileStreamChunk>('text-file-stream-read', requestId)
         if (chunk.data) callbacks.onChunk(chunk.data)
         callbacks.onProgress(

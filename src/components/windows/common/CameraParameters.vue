@@ -305,19 +305,6 @@
                   >
                     {{ sshStateText ?? sshEndpoint }}
                   </span>
-                  <el-button
-                    :type="observing ? 'default' : 'primary'"
-                    plain
-                    :disabled="calRunning || status !== 'connected'"
-                    @click="toggleObservation"
-                  >
-                    <el-icon><Refresh /></el-icon>
-                    {{
-                      observing
-                        ? t('common.camera.calibration.stopObserve')
-                        : t('common.camera.calibration.observe')
-                    }}
-                  </el-button>
                 </div>
 
                 <p v-if="calState?.observing" class="cal-hint">
@@ -381,7 +368,6 @@
                       <el-option
                         :label="t('common.camera.calibration.targetCountTwo')"
                         :value="2"
-                        disabled
                       />
                     </el-select>
                   </label>
@@ -458,8 +444,8 @@
                       v-model="calForm.height"
                       :min="0.1"
                       :max="5"
-                      :step="0.05"
-                      :precision="2"
+                      :step="0.005"
+                      :precision="3"
                       controls-position="right"
                       :disabled="calRunning"
                     />
@@ -482,8 +468,8 @@
                       v-model="calForm.initialOffset"
                       :min="calForm.minOffset"
                       :max="calForm.maxOffset"
-                      :step="0.5"
-                      :precision="2"
+                      :step="0.1"
+                      :precision="3"
                       controls-position="right"
                       :disabled="calRunning"
                     />
@@ -1227,9 +1213,10 @@ async function autoFillDeviceParams() {
   autoReadInFlight = true
   try {
     const snapshot = await window.electronAPI.cameraCalibrationReadParams()
-    calForm.height = Number(snapshot.height.toFixed(2))
+    // 3 位小数与设备 read_params/set_params 协议精度一致, 避免舍入导致门控失配
+    calForm.height = Number(snapshot.height.toFixed(3))
     calForm.fov = Number(((snapshot.fov * 180) / Math.PI).toFixed(3))
-    calForm.initialOffset = Number(snapshot.thetaOffset.toFixed(2))
+    calForm.initialOffset = Number(snapshot.thetaOffset.toFixed(3))
   } catch {
     calForm.initialOffset = -20
     ElMessage.warning(t('common.camera.calibration.autoReadFailed'))
@@ -1242,6 +1229,10 @@ watch(status, (value, previous) => {
   if (value === 'connected' && previous !== 'connected') void autoFillDeviceParams()
 })
 
+watch([status, activeTab, calRunning], () => {
+  void observeLifecycle()
+})
+
 onMounted(async () => {
   const access = await window.electronAPI?.cameraCalibrationAccess?.().catch(() => undefined)
   if (access) {
@@ -1251,40 +1242,33 @@ onMounted(async () => {
     sshPasswordSaved.value = access.hasPassword
   }
   if (status.value === 'connected') void autoFillDeviceParams()
+  void observeLifecycle()
 })
 
-async function toggleObservation() {
-  if (!window.electronAPI?.cameraCalibrationObserve) {
-    ElMessage.error(t('common.camera.errTcpNotSupported'))
-    return
-  }
-  if (observing.value) {
+// 观测自动生命周期:设备已连接且停留在标定页 → 自动开始观测;
+// 连接断开/切走页面 → 自动停止(标定运行中除外, 待其结束后再停)
+async function observeLifecycle() {
+  const shouldObserve = status.value === 'connected' && activeTab.value === 'calibration'
+  if (shouldObserve && !observing.value && !calRunning.value) {
+    if (!sshForm.host.trim() || !sshForm.username.trim()) return
+    try {
+      calState.value = await window.electronAPI.cameraCalibrationObserve({
+        host: sshForm.host.trim(),
+        port: sshForm.port,
+        username: sshForm.username.trim(),
+        password: sshForm.password,
+      })
+      calScrollFollow.value = false
+      sshForm.password = ''
+    } catch {
+      // 静默失败:测量源状态行会显示通道错误, 不在自动流程里弹窗
+    }
+  } else if (!shouldObserve && observing.value && !calRunning.value) {
     try {
       calState.value = await window.electronAPI.cameraCalibrationClose()
     } catch (error) {
       await reportCalibrationError(error)
     }
-    return
-  }
-  if (status.value !== 'connected') {
-    ElMessage.warning(t('common.camera.errTcpConfigurationRequired'))
-    return
-  }
-  if (!sshForm.host.trim() || !sshForm.username.trim()) {
-    ElMessage.warning(t('common.camera.calibration.errSshMissing'))
-    return
-  }
-  try {
-    calState.value = await window.electronAPI.cameraCalibrationObserve({
-      host: sshForm.host.trim(),
-      port: sshForm.port,
-      username: sshForm.username.trim(),
-      password: sshForm.password,
-    })
-    calScrollFollow.value = false
-    sshForm.password = ''
-  } catch (error) {
-    await reportCalibrationError(error)
   }
 }
 

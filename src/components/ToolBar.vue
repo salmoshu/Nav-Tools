@@ -12,7 +12,7 @@
     </div>
     <div class="toolbar-content">
       <!-- IO: Input/Output -->
-      <div class="toggle-switch-container">
+      <div v-show="!deviceToggleHidden" class="toggle-switch-container">
         <div
           class="toggle-switch"
           :class="{ 'toggle-on': deviceConnected, 'toggle-pending': deviceConnecting }"
@@ -122,7 +122,9 @@
       </button>
 
       <span v-if="fileTimelineActive" class="divider timeline-divider" aria-hidden="true"></span>
-      <FileTimelineControl :position="position" />
+      <FileTimelineControl v-if="fileTimelineActive" :position="position" />
+      <span v-if="lidarTimelineActive" class="divider timeline-divider" aria-hidden="true"></span>
+      <LidarTimelineControl v-if="lidarTimelineActive" :position="position" />
     </div>
     <div class="toolbar-dock-zones" v-if="isDragging && activeDockZone">
       <div
@@ -158,6 +160,7 @@
       :tab-position="inputTabPosition"
       :stretch="inputTabPosition === 'top'"
       class="data-source-tabs"
+      :before-leave="() => !fileInputLoading"
     >
       <el-tab-pane :label="t('app.toolbar.fileTab')" name="file">
         <template #label>
@@ -179,78 +182,120 @@
         <div class="source-config-card">
           <div class="input-group">
             <span class="input-label">{{ t('app.toolbar.filePath') }}</span>
-            <el-input v-model="filePath" :placeholder="t('app.toolbar.filePathPlaceholder')" />
-            <el-button type="default" @click="triggerFileSelection">{{
+            <el-input
+              v-model="filePath"
+              :placeholder="t('app.toolbar.filePathPlaceholder')"
+              :aria-label="t('app.toolbar.filePath')"
+              :disabled="fileInputLoading"
+              @keyup.enter="handleInputSubmit"
+            />
+            <el-button type="default" :disabled="fileInputLoading" @click="selectTargetFile">{{
               t('app.toolbar.selectFile')
             }}</el-button>
           </div>
-          <div class="input-group compact-input-group">
-            <span class="input-label">{{ t('app.toolbar.replaySpeed') }}</span>
-            <el-select
-              v-model="replaySpeedSelection"
-              :teleported="true"
-              popper-class="replay-speed-dropdown"
-            >
-              <el-option
-                v-for="speed in replaySpeedSelectionOptions"
-                :key="speed"
-                :label="`×${speed}`"
-                :value="speed"
-              />
-            </el-select>
+          <div v-if="fileIsMcap" class="mcap-hint">
+            <strong>{{ t('app.toolbar.mcapSource') }}</strong>
+            <span v-if="selectedFileCount > 1">{{
+              t('app.toolbar.mcapSelectedParts', { count: selectedFileCount })
+            }}</span>
+            <p>{{ t('app.toolbar.mcapHint') }}</p>
           </div>
-          <div v-if="fileTimeTag" class="time-tag-options">
+          <template v-else>
             <div class="input-group compact-input-group">
-              <span class="input-label">{{ t('app.toolbar.startOffset') }}</span>
-              <el-input-number
-                v-model="fileStartOffset"
-                :min="0"
-                :step="1"
-                :precision="0"
-                controls-position="right"
-              />
-              <span class="input-unit">{{ t('app.toolbar.second') }}</span>
-            </div>
-            <div class="input-group compact-input-group">
-              <span class="input-label">{{ t('app.toolbar.posFormat') }}</span>
-              <el-select v-model="filePositionBytes" :teleported="false">
-                <el-option :label="t('app.toolbar.bytes', { v: 4 })" :value="4" />
-                <el-option :label="t('app.toolbar.bytes', { v: 8 })" :value="8" />
+              <span class="input-label">{{ t('app.toolbar.replaySpeed') }}</span>
+              <el-select
+                v-model="replaySpeedSelection"
+                :teleported="true"
+                popper-class="replay-speed-dropdown"
+              >
+                <el-option
+                  v-for="speed in replaySpeedSelectionOptions"
+                  :key="speed"
+                  :label="`×${speed}`"
+                  :value="speed"
+                />
               </el-select>
             </div>
-          </div>
-          <div class="parser-card" :class="{ 'parser-flash': parserFlash }">
-            <div class="parser-copy">
-              <strong>{{ t('app.toolbar.dataSection') }}</strong>
-              <span>{{ activeParserDescription }}</span>
+            <div v-if="fileTimeTag" class="time-tag-options">
+              <div class="input-group compact-input-group">
+                <span class="input-label">{{ t('app.toolbar.startOffset') }}</span>
+                <el-input-number
+                  v-model="fileStartOffset"
+                  :min="0"
+                  :step="1"
+                  :precision="0"
+                  controls-position="right"
+                />
+                <span class="input-unit">{{ t('app.toolbar.second') }}</span>
+              </div>
+              <div class="input-group compact-input-group">
+                <span class="input-label">{{ t('app.toolbar.posFormat') }}</span>
+                <el-select v-model="filePositionBytes" :teleported="false">
+                  <el-option :label="t('app.toolbar.bytes', { v: 4 })" :value="4" />
+                  <el-option :label="t('app.toolbar.bytes', { v: 8 })" :value="8" />
+                </el-select>
+              </div>
             </div>
-            <div class="input-group">
-              <span class="input-label">{{ t('app.toolbar.parseMethod') }}</span>
-              <el-cascader
-                v-model="sourceParser"
-                :options="textDataParserCascaderOptions"
-                :props="parserCascaderProps"
-                :show-all-levels="false"
-                :aria-label="t('app.toolbar.parseMethod')"
-                class="parser-select"
-                popper-class="parser-select-dropdown"
-              />
-            </div>
-            <div v-if="sourceParser === 'regex'" class="regex-parser-config">
+            <div class="parser-card" :class="{ 'parser-flash': parserFlash }">
+              <div class="parser-copy">
+                <strong>{{ t('app.toolbar.dataSection') }}</strong>
+                <span>{{ activeParserDescription }}</span>
+              </div>
               <div class="input-group">
-                <span class="input-label">{{ t('app.toolbar.regexPattern') }}</span>
-                <el-input
-                  v-model="sourceRegexPattern"
-                  type="textarea"
-                  :rows="3"
-                  resize="vertical"
-                  :placeholder="t('app.toolbar.regexPatternPlaceholder')"
-                  :aria-label="t('app.toolbar.regexPattern')"
+                <span class="input-label">{{ t('app.toolbar.parseMethod') }}</span>
+                <el-cascader
+                  v-model="sourceParser"
+                  :options="textDataParserCascaderOptions"
+                  :props="parserCascaderProps"
+                  :show-all-levels="false"
+                  :aria-label="t('app.toolbar.parseMethod')"
+                  class="parser-select"
+                  popper-class="parser-select-dropdown"
                 />
               </div>
-              <small :class="{ invalid: regexPatternError }">
-                {{ regexPatternError || t('app.toolbar.regexPatternHint') }}
-              </small>
+              <div v-if="sourceParser === 'regex'" class="regex-parser-config">
+                <div class="input-group">
+                  <span class="input-label">{{ t('app.toolbar.regexPattern') }}</span>
+                  <el-input
+                    v-model="sourceRegexPattern"
+                    type="textarea"
+                    :rows="3"
+                    resize="vertical"
+                    :placeholder="t('app.toolbar.regexPatternPlaceholder')"
+                    :aria-label="t('app.toolbar.regexPattern')"
+                  />
+                </div>
+                <small :class="{ invalid: regexPatternError }">
+                  {{ regexPatternError || t('app.toolbar.regexPatternHint') }}
+                </small>
+              </div>
+            </div>
+          </template>
+          <div
+            v-if="mcapRecentFiles.length > 0"
+            class="input-group compact-input-group mcap-recent-group"
+          >
+            <span class="input-label">{{ t('app.toolbar.mcapRecent') }}</span>
+            <div class="mcap-recent-list">
+              <button
+                v-for="item in mcapRecentFiles"
+                :key="item.path"
+                type="button"
+                class="mcap-recent-item"
+                :title="item.paths?.join('\n') ?? item.path"
+                :disabled="fileInputLoading"
+                @click="selectFilePath(item.path)"
+              >
+                <span class="mcap-recent-name">
+                  {{ item.name
+                  }}<template v-if="(item.paths?.length ?? 0) > 1"
+                    >（{{
+                      t('lidar.playback.partCount', { count: item.paths!.length })
+                    }}）</template
+                  >
+                </span>
+                <span class="mcap-recent-size">{{ formatMcapSize(item.sizeBytes) }}</span>
+              </button>
             </div>
           </div>
         </div>
@@ -475,7 +520,9 @@
     </el-tabs>
     <template #footer>
       <el-button @click="showInputDialog = false">{{ t('app.cancel') }}</el-button>
-      <el-button type="primary" @click="handleInputSubmit">{{ inputSubmitLabel }}</el-button>
+      <el-button type="primary" :loading="fileInputLoading" @click="handleInputSubmit">{{
+        inputSubmitLabel
+      }}</el-button>
     </template>
   </el-dialog>
 </template>
@@ -494,6 +541,7 @@ import { showStatusBar, toolbarPosition } from '@/composables/useStatusManager'
 import emitter from '@/hooks/useMitt'
 import {
   ElDialog,
+  ElMessage,
   ElTabs,
   ElTabPane,
   ElButton,
@@ -506,7 +554,7 @@ import {
   ElCheckbox,
   ElIcon,
 } from 'element-plus'
-import { Connection, Download, FolderOpened, Monitor, Refresh } from '@element-plus/icons-vue'
+import { Connection, Download, Film, FolderOpened, Monitor, Refresh } from '@element-plus/icons-vue'
 import { useApplicationSelector } from '@/composables/useApplicationSelector'
 import { getPanelIconComponent } from '@/settings/panelIcons'
 import {
@@ -515,6 +563,10 @@ import {
 } from '@/composables/useDataSourceManager'
 import { useFileTimeline } from '@/composables/useFileTimeline'
 import FileTimelineControl from '@/components/FileTimelineControl.vue'
+import LidarTimelineControl from '@/components/LidarTimelineControl.vue'
+import { useMcapPlayer } from '@/composables/useMcapPlayer'
+import { McapRecentFiles } from '@/core/lidar/McapRecentFiles'
+import { JsonStorage } from '@/core/storage/JsonStorage'
 import { createRecordRegex } from '@/core/data/TextRecordParser'
 import { t } from '@/i18n'
 
@@ -523,7 +575,33 @@ const ipcRenderer = window.ipcRenderer
 // 既与 Dashboard 保持单一数据源，也能在隐藏/重新显示（组件重载）后保持位置，
 // 并由布局持久化层跨重启恢复。
 const position = toolbarPosition
-const { active: fileTimelineActive } = useFileTimeline()
+const { currentApplication, currentApplicationId, currentWindows } = useApplicationSelector()
+const { active: fileTimelineLoaded } = useFileTimeline()
+const fileTimelineActive = computed(
+  () =>
+    fileTimelineLoaded.value &&
+    currentWindows.value.some((windowDefinition) => windowDefinition.funcMode === 'gnss'),
+)
+
+// 文件输入中的 MCAP 回放与最近录像。
+const mcapPlayer = useMcapPlayer()
+const lidarTimelineActive = computed(
+  () =>
+    mcapPlayer.status.value === 'ready' &&
+    currentWindows.value.some((windowDefinition) => windowDefinition.catalogGroup === 'lidar'),
+)
+const mcapRecentStore = new McapRecentFiles(new JsonStorage(localStorage))
+const mcapRecentFiles = ref(mcapRecentStore.list())
+function formatMcapSize(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes < 0) return '-'
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KiB`
+  return `${(bytes / 1024 / 1024).toFixed(1)} MiB`
+}
+
+const deviceToggleHidden = computed(
+  () => activeTab.value === 'file' && fileIsMcap.value && showInputDialog.value,
+)
 const viewportWidth = ref(window.innerWidth)
 const inputTabPosition = computed(() => (viewportWidth.value <= 560 ? 'top' : 'left'))
 const updateViewportWidth = () => {
@@ -552,8 +630,6 @@ const flashParserConfig = () => {
     }, 2200)
   }, 250)
 }
-const { currentApplication, currentApplicationId } = useApplicationSelector()
-
 import { useDevice } from '@/hooks/useDevice'
 
 const deviceInstance = useDevice()
@@ -571,7 +647,11 @@ const {
   serialParity,
   serialAdvanced,
   selectTargetFile,
+  selectFilePath,
   filePath,
+  fileIsMcap,
+  fileInputLoading,
+  selectedFileCount,
   fileTimeTag,
   fileReplaySpeed,
   fileStartOffset,
@@ -594,6 +674,9 @@ const {
   logRecordingPath,
   toggleLogRecording,
 } = deviceInstance
+watch([showInputDialog, mcapPlayer.status], () => {
+  mcapRecentFiles.value = mcapRecentStore.list()
+})
 const serialPortsRefreshing = ref(false)
 
 async function refreshSerialPorts(): Promise<void> {
@@ -639,11 +722,6 @@ const regexPatternError = computed(() => {
   }
 })
 const inputSubmitLabel = computed(() => t('app.confirm'))
-
-// 添加triggerFileSelection函数，注意这里是const而不是sconst
-const triggerFileSelection = () => {
-  selectTargetFile()
-}
 
 watch(networkProtocol, (protocol) => {
   if (protocol === 'udp' && networkIp.value === '127.0.0.1') networkIp.value = '0.0.0.0'
@@ -2019,5 +2097,76 @@ onUnmounted(() => {
   to {
     transform: rotate(360deg);
   }
+}
+
+/* 文件输入中的最近录像 */
+
+.mcap-recent-group {
+  align-items: flex-start;
+}
+
+.mcap-recent-list {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 128px;
+  overflow-y: auto;
+  padding: 6px;
+  background: var(--app-surface-muted);
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+}
+
+.mcap-recent-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 4px 8px;
+  color: var(--app-text);
+  font-size: 12px;
+  text-align: left;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.mcap-recent-item:enabled:hover {
+  color: var(--el-color-primary);
+  background: color-mix(in srgb, var(--el-color-primary) 8%, var(--app-surface));
+  border-color: color-mix(in srgb, var(--el-color-primary) 30%, var(--app-border));
+}
+
+.mcap-recent-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mcap-recent-size {
+  flex: none;
+  color: var(--app-text-muted);
+}
+
+.mcap-hint p {
+  margin: 6px 0 0;
+}
+
+.mcap-hint > span {
+  margin-left: 8px;
+}
+
+.mcap-hint {
+  padding: 8px 10px;
+  color: var(--app-text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+  background: var(--app-surface-muted);
+  border: 1px dashed var(--app-border);
+  border-radius: 8px;
 }
 </style>

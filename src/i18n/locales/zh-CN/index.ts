@@ -9,6 +9,7 @@ import flow from './flow'
 import core from './core'
 import data from './data'
 import update from './update'
+import lidar from './lidar'
 
 export default {
   app,
@@ -22,4 +23,5 @@ export default {
   core,
   data,
   update,
+  lidar,
 }

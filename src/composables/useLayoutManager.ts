@@ -32,6 +32,7 @@ const modules = import.meta.glob<DefineComponent>([
   '../components/windows/common/*.vue',
   '../components/windows/gnss/*.vue',
   '../components/windows/motor/*.vue',
+  '../components/windows/lidar/*.vue',
 ])
 
 function loadComponent(componentPath: string) {

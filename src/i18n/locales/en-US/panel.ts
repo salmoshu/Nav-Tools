@@ -43,4 +43,20 @@ export default {
     title: 'Hex Message',
     desc: 'Read and configure parameters',
   },
+  'lidar-scene': {
+    title: 'LiDAR Scene',
+    desc: 'MCAP replay 3D scene: point clouds, trajectories, footprint and goal',
+  },
+  'lidar-plot': {
+    title: 'Command Curves',
+    desc: 'Command/odometry/score time series synced with the playhead',
+  },
+  'lidar-scores': {
+    title: 'DWA Scores',
+    desc: 'Per-candidate DWA scoring details and rejection reasons',
+  },
+  'lidar-inspector': {
+    title: 'Message Inspector',
+    desc: 'Inspect decoded messages of the current frame',
+  },
 }

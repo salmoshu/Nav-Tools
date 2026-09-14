@@ -1,18 +1,21 @@
 /**
  * NSat 图表性能测试：解析 rs.txt（11+ 分钟 NMEA 数据）后验证数据处理性能
  */
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { describe, expect, it, beforeEach } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { useNmea } from '@/composables/gnss/useNmea'
 
-const RAW = readFileSync('C:\\Users\\ESSZ\\Desktop\\gnss-test\\rs.txt', 'utf8')
+// 数据样本只存在于特定测试机；缺失时整组跳过，不阻塞 CI
+const RAW_PATH = 'C:\\Users\\ESSZ\\Desktop\\gnss-test\\rs.txt'
+const HAS_DATA = existsSync(RAW_PATH)
+const RAW = HAS_DATA ? readFileSync(RAW_PATH, 'utf8') : ''
 const LINES = RAW.split('\n')
 
 // 解析 88k 行 NMEA 数据需要较长时间，设置 30s 超时
 const PERF_TIMEOUT = 30000
 
-describe('NSat chart performance with 11min real NMEA data', () => {
+describe.skipIf(!HAS_DATA)('NSat chart performance with 11min real NMEA data', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     useNmea().clearData()

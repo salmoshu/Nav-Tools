@@ -2,6 +2,7 @@ import type { Component } from 'vue'
 import {
   Aim,
   Compass,
+  Document,
   Grid,
   Histogram,
   MapLocation,
@@ -21,6 +22,10 @@ export const panelIconComponents: Readonly<Record<string, Component>> = {
   sky: Compass,
   config: Setting,
   map: MapLocation,
+  radar: Aim,
+  'lidar-plot': TrendCharts,
+  'lidar-scores': Histogram,
+  'lidar-inspector': Document,
 }
 
 export function getPanelIconComponent(action?: string): Component {

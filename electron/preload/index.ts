@@ -50,6 +50,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     autoDownload: boolean
     ignoredVersion?: string
   }) => ipcRenderer.send('update-set-prefs', prefs),
+  lidarMcapReadFile: (path: string) => ipcRenderer.invoke('lidar-mcap-read-file', path),
 })
 const listenerMap = new Map<string, Map<Function, (...args: unknown[]) => void>>()
 

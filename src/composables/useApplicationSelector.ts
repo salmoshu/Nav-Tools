@@ -36,6 +36,10 @@ export function useApplicationSelector() {
   const activeDataModes = computed(() => [
     ...new Set(currentWindows.value.map((windowDefinition) => windowDefinition.funcMode)),
   ])
+  /** 当前应用包含面板的 moduleId 集合；status source 等按模块命中的场景用这个，不要按 funcMode */
+  const activeModuleIds = computed(
+    () => new Set(currentWindows.value.map((windowDefinition) => windowDefinition.moduleId)),
+  )
 
   const selectApplication = (applicationId: string, persist = true) => {
     const application = applications.value.find((candidate) => candidate.id === applicationId)
@@ -134,6 +138,7 @@ export function useApplicationSelector() {
     currentApplicationId,
     currentWindows,
     activeDataModes,
+    activeModuleIds,
     isApplicationSelectorOpen,
     selectApplication,
     saveApplication,

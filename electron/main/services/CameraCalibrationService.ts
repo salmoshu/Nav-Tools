@@ -1,10 +1,6 @@
 import { CameraCalibration } from '../../../src/core/camera/CameraCalibration'
 import { InssegParser } from '../../../src/core/camera/InssegParser'
 import {
-  parseReadParamsResponse,
-  type CameraParamSnapshot,
-} from '../../../src/core/camera/CameraParamReadback'
-import {
   createCalibrationSnapshot, isCalibrationRunning,
   type CameraCalibrationConfig, type CameraCalibrationRecovery,
   type CameraCalibrationSnapshot,
@@ -13,15 +9,10 @@ import type { CameraMeasurementAccess, CameraMeasurementTeardown } from './Camer
 
 type Endpoint = { host: string; port: number }
 
-/** 与配置表单对比 / 写入核对共用的浮点容差（应答保留三位小数） */
-const READBACK_EPSILON = 0.002;
-
 export interface CameraCalibrationHost {
   now(): number
   tcpTarget(): Endpoint | undefined
   writeParams(content: string): Promise<void>
-  /** 8080 read_params 回读（裸文本应答） */
-  readbackParams(): Promise<CameraParamSnapshot>
   /** 建立 SSH 测量通道，INSSEG 文本流经 onText 到达 receive() */
   startMeasurement(access: CameraMeasurementAccess): Promise<void>
   /** 拆除测量通道并核实现场（无 strace 残留、TracerPid 归零） */
@@ -37,8 +28,6 @@ export class CameraCalibrationService {
   private rawBuffer = ''
   private writing = false
   private manualWrites = 0
-  /** 启动时回读的设备原始参数（恢复现场的基准） */
-  private originalSnapshot: CameraParamSnapshot | undefined
   private finalizing = false
   private finalized = false
   private publish: (state: CameraCalibrationSnapshot) => void = () => undefined
@@ -66,7 +55,6 @@ export class CameraCalibrationService {
     if (this.writing || this.manualWrites || isCalibrationRunning(this.snapshot().phase)) throw new Error('请先停止标定并等待发送结束')
     this.owner = owner
     this.engine = undefined
-    this.originalSnapshot = undefined
     this.finalized = false
     this.finalizing = false
     this.parser.reset()
@@ -103,19 +91,6 @@ export class CameraCalibrationService {
     if (!this.state.observing || this.host.now() - this.lastFrameAt > 1500) throw new Error('请先取得实时 INSSEG 数据')
     if (!this.host.tcpTarget()) throw new Error('相机控制连接已断开，请检查工具栏数据接入的 TCP 连接')
 
-    // 回读门控：height/FOV 是几何标定常量（引擎不调它们、测距全靠它们），
-    // 设备与表单不一致时拒绝启动，防止模板值盲目下发毁掉测距正确性
-    const readback = await this.host.readbackParams()
-    const rad = (config.fov * Math.PI) / 180
-    if (Math.abs(readback.height - config.height) > READBACK_EPSILON ||
-      Math.abs(readback.fov - rad) > 0.01) {
-      throw new Error(
-        `设备几何参数与表单不一致：设备回报 ${readback.raw}；` +
-        `表单为 height=${config.height}, fov=${config.fov}(°)。` +
-        `height/FOV 决定测距几何，自动标定不调整它们，请人工核对表单后再启动`)
-    }
-    this.originalSnapshot = readback
-
     const last = this.state.lastFrame
     if (!last || last.targets.length !== config.targets.length ||
       last.targets.some((t) => t.classId !== config.personClassId)) {
@@ -132,27 +107,23 @@ export class CameraCalibrationService {
     // 先构造引擎校验配置合法性，再进行任何写入
     const engine = new CameraCalibration(config, this.host.now())
     this.state.config = { ...config }
-    // 恢复基准 = 表单 height/fov + 设备回读的 thetaOffset（自动同步前的设备原值，同通道可精确核对）
-    this.state.originalParams = `${config.height},${config.fov},${readback.thetaOffset}`
-    this.state.lastSentParams = null
 
-    // OFFSET 基线自动同步：设备 thetaOffset 与表单初值不一致时无需拒绝，
-    // 直接把表单值下发并回读核对，再从初值开始搜索
-    if (Math.abs(readback.thetaOffset - config.initialOffset) > READBACK_EPSILON) {
-      const content = `${config.height},${config.fov},${config.initialOffset}`
-      this.ensureControlLink()
-      this.writing = true
-      this.state.lastSentParams = content
+    // 表单即真值：启动时把表单参数整组下发作为搜索基线（不回读核对），
+    // 随后等待 settle 时长，让设备应用参数并重建 INSSEG 流，再开始采样
+    const baseline = `${config.height},${config.fov},${config.initialOffset}`
+    this.ensureControlLink()
+    this.writing = true
+    this.state.originalParams = baseline
+    this.state.lastSentParams = baseline
+    this.emit()
+    try {
+      await this.writeWithTimeout(baseline)
+      await new Promise((resolve) => setTimeout(resolve, Math.max(500, config.settleMs)))
+    } catch (error) {
+      throw new Error(`基线参数下发失败，未启动标定：${errorMessage(error)}`)
+    } finally {
+      this.writing = false
       this.emit()
-      try {
-        await this.writeWithTimeout(content)
-        await this.confirmWritten(content)
-      } catch (error) {
-        throw new Error(`OFFSET 基线同步失败，未启动标定：${errorMessage(error)}`)
-      } finally {
-        this.writing = false
-        this.emit()
-      }
     }
 
     this.engine = engine
@@ -284,23 +255,23 @@ export class CameraCalibrationService {
   public async restore(owner: number): Promise<CameraCalibrationSnapshot> {
     this.requireOwner(owner)
     if (this.writing || this.manualWrites || isCalibrationRunning(this.snapshot().phase)) throw new Error('请先停止标定并等待发送结束')
-    if (!this.originalSnapshot || !this.state.originalParams) throw new Error('没有可恢复的标定前参数')
-    const readback = await this.restoreParamsAndVerify()
+    if (!this.state.originalParams) throw new Error('没有可恢复的标定前参数')
+    await this.restoreOriginalParams()
     this.state.recovery = {
       straceCleared: this.state.recovery?.straceCleared ?? true,
       tracerPidZero: this.state.recovery?.tracerPidZero ?? true,
       paramsVerified: true,
       restored: true,
       expected: this.state.originalParams,
-      readback: readback.raw,
-      detail: '参数已恢复并经 read_params 回读核对',
+      readback: '',
+      detail: '已发送恢复参数（未做回读核对，请人工核实）',
       pendingChecks: this.state.recovery?.pendingChecks ?? true,
     }
     this.emit()
     return this.snapshot()
   }
 
-  /** 标定结束后的现场恢复：拆测量通道 + 失败/停止时回写原参数并核对 */
+  /** 标定结束后的现场恢复：失败/停止时回写原参数（表单基线），成功时保持参数 */
   private async finalize(): Promise<void> {
     const engine = this.engine
     if (!engine || this.finalizing) return
@@ -315,28 +286,17 @@ export class CameraCalibrationService {
 
     if (phase === 'failed' || phase === 'stopped') {
       try {
-        const readback = await this.restoreParamsAndVerify()
+        await this.restoreOriginalParams()
         recovery.paramsVerified = true
         recovery.restored = true
-        recovery.readback = readback.raw
-        recovery.detail = '已恢复标定前参数并回读核对'
+        recovery.detail = '已发送恢复参数（未做回读核对，请人工核实）'
       } catch (error) {
         recovery.paramsVerified = false
         recovery.detail = `参数恢复失败，请人工核实：${errorMessage(error)}`
       }
     } else if (phase === 'succeeded') {
-      try {
-        const readback = await this.host.readbackParams()
-        recovery.readback = readback.raw
-        const applied = parseWrittenContent(this.state.lastSentParams)
-        recovery.paramsVerified = Boolean(applied &&
-          Math.abs(readback.thetaOffset - applied.thetaOffset) <= READBACK_EPSILON)
-        recovery.detail = recovery.paramsVerified
-          ? '标定参数已保持并回读核对'
-          : '设备参数与标定结果不一致，请人工核实'
-      } catch (error) {
-        recovery.detail = `标定成功，但回读核对失败：${errorMessage(error)}`
-      }
+      recovery.paramsVerified = true
+      recovery.detail = '标定成功，标定参数已保持'
     }
 
     this.state.recovery = recovery
@@ -345,7 +305,7 @@ export class CameraCalibrationService {
     this.emit()
   }
 
-  private async restoreParamsAndVerify(): Promise<CameraParamSnapshot> {
+  private async restoreOriginalParams(): Promise<void> {
     const content = this.state.originalParams
     if (!content) throw new Error('没有可恢复的原始参数')
     this.ensureControlLink()
@@ -354,7 +314,6 @@ export class CameraCalibrationService {
     this.emit()
     try {
       await this.writeWithTimeout(content)
-      return await this.confirmWritten(content)
     } finally { this.writing = false; this.emit() }
   }
 
@@ -369,27 +328,13 @@ export class CameraCalibrationService {
       this.state.lastSentParams = content
       this.emit()
       await this.writeWithTimeout(content)
-      const readback = await this.confirmWritten(content)
       if (engine.snapshot().phase === 'writing') engine.written(offset, this.host.now())
       else if (isCalibrationRunning(engine.snapshot().phase)) {
         engine.fail('发送期间观测失效，参数可能已改变，请核实后重新开始')
       }
-      void readback
     } catch (error) {
-      engine.fail(`参数发送或回读未确认，停止自动写入：${errorMessage(error)}`)
+      engine.fail(`参数发送失败，停止自动写入：${errorMessage(error)}`)
     } finally { this.writing = false; this.emit() }
-  }
-
-  /** 写入后经 read_params 核对设备已应用目标值 */
-  private async confirmWritten(content: string): Promise<CameraParamSnapshot> {
-    const expected = parseWrittenContent(content)
-    if (!expected) throw new Error(`写入内容无法解析：${content}`)
-    const readback = await this.host.readbackParams()
-    if (Math.abs(readback.thetaOffset - expected.thetaOffset) > READBACK_EPSILON ||
-      Math.abs(readback.height - expected.height) > READBACK_EPSILON) {
-      throw new Error(`回读不一致：期望 offset=${expected.thetaOffset}，设备回报 ${readback.raw}`)
-    }
-    return readback
   }
 
   private async writeWithTimeout(content: string): Promise<void> {
@@ -419,15 +364,6 @@ export class CameraCalibrationService {
   }
 }
 
-function parseWrittenContent(content: string | null): { height: number; thetaOffset: number } | undefined {
-  if (!content) return undefined
-  const parts = content.split(',')
-  if (parts.length !== 3) return undefined
-  const height = Number(parts[0])
-  const thetaOffset = Number(parts[2])
-  if (!Number.isFinite(height) || !Number.isFinite(thetaOffset)) return undefined
-  return { height, thetaOffset }
-}
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)

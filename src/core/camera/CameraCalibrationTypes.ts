@@ -133,12 +133,12 @@ export function isCalibrationRunning(phase: CameraCalibrationPhase): boolean {
   return ['sampling', 'verifying', 'writing', 'settling', 'paused'].includes(phase)
 }
 
-/** 规格默认值：参数模板 0.55,62.292,-21.5；默认单目标（人员右侧 1.2 m），允许偏差 -2~+2 cm。
- *  双目标（1.2 m + 2.0 m）暂不支持：UI 下拉框已禁用该选项，引擎逻辑保留待后续启用 */
+/** 规格默认值：参数模板 0.55,62.292,-22；默认单目标（人员右侧 1.2 m），允许偏差 -2~+2 cm。
+ *  双目标（1.2 m + 2.0 m）可在下拉框选择启用：需两人均处于固件串口上报窗口内（非跟随目标 ≤1.5 m） */
 export const DEFAULT_CALIBRATION_CONFIG: Readonly<CameraCalibrationConfig> = Object.freeze({
   height: 0.55,
   fov: 62.292,
-  initialOffset: -21.5,
+  initialOffset: -22,
   minOffset: -30,
   maxOffset: -10,
   step: 1,

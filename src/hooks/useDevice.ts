@@ -25,6 +25,9 @@ import {
   type SerialStopBits,
 } from '@/core/serial/SerialService'
 import emitter from '@/hooks/useMitt'
+import { useMcapPlayer } from '@/composables/useMcapPlayer'
+import { McapRecentFiles } from '@/core/lidar/McapRecentFiles'
+import { JsonStorage } from '@/core/storage/JsonStorage'
 import { useDataSourceManager } from '@/composables/useDataSourceManager'
 import type { TextDataParser } from '@/core/data/DataSourceStorage'
 import { createRecordRegex } from '@/core/data/TextRecordParser'
@@ -127,8 +130,14 @@ const fileTimeTag = toRef(dataSourceSettings.file, 'timeTag')
 const fileReplaySpeed = toRef(dataSourceSettings.file, 'replaySpeed')
 const fileStartOffset = toRef(dataSourceSettings.file, 'startOffset')
 const filePositionBytes = toRef(dataSourceSettings.file, 'filePositionBytes')
-const selectedFile = ref<File | null>(null)
+const selectedFiles = ref<File[]>([])
+const selectedFile = computed(() => selectedFiles.value[0] ?? null)
 const selectedFilePath = ref('')
+const isMcapPath = (path: string) => path.trim().toLowerCase().endsWith('.mcap')
+const fileIsMcap = computed(() => isMcapPath(filePath.value))
+const selectedFileCount = computed(() =>
+  selectedFilePath.value === filePath.value.trim() ? selectedFiles.value.length : 0,
+)
 const serialPorts = ref<string[]>([])
 const logRecordingActive = ref(false)
 const logRecordingPath = ref('')
@@ -612,10 +621,13 @@ function startTimestampPlayback(path: string): void {
  */
 export function useDevice() {
   const isDragOver = ref(false)
+  const mcapPlayer = useMcapPlayer()
 
   // 对话框状态
   const showInputDialog = ref(false)
   const activeTab = ref<'serial' | 'file' | 'network'>(dataSourceSettings.activeSource)
+  const fileInputLoading = ref(false)
+  const mcapRecentStore = new McapRecentFiles(new JsonStorage(localStorage))
   let dataSourceSnapshot: typeof dataSourceSettings | undefined
   let dataSourceChangesCommitted = false
 
@@ -730,11 +742,33 @@ export function useDevice() {
 
     if (event.dataTransfer && event.dataTransfer.files && event.dataTransfer.files.length > 0) {
       const files = Array.from(event.dataTransfer.files)
+      // LiDAR MCAP 录像优先分发（避免被文本分支误吞）；一次拖入多个分片时合并为单会话加载
+      const mcapFiles = files.filter((file) => isMcapPath(file.name))
 
       for (const file of files) {
         try {
           // 根据文件类型进行不同处理
-          // 不区分大小写的文件类型检查
+          if (isMcapPath(file.name)) {
+            // 分片随首个 .mcap 一起批量加载，其余分片跳过
+            if (file !== mcapFiles[0]) continue
+            const ok = await mcapPlayer.loadFromFiles(mcapFiles)
+            if (ok) {
+              ElMessage({
+                message:
+                  mcapFiles.length > 1
+                    ? t('app.toolbar.mcapLoadedParts', { count: mcapFiles.length })
+                    : t('app.toolbar.mcapLoaded', { name: file.name }),
+                type: 'success',
+                placement: 'bottom-right',
+                offset: 50,
+              })
+              continue
+            }
+            if (mcapPlayer.status.value === 'error') {
+              throw new Error(mcapPlayer.errorText.value)
+            }
+            continue
+          }
           if (
             file.type.toLowerCase().includes('log') ||
             file.name.toLowerCase().endsWith('.log') ||
@@ -745,7 +779,7 @@ export function useDevice() {
           ) {
             // 处理文本文件
             const droppedPath = window.electronAPI?.getPathForFile(file) || file.name
-            selectedFile.value = file
+            selectedFiles.value = [file]
             selectedFilePath.value = droppedPath
             filePath.value = droppedPath
             globalDevice.value = {
@@ -946,12 +980,20 @@ export function useDevice() {
     return globalDevice.value.path ?? ''
   }
 
-  // 重构selectTargetFile函数，只负责选择文件并设置filePath
+  // 路径/最近文件选择清除浏览器 File 引用，避免读到上一次选择的文件。
+  const selectFilePath = (path: string) => {
+    selectedFiles.value = []
+    selectedFilePath.value = ''
+    filePath.value = path
+  }
+
+  // 文件输入统一选择文本文件或同一会话的 MCAP 分片，确认时按扩展名分发。
   const selectTargetFile = () => {
     // 创建一个隐藏的文件输入元素
     const fileInput = document.createElement('input')
     fileInput.type = 'file'
-    fileInput.accept = '.txt,.csv,.dat,.log'
+    fileInput.accept = '.txt,.csv,.dat,.log,.mcap'
+    fileInput.multiple = true
     fileInput.style.display = 'none'
 
     // 添加到文档中
@@ -960,22 +1002,25 @@ export function useDevice() {
     // 设置文件选择后的回调
     fileInput.onchange = (event) => {
       const target = event.target as HTMLInputElement
-      const file = target.files?.[0]
+      const files = Array.from(target.files ?? [])
+      const file = files[0]
+      if (files.length > 1 && !files.every((item) => isMcapPath(item.name))) {
+        ElMessage.warning(t('app.toolbar.fileSelectionMixed'))
+        fileInput.remove()
+        return
+      }
       if (file) {
         // Electron 32+ 通过 preload 的 webUtils 获取文件系统路径。
         filePath.value = window.electronAPI?.getPathForFile(file) || file.name
         selectedFilePath.value = filePath.value
 
-        // 在Electron环境中，可以考虑存储文件对象引用，以便后续读取
-        if (file instanceof File) {
-          // 存储文件对象引用
-          selectedFile.value = file
-        }
+        selectedFiles.value = files
       }
 
       // 移除临时元素
       document.body.removeChild(fileInput)
     }
+    fileInput.oncancel = () => fileInput.remove()
 
     // 触发文件选择对话框
     fileInput.click()
@@ -1045,7 +1090,7 @@ export function useDevice() {
     }
 
     // 如果有文件对象引用，直接使用它读取内容
-    if (selectedFile.value) {
+    if (selectedFile.value && selectedFilePath.value === fileCmd) {
       fileTimeline.clearTimeline()
       const reader = new FileReader()
       reader.onload = (e) => {
@@ -1185,7 +1230,39 @@ export function useDevice() {
   /**
    * 提交输入表单
    */
-  const handleInputSubmit = () => {
+  const handleInputSubmit = async () => {
+    if (fileInputLoading.value) return
+    // MCAP 自带结构与时间索引，不经过文本解析器、时间标签回放或设备连接。
+    if (activeTab.value === 'file' && fileIsMcap.value) {
+      const path = filePath.value.trim()
+      const files = selectedFilePath.value === path ? selectedFiles.value : []
+      const recent = mcapRecentStore.list().find((item) => item.path === path)
+      fileInputLoading.value = true
+      try {
+        const ok =
+          files.length > 0
+            ? await mcapPlayer.loadFromFiles(files)
+            : recent?.paths?.length
+              ? await mcapPlayer.loadFromPaths(recent.paths)
+              : await mcapPlayer.loadFromPath(path)
+        if (!ok) {
+          if (mcapPlayer.status.value === 'error') throw new Error(mcapPlayer.errorText.value)
+          return
+        }
+        dataSourceChangesCommitted = true
+        dataSourceSettings.activeSource = 'file'
+        filePath.value = path
+        saveDataSourceSettings()
+        showInputDialog.value = false
+      } catch (error) {
+        ElMessage.error(
+          `${t('lidar.playback.loadFailed')}: ${error instanceof Error ? error.message : String(error)}`,
+        )
+      } finally {
+        fileInputLoading.value = false
+      }
+      return
+    }
     if (sourceParser.value === 'regex') {
       try {
         createRecordRegex(sourceRegexPattern.value)
@@ -1245,6 +1322,9 @@ export function useDevice() {
     serialParity,
     serialAdvanced,
     filePath,
+    fileIsMcap,
+    fileInputLoading,
+    selectedFileCount,
     fileTimeTag,
     fileReplaySpeed,
     fileStartOffset,
@@ -1272,6 +1352,7 @@ export function useDevice() {
     handleDragLeave,
     handleDrop,
     selectTargetFile,
+    selectFilePath,
     handleInputSubmit,
     inputDialog,
     openCurrDevice,

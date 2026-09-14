@@ -100,11 +100,12 @@ describe('CameraCalibrationService 观测生命周期', () => {
   })
 })
 
-// ---- 启动门控与 OFFSET 基线自动同步 ----
+// ---- 启动基线直发（表单即真值，不回读） ----
 function sentence(payload: string): string {
   let checksum = 0
   for (const char of payload) checksum ^= char.charCodeAt(0)
-  return `$${payload}*${checksum.toString(16).padStart(2, '0')}\r\n`
+  return `$${payload}*${checksum.toString(16).padStart(2, '0')}
+`
 }
 
 const TWO_PEOPLE = sentence(
@@ -125,7 +126,7 @@ function calConfig(overrides: Partial<CameraCalibrationConfig> = {}): CameraCali
   }
 }
 
-describe('CameraCalibrationService 启动门控与 OFFSET 自动同步', () => {
+describe('CameraCalibrationService 启动基线直发', () => {
   async function readyToStart(host: FakeHost): Promise<CameraCalibrationService> {
     const service = new CameraCalibrationService(host as unknown as CameraCalibrationHost)
     await service.observe(1, ACCESS)
@@ -133,50 +134,31 @@ describe('CameraCalibrationService 启动门控与 OFFSET 自动同步', () => {
     return service
   }
 
-  it('三项参数全部一致时不写参数直接启动', async () => {
+  it('启动时把表单参数整组下发作为搜索基线', async () => {
     const host = new FakeHost()
-    const service = await readyToStart(host)
-    const state = await service.start(1, calConfig())
-    expect(state.phase).toBe('sampling')
-    expect(host.writes).toEqual([])
-    expect(state.originalParams).toBe('0.55,62.292,-21.5')
-  })
-
-  it('设备 height 与表单不一致时拒绝启动且不写参数', async () => {
-    const host = new FakeHost()
-    host.device.height = 0.6
-    const service = await readyToStart(host)
-    await expect(service.start(1, calConfig())).rejects.toThrow(/几何参数/)
-    expect(host.writes).toEqual([])
-  })
-
-  it('设备 FOV 与表单不一致时拒绝启动且不写参数', async () => {
-    const host = new FakeHost()
-    host.device.fov = 1.2
-    const service = await readyToStart(host)
-    await expect(service.start(1, calConfig())).rejects.toThrow(/几何参数/)
-    expect(host.writes).toEqual([])
-  })
-
-  it('OFFSET 基线不一致时自动下发表单值同步再启动, 恢复基准保留设备原值', async () => {
-    const host = new FakeHost()
-    host.device.thetaOffset = -20
     const service = await readyToStart(host)
     const state = await service.start(1, calConfig())
     expect(state.phase).toBe('sampling')
     expect(host.writes).toEqual(['0.55,62.292,-21.5'])
     expect(host.device.thetaOffset).toBe(-21.5)
-    expect(state.originalParams).toBe('0.55,62.292,-20')
+    expect(state.originalParams).toBe('0.55,62.292,-21.5')
     expect(state.lastSentParams).toBe('0.55,62.292,-21.5')
   })
 
-  it('OFFSET 基线同步写入失败时拒绝启动并保留恢复基准', async () => {
+  it('基线写入失败时拒绝启动并保持观测', async () => {
     const host = new FakeHost()
-    host.device.thetaOffset = -20
     host.failWrites = true
     const service = await readyToStart(host)
-    await expect(service.start(1, calConfig())).rejects.toThrow(/基线同步失败/)
-    expect(service.snapshot().phase).not.toBe('sampling')
-    expect(service.snapshot().originalParams).toBe('0.55,62.292,-20')
+    await expect(service.start(1, calConfig())).rejects.toThrow(/基线参数下发失败/)
+    expect(service.snapshot().phase).toBe('observing')
+    expect(host.writes).toEqual([])
+  })
+
+  it('启动包含 settle 等待, 让设备应用参数后再开始采样', async () => {
+    const host = new FakeHost()
+    const service = await readyToStart(host)
+    const started = Date.now()
+    await service.start(1, calConfig())
+    expect(Date.now() - started).toBeGreaterThanOrEqual(450)
   })
 })

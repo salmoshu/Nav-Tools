@@ -14,11 +14,25 @@
       @node-click="emit('node-click', $event)"
     >
       <template #default="{ data }">
-        <el-icon class="terminal-file-tree__icon">
-          <Folder v-if="data.directory" />
-          <Document v-else />
-        </el-icon>
-        <span class="terminal-file-tree__name">{{ data.name }}</span>
+        <el-dropdown
+          trigger="contextmenu"
+          @command="(command: string) => onNodeCommand(command, data)"
+        >
+          <span class="terminal-file-tree__node">
+            <el-icon class="terminal-file-tree__icon">
+              <Folder v-if="data.directory" />
+              <Document v-else />
+            </el-icon>
+            <span class="terminal-file-tree__name">{{ data.name }}</span>
+          </span>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item command="download">
+                {{ t('common.terminal.fileTreeDownload') }}
+              </el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
       </template>
     </el-tree>
   </div>
@@ -26,6 +40,7 @@
 
 <script setup lang="ts">
 import { ref, watch } from 'vue'
+import { ElMessage } from 'element-plus'
 import { Document, Folder } from '@element-plus/icons-vue'
 import { useTerminalTranslate } from '@/core/terminal/TerminalI18n'
 import type { SftpEntry, TerminalSessionDir } from '@/core/terminal/TerminalTypes'
@@ -44,6 +59,30 @@ const emit = defineEmits<{
   'root-resolved': [path: string]
   'load-error': [path: string, root: boolean, error?: unknown]
 }>()
+
+async function onNodeCommand(command: string, entry: SftpEntry): Promise<void> {
+  if (command !== 'download') return
+  const localPath = (await window.ipcRenderer.invoke('terminal-sftp-choose-download', {
+    name: entry.name,
+    directory: entry.directory,
+  })) as string | null
+  if (!localPath) return
+  try {
+    await window.ipcRenderer.invoke('terminal-session-download', {
+      sessionId: props.sessionId,
+      sessionPath: entry.path,
+      localPath,
+    })
+    ElMessage.success(t('common.terminal.fileTreeDownloadDone', { name: entry.name }))
+  } catch (error) {
+    ElMessage.error(
+      t('common.terminal.fileTreeDownloadFailed', {
+        name: entry.name,
+        message: error instanceof Error ? error.message : String(error),
+      }),
+    )
+  }
+}
 
 type FileTreeNode = SftpEntry & { isLeaf: boolean }
 
@@ -114,6 +153,13 @@ watch(
   background: var(--app-surface);
   font-size: 11px;
 }
+.terminal-file-tree__node {
+  display: inline-flex;
+  flex: 1;
+  min-width: 0;
+  align-items: center;
+}
+
 .terminal-file-tree__icon {
   margin-right: 4px;
   color: var(--app-text-muted);

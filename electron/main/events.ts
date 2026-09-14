@@ -28,7 +28,6 @@ const cameraCalibrationService = new CameraCalibrationService({
   writeParams: async (content) => {
     await cameraCommandService.send({ subCommand: 'set_params', content, contentFormat: 'text' })
   },
-  readbackParams: () => readbackParams(),
   startMeasurement: async (access) => {
     await measurementChannel.start(access, {
       onText: (text) => cameraCalibrationService.receive(text),

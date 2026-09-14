@@ -1,5 +1,7 @@
 import { ref } from "vue"
 import { defineStore } from "pinia"
+import { registerStatusSource } from '@/core/status/registry'
+import { createStatusSource } from '@/core/status/createStatusSource'
 
 export interface GnssState {
     fixMode: string
@@ -60,3 +62,13 @@ export const useGnssStore = defineStore('gnss', () => {
         resetTrack,
     }
 })
+
+// Status View 数据源：就近声明，聚合层（core/status）按当前应用的 moduleId 命中
+registerStatusSource(
+    createStatusSource({
+        id: 'gnss',
+        label: 'GNSS',
+        match: moduleIds => moduleIds.has('gnss'),
+        status: () => useGnssStore().status,
+    }),
+)

@@ -19,8 +19,9 @@ export type ApplicationIcon =
   | 'target'
   | 'gauge'
   | 'chart'
+  | 'radar'
 export type PanelDataMode = 'general' | 'flow' | 'gnss' | 'motor'
-export type PanelCatalogGroup = 'general' | 'flow' | 'gnss' | 'camera'
+export type PanelCatalogGroup = 'general' | 'flow' | 'gnss' | 'camera' | 'lidar'
 
 export interface UserApplication {
   id: string
@@ -176,6 +177,54 @@ export const panelRegistry: readonly PanelDefinition[] = [
     description: 'panel.motor-parameters.desc',
     componentName: 'MotorConfig',
     componentPath: '@/components/windows/motor/MotorConfig.vue',
+  },
+  {
+    id: 'lidar-scene',
+    moduleId: 'lidar',
+    appMode: 'workspace',
+    funcMode: 'general',
+    catalogGroup: 'lidar',
+    action: 'radar',
+    title: 'panel.lidar-scene.title',
+    description: 'panel.lidar-scene.desc',
+    componentName: 'LidarScene',
+    componentPath: '@/components/windows/lidar/LidarScene.vue',
+  },
+  {
+    id: 'lidar-plot',
+    moduleId: 'lidar',
+    appMode: 'workspace',
+    funcMode: 'general',
+    catalogGroup: 'lidar',
+    action: 'lidar-plot',
+    title: 'panel.lidar-plot.title',
+    description: 'panel.lidar-plot.desc',
+    componentName: 'LidarPlot',
+    componentPath: '@/components/windows/lidar/LidarPlot.vue',
+  },
+  {
+    id: 'lidar-scores',
+    moduleId: 'lidar',
+    appMode: 'workspace',
+    funcMode: 'general',
+    catalogGroup: 'lidar',
+    action: 'lidar-scores',
+    title: 'panel.lidar-scores.title',
+    description: 'panel.lidar-scores.desc',
+    componentName: 'LidarScores',
+    componentPath: '@/components/windows/lidar/LidarScores.vue',
+  },
+  {
+    id: 'lidar-inspector',
+    moduleId: 'lidar',
+    appMode: 'workspace',
+    funcMode: 'general',
+    catalogGroup: 'lidar',
+    action: 'lidar-inspector',
+    title: 'panel.lidar-inspector.title',
+    description: 'panel.lidar-inspector.desc',
+    componentName: 'LidarInspector',
+    componentPath: '@/components/windows/lidar/LidarInspector.vue',
   },
 ]
 
