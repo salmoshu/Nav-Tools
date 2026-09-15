@@ -755,6 +755,62 @@ export class TerminalService {
     await this.downloadEntry(sftp, sessionId, target.path, localPath)
   }
 
+  /**
+   * 会话文件重命名(三通道统一入口):本机走 fs.rename、WSL 走 mv 转发、SSH 走 SFTP。
+   * 新旧路径都按同一会话语义解析,因此必然落在同一通道;新路径的合法性由渲染层校验。
+   */
+  public async renameSessionPath(
+    sessionId: string,
+    oldPath: string,
+    newPath: string,
+  ): Promise<void> {
+    const session = this.sessions.get(sessionId)
+    if (!session) throw new Error('终端会话不存在')
+    const source = this.resolveSessionPath(session, oldPath)
+    const target = this.resolveSessionPath(session, newPath)
+    if (!source || !target) throw new Error('路径无法解析')
+
+    if (source.kind === 'local') {
+      await this.host.fileSystem.rename(source.path, target.path)
+      return
+    }
+    if (source.kind === 'wsl') {
+      await this.wslExec(
+        source.distro,
+        `mv -- ${quoteShellArg(source.path, 'posix')} ${quoteShellArg(target.path, 'posix')}`,
+        [],
+      )
+      return
+    }
+    await this.sftpRename(sessionId, source.path, target.path)
+  }
+
+  /**
+   * 会话文件删除(三通道统一入口):directory 为 true 时递归删除整个目录。
+   * 本机走 fs.rm、WSL 走 rm 转发、SSH 走 SFTP 递归删除;目标不存在时抛错,由面板提示。
+   */
+  public async deleteSessionPath(
+    sessionId: string,
+    rawPath: string,
+    directory: boolean,
+  ): Promise<void> {
+    const session = this.sessions.get(sessionId)
+    if (!session) throw new Error('终端会话不存在')
+    const target = this.resolveSessionPath(session, rawPath)
+    if (!target) throw new Error('路径无法解析')
+
+    if (target.kind === 'local') {
+      await this.host.fileSystem.rm(target.path, { recursive: directory })
+      return
+    }
+    if (target.kind === 'wsl') {
+      const quoted = quoteShellArg(target.path, 'posix')
+      await this.wslExec(target.distro, directory ? `rm -r -- ${quoted}` : `rm -- ${quoted}`, [])
+      return
+    }
+    await this.sftpRemove(sessionId, target.path)
+  }
+
   /** 用系统 tar 从流中提取(Windows 10+ 自带 bsdtar;WSL 场景宿主必有 tar) */
   private async extractTarToDirectory(tarPath: string, destDir: string): Promise<void> {
     await this.host.fileSystem.mkdir(destDir, { recursive: true })

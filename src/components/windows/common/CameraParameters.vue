@@ -802,16 +802,13 @@
                 </label>
                 <div class="action-buttons">
                   <el-button
-                    type="primary"
-                    :loading="scriptRunning"
-                    :disabled="!scriptPath || scriptRunning"
-                    @click="runScript"
+                    :type="scriptRunning ? 'danger' : 'primary'"
+                    :plain="scriptRunning"
+                    :disabled="!scriptRunning && !scriptPath"
+                    @click="scriptRunning ? stopScript() : runScript()"
                   >
                     <el-icon v-if="!scriptRunning"><VideoPlay /></el-icon>
-                    {{ t('common.camera.script.run') }}
-                  </el-button>
-                  <el-button v-if="scriptRunning" type="danger" plain @click="stopScript">
-                    {{ t('common.camera.script.stop') }}
+                    {{ scriptRunning ? t('common.camera.script.stop') : t('common.camera.script.run') }}
                   </el-button>
                 </div>
               </div>

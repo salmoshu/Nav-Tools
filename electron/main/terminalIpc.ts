@@ -162,6 +162,17 @@ export function registerTerminalIpc(
     (_event, request: { sessionId: string; path: string }) =>
       service.listSessionPath(request.sessionId, request.path),
   )
+  // 文件树重命名/删除:与列目录、下载共用同一套会话三通道分发
+  ipcMain.handle(
+    'terminal-session-rename',
+    (_event, request: { sessionId: string; oldPath: string; newPath: string }) =>
+      service.renameSessionPath(request.sessionId, request.oldPath, request.newPath),
+  )
+  ipcMain.handle(
+    'terminal-session-delete',
+    (_event, request: { sessionId: string; path: string; directory: boolean }) =>
+      service.deleteSessionPath(request.sessionId, request.path, request.directory),
+  )
 
   ipcMain.handle(
     'terminal-forward-start',

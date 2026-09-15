@@ -82,7 +82,7 @@ export default {
     networkTab: 'Network',
     networkTabShort: 'Network',
     mcapSource: 'LiDAR recording (MCAP)',
-    mcapRecent: 'Recent recordings',
+    recentFiles: 'Recent files',
     mcapSelectedParts: '{count} parts selected',
     mcapHint:
       'Confirm to load the LiDAR timeline for playback, frame stepping and speed control. Select all part_N.mcap files from one session together, or drop them onto the main window.',

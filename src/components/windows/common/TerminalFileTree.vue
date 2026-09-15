@@ -30,6 +30,12 @@
               <el-dropdown-item command="download">
                 {{ t('common.terminal.fileTreeDownload') }}
               </el-dropdown-item>
+              <el-dropdown-item command="rename">
+                {{ t('common.terminal.fileTreeRename') }}
+              </el-dropdown-item>
+              <el-dropdown-item command="delete" class="terminal-file-tree__delete-item">
+                {{ t('common.terminal.fileTreeDelete') }}
+              </el-dropdown-item>
             </el-dropdown-menu>
           </template>
         </el-dropdown>
@@ -40,7 +46,7 @@
 
 <script setup lang="ts">
 import { ref, watch } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { Document, Folder } from '@element-plus/icons-vue'
 import { useTerminalTranslate } from '@/core/terminal/TerminalI18n'
 import type { SftpEntry, TerminalSessionDir } from '@/core/terminal/TerminalTypes'
@@ -60,8 +66,33 @@ const emit = defineEmits<{
   'load-error': [path: string, root: boolean, error?: unknown]
 }>()
 
-async function onNodeCommand(command: string, entry: SftpEntry): Promise<void> {
+function onNodeCommand(command: string, entry: SftpEntry): void {
+  if (command === 'rename') {
+    void renameEntry(entry)
+    return
+  }
+  if (command === 'delete') {
+    void deleteEntry(entry)
+    return
+  }
   if (command !== 'download') return
+  void downloadEntry(entry)
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}
+
+/** 同目录下的新路径:按 entry.path 自身的分隔符风格拼接(本机可能是 '\',远端是 '/') */
+function siblingPath(fullPath: string, name: string): string {
+  const separator = fullPath.includes('\\') ? '\\' : '/'
+  const index = fullPath.lastIndexOf(separator)
+  if (index < 0) return name
+  const directory = index === 0 ? separator : fullPath.slice(0, index)
+  return `${directory}${directory.endsWith(separator) ? '' : separator}${name}`
+}
+
+async function downloadEntry(entry: SftpEntry): Promise<void> {
   const localPath = (await window.ipcRenderer.invoke('terminal-sftp-choose-download', {
     name: entry.name,
     directory: entry.directory,
@@ -78,9 +109,59 @@ async function onNodeCommand(command: string, entry: SftpEntry): Promise<void> {
     ElMessage.error(
       t('common.terminal.fileTreeDownloadFailed', {
         name: entry.name,
-        message: error instanceof Error ? error.message : String(error),
+        message: errorMessage(error),
       }),
     )
+  }
+}
+
+async function renameEntry(entry: SftpEntry): Promise<void> {
+  try {
+    const result = await ElMessageBox.prompt(
+      t('common.terminal.fileTreeRenamePrompt', { name: entry.name }),
+      t('common.terminal.fileTreeRename'),
+      {
+        inputValue: entry.name,
+        inputValidator: (value: string) =>
+          value.trim().length > 0 && !/[/\\]/.test(value)
+            ? true
+            : t('common.terminal.fileTreeRenameInvalidName'),
+      },
+    )
+    const name = result.value.trim()
+    if (name === entry.name) return
+    await window.ipcRenderer.invoke('terminal-session-rename', {
+      sessionId: props.sessionId,
+      oldPath: entry.path,
+      newPath: siblingPath(entry.path, name),
+    })
+    ElMessage.success(t('common.terminal.fileTreeRenameDone', { name }))
+    treeKey.value += 1
+  } catch (error) {
+    if (error === 'cancel' || error === 'close') return
+    ElMessage.error(t('common.terminal.fileTreeOpFailed', { message: errorMessage(error) }))
+  }
+}
+
+async function deleteEntry(entry: SftpEntry): Promise<void> {
+  try {
+    await ElMessageBox.confirm(
+      entry.directory
+        ? t('common.terminal.fileTreeDeleteDirectoryConfirm', { name: entry.name })
+        : t('common.terminal.fileTreeDeleteFileConfirm', { name: entry.name }),
+      t('common.terminal.fileTreeDelete'),
+      { type: 'warning' },
+    )
+    await window.ipcRenderer.invoke('terminal-session-delete', {
+      sessionId: props.sessionId,
+      path: entry.path,
+      directory: entry.directory,
+    })
+    ElMessage.success(t('common.terminal.fileTreeDeleteDone', { name: entry.name }))
+    treeKey.value += 1
+  } catch (error) {
+    if (error === 'cancel' || error === 'close') return
+    ElMessage.error(t('common.terminal.fileTreeOpFailed', { message: errorMessage(error) }))
   }
 }
 
@@ -158,6 +239,8 @@ watch(
   flex: 1;
   min-width: 0;
   align-items: center;
+  /* el-tree 行高固定，行内盒要给字母下延（g/p/y）留出空间，否则被 overflow 裁掉 */
+  line-height: 1.5;
 }
 
 .terminal-file-tree__icon {
@@ -167,7 +250,11 @@ watch(
 }
 .terminal-file-tree__name {
   overflow: hidden;
+  line-height: 1.5;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.terminal-file-tree__delete-item {
+  color: var(--el-color-error);
 }
 </style>

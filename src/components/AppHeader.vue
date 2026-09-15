@@ -16,7 +16,7 @@
         @dblclick.stop
         @click="$emit('open-application-selector')"
       >
-        <LayoutDashboard :size="16" :stroke-width="1.8" aria-hidden="true" />
+        <LayoutGrid :size="16" :stroke-width="1.8" aria-hidden="true" />
       </button>
       <span v-if="contextTitle || contextPanelTitle" class="context-title">
         <span v-if="contextTitle" class="context-app-name">{{ contextTitle }}</span>
@@ -148,7 +148,7 @@ import {
   FullScreen,
   Minus,
 } from '@element-plus/icons-vue'
-import { LayoutDashboard, PanelTopOpen, Pin } from '@lucide/vue'
+import { LayoutGrid, PanelTopOpen, Pin } from '@lucide/vue'
 import { showStatusBar, showToolBar } from '@/composables/useStatusManager'
 import { getBrowserWindowService } from '@/core/window/browserWindowService'
 import { getPanelIconComponent } from '@/settings/panelIcons'

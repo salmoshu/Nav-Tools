@@ -22,6 +22,7 @@ type TerminalFileSystem = Pick<
   | 'open'
   | 'readFile'
   | 'readdir'
+  | 'rename'
   | 'rm'
   | 'stat'
   | 'writeFile'
@@ -74,6 +75,7 @@ export function createNodeTerminalServiceHost(): TerminalServiceHost {
       open: fs.open,
       readFile: fs.readFile,
       readdir: fs.readdir,
+      rename: fs.rename,
       stat: fs.stat,
       writeFile: fs.writeFile,
       copyFile: fs.copyFile,

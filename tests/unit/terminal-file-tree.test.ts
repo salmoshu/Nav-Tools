@@ -1,3 +1,5 @@
+import { existsSync } from 'node:fs'
+import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { beforeAll, describe, expect, it, vi } from 'vitest'
@@ -8,7 +10,10 @@ vi.mock('electron', () => ({
 }))
 
 import { TerminalService } from '../../electron/main/services/TerminalService'
-import { createNodeTerminalServiceHost } from '../../electron/main/services/TerminalServiceHost'
+import {
+  createNodeTerminalServiceHost,
+  type TerminalServiceHost,
+} from '../../electron/main/services/TerminalServiceHost'
 
 interface FakeSessionOptions {
   kind: 'local' | 'wsl' | 'ssh'
@@ -122,5 +127,94 @@ describe('terminal file tree listSessionPath', () => {
     } finally {
       listSftp.mockRestore()
     }
+  })
+})
+
+describe('terminal file tree renameSessionPath/deleteSessionPath', () => {
+  let service: TerminalService
+
+  beforeAll(() => {
+    service = new TerminalService(os.tmpdir(), () => {}, createNodeTerminalServiceHost())
+  })
+
+  it('renames a local file relative to the session cwd and keeps its content', async () => {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'navtools-rename-'))
+    injectSession(service, 'local-rename', { kind: 'local', cwd: dir })
+    try {
+      await fs.writeFile(path.join(dir, 'old.txt'), 'payload')
+
+      await service.renameSessionPath('local-rename', 'old.txt', 'new.txt')
+
+      await expect(fs.readFile(path.join(dir, 'new.txt'), 'utf8')).resolves.toBe('payload')
+      expect(existsSync(path.join(dir, 'old.txt'))).toBe(false)
+    } finally {
+      await fs.rm(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('deletes a local directory recursively only when the directory flag is set', async () => {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'navtools-delete-'))
+    injectSession(service, 'local-delete', { kind: 'local', cwd: dir })
+    try {
+      await fs.mkdir(path.join(dir, 'sub'))
+      await fs.writeFile(path.join(dir, 'sub', 'leaf.txt'), 'x')
+
+      await expect(service.deleteSessionPath('local-delete', 'sub', false)).rejects.toThrow()
+      await service.deleteSessionPath('local-delete', 'sub', true)
+
+      expect(existsSync(path.join(dir, 'sub'))).toBe(false)
+    } finally {
+      await fs.rm(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('rejects operations on missing sessions and missing local paths', async () => {
+    injectSession(service, 'local-missing', { kind: 'local', cwd: os.tmpdir() })
+
+    await expect(service.renameSessionPath('no-such-session', 'a', 'b')).rejects.toThrow(
+      '终端会话不存在',
+    )
+    await expect(service.deleteSessionPath('no-such-session', 'a', false)).rejects.toThrow(
+      '终端会话不存在',
+    )
+    await expect(
+      service.deleteSessionPath('local-missing', 'definitely-not-there.txt', false),
+    ).rejects.toThrow()
+  })
+
+  it('dispatches SSH rename/delete to the SFTP channel with resolved posix paths', async () => {
+    injectSession(service, 'ssh-ops', { kind: 'ssh', cwd: '/workspace' })
+    const rename = vi.spyOn(service, 'sftpRename').mockResolvedValue()
+    const remove = vi.spyOn(service, 'sftpRemove').mockResolvedValue()
+    try {
+      await service.renameSessionPath('ssh-ops', 'a.txt', 'dir/b.txt')
+      await service.deleteSessionPath('ssh-ops', 'dir', true)
+
+      expect(rename).toHaveBeenCalledWith('ssh-ops', '/workspace/a.txt', '/workspace/dir/b.txt')
+      expect(remove).toHaveBeenCalledWith('ssh-ops', '/workspace/dir')
+    } finally {
+      rename.mockRestore()
+      remove.mockRestore()
+    }
+  })
+
+  it('forwards WSL rename/delete to wsl.exe sh with posix-quoted paths', async () => {
+    const executeFile = vi.fn<TerminalServiceHost['executeFile']>(async () => Buffer.from(''))
+    const wslService = new TerminalService(os.tmpdir(), () => {}, {
+      ...createNodeTerminalServiceHost(),
+      executeFile,
+    })
+    injectSession(wslService, 'wsl-ops', { kind: 'wsl', wslDistro: 'Ubuntu', cwd: '/home/robot' })
+
+    await wslService.renameSessionPath('wsl-ops', 'a.txt', 'b.txt')
+    await wslService.deleteSessionPath('wsl-ops', 'old dir', true)
+
+    expect(executeFile).toHaveBeenCalledTimes(2)
+    const renameCall = executeFile.mock.calls[0]
+    expect(renameCall?.[0]).toBe('wsl.exe')
+    expect(renameCall?.[1].slice(0, 5)).toEqual(['--distribution', 'Ubuntu', '--', 'sh', '-c'])
+    expect(renameCall?.[1][5]).toBe(`mv -- '/home/robot/a.txt' '/home/robot/b.txt'`)
+    const deleteCall = executeFile.mock.calls[1]
+    expect(deleteCall?.[1][5]).toBe(`rm -r -- '/home/robot/old dir'`)
   })
 })

@@ -11,7 +11,7 @@ import {
   readMcapFromPaths,
   type LoadedMcapBytes,
 } from '@/core/lidar/McapFileAccess'
-import { McapRecentFiles } from '@/core/lidar/McapRecentFiles'
+import { RecentInputFiles } from '@/core/file/RecentInputFiles'
 import { JsonStorage } from '@/core/storage/JsonStorage'
 import { LIDAR_TOPICS } from '@/core/lidar/SceneFrame'
 import type { CurrentFrame, CurrentMessage, DwaScores, LidarPlotSeries } from '@/core/lidar/types'
@@ -36,7 +36,7 @@ const series = shallowRef<LidarPlotSeries | null>(null)
 const followRobot = ref(true)
 const topicVisibility = ref<Record<string, boolean>>({})
 
-const recentStore = new McapRecentFiles(new JsonStorage(localStorage))
+const recentStore = new RecentInputFiles(new JsonStorage(localStorage))
 const prefsStorage = new JsonStorage(localStorage)
 
 // —— 偏好持久化（速度/循环/跟随/话题可见性） ——
@@ -78,7 +78,8 @@ function savePrefsDebounced(): void {
 loadPrefs()
 watch([speed, loop, followRobot, topicVisibility], savePrefsDebounced, { deep: true })
 
-// —— LiDAR 面板消费者计数：没有任何 LiDAR 面板挂载时，禁用全局快捷键并自动暂停 ——
+// —— LiDAR 面板消费者计数：仅用于全局快捷键的作用域门控（没有任何 LiDAR 面板
+// 挂载时快捷键不响应）。播放本身不随面板/应用切换暂停——切走再切回时动画继续。
 let panelConsumers = 0
 
 /** 供 LiDAR 各面板在 setup 中调用：注册一个可见消费者，卸载时自动释放。 */
@@ -86,10 +87,6 @@ export function useLidarPanelPresence(): void {
   panelConsumers++
   onUnmounted(() => {
     panelConsumers = Math.max(0, panelConsumers - 1)
-    if (panelConsumers === 0) {
-      clockRef.value?.pause()
-      playing.value = false
-    }
   })
 }
 

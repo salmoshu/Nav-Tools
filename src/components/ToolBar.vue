@@ -272,13 +272,13 @@
             </div>
           </template>
           <div
-            v-if="mcapRecentFiles.length > 0"
+            v-if="recentInputFiles.length > 0"
             class="input-group compact-input-group mcap-recent-group"
           >
-            <span class="input-label">{{ t('app.toolbar.mcapRecent') }}</span>
+            <span class="input-label">{{ t('app.toolbar.recentFiles') }}</span>
             <div class="mcap-recent-list">
               <button
-                v-for="item in mcapRecentFiles"
+                v-for="item in recentInputFiles"
                 :key="item.path"
                 type="button"
                 class="mcap-recent-item"
@@ -286,13 +286,16 @@
                 :disabled="fileInputLoading"
                 @click="selectFilePath(item.path)"
               >
-                <span class="mcap-recent-name">
-                  {{ item.name
-                  }}<template v-if="(item.paths?.length ?? 0) > 1"
-                    >（{{
-                      t('lidar.playback.partCount', { count: item.paths!.length })
-                    }}）</template
-                  >
+                <span class="mcap-recent-text">
+                  <span class="mcap-recent-name">
+                    {{ item.name
+                    }}<template v-if="(item.paths?.length ?? 0) > 1"
+                      >（{{
+                        t('lidar.playback.partCount', { count: item.paths!.length })
+                      }}）</template
+                    >
+                  </span>
+                  <span class="mcap-recent-path">{{ item.path }}</span>
                 </span>
                 <span class="mcap-recent-size">{{ formatMcapSize(item.sizeBytes) }}</span>
               </button>
@@ -565,7 +568,7 @@ import { useFileTimeline } from '@/composables/useFileTimeline'
 import FileTimelineControl from '@/components/FileTimelineControl.vue'
 import LidarTimelineControl from '@/components/LidarTimelineControl.vue'
 import { useMcapPlayer } from '@/composables/useMcapPlayer'
-import { McapRecentFiles } from '@/core/lidar/McapRecentFiles'
+import { RecentInputFiles } from '@/core/file/RecentInputFiles'
 import { JsonStorage } from '@/core/storage/JsonStorage'
 import { createRecordRegex } from '@/core/data/TextRecordParser'
 import { t } from '@/i18n'
@@ -583,15 +586,15 @@ const fileTimelineActive = computed(
     currentWindows.value.some((windowDefinition) => windowDefinition.funcMode === 'gnss'),
 )
 
-// 文件输入中的 MCAP 回放与最近录像。
+// 文件输入中的 MCAP 回放与最近文件（覆盖所有支持的输入类型）。
 const mcapPlayer = useMcapPlayer()
 const lidarTimelineActive = computed(
   () =>
     mcapPlayer.status.value === 'ready' &&
     currentWindows.value.some((windowDefinition) => windowDefinition.catalogGroup === 'lidar'),
 )
-const mcapRecentStore = new McapRecentFiles(new JsonStorage(localStorage))
-const mcapRecentFiles = ref(mcapRecentStore.list())
+const recentInputFilesStore = new RecentInputFiles(new JsonStorage(localStorage))
+const recentInputFiles = ref(recentInputFilesStore.list())
 function formatMcapSize(bytes: number): string {
   if (!Number.isFinite(bytes) || bytes < 0) return '-'
   if (bytes < 1024) return `${bytes} B`
@@ -675,7 +678,7 @@ const {
   toggleLogRecording,
 } = deviceInstance
 watch([showInputDialog, mcapPlayer.status], () => {
-  mcapRecentFiles.value = mcapRecentStore.list()
+  recentInputFiles.value = recentInputFilesStore.list()
 })
 const serialPortsRefreshing = ref(false)
 
@@ -2099,7 +2102,7 @@ onUnmounted(() => {
   }
 }
 
-/* 文件输入中的最近录像 */
+/* 文件输入中的最近文件 */
 
 .mcap-recent-group {
   align-items: flex-start;
@@ -2140,9 +2143,23 @@ onUnmounted(() => {
   border-color: color-mix(in srgb, var(--el-color-primary) 30%, var(--app-border));
 }
 
-.mcap-recent-name {
+.mcap-recent-text {
+  display: flex;
+  min-width: 0;
   flex: 1;
+  flex-direction: column;
+}
+
+.mcap-recent-name {
   overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mcap-recent-path {
+  overflow: hidden;
+  color: var(--app-text-muted);
+  font-size: 11px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -2161,6 +2178,7 @@ onUnmounted(() => {
 }
 
 .mcap-hint {
+  margin: 6px 0 8px;
   padding: 8px 10px;
   color: var(--app-text-muted);
   font-size: 12px;

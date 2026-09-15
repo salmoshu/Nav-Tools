@@ -76,7 +76,7 @@ Nav-Tools：  拖拽（可多文件）/ 对话框（可多选）/ 最近文件 �
 | 纯逻辑 | `src/core/lidar/LidarGeometry.ts` | 消息结构守卫 + 点云/轨迹/多边形提取 + 平面变换 |
 | 纯逻辑 | `src/core/lidar/SceneFrame.ts` | 播放帧 → 世界系渲染几何（含里程计轨迹降采样） |
 | 纯逻辑 | `src/core/lidar/LidarSeries.ts` | 绘图序列预提取（cmd/odom/scores） |
-| 纯逻辑 | `src/core/lidar/DwaScores.ts`、`PlayerClock.ts`、`timeFormat.ts`、`McapFileAccess.ts`、`McapRecentFiles.ts` | 评分解析 / 回放时钟 / 时间格式化 / 平台文件接入 / 最近文件 |
+| 纯逻辑 | `src/core/lidar/DwaScores.ts`、`PlayerClock.ts`、`timeFormat.ts`、`McapFileAccess.ts`、`src/core/file/RecentInputFiles.ts` | 评分解析 / 回放时钟 / 时间格式化 / 平台文件接入 / 统一最近文件（含旧 MCAP 键迁移） |
 | Store | `src/composables/useMcapPlayer.ts` | 单例播放器：加载/播放/seek/步进/偏好持久化/全局快捷键 |
 | 渲染 | `src/components/windows/lidar/scene/LidarSceneRenderer.ts` | three.js 封装（点云着色、轨迹、轮廓、goal、跟随相机、主题） |
 | 面板 | `LidarScene.vue` 等 4 个 + `JsonTreeNode.vue` | 注册于 `panelRegistry`，`catalogGroup: 'lidar'` |
@@ -105,8 +105,8 @@ Electron+React），无法作为组件嵌入 Vue 应用；但其核心能力来�
 - Raw Messages 检查器（JSON 树、大数组折叠、复制）；
 - 布局持久化（经由 Nav-Tools 既有应用/布局系统，等价于 Foxglove layout 入库）；
 - 键盘快捷键（Space/←→/Shift+←→/Home/End），仅在有 LiDAR 面板打开时生效，
-  且对输入框/滑块/按钮等可编辑控件不劫持；无 LiDAR 面板打开时播放循环自动
-  暂停，不空转；
+  且对输入框/滑块/按钮等可编辑控件不劫持；播放不随面板/应用切换暂停，
+  切走再切回时动画从中断处继续；
 - 话题可见性开关直接读写播放器偏好（单一数据源），场景面板不持有本地副本；
 - 加载问题（problems）与会话 Metadata（板上指纹）展示。
 

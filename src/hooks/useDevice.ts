@@ -26,7 +26,8 @@ import {
 } from '@/core/serial/SerialService'
 import emitter from '@/hooks/useMitt'
 import { useMcapPlayer } from '@/composables/useMcapPlayer'
-import { McapRecentFiles } from '@/core/lidar/McapRecentFiles'
+import { RecentInputFiles } from '@/core/file/RecentInputFiles'
+import { mcapBasename } from '@/core/lidar/McapFileAccess'
 import { JsonStorage } from '@/core/storage/JsonStorage'
 import { useDataSourceManager } from '@/composables/useDataSourceManager'
 import type { TextDataParser } from '@/core/data/DataSourceStorage'
@@ -134,6 +135,8 @@ const selectedFiles = ref<File[]>([])
 const selectedFile = computed(() => selectedFiles.value[0] ?? null)
 const selectedFilePath = ref('')
 const isMcapPath = (path: string) => path.trim().toLowerCase().endsWith('.mcap')
+// 文件输入按扩展名自适应分发：.mcap 走 LiDAR 时间轴，以下文本类型走文本解析器
+const TEXT_FILE_EXTENSIONS = ['txt', 'csv', 'dat', 'log', 'nmea']
 const fileIsMcap = computed(() => isMcapPath(filePath.value))
 const selectedFileCount = computed(() =>
   selectedFilePath.value === filePath.value.trim() ? selectedFiles.value.length : 0,
@@ -627,7 +630,7 @@ export function useDevice() {
   const showInputDialog = ref(false)
   const activeTab = ref<'serial' | 'file' | 'network'>(dataSourceSettings.activeSource)
   const fileInputLoading = ref(false)
-  const mcapRecentStore = new McapRecentFiles(new JsonStorage(localStorage))
+  const recentInputFilesStore = new RecentInputFiles(new JsonStorage(localStorage))
   let dataSourceSnapshot: typeof dataSourceSettings | undefined
   let dataSourceChangesCommitted = false
 
@@ -782,6 +785,7 @@ export function useDevice() {
             selectedFiles.value = [file]
             selectedFilePath.value = droppedPath
             filePath.value = droppedPath
+            recentInputFilesStore.record({ path: droppedPath, name: file.name, sizeBytes: file.size })
             globalDevice.value = {
               type: 'file',
               path: droppedPath,
@@ -1041,6 +1045,12 @@ export function useDevice() {
       return ''
     }
 
+    recentInputFilesStore.record({
+      path: fileCmd,
+      name: mcapBasename(fileCmd),
+      sizeBytes: selectedFilePath.value === fileCmd ? (selectedFile.value?.size ?? 0) : 0,
+    })
+
     // 设置全局设备信息
     globalDevice.value = {
       type: 'file',
@@ -1236,7 +1246,7 @@ export function useDevice() {
     if (activeTab.value === 'file' && fileIsMcap.value) {
       const path = filePath.value.trim()
       const files = selectedFilePath.value === path ? selectedFiles.value : []
-      const recent = mcapRecentStore.list().find((item) => item.path === path)
+      const recent = recentInputFilesStore.list().find((item) => item.path === path)
       fileInputLoading.value = true
       try {
         const ok =
@@ -1262,6 +1272,20 @@ export function useDevice() {
         fileInputLoading.value = false
       }
       return
+    }
+    // 文件页签的自适应分发门控：带扩展名且不属于文本类型的文件不应进入文本解析流程
+    if (activeTab.value === 'file') {
+      const path = filePath.value.trim()
+      const extension = /\.([a-z0-9]+)$/i.exec(path)?.[1]?.toLowerCase()
+      if (extension && !TEXT_FILE_EXTENSIONS.includes(extension)) {
+        ElMessage({
+          message: t('data.fileTypeUnsupported', { name: mcapBasename(path) }),
+          type: 'warning',
+          placement: 'bottom-right',
+          offset: 50,
+        })
+        return
+      }
     }
     if (sourceParser.value === 'regex') {
       try {
