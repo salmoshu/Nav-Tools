@@ -363,6 +363,8 @@ export default {
     fileTreeDownload: '下载到本机…',
     fileTreeDownloadDone: '已下载：{name}',
     fileTreeDownloadFailed: '下载失败：{message}',
+    fileTreeCopyPath: '复制路径',
+    fileTreeCopyPathDone: '路径已复制：{path}',
     fileTreeRename: '重命名…',
     fileTreeRenamePrompt: '输入 {name} 的新名称',
     fileTreeRenameInvalidName: '名称不能为空，且不能包含 / 或 \\',

@@ -366,6 +366,8 @@ export default {
     fileTreeDownload: 'Download to local…',
     fileTreeDownloadDone: 'Downloaded: {name}',
     fileTreeDownloadFailed: 'Download failed: {message}',
+    fileTreeCopyPath: 'Copy path',
+    fileTreeCopyPathDone: 'Path copied: {path}',
     fileTreeRename: 'Rename…',
     fileTreeRenamePrompt: 'Enter a new name for {name}',
     fileTreeRenameInvalidName: 'Name must not be empty or contain / or \\',

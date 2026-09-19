@@ -42,6 +42,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
     timeoutS: number
   }) => ipcRenderer.invoke('camera-script-run', request),
   cameraScriptStop: () => ipcRenderer.invoke('camera-script-stop'),
+  openFileDialog: (request?: {
+    scope?: string
+    filters?: { name: string; extensions: string[] }[]
+    multi?: boolean
+  }) => ipcRenderer.invoke('open-file-dialog', request),
   checkForUpdates: () => ipcRenderer.invoke('update-check'),
   downloadUpdate: () => ipcRenderer.invoke('update-download'),
   quitAndInstall: () => ipcRenderer.invoke('update-quit-and-install'),

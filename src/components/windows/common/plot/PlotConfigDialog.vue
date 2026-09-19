@@ -102,14 +102,7 @@
     <template #footer>
       <div class="config-dialog-footer">
         <div class="config-dialog-footer__secondary">
-          <input
-            ref="fileInput"
-            type="file"
-            accept=".json"
-            hidden
-            @change="handleConfigFileUpload"
-          />
-          <el-button @click="fileInput?.click()">导入配置</el-button>
+          <el-button @click="importConfig">导入配置</el-button>
           <el-button @click="exportConfigFile">导出配置</el-button>
         </div>
         <div class="config-dialog-footer__primary">
@@ -185,22 +178,20 @@ function setConfigValue(config: ConfigRecord, key: string, value: unknown): void
   if (config[key]) config[key].value = value
 }
 
-function handleConfigFileUpload(event: Event): void {
-  const target = event.target as HTMLInputElement
-  const file = target.files?.[0]
-  if (!file) return
-
-  const reader = new FileReader()
-  reader.onload = loadEvent => {
-    try {
-      props.validateAndApplyConfig(JSON.parse(String(loadEvent.target?.result ?? '')))
-      ElMessage({ message: '配置导入成功', type: 'success', placement: 'bottom-right', offset: 50 })
-    } catch {
-      ElMessage({ message: '配置文件解析失败，请检查格式是否正确', type: 'error', placement: 'bottom-right', offset: 50 })
-    }
+async function importConfig(): Promise<void> {
+  try {
+    const paths = (await window.ipcRenderer.invoke('open-file-dialog', {
+      scope: 'plot-config',
+      filters: [{ name: 'JSON', extensions: ['json'] }],
+    })) as string[] | null
+    const picked = paths?.[0]
+    if (!picked) return
+    const content = await window.ipcRenderer.invoke('read-file-utf8', picked)
+    props.validateAndApplyConfig(JSON.parse(String(content)))
+    ElMessage({ message: '配置导入成功', type: 'success', placement: 'bottom-right', offset: 50 })
+  } catch {
+    ElMessage({ message: '配置文件解析失败，请检查格式是否正确', type: 'error', placement: 'bottom-right', offset: 50 })
   }
-  reader.readAsText(file)
-  target.value = ''
 }
 </script>
 

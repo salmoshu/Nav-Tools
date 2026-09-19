@@ -38,6 +38,11 @@ export class NetworkService {
     return this.ipc.invoke<void>('close-network-connection')
   }
 
+  /** 终止正在进行的连接尝试(连接中点击开关的语义) */
+  public cancelPending(): Promise<void> {
+    return this.ipc.invoke<void>('network-connect-cancel')
+  }
+
   public onData(listener: (data: string) => void): () => void {
     return this.ipc.on('network-data-to-renderer', (_event, data) => listener(String(data)))
   }

@@ -837,14 +837,6 @@
         </div>
       </el-tab-pane>
     </el-tabs>
-    <input
-      ref="scriptFileInput"
-      type="file"
-      accept=".sh"
-      class="script-file-input"
-      @change="onScriptFileChange"
-    />
-
     <el-dialog
       v-model="showCommandHelp"
       :title="t('common.camera.commandHelpTitle')"
@@ -1399,7 +1391,6 @@ type CameraScriptEvent =
     }
   | { type: 'output'; text: string }
 
-const scriptFileInput = ref<HTMLInputElement | null>(null)
 const scriptPath = ref('')
 const scriptFileName = computed(() => scriptPath.value.split(/[\\/]/).pop() ?? '')
 const scriptTimeoutS = ref(120)
@@ -1428,20 +1419,21 @@ const scriptStateText = computed(() => {
 
 const scriptOutputText = computed(() => scriptLogs.value.join(''))
 
-function pickScriptFile() {
-  scriptFileInput.value?.click()
-}
-
-function onScriptFileChange(event: Event) {
-  const input = event.target as HTMLInputElement
-  const file = input.files?.[0]
-  if (file && !file.name.toLowerCase().endsWith('.sh')) {
-    ElMessage.warning(t('common.camera.script.onlyShell'))
-    input.value = ''
+async function pickScriptFile() {
+  if (!window.electronAPI?.openFileDialog) {
+    ElMessage.error(t('common.camera.errTcpNotSupported'))
     return
   }
-  if (file) scriptPath.value = window.electronAPI?.getPathForFile(file) || ''
-  input.value = ''
+  try {
+    const paths = await window.electronAPI.openFileDialog({
+      scope: 'camera-script',
+      filters: [{ name: 'Shell', extensions: ['sh'] }],
+    })
+    if (!paths || paths.length === 0) return
+    scriptPath.value = paths[0]
+  } catch (error) {
+    reportCalibrationError(error)
+  }
 }
 
 function appendScriptOutput(text: string) {

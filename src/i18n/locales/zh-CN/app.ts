@@ -36,6 +36,7 @@ export default {
     exportConfigurationFailed: '配置导出失败',
     connect: '连接设备',
     disconnect: '断开连接',
+    connectCancel: '终止当前连接',
     recordLog: '录制日志',
     stopRecord: '停止录制',
     stopRecordPath: '停止录制：{v}',

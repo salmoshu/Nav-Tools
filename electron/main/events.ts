@@ -1,5 +1,5 @@
 import fs from 'node:fs'
-import { dialog, type IpcMainEvent, type IpcMainInvokeEvent } from 'electron'
+import { BrowserWindow, type IpcMainEvent, type IpcMainInvokeEvent } from 'electron'
 import { SerialPortService, type SerialPortOptions } from './services/SerialPortService'
 import { IapUpgradeService } from './services/IapUpgradeService'
 import type { IapUpgradeRequest } from '../../src/core/iap/IapUpgrade'
@@ -14,6 +14,7 @@ import {
 } from './services/CameraCommandService'
 import { CameraCalibrationService } from './services/CameraCalibrationService'
 import { CameraSshMeasurementChannel } from './services/CameraSshMeasurementChannel'
+import { chooseOpenFiles } from './dialogs'
 import { ReadParamsSniffer, type CameraParamSnapshot } from '../../src/core/camera/CameraParamReadback'
 
 const serialService = new SerialPortService()
@@ -101,6 +102,7 @@ const eventsMap = {
   'serial-data-format': changeSerialDataFormat,
   'open-network-connection': openNetworkConnection,
   'close-network-connection': closeNetworkConnection,
+  'network-connect-cancel': cancelNetworkConnect,
   'send-network-hex-data': sendNetworkHexData,
   'send-network-ascii-data': sendNetworkAsciiData,
   'camera-command-send': sendCameraCommand,
@@ -110,6 +112,7 @@ const eventsMap = {
   'iap-upgrade-cancel': cancelIapUpgrade,
   'iap-upgrade-snapshot': getIapUpgradeSnapshot,
   'open-file-dialog': openFileDialog,
+  'read-file-utf8': readFileUtf8,
   'read-file-event': readFileEvent,
 }
 
@@ -164,6 +167,10 @@ function openNetworkConnection(event: IpcMainInvokeEvent, options: NetworkConnec
       event.sender.send('network-disconnected', { ...connection, reason })
     },
   })
+}
+
+function cancelNetworkConnect() {
+  networkService.cancelPending()
 }
 
 function closeNetworkConnection() {
@@ -222,11 +229,19 @@ function getIapUpgradeSnapshot() {
   return iapUpgradeService.getSnapshot()
 }
 
-function openFileDialog() {
-  return dialog.showOpenDialog({
-    properties: ['openFile'],
-    filters: [{ name: '所有文件', extensions: ['*'] }],
+function openFileDialog(
+  event: IpcMainInvokeEvent,
+  request?: { scope?: string; filters?: { name: string; extensions: string[] }[]; multi?: boolean },
+) {
+  const target = BrowserWindow.fromWebContents(event.sender)
+  return chooseOpenFiles(target, request?.scope ?? '', {
+    filters: request?.filters,
+    multi: request?.multi === true,
   })
+}
+
+function readFileUtf8(_event: IpcMainInvokeEvent, filePath: string): Promise<string> {
+  return fs.promises.readFile(filePath, 'utf8')
 }
 
 async function readFileEvent(event: IpcMainInvokeEvent, filePath: string) {

@@ -36,6 +36,7 @@ export default {
     exportConfigurationFailed: 'Failed to export configuration',
     connect: 'Connect Device',
     disconnect: 'Disconnect',
+    connectCancel: 'Abort current connection',
     recordLog: 'Record Log',
     stopRecord: 'Stop Recording',
     stopRecordPath: 'Stop Recording: {v}',

@@ -75,6 +75,11 @@ interface Window {
       timeoutS: number
     }) => Promise<{ ok: boolean }>
     cameraScriptStop: () => Promise<void>
+    openFileDialog: (request?: {
+      scope?: string
+      filters?: { name: string; extensions: string[] }[]
+      multi?: boolean
+    }) => Promise<string[] | null>
     checkForUpdates: () => Promise<void>
     downloadUpdate: () => Promise<void>
     quitAndInstall: () => Promise<void>

@@ -353,18 +353,26 @@ function applyTemplate(id: string): void {
   if (template) Object.assign(config, cloneIapConfig(template.config))
 }
 
-function selectFirmware(): void {
-  const input = document.createElement('input')
-  input.type = 'file'
-  input.accept = '.bin,.hex,.img,.fw,*/*'
-  input.onchange = () => {
-    const file = input.files?.[0]
-    if (!file) return
-    firmwareName.value = file.name
-    firmwarePath.value = window.electronAPI?.getPathForFile(file) || ''
-    if (!firmwarePath.value) ElMessage.error(t('common.iap.desktopOnly'))
+async function selectFirmware(): Promise<void> {
+  if (!window.electronAPI?.openFileDialog) {
+    ElMessage.error(t('common.iap.desktopOnly'))
+    return
   }
-  input.click()
+  try {
+    const paths = await window.electronAPI.openFileDialog({
+      scope: 'iap-firmware',
+      filters: [
+        { name: 'Firmware', extensions: ['bin', 'hex', 'img', 'fw'] },
+        { name: 'All', extensions: ['*'] },
+      ],
+    })
+    const picked = paths?.[0]
+    if (!picked) return
+    firmwarePath.value = picked
+    firmwareName.value = picked.split(/[\\/]/).pop() ?? picked
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : String(error))
+  }
 }
 
 async function saveTemplate(): Promise<void> {
@@ -413,26 +421,26 @@ function exportTemplates(): void {
   URL.revokeObjectURL(url)
 }
 
-function importTemplates(): void {
-  const input = document.createElement('input')
-  input.type = 'file'
-  input.accept = '.json,application/json'
-  input.onchange = async () => {
-    const file = input.files?.[0]
-    if (!file) return
-    try {
-      const imported = profileStorage.importJson(await file.text())
-      templates.value = profileStorage.list()
-      if (imported[0]) {
-        selectedTemplateId.value = imported[0].id
-        applyTemplate(imported[0].id)
-      }
-      ElMessage.success(t('common.iap.imported'))
-    } catch (error) {
-      ElMessage.error(error instanceof Error ? error.message : String(error))
+async function importTemplates(): Promise<void> {
+  if (!window.electronAPI?.openFileDialog) return
+  try {
+    const paths = await window.electronAPI.openFileDialog({
+      scope: 'iap-config',
+      filters: [{ name: 'JSON', extensions: ['json'] }],
+    })
+    const picked = paths?.[0]
+    if (!picked) return
+    const content = await window.ipcRenderer.invoke('read-file-utf8', picked)
+    const imported = profileStorage.importJson(String(content))
+    templates.value = profileStorage.list()
+    if (imported[0]) {
+      selectedTemplateId.value = imported[0].id
+      applyTemplate(imported[0].id)
     }
+    ElMessage.success(t('common.iap.imported'))
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : String(error))
   }
-  input.click()
 }
 
 async function startUpgrade(): Promise<void> {

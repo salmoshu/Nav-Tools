@@ -132,6 +132,7 @@ const fileReplaySpeed = toRef(dataSourceSettings.file, 'replaySpeed')
 const fileStartOffset = toRef(dataSourceSettings.file, 'startOffset')
 const filePositionBytes = toRef(dataSourceSettings.file, 'filePositionBytes')
 const selectedFiles = ref<File[]>([])
+const selectedPaths = ref<string[]>([])
 const selectedFile = computed(() => selectedFiles.value[0] ?? null)
 const selectedFilePath = ref('')
 const isMcapPath = (path: string) => path.trim().toLowerCase().endsWith('.mcap')
@@ -139,7 +140,9 @@ const isMcapPath = (path: string) => path.trim().toLowerCase().endsWith('.mcap')
 const TEXT_FILE_EXTENSIONS = ['txt', 'csv', 'dat', 'log', 'nmea']
 const fileIsMcap = computed(() => isMcapPath(filePath.value))
 const selectedFileCount = computed(() =>
-  selectedFilePath.value === filePath.value.trim() ? selectedFiles.value.length : 0,
+  selectedFilePath.value === filePath.value.trim()
+    ? selectedFiles.value.length || selectedPaths.value.length
+    : 0,
 )
 const serialPorts = ref<string[]>([])
 const logRecordingActive = ref(false)
@@ -236,6 +239,8 @@ function currentNetworkOptions(): NetworkConnectionOptions | undefined {
 // 手动关闭/移除设备或关闭 loop 时取消调度
 const NETWORK_RECONNECT_DELAY_MS = 3000
 let networkReconnectTimer: ReturnType<typeof setTimeout> | null = null
+// 「连接中点击开关 = 终止连接」的取消标记: 令 open() 的失败回调静默
+let networkConnectCancelled = false
 
 function cancelNetworkReconnect(): void {
   if (networkReconnectTimer) {
@@ -259,6 +264,14 @@ function scheduleNetworkReconnect(): void {
       openNetworkDevice()
     }
   }, NETWORK_RECONNECT_DELAY_MS)
+}
+
+function cancelNetworkConnect(): void {
+  if (globalDevice.value.connecting !== true) return
+  networkConnectCancelled = true
+  globalDevice.value.connecting = false
+  globalDevice.value.connected = false
+  void networkService.cancelPending()
 }
 
 function openNetworkDevice(): void {
@@ -285,12 +298,20 @@ function openNetworkDevice(): void {
     .catch((error) => {
       globalDevice.value.connecting = false
       globalDevice.value.connected = false
-      ElMessage({
-        message: error instanceof Error ? error.message : String(error),
-        type: 'error',
-        placement: 'bottom-right',
-        offset: 50,
-      })
+      // 用户主动终止: 不提示、不进入循环重连调度
+      if (networkConnectCancelled) {
+        networkConnectCancelled = false
+        return
+      }
+      // 循环重连模式下连接失败属预期, 静默重试, 不再反复弹框
+      if (!networkLoop.value) {
+        ElMessage({
+          message: error instanceof Error ? error.message : String(error),
+          type: 'error',
+          placement: 'bottom-right',
+          offset: 50,
+        })
+      }
       scheduleNetworkReconnect()
     })
 }
@@ -352,14 +373,17 @@ networkService.onDisconnected((connection) => {
 
   globalDevice.value.connected = false
   activeDataTransport.clear('network')
-  ElMessage({
-    message:
-      connection.reason ||
-      t('data.netDisconnected', { protocol: connection.protocol.toUpperCase() }),
-    type: 'warning',
-    placement: 'bottom-right',
-    offset: 50,
-  })
+  // 循环重连模式下断线属预期, 静默重试
+  if (!networkLoop.value) {
+    ElMessage({
+      message:
+        connection.reason ||
+        t('data.netDisconnected', { protocol: connection.protocol.toUpperCase() }),
+      type: 'warning',
+      placement: 'bottom-right',
+      offset: 50,
+    })
+  }
   scheduleNetworkReconnect()
 })
 
@@ -987,47 +1011,30 @@ export function useDevice() {
   // 路径/最近文件选择清除浏览器 File 引用，避免读到上一次选择的文件。
   const selectFilePath = (path: string) => {
     selectedFiles.value = []
+    selectedPaths.value = []
     selectedFilePath.value = ''
     filePath.value = path
   }
 
   // 文件输入统一选择文本文件或同一会话的 MCAP 分片，确认时按扩展名分发。
-  const selectTargetFile = () => {
-    // 创建一个隐藏的文件输入元素
-    const fileInput = document.createElement('input')
-    fileInput.type = 'file'
-    fileInput.accept = '.txt,.csv,.dat,.log,.mcap'
-    fileInput.multiple = true
-    fileInput.style.display = 'none'
-
-    // 添加到文档中
-    document.body.appendChild(fileInput)
-
-    // 设置文件选择后的回调
-    fileInput.onchange = (event) => {
-      const target = event.target as HTMLInputElement
-      const files = Array.from(target.files ?? [])
-      const file = files[0]
-      if (files.length > 1 && !files.every((item) => isMcapPath(item.name))) {
-        ElMessage.warning(t('app.toolbar.fileSelectionMixed'))
-        fileInput.remove()
-        return
-      }
-      if (file) {
-        // Electron 32+ 通过 preload 的 webUtils 获取文件系统路径。
-        filePath.value = window.electronAPI?.getPathForFile(file) || file.name
-        selectedFilePath.value = filePath.value
-
-        selectedFiles.value = files
-      }
-
-      // 移除临时元素
-      document.body.removeChild(fileInput)
+  // 使用带 scope 记忆的原生对话框: 数据接入的上次目录独立于其它模块记忆。
+  const selectTargetFile = async () => {
+    if (!window.electronAPI?.openFileDialog) return
+    selectedFiles.value = []
+    selectedPaths.value = []
+    const paths = (await window.electronAPI.openFileDialog({
+      scope: 'data-access-file',
+      filters: [{ name: 'Log / MCAP', extensions: ['txt', 'csv', 'dat', 'log', 'mcap'] }],
+      multi: true,
+    })) as string[] | null
+    if (!paths || paths.length === 0) return
+    if (paths.length > 1 && !paths.every((item) => isMcapPath(item))) {
+      ElMessage.warning(t('app.toolbar.fileSelectionMixed'))
+      return
     }
-    fileInput.oncancel = () => fileInput.remove()
-
-    // 触发文件选择对话框
-    fileInput.click()
+    filePath.value = paths[0]
+    selectedFilePath.value = paths[0]
+    selectedPaths.value = paths
   }
 
   // 添加一个响应式变量来存储选择的文件对象
@@ -1246,15 +1253,18 @@ export function useDevice() {
     if (activeTab.value === 'file' && fileIsMcap.value) {
       const path = filePath.value.trim()
       const files = selectedFilePath.value === path ? selectedFiles.value : []
+      const pathList = selectedFilePath.value === path ? selectedPaths.value : []
       const recent = recentInputFilesStore.list().find((item) => item.path === path)
       fileInputLoading.value = true
       try {
         const ok =
           files.length > 0
             ? await mcapPlayer.loadFromFiles(files)
-            : recent?.paths?.length
-              ? await mcapPlayer.loadFromPaths(recent.paths)
-              : await mcapPlayer.loadFromPath(path)
+            : pathList.length > 1
+              ? await mcapPlayer.loadFromPaths(pathList)
+              : recent?.paths?.length
+                ? await mcapPlayer.loadFromPaths(recent.paths)
+                : await mcapPlayer.loadFromPath(path)
         if (!ok) {
           if (mcapPlayer.status.value === 'error') throw new Error(mcapPlayer.errorText.value)
           return
@@ -1380,6 +1390,7 @@ export function useDevice() {
     handleInputSubmit,
     inputDialog,
     openCurrDevice,
+    cancelNetworkConnect,
     closeCurrDevice,
     removeCurrDevice,
     toggleLogRecording,

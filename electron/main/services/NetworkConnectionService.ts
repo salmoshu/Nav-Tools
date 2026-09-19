@@ -30,13 +30,39 @@ export class NetworkConnectionService {
     return () => this.rawDataListeners.delete(listener)
   }
 
+  private connecting = false
+  private cancelOpen: ((error: Error) => void) | undefined
+
   public async open(options: NetworkConnectionOptions, callbacks: NetworkCallbacks): Promise<void> {
     await this.close()
     this.currentOptions = { ...options, host: options.host.trim() }
     this.intentionalClose = false
+    this.connecting = true
+    const resolvedOptions = this.currentOptions
+    try {
+      await new Promise<void>((resolve, reject) => {
+        this.cancelOpen = (error: Error) => reject(error)
+        if (resolvedOptions.protocol === 'tcp') void this.openTcp(resolvedOptions, callbacks, resolve, reject)
+        else void this.openUdp(resolvedOptions, callbacks, resolve, reject)
+      })
+    } finally {
+      this.connecting = false
+      this.cancelOpen = undefined
+    }
+  }
 
-    if (options.protocol === 'tcp') await this.openTcp(this.currentOptions, callbacks)
-    else await this.openUdp(this.currentOptions, callbacks)
+  /** 终止正在进行的连接尝试: 摧毁底层 socket 并让 open() 以取消错误结束 */
+  public cancelPending(): void {
+    if (!this.connecting) return
+    this.intentionalClose = true
+    const cancel = this.cancelOpen
+    this.tcpSocket?.destroy()
+    this.udpSocket?.close(() => undefined)
+    cancel?.(new Error('已取消连接'))
+    this.connecting = false
+    this.tcpSocket = undefined
+    this.udpSocket = undefined
+    this.currentOptions = undefined
   }
 
   public async close(): Promise<void> {
@@ -104,80 +130,102 @@ export class NetworkConnectionService {
     throw new Error('网络连接不可用；UDP 需要先接收到一个远端数据包')
   }
 
-  private openTcp(options: NetworkConnectionOptions, callbacks: NetworkCallbacks): Promise<void> {
-    return new Promise<void>((resolve, reject) => {
-      let settled = false
-      let opened = false
-      const socket = net.createConnection({ host: options.host, port: options.port })
-      this.tcpSocket = socket
+  private openTcp(
+    options: NetworkConnectionOptions,
+    callbacks: NetworkCallbacks,
+    resolve: () => void,
+    reject: (error: Error) => void,
+  ): void {
+    let settled = false
+    let opened = false
+    const settle = (fn: () => void) => {
+      if (settled) return
+      settled = true
+      fn()
+    }
+    const socket = net.createConnection({ host: options.host, port: options.port })
+    this.tcpSocket = socket
 
-      socket.setNoDelay(true)
-      socket.once('connect', () => {
+    socket.setNoDelay(true)
+    socket.once('connect', () => {
+      opened = true
+      settle(resolve)
+    })
+    socket.on('data', (chunk) => {
+      for (const listener of this.rawDataListeners) listener(chunk)
+      callbacks.onData(this.formatData(chunk))
+    })
+    socket.on('error', (error) => {
+      if (!settled) {
         settled = true
-        opened = true
-        resolve()
-      })
-      socket.on('data', (chunk) => {
-        for (const listener of this.rawDataListeners) listener(chunk)
-        callbacks.onData(this.formatData(chunk))
-      })
-      socket.on('error', (error) => {
-        if (!settled) {
-          settled = true
-          this.tcpSocket = undefined
-          this.currentOptions = undefined
-          reject(error)
-        }
-      })
-      socket.once('close', (hadError) => {
-        const intentional = this.intentionalClose
-        this.intentionalClose = false
-        if (this.tcpSocket === socket) this.tcpSocket = undefined
-        if (this.currentOptions === options) this.currentOptions = undefined
-        if (!intentional && opened) {
-          callbacks.onDisconnected(options, hadError ? 'TCP 连接异常关闭' : 'TCP 连接已关闭')
-        }
-      })
+        this.tcpSocket = undefined
+        this.currentOptions = undefined
+        reject(error)
+      }
+    })
+    socket.once('close', (hadError) => {
+      const intentional = this.intentionalClose
+      this.intentionalClose = false
+      if (this.tcpSocket === socket) this.tcpSocket = undefined
+      if (this.currentOptions === options) this.currentOptions = undefined
+      if (!settled) {
+        settle(() => reject(new Error('连接已取消')))
+        return
+      }
+      if (!intentional && opened) {
+        callbacks.onDisconnected(options, hadError ? 'TCP 连接异常关闭' : 'TCP 连接已关闭')
+      }
     })
   }
 
-  private openUdp(options: NetworkConnectionOptions, callbacks: NetworkCallbacks): Promise<void> {
-    return new Promise<void>((resolve, reject) => {
-      let settled = false
-      let opened = false
-      const socket = dgram.createSocket('udp4')
-      this.udpSocket = socket
+  private openUdp(
+    options: NetworkConnectionOptions,
+    callbacks: NetworkCallbacks,
+    resolve: () => void,
+    reject: (error: Error) => void,
+  ): void {
+    let settled = false
+    let opened = false
+    const settle = (fn: () => void) => {
+      if (settled) return
+      settled = true
+      fn()
+    }
+    const socket = dgram.createSocket('udp4')
+    this.udpSocket = socket
 
-      socket.on('message', (message, remote) => {
-        this.lastUdpRemote = remote
-        for (const listener of this.rawDataListeners) listener(message)
-        callbacks.onData(this.formatData(message))
-      })
-      socket.once('listening', () => {
-        settled = true
-        opened = true
-        resolve()
-      })
-      socket.on('error', (error) => {
-        if (!settled) {
-          settled = true
-          this.udpSocket = undefined
-          this.currentOptions = undefined
-          socket.close()
-          reject(error)
-          return
-        }
-        socket.close()
-      })
-      socket.once('close', () => {
-        const intentional = this.intentionalClose
-        this.intentionalClose = false
-        if (this.udpSocket === socket) this.udpSocket = undefined
-        if (this.currentOptions === options) this.currentOptions = undefined
-        if (!intentional && opened) callbacks.onDisconnected(options, 'UDP 监听已关闭')
-      })
-      socket.bind(options.port, options.host)
+    socket.on('message', (message, remote) => {
+      this.lastUdpRemote = remote
+      for (const listener of this.rawDataListeners) listener(message)
+      callbacks.onData(this.formatData(message))
     })
+    socket.once('listening', () => {
+      opened = true
+      settle(resolve)
+    })
+    socket.on('error', (error) => {
+      if (!settled) {
+        settled = true
+        this.udpSocket = undefined
+        this.currentOptions = undefined
+        socket.close()
+        reject(error)
+        return
+      }
+      socket.close()
+    })
+    socket.once('close', () => {
+      const intentional = this.intentionalClose
+      this.intentionalClose = false
+      if (this.udpSocket === socket) this.udpSocket = undefined
+      if (this.currentOptions === options) this.currentOptions = undefined
+      if (!settled) {
+        settle(() => reject(new Error('连接已取消')))
+        return
+      }
+      if (!intentional && opened) callbacks.onDisconnected(options, 'UDP 监听已关闭')
+    })
+    socket.bind(options.port, options.host)
   }
 
   private formatData(data: Uint8Array): string {

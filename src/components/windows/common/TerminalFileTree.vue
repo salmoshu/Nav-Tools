@@ -11,6 +11,9 @@
       node-key="path"
       lazy
       highlight-current
+      :default-expanded-keys="expandedKeys"
+      @node-expand="rememberExpanded"
+      @node-collapse="forgetExpanded"
       @node-click="emit('node-click', $event)"
     >
       <template #default="{ data }">
@@ -29,6 +32,9 @@
             <el-dropdown-menu>
               <el-dropdown-item command="download">
                 {{ t('common.terminal.fileTreeDownload') }}
+              </el-dropdown-item>
+              <el-dropdown-item command="copy-path" divided>
+                {{ t('common.terminal.fileTreeCopyPath') }}
               </el-dropdown-item>
               <el-dropdown-item command="rename">
                 {{ t('common.terminal.fileTreeRename') }}
@@ -73,6 +79,10 @@ function onNodeCommand(command: string, entry: SftpEntry): void {
   }
   if (command === 'delete') {
     void deleteEntry(entry)
+    return
+  }
+  if (command === 'copy-path') {
+    void copyPath(entry)
     return
   }
   if (command !== 'download') return
@@ -136,6 +146,8 @@ async function renameEntry(entry: SftpEntry): Promise<void> {
       newPath: siblingPath(entry.path, name),
     })
     ElMessage.success(t('common.terminal.fileTreeRenameDone', { name }))
+    if (expandedSet.delete(entry.path)) expandedSet.add(siblingPath(entry.path, name))
+    expandedKeys.value = [...expandedSet]
     treeKey.value += 1
   } catch (error) {
     if (error === 'cancel' || error === 'close') return
@@ -176,6 +188,29 @@ const treeProps = { label: 'name', children: 'children', isLeaf: 'isLeaf' }
 const treeKey = ref(0)
 const truncatedEntryCount = ref<number | null>(null)
 let pendingLoads = 0
+// 展开状态跨刷新保持: 删除/重命名等操作触发重建时, 已展开目录自动恢复
+const expandedKeys = ref<string[]>([])
+const expandedSet = new Set<string>()
+
+function rememberExpanded(data: SftpEntry): void {
+  if (expandedSet.has(data.path)) return
+  expandedSet.add(data.path)
+  expandedKeys.value = [...expandedSet]
+}
+
+function forgetExpanded(data: SftpEntry): void {
+  if (!expandedSet.delete(data.path)) return
+  expandedKeys.value = [...expandedSet]
+}
+
+async function copyPath(entry: SftpEntry): Promise<void> {
+  try {
+    await navigator.clipboard.writeText(entry.path)
+    ElMessage.success(t('common.terminal.fileTreeCopyPathDone', { path: entry.path }))
+  } catch (error) {
+    ElMessage.error(errorMessage(error))
+  }
+}
 
 async function listDirectory(path: string, root: boolean): Promise<TerminalSessionDir | null> {
   pendingLoads += 1
@@ -215,6 +250,8 @@ watch(
   () => [props.sessionId, props.rootPath],
   () => {
     truncatedEntryCount.value = null
+    expandedSet.clear()
+    expandedKeys.value = []
     treeKey.value += 1
   },
 )

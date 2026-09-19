@@ -1,10 +1,8 @@
 import path from 'node:path'
+import { chooseOpenFiles, showScopedSaveDialog } from './dialogs'
 import {
   BrowserWindow,
-  dialog,
   ipcMain,
-  type OpenDialogOptions,
-  type SaveDialogOptions,
 } from 'electron'
 import type {
   PortForwardRule,
@@ -14,14 +12,6 @@ import type {
 } from '../../src/core/terminal/TerminalTypes'
 import type { TerminalCredentialService } from './services/TerminalCredentialService'
 import type { TerminalService } from './services/TerminalService'
-
-function showOpenDialogForWindow(target: BrowserWindow | null, options: OpenDialogOptions) {
-  return target ? dialog.showOpenDialog(target, options) : dialog.showOpenDialog(options)
-}
-
-function showSaveDialogForWindow(target: BrowserWindow | null, options: SaveDialogOptions) {
-  return target ? dialog.showSaveDialog(target, options) : dialog.showSaveDialog(options)
-}
 
 export function registerTerminalIpc(
   service: TerminalService,
@@ -90,10 +80,7 @@ export function registerTerminalIpc(
   )
   ipcMain.handle('terminal-sftp-choose-upload', async (event) => {
     const target = BrowserWindow.fromWebContents(event.sender)
-    const result = await showOpenDialogForWindow(target, {
-      properties: ['openFile', 'multiSelections'],
-    })
-    return result.canceled ? [] : result.filePaths
+    return (await chooseOpenFiles(target, 'terminal-upload', { multi: true })) ?? []
   })
   ipcMain.handle(
     'terminal-sftp-upload',
@@ -105,14 +92,16 @@ export function registerTerminalIpc(
     async (event, request: { name: string; directory: boolean }) => {
       const target = BrowserWindow.fromWebContents(event.sender)
       if (request.directory) {
-        const result = await showOpenDialogForWindow(target, {
-          properties: ['openDirectory'],
+        const result = await showScopedSaveDialog(target, 'terminal-download', {
+          defaultPath: request.name,
         })
-        return result.canceled || !result.filePaths[0]
+        return result.canceled || !result.filePath
           ? null
-          : path.join(result.filePaths[0], request.name)
+          : path.join(result.filePath, request.name)
       }
-      const result = await showSaveDialogForWindow(target, { defaultPath: request.name })
+      const result = await showScopedSaveDialog(target, 'terminal-download', {
+        defaultPath: request.name,
+      })
       return result.canceled ? null : result.filePath
     },
   )
@@ -187,11 +176,10 @@ export function registerTerminalIpc(
 
   ipcMain.handle('terminal-private-key-select', async (event) => {
     const target = BrowserWindow.fromWebContents(event.sender)
-    const result = await showOpenDialogForWindow(target, {
-      properties: ['openFile'],
+    const result = await chooseOpenFiles(target, 'terminal-ssh-key', {
       filters: [{ name: 'SSH Private Key', extensions: ['pem', 'key', 'ppk', '*'] }],
     })
-    return result.canceled ? null : result.filePaths[0]
+    return result?.[0] ?? null
   })
 }
 

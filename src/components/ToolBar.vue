@@ -17,7 +17,13 @@
           class="toggle-switch"
           :class="{ 'toggle-on': deviceConnected, 'toggle-pending': deviceConnecting }"
           :aria-busy="deviceConnecting"
-          :title="deviceConnected ? t('app.toolbar.disconnect') : t('app.toolbar.connect')"
+          :title="
+            deviceConnecting
+              ? t('app.toolbar.connectCancel')
+              : deviceConnected
+                ? t('app.toolbar.disconnect')
+                : t('app.toolbar.connect')
+          "
           @click="handleDeviceConnected"
         >
           <div class="toggle-slider">
@@ -32,20 +38,16 @@
         v-for="item in ioList"
         :key="item.msg"
         class="toolbar-btn"
+        :title="item.title"
         @click="
           handleIo(item.msg)
           ;($event.currentTarget as HTMLElement)?.blur()
         "
-        :title="item.title"
         v-html="item.icon"
       ></button>
       <button
         class="toolbar-btn log-record-button"
         :class="{ 'is-recording': logRecordingActive }"
-        @click="
-          toggleLogRecording()
-          ;($event.currentTarget as HTMLElement)?.blur()
-        "
         :title="
           logRecordingActive
             ? logRecordingPath
@@ -55,6 +57,10 @@
         "
         :aria-pressed="logRecordingActive"
         :aria-label="t('app.toolbar.recordLog')"
+        @click="
+          toggleLogRecording()
+          ;($event.currentTarget as HTMLElement)?.blur()
+        "
       >
         <span class="log-record-icon" aria-hidden="true"></span>
       </button>
@@ -66,11 +72,11 @@
         v-for="item in handleList"
         :key="item.msg"
         class="toolbar-btn"
+        :title="t(item.title)"
         @click="
           handleAction(item.msg)
           ;($event.currentTarget as HTMLElement)?.blur()
         "
-        :title="t(item.title)"
       >
         <el-icon class="toolbar-window-icon" :size="18">
           <component :is="getPanelIconComponent(item.action)" />
@@ -83,29 +89,29 @@
       <button
         v-if="showSaveButton"
         class="toolbar-btn"
+        :title="t(layoutList[1].title)"
         @click="
           handleLayout('save')
           ;($event.currentTarget as HTMLElement)?.blur()
         "
-        :title="t(layoutList[1].title)"
         v-html="layoutList[1].icon"
       ></button>
       <button
         class="toolbar-btn"
+        :title="t(layoutList[2].title)"
         @click="
           handleLayout('auto')
           ;($event.currentTarget as HTMLElement)?.blur()
         "
-        :title="t(layoutList[2].title)"
         v-html="layoutList[2].icon"
       ></button>
       <button
         class="toolbar-btn"
+        :title="t(layoutList[3].title)"
         @click="
           handleLayout('reset')
           ;($event.currentTarget as HTMLElement)?.blur()
         "
-        :title="t(layoutList[3].title)"
         v-html="layoutList[3].icon"
       ></button>
 
@@ -126,7 +132,7 @@
       <span v-if="lidarTimelineActive" class="divider timeline-divider" aria-hidden="true"></span>
       <LidarTimelineControl v-if="lidarTimelineActive" :position="position" />
     </div>
-    <div class="toolbar-dock-zones" v-if="isDragging && activeDockZone">
+    <div v-if="isDragging && activeDockZone" class="toolbar-dock-zones">
       <div
         :class="['dock-zone', `dock-zone-${activeDockZone}`]"
         :style="getDockZoneStyle(activeDockZone)"
@@ -134,8 +140,8 @@
     </div>
   </div>
   <el-dialog
-    :title="t('app.toolbar.dataInputTitle')"
     v-model="showInputDialog"
+    :title="t('app.toolbar.dataInputTitle')"
     class="app-dialog data-input-dialog"
     width="min(760px, calc(100vw - 32px))"
     :close-on-click-modal="true"
@@ -198,7 +204,6 @@
             <span v-if="selectedFileCount > 1">{{
               t('app.toolbar.mcapSelectedParts', { count: selectedFileCount })
             }}</span>
-            <p>{{ t('app.toolbar.mcapHint') }}</p>
           </div>
           <template v-else>
             <div class="input-group compact-input-group">
@@ -356,7 +361,7 @@
               <el-option v-for="rate in baudRates" :key="rate" :label="rate" :value="rate" />
             </el-select>
           </div>
-          <div class="input-group" v-if="serialAdvanced">
+          <div v-if="serialAdvanced" class="input-group">
             <span class="input-label">{{ t('app.toolbar.dataBits') }}</span>
             <el-select
               v-model="serialDataBits"
@@ -367,7 +372,7 @@
               <el-option v-for="bit in dataBits" :key="bit" :label="bit" :value="bit" />
             </el-select>
           </div>
-          <div class="input-group" v-if="serialAdvanced">
+          <div v-if="serialAdvanced" class="input-group">
             <span class="input-label">{{ t('app.toolbar.stopBits') }}</span>
             <el-select
               v-model="serialStopBits"
@@ -378,7 +383,7 @@
               <el-option v-for="bit in stopBits" :key="bit" :label="bit" :value="bit" />
             </el-select>
           </div>
-          <div class="input-group" v-if="serialAdvanced">
+          <div v-if="serialAdvanced" class="input-group">
             <span class="input-label">{{ t('app.toolbar.parity') }}</span>
             <el-select
               v-model="serialParity"
@@ -746,6 +751,11 @@ const networkPortText = computed({
 })
 
 const handleDeviceConnected = () => {
+  if (deviceConnecting.value === true) {
+    // 连接中点击开关: 终止当前正在进行的连接尝试
+    deviceInstance.cancelNetworkConnect()
+    return
+  }
   if (deviceConnected.value === true) {
     deviceInstance.closeCurrDevice()
   } else {
