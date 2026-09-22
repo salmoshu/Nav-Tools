@@ -90,7 +90,7 @@
     "monaco-editor": "^0.53.0",
     "node-pty": "^1.1.0",
     "pinia": "^3.0.3",
-    "robo-gnss-wasm": "file:../../05-GNSS/Robo-GNSS/wasm",
+    "robo-gnss-wasm": "file:vendor/robo-gnss-wasm-0.1.0.tgz",
     "serialport": "^13.0.0",
     "ssh2": "^1.17.0",
     "three": "^0.186.0",

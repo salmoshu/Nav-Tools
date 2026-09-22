@@ -78,8 +78,8 @@ importers:
         specifier: ^3.0.3
         version: 3.0.3(typescript@5.9.2)(vue@3.5.18(typescript@5.9.2))
       robo-gnss-wasm:
-        specifier: file:../../05-GNSS/Robo-GNSS/wasm
-        version: file:../../05-GNSS/Robo-GNSS/wasm
+        specifier: file:vendor/robo-gnss-wasm-0.1.0.tgz
+        version: file:vendor/robo-gnss-wasm-0.1.0.tgz
       serialport:
         specifier: ^13.0.0
         version: 13.0.0
@@ -2949,8 +2949,9 @@ packages:
     resolution: {integrity: sha512-CHhPh+UNHD2GTXNYhPWLnU8ONHdI+5DI+4EYIAOaiD63rHeYlZvyh8P+in5999TTSFgUYuKUAjzRI4mdh/p+2A==}
     engines: {node: '>=8.0'}
 
-  robo-gnss-wasm@file:../../05-GNSS/Robo-GNSS/wasm:
-    resolution: {directory: ../../05-GNSS/Robo-GNSS/wasm, type: directory}
+  robo-gnss-wasm@file:vendor/robo-gnss-wasm-0.1.0.tgz:
+    resolution: {integrity: sha512-GfYHIUIzwe0dCCiapFzSe+0Nlo/yKsE+zmoniLYIF9aHo9a6rIeLjdg67phd/OaV3hmQg3NjnThI6oQcXubsEw==, tarball: file:vendor/robo-gnss-wasm-0.1.0.tgz}
+    version: 0.1.0
 
   rollup@4.46.2:
     resolution: {integrity: sha512-WMmLFI+Boh6xbop+OAGo9cQ3OgX9MIg7xOQjn+pTCwOkk+FNDAeAemXkJ3HzDJrVXleLOFVa1ipuc1AmEx1Dwg==}
@@ -6678,7 +6679,7 @@ snapshots:
       sprintf-js: 1.1.3
     optional: true
 
-  robo-gnss-wasm@file:../../05-GNSS/Robo-GNSS/wasm: {}
+  robo-gnss-wasm@file:vendor/robo-gnss-wasm-0.1.0.tgz: {}
 
   rollup@4.46.2:
     dependencies:
