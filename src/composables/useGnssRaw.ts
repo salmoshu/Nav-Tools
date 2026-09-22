@@ -35,13 +35,13 @@ let loadSeq = 0
 /** RTCM 源字节（导出 RINEX 用；RINEX 源不需要保留） */
 let sourceBytes: Uint8Array | null = null
 
-function workerUrl(): URL {
-  return new URL('../core/gnssraw/rtcm.worker.ts', import.meta.url)
-}
-
+// new Worker(new URL(...)) 必须保持直接嵌套：Vite 构建期只识别这种模式来打包 Worker，
+// 抽成函数会导致 Worker 未被编译（.ts 源码被当静态资源内联为 data URL），生产环境启动失败。
 function ensureWorker(): Worker {
   if (worker) return worker
-  worker = new Worker(workerUrl(), { type: 'module' })
+  worker = new Worker(new URL('../core/gnssraw/rtcm.worker.ts', import.meta.url), {
+    type: 'module',
+  })
   return worker
 }
 
@@ -180,7 +180,9 @@ export function useGnssRaw() {
       sourceBytes.byteOffset,
       sourceBytes.byteOffset + sourceBytes.byteLength,
     ) as ArrayBuffer
-    const convertWorker = new Worker(workerUrl(), { type: 'module' })
+    const convertWorker = new Worker(new URL('../core/gnssraw/rtcm.worker.ts', import.meta.url), {
+      type: 'module',
+    })
     try {
       return await new Promise<RnxOutputFile[]>((resolve, reject) => {
         convertWorker.onmessage = (event: MessageEvent) => {

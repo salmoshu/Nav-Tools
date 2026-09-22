@@ -95,6 +95,11 @@ export default defineConfig(({ command }) => {
         '@element-plus/icons-vue',
         'vue-i18n',
       ],
+      // robo-gnss-wasm 不预打包：解码 Worker 以独立模块图引用它，预打包的
+      // ?v=hash 失效（重装依赖/双 dev server 共享 .vite 缓存/运行时重优化）
+      // 会让 Worker 加载 404 且 onerror 拿不到详情。该包为纯 ESM 单文件 wasm，
+      // 直接走 node_modules 稳定路径即可。
+      exclude: ['robo-gnss-wasm'],
     },
     server: {
       ...(process.env.VSCODE_DEBUG &&
