@@ -59,6 +59,26 @@ describe('NetworkConnectionService', () => {
     await expect(service.sendTcp(Uint8Array.from([0x01]))).rejects.toThrow('工具栏 TCP 连接不可用')
   })
 
+  it('enables TCP keepalive so an unplugged peer is detected instead of staying green', async () => {
+    const keepAlive = vi.spyOn(net.Socket.prototype, 'setKeepAlive')
+    const server = net.createServer()
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+    const address = server.address()
+    if (!address || typeof address === 'string') throw new Error('TCP test server did not bind')
+
+    try {
+      await service.open(
+        { protocol: 'tcp', host: '127.0.0.1', port: address.port },
+        { onData: vi.fn(), onDisconnected: vi.fn() },
+      )
+      expect(keepAlive).toHaveBeenCalledWith(true, expect.any(Number))
+    } finally {
+      keepAlive.mockRestore()
+      await service.close()
+      await new Promise<void>((resolve) => server.close(() => resolve()))
+    }
+  })
+
   it('receives UDP datagrams on the configured local endpoint', async () => {
     const port = await findFreeUdpPort()
     const received = new Promise<string>((resolve) => {

@@ -17,6 +17,12 @@ export interface ConsoleMessage {
   fileElapsedMilliseconds?: number;
 }
 
+/**
+ * 文件回放行的相对时间解析器：参数为行内容与序号（仅计非空行，从 0 起），
+ * 返回相对文件起点的毫秒数；返回 null 时回落到内置 NMEA 时钟解析。
+ */
+export type FileReplayElapsedResolver = (line: string, lineIndex: number) => number | null;
+
 export function findTimelineMessageIndex(
   source: readonly ConsoleMessage[],
   cutoffMilliseconds: number,
@@ -65,6 +71,7 @@ export interface ConsoleState {
   beginFileReplayMessages: () => void;
   addFileReplayData: (rawData: string) => void;
   endFileReplayMessages: () => void;
+  setFileReplayElapsedResolver: (resolver: FileReplayElapsedResolver | null) => void;
   clearMessages: () => void;
   toggleFilter: () => void;
   toggleDisplayFormat: () => void;
@@ -111,6 +118,8 @@ export function useConsole(useGlobal: boolean = true): ConsoleState {
   let fileReplayPreviousClock: number | null = null;
   let fileReplayDayOffset = 0;
   let fileReplayLastElapsed = 0;
+  let fileReplayElapsedResolver: FileReplayElapsedResolver | null = null;
+  let fileReplayLineIndex = 0;
   let tempDataString = ''; // 临时存储数据，用于处理不完整的消息
   let messageKeySequence = 0;
   let noneFlushTimer: ReturnType<typeof setTimeout> | null = null; // none模式下无换行符时的刷新定时器
@@ -321,6 +330,8 @@ export function useConsole(useGlobal: boolean = true): ConsoleState {
     let isValid = false;
     const nmeaStart = line.indexOf('$');
     const trimmedLine = line.trim();
+    const lineIndex = fileReplayLineIndex;
+    fileReplayLineIndex += 1;
 
     if (dataFormat.value === 'regex') {
       dataType = 'regex';
@@ -345,7 +356,8 @@ export function useConsole(useGlobal: boolean = true): ConsoleState {
       dataType,
       isValid,
       key: generateKey(timestamp),
-      fileElapsedMilliseconds: resolveFileElapsedMilliseconds(line),
+      fileElapsedMilliseconds:
+        fileReplayElapsedResolver?.(line, lineIndex) ?? resolveFileElapsedMilliseconds(line),
     });
   };
 
@@ -558,6 +570,12 @@ export function useConsole(useGlobal: boolean = true): ConsoleState {
     fileReplayPreviousClock = null;
     fileReplayDayOffset = 0;
     fileReplayLastElapsed = 0;
+    fileReplayLineIndex = 0;
+  };
+
+  const setFileReplayElapsedResolver = (resolver: FileReplayElapsedResolver | null) => {
+    fileReplayElapsedResolver = resolver;
+    fileReplayLineIndex = 0;
   };
 
   const addFileReplayData = (rawData: string) => {
@@ -598,6 +616,8 @@ export function useConsole(useGlobal: boolean = true): ConsoleState {
     fileReplayPreviousClock = null;
     fileReplayDayOffset = 0;
     fileReplayLastElapsed = 0;
+    fileReplayElapsedResolver = null;
+    fileReplayLineIndex = 0;
   };
 
   const toggleFilter = () => {
@@ -760,6 +780,7 @@ export function useConsole(useGlobal: boolean = true): ConsoleState {
     beginFileReplayMessages,
     addFileReplayData,
     endFileReplayMessages,
+    setFileReplayElapsedResolver,
     clearMessages,
     toggleFilter,
     toggleDisplayFormat,

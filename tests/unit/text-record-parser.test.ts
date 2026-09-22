@@ -2,9 +2,13 @@ import { describe, expect, it } from 'vitest'
 import {
   DEFAULT_KEY_VALUE_REGEX,
   createRecordRegex,
+  csvHeaderKeys,
+  isCsvHeaderRow,
   parseCsvRecord,
+  parseCsvRecordWithKeys,
   parseRegexRecord,
   parseTextRecord,
+  splitCsvLine,
 } from '@/core/data/TextRecordParser'
 
 describe('TextRecordParser', () => {
@@ -75,6 +79,38 @@ describe('TextRecordParser', () => {
     expect(parseTextRecord('12.5,-3,OK,true', 'csv')).toEqual({
       valid: true,
       record: { '1': 12.5, '2': -3, '3': 'OK', '4': true },
+    })
+  })
+})
+
+describe('CSV header helpers', () => {
+  it('splitCsvLine respects quoted commas and escaped quotes', () => {
+    expect(splitCsvLine('"a,b",c')).toEqual(['a,b', 'c'])
+    expect(splitCsvLine('"a""b",c')).toEqual(['a"b', 'c'])
+    expect(splitCsvLine('a,b,c')).toEqual(['a', 'b', 'c'])
+    expect(splitCsvLine(',,')).toEqual(['', '', ''])
+  })
+
+  it('isCsvHeaderRow only accepts rows without any numeric cell', () => {
+    expect(isCsvHeaderRow(['time', 'vx', 'vy'])).toBe(true)
+    expect(isCsvHeaderRow(['0.1', '0.2'])).toBe(false)
+    expect(isCsvHeaderRow(['state', '1'])).toBe(false)
+    expect(isCsvHeaderRow(['', '', ''])).toBe(false)
+  })
+
+  it('csvHeaderKeys falls back to column numbers and dedupes repeats', () => {
+    expect(csvHeaderKeys(['time', '', 'vx'])).toEqual(['time', '2', 'vx'])
+    expect(csvHeaderKeys(['a', 'a', 'a'])).toEqual(['a', 'a_2', 'a_3'])
+  })
+
+  it('parseCsvRecordWithKeys maps columns to header keys and keeps extras positional', () => {
+    expect(parseCsvRecordWithKeys('1,2', ['vx', 'vy'])).toEqual({
+      valid: true,
+      record: { vx: 1, vy: 2 },
+    })
+    expect(parseCsvRecordWithKeys('1,2,3', ['a'])).toEqual({
+      valid: true,
+      record: { a: 1, '2': 2, '3': 3 },
     })
   })
 })

@@ -1,7 +1,18 @@
 import { computed, ref } from 'vue'
-import type { NumericEpochStore } from '@/core/gnss/NumericEpochStore'
 
 export type FileTimelineMode = 'loaded' | 'replay'
+
+/**
+ * 时间轴数据源的结构化契约：NumericEpochStore（GNSS 墙上时钟）与
+ * TextEpochStore（文本样本时钟）都天然满足。
+ */
+export interface EpochTimelineSource {
+  readonly length: number
+  readonly duration: number
+  getElapsedTime(index: number): number
+  findNearestElapsedTime(elapsedMilliseconds: number): number
+  formatTime(index: number): string
+}
 
 interface TimelineOptions {
   mode: FileTimelineMode
@@ -22,7 +33,7 @@ const elapsedMilliseconds = ref(0)
 const durationMilliseconds = ref(0)
 const cursorTime = ref('')
 
-let source: NumericEpochStore | null = null
+let source: EpochTimelineSource | null = null
 let applyEpoch: ((index: number) => void) | null = null
 let replaySpeed = 1
 let animationFrame: number | null = null
@@ -145,7 +156,7 @@ function updateIndexingProgress(value: number): void {
   indexingProgress.value = Math.max(0, Math.min(100, value))
 }
 
-function attachTimeline(epochSource: NumericEpochStore, options: TimelineOptions): boolean {
+function attachTimeline(epochSource: EpochTimelineSource, options: TimelineOptions): boolean {
   pause()
   indexing.value = false
   indexingProgress.value = 100

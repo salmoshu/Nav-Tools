@@ -116,14 +116,102 @@ export function parseRegexRecord(
   }
 }
 
+/**
+ * RFC4180 行切分：双引号包裹的字段内逗号不切分，`""` 还原为字面引号。
+ * 引号只在字段起始位置（前置内容为空）生效，其余位置按字面字符处理（宽松策略）。
+ */
+export function splitCsvLine(input: string): string[] {
+  const fields: string[] = []
+  let current = ''
+  let quoted = false
+  for (let index = 0; index < input.length; index += 1) {
+    const char = input[index]
+    if (quoted) {
+      if (char === '"') {
+        if (input[index + 1] === '"') {
+          current += '"'
+          index += 1
+        } else {
+          quoted = false
+        }
+      } else {
+        current += char
+      }
+      continue
+    }
+    if (char === '"' && current.trim() === '') {
+      quoted = true
+      current = ''
+      continue
+    }
+    if (char === ',') {
+      fields.push(current)
+      current = ''
+      continue
+    }
+    current += char
+  }
+  fields.push(current)
+  return fields
+}
+
+/**
+ * 表头行探测（保守策略）：存在非空单元格，且所有非空单元格都不是纯数值。
+ * 只要有一个数值单元格就当作数据行，避免把首行数据误吞成表头。
+ */
+export function isCsvHeaderRow(cells: string[]): boolean {
+  let hasTextCell = false
+  for (const cell of cells) {
+    const value = cell.trim()
+    if (value === '') continue
+    if (Number.isFinite(Number(value))) return false
+    hasTextCell = true
+  }
+  return hasTextCell
+}
+
+/** 表头单元格 → 字段 key：空表头回退为列号（1 起，与无表头模式一致），重名追加 _2/_3 后缀。 */
+export function csvHeaderKeys(cells: string[]): string[] {
+  const used = new Set<string>()
+  return cells.map((cell, index) => {
+    const base = cell.trim() || String(index + 1)
+    let key = base
+    let suffix = 2
+    while (used.has(key)) {
+      key = `${base}_${suffix}`
+      suffix += 1
+    }
+    used.add(key)
+    return key
+  })
+}
+
 export function parseCsvRecord(input: string): TextRecordParseResult {
   const record: ParsedTextRecord = {}
-  const fields = input.split(',')
+  const fields = splitCsvLine(input)
 
   fields.forEach((rawField, index) => {
     const value = rawField.trim()
     if (value === '') return
     const key = String(index + 1)
+    record[key] = parseTextValue(value)
+  })
+
+  if (Object.keys(record).length === 0) {
+    return { valid: false, error: 'CSV did not extract any fields' }
+  }
+  return { valid: true, record }
+}
+
+/** 表头感知变体：按列号映射到表头 key；超出表头范围的列回退为列号 key。 */
+export function parseCsvRecordWithKeys(input: string, keys: string[]): TextRecordParseResult {
+  const record: ParsedTextRecord = {}
+  const fields = splitCsvLine(input)
+
+  fields.forEach((rawField, index) => {
+    const value = rawField.trim()
+    if (value === '') return
+    const key = keys[index] ?? String(index + 1)
     record[key] = parseTextValue(value)
   })
 

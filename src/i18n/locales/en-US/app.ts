@@ -59,6 +59,8 @@ export default {
     second: 's',
     posFormat: 'Position Format',
     bytes: '{v} bytes',
+    sampleInterval: 'Sample interval',
+    millisecond: 'ms',
     parseMethod: 'Data Format',
     dataSection: 'Data',
     regexPattern: 'Regular Expression',

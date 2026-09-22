@@ -27,6 +27,8 @@ export interface DataSourceSettings {
     replaySpeed: number
     startOffset: number
     filePositionBytes: 4 | 8
+    /** 文本回放：无 time 字段记录之间的虚拟样本间隔（毫秒）。 */
+    sampleIntervalMs: number
   }
   network: {
     protocol: 'tcp' | 'udp'
@@ -60,6 +62,7 @@ export function createDefaultDataSourceSettings(): DataSourceSettings {
       replaySpeed: 1,
       startOffset: 0,
       filePositionBytes: 4,
+      sampleIntervalMs: 20,
     },
     network: {
       protocol: 'tcp',
@@ -139,6 +142,7 @@ function normalizeSettings(value: unknown): DataSourceSettings {
       replaySpeed: positiveNumber(file.replaySpeed, defaults.file.replaySpeed),
       startOffset: nonNegativeNumber(file.startOffset, defaults.file.startOffset),
       filePositionBytes: file.filePositionBytes === 8 ? 8 : 4,
+      sampleIntervalMs: positiveNumber(file.sampleIntervalMs, defaults.file.sampleIntervalMs),
     },
     network: {
       protocol: network.protocol === 'udp' ? 'udp' : 'tcp',

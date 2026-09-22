@@ -34,6 +34,7 @@ import type { TextDataParser } from '@/core/data/DataSourceStorage'
 import { createRecordRegex } from '@/core/data/TextRecordParser'
 import { FilePlaybackService } from '@/core/file/FilePlaybackService'
 import { TextFileStreamService } from '@/core/file/TextFileStreamService'
+import { buildTextTimeline } from '@/core/file/TextEpochStore'
 import { LogRecordingService } from '@/core/file/LogRecordingService'
 import { t } from '@/i18n'
 
@@ -52,7 +53,9 @@ const {
 const {
   addRawData: addFlowData,
   initRawData: initFlowData,
+  appendRecord: appendFlowRecord,
   clearRawData: clearFlowData,
+  flowData,
 } = useFlow()
 const {
   addMessages: initFlowConsole,
@@ -60,6 +63,7 @@ const {
   beginFileReplayMessages,
   addFileReplayData,
   endFileReplayMessages,
+  setFileReplayElapsedResolver,
   clearMessages: clearFlowConsole,
   dataFormat: flowDataFormat,
   regexPattern: flowRegexPattern,
@@ -86,14 +90,17 @@ const { settings: dataSourceSettings, saveSettings: saveDataSourceSettings } =
 const isWindowActive = (windowId: string) =>
   currentWindows.value.some((windowDefinition) => windowDefinition.id === windowId)
 
-const loadTextIntoActiveWindows = (content: string) => {
+const loadTextIntoActiveWindows = (content: string, sourceName?: string) => {
   let handled = false
   if (
     isWindowActive('plot') ||
     activeDataModes.value.includes('flow') ||
     activeDataModes.value.includes('motor')
   ) {
-    initFlowData(content, activeDataParser.value, activeRegexPattern.value)
+    // .csv 文件按 CSV 表头解析（首行表头作为字段 key），与解析器下拉选择解耦
+    const parser =
+      sourceName && /\.csv$/i.test(sourceName.trim()) ? 'csv' : activeDataParser.value
+    initFlowData(content, parser, activeRegexPattern.value)
     handled = true
   }
   if (isWindowActive('raw-messages')) {
@@ -130,6 +137,7 @@ const filePath = toRef(dataSourceSettings.file, 'path')
 const fileTimeTag = toRef(dataSourceSettings.file, 'timeTag')
 const fileReplaySpeed = toRef(dataSourceSettings.file, 'replaySpeed')
 const fileStartOffset = toRef(dataSourceSettings.file, 'startOffset')
+const fileSampleInterval = toRef(dataSourceSettings.file, 'sampleIntervalMs')
 const filePositionBytes = toRef(dataSourceSettings.file, 'filePositionBytes')
 const selectedFiles = ref<File[]>([])
 const selectedPaths = ref<string[]>([])
@@ -534,49 +542,161 @@ async function loadGnssTimelineSource(
   })
 }
 
-async function loadGnssTimelineFile(file: File, timelineMode: FileTimelineMode): Promise<void> {
-  await loadGnssTimelineSource(timelineMode, async (onChunk, onProgress) => {
-    const decoder = new TextDecoder()
-    let processedBytes = 0
-    let bytesSinceYield = 0
+async function streamFileContent(
+  file: File,
+  onChunk: (chunk: string) => void,
+  onProgress: (progress: number) => void,
+): Promise<void> {
+  const decoder = new TextDecoder()
+  let processedBytes = 0
+  let bytesSinceYield = 0
 
-    if (typeof file.stream === 'function') {
-      const reader = file.stream().getReader()
-      for (;;) {
-        const result = await reader.read()
-        if (result.done) break
-        onChunk(decoder.decode(result.value, { stream: true }))
-        processedBytes += result.value.byteLength
-        bytesSinceYield += result.value.byteLength
-        onProgress(file.size <= 0 ? 0 : (processedBytes / file.size) * 100)
-        if (bytesSinceYield >= 2 * 1024 * 1024) {
-          bytesSinceYield = 0
-          await yieldFileImport()
-        }
-      }
-      onChunk(decoder.decode())
-      return
-    }
-
-    const content = await file.text()
-    const chunkSize = 32 * 1024
-    for (let offset = 0; offset < content.length; offset += chunkSize) {
-      const chunk = content.slice(offset, offset + chunkSize)
-      onChunk(chunk)
-      onProgress(content.length === 0 ? 0 : ((offset + chunk.length) / content.length) * 100)
-      bytesSinceYield += chunk.length
+  if (typeof file.stream === 'function') {
+    const reader = file.stream().getReader()
+    for (;;) {
+      const result = await reader.read()
+      if (result.done) break
+      onChunk(decoder.decode(result.value, { stream: true }))
+      processedBytes += result.value.byteLength
+      bytesSinceYield += result.value.byteLength
+      onProgress(file.size <= 0 ? 0 : (processedBytes / file.size) * 100)
       if (bytesSinceYield >= 2 * 1024 * 1024) {
         bytesSinceYield = 0
         await yieldFileImport()
       }
     }
-  })
+    onChunk(decoder.decode())
+    return
+  }
+
+  const content = await file.text()
+  const chunkSize = 32 * 1024
+  for (let offset = 0; offset < content.length; offset += chunkSize) {
+    const chunk = content.slice(offset, offset + chunkSize)
+    onChunk(chunk)
+    onProgress(content.length === 0 ? 0 : ((offset + chunk.length) / content.length) * 100)
+    bytesSinceYield += chunk.length
+    if (bytesSinceYield >= 2 * 1024 * 1024) {
+      bytesSinceYield = 0
+      await yieldFileImport()
+    }
+  }
+}
+
+async function loadGnssTimelineFile(file: File, timelineMode: FileTimelineMode): Promise<void> {
+  await loadGnssTimelineSource(timelineMode, (onChunk, onProgress) =>
+    streamFileContent(file, onChunk, onProgress),
+  )
 }
 
 async function loadGnssTimelinePath(path: string, timelineMode: FileTimelineMode): Promise<void> {
   await loadGnssTimelineSource(timelineMode, (onChunk, onProgress) =>
     textFileStreamService.read(path, { onChunk, onProgress }),
   )
+}
+
+/**
+ * 文本回放（无 RTKLIB time-tag 时的回落）：读入全文，按样本时钟构建虚拟时间轴
+ * （记录 time 字段优先，否则按 sampleIntervalMs 递增），控制台逐行投影、
+ * 图表按历元增量投影，加载完成后从起始偏移自动播放。
+ */
+async function loadTextTimelineSource(
+  sourceName: string,
+  readSource: GnssTimelineReader,
+): Promise<void> {
+  fileTimeline.beginIndexing()
+  globalDevice.value.connected = false
+  clearFlowData()
+  clearFlowConsole()
+  beginFileReplayMessages()
+
+  try {
+    const chunks: string[] = []
+    await readSource(
+      (chunk) => {
+        if (chunk) chunks.push(chunk)
+      },
+      fileTimeline.updateIndexingProgress,
+    )
+    const content = chunks.join('')
+
+    const isCsv = /\.csv$/i.test(sourceName.trim())
+    const { store, records } = buildTextTimeline(content, {
+      parser: isCsv ? 'csv' : activeDataParser.value,
+      regexPattern: activeRegexPattern.value,
+      sampleIntervalMs: fileSampleInterval.value,
+      isCsv,
+    })
+    if (store.length === 0) throw new Error(t('data.noTextRecords'))
+
+    // 控制台行与历元逐行对齐（仅计非空行，与 addFileReplayData 一致）
+    setFileReplayElapsedResolver((line, lineIndex) =>
+      lineIndex < store.length ? store.getElapsedTime(lineIndex) : null,
+    )
+    addFileReplayData(content)
+    endFileReplayMessages()
+
+    // 图表投影：前向增量追加、回退全量重建；记录注入虚拟时间（秒）作为 time，
+    // 使 x 轴与时间轴一致（绕过 addRawData 的墙钟盖戳）。
+    const projectFlow =
+      isWindowActive('plot') ||
+      activeDataModes.value.includes('flow') ||
+      activeDataModes.value.includes('motor')
+    let recordCursor = 0
+    let appliedEpoch = -1
+    const applyEpoch = (index: number) => {
+      if (!projectFlow) return
+      if (index < appliedEpoch) {
+        clearFlowData()
+        flowData.value.isBatchData = true
+        recordCursor = 0
+        appliedEpoch = -1
+      }
+      while (recordCursor < records.length && records[recordCursor].epochIndex <= index) {
+        const { epochIndex, record } = records[recordCursor]
+        appendFlowRecord({ ...record, time: store.getElapsedTime(epochIndex) / 1000 })
+        appliedEpoch = epochIndex
+        recordCursor += 1
+      }
+    }
+    if (projectFlow) flowData.value.isBatchData = true
+
+    const attached = fileTimeline.attachTimeline(store, {
+      mode: 'replay',
+      speed: fileReplaySpeed.value,
+      startElapsedMilliseconds: fileStartOffset.value * 1000,
+      applyEpoch,
+    })
+    if (!attached) throw new Error(t('data.noTextRecords'))
+
+    ElMessage({
+      message: t('data.tsPlayStarted'),
+      type: 'success',
+      placement: 'bottom-right',
+      offset: 50,
+    })
+  } catch (error) {
+    setFileReplayElapsedResolver(null)
+    endFileReplayMessages()
+    throw error
+  }
+}
+
+function loadTextTimeline(path: string): Promise<void> | null {
+  const readSource: GnssTimelineReader | null =
+    selectedFile.value && selectedFilePath.value === path
+      ? (onChunk, onProgress) => streamFileContent(selectedFile.value as File, onChunk, onProgress)
+      : window.ipcRenderer
+        ? (onChunk, onProgress) => textFileStreamService.read(path, { onChunk, onProgress })
+        : null
+  if (!readSource) return null
+  return loadTextTimelineSource(path, readSource)
+}
+
+/** time-tag 缺失/无效（纯文本文件没有伴生 .tag）时回落到样本时钟回放。 */
+function isTimeTagMissingError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error)
+  return /ENOENT|TIMETAG|时间戳文件/i.test(message)
 }
 
 function startTimestampPlayback(path: string): void {
@@ -628,6 +748,29 @@ function startTimestampPlayback(path: string): void {
       filePositionBytes: filePositionBytes.value,
     })
     .catch((error) => {
+      // 纯文本文件没有伴生 .tag：回落为样本时钟回放（虚拟时间轴），
+      // 其余 time-tag 错误维持原失败提示。
+      if (isTimeTagMissingError(error)) {
+        const textTimeline = loadTextTimeline(path)
+        if (textTimeline) {
+          void textTimeline.catch((fallbackError) => {
+            fileTimeline.clearTimeline()
+            if (globalDevice.value.type === 'file' && globalDevice.value.path === path) {
+              globalDevice.value.connected = false
+            }
+            ElMessage({
+              message: t('data.tsPlayFailed', {
+                message:
+                  fallbackError instanceof Error ? fallbackError.message : String(fallbackError),
+              }),
+              type: 'error',
+              placement: 'bottom-right',
+              offset: 50,
+            })
+          })
+          return
+        }
+      }
       if (globalDevice.value.type === 'file' && globalDevice.value.path === path) {
         globalDevice.value.connected = false
       }
@@ -858,7 +1001,7 @@ export function useDevice() {
         try {
           const content = e.target?.result as string
 
-          if (loadTextIntoActiveWindows(content)) {
+          if (loadTextIntoActiveWindows(content, file.name)) {
             ElMessage({
               message: t('data.fileImportSuccess', { name: file.name }),
               type: 'success',
@@ -1019,7 +1162,32 @@ export function useDevice() {
   // 文件输入统一选择文本文件或同一会话的 MCAP 分片，确认时按扩展名分发。
   // 使用带 scope 记忆的原生对话框: 数据接入的上次目录独立于其它模块记忆。
   const selectTargetFile = async () => {
-    if (!window.electronAPI?.openFileDialog) return
+    // Web 构建没有原生对话框：退回隐藏的 input[type=file]，选择语义保持一致。
+    if (!window.electronAPI?.openFileDialog) {
+      const fileInput = document.createElement('input')
+      fileInput.type = 'file'
+      fileInput.accept = '.txt,.csv,.dat,.log,.mcap'
+      fileInput.multiple = true
+      fileInput.style.display = 'none'
+      document.body.appendChild(fileInput)
+      fileInput.onchange = () => {
+        const files = Array.from(fileInput.files ?? [])
+        fileInput.remove()
+        if (files.length === 0) return
+        if (files.length > 1 && !files.every((item) => isMcapPath(item.name))) {
+          ElMessage.warning(t('app.toolbar.fileSelectionMixed'))
+          return
+        }
+        const file = files[0]
+        filePath.value = window.electronAPI?.getPathForFile(file) || file.name
+        selectedFilePath.value = filePath.value
+        selectedFiles.value = files
+        selectedPaths.value = []
+      }
+      fileInput.oncancel = () => fileInput.remove()
+      fileInput.click()
+      return
+    }
     selectedFiles.value = []
     selectedPaths.value = []
     const paths = (await window.electronAPI.openFileDialog({
@@ -1113,7 +1281,7 @@ export function useDevice() {
       reader.onload = (e) => {
         const content = e.target?.result as string
         try {
-          if (loadTextIntoActiveWindows(content)) {
+          if (loadTextIntoActiveWindows(content, fileCmd)) {
             ElMessage({
               message: t('data.dataLoadSuccess'),
               type: 'success',
@@ -1141,8 +1309,47 @@ export function useDevice() {
       }
 
       reader.readAsText(selectedFile.value)
+    } else if (window.ipcRenderer) {
+      // 原生文件对话框只返回路径（没有浏览器 File 对象）：
+      // Electron 下按路径经主进程读全文，与拖放（带 File 对象）行为对齐。
+      fileTimeline.clearTimeline()
+      const chunks: string[] = []
+      void textFileStreamService
+        .read(fileCmd, {
+          onChunk: (chunk) => chunks.push(chunk),
+          onProgress: () => undefined,
+        })
+        .then(() => {
+          try {
+            if (loadTextIntoActiveWindows(chunks.join(''), fileCmd)) {
+              ElMessage({
+                message: t('data.dataLoadSuccess'),
+                type: 'success',
+                placement: 'bottom-right',
+                offset: 50,
+              })
+            }
+          } catch (error) {
+            ElMessage({
+              message: t('data.dataLoadFailed', { error }),
+              type: 'error',
+              placement: 'bottom-right',
+              offset: 50,
+            })
+          }
+        })
+        .catch((error) => {
+          ElMessage({
+            message: t('data.dataLoadFailed', {
+              error: error instanceof Error ? error.message : String(error),
+            }),
+            type: 'error',
+            placement: 'bottom-right',
+            offset: 50,
+          })
+        })
     } else {
-      // 如果没有文件对象，显示提示信息
+      // 浏览器端没有文件对象时无法按路径读取，显示提示信息
       ElMessage({
         message: t('data.reselectFile'),
         type: 'warning',
@@ -1362,6 +1569,7 @@ export function useDevice() {
     fileTimeTag,
     fileReplaySpeed,
     fileStartOffset,
+    fileSampleInterval,
     filePositionBytes,
     networkIp,
     networkPort,

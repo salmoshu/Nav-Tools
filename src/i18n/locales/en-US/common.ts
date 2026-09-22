@@ -313,6 +313,7 @@ export default {
       cancelled: 'Firmware upgrade cancelled',
     },
     ackedPackets: 'Acknowledged {acked}/{total}',
+    elapsed: 'Elapsed {time}',
     sentPackets: 'Packets sent {count}',
     retries: 'Retries {count}',
     log: 'Upgrade Log',

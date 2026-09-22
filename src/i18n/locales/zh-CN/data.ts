@@ -1,5 +1,6 @@
 export default {
   noGnssEpochs: '文件中没有找到可用的 GNSS 历元',
+  noTextRecords: '文件中没有可回放的数据行',
   timelineIndexing: '正在建立索引',
   timelinePlay: '播放',
   timelinePause: '暂停',

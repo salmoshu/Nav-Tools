@@ -137,3 +137,64 @@ describe('file replay message projection', () => {
     expect(consoleState.messages.value).toHaveLength(consoleState.maxMessages + 2)
   })
 })
+
+describe('file replay elapsed resolver', () => {
+  const consoleState = useConsole(true)
+
+  beforeEach(() => {
+    consoleState.clearMessages()
+    consoleState.dataFormat.value = 'none'
+    consoleState.dataFilter.value = false
+  })
+
+  afterEach(() => {
+    consoleState.clearMessages()
+  })
+
+  it('uses resolver-provided elapsed times per non-empty line', () => {
+    consoleState.beginFileReplayMessages()
+    consoleState.setFileReplayElapsedResolver((line, lineIndex) =>
+      line.startsWith('junk') ? null : lineIndex * 20,
+    )
+    consoleState.addFileReplayData('first\n\nsecond\nthird\n')
+    consoleState.endFileReplayMessages()
+
+    expect(consoleState.messages.value.map((message) => message.fileElapsedMilliseconds)).toEqual([
+      0, 20, 40,
+    ])
+  })
+
+  it('resets the line counter when a resolver is installed mid-stream', () => {
+    consoleState.beginFileReplayMessages()
+    consoleState.addFileReplayData('before\n')
+    consoleState.setFileReplayElapsedResolver((line, lineIndex) => lineIndex * 100)
+    consoleState.addFileReplayData('after\n')
+    consoleState.endFileReplayMessages()
+
+    const elapsed = consoleState.messages.value.map((message) => message.fileElapsedMilliseconds)
+    expect(elapsed[1]).toBe(0)
+  })
+
+  it('falls back to the NMEA clock when the resolver returns null', () => {
+    consoleState.beginFileReplayMessages()
+    consoleState.setFileReplayElapsedResolver(() => null)
+    consoleState.addFileReplayData('$GPGGA,120000.000,one\n$GPGGA,120001.000,two\n')
+    consoleState.endFileReplayMessages()
+
+    expect(consoleState.messages.value.map((message) => message.fileElapsedMilliseconds)).toEqual([
+      0, 1000,
+    ])
+  })
+
+  it('clears the resolver together with the messages', () => {
+    consoleState.beginFileReplayMessages()
+    consoleState.setFileReplayElapsedResolver(() => 999)
+    consoleState.clearMessages()
+
+    consoleState.beginFileReplayMessages()
+    consoleState.addFileReplayData('$GPGGA,120000.000,one\n')
+    consoleState.endFileReplayMessages()
+
+    expect(consoleState.messages.value[0].fileElapsedMilliseconds).toBe(0)
+  })
+})

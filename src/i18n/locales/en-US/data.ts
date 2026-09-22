@@ -1,5 +1,6 @@
 export default {
   noGnssEpochs: 'No usable GNSS epochs were found in the file',
+  noTextRecords: 'No replayable data lines were found in the file',
   timelineIndexing: 'Indexing',
   timelinePlay: 'Play',
   timelinePause: 'Pause',

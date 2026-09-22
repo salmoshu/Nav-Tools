@@ -1,7 +1,11 @@
 import { computed, ref } from "vue"
 import {
   DEFAULT_KEY_VALUE_REGEX,
+  csvHeaderKeys,
+  isCsvHeaderRow,
+  parseCsvRecordWithKeys,
   parseTextRecord,
+  splitCsvLine,
   type ParsedTextRecord,
   type TextDataParser,
 } from '@/core/data/TextRecordParser'
@@ -62,6 +66,45 @@ export function useFlow() {
     }
   }
 
+  // 追加单条记录：注册新 key（回填 null）、处理时间戳、按 rawDataKeys 推值。
+  // 批量导入与文件回放投影共用；调用方可在 record 上注入 time 来对齐虚拟时间轴。
+  const appendRecord = (json: ParsedTextRecord) => {
+    // 自适应添加新的数据源字段
+    Object.keys(json).forEach(key => {
+      if (!(key in flowData.value) && key !== 'time') {
+        flowData.value[key] = Array(flowData.value.plotTime?.length ?? 0).fill(null)
+        flowData.value.rawDataKeys!.push(key)
+      }
+    })
+
+    // 处理时间戳
+    if (typeof json.time === 'number') {
+      if (flowData.value.plotTime?.length == 0) {
+        flowData.value.startTime = Number(json.time)
+      }
+      flowData.value.plotTime!.push(Number(json.time) - flowData.value.startTime!)
+      flowData.value.timestamp!.push(Number(json.time))
+    } else {
+      // 如果没有time属性，则按照样本逐一展示
+      if (flowData.value.plotTime?.length == 0) {
+        flowData.value.startTime = 0
+        flowData.value.plotTime!.push(0)
+        flowData.value.timestamp!.push(0)
+      } else {
+        const lastTimestamp = flowData.value.timestamp![flowData.value.timestamp!.length - 1]
+        flowData.value.plotTime!.push(lastTimestamp + 1)
+        flowData.value.timestamp!.push(lastTimestamp + 1)
+      }
+    }
+
+    // 存储数据
+    flowData.value.rawDataKeys!.forEach(key => {
+      if (Array.isArray(flowData.value[key])) {
+        (flowData.value[key] as any[]).push(key in json ? json[key] : null)
+      }
+    })
+  }
+
   const initRawData = (
     data: string,
     parser: TextDataParser = 'json',
@@ -70,51 +113,33 @@ export function useFlow() {
     clearRawData()
     const lines = data.split("\n")
     flowData.value.isBatchData = true
-    
+
+    // CSV 批量导入：首个非空行若判定为表头（无非空数值单元格），
+    // 其内容作为字段 key（Status View / 绘图共用），表头行本身不进入数据。
+    let csvKeys: string[] | undefined
+    let csvHeaderProbePending = parser === 'csv'
+
     for (const line of lines) {
       if (line.trim() !== "") {
         try {
           const combined_reg = /^(\d{2}:\d{2}:\d{2}\.\d+)?\s*(\[MSG ⬅️\]:\s+|\[STR ➡️\]:\s+|\[HEX ➡️\]:\s+)?/;
           const cleanedLine = line.replace(combined_reg, '').trim()
 
-          const parsed = parseTextRecord(cleanedLine, parser, regexPattern)
-          if (!parsed.valid || !parsed.record) continue
-          const json: ParsedTextRecord = parsed.record
-          
-          // 自适应添加新的数据源字段
-          Object.keys(json).forEach(key => {
-            if (!(key in flowData.value) && key !== 'time') {
-              flowData.value[key] = Array(flowData.value.plotTime?.length ?? 0).fill(null)
-              flowData.value.rawDataKeys!.push(key)
-            }
-          })
-          
-          // 处理时间戳
-          if (typeof json.time === 'number') {
-            if (flowData.value.plotTime?.length == 0) {
-              flowData.value.startTime = Number(json.time)
-            }
-            flowData.value.plotTime!.push(Number(json.time) - flowData.value.startTime!)
-            flowData.value.timestamp!.push(Number(json.time))
-          } else {
-            // 如果没有time属性，则按照样本逐一展示
-            if (flowData.value.plotTime?.length == 0) {
-              flowData.value.startTime = 0
-              flowData.value.plotTime!.push(0)
-              flowData.value.timestamp!.push(0)
-            } else {
-              const lastTimestamp = flowData.value.timestamp![flowData.value.timestamp!.length - 1]
-              flowData.value.plotTime!.push(lastTimestamp + 1)
-              flowData.value.timestamp!.push(lastTimestamp + 1)
+          if (csvHeaderProbePending) {
+            csvHeaderProbePending = false
+            const cells = splitCsvLine(cleanedLine)
+            if (isCsvHeaderRow(cells)) {
+              csvKeys = csvHeaderKeys(cells)
+              continue
             }
           }
-          
-          // 存储数据
-          flowData.value.rawDataKeys!.forEach(key => {
-            if (Array.isArray(flowData.value[key])) {
-              (flowData.value[key] as any[]).push(key in json ? json[key] : null)
-            }
-          })
+
+          const parsed =
+            parser === 'csv' && csvKeys
+              ? parseCsvRecordWithKeys(cleanedLine, csvKeys)
+              : parseTextRecord(cleanedLine, parser, regexPattern)
+          if (!parsed.valid || !parsed.record) continue
+          appendRecord(parsed.record)
         } catch (error) {
           // console.log(`json解析失败: ${error}`)
         }
@@ -268,6 +293,7 @@ export function useFlow() {
     toggleSlideWindow,
     addRawData,
     initRawData,
+    appendRecord,
     clearRawData,
     saveData
   }

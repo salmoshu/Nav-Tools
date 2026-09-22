@@ -240,6 +240,17 @@
                   <el-option :label="t('app.toolbar.bytes', { v: 8 })" :value="8" />
                 </el-select>
               </div>
+              <div class="input-group compact-input-group">
+                <span class="input-label">{{ t('app.toolbar.sampleInterval') }}</span>
+                <el-input-number
+                  v-model="fileSampleInterval"
+                  :min="1"
+                  :step="10"
+                  :precision="0"
+                  controls-position="right"
+                />
+                <span class="input-unit">{{ t('app.toolbar.millisecond') }}</span>
+              </div>
             </div>
             <div class="parser-card" :class="{ 'parser-flash': parserFlash }">
               <div class="parser-copy">
@@ -585,10 +596,17 @@ const ipcRenderer = window.ipcRenderer
 const position = toolbarPosition
 const { currentApplication, currentApplicationId, currentWindows } = useApplicationSelector()
 const { active: fileTimelineLoaded } = useFileTimeline()
+// 时间轴控件可见性：GNSS 时间轴之外，文本样本时钟回放（flow/motor/plot/raw-messages）也用同一条时间轴
+const TIMELINE_FUNC_MODES = new Set(['gnss', 'flow', 'motor'])
+const TIMELINE_WINDOW_IDS = new Set(['plot', 'raw-messages'])
 const fileTimelineActive = computed(
   () =>
     fileTimelineLoaded.value &&
-    currentWindows.value.some((windowDefinition) => windowDefinition.funcMode === 'gnss'),
+    currentWindows.value.some(
+      (windowDefinition) =>
+        TIMELINE_FUNC_MODES.has(windowDefinition.funcMode) ||
+        TIMELINE_WINDOW_IDS.has(windowDefinition.id),
+    ),
 )
 
 // 文件输入中的 MCAP 回放与最近文件（覆盖所有支持的输入类型）。
@@ -663,6 +681,7 @@ const {
   fileTimeTag,
   fileReplaySpeed,
   fileStartOffset,
+  fileSampleInterval,
   filePositionBytes,
   networkIp,
   networkPort,

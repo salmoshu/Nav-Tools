@@ -310,6 +310,7 @@ export default {
       cancelled: '固件升级已取消',
     },
     ackedPackets: '成功包 {acked}/{total}',
+    elapsed: '耗时 {time}',
     sentPackets: '发送总包 {count}',
     retries: '重发 {count}',
     log: '升级日志',

@@ -15,6 +15,11 @@ export interface NetworkCallbacks {
   onDisconnected(options: NetworkConnectionOptions, reason?: string): void
 }
 
+// 对端断电/拔线时 TCP 不会收到 FIN/RST（半开连接），只能靠 keepalive 探针发现。
+// initialDelay 为空闲毫秒数；Windows 上随后的探针间隔/次数取系统默认（1s×10），
+// 即拔线后约 15s 内触发 close → onDisconnected，工具栏开关随之复位。
+const TCP_KEEPALIVE_IDLE_MS = 5000
+
 export class NetworkConnectionService {
   private tcpSocket: TcpSocket | undefined
   private udpSocket: UdpSocket | undefined
@@ -147,6 +152,7 @@ export class NetworkConnectionService {
     this.tcpSocket = socket
 
     socket.setNoDelay(true)
+    socket.setKeepAlive(true, TCP_KEEPALIVE_IDLE_MS)
     socket.once('connect', () => {
       opened = true
       settle(resolve)

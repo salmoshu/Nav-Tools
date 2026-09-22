@@ -31,6 +31,7 @@ test('keeps legacy configuration dialogs polished and inside a narrow viewport',
   page,
 }) => {
   await page.addInitScript((application) => {
+    localStorage.setItem('nav-tools:locale', 'zh-CN')
     localStorage.setItem('nav-tools:custom-applications', JSON.stringify([application]))
     localStorage.setItem('nav-tools:selected-application', application.id)
   }, dialogApplication)
@@ -40,11 +41,13 @@ test('keeps legacy configuration dialogs polished and inside a narrow viewport',
   const cards = page.locator('.vgl-item:not(.vgl-item--placeholder)')
   await expect(cards).toHaveCount(dialogApplication.windowIds.length)
 
-  const plotCard = cards.filter({ has: page.getByText('Plot', { exact: true }) })
+  const plotCard = cards.filter({ has: page.getByText('图表', { exact: true }) })
   await plotCard.locator('.message-btn').click()
   let dialog = page.locator('.plot-message-dialog')
   await expectDialogInsideViewport(page, dialog)
-  await expect(dialog.getByText('JSON 数据结构与输入约定')).toBeAttached()
+  // 窄屏（≤460px）下对话框副标题按 AppDialogTitle 的响应式设计隐藏，只断言标题
+  await expect(dialog.getByText('数据格式说明').first()).toBeVisible()
+  await expect(dialog.locator('.app-dialog-heading__copy small')).toBeHidden()
   await page.screenshot({ path: 'test-results/ui-audit-plot-message-mobile.png' })
   await page.keyboard.press('Escape')
   await expect(dialog).toBeHidden()
@@ -58,7 +61,7 @@ test('keeps legacy configuration dialogs polished and inside a narrow viewport',
   await page.keyboard.press('Escape')
   await expect(dialog).toBeHidden()
 
-  const deviationCard = cards.filter({ has: page.getByText('Deviation Chart', { exact: true }) })
+  const deviationCard = cards.filter({ has: page.getByText('偏差图', { exact: true }) })
   await deviationCard.locator('.config-btn').click()
   dialog = page.locator('.deviation-config-dialog')
   await expectDialogInsideViewport(page, dialog)
@@ -66,7 +69,7 @@ test('keeps legacy configuration dialogs polished and inside a narrow viewport',
   await page.keyboard.press('Escape')
   await expect(dialog).toBeHidden()
 
-  const motorCard = cards.filter({ has: page.getByText('Hex Message', { exact: true }) })
+  const motorCard = cards.filter({ has: page.getByText('Hex报文', { exact: true }) })
   await motorCard.locator('.config-btn').click()
   dialog = page.locator('.motor-config-dialog')
   await expectDialogInsideViewport(page, dialog)
@@ -93,6 +96,13 @@ test('keeps legacy configuration dialogs polished and inside a narrow viewport',
   await expect(dialog).toBeHidden()
 
   await page.setViewportSize({ width: 1280, height: 720 })
+  // 桌面视口下副标题恢复显示
+  await plotCard.locator('.message-btn').click()
+  dialog = page.locator('.plot-message-dialog')
+  await expect(dialog.getByText('JSON 数据结构与输入约定')).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(dialog).toBeHidden()
+
   await plotCard.locator('.layout-btn').click()
   dialog = page.locator('.plot-config-dialog')
   await dialog.getByText('双图', { exact: true }).click()
@@ -114,7 +124,7 @@ test('keeps legacy configuration dialogs polished and inside a narrow viewport',
   await expect(page.locator('html')).toHaveClass(/dark/)
   const darkPlotCard = page
     .locator('.vgl-item:not(.vgl-item--placeholder)')
-    .filter({ has: page.getByText('Plot', { exact: true }) })
+    .filter({ has: page.getByText('图表', { exact: true }) })
   await darkPlotCard.locator('.layout-btn').click()
   dialog = page.locator('.plot-config-dialog')
   await expectDialogInsideViewport(page, dialog)

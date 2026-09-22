@@ -57,6 +57,8 @@ export default {
     second: '秒',
     posFormat: '位置格式',
     bytes: '{v} 字节',
+    sampleInterval: '采样间隔',
+    millisecond: '毫秒',
     parseMethod: '数据格式',
     dataSection: '数据',
     regexPattern: '正则表达式',

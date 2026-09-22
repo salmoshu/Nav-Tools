@@ -257,10 +257,10 @@
       <section v-if="snapshot.phase !== 'idle'" class="iap-section progress-section">
         <div class="progress-heading">
           <strong>{{ statusText }}</strong>
-          <span>{{ formatElapsed(snapshot.elapsedMs) }}</span>
         </div>
         <el-progress :percentage="snapshot.progress" :status="progressStatus" :stroke-width="14" />
         <div class="stats-row">
+          <span>{{ t('common.iap.elapsed', { time: formatElapsed(snapshot.elapsedMs) }) }}</span>
           <span>{{
             t('common.iap.ackedPackets', {
               acked: snapshot.acknowledgedPackets,
