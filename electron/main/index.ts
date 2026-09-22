@@ -20,6 +20,7 @@ import { eventsMap, iapUpgradeService, cameraCalibrationService } from './events
 import { registerCameraCalibrationIpc } from './cameraCalibrationIpc'
 import { registerCameraScriptIpc } from './cameraScriptIpc'
 import { registerLidarIpc } from './lidarIpc'
+import { registerGnssRawIpc } from './gnssRawIpc'
 import { CameraMeasurementAccessStore } from './services/CameraMeasurementAccessStore'
 import { CameraScriptInjector } from './services/CameraScriptInjector'
 import { CameraStreamService } from './services/CameraStreamService'
@@ -96,6 +97,7 @@ const cameraMeasurementStore = new CameraMeasurementAccessStore(app.getPath('use
 registerCameraCalibrationIpc(cameraCalibrationService, cameraMeasurementStore)
 registerCameraScriptIpc(new CameraScriptInjector(), cameraMeasurementStore)
 registerLidarIpc()
+registerGnssRawIpc()
 // 自定义瓦片协议必须在 app ready 之前注册为 privileged scheme
 offlineTileService.registerPrivilegedScheme()
 const cameraStreamOwners = new Set<number>()

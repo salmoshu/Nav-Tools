@@ -10,6 +10,7 @@ import core from './core'
 import data from './data'
 import update from './update'
 import lidar from './lidar'
+import gnssRaw from './gnssRaw'
 
 export default {
   app,
@@ -24,4 +25,5 @@ export default {
   data,
   update,
   lidar,
+  gnssRaw,
 }

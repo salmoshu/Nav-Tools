@@ -68,6 +68,10 @@ export default defineConfig(({ command }) => {
       }),
       monacoEditorPlugin({}),
     ],
+    // RTCM 解码 Worker 走 ES module（robo-gnss-wasm 为 ESM，iife 无法代码分割）
+    worker: {
+      format: 'es',
+    },
     resolve: {
       alias: {
         '@': fileURLToPath(new URL('./src', import.meta.url)),

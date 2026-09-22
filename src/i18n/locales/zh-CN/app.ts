@@ -89,6 +89,7 @@ export default {
       '确认后加载到 LiDAR 时间轴，支持播放、逐帧和倍速。同一会话的 part_N.mcap 分片可多选，也可直接拖入主窗口。',
     mcapLoaded: '已打开录像：{name}',
     mcapLoadedParts: '已打开 MCAP 会话：{count} 个分片',
+    rtcmLoaded: '已加载 RTCM 数据：{name}',
     networkSource: '网络',
     networkSourceDesc: '通过 TCP 客户端或 UDP 监听接收实时数据。',
     networkProtocol: '网络协议',

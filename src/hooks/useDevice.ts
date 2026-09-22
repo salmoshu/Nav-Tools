@@ -26,6 +26,8 @@ import {
 } from '@/core/serial/SerialService'
 import emitter from '@/hooks/useMitt'
 import { useMcapPlayer } from '@/composables/useMcapPlayer'
+import { useGnssRaw } from '@/composables/useGnssRaw'
+import { isRtcmFileName, sniffRtcm } from '@/core/gnssraw/RtcmFileAccess'
 import { RecentInputFiles } from '@/core/file/RecentInputFiles'
 import { mcapBasename } from '@/core/lidar/McapFileAccess'
 import { JsonStorage } from '@/core/storage/JsonStorage'
@@ -792,6 +794,7 @@ function startTimestampPlayback(path: string): void {
 export function useDevice() {
   const isDragOver = ref(false)
   const mcapPlayer = useMcapPlayer()
+  const gnssRaw = useGnssRaw()
 
   // 对话框状态
   const showInputDialog = ref(false)
@@ -968,7 +971,22 @@ export function useDevice() {
 
             await handleTextFile(file)
           } else {
-            // 其他文件类型
+            // 其他文件类型：先嗅探是否为 RTCM3 二进制流（扩展名或帧同步+CRC），
+            // 识别成功则载入 GNSS-Raw 分析，否则按不支持处理
+            const head = new Uint8Array(await file.slice(0, 8192).arrayBuffer())
+            if (isRtcmFileName(file.name) || sniffRtcm(head)) {
+              const ok = await gnssRaw.loadFromFile(file)
+              if (ok) {
+                ElMessage({
+                  message: t('app.toolbar.rtcmLoaded', { name: file.name }),
+                  type: 'success',
+                  placement: 'bottom-right',
+                  offset: 50,
+                })
+                continue
+              }
+              throw new Error(gnssRaw.errorText.value)
+            }
             ElMessage({
               message: t('data.fileTypeUnsupported', { name: file.name }),
               type: 'warning',
@@ -1166,7 +1184,7 @@ export function useDevice() {
     if (!window.electronAPI?.openFileDialog) {
       const fileInput = document.createElement('input')
       fileInput.type = 'file'
-      fileInput.accept = '.txt,.csv,.dat,.log,.mcap'
+      fileInput.accept = '.txt,.csv,.dat,.log,.mcap,.rtcm3,.rtcm,.rtc,.rt3'
       fileInput.multiple = true
       fileInput.style.display = 'none'
       document.body.appendChild(fileInput)
@@ -1192,7 +1210,12 @@ export function useDevice() {
     selectedPaths.value = []
     const paths = (await window.electronAPI.openFileDialog({
       scope: 'data-access-file',
-      filters: [{ name: 'Log / MCAP', extensions: ['txt', 'csv', 'dat', 'log', 'mcap'] }],
+      filters: [
+        {
+          name: 'Log / MCAP / RTCM',
+          extensions: ['txt', 'csv', 'dat', 'log', 'mcap', 'rtcm3', 'rtcm', 'rtc', 'rt3'],
+        },
+      ],
       multi: true,
     })) as string[] | null
     if (!paths || paths.length === 0) return
@@ -1489,6 +1512,47 @@ export function useDevice() {
         fileInputLoading.value = false
       }
       return
+    }
+    // RTCM 二进制流自带解码管线（Worker + WASM），不经过文本解析器、时间标签回放或设备连接。
+    if (activeTab.value === 'file') {
+      const path = filePath.value.trim()
+      const files = selectedFilePath.value === path ? selectedFiles.value : []
+      const extension = /\.([a-z0-9]+)$/i.exec(path)?.[1]?.toLowerCase()
+      let isRtcm = isRtcmFileName(path)
+      if (!isRtcm && !extension && path) {
+        // 无扩展名（如采集文件 RTCM_test）：嗅探二进制帧头再决定路由
+        try {
+          if (files[0]) {
+            const head = new Uint8Array(await files[0].slice(0, 8192).arrayBuffer())
+            isRtcm = sniffRtcm(head)
+          } else if (window.electronAPI?.gnssRawReadFile) {
+            const res = await window.electronAPI.gnssRawReadFile(path)
+            isRtcm = sniffRtcm(new Uint8Array(res.data, 0, Math.min(res.size, 8192)))
+          }
+        } catch {
+          isRtcm = false
+        }
+      }
+      if (isRtcm) {
+        fileInputLoading.value = true
+        try {
+          const ok = files[0]
+            ? await gnssRaw.loadFromFile(files[0])
+            : await gnssRaw.loadFromPath(path)
+          if (!ok) throw new Error(gnssRaw.errorText.value)
+          dataSourceChangesCommitted = true
+          dataSourceSettings.activeSource = 'file'
+          saveDataSourceSettings()
+          showInputDialog.value = false
+        } catch (error) {
+          ElMessage.error(
+            `${t('gnssRaw.common.loadError')}: ${error instanceof Error ? error.message : String(error)}`,
+          )
+        } finally {
+          fileInputLoading.value = false
+        }
+        return
+      }
     }
     // 文件页签的自适应分发门控：带扩展名且不属于文本类型的文件不应进入文本解析流程
     if (activeTab.value === 'file') {

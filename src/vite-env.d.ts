@@ -85,6 +85,7 @@ interface Window {
     quitAndInstall: () => Promise<void>
     setUpdaterPrefs: (prefs: import('./core/update/UpdaterService').UpdaterPrefs) => void
     lidarMcapReadFile: (path: string) => Promise<{ data: ArrayBuffer; size: number }>
+    gnssRawReadFile: (path: string) => Promise<{ data: ArrayBuffer; size: number }>
   }
   ipcRenderer: import('electron').IpcRenderer
 }

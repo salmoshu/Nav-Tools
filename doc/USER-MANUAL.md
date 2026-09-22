@@ -55,6 +55,12 @@ instead of each asking for a port again.
 | GNSS | **GNSS Deviation** | Positioning trajectory and fix status |
 | GNSS | **GNSS Signals** | Satellite signal strength and status |
 | GNSS | **Sky Plot** | Satellite azimuth/elevation distribution |
+| GNSS-Raw | **Frame Stats** | RTCM stream statistics: valid/CRC-error frames, per-type message counts, station info |
+| GNSS-Raw | **Visibility** | Per-constellation satellite visibility and sampling completeness over time |
+| GNSS-Raw | **GF Combination** | Geometry-free carrier combination per satellite: cycle-slip and ionospheric drift check |
+| GNSS-Raw | **Pseudorange Noise** | Per-frequency pseudorange noise (median / RMS / P95) by constellation |
+| GNSS-Raw | **SNR Distribution** | Signal-strength histograms per constellation and frequency |
+| GNSS-Raw | **Ephemeris Events** | Broadcast ephemeris updates: iode changes/flaps, expiry, per-type decode failures |
 | Motor | **Motor Parameters** | Read, configure and write motor parameters |
 
 ---
@@ -136,7 +142,7 @@ are persisted, so you configure a connection once.
 
 | Source | Configured here |
 |---|---|
-| **File** | Path to a recorded file for replay |
+| **File** | Path to a recorded file for replay. Text logs replay through the timeline; `.mcap` loads onto the LiDAR timeline; RTCM3 captures (`.rtcm3/.rtcm/.rtc/.rt3`, including extension-less captures, auto-detected by frame sync + CRC) decode into the GNSS-Raw analysis dataset |
 | **Serial port** | Port, baud rate and framing |
 | **TCP** | Host and port |
 | **UDP** | Host and port |
@@ -198,6 +204,39 @@ Satellite distribution by azimuth and elevation.
 ### 5.8 Motor Parameters
 
 Reads, edits and writes motor parameters to the connected device.
+
+### 5.9 GNSS-Raw (RTCM Analysis)
+
+The GNSS-Raw application decodes RTCM3 captures (mixed RTCM3 + NMEA streams are
+supported) with the Robo-GNSS decoder compiled to WebAssembly, and builds a
+columnar dataset for offline raw-data analysis. It is aimed at GNSS R&D
+workflows: observation quality and ephemeris-update anomaly investigation.
+
+1. Add the **GNSS-Raw** application (it ships with six panels).
+2. Load a capture via `Input → File` (select or paste the path) or simply drop
+   the file onto the main window. Files without an extension are sniffed for
+   RTCM3 framing, so raw capture dumps work too.
+3. Decoding runs in a background worker; all six panels share the resulting
+   dataset.
+
+- **Frame Stats** — stream totals (bytes, valid frames, CRC errors, decode
+  failures), per-message-type counts (MSM, ephemeris, proprietary) and station
+  (antenna position) events.
+- **Visibility** — stacked per-constellation satellite counts over time,
+  sampling interval/completeness, and a per-satellite visibility table.
+- **GF Combination** — geometry-free carrier combination (λ1L1 − λ2L2) for a
+  selected dual-frequency satellite; the linear drift rate highlights
+  ionospheric drift, and steps in the series reveal cycle slips.
+- **Pseudorange Noise** — epoch-differenced code-minus-carrier noise aggregated
+  per constellation/frequency (median, RMS, P95, outlier rate).
+- **SNR Distribution** — 1 dB histograms of signal strength per constellation
+  and frequency slot.
+- **Ephemeris Events** — per-satellite iode/iodc change counts, flap detection
+  (repeated changes within one hour), expired ephemerides (age beyond fit
+  interval) and per-message-type decode failures (e.g. GLONASS string errors).
+
+> GNSS-Raw analyzes recorded files only; live serial RTCM streaming is not
+> wired into these panels yet.
 
 ---
 

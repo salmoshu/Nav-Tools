@@ -21,7 +21,7 @@ export type ApplicationIcon =
   | 'chart'
   | 'radar'
 export type PanelDataMode = 'general' | 'flow' | 'gnss' | 'motor'
-export type PanelCatalogGroup = 'general' | 'flow' | 'gnss' | 'camera' | 'lidar'
+export type PanelCatalogGroup = 'general' | 'flow' | 'gnss' | 'camera' | 'lidar' | 'gnssraw'
 
 export interface UserApplication {
   id: string
@@ -225,6 +225,78 @@ export const panelRegistry: readonly PanelDefinition[] = [
     description: 'panel.lidar-inspector.desc',
     componentName: 'LidarInspector',
     componentPath: '@/components/windows/lidar/LidarInspector.vue',
+  },
+  {
+    id: 'gnssraw-frames',
+    moduleId: 'gnssraw',
+    appMode: 'workspace',
+    funcMode: 'general',
+    catalogGroup: 'gnssraw',
+    action: 'gnssraw-frames',
+    title: 'panel.gnssraw-frames.title',
+    description: 'panel.gnssraw-frames.desc',
+    componentName: 'GnssRawFrames',
+    componentPath: '@/components/windows/gnssraw/GnssRawFrames.vue',
+  },
+  {
+    id: 'gnssraw-visibility',
+    moduleId: 'gnssraw',
+    appMode: 'workspace',
+    funcMode: 'general',
+    catalogGroup: 'gnssraw',
+    action: 'gnssraw-visibility',
+    title: 'panel.gnssraw-visibility.title',
+    description: 'panel.gnssraw-visibility.desc',
+    componentName: 'GnssRawVisibility',
+    componentPath: '@/components/windows/gnssraw/GnssRawVisibility.vue',
+  },
+  {
+    id: 'gnssraw-gf',
+    moduleId: 'gnssraw',
+    appMode: 'workspace',
+    funcMode: 'general',
+    catalogGroup: 'gnssraw',
+    action: 'gnssraw-gf',
+    title: 'panel.gnssraw-gf.title',
+    description: 'panel.gnssraw-gf.desc',
+    componentName: 'GnssRawGf',
+    componentPath: '@/components/windows/gnssraw/GnssRawGf.vue',
+  },
+  {
+    id: 'gnssraw-prnoise',
+    moduleId: 'gnssraw',
+    appMode: 'workspace',
+    funcMode: 'general',
+    catalogGroup: 'gnssraw',
+    action: 'gnssraw-prnoise',
+    title: 'panel.gnssraw-prnoise.title',
+    description: 'panel.gnssraw-prnoise.desc',
+    componentName: 'GnssRawPrNoise',
+    componentPath: '@/components/windows/gnssraw/GnssRawPrNoise.vue',
+  },
+  {
+    id: 'gnssraw-snr',
+    moduleId: 'gnssraw',
+    appMode: 'workspace',
+    funcMode: 'general',
+    catalogGroup: 'gnssraw',
+    action: 'gnssraw-snr',
+    title: 'panel.gnssraw-snr.title',
+    description: 'panel.gnssraw-snr.desc',
+    componentName: 'GnssRawSnr',
+    componentPath: '@/components/windows/gnssraw/GnssRawSnr.vue',
+  },
+  {
+    id: 'gnssraw-eph',
+    moduleId: 'gnssraw',
+    appMode: 'workspace',
+    funcMode: 'general',
+    catalogGroup: 'gnssraw',
+    action: 'gnssraw-eph',
+    title: 'panel.gnssraw-eph.title',
+    description: 'panel.gnssraw-eph.desc',
+    componentName: 'GnssRawEph',
+    componentPath: '@/components/windows/gnssraw/GnssRawEph.vue',
   },
 ]
 

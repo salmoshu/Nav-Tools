@@ -10,6 +10,7 @@ const GNSS_MESSAGES_MIGRATION_KEY = 'nav-tools:migration:gnss-messages-v1'
 const FLOW_DEFAULT_MIGRATION_KEY = 'nav-tools:migration:flow-default-v1'
 const CAMERA_TERMINAL_MIGRATION_KEY = 'nav-tools:migration:camera-terminal-v1'
 const LIDAR_DEFAULT_MIGRATION_KEY = 'nav-tools:migration:lidar-default-v1'
+const GNSSRAW_DEFAULT_MIGRATION_KEY = 'nav-tools:migration:gnssraw-default-v1'
 
 export const DEFAULT_APPLICATIONS: readonly UserApplication[] = [
   {
@@ -51,6 +52,21 @@ export const DEFAULT_APPLICATIONS: readonly UserApplication[] = [
     icon: 'radar',
     accent: '#06b6d4',
     windowIds: ['lidar-scene', 'lidar-scores', 'lidar-plot', 'lidar-inspector'],
+  },
+  {
+    id: 'gnssraw',
+    name: 'GNSS-Raw',
+    description: 'RTCM raw stream analysis: frames, visibility, GF, noise, SNR, ephemeris',
+    icon: 'satellite',
+    accent: '#6366f1',
+    windowIds: [
+      'gnssraw-frames',
+      'gnssraw-visibility',
+      'gnssraw-gf',
+      'gnssraw-prnoise',
+      'gnssraw-snr',
+      'gnssraw-eph',
+    ],
   },
 ]
 
@@ -149,6 +165,19 @@ export class ApplicationStorage {
       }
       this.storage.writeRaw(LIDAR_DEFAULT_MIGRATION_KEY, '1')
     }
+    if (this.storage.readRaw(GNSSRAW_DEFAULT_MIGRATION_KEY) === null) {
+      const gnssrawDefault = DEFAULT_APPLICATIONS.find(
+        (application) => application.id === 'gnssraw',
+      )
+      if (
+        applications.length > 0 &&
+        gnssrawDefault &&
+        !applications.some(({ id }) => id === 'gnssraw')
+      ) {
+        applications.push(cloneApplications([gnssrawDefault])[0])
+      }
+      this.storage.writeRaw(GNSSRAW_DEFAULT_MIGRATION_KEY, '1')
+    }
     this.saveApplications(applications)
     return applications
   }
@@ -192,6 +221,7 @@ export class ApplicationStorage {
     this.storage.writeRaw(FLOW_DEFAULT_MIGRATION_KEY, '1')
     this.storage.writeRaw(CAMERA_TERMINAL_MIGRATION_KEY, '1')
     this.storage.writeRaw(LIDAR_DEFAULT_MIGRATION_KEY, '1')
+    this.storage.writeRaw(GNSSRAW_DEFAULT_MIGRATION_KEY, '1')
     return defaults
   }
 

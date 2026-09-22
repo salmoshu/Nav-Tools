@@ -91,6 +91,7 @@ export default {
       'Confirm to load the LiDAR timeline for playback, frame stepping and speed control. Select all part_N.mcap files from one session together, or drop them onto the main window.',
     mcapLoaded: 'Recording opened: {name}',
     mcapLoadedParts: 'MCAP session opened: {count} parts',
+    rtcmLoaded: 'RTCM data loaded: {name}',
     networkSource: 'Network',
     networkSourceDesc: 'Receive real-time data via TCP client or UDP listener.',
     networkProtocol: 'Network Protocol',

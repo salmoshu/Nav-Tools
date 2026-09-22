@@ -59,4 +59,28 @@ export default {
     title: 'Message Inspector',
     desc: 'Inspect decoded messages of the current frame',
   },
+  'gnssraw-frames': {
+    title: 'Frame Stats',
+    desc: 'RTCM message type distribution, CRC errors and decode failures',
+  },
+  'gnssraw-visibility': {
+    title: 'Sat Visibility',
+    desc: 'Per-constellation satellite timeline, per-sat presence and sampling completeness',
+  },
+  'gnssraw-gf': {
+    title: 'GF Combination',
+    desc: 'Dual-frequency carrier GF combination series and drift rate',
+  },
+  'gnssraw-prnoise': {
+    title: 'Pseudorange Noise',
+    desc: 'Per-frequency pseudorange noise statistics and outlier ratio',
+  },
+  'gnssraw-snr': {
+    title: 'SNR Distribution',
+    desc: 'Per-constellation per-frequency SNR histogram',
+  },
+  'gnssraw-eph': {
+    title: 'Ephemeris Status',
+    desc: 'Ephemeris update events, iode flapping, decode failures and expiry',
+  },
 }

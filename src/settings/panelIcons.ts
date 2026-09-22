@@ -26,6 +26,12 @@ export const panelIconComponents: Readonly<Record<string, Component>> = {
   'lidar-plot': TrendCharts,
   'lidar-scores': Histogram,
   'lidar-inspector': Document,
+  'gnssraw-frames': Monitor,
+  'gnssraw-visibility': Compass,
+  'gnssraw-gf': TrendCharts,
+  'gnssraw-prnoise': Aim,
+  'gnssraw-snr': Histogram,
+  'gnssraw-eph': Document,
 }
 
 export function getPanelIconComponent(action?: string): Component {

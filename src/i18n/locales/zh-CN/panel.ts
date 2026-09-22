@@ -59,4 +59,28 @@ export default {
     title: '消息检查',
     desc: '查看当前帧各话题的解码消息',
   },
+  'gnssraw-frames': {
+    title: '帧统计',
+    desc: 'RTCM 报文类型分布、CRC 错误与译码失败统计',
+  },
+  'gnssraw-visibility': {
+    title: '卫星可见性',
+    desc: '分星座卫星数时间线、逐星可见性与采样完整率',
+  },
+  'gnssraw-gf': {
+    title: 'GF 组合',
+    desc: '双频载波 GF 组合序列与漂移率',
+  },
+  'gnssraw-prnoise': {
+    title: '伪距噪声',
+    desc: '分频点伪距噪声统计与粗差占比',
+  },
+  'gnssraw-snr': {
+    title: 'SNR 分布',
+    desc: '分星座分频点载噪比分布直方图',
+  },
+  'gnssraw-eph': {
+    title: '星历状态',
+    desc: '星历更新事件、iode 翻动、译码失败与过期分析',
+  },
 }
