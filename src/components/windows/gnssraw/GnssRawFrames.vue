@@ -7,6 +7,24 @@
       {{ t('gnssRaw.common.loadError') }}: {{ store.errorText.value }}
     </div>
     <template v-else-if="stats">
+      <div v-if="store.fileInfo.value" class="source-bar">
+        <span class="source-kind">{{ store.kind.value === 'rtcm' ? 'RTCM' : 'RINEX' }}</span>
+        <span class="source-name" :title="store.fileInfo.value.path ?? store.fileInfo.value.name">
+          {{ store.fileInfo.value.name }}
+        </span>
+        <span v-if="store.fileInfo.value.count > 1" class="source-count">
+          {{ t('gnssRaw.frames.sourceFiles', { count: store.fileInfo.value.count }) }}
+        </span>
+        <el-button
+          v-if="store.kind.value === 'rtcm'"
+          class="export-btn"
+          size="small"
+          :loading="exporting"
+          @click="exportRnx"
+        >
+          {{ t('gnssRaw.frames.exportRnx') }}
+        </el-button>
+      </div>
       <div class="cards">
         <div v-for="card in cards" :key="card.label" class="card">
           <div class="card-value">{{ card.value }}</div>
@@ -50,12 +68,43 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
+import { ElMessage } from 'element-plus'
 import { t } from '@/i18n'
 import { useGnssRaw } from '@/composables/useGnssRaw'
 import { msgTypeName } from '@/core/gnssraw/analysis'
 
 const store = useGnssRaw()
+
+const exporting = ref(false)
+
+async function exportRnx(): Promise<void> {
+  if (exporting.value) return
+  exporting.value = true
+  try {
+    const files = await store.convertToRnx()
+    for (const file of files) {
+      const url = URL.createObjectURL(new Blob([new Uint8Array(file.data)], { type: 'text/plain' }))
+      const link = document.createElement('a')
+      link.href = url
+      link.download = file.name
+      link.click()
+      URL.revokeObjectURL(url)
+    }
+    ElMessage({
+      message: t('gnssRaw.frames.exportRnxDone', { count: files.length }),
+      type: 'success',
+      placement: 'bottom-right',
+      offset: 50,
+    })
+  } catch (error) {
+    ElMessage.error(
+      `${t('gnssRaw.frames.exportRnxFailed')}: ${error instanceof Error ? error.message : String(error)}`,
+    )
+  } finally {
+    exporting.value = false
+  }
+}
 
 const stats = computed(() => store.dataset.value?.stats ?? store.liveStats.value)
 
@@ -140,6 +189,33 @@ const station = computed(() => {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 6px;
+}
+.source-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  padding: 4px 8px;
+  background: var(--el-fill-color-light);
+  border-radius: 6px;
+}
+.source-kind {
+  flex-shrink: 0;
+  font-weight: 600;
+  color: var(--el-color-primary);
+}
+.source-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.source-count {
+  flex-shrink: 0;
+  color: var(--el-text-color-secondary);
+}
+.export-btn {
+  margin-left: auto;
+  flex-shrink: 0;
 }
 .card {
   background: var(--el-fill-color-light);

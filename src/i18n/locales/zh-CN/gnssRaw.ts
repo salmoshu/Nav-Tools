@@ -2,7 +2,7 @@
 export default {
   common: {
     noData: '未加载数据',
-    emptyHint: '通过数据接入 → 文件输入选择 RTCM 文件，或直接拖入窗口',
+    emptyHint: '通过数据接入 → 文件输入选择 RTCM / RINEX 文件，或直接拖入窗口',
     loading: '解码中',
     loadError: '加载失败',
     relativeTime: '相对时间 (s)',
@@ -24,6 +24,10 @@ export default {
     station: '站点信息',
     stationPos: 'ECEF 位置 (m)',
     stationHgt: '天线高 (m)',
+    sourceFiles: '{count} 个文件',
+    exportRnx: '导出 RINEX',
+    exportRnxDone: '已导出 {count} 个 RINEX 文件',
+    exportRnxFailed: 'RINEX 导出失败',
   },
   visibility: {
     timeline: '分星座卫星数',

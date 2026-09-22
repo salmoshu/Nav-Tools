@@ -1,5 +1,8 @@
 // RTCM 二进制流文件获取与识别：Electron 走主进程 IPC，Web 降级 File API。
 // 扩展名之外提供内容嗅探——实际采样（如 RTCM_test）可能没有扩展名。
+import type { GnssRawKind } from './types'
+
+export type { GnssRawKind }
 
 export interface LoadedRtcmBytes {
   name: string
@@ -16,6 +19,51 @@ export function isRtcmFileName(name: string): boolean {
   const dot = lower.lastIndexOf('.')
   if (dot < 0) return false
   return (RTCM_FILE_EXTENSIONS as readonly string[]).includes(lower.slice(dot + 1))
+}
+
+/** 常见 RINEX 扩展名；RINEX2 年代式命名（.23o/.25n…）由正则单独覆盖 */
+export const RNX_FILE_EXTENSIONS = [
+  'rnx',
+  'obs',
+  'nav',
+  'gnav',
+  'hnav',
+  'qnav',
+  'lnav',
+  'cnav',
+  'glo',
+  'gps',
+  'gal',
+] as const
+
+const RNX2_NAME_PATTERN = /\.\d{2}[onghqlp]$/i
+
+export function isRnxFileName(name: string): boolean {
+  const lower = name.toLowerCase()
+  if (RNX2_NAME_PATTERN.test(lower)) return true
+  const dot = lower.lastIndexOf('.')
+  if (dot < 0) return false
+  return (RNX_FILE_EXTENSIONS as readonly string[]).includes(lower.slice(dot + 1))
+}
+
+/**
+ * RINEX 内容嗅探：首行 61-80 列固定为 "RINEX VERSION / TYPE" 标签。
+ * Hatanaka 压缩（.crx/.YYd）首行也是该标签但类型为 COMPACT —— 当前不支持，
+ * 会在解码阶段以空数据集呈现。
+ */
+export function sniffRnx(bytes: Uint8Array, probeBytes = 512): boolean {
+  if (bytes.length < 80) return false
+  const limit = Math.min(bytes.length, probeBytes)
+  let text = ''
+  for (let i = 0; i < limit; i++) text += String.fromCharCode(bytes[i])
+  return text.slice(60, 80) === 'RINEX VERSION / TYPE'
+}
+
+/** 按文件名优先、内容嗅探兜底判定 GNSS-Raw 可加载的数据种类。 */
+export function detectGnssRawKind(name: string, headBytes: Uint8Array): GnssRawKind | null {
+  if (isRtcmFileName(name) || sniffRtcm(headBytes)) return 'rtcm'
+  if (isRnxFileName(name) || sniffRnx(headBytes)) return 'rnx'
+  return null
 }
 
 // —— CRC24Q（RTCM3 校验，多项式 0x1864CFB） ——

@@ -27,7 +27,11 @@ import {
 import emitter from '@/hooks/useMitt'
 import { useMcapPlayer } from '@/composables/useMcapPlayer'
 import { useGnssRaw } from '@/composables/useGnssRaw'
-import { isRtcmFileName, sniffRtcm } from '@/core/gnssraw/RtcmFileAccess'
+import {
+  detectGnssRawKind,
+  isRtcmFileName,
+  isRnxFileName,
+} from '@/core/gnssraw/RtcmFileAccess'
 import { RecentInputFiles } from '@/core/file/RecentInputFiles'
 import { mcapBasename } from '@/core/lidar/McapFileAccess'
 import { JsonStorage } from '@/core/storage/JsonStorage'
@@ -917,6 +921,10 @@ export function useDevice() {
       const files = Array.from(event.dataTransfer.files)
       // LiDAR MCAP 录像优先分发（避免被文本分支误吞）；一次拖入多个分片时合并为单会话加载
       const mcapFiles = files.filter((file) => isMcapPath(file.name))
+      // GNSS-Raw 文件（RTCM 单文件 / RINEX obs+nav 组合）按名字识别，合并一次加载
+      const gnssRawFiles = files.filter(
+        (file) => isRtcmFileName(file.name) || isRnxFileName(file.name),
+      )
 
       for (const file of files) {
         try {
@@ -941,6 +949,26 @@ export function useDevice() {
               throw new Error(mcapPlayer.errorText.value)
             }
             continue
+          }
+          if (isRtcmFileName(file.name) || isRnxFileName(file.name)) {
+            // 同批 GNSS-Raw 文件随首个一起加载（RTCM 单文件 / RINEX obs+nav）
+            if (file !== gnssRawFiles[0]) continue
+            const ok = await gnssRaw.loadFromFiles(gnssRawFiles)
+            if (ok) {
+              ElMessage({
+                message: t(
+                  isRtcmFileName(file.name) && gnssRawFiles.length === 1
+                    ? 'app.toolbar.rtcmLoaded'
+                    : 'app.toolbar.rnxLoaded',
+                  { name: file.name, count: gnssRawFiles.length },
+                ),
+                type: 'success',
+                placement: 'bottom-right',
+                offset: 50,
+              })
+              continue
+            }
+            throw new Error(gnssRaw.errorText.value)
           }
           if (
             file.type.toLowerCase().includes('log') ||
@@ -971,11 +999,11 @@ export function useDevice() {
 
             await handleTextFile(file)
           } else {
-            // 其他文件类型：先嗅探是否为 RTCM3 二进制流（扩展名或帧同步+CRC），
+            // 其他文件类型：按内容嗅探 GNSS-Raw 数据（RTCM3 帧同步+CRC / RINEX 头部），
             // 识别成功则载入 GNSS-Raw 分析，否则按不支持处理
             const head = new Uint8Array(await file.slice(0, 8192).arrayBuffer())
-            if (isRtcmFileName(file.name) || sniffRtcm(head)) {
-              const ok = await gnssRaw.loadFromFile(file)
+            if (detectGnssRawKind(file.name, head)) {
+              const ok = await gnssRaw.loadFromFiles([file])
               if (ok) {
                 ElMessage({
                   message: t('app.toolbar.rtcmLoaded', { name: file.name }),
@@ -1184,7 +1212,7 @@ export function useDevice() {
     if (!window.electronAPI?.openFileDialog) {
       const fileInput = document.createElement('input')
       fileInput.type = 'file'
-      fileInput.accept = '.txt,.csv,.dat,.log,.mcap,.rtcm3,.rtcm,.rtc,.rt3'
+      fileInput.accept = '.txt,.csv,.dat,.log,.mcap,.rtcm3,.rtcm,.rtc,.rt3,.rnx,.obs,.nav,.glo'
       fileInput.multiple = true
       fileInput.style.display = 'none'
       document.body.appendChild(fileInput)
@@ -1192,7 +1220,9 @@ export function useDevice() {
         const files = Array.from(fileInput.files ?? [])
         fileInput.remove()
         if (files.length === 0) return
-        if (files.length > 1 && !files.every((item) => isMcapPath(item.name))) {
+        const allMcap = files.every((item) => isMcapPath(item.name))
+        const allRnx = files.every((item) => isRnxFileName(item.name))
+        if (files.length > 1 && !allMcap && !allRnx) {
           ElMessage.warning(t('app.toolbar.fileSelectionMixed'))
           return
         }
@@ -1212,14 +1242,21 @@ export function useDevice() {
       scope: 'data-access-file',
       filters: [
         {
-          name: 'Log / MCAP / RTCM',
-          extensions: ['txt', 'csv', 'dat', 'log', 'mcap', 'rtcm3', 'rtcm', 'rtc', 'rt3'],
+          name: 'Log / MCAP / RTCM / RINEX',
+          extensions: [
+            'txt', 'csv', 'dat', 'log', 'mcap',
+            'rtcm3', 'rtcm', 'rtc', 'rt3',
+            'rnx', 'obs', 'nav', 'gnav', 'hnav', 'qnav', 'lnav', 'cnav', 'glo', 'gps', 'gal',
+          ],
         },
+        { name: 'All Files', extensions: ['*'] },
       ],
       multi: true,
     })) as string[] | null
     if (!paths || paths.length === 0) return
-    if (paths.length > 1 && !paths.every((item) => isMcapPath(item))) {
+    const allMcap = paths.every((item) => isMcapPath(item))
+    const allRnx = paths.every((item) => isRnxFileName(item))
+    if (paths.length > 1 && !allMcap && !allRnx) {
       ElMessage.warning(t('app.toolbar.fileSelectionMixed'))
       return
     }
@@ -1513,32 +1550,39 @@ export function useDevice() {
       }
       return
     }
-    // RTCM 二进制流自带解码管线（Worker + WASM），不经过文本解析器、时间标签回放或设备连接。
+    // RTCM 二进制流 / RINEX 文本自带解码管线（Worker + WASM），不经过文本解析器、时间标签回放或设备连接。
     if (activeTab.value === 'file') {
       const path = filePath.value.trim()
       const files = selectedFilePath.value === path ? selectedFiles.value : []
+      const pathList = selectedFilePath.value === path ? selectedPaths.value : []
+      const names = files.length > 0 ? files.map((file) => file.name) : pathList.length > 1 ? pathList : [path]
       const extension = /\.([a-z0-9]+)$/i.exec(path)?.[1]?.toLowerCase()
-      let isRtcm = isRtcmFileName(path)
-      if (!isRtcm && !extension && path) {
-        // 无扩展名（如采集文件 RTCM_test）：嗅探二进制帧头再决定路由
+      let isGnssRaw = names.every((name) => isRtcmFileName(name) || isRnxFileName(name))
+      if (!isGnssRaw && names.length === 1 && !extension && path) {
+        // 无扩展名（如采集文件 RTCM_test）：嗅探帧头再决定路由
         try {
           if (files[0]) {
             const head = new Uint8Array(await files[0].slice(0, 8192).arrayBuffer())
-            isRtcm = sniffRtcm(head)
+            isGnssRaw = detectGnssRawKind(names[0], head) !== null
           } else if (window.electronAPI?.gnssRawReadFile) {
             const res = await window.electronAPI.gnssRawReadFile(path)
-            isRtcm = sniffRtcm(new Uint8Array(res.data, 0, Math.min(res.size, 8192)))
+            isGnssRaw =
+              detectGnssRawKind(
+                names[0],
+                new Uint8Array(res.data, 0, Math.min(res.size, 8192)),
+              ) !== null
           }
         } catch {
-          isRtcm = false
+          isGnssRaw = false
         }
       }
-      if (isRtcm) {
+      if (isGnssRaw) {
         fileInputLoading.value = true
         try {
-          const ok = files[0]
-            ? await gnssRaw.loadFromFile(files[0])
-            : await gnssRaw.loadFromPath(path)
+          const ok =
+            files.length > 0
+              ? await gnssRaw.loadFromFiles(files)
+              : await gnssRaw.loadFromPaths(pathList.length > 1 ? pathList : [path])
           if (!ok) throw new Error(gnssRaw.errorText.value)
           dataSourceChangesCommitted = true
           dataSourceSettings.activeSource = 'file'

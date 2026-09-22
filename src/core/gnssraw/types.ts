@@ -3,6 +3,9 @@
 // index.d.ts —— 仅 Worker 边界模块直接引用 wasm 包，其余模块只依赖本文件，
 // 这样分析/数据集逻辑可以在无 WASM 环境下单测。
 
+/** GNSS-Raw 可加载的数据种类：RTCM 二进制流 / RINEX 文本（观测与星历） */
+export type GnssRawKind = 'rtcm' | 'rnx'
+
 /** 星座 id（与 robo-gnss-wasm 的 SYS 一致） */
 export const GNSS_SYS = Object.freeze({
   NONE: 0,

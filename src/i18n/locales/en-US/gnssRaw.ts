@@ -2,7 +2,7 @@
 export default {
   common: {
     noData: 'No data loaded',
-    emptyHint: 'Pick an RTCM file via Data Input → File, or drop one into the window',
+    emptyHint: 'Pick an RTCM / RINEX file via Data Input → File, or drop files into the window',
     loading: 'Decoding',
     loadError: 'Load failed',
     relativeTime: 'Relative time (s)',
@@ -24,6 +24,10 @@ export default {
     station: 'Station',
     stationPos: 'ECEF position (m)',
     stationHgt: 'Antenna height (m)',
+    sourceFiles: '{count} files',
+    exportRnx: 'Export RINEX',
+    exportRnxDone: 'Exported {count} RINEX files',
+    exportRnxFailed: 'RINEX export failed',
   },
   visibility: {
     timeline: 'Satellites by constellation',

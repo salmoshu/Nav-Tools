@@ -51,7 +51,7 @@ export default {
     filePathPlaceholder: 'Enter file path',
     selectFile: 'Select File',
     fileSelectionMixed:
-      'Select one text file at a time, or multiple .mcap parts from the same session.',
+      'Select one text file at a time, or multiple .mcap parts / RINEX obs+nav files from the same session.',
     timeTag: 'Timestamp Playback',
     timeTagDesc: 'Read the same-named .tag file and replay at the original acquisition interval.',
     replaySpeed: 'Replay Speed',
@@ -92,6 +92,7 @@ export default {
     mcapLoaded: 'Recording opened: {name}',
     mcapLoadedParts: 'MCAP session opened: {count} parts',
     rtcmLoaded: 'RTCM data loaded: {name}',
+    rnxLoaded: 'RINEX data loaded: {name}',
     networkSource: 'Network',
     networkSourceDesc: 'Receive real-time data via TCP client or UDP listener.',
     networkProtocol: 'Network Protocol',

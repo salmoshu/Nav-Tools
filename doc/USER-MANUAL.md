@@ -142,7 +142,7 @@ are persisted, so you configure a connection once.
 
 | Source | Configured here |
 |---|---|
-| **File** | Path to a recorded file for replay. Text logs replay through the timeline; `.mcap` loads onto the LiDAR timeline; RTCM3 captures (`.rtcm3/.rtcm/.rtc/.rt3`, including extension-less captures, auto-detected by frame sync + CRC) decode into the GNSS-Raw analysis dataset |
+| **File** | Path to a recorded file for replay. Text logs replay through the timeline; `.mcap` loads onto the LiDAR timeline; RTCM3 captures (`.rtcm3/.rtcm/.rtc/.rt3`, including extension-less captures, auto-detected by frame sync + CRC) and RINEX files (`.rnx/.obs/.nav/.glo/...`, obs+nav pairs may be multi-selected) decode into the GNSS-Raw analysis dataset |
 | **Serial port** | Port, baud rate and framing |
 | **TCP** | Host and port |
 | **UDP** | Host and port |
@@ -205,23 +205,32 @@ Satellite distribution by azimuth and elevation.
 
 Reads, edits and writes motor parameters to the connected device.
 
-### 5.9 GNSS-Raw (RTCM Analysis)
+### 5.9 GNSS-Raw (Raw Data Analysis)
 
 The GNSS-Raw application decodes RTCM3 captures (mixed RTCM3 + NMEA streams are
-supported) with the Robo-GNSS decoder compiled to WebAssembly, and builds a
-columnar dataset for offline raw-data analysis. It is aimed at GNSS R&D
-workflows: observation quality and ephemeris-update anomaly investigation.
+supported) and RINEX observation/navigation files with the Robo-GNSS decoder
+compiled to WebAssembly, and builds a columnar dataset for offline raw-data
+analysis. It is aimed at GNSS R&D workflows: observation quality and
+ephemeris-update anomaly investigation.
 
 1. Add the **GNSS-Raw** application (it ships with six panels).
-2. Load a capture via `Input → File` (select or paste the path) or simply drop
-   the file onto the main window. Files without an extension are sniffed for
-   RTCM3 framing, so raw capture dumps work too.
+2. Load data via `Input → File` (select or paste the path) or simply drop the
+   file(s) onto the main window:
+   - **RTCM3** — one capture at a time (`.rtcm3/.rtcm/.rtc/.rt3`); files without
+     an extension are sniffed for RTCM3 framing, so raw capture dumps work too.
+   - **RINEX** — observation and navigation files (`.rnx/.obs/.nav/.glo/...`,
+     RINEX 2 names like `.25o/.25n` included) are detected by name and by the
+     `RINEX VERSION / TYPE` header label. An obs+nav pair of the same station
+     can be selected or dropped together; the files are merged into one dataset.
 3. Decoding runs in a background worker; all six panels share the resulting
    dataset.
 
 - **Frame Stats** — stream totals (bytes, valid frames, CRC errors, decode
   failures), per-message-type counts (MSM, ephemeris, proprietary) and station
-  (antenna position) events.
+  (antenna position) events. For RTCM sources the header also offers
+  **Export RINEX**, which converts the capture to RINEX 3.04 files (obs + nav,
+  one per constellation) via the Robo-GNSS convrnx engine and downloads them in
+  the browser.
 - **Visibility** — stacked per-constellation satellite counts over time,
   sampling interval/completeness, and a per-satellite visibility table.
 - **GF Combination** — geometry-free carrier combination (λ1L1 − λ2L2) for a
