@@ -105,7 +105,13 @@ async function startLoad(loadKind: GnssRawKind, items: LoadedRtcmBytes[]): Promi
     }
     w.onerror = (event) => {
       if (seq !== loadSeq) return resolve()
-      errorText.value = event.message || 'GNSS-Raw 解码 Worker 启动失败'
+      const detail = event.message?.trim()
+      const where = event.filename
+        ? ` (${event.filename.split('/').pop() ?? ''}:${event.lineno ?? 0})`
+        : ''
+      errorText.value = detail
+        ? `${detail}${where}`
+        : 'GNSS-Raw 解码 Worker 启动失败，请刷新页面或重启应用后重试'
       status.value = 'error'
       progress.value = null
       resolve()
@@ -183,7 +189,12 @@ export function useGnssRaw() {
           else if (message?.type === 'error') reject(new Error(String(message.message)))
         }
         convertWorker.onerror = (event) =>
-          reject(new Error(event.message || 'RINEX 转换 Worker 启动失败'))
+          reject(
+            new Error(
+              event.message?.trim() ||
+                'RINEX 转换 Worker 启动失败，请刷新页面或重启应用后重试',
+            ),
+          )
         convertWorker.postMessage({ type: 'convert', buffers: [buffer], base }, [buffer])
       })
     } finally {
