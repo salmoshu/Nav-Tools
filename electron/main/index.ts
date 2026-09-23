@@ -16,7 +16,12 @@ import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import os from 'node:os'
 import ffmpegStatic from 'ffmpeg-static'
-import { eventsMap, iapUpgradeService, cameraCalibrationService } from './events'
+import {
+  eventsMap,
+  iapUpgradeService,
+  cameraCalibrationService,
+  setCameraStreamServiceRef,
+} from './events'
 import { registerCameraCalibrationIpc } from './cameraCalibrationIpc'
 import { registerCameraScriptIpc } from './cameraScriptIpc'
 import { registerLidarIpc } from './lidarIpc'
@@ -74,6 +79,7 @@ const ffmpegExecutable = (ffmpegStatic || 'ffmpeg').replace(
   'app.asar.unpacked',
 )
 const cameraStreamService = new CameraStreamService(ffmpegExecutable)
+setCameraStreamServiceRef(cameraStreamService)
 const filePlaybackService = new FilePlaybackService()
 const textFileStreamService = new TextFileStreamService()
 const logRecordingService = new LogRecordingService()

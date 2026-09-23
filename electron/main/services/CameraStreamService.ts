@@ -160,6 +160,14 @@ export class CameraStreamService {
     this.sendStatus(session, 'error', `${message}（已尝试 ${transport} 传输）`)
   }
 
+  /** 当前运行中的 RTSP 会话列表(供数据接入连接总览展示) */
+  public listActive(): Array<{ url: string; ownerWindowId: number }> {
+    return [...this.sessions.values()].map((session) => ({
+      url: session.url,
+      ownerWindowId: (session.target as unknown as { id: number }).id ?? -1,
+    }))
+  }
+
   public stop(id: number): void {
     const session = this.sessions.get(id)
     if (!session) return

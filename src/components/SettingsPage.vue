@@ -135,11 +135,16 @@
               </el-button>
             </div>
 
-            <div v-if="updaterEvent?.type === 'update-available'" class="version-status">
-              <span>{{ t('update.newVersionDesc', { version: updaterEvent.version }) }}</span>
-              <span v-if="updaterPrefs.autoDownload" class="version-status-hint">
-                {{ t('update.backgroundDownloading') }}
-              </span>
+            <div
+              v-if="updaterEvent?.type === 'update-available'"
+              class="version-status version-status-hint"
+            >
+              <span
+                >{{ t('update.newVersionDesc', { version: updaterEvent.version })
+                }}<template v-if="updaterPrefs.autoDownload">
+                  ，{{ t('update.backgroundDownloading') }}</template
+                ></span
+              >
             </div>
             <el-progress
               v-else-if="updaterEvent?.type === 'download-progress'"

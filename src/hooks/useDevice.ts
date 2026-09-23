@@ -312,15 +312,21 @@ function openNetworkDevice(): void {
     .catch((error) => {
       globalDevice.value.connecting = false
       globalDevice.value.connected = false
-      // 用户主动终止: 不提示、不进入循环重连调度
-      if (networkConnectCancelled) {
+      const message = error instanceof Error ? error.message : String(error)
+      // 用户主动终止: 不提示、不进入循环重连调度。
+      // close() 在连接建立前销毁 socket 也会以「连接已取消」结束 open(), 同样视为有意中断
+      const cancelled =
+        networkConnectCancelled ||
+        message.includes('已取消连接') ||
+        message.includes('连接已取消')
+      if (cancelled) {
         networkConnectCancelled = false
         return
       }
       // 循环重连模式下连接失败属预期, 静默重试, 不再反复弹框
       if (!networkLoop.value) {
         ElMessage({
-          message: error instanceof Error ? error.message : String(error),
+          message,
           type: 'error',
           placement: 'bottom-right',
           offset: 50,

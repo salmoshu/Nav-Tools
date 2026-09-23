@@ -23,6 +23,13 @@ const cameraCommandService = new CameraCommandService({
   write: (packet) => networkService.sendTcp(packet),
 })
 const measurementChannel = new CameraSshMeasurementChannel()
+let cameraStreamServiceRef: { listActive(): Array<{ url: string; ownerWindowId: number }> } | undefined
+
+/** index.ts 注入相机流服务引用, 供连接总览查询 RTSP 会话状态 */
+export function setCameraStreamServiceRef(ref: { listActive(): Array<{ url: string; ownerWindowId: number }> }): void {
+  cameraStreamServiceRef = ref
+}
+
 const cameraCalibrationService = new CameraCalibrationService({
   now: () => performance.now(),
   tcpTarget: () => networkService.getTcpTarget(),
@@ -103,6 +110,7 @@ const eventsMap = {
   'open-network-connection': openNetworkConnection,
   'close-network-connection': closeNetworkConnection,
   'network-connect-cancel': cancelNetworkConnect,
+  'camera-stream-sessions': () => cameraStreamServiceRef?.listActive() ?? [],
   'send-network-hex-data': sendNetworkHexData,
   'send-network-ascii-data': sendNetworkAsciiData,
   'camera-command-send': sendCameraCommand,
