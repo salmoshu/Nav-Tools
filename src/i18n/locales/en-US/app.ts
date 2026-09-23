@@ -42,6 +42,7 @@ export default {
     appConnSsh: 'Camera measurement',
     appConnConnect: 'Connect',
     appConnDisconnect: 'Disconnect',
+    appConnRtspAuto: 'Connects automatically while playing',
     connectCancel: 'Abort current connection',
     recordLog: 'Record Log',
     stopRecord: 'Stop Recording',

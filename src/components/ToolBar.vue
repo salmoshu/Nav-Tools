@@ -172,16 +172,31 @@
         <el-icon><Connection :size="14" /></el-icon>
         <strong>{{ t('app.toolbar.appConnections') }}</strong>
       </div>
-      <div v-for="item in appConnectionItems" :key="item.id" class="app-connection-row">
-        <span class="app-connection-dot" :class="`is-${item.status}`"></span>
-        <span class="app-connection-label">{{ item.label }}</span>
-        <span class="app-connection-endpoint">{{ item.endpoint }}</span>
-        <span
-          v-if="item.action"
-          class="app-connection-action"
-          role="button"
-          @click="item.action()"
-        >{{ item.actionLabel }}</span>
+      <div class="app-connections-grid">
+        <div
+          v-for="item in appConnectionItems"
+          :key="item.id"
+          class="app-connection-card"
+          :class="`is-${item.status}`"
+        >
+          <div class="app-connection-card-head">
+            <span class="app-connection-dot" :class="`is-${item.status}`"></span>
+            <span class="app-connection-label">{{ item.label }}</span>
+            <span class="app-connection-proto">{{ item.proto }}</span>
+          </div>
+          <span class="app-connection-endpoint">{{ item.endpoint }}</span>
+          <div class="app-connection-foot">
+            <span v-if="item.note" class="app-connection-note">{{ item.note }}</span>
+            <button
+              v-if="item.action"
+              type="button"
+              class="app-connection-action"
+              @click="item.action()"
+            >
+              {{ item.actionLabel }}
+            </button>
+          </div>
+        </div>
       </div>
     </div>
     <el-tabs
@@ -812,8 +827,10 @@ const appConnectionItems = computed(() => {
   const items: Array<{
     id: string
     label: string
+    proto: string
     endpoint: string
     status: 'connected' | 'connecting' | 'disconnected'
+    note?: string
     action?: () => void
     actionLabel?: string
   }> = []
@@ -824,7 +841,8 @@ const appConnectionItems = computed(() => {
   items.push({
     id: 'camera-control-tcp',
     label: t('app.toolbar.appConnControl'),
-    endpoint: `${networkIp.value || '—'}:${networkPort.value || '—'} (TCP)`,
+    proto: 'TCP',
+    endpoint: `${networkIp.value || '—'}:${networkPort.value || '—'}`,
     status: controlConnected ? 'connected' : controlConnecting ? 'connecting' : 'disconnected',
   })
 
@@ -833,8 +851,10 @@ const appConnectionItems = computed(() => {
   items.push({
     id: 'camera-rtsp',
     label: t('app.toolbar.appConnRtsp'),
-    endpoint: `RTSP ${networkIp.value || '—'}:8554`,
+    proto: 'RTSP',
+    endpoint: `${networkIp.value || '—'}:8554`,
     status: rtspActive ? 'connected' : 'disconnected',
+    note: t('app.toolbar.appConnRtspAuto'),
   })
 
   // 测量通道(SSH): 自动标定观测, 可在此连接/断开
@@ -844,7 +864,8 @@ const appConnectionItems = computed(() => {
   items.push({
     id: 'camera-ssh-measure',
     label: t('app.toolbar.appConnSsh'),
-    endpoint: `SSH ${ssh?.host ?? (networkIp.value || '—')}:${ssh?.port ?? 22}`,
+    proto: 'SSH',
+    endpoint: `${ssh?.host ?? (networkIp.value || '—')}:${ssh?.port ?? 22}`,
     status: sshConnected ? 'connected' : sshConnecting ? 'connecting' : 'disconnected',
     action: sshConnected
       ? () => void stopCalibrationObservation()
@@ -1683,10 +1704,12 @@ onUnmounted(() => {
   transform: translate(18px, -50%);
 }
 
-/* 连接进行中：滑块移到右侧并橙色闪烁，点击开关即终止连接回左侧 */
+/* 连接进行中：滑块移到右侧，圆形橙色图标自身闪烁，点击开关即终止连接回左侧 */
 .toggle-switch.toggle-pending .toggle-slider {
   transform: translate(18px, -50%);
-  background: var(--el-color-warning);
+}
+
+.toggle-switch.toggle-pending .slider-icon {
   animation: toggle-pending-pulse 1s ease-in-out infinite;
 }
 
@@ -1698,13 +1721,20 @@ onUnmounted(() => {
   50% {
     opacity: 0.35;
   }
+}
+
+@keyframes conn-blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.3;
+  }
+}
 
 .app-connections-overview {
-  margin-bottom: 12px;
-  padding: 10px 12px;
-  border: 1px solid var(--app-border);
-  border-radius: 8px;
-  background: var(--app-surface-muted);
+  margin-bottom: 14px;
 }
 
 .app-connections-title {
@@ -1712,17 +1742,43 @@ onUnmounted(() => {
   align-items: center;
   gap: 6px;
   margin-bottom: 8px;
-  color: var(--app-text);
+  color: var(--app-text-secondary);
   font-size: 12px;
 }
 
-.app-connection-row {
+.app-connections-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.app-connection-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid var(--app-border);
+  border-radius: 10px;
+  background: var(--app-surface-muted);
+  transition:
+    border-color 0.2s,
+    background 0.2s;
+}
+
+.app-connection-card.is-connected {
+  border-color: color-mix(in srgb, var(--el-color-success) 35%, var(--app-border));
+  background: color-mix(in srgb, var(--el-color-success) 6%, var(--app-surface-muted));
+}
+
+.app-connection-card.is-connecting {
+  border-color: color-mix(in srgb, var(--el-color-warning) 45%, var(--app-border));
+}
+
+.app-connection-card-head {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 3px 0;
-  font-size: 12px;
-  color: var(--app-text-secondary);
+  gap: 7px;
+  min-width: 0;
 }
 
 .app-connection-dot {
@@ -1747,29 +1803,79 @@ onUnmounted(() => {
 }
 
 .app-connection-label {
-  flex: 0 0 auto;
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
   color: var(--app-text);
+  font-size: 12.5px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-connection-proto {
+  flex: 0 0 auto;
+  margin-left: auto;
+  padding: 1px 7px;
+  border: 1px solid var(--app-border-strong);
+  border-radius: 999px;
+  color: var(--app-text-muted);
+  font-size: 10.5px;
+  letter-spacing: 0.4px;
+  line-height: 1.5;
 }
 
 .app-connection-endpoint {
-  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--app-text-secondary);
+  font-family: Consolas, 'Courier New', monospace;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-connection-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 22px;
+}
+
+.app-connection-note {
   min-width: 0;
   overflow: hidden;
   color: var(--app-text-muted);
-  font-family: Consolas, 'Courier New', monospace;
+  font-size: 11px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .app-connection-action {
   flex: 0 0 auto;
+  margin-left: auto;
+  padding: 2px 14px;
+  border: 1px solid color-mix(in srgb, var(--el-color-primary) 45%, transparent);
+  border-radius: 999px;
+  background: transparent;
   color: var(--el-color-primary);
   cursor: pointer;
+  font-size: 11.5px;
+  line-height: 1.6;
+  transition:
+    background 0.2s,
+    color 0.2s;
 }
 
 .app-connection-action:hover {
-  text-decoration: underline;
+  background: var(--el-color-primary);
+  color: #fff;
 }
+
+@media (max-width: 660px) {
+  .app-connections-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 /* 更新滑块图标大小 */
@@ -1809,6 +1915,11 @@ onUnmounted(() => {
 /* 更新垂直工具栏的滑块激活状态移动距离 */
 .toolbar-left .toggle-switch.toggle-on .toggle-slider,
 .toolbar-right .toggle-switch.toggle-on .toggle-slider {
+  transform: translateY(18px);
+}
+
+.toolbar-left .toggle-switch.toggle-pending .toggle-slider,
+.toolbar-right .toggle-switch.toggle-pending .toggle-slider {
   transform: translateY(18px);
 }
 

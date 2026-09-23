@@ -42,6 +42,7 @@ export default {
     appConnSsh: '相机测量',
     appConnConnect: '连接',
     appConnDisconnect: '断开',
+    appConnRtspAuto: '播放视频时自动连接',
     connectCancel: '终止当前连接',
     recordLog: '录制日志',
     stopRecord: '停止录制',
