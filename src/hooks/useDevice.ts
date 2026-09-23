@@ -280,23 +280,32 @@ function scheduleNetworkReconnect(): void {
   }, NETWORK_RECONNECT_DELAY_MS)
 }
 
+// 连接尝试序号: 新尝试开启/用户取消时自增, 旧 promise 迟到的 then/catch 据此失效,
+// 避免回写 connecting/connected 干扰当前状态（旧尝试被顶掉时会以「连接已取消」迟到拒绝）
+let networkOpenAttempt = 0
+
 function cancelNetworkConnect(): void {
   if (globalDevice.value.connecting !== true) return
   networkConnectCancelled = true
+  networkOpenAttempt++
   globalDevice.value.connecting = false
   globalDevice.value.connected = false
-  void networkService.cancelPending()
+  networkService.cancelPending().catch(() => undefined)
 }
 
 function openNetworkDevice(): void {
   const options = currentNetworkOptions()
   if (!options) return
+  const attempt = ++networkOpenAttempt
+  // 上一次取消的静默标记只属于那一次尝试, 新尝试开始即作废
+  networkConnectCancelled = false
   // 点击后立即置为 connecting，工具栏马上给出 pending 反馈，
   // 避免失败时长时间无反应让用户误以为没点上
   globalDevice.value.connecting = true
   networkService
     .open(options)
     .then(() => {
+      if (attempt !== networkOpenAttempt) return
       globalDevice.value.connecting = false
       globalDevice.value.connected = true
       activeDataTransport.activate('network')
@@ -310,6 +319,7 @@ function openNetworkDevice(): void {
       })
     })
     .catch((error) => {
+      if (attempt !== networkOpenAttempt) return
       globalDevice.value.connecting = false
       globalDevice.value.connected = false
       const message = error instanceof Error ? error.message : String(error)

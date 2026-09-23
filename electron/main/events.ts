@@ -168,13 +168,21 @@ function changeSerialDataFormat(_event: IpcMainEvent, format: string) {
 
 function openNetworkConnection(event: IpcMainInvokeEvent, options: NetworkConnectionOptions) {
   cameraCalibrationService.stopForControlLinkChange('控制连接正在改变，已停止自动标定（观测保持运行）')
-  return networkService.open(options, {
-    onData: (data) => event.sender.send('network-data-to-renderer', data),
-    onDisconnected: (connection, reason) => {
-      cameraCalibrationService.stopForControlLinkChange('控制连接已断开，设备参数需人工核实')
-      event.sender.send('network-disconnected', { ...connection, reason })
-    },
-  })
+  return networkService
+    .open(options, {
+      onData: (data) => event.sender.send('network-data-to-renderer', data),
+      onDisconnected: (connection, reason) => {
+        cameraCalibrationService.stopForControlLinkChange('控制连接已断开，设备参数需人工核实')
+        event.sender.send('network-disconnected', { ...connection, reason })
+      },
+    })
+    .catch((error: unknown) => {
+      // 用户取消或被新连接顶掉属预期结局, 不作为 handler 异常刷主进程控制台;
+      // 渲染端以尝试序号守卫状态, 不会把这个静默结果当成连接成功
+      const message = error instanceof Error ? error.message : String(error)
+      if (message.includes('已取消连接') || message.includes('连接已取消')) return
+      throw error
+    })
 }
 
 function cancelNetworkConnect() {
