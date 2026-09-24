@@ -1,6 +1,6 @@
 // GNSS-Raw 面板共享的 echarts 生命周期：初始化、数据集/主题变更重建、
 // 缩放跟随、卸载销毁。面板只需提供 option 构建函数。
-import { onMounted, onUnmounted, ref, watch } from 'vue'
+import { nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import * as echarts from 'echarts'
 import { useTheme } from '@/composables/useTheme'
 import { useGnssRaw } from '@/composables/useGnssRaw'
@@ -30,8 +30,22 @@ export function useGnssRawChart(
   let chart: echarts.ECharts | null = null
   let resizeObserver: ResizeObserver | null = null
 
-  function rebuild(): void {
-    if (!chart) return
+  async function rebuild(): Promise<void> {
+    // 等 DOM 更新：chart 容器在 v-else-if="dataset" 分支内，
+    // 面板先于数据挂载时 chartRef 尚不存在，需惰性初始化。
+    await nextTick()
+    if (!chartRef.value) {
+      resizeObserver?.disconnect()
+      resizeObserver = null
+      chart?.dispose()
+      chart = null
+      return
+    }
+    if (!chart) {
+      chart = echarts.init(chartRef.value)
+      resizeObserver = new ResizeObserver(() => chart?.resize())
+      resizeObserver.observe(chartRef.value)
+    }
     const dataset = store.dataset.value
     const option = dataset ? build({ colors: chartTheme.value, dataset }) : null
     chart.clear()
@@ -41,11 +55,7 @@ export function useGnssRawChart(
   }
 
   onMounted(() => {
-    if (!chartRef.value) return
-    chart = echarts.init(chartRef.value)
-    rebuild()
-    resizeObserver = new ResizeObserver(() => chart?.resize())
-    resizeObserver.observe(chartRef.value)
+    void rebuild()
   })
 
   onUnmounted(() => {

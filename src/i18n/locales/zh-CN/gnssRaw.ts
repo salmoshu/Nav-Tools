@@ -37,6 +37,7 @@ export default {
     medianInterval: '中位间隔',
     completeness: '完整率',
     perSat: '逐星可见性',
+    perSatTimeline: '逐星时间线',
     presence: '可见率',
     epochs: '历元数',
     firstLast: '首/末历元',

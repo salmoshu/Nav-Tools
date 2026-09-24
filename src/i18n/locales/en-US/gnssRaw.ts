@@ -37,6 +37,7 @@ export default {
     medianInterval: 'Median interval',
     completeness: 'Completeness',
     perSat: 'Per-satellite visibility',
+    perSatTimeline: 'Per-satellite timeline',
     presence: 'Presence',
     epochs: 'Epochs',
     firstLast: 'First/last epoch',
