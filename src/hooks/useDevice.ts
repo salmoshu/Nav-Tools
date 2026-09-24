@@ -1593,24 +1593,25 @@ export function useDevice() {
         }
       }
       if (isGnssRaw) {
-        fileInputLoading.value = true
-        try {
-          const ok =
-            files.length > 0
-              ? await gnssRaw.loadFromFiles(files)
-              : await gnssRaw.loadFromPaths(pathList.length > 1 ? pathList : [path])
-          if (!ok) throw new Error(gnssRaw.errorText.value)
-          dataSourceChangesCommitted = true
-          dataSourceSettings.activeSource = 'file'
-          saveDataSourceSettings()
-          showInputDialog.value = false
-        } catch (error) {
-          ElMessage.error(
-            `${t('gnssRaw.common.loadError')}: ${error instanceof Error ? error.message : String(error)}`,
-          )
-        } finally {
-          fileInputLoading.value = false
-        }
+        // 立即关闭弹框、后台解码：加载进度由各 GNSS-Raw 面板的进度条展示，
+        // 失败时弹错误提示（面板内同时显示错误状态）。
+        dataSourceChangesCommitted = true
+        dataSourceSettings.activeSource = 'file'
+        saveDataSourceSettings()
+        showInputDialog.value = false
+        void (async () => {
+          try {
+            const ok =
+              files.length > 0
+                ? await gnssRaw.loadFromFiles(files)
+                : await gnssRaw.loadFromPaths(pathList.length > 1 ? pathList : [path])
+            if (!ok) throw new Error(gnssRaw.errorText.value)
+          } catch (error) {
+            ElMessage.error(
+              `${t('gnssRaw.common.loadError')}: ${error instanceof Error ? error.message : String(error)}`,
+            )
+          }
+        })()
         return
       }
     }
