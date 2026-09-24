@@ -4,6 +4,7 @@ export default {
     noData: '未加载数据',
     emptyHint: '通过数据接入 → 文件输入选择 RTCM / RINEX 文件，或直接拖入窗口',
     loading: '解码中',
+    loadingFiles: '文件 {done}/{total}',
     loadError: '加载失败',
     relativeTime: '相对时间 (s)',
     satCount: '卫星数',

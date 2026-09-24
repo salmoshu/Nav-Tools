@@ -4,6 +4,7 @@ export default {
     noData: 'No data loaded',
     emptyHint: 'Pick an RTCM / RINEX file via Data Input → File, or drop files into the window',
     loading: 'Decoding',
+    loadingFiles: 'Files {done}/{total}',
     loadError: 'Load failed',
     relativeTime: 'Relative time (s)',
     satCount: 'Satellites',

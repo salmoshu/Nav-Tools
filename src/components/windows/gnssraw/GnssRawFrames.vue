@@ -1,8 +1,6 @@
 <template>
   <div class="gnssraw-frames">
-    <div v-if="store.status.value === 'loading'" class="state-row">
-      <span>{{ t('gnssRaw.common.loading') }}… {{ progressText }}</span>
-    </div>
+    <GnssRawLoading v-if="store.status.value === 'loading'" />
     <div v-else-if="store.status.value === 'error'" class="state-row error">
       {{ t('gnssRaw.common.loadError') }}: {{ store.errorText.value }}
     </div>
@@ -72,6 +70,7 @@ import { computed, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { t } from '@/i18n'
 import { useGnssRaw } from '@/composables/useGnssRaw'
+import GnssRawLoading from './GnssRawLoading.vue'
 import { msgTypeName } from '@/core/gnssraw/analysis'
 
 const store = useGnssRaw()
@@ -107,12 +106,6 @@ async function exportRnx(): Promise<void> {
 }
 
 const stats = computed(() => store.dataset.value?.stats ?? store.liveStats.value)
-
-const progressText = computed(() => {
-  const p = store.progress.value
-  if (!p || p.total <= 0) return ''
-  return `${((p.done / p.total) * 100).toFixed(0)}%`
-})
 
 function formatInt(value: number | undefined): string {
   return value === undefined ? '—' : value.toLocaleString()
