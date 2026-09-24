@@ -1,6 +1,8 @@
 <template>
   <div class="gnssraw-frames">
-    <GnssRawLoading v-if="store.status.value === 'loading'" />
+    <div v-if="store.status.value === 'loading'" class="state-row">
+      {{ t('gnssRaw.common.loading') }}…
+    </div>
     <div v-else-if="store.status.value === 'error'" class="state-row error">
       {{ t('gnssRaw.common.loadError') }}: {{ store.errorText.value }}
     </div>
@@ -70,7 +72,6 @@ import { computed, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { t } from '@/i18n'
 import { useGnssRaw } from '@/composables/useGnssRaw'
-import GnssRawLoading from './GnssRawLoading.vue'
 import { msgTypeName } from '@/core/gnssraw/analysis'
 
 const store = useGnssRaw()

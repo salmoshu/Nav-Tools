@@ -1,6 +1,8 @@
 <template>
   <div class="gnssraw-gf">
-    <GnssRawLoading v-if="store.status.value === 'loading'" />
+    <div v-if="store.status.value === 'loading'" class="state-row">
+      {{ t('gnssRaw.common.loading') }}…
+    </div>
     <div v-else-if="store.status.value === 'error'" class="state-row error">
       {{ t('gnssRaw.common.loadError') }}: {{ store.errorText.value }}
     </div>
@@ -39,7 +41,6 @@
 import { computed, ref, watch } from 'vue'
 import { t } from '@/i18n'
 import { useGnssRawChart, satLabel, relativeTimes } from './useGnssRawChart'
-import GnssRawLoading from './GnssRawLoading.vue'
 import { computeGfSeries } from '@/core/gnssraw/analysis'
 import { GNSS_SYS_NAME, GNSS_SYS_COLOR } from '@/core/gnssraw/types'
 

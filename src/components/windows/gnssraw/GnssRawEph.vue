@@ -1,6 +1,8 @@
 <template>
   <div class="gnssraw-eph">
-    <GnssRawLoading v-if="store.status.value === 'loading'" />
+    <div v-if="store.status.value === 'loading'" class="state-row">
+      {{ t('gnssRaw.common.loading') }}…
+    </div>
     <div v-else-if="store.status.value === 'error'" class="state-row error">
       {{ t('gnssRaw.common.loadError') }}: {{ store.errorText.value }}
     </div>
@@ -84,7 +86,6 @@
 import { computed } from 'vue'
 import { t } from '@/i18n'
 import { useGnssRaw } from '@/composables/useGnssRaw'
-import GnssRawLoading from './GnssRawLoading.vue'
 import { satLabel, formatTimeOfDay, formatDuration } from './useGnssRawChart'
 import { analyzeEphemeris, msgTypeName } from '@/core/gnssraw/analysis'
 import { GNSS_SYS_NAME, GNSS_SYS_COLOR } from '@/core/gnssraw/types'

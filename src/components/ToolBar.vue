@@ -137,6 +137,8 @@
       <FileTimelineControl v-if="fileTimelineActive" :position="position" />
       <span v-if="lidarTimelineActive" class="divider timeline-divider" aria-hidden="true"></span>
       <LidarTimelineControl v-if="lidarTimelineActive" :position="position" />
+      <span v-if="gnssRawLoading" class="divider timeline-divider" aria-hidden="true"></span>
+      <GnssRawLoadingControl v-if="gnssRawLoading" :position="position" />
     </div>
     <div v-if="isDragging && activeDockZone" class="toolbar-dock-zones">
       <div
@@ -621,6 +623,8 @@ import {
 import { useFileTimeline } from '@/composables/useFileTimeline'
 import FileTimelineControl from '@/components/FileTimelineControl.vue'
 import LidarTimelineControl from '@/components/LidarTimelineControl.vue'
+import GnssRawLoadingControl from '@/components/GnssRawLoadingControl.vue'
+import { useGnssRaw } from '@/composables/useGnssRaw'
 import { useMcapPlayer } from '@/composables/useMcapPlayer'
 import { RecentInputFiles } from '@/core/file/RecentInputFiles'
 import { JsonStorage } from '@/core/storage/JsonStorage'
@@ -654,6 +658,10 @@ const lidarTimelineActive = computed(
     mcapPlayer.status.value === 'ready' &&
     currentWindows.value.some((windowDefinition) => windowDefinition.catalogGroup === 'lidar'),
 )
+
+// GNSS-Raw 解码加载指示：全局瞬态（后台解码期间任何应用下都应可见），不按窗口门控。
+const gnssRaw = useGnssRaw()
+const gnssRawLoading = computed(() => gnssRaw.status.value === 'loading')
 const recentInputFilesStore = new RecentInputFiles(new JsonStorage(localStorage))
 const recentInputFiles = ref(recentInputFilesStore.list())
 function formatMcapSize(bytes: number): string {
