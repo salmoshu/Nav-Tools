@@ -32,6 +32,8 @@ export default {
   },
   visibility: {
     timeline: 'Satellites by constellation',
+    total: 'Total',
+    epochTicks: 'Obs. epochs',
     sampling: 'Sampling',
     epochCount: 'Epochs',
     span: 'Span',

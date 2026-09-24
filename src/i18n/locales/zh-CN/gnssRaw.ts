@@ -32,6 +32,8 @@ export default {
   },
   visibility: {
     timeline: '分星座卫星数',
+    total: '总数',
+    epochTicks: '观测历元',
     sampling: '采样统计',
     epochCount: '历元数',
     span: '时长',
