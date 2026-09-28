@@ -37,6 +37,8 @@ export default {
     connect: 'Connect Device',
     disconnect: 'Disconnect',
     appConnections: 'App connections',
+    dataSourceConfigTab: 'Data source',
+    appConnEmpty: 'No data connections to manage for the current application',
     appConnControl: 'Camera control',
     appConnRtsp: 'Camera video',
     appConnSsh: 'Camera measurement',

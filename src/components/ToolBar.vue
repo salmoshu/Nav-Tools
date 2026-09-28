@@ -169,45 +169,15 @@
       </div>
     </template>
 
-    <div v-if="appConnectionItems.length > 0" class="app-connections-overview">
-      <div class="app-connections-title">
-        <el-icon><Connection :size="14" /></el-icon>
-        <strong>{{ t('app.toolbar.appConnections') }}</strong>
-      </div>
-      <div class="app-connections-grid">
-        <div
-          v-for="item in appConnectionItems"
-          :key="item.id"
-          class="app-connection-card"
-          :class="`is-${item.status}`"
+    <el-tabs v-model="inputMainTab" class="data-source-main-tabs">
+      <el-tab-pane :label="t('app.toolbar.dataSourceConfigTab')" name="config">
+        <el-tabs
+          v-model="activeTab"
+          :tab-position="inputTabPosition"
+          :stretch="inputTabPosition === 'top'"
+          class="data-source-tabs"
+          :before-leave="() => !fileInputLoading"
         >
-          <div class="app-connection-card-head">
-            <span class="app-connection-dot" :class="`is-${item.status}`"></span>
-            <span class="app-connection-label">{{ item.label }}</span>
-            <span class="app-connection-proto">{{ item.proto }}</span>
-          </div>
-          <span class="app-connection-endpoint">{{ item.endpoint }}</span>
-          <div class="app-connection-foot">
-            <span v-if="item.note" class="app-connection-note">{{ item.note }}</span>
-            <button
-              v-if="item.action"
-              type="button"
-              class="app-connection-action"
-              @click="item.action()"
-            >
-              {{ item.actionLabel }}
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-    <el-tabs
-      v-model="activeTab"
-      :tab-position="inputTabPosition"
-      :stretch="inputTabPosition === 'top'"
-      class="data-source-tabs"
-      :before-leave="() => !fileInputLoading"
-    >
       <el-tab-pane :label="t('app.toolbar.fileTab')" name="file">
         <template #label>
           <span class="source-tab-label">
@@ -576,6 +546,40 @@
           </div>
         </div>
       </el-tab-pane>
+        </el-tabs>
+      </el-tab-pane>
+      <el-tab-pane :label="t('app.toolbar.appConnections')" name="connections">
+        <div
+          v-if="appConnectionItems.length > 0"
+          class="app-connections-grid app-connections-tab-grid"
+        >
+          <div
+            v-for="item in appConnectionItems"
+            :key="item.id"
+            class="app-connection-card"
+            :class="`is-${item.status}`"
+          >
+            <div class="app-connection-card-head">
+              <span class="app-connection-dot" :class="`is-${item.status}`"></span>
+              <span class="app-connection-label">{{ item.label }}</span>
+              <span class="app-connection-proto">{{ item.proto }}</span>
+            </div>
+            <span class="app-connection-endpoint">{{ item.endpoint }}</span>
+            <div class="app-connection-foot">
+              <span v-if="item.note" class="app-connection-note">{{ item.note }}</span>
+              <button
+                v-if="item.action"
+                type="button"
+                class="app-connection-action"
+                @click="item.action()"
+              >
+                {{ item.actionLabel }}
+              </button>
+            </div>
+          </div>
+        </div>
+        <div v-else class="app-connections-empty">{{ t('app.toolbar.appConnEmpty') }}</div>
+      </el-tab-pane>
     </el-tabs>
     <template #footer>
       <el-button @click="showInputDialog = false">{{ t('app.cancel') }}</el-button>
@@ -817,8 +821,11 @@ const networkPortText = computed({
 })
 
 // ---- 应用连接总览: 按当前应用组件派生数据通道状态（useAppConnections） ----
+// 弹框分两个主 Tab：数据源配置（文件/串口/网络）与应用连接（当前应用的通道总览）
+const inputMainTab = ref<'config' | 'connections'>('config')
 const { items: appConnectionItems, refresh: refreshAppConnections } = useAppConnections({
   gotoTab: (tab) => {
+    inputMainTab.value = 'config'
     activeTab.value = tab
   },
 })
@@ -843,11 +850,18 @@ const handleDeviceConnected = () => {
 }
 
 watch(showInputDialog, (open) => {
-  if (open) void refreshAppConnections()
+  if (open) {
+    inputMainTab.value = 'config'
+    void refreshAppConnections()
+  }
+})
+
+watch(inputMainTab, (tab) => {
+  if (tab === 'connections' && showInputDialog.value) void refreshAppConnections()
 })
 
 setInterval(() => {
-  if (showInputDialog.value) void refreshAppConnections()
+  if (showInputDialog.value && inputMainTab.value === 'connections') void refreshAppConnections()
 }, 3000)
 
 const handleList = computed(() => getWindowButtonList(currentApplication.value?.windowIds ?? []))
@@ -1613,16 +1627,18 @@ onUnmounted(() => {
   }
 }
 
-.app-connections-overview {
-  margin-bottom: 14px;
+.app-connections-tab-grid {
+  min-height: 290px;
+  align-content: start;
+  padding-top: 4px;
 }
 
-.app-connections-title {
+.app-connections-empty {
   display: flex;
   align-items: center;
-  gap: 6px;
-  margin-bottom: 8px;
-  color: var(--app-text-secondary);
+  justify-content: center;
+  min-height: 290px;
+  color: var(--app-text-muted);
   font-size: 12px;
 }
 
