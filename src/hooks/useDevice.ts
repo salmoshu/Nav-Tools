@@ -145,6 +145,8 @@ const fileReplaySpeed = toRef(dataSourceSettings.file, 'replaySpeed')
 const fileStartOffset = toRef(dataSourceSettings.file, 'startOffset')
 const fileSampleInterval = toRef(dataSourceSettings.file, 'sampleIntervalMs')
 const filePositionBytes = toRef(dataSourceSettings.file, 'filePositionBytes')
+// 持久化的当前数据源类型（serial/network/file），供应用连接总览等只读消费
+const activeSource = toRef(dataSourceSettings, 'activeSource')
 const selectedFiles = ref<File[]>([])
 const selectedPaths = ref<string[]>([])
 const selectedFile = computed(() => selectedFiles.value[0] ?? null)
@@ -1710,6 +1712,7 @@ export function useDevice() {
     parities,
     deviceConnected,
     deviceConnecting,
+    activeSource,
     logRecordingActive,
     logRecordingPath,
     globalDevice,

@@ -169,7 +169,7 @@
       </div>
     </template>
 
-    <div class="app-connections-overview">
+    <div v-if="appConnectionItems.length > 0" class="app-connections-overview">
       <div class="app-connections-title">
         <el-icon><Connection :size="14" /></el-icon>
         <strong>{{ t('app.toolbar.appConnections') }}</strong>
@@ -625,6 +625,7 @@ import FileTimelineControl from '@/components/FileTimelineControl.vue'
 import LidarTimelineControl from '@/components/LidarTimelineControl.vue'
 import GnssRawLoadingControl from '@/components/GnssRawLoadingControl.vue'
 import { useGnssRaw } from '@/composables/useGnssRaw'
+import { useAppConnections } from '@/composables/useAppConnections'
 import { useMcapPlayer } from '@/composables/useMcapPlayer'
 import { RecentInputFiles } from '@/core/file/RecentInputFiles'
 import { JsonStorage } from '@/core/storage/JsonStorage'
@@ -815,141 +816,12 @@ const networkPortText = computed({
   },
 })
 
-// ---- 应用连接总览: 汇总当前应用使用的各连接通道状态 ----
-const cameraStreamSessions = ref<Array<{ url: string; ownerWindowId: number }>>([])
-const calibrationSsh = ref<{ state: string; host: string; port: number } | null>(null)
-
-let calSnapshotListening = false
-function ensureCalibrationStateListener(): void {
-  if (calSnapshotListening) return
-  calSnapshotListening = true
-  window.ipcRenderer?.on('camera-calibration-state', (_event, state) => {
-    calibrationSsh.value =
-      state?.ssh && state.observing
-        ? { state: state.ssh.state, host: state.ssh.host, port: state.ssh.port }
-        : null
-  })
-}
-
-const appConnectionItems = computed(() => {
-  const items: Array<{
-    id: string
-    label: string
-    proto: string
-    endpoint: string
-    status: 'connected' | 'connecting' | 'disconnected'
-    note?: string
-    action?: () => void
-    actionLabel?: string
-  }> = []
-
-  // 控制通道(TCP): 由本弹框的网络配置管理
-  const controlConnected = deviceConnected.value === true
-  const controlConnecting = deviceConnecting.value === true
-  items.push({
-    id: 'camera-control-tcp',
-    label: t('app.toolbar.appConnControl'),
-    proto: 'TCP',
-    endpoint: `${networkIp.value || '—'}:${networkPort.value || '—'}`,
-    status: controlConnected ? 'connected' : controlConnecting ? 'connecting' : 'disconnected',
-  })
-
-  // 视频通道(RTSP): 由相机视频组件自动管理(播放时自动连接)
-  const rtspActive = cameraStreamSessions.value.length > 0
-  items.push({
-    id: 'camera-rtsp',
-    label: t('app.toolbar.appConnRtsp'),
-    proto: 'RTSP',
-    endpoint: `${networkIp.value || '—'}:8554`,
-    status: rtspActive ? 'connected' : 'disconnected',
-    note: t('app.toolbar.appConnRtspAuto'),
-  })
-
-  // 测量通道(SSH): 自动标定观测, 可在此连接/断开
-  const ssh = calibrationSsh.value
-  const sshConnected = ssh?.state === 'streaming'
-  const sshConnecting = ssh?.state === 'connecting'
-  items.push({
-    id: 'camera-ssh-measure',
-    label: t('app.toolbar.appConnSsh'),
-    proto: 'SSH',
-    endpoint: `${ssh?.host ?? (networkIp.value || '—')}:${ssh?.port ?? 22}`,
-    status: sshConnected ? 'connected' : sshConnecting ? 'connecting' : 'disconnected',
-    action: sshConnected
-      ? () => void stopCalibrationObservation()
-      : () => void startCalibrationObservation(),
-    actionLabel: sshConnected
-      ? t('app.toolbar.appConnDisconnect')
-      : t('app.toolbar.appConnConnect'),
-  })
-
-  return items
+// ---- 应用连接总览: 按当前应用组件派生数据通道状态（useAppConnections） ----
+const { items: appConnectionItems, refresh: refreshAppConnections } = useAppConnections({
+  gotoTab: (tab) => {
+    activeTab.value = tab
+  },
 })
-
-async function startCalibrationObservation(): Promise<void> {
-  try {
-    const access = (await window.ipcRenderer.invoke('camera-calibration-access')) as {
-      host?: string
-      port?: number
-      username?: string
-      hasPassword?: boolean
-    } | null
-    const host = access?.host || networkIp.value
-    if (!host) return
-    await window.ipcRenderer.invoke('camera-calibration-observe', {
-      host,
-      port: access?.port ?? 22,
-      username: access?.username ?? 'root',
-    })
-  } catch (error) {
-    ElMessage.warning(error instanceof Error ? error.message : String(error))
-  }
-}
-
-async function stopCalibrationObservation(): Promise<void> {
-  try {
-    await window.ipcRenderer.invoke('camera-calibration-close')
-  } catch (error) {
-    ElMessage.warning(error instanceof Error ? error.message : String(error))
-  }
-}
-
-async function refreshAppConnections(): Promise<void> {
-  ensureCalibrationStateListener()
-  try {
-    const snap = (await window.ipcRenderer.invoke('camera-calibration-snapshot')) as {
-      observing?: boolean
-      ssh?: { state: string; host: string; port: number } | null
-    } | null
-    if (snap?.ssh && snap.observing) {
-      calibrationSsh.value = { state: snap.ssh.state, host: snap.ssh.host, port: snap.ssh.port }
-    }
-  } catch {
-    /* 快照不可用时忽略 */
-  }
-  try {
-    cameraStreamSessions.value = (await window.ipcRenderer.invoke(
-      'camera-stream-sessions',
-    )) as Array<{ url: string; ownerWindowId: number }>
-  } catch {
-    cameraStreamSessions.value = []
-  }
-  try {
-    const access = (await window.ipcRenderer.invoke('camera-calibration-access')) as {
-      host?: string
-      port?: number
-    } | null
-    if (access?.host) {
-      calibrationSsh.value = {
-        host: access.host,
-        port: access.port ?? 22,
-        state: calibrationSsh.value?.state ?? 'disconnected',
-      }
-    }
-  } catch {
-    calibrationSsh.value = null
-  }
-}
 
 const handleDeviceConnected = () => {
   if (deviceConnecting.value === true) {
