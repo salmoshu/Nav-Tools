@@ -12,6 +12,9 @@ import UpdateDialog from './components/UpdateDialog.vue'
 import emitter from '@/hooks/useMitt'
 import { useApplicationSelector } from '@/composables/useApplicationSelector'
 import { useLocale } from '@/composables/useLocale'
+import { getWindowsByIds } from '@/settings/config'
+import { createComponentDesktopShortcut } from '@/core/panels/componentIcon'
+import { ElMessage } from 'element-plus'
 import { t } from '@/i18n'
 import { TERMINAL_EVENT_BUS_KEY, type TerminalEventBus } from '@/core/terminal/TerminalEventBus'
 import { TERMINAL_TRANSLATE_KEY } from '@/core/terminal/TerminalI18n'
@@ -71,6 +74,36 @@ const openApplicationSelector = () => emitter.emit('open-application-selector')
 const openSettings = () => {
   settingsOpen.value = true
 }
+
+/**
+ * 独立组件窗口标题栏「创建桌面快捷方式」:从地址 hash 解析当前组件,
+ * 图标合成与 .lnk 落盘复用卡片右键同一条链路。
+ */
+async function createCardWindowShortcut(): Promise<void> {
+  if (!isCardWindow.value) return
+  try {
+    const payload = JSON.parse(
+      decodeURIComponent(window.location.hash.slice('#card/'.length)),
+    ) as { windowId?: unknown }
+    const windowId = typeof payload.windowId === 'string' ? payload.windowId : ''
+    const definition = getWindowsByIds([windowId])[0]
+    if (!definition) return
+    await createComponentDesktopShortcut(definition.id, t(definition.title))
+    ElMessage({
+      message: t('app.cardWindow.shortcutCreated'),
+      type: 'success',
+      placement: 'bottom-right',
+      offset: 50,
+    })
+  } catch (error) {
+    ElMessage({
+      message: error instanceof Error ? error.message : String(error),
+      type: 'error',
+      placement: 'bottom-right',
+      offset: 50,
+    })
+  }
+}
 const exitPanelFullscreen = () => dashboardRef.value?.exitFullScreen()
 const handleFullscreenPanelChange = (panel?: FullscreenPanelContext) => {
   fullscreenPanel.value = panel
@@ -99,6 +132,7 @@ onUnmounted(() => {
         :show-panel-fullscreen-exit="Boolean(fullscreenPanel)"
         @open-application-selector="openApplicationSelector"
         @exit-panel-fullscreen="exitPanelFullscreen"
+        @create-shortcut="createCardWindowShortcut"
         @maximized-change="maximized = $event"
       />
       <main class="app-content">

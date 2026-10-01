@@ -1,15 +1,5 @@
 <template>
   <div class="card-window">
-    <button
-      v-if="cardComponent && cardWindowId"
-      type="button"
-      class="shortcut-button"
-      :title="t('app.cardWindow.createShortcut')"
-      @click="createShortcut"
-    >
-      <el-icon :size="14"><Pointer /></el-icon>
-      <span>{{ t('app.cardWindow.createShortcut') }}</span>
-    </button>
     <component
       v-if="cardComponent"
       :is="cardComponent"
@@ -26,11 +16,8 @@
 <script setup lang="ts">
 import { markRaw, onMounted, onUnmounted, ref } from 'vue'
 import type { Component } from 'vue'
-import { ElMessage } from 'element-plus'
-import { Pointer } from '@element-plus/icons-vue'
 import { routeDataToWindow } from '@/hooks/useDevice'
 import { getWindowById } from '@/settings/config'
-import { createComponentDesktopShortcut } from '@/core/panels/componentIcon'
 import { t } from '@/i18n'
 
 // 构建后动态 import 的路径会被打包成哈希文件名，
@@ -103,29 +90,6 @@ onUnmounted(() => {
 function closeWindow() {
   void window.electronAPI?.closeWindow()
 }
-
-/** 把当前组件固化成桌面快捷方式:双击直达本组件独立窗口 */
-async function createShortcut(): Promise<void> {
-  if (!cardWindowId.value) return
-  const definition = getWindowById(cardWindowId.value)
-  if (!definition) return
-  try {
-    await createComponentDesktopShortcut(definition.id, t(definition.title))
-    ElMessage({
-      message: t('app.cardWindow.shortcutCreated'),
-      type: 'success',
-      placement: 'bottom-right',
-      offset: 50,
-    })
-  } catch (error) {
-    ElMessage({
-      message: error instanceof Error ? error.message : String(error),
-      type: 'error',
-      placement: 'bottom-right',
-      offset: 50,
-    })
-  }
-}
 </script>
 
 <style scoped>
@@ -136,36 +100,6 @@ async function createShortcut(): Promise<void> {
   overflow: auto;
   color: var(--app-text);
   background: var(--app-surface);
-}
-/* 创建桌面快捷方式:悬浮右上角,不占组件空间 */
-.shortcut-button {
-  position: absolute;
-  top: 6px;
-  right: 10px;
-  z-index: 20;
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 4px 10px;
-  border: 1px solid var(--app-border);
-  border-radius: 6px;
-  color: var(--app-text-secondary);
-  background: var(--app-surface-muted);
-  font-size: 12px;
-  cursor: pointer;
-  opacity: 0;
-  transition:
-    opacity 0.15s ease,
-    color 0.15s ease,
-    border-color 0.15s ease;
-}
-.card-window:hover .shortcut-button,
-.shortcut-button:focus-visible {
-  opacity: 1;
-}
-.shortcut-button:hover {
-  color: var(--app-text);
-  border-color: var(--el-color-primary);
 }
 
 .load-error {

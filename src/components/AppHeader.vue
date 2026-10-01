@@ -35,6 +35,16 @@
         v-if="showDetachedControls"
         class="header-button"
         type="button"
+        :title="t('app.cardWindow.createShortcut')"
+        :aria-label="t('app.cardWindow.createShortcut')"
+        @click="$emit('create-shortcut')"
+      >
+        <SquareArrowOutUpRight :size="16" :stroke-width="1.8" aria-hidden="true" />
+      </button>
+      <button
+        v-if="showDetachedControls"
+        class="header-button"
+        type="button"
         title="还原到主窗口"
         aria-label="还原面板到主窗口"
         @click="restoreDetachedPanel"
@@ -148,7 +158,7 @@ import {
   FullScreen,
   Minus,
 } from '@element-plus/icons-vue'
-import { LayoutGrid, PanelTopOpen, Pin } from '@lucide/vue'
+import { LayoutGrid, PanelTopOpen, Pin, SquareArrowOutUpRight } from '@lucide/vue'
 import { showStatusBar, showToolBar } from '@/composables/useStatusManager'
 import { getBrowserWindowService } from '@/core/window/browserWindowService'
 import { getPanelIconComponent } from '@/settings/panelIcons'
@@ -168,6 +178,7 @@ defineProps<{
 const emit = defineEmits<{
   'open-application-selector': []
   'exit-panel-fullscreen': []
+  'create-shortcut': []
   'maximized-change': [maximized: boolean]
 }>()
 
