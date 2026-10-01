@@ -35,16 +35,20 @@ test('caps component chips on the application card and lists the rest in the ove
   const card = page.locator('.application-card[data-application-id="overflow-app"]')
   await expect(card).toBeVisible()
 
-  // 卡片上最多直接展示 6 个组件徽章,其余收进 +N 弹层,不再撑破卡片
-  await expect(card.locator('.panel-chip:not(.panel-chip--more)')).toHaveCount(6)
+  // 徽章按容器宽度动态收纳(ResizeObserver 异步收敛);隐藏徽章仍在 DOM,只数可见的
+  const chips = card.locator('.panel-chip:not(.panel-chip--more):visible')
+  await expect.poll(() => chips.count()).toBeLessThan(9)
+  const visibleCount = await chips.count()
+  expect(visibleCount).toBeGreaterThan(0)
   const more = card.locator('.panel-chip--more')
-  await expect(more).toHaveText('+3')
+  await expect(more).toHaveText(`+${9 - visibleCount}`)
+  const chipsBox = await card.locator('.panel-list__chips').boundingBox()
+  expect(chipsBox?.height).toBeLessThan(30)
 
-  // 悬浮 +N 列出其余组件,每项仍是独立窗口快捷方式
+  // 悬浮 +N 列出其余组件;弹层内容常驻 DOM,只断言当前可见的那个
   await more.hover()
-  const overflowItems = page.locator('.panel-overflow-popper .panel-overflow__item')
-  await expect(overflowItems).toHaveCount(3)
-  await expect(overflowItems.first()).toContainText('GNSS')
+  const overflowItems = page.locator('.panel-overflow-popper .panel-overflow__item:visible')
+  await expect(overflowItems).toHaveCount(9 - visibleCount)
 })
 
 test('opens a component standalone window from the card header shortcut button', async ({

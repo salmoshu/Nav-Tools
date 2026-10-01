@@ -92,49 +92,10 @@
                 </el-icon>
               </div>
               <p>{{ application.description || t('app.selector.noDescription') }}</p>
-              <div class="panel-list">
-                <button
-                  v-for="windowDefinition in visibleApplicationWindows(application)"
-                  :key="windowDefinition.id"
-                  type="button"
-                  class="panel-chip"
-                  :title="t('app.selector.openComponentWindow', { v: t(windowDefinition.title) })"
-                  @click.stop="$emit('open-component-window', windowDefinition.id)"
-                >
-                  <el-icon :size="11"><TopRight /></el-icon>
-                  <span>{{ t(windowDefinition.title) }}</span>
-                </button>
-                <el-popover
-                  v-if="overflowApplicationWindows(application).length > 0"
-                  placement="bottom-start"
-                  trigger="hover"
-                  :width="260"
-                  :teleported="true"
-                  popper-class="panel-overflow-popper"
-                >
-                  <template #reference>
-                    <button
-                      type="button"
-                      class="panel-chip panel-chip--more"
-                      :title="t('app.selector.moreComponents')"
-                    >
-                      +{{ overflowApplicationWindows(application).length }}
-                    </button>
-                  </template>
-                  <div class="panel-overflow">
-                    <button
-                      v-for="windowDefinition in overflowApplicationWindows(application)"
-                      :key="windowDefinition.id"
-                      type="button"
-                      class="panel-overflow__item"
-                      @click="$emit('open-component-window', windowDefinition.id)"
-                    >
-                      <el-icon :size="11"><TopRight /></el-icon>
-                      <span>{{ t(windowDefinition.title) }}</span>
-                    </button>
-                  </div>
-                </el-popover>
-              </div>
+              <ApplicationPanelChips
+                :windows="applicationWindows(application)"
+                @open="(windowId) => $emit('open-component-window', windowId)"
+              />
             </div>
             <div class="application-actions">
               <el-button
@@ -194,12 +155,12 @@ import {
   Grid,
   Plus,
   Refresh,
-  TopRight,
 } from '@element-plus/icons-vue'
 import type { UserApplication } from '@/settings/config'
 import { useApplicationSelector } from '@/composables/useApplicationSelector'
 import { applicationIconComponents } from '@/settings/applicationIcons'
 import ApplicationEditor from './ApplicationEditor.vue'
+import ApplicationPanelChips from './ApplicationPanelChips.vue'
 import { t } from '@/i18n'
 
 const props = defineProps<{
@@ -238,15 +199,6 @@ const applicationWindows = (application: UserApplication) => {
   }
   return windows
 }
-
-/** 卡片上直接可见的组件徽章上限:再多会撑破卡片布局,余下收进 +N 弹层 */
-const MAX_PANEL_CHIPS = 6
-
-const visibleApplicationWindows = (application: UserApplication) =>
-  applicationWindows(application).slice(0, MAX_PANEL_CHIPS)
-
-const overflowApplicationWindows = (application: UserApplication) =>
-  applicationWindows(application).slice(MAX_PANEL_CHIPS)
 
 const iconComponent = (icon: string) =>
   applicationIconComponents[icon as UserApplication['icon']] ?? Grid
@@ -353,38 +305,6 @@ const handleEscape = (event: KeyboardEvent) => {
 onMounted(() => window.addEventListener('keydown', handleEscape, { capture: true }))
 onUnmounted(() => window.removeEventListener('keydown', handleEscape, { capture: true }))
 </script>
-
-<style>
-/* +N 弹层内容 teleport 到 body,scoped 样式够不到,走全局 */
-.panel-overflow-popper .panel-overflow {
-  display: flex;
-  max-height: 260px;
-  flex-direction: column;
-  gap: 2px;
-  overflow-y: auto;
-}
-
-.panel-overflow-popper .panel-overflow__item {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 8px;
-  border: none;
-  border-radius: 6px;
-  color: var(--app-text-secondary);
-  background: transparent;
-  font-size: 12px;
-  text-align: left;
-  cursor: pointer;
-}
-
-.panel-overflow-popper .panel-overflow__item:hover,
-.panel-overflow-popper .panel-overflow__item:focus-visible {
-  color: var(--app-text);
-  background: var(--app-surface-muted);
-  outline: none;
-}
-</style>
 
 <style scoped>
 .selector-backdrop {
@@ -581,41 +501,7 @@ onUnmounted(() => window.removeEventListener('keydown', handleEscape, { capture:
   overflow: hidden;
 }
 
-.panel-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-/* 组件快捷方式按钮:点击即把该组件单独开成桌面独立窗口 */
-.panel-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 3px 7px;
-  border: 1px solid var(--app-border);
-  border-radius: 4px;
-  color: var(--app-text-secondary);
-  background: var(--app-surface-muted);
-  font-size: 12px;
-  cursor: pointer;
-  transition:
-    border-color 120ms ease,
-    color 120ms ease,
-    background 120ms ease;
-}
-
-.panel-chip:hover,
-.panel-chip:focus-visible {
-  border-color: var(--application-accent);
-  color: var(--app-text);
-  background: color-mix(in srgb, var(--application-accent) 10%, var(--app-surface));
-  outline: none;
-}
-
-.panel-chip--more {
-  font-weight: 600;
-}
+/* 组件徽章行由 ApplicationPanelChips 渲染:按容器宽度动态收纳,卡片高度恒定 */
 
 .application-actions {
   display: flex;
