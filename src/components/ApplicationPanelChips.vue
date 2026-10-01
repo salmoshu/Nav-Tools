@@ -1,21 +1,19 @@
 <template>
-  <div class="panel-list">
-    <!-- 徽章区固定单行,按容器实际宽度动态决定完整可见的个数,放不下的收进 +N -->
-    <div ref="rowEl" class="panel-list__chips">
-      <button
-        v-for="(windowDefinition, index) in windows"
-        v-show="index < visibleCount"
-        :key="windowDefinition.id"
-        :ref="(element) => collectChip(index, element)"
-        type="button"
-        class="panel-chip"
-        :title="t('app.selector.openComponentWindow', { v: t(windowDefinition.title) })"
-        @click.stop="emit('open', windowDefinition.id)"
-      >
-        <el-icon :size="11"><TopRight /></el-icon>
-        <span>{{ t(windowDefinition.title) }}</span>
-      </button>
-    </div>
+  <!-- 徽章区固定两行流式布局:按容器实际宽度动态决定完整可见的个数,+N 排在行末,余下收进弹层 -->
+  <div ref="rowEl" class="panel-list">
+    <button
+      v-for="(windowDefinition, index) in windows"
+      v-show="index < visibleCount"
+      :key="windowDefinition.id"
+      :ref="(element) => collectChip(index, element)"
+      type="button"
+      class="panel-chip"
+      :title="t('app.selector.openComponentWindow', { v: t(windowDefinition.title) })"
+      @click.stop="emit('open', windowDefinition.id)"
+    >
+      <el-icon :size="11"><TopRight /></el-icon>
+      <span>{{ t(windowDefinition.title) }}</span>
+    </button>
     <el-popover
       v-if="windows.length > visibleCount"
       placement="bottom-start"
@@ -66,6 +64,8 @@ const emit = defineEmits<{
 const CHIP_GAP_PX = 6
 /** 「+N」角标宽度估算:两位数也按这个预算,宁少勿溢出 */
 const MORE_CHIP_WIDTH_PX = 44
+/** 徽章最多占两行:再多的组件收进 +N 弹层,卡片高度保持稳定 */
+const MAX_CHIP_ROWS = 2
 
 const rowEl = ref<HTMLElement | null>(null)
 const chipEls: HTMLElement[] = []
@@ -76,8 +76,30 @@ function collectChip(index: number, element: unknown): void {
 }
 
 /**
- * 逐个累加徽章宽度:一旦当前徽章或其后的「+N」放不下就停,
- * 保证可见徽章全部完整、有溢出时 +N 必有位置。
+ * 贪心流式装箱:逐个放入徽章,行宽用尽换行,超过 maxRows 停止。
+ * 返回放下的项数(序列里可以混入 +N 的预算宽度)。
+ */
+function packItems(widths: number[], available: number, maxRows: number): number {
+  let rows = 1
+  let usedInRow = 0
+  let count = 0
+  for (const width of widths) {
+    const gap = usedInRow > 0 ? CHIP_GAP_PX : 0
+    if (usedInRow + gap + width > available) {
+      if (rows >= maxRows) break
+      rows++
+      usedInRow = width
+    } else {
+      usedInRow += gap + width
+    }
+    count++
+  }
+  return count
+}
+
+/**
+ * 先按纯容量试装两行;装不下时把「+N」当作末尾一项重新装,
+ * 让出的那个位置正好放 +N——保证文字永不截断、+N 必有位置。
  */
 function measure(): void {
   const row = rowEl.value
@@ -93,15 +115,9 @@ function measure(): void {
     const available = row.clientWidth
     if (available <= 0) return
     const widths = chips.map((chip) => chip.offsetWidth)
-    let used = 0
-    let count = 0
-    for (let index = 0; index < widths.length; index++) {
-      const itemWidth = widths[index] + (count > 0 ? CHIP_GAP_PX : 0)
-      const moreReserve =
-        index < widths.length - 1 ? MORE_CHIP_WIDTH_PX + CHIP_GAP_PX : 0
-      if (used + itemWidth + moreReserve > available) break
-      used += itemWidth
-      count++
+    let count = packItems(widths, available, MAX_CHIP_ROWS)
+    if (count < widths.length) {
+      count = packItems([...widths, MORE_CHIP_WIDTH_PX], available, MAX_CHIP_ROWS) - 1
     }
     visibleCount.value = count
   })
@@ -130,20 +146,14 @@ watch(
 </script>
 
 <style scoped>
+/* 两行流式徽章:动态收纳保证不截断文字、不溢出卡片 */
 .panel-list {
   display: flex;
-  align-items: center;
+  flex-wrap: wrap;
+  align-content: flex-start;
   gap: 6px;
-}
-
-/* 徽章区固定单行:卡片高度不随组件数变化,动态收纳保证不截断文字 */
-.panel-list__chips {
-  display: flex;
-  flex: 1;
-  min-width: 0;
-  gap: 6px;
+  max-height: 58px;
   overflow: clip;
-  white-space: nowrap;
 }
 
 .panel-chip {

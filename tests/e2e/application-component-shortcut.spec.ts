@@ -35,15 +35,17 @@ test('caps component chips on the application card and lists the rest in the ove
   const card = page.locator('.application-card[data-application-id="overflow-app"]')
   await expect(card).toBeVisible()
 
-  // 徽章按容器宽度动态收纳(ResizeObserver 异步收敛);隐藏徽章仍在 DOM,只数可见的
+  // 徽章按容器宽度动态收纳成两行(ResizeObserver 异步收敛);隐藏徽章仍在 DOM,只数可见的
   const chips = card.locator('.panel-chip:not(.panel-chip--more):visible')
   await expect.poll(() => chips.count()).toBeLessThan(9)
   const visibleCount = await chips.count()
   expect(visibleCount).toBeGreaterThan(0)
   const more = card.locator('.panel-chip--more')
   await expect(more).toHaveText(`+${9 - visibleCount}`)
-  const chipsBox = await card.locator('.panel-list__chips').boundingBox()
-  expect(chipsBox?.height).toBeLessThan(30)
+  const chipsBox = await card.locator('.panel-list').boundingBox()
+  // 两行布局:高度超过单行(~26px)、不超过两行上限(~58px)
+  expect(chipsBox?.height).toBeGreaterThan(30)
+  expect(chipsBox?.height).toBeLessThanOrEqual(60)
 
   // 悬浮 +N 列出其余组件;弹层内容常驻 DOM,只断言当前可见的那个
   await more.hover()
