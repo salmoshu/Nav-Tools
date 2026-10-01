@@ -73,6 +73,7 @@
                       <el-button
                         type="text"
                         @click="openComponentWindow(item.windowId, item)"
+                        @contextmenu.prevent="createItemDesktopShortcut(item)"
                         class="shortcut-btn"
                         :title="t('app.dashboard.shortcutWindow')"
                       >
@@ -142,6 +143,7 @@ import {
   statusbarPosition,
 } from '@/composables/useStatusManager'
 import { getWindowById, getWindowsByIds, windowCatalog } from '@/settings/config'
+import { createComponentDesktopShortcut } from '@/core/panels/componentIcon'
 import { getPanelIconComponent } from '@/settings/panelIcons'
 import { useDevice } from '@/hooks/useDevice'
 import { useApplicationSelector } from '@/composables/useApplicationSelector'
@@ -239,6 +241,31 @@ const openApplicationWindow = async (applicationId: string) => {
   if (windowId === null) {
     ElMessage({
       message: t('app.dashboard.openWindowFailed'),
+      type: 'error',
+      placement: 'bottom-right',
+      offset: 50,
+    })
+  }
+}
+
+/**
+ * 组件卡片 ↗ 按钮右键:为该组件创建桌面快捷方式(双击直达独立窗口,
+ * 图标 = 应用主图标 + 组件角标)。
+ */
+const createItemDesktopShortcut = async (item: { windowId: string; titleName: string }) => {
+  const definition = getWindowsByIds([item.windowId])[0]
+  if (!definition) return
+  try {
+    await createComponentDesktopShortcut(definition.id, t(definition.title))
+    ElMessage({
+      message: t('app.dashboard.shortcutCreated'),
+      type: 'success',
+      placement: 'bottom-right',
+      offset: 50,
+    })
+  } catch (error) {
+    ElMessage({
+      message: error instanceof Error ? error.message : String(error),
       type: 'error',
       placement: 'bottom-right',
       offset: 50,

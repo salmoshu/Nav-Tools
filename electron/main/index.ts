@@ -38,6 +38,8 @@ import { TerminalService } from './services/TerminalService'
 import { createNodeTerminalServiceHost } from './services/TerminalServiceHost'
 import { TerminalCredentialService } from './services/TerminalCredentialService'
 import { registerTerminalIpc } from './terminalIpc'
+import { createDesktopShortcut, parseOpenComponentArg } from './shortcuts'
+import { getPanelById } from '../../src/core/panels/registry'
 
 const require = createRequire(import.meta.url)
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -415,6 +417,10 @@ app.whenReady().then(() => {
   createWindow()
   Menu.setApplicationMenu(null)
 
+  // 桌面快捷方式冷启动:主窗口照常创建后,再打开快捷方式指向的组件窗口
+  const startupComponent = parseOpenComponentArg(process.argv)
+  if (startupComponent) openComponentStandalone(startupComponent)
+
   // 注册获取版本号的 IPC 处理器
   ipcMain.handle('get-app-version', () => {
     return appVersion
@@ -426,6 +432,21 @@ app.whenReady().then(() => {
   app.commandLine.appendSwitch('disable-backgrounding-occluded-windows')
   app.commandLine.appendSwitch('disable-features', 'CalculateNativeWinOcclusion')
 })
+
+// 单实例:数据接入/设备连接由主窗口持有,多实例会互相抢占;
+// 双击桌面快捷方式时把 --open-component 转发给已运行实例直接开窗
+if (!app.requestSingleInstanceLock()) {
+  app.quit()
+} else {
+  app.on('second-instance', (_event, argv) => {
+    if (win) {
+      if (win.isMinimized()) win.restore()
+      win.focus()
+    }
+    const requested = parseOpenComponentArg(argv)
+    if (requested) openComponentStandalone(requested)
+  })
+}
 
 app.on('window-all-closed', () => {
   win = null
@@ -451,15 +472,22 @@ app.on('activate', () => {
 })
 
 // Open card in new window
-ipcMain.handle('open-card-window', async (event, serializedData) => {
-  let cardData
-  try {
-    cardData = JSON.parse(serializedData)
-  } catch (error) {
-    console.error('Error parsing card data:', error)
-    return
-  }
-
+/**
+ * 创建承载单个组件的独立窗口:卡片分离(open-card-window)与桌面快捷方式启动
+ * (--open-component)共用。originWebContentsId 用于数据广播溯源,快捷方式冷启动
+ * 时主窗口可能尚未创建,允许缺省。
+ */
+async function openCardWindow(
+  cardData: {
+    title?: string
+    width?: number
+    height?: number
+    componentName: string
+    windowId?: string
+    props?: Record<string, unknown>
+  },
+  originWebContentsId?: number,
+): Promise<number> {
   const cardWindow = new BrowserWindow({
     title: cardData.title || 'Card Content',
     width: cardData.width || 800,
@@ -478,7 +506,7 @@ ipcMain.handle('open-card-window', async (event, serializedData) => {
   configureWebTitleBar(cardWindow)
   if (typeof cardData.windowId === 'string') {
     detachedPanels.set(cardWindow.id, {
-      originWebContentsId: event.sender.id,
+      originWebContentsId: originWebContentsId ?? 0,
       windowId: cardData.windowId,
       componentName:
         typeof cardData.componentName === 'string' ? cardData.componentName : undefined,
@@ -527,7 +555,57 @@ ipcMain.handle('open-card-window', async (event, serializedData) => {
   }
 
   return cardWindow.id
+}
+
+ipcMain.handle('open-card-window', async (event, serializedData) => {
+  let cardData
+  try {
+    cardData = JSON.parse(serializedData)
+  } catch (error) {
+    console.error('Error parsing card data:', error)
+    return
+  }
+
+  return openCardWindow(cardData, event.sender.id)
 })
+
+// ---- 桌面快捷方式:--open-component=<面板id> 直达组件独立窗口 ----
+
+/** 快捷方式冷启动/二次启动时打开目标组件窗口 */
+function openComponentStandalone(windowId: string): void {
+  void openCardWindow(
+    {
+      componentName: getPanelById(windowId)!.componentName,
+      windowId,
+      title: 'Nav-Tools',
+      width: 980,
+      height: 660,
+      props: {},
+    },
+    win?.webContents?.id,
+  )
+}
+
+ipcMain.handle(
+  'create-desktop-shortcut',
+  async (_event, request: { windowId: string; name: string; iconDataUrl: string }) => {
+    if (!request || typeof request.windowId !== 'string') {
+      return { ok: false, error: 'Invalid shortcut request' }
+    }
+    return createDesktopShortcut(
+      {
+        windowId: request.windowId,
+        name: String(request.name || ''),
+        iconDataUrl: String(request.iconDataUrl || ''),
+      },
+      {
+        desktopPath: app.getPath('desktop'),
+        execPath: process.execPath,
+        userDataPath: app.getPath('userData'),
+      },
+    )
+  },
+)
 
 ipcMain.on('close-card-window', (event) => {
   BrowserWindow.fromWebContents(event.sender)?.close()

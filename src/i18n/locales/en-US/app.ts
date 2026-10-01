@@ -206,7 +206,8 @@ export default {
   },
   dashboard: {
     detach: 'Detach to Separate Window',
-    shortcutWindow: 'Open in standalone window (keep card)',
+    shortcutWindow: 'Open in standalone window (right-click: desktop shortcut)',
+    shortcutCreated: 'Desktop shortcut created',
     fullscreen: 'Show Fullscreen',
     removeCard: 'Remove Card',
     openWindowFailed: 'Cannot open application window',
@@ -240,5 +241,7 @@ export default {
     close: 'Close Window',
     invalidAddress: 'Invalid card window address',
     componentNotFound: 'Component not found: {v}',
+    createShortcut: 'Create desktop shortcut',
+    shortcutCreated: 'Desktop shortcut created',
   },
 }
