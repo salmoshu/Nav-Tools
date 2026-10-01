@@ -172,6 +172,7 @@ export default {
     noDescription: 'No description',
     openWindow: 'Open in New Window',
     openComponentWindow: 'Open "{v}" in standalone window',
+    moreComponents: 'More components',
     editApp: 'Edit Application',
     deleteApp: 'Delete Application',
     resetConfirm:
@@ -205,6 +206,7 @@ export default {
   },
   dashboard: {
     detach: 'Detach to Separate Window',
+    shortcutWindow: 'Open in standalone window (keep card)',
     fullscreen: 'Show Fullscreen',
     removeCard: 'Remove Card',
     openWindowFailed: 'Cannot open application window',

@@ -169,6 +169,7 @@ export default {
     noDescription: '无描述',
     openWindow: '在新窗口打开',
     openComponentWindow: '在独立窗口打开「{v}」',
+    moreComponents: '更多组件',
     editApp: '编辑应用',
     deleteApp: '删除应用',
     resetConfirm:
@@ -202,6 +203,7 @@ export default {
   },
   dashboard: {
     detach: '分离到独立窗口',
+    shortcutWindow: '在独立窗口打开（保留原卡片）',
     fullscreen: '全屏展示',
     removeCard: '移除卡片',
     openWindowFailed: '无法打开应用窗口',

@@ -72,6 +72,14 @@
                     <div class="card-actions">
                       <el-button
                         type="text"
+                        @click="openComponentWindow(item.windowId, item)"
+                        class="shortcut-btn"
+                        :title="t('app.dashboard.shortcutWindow')"
+                      >
+                        <el-icon><TopRight /></el-icon>
+                      </el-button>
+                      <el-button
+                        type="text"
                         @click="detachItem(item)"
                         class="detach-btn"
                         :title="t('app.dashboard.detach')"
@@ -124,7 +132,7 @@ import ApplicationSelector from './ApplicationSelector.vue'
 import { ref, computed, nextTick, onMounted, onUnmounted, provide, watch } from 'vue'
 import { GridLayout, GridItem } from 'grid-layout-plus'
 import { ElButton, ElCard, ElIcon, ElMessage, ElMessageBox } from 'element-plus'
-import { Close, Share, FullScreen } from '@element-plus/icons-vue'
+import { Close, Share, FullScreen, TopRight } from '@element-plus/icons-vue'
 import emitter from '@/hooks/useMitt'
 import { useLayoutManager } from '@/composables/useLayoutManager'
 import {
@@ -239,20 +247,22 @@ const openApplicationWindow = async (applicationId: string) => {
 }
 
 /**
- * 组件快捷方式:把单个组件直接开成桌面独立窗口。
+ * 组件快捷方式:把单个组件直接开成桌面独立窗口(原卡片保留在布局中,不是分离)。
  * windowId 沿用面板目录 id,独立窗口据此接收主窗口广播的实时数据路由。
+ * 传入卡片 item 时按其当前尺寸开窗,体验与分离窗口一致。
  */
-const openComponentWindow = async (windowId: string) => {
+const openComponentWindow = async (windowId: string, item?: { i: string }) => {
   const definition = getWindowsByIds([windowId])[0]
   if (!definition || !window.ipcRenderer) return
 
+  const element = item ? document.getElementById(`grid-item-${item.i}`) : null
   const cardData = {
     componentName: definition.componentName,
     windowId: definition.id,
     title: t(definition.title),
     props: {},
-    width: 980,
-    height: 660,
+    width: element ? element.clientWidth : 980,
+    height: element ? element.clientHeight : 660,
   }
   try {
     const opened = await window.ipcRenderer.invoke(
@@ -857,9 +867,14 @@ onUnmounted(() => {
 
 .detach-btn,
 .remove-btn,
-.fullscreen-btn {
+.fullscreen-btn,
+.shortcut-btn {
   padding: 0;
   color: var(--app-text-muted);
+}
+
+.shortcut-btn:hover {
+  color: var(--el-color-primary);
 }
 
 .detach-btn:hover {

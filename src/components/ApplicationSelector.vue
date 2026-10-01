@@ -94,7 +94,7 @@
               <p>{{ application.description || t('app.selector.noDescription') }}</p>
               <div class="panel-list">
                 <button
-                  v-for="windowDefinition in applicationWindows(application)"
+                  v-for="windowDefinition in visibleApplicationWindows(application)"
                   :key="windowDefinition.id"
                   type="button"
                   class="panel-chip"
@@ -104,6 +104,36 @@
                   <el-icon :size="11"><TopRight /></el-icon>
                   <span>{{ t(windowDefinition.title) }}</span>
                 </button>
+                <el-popover
+                  v-if="overflowApplicationWindows(application).length > 0"
+                  placement="bottom-start"
+                  trigger="hover"
+                  :width="260"
+                  :teleported="true"
+                  popper-class="panel-overflow-popper"
+                >
+                  <template #reference>
+                    <button
+                      type="button"
+                      class="panel-chip panel-chip--more"
+                      :title="t('app.selector.moreComponents')"
+                    >
+                      +{{ overflowApplicationWindows(application).length }}
+                    </button>
+                  </template>
+                  <div class="panel-overflow">
+                    <button
+                      v-for="windowDefinition in overflowApplicationWindows(application)"
+                      :key="windowDefinition.id"
+                      type="button"
+                      class="panel-overflow__item"
+                      @click="$emit('open-component-window', windowDefinition.id)"
+                    >
+                      <el-icon :size="11"><TopRight /></el-icon>
+                      <span>{{ t(windowDefinition.title) }}</span>
+                    </button>
+                  </div>
+                </el-popover>
               </div>
             </div>
             <div class="application-actions">
@@ -208,6 +238,15 @@ const applicationWindows = (application: UserApplication) => {
   }
   return windows
 }
+
+/** 卡片上直接可见的组件徽章上限:再多会撑破卡片布局,余下收进 +N 弹层 */
+const MAX_PANEL_CHIPS = 6
+
+const visibleApplicationWindows = (application: UserApplication) =>
+  applicationWindows(application).slice(0, MAX_PANEL_CHIPS)
+
+const overflowApplicationWindows = (application: UserApplication) =>
+  applicationWindows(application).slice(MAX_PANEL_CHIPS)
 
 const iconComponent = (icon: string) =>
   applicationIconComponents[icon as UserApplication['icon']] ?? Grid
@@ -314,6 +353,38 @@ const handleEscape = (event: KeyboardEvent) => {
 onMounted(() => window.addEventListener('keydown', handleEscape, { capture: true }))
 onUnmounted(() => window.removeEventListener('keydown', handleEscape, { capture: true }))
 </script>
+
+<style>
+/* +N 弹层内容 teleport 到 body,scoped 样式够不到,走全局 */
+.panel-overflow-popper .panel-overflow {
+  display: flex;
+  max-height: 260px;
+  flex-direction: column;
+  gap: 2px;
+  overflow-y: auto;
+}
+
+.panel-overflow-popper .panel-overflow__item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border: none;
+  border-radius: 6px;
+  color: var(--app-text-secondary);
+  background: transparent;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.panel-overflow-popper .panel-overflow__item:hover,
+.panel-overflow-popper .panel-overflow__item:focus-visible {
+  color: var(--app-text);
+  background: var(--app-surface-muted);
+  outline: none;
+}
+</style>
 
 <style scoped>
 .selector-backdrop {
@@ -540,6 +611,10 @@ onUnmounted(() => window.removeEventListener('keydown', handleEscape, { capture:
   color: var(--app-text);
   background: color-mix(in srgb, var(--application-accent) 10%, var(--app-surface));
   outline: none;
+}
+
+.panel-chip--more {
+  font-weight: 600;
 }
 
 .application-actions {
