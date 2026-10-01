@@ -623,6 +623,11 @@ ipcMain.handle(
     if (!request || typeof request.windowId !== 'string') {
       return { ok: false, error: 'Invalid shortcut request' }
     }
+    // 开发模式下 process.execPath 指向 node_modules 里的 electron.exe,
+    // 建出来的快捷方式指向开发环境,对用户是坏入口——直接拒绝并提示
+    if (!app.isPackaged) {
+      return { ok: false, error: '开发模式下无法创建桌面快捷方式，请在安装版中使用' }
+    }
     return createDesktopShortcut(
       {
         windowId: request.windowId,
