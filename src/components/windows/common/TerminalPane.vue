@@ -256,6 +256,7 @@
         :cwd="guiCwd"
         :cols="termCols"
         :session-id="sessionInfo?.id"
+        :history-scope="historyScope"
         :search-query="searchVisible ? searchQuery : ''"
         :search-next-tick="searchNextTick"
         :search-prev-tick="searchPrevTick"
@@ -357,6 +358,7 @@ import { FitAddon } from '@xterm/addon-fit'
 import { SearchAddon } from '@xterm/addon-search'
 import '@xterm/xterm/css/xterm.css'
 import { CommandBlockAssembler, type TerminalCommandBlock } from '@/core/terminal/CommandBlocks'
+import { createTerminalHistoryScope } from '@/core/terminal/TerminalHistoryStorage'
 import type { TerminalPaneNode, TerminalSplitDirection } from '@/core/terminal/TerminalLayout'
 import {
   TERMINAL_SSH_RECOVERED_EVENT,
@@ -456,6 +458,26 @@ const guiDegraded = computed(() => {
   const kind = props.pane.launch?.kind ?? props.sessionInfo?.kind
   if (kind === 'ssh') return true
   return props.pane.launch?.kind === 'local' && props.pane.launch.localShell === 'cmd'
+})
+
+/**
+ * 历史持久化作用域:同类会话(本机同 shell / 同发行版 WSL / 同主机 SSH)
+ * 共享一份历史;未知会话不给作用域,历史仅存内存。
+ */
+const historyScope = computed(() => {
+  const launch = props.pane.launch
+  if (launch?.kind === 'local') return createTerminalHistoryScope('local', launch.localShell)
+  if (launch?.kind === 'wsl') return createTerminalHistoryScope('wsl', launch.wslDistro)
+  if (launch?.kind === 'ssh' && launch.sshProfile) {
+    return createTerminalHistoryScope(
+      'ssh',
+      `${launch.sshProfile.username}@${launch.sshProfile.host}:${launch.sshProfile.port}`,
+    )
+  }
+  const session = props.sessionInfo
+  if (session?.kind === 'local') return createTerminalHistoryScope('local', session.title)
+  if (session?.kind === 'wsl') return createTerminalHistoryScope('wsl', session.title)
+  return undefined
 })
 
 function feedCommandBlocks(data: string): void {
@@ -563,17 +585,15 @@ function handlePaneKeydown(event: KeyboardEvent): void {
   }
   // 块间导航只在 GUI 视图有意义:终端视图没有块边界
   if (!isGui.value || guiDegraded.value) return
+  // ↑/↓ 前带 Alt 或 Ctrl(恰好一个)都触发提示间跳转:Alt 是原快捷键,Ctrl 是 Warp 习惯
+  const blockNavModifier = event.altKey !== event.ctrlKey && !event.metaKey && !event.shiftKey
+  if (blockNavModifier && (event.key === 'ArrowUp' || event.key === 'ArrowDown')) {
+    event.preventDefault()
+    if (event.key === 'ArrowUp') navPrevTick.value += 1
+    else navNextTick.value += 1
+    return
+  }
   if (event.altKey && !event.ctrlKey && !event.metaKey) {
-    if (event.key === 'ArrowUp') {
-      event.preventDefault()
-      navPrevTick.value += 1
-      return
-    }
-    if (event.key === 'ArrowDown') {
-      event.preventDefault()
-      navNextTick.value += 1
-      return
-    }
     if (event.key.toLowerCase() === 'e') {
       event.preventDefault()
       navErrorTick.value += 1
@@ -1292,7 +1312,8 @@ function withTimeout<T>(
   display: flex;
   align-items: center;
   gap: 9px;
-  padding: 5px 10px;
+  /* 顶部留出 pane-header 浮层按钮行的高度,否则「切回终端视图」按钮被浮层挡住点不到 */
+  padding: 36px 10px 5px;
   border-bottom: 1px solid color-mix(in srgb, var(--terminal-fg) 14%, var(--terminal-bg));
   color: var(--terminal-fg);
   background: color-mix(in srgb, var(--terminal-bg) 92%, var(--el-color-warning));

@@ -1,6 +1,6 @@
 <template>
   <div class="terminal-gui-view">
-    <div ref="scrollElement" class="terminal-gui-view__blocks">
+    <div ref="scrollElement" class="terminal-gui-view__blocks" @click="handleBlocksClick">
       <div v-if="blocks.length === 0" class="gui-empty" role="status">
         <span class="gui-empty__icon"><LayoutGrid /></span>
         <strong>{{ t('common.terminal.guiEmptyTitle') }}</strong>
@@ -46,6 +46,20 @@
                 :aria-label="t('common.terminal.guiShowRaw')"
                 @click="toggleRawView(entry.block.id)"
                 ><el-icon><View /></el-icon
+              ></el-button>
+            </el-tooltip>
+            <el-tooltip
+              v-if="entry.block.command"
+              :content="t('common.terminal.copyCommand')"
+              placement="bottom"
+              :show-after="400"
+            >
+              <el-button
+                text
+                class="command-block__action"
+                :aria-label="t('common.terminal.copyCommand')"
+                @click="$emit('copy', entry.block.command)"
+                ><el-icon><DocumentCopy /></el-icon
               ></el-button>
             </el-tooltip>
             <el-tooltip
@@ -258,20 +272,21 @@
           readonly
           aria-hidden="true"
         />
-        <input
+        <textarea
           ref="inputElement"
           v-model="draft"
           class="gui-input"
-          type="text"
+          rows="1"
           spellcheck="false"
           autocomplete="off"
           :placeholder="t('common.terminal.guiInputPlaceholder')"
           :aria-label="t('common.terminal.guiInputPlaceholder')"
-          @input="syncCaret"
+          @input="handleInput"
           @click="syncCaret"
           @keyup="syncCaret"
+          @select="syncCaret"
           @keydown="handleInputKeydown"
-        />
+        ></textarea>
       </div>
       <!-- 块间导航:快捷键之外也给个可点的入口,否则这功能等于藏起来了 -->
       <span v-if="blocks.length > 0" class="gui-input-row__nav">
@@ -314,6 +329,7 @@ import {
   ArrowUpBold,
   CloseBold,
   CopyDocument,
+  DocumentCopy,
   RefreshRight,
   View,
   WarningFilled,
@@ -339,6 +355,10 @@ import {
 } from '@/core/terminal/CommandCompletion'
 import { useTerminalTranslate } from '@/core/terminal/TerminalI18n'
 import type { TerminalRichPayload } from '@/core/terminal/CommandBlocks'
+import {
+  createTerminalHistoryStore,
+  TERMINAL_HISTORY_MAX_ENTRIES,
+} from '@/core/terminal/TerminalHistoryStorage'
 import type { TerminalPathStat, TerminalSessionDir } from '@/core/terminal/TerminalTypes'
 import TerminalFileTree from './TerminalFileTree.vue'
 import TerminalRichContent from './TerminalRichContent.vue'
@@ -365,6 +385,11 @@ const props = defineProps<{
   navNextTick?: number
   /** 「跳到出错块」触发计数 */
   navErrorTick?: number
+  /**
+   * 历史持久化作用域(`local:bash` / `wsl:Ubuntu` / `ssh:user@host:22`):
+   * 同类会话共享历史并在重启后保留;缺省时历史仅存内存。
+   */
+  historyScope?: string
 }>()
 const emit = defineEmits<{
   rerun: [command: string]
@@ -387,34 +412,60 @@ interface PreviewState {
 }
 
 const scrollElement = ref<HTMLDivElement | null>(null)
-const inputElement = ref<HTMLInputElement | null>(null)
+const inputElement = ref<HTMLTextAreaElement | null>(null)
 const collapsed = ref<Set<number>>(new Set())
 /** 用户回滚查看历史时不再强制吸底 */
 let stickToBottom = true
 
 const draft = ref('')
-/** 会话内输入历史,↑/↓ 翻阅;仅存内存,不持久化 */
+/** 会话内输入历史,↑/↓ 翻阅;按 historyScope 持久化,同类会话重启后仍在 */
 const history = reactive<string[]>([])
 let historyIndex = -1
+/** 翻历史前的草稿:回到最新一条时还原,未发完的输入不丢(Warp 行为) */
+let historyDraft: string | null = null
+
+const historyStore = createTerminalHistoryStore(localStorage)
 
 function rememberCommand(command: string): void {
   const previous = history.indexOf(command)
   if (previous >= 0) history.splice(previous, 1)
   history.push(command)
-  if (history.length > 100) history.shift()
+  if (history.length > TERMINAL_HISTORY_MAX_ENTRIES) history.shift()
+  persistHistory()
+}
+
+/** 历史写入合并去抖:块回放一次灌入上百条,逐条同步写 localStorage 得不偿失 */
+let historySaveTimer: ReturnType<typeof setTimeout> | undefined
+function persistHistory(): void {
+  const scope = props.historyScope
+  if (!scope) return
+  if (historySaveTimer) clearTimeout(historySaveTimer)
+  historySaveTimer = setTimeout(() => {
+    historySaveTimer = undefined
+    historyStore.save(scope, history)
+  }, 300)
 }
 
 /** 把同一会话已经捕获的命令也纳入提示，不局限于 GUI 输入行提交的命令。 */
 const rememberedBlockIds = new Set<number>()
 let rememberedSessionId = props.sessionId
+let rememberedScope = props.historyScope
 watch(
-  [() => props.sessionId, () => props.blocks],
-  ([sessionId, blocks]) => {
-    if (sessionId !== rememberedSessionId) {
+  [() => props.sessionId, () => props.historyScope, () => props.blocks],
+  ([sessionId, scope, blocks]) => {
+    if (sessionId !== rememberedSessionId || scope !== rememberedScope) {
       rememberedSessionId = sessionId
+      rememberedScope = scope
       rememberedBlockIds.clear()
       history.splice(0)
       historyIndex = -1
+      historyDraft = null
+      // 持久化历史先入列(较旧),块回放的命令经 rememberCommand 浮到队尾(较新)
+      if (scope) {
+        for (const command of historyStore.load(scope)) {
+          if (!history.includes(command)) history.push(command)
+        }
+      }
     }
     for (const block of blocks) {
       if (!block.command || rememberedBlockIds.has(block.id)) continue
@@ -460,6 +511,89 @@ function caretPosition(): number {
 
 function syncCaret(): void {
   caret.value = caretPosition()
+}
+
+/** 用户手动输入:脱离历史翻阅态(草稿归属用户),灰字与补全跟随光标,输入框自动增高 */
+function handleInput(): void {
+  if (historyIndex !== -1) {
+    historyIndex = -1
+    historyDraft = null
+  }
+  caret.value = caretPosition()
+  autoGrow()
+}
+
+const INPUT_LINE_HEIGHT_PX = 20
+const INPUT_MAX_LINES = 8
+
+/** 自动增高:随内容长高到最多 8 行,再多的部分内部滚动 */
+function autoGrow(): void {
+  const element = inputElement.value
+  if (!element) return
+  element.style.height = 'auto'
+  const maxHeight = INPUT_LINE_HEIGHT_PX * INPUT_MAX_LINES
+  const height = Math.min(element.scrollHeight, maxHeight)
+  element.style.height = `${height}px`
+  element.style.overflowY = element.scrollHeight > maxHeight ? 'auto' : 'hidden'
+}
+
+/** 光标是否在草稿的第一行/最后一行:决定裸 ↑/↓ 先移光标还是翻历史 */
+function caretLinePosition(): { first: boolean; last: boolean } {
+  const position = inputElement.value?.selectionStart ?? draft.value.length
+  return {
+    first: !draft.value.slice(0, position).includes('\n'),
+    last: !draft.value.slice(position).includes('\n'),
+  }
+}
+
+function moveCaretToEnd(): void {
+  const element = inputElement.value
+  const end = draft.value.length
+  element?.setSelectionRange(end, end)
+  caret.value = end
+}
+
+/** Alt/Shift+Enter 插入换行,支持 Warp 式多行命令编辑 */
+function insertNewline(): void {
+  const element = inputElement.value
+  const start = element?.selectionStart ?? draft.value.length
+  const end = element?.selectionEnd ?? start
+  draft.value = draft.value.slice(0, start) + '\n' + draft.value.slice(end)
+  const cursor = start + 1
+  void nextTick(() => {
+    element?.setSelectionRange(cursor, cursor)
+    caret.value = cursor
+    autoGrow()
+  })
+}
+
+/** 翻阅历史;进入翻阅时记下草稿,翻回最新一条时还原 */
+function recallHistory(delta: 1 | -1): void {
+  if (delta === -1) {
+    if (historyIndex === -1) {
+      historyDraft = draft.value
+      historyIndex = history.length - 1
+    } else {
+      historyIndex = Math.max(0, historyIndex - 1)
+    }
+  } else {
+    historyIndex += 1
+    if (historyIndex >= history.length) {
+      historyIndex = -1
+      draft.value = historyDraft ?? ''
+      historyDraft = null
+      void nextTick(() => {
+        moveCaretToEnd()
+        autoGrow()
+      })
+      return
+    }
+  }
+  draft.value = history[historyIndex] ?? ''
+  void nextTick(() => {
+    moveCaretToEnd()
+    autoGrow()
+  })
 }
 
 const availableCompletionPaths = computed(() => {
@@ -521,10 +655,12 @@ const completionCandidates = computed<CompletionCandidate[]>(() =>
 )
 
 const suggestedLine = computed(() => {
+  // 多行草稿不给灰字建议:单行的建议层无法对齐换行后的文本
   if (
     historySearchOpen.value ||
     completionOpen.value ||
-    caret.value !== draft.value.length
+    caret.value !== draft.value.length ||
+    draft.value.includes('\n')
   ) {
     return undefined
   }
@@ -586,7 +722,21 @@ function completionKindLabel(kind: CompletionKind): string {
 function pickHistory(command: string): void {
   draft.value = command
   historyIndex = -1
+  historyDraft = null
   closeHistorySearch()
+  void nextTick(() => {
+    moveCaretToEnd()
+    autoGrow()
+  })
+}
+
+/** 点击块区空白处把焦点交回输入行(Warp 行为);拖选文本或点到按钮时不打扰 */
+function handleBlocksClick(event: MouseEvent): void {
+  const target = event.target
+  if (!(target instanceof HTMLElement)) return
+  if (target.closest('button, a, input, textarea, .el-button, .command-block__preview')) return
+  if (window.getSelection()?.isCollapsed === false) return
+  inputElement.value?.focus()
 }
 
 function handleInputKeydown(event: KeyboardEvent): void {
@@ -710,32 +860,46 @@ function handleInputKeydown(event: KeyboardEvent): void {
   }
 
   if (event.key === 'Enter') {
+    // textarea 的回车默认行为是插换行,必须拦下:Alt/Shift+Enter 手动插,裸回车提交
+    event.preventDefault()
+    if (event.altKey || event.shiftKey) {
+      insertNewline()
+      return
+    }
     const command = draft.value.trim()
     if (!command) return
     rememberCommand(command)
     historyIndex = -1
+    historyDraft = null
     draft.value = ''
+    autoGrow()
     closeHistorySearch()
     emit('submit', command)
     return
   }
-  if (event.key === 'ArrowUp') {
-    if (history.length === 0) return
+  // Ctrl+↑/↓ 在块间跳转,与 Alt+↑/↓ 等效(Warp 的提示间跳转)
+  if (
+    event.ctrlKey &&
+    !event.altKey &&
+    !event.metaKey &&
+    !event.shiftKey &&
+    (event.key === 'ArrowUp' || event.key === 'ArrowDown')
+  ) {
     event.preventDefault()
-    historyIndex = historyIndex === -1 ? history.length - 1 : Math.max(0, historyIndex - 1)
-    draft.value = history[historyIndex]
+    stepBlock(event.key === 'ArrowUp' ? -1 : 1)
+    return
+  }
+  if (event.key === 'ArrowUp') {
+    // 多行草稿里光标先在行间移动,到第一行才开始翻历史
+    if (history.length === 0 || !caretLinePosition().first) return
+    event.preventDefault()
+    recallHistory(-1)
     return
   }
   if (event.key === 'ArrowDown') {
-    if (historyIndex === -1) return
+    if (historyIndex === -1 || !caretLinePosition().last) return
     event.preventDefault()
-    historyIndex += 1
-    if (historyIndex >= history.length) {
-      historyIndex = -1
-      draft.value = ''
-    } else {
-      draft.value = history[historyIndex]
-    }
+    recallHistory(1)
   }
 }
 
@@ -1506,6 +1670,10 @@ watch(scrollElement, (element, previous) => {
 .gui-input {
   position: relative;
   z-index: 1;
+  height: 20px;
+  overflow-y: hidden;
+  /* 覆盖 textarea 的默认可拖拽调整尺寸;换行行为保持浏览器默认的软换行 */
+  resize: none;
 }
 .gui-autosuggestion {
   position: absolute;

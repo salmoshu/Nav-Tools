@@ -200,6 +200,55 @@
       :session-id="activeReadySessionId"
       :project-cwd="activeReadySession?.cwd"
     />
+
+    <!-- 命令面板:Ctrl/Cmd+Shift+P 唤起,模糊过滤全部工作台动作,方向键 + 回车执行 -->
+    <div
+      v-if="paletteOpen"
+      class="command-palette"
+      role="dialog"
+      :aria-label="t('common.terminal.paletteTitle')"
+      @click.self="closeCommandPalette"
+    >
+      <div class="command-palette__panel">
+        <input
+          ref="paletteInput"
+          v-model="paletteQuery"
+          class="command-palette__input"
+          type="text"
+          spellcheck="false"
+          autocomplete="off"
+          :placeholder="t('common.terminal.palettePlaceholder')"
+          :aria-label="t('common.terminal.palettePlaceholder')"
+          @keydown="handlePaletteKeydown"
+        />
+        <div class="command-palette__list" role="listbox">
+          <div v-if="paletteCommands.length === 0" class="command-palette__empty">
+            {{ t('common.terminal.paletteEmpty') }}
+          </div>
+          <button
+            v-for="(item, index) in paletteCommands"
+            :key="item.id"
+            class="command-palette__item"
+            :class="{ 'is-active': index === paletteIndex }"
+            type="button"
+            role="option"
+            :aria-selected="index === paletteIndex"
+            @click="runPaletteCommand(item.id)"
+            @mousemove="paletteIndex = index"
+          >
+            <span class="command-palette__label"
+              ><span
+                v-for="(char, charIndex) in item.label"
+                :key="charIndex"
+                :class="{ 'is-hit': item.positions.includes(charIndex) }"
+                >{{ char }}</span
+              ></span
+            >
+            <span class="command-palette__binding">{{ item.binding }}</span>
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -232,10 +281,13 @@ import {
   type TerminalTabLayout,
 } from '@/core/terminal/TerminalLayout'
 import {
+  formatTerminalShortcutBinding,
   TerminalShortcutSettings,
   terminalShortcutInputFromKeyboardEvent,
   type TerminalShortcutAction,
+  type TerminalShortcutCommandId,
 } from '@/core/terminal/TerminalShortcuts'
+import { fuzzySearch } from '@/core/terminal/FuzzyMatch'
 import {
   planTerminalRecovery,
   TerminalWorkspaceStorage,
@@ -815,6 +867,9 @@ function runShortcut(action: TerminalShortcutAction): void {
     case 'new-tab':
       addTab()
       break
+    case 'command-palette':
+      toggleCommandPalette()
+      break
     case 'close-active':
       if (focusedPaneId && activePaneCount.value > 1) void closePane(focusedPaneId)
       else if (activeTab.value) void closeTab(activeTab.value.id)
@@ -866,14 +921,100 @@ function handleTerminalShortcut(event: KeyboardEvent): void {
   const isEditable =
     element?.isContentEditable ||
     element?.matches('input, textarea, select, [contenteditable="true"]')
-  if (isEditable && !isTerminalInput) return
   if (hasVisibleTerminalOverlay()) return
   shortcutSettings.reload()
   const action = shortcutSettings.resolve(terminalShortcutInputFromKeyboardEvent(event))
   if (!action) return
+  // 命令面板从任意焦点(包括输入行)都要能唤起;其余动作不打断正在输入的组件
+  if (isEditable && !isTerminalInput && action.type !== 'command-palette') return
   event.preventDefault()
   event.stopPropagation()
   runShortcut(action)
+}
+
+// ---- 命令面板:全部工作台动作的模糊搜索入口,行为对齐 Warp 的 Ctrl+Shift+P ----
+interface PaletteCommand {
+  id: TerminalShortcutCommandId
+  label: string
+  positions: number[]
+  binding: string
+}
+
+const paletteOpen = ref(false)
+const paletteQuery = ref('')
+const paletteIndex = ref(0)
+const paletteInput = ref<HTMLInputElement | null>(null)
+
+const paletteCommands = computed<PaletteCommand[]>(() => {
+  if (!paletteOpen.value) return []
+  const items = shortcutSettings
+    .getCommands()
+    .filter((command) => command.id !== 'select-tab')
+    .map((command) => ({
+      id: command.id,
+      label: t(command.labelKey),
+      binding: command.bindings
+        .map((binding) =>
+          formatTerminalShortcutBinding(binding, capabilities.value.platform),
+        )
+        .join(' / '),
+    }))
+  const query = paletteQuery.value.trim()
+  if (!query) return items.map((item) => ({ ...item, positions: [] }))
+  const labels = items.map((item) => item.label)
+  return fuzzySearch(query, labels, items.length).map((match) => ({
+    ...items[labels.indexOf(match.text)],
+    positions: match.positions,
+  }))
+})
+
+watch(paletteCommands, (commands) => {
+  if (paletteIndex.value >= commands.length) paletteIndex.value = commands.length - 1
+})
+
+function toggleCommandPalette(): void {
+  if (paletteOpen.value) closeCommandPalette()
+  else openCommandPalette()
+}
+
+function openCommandPalette(): void {
+  paletteQuery.value = ''
+  paletteIndex.value = 0
+  paletteOpen.value = true
+  void nextTick(() => paletteInput.value?.focus())
+}
+
+function closeCommandPalette(): void {
+  paletteOpen.value = false
+  paletteQuery.value = ''
+  paletteIndex.value = 0
+}
+
+function runPaletteCommand(id: TerminalShortcutCommandId): void {
+  closeCommandPalette()
+  runShortcut({ type: id } as TerminalShortcutAction)
+}
+
+function handlePaletteKeydown(event: KeyboardEvent): void {
+  if (event.isComposing) return
+  if (event.key === 'Escape') {
+    event.preventDefault()
+    closeCommandPalette()
+    return
+  }
+  if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+    const count = paletteCommands.value.length
+    if (count === 0) return
+    event.preventDefault()
+    const delta = event.key === 'ArrowDown' ? 1 : -1
+    paletteIndex.value = (paletteIndex.value + delta + count) % count
+    return
+  }
+  if (event.key === 'Enter') {
+    event.preventDefault()
+    const command = paletteCommands.value[paletteIndex.value]
+    if (command) runPaletteCommand(command.id)
+  }
 }
 
 function saveProfile(profile: SshConnectionProfile): void {
@@ -1306,5 +1447,81 @@ function withTimeout<T>(
 :global(.terminal-new-session-menu .el-dropdown-menu__item) {
   min-width: 180px;
   gap: 8px;
+}
+/* 命令面板:顶部居中浮层,模糊过滤 + 键盘导航 */
+.command-palette {
+  position: fixed;
+  inset: 0;
+  z-index: 9000;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 12vh;
+  background: color-mix(in srgb, #000 32%, transparent);
+}
+.command-palette__panel {
+  width: min(520px, calc(100vw - 48px));
+  overflow: hidden;
+  border: 1px solid var(--app-border-strong);
+  border-radius: 10px;
+  background: var(--app-surface);
+  box-shadow: 0 18px 48px rgb(0 0 0 / 32%);
+}
+.command-palette__input {
+  width: 100%;
+  padding: 12px 14px;
+  border: none;
+  outline: none;
+  border-bottom: 1px solid var(--app-border);
+  color: var(--app-text);
+  background: transparent;
+  font-size: 13px;
+}
+.command-palette__input::placeholder {
+  color: var(--app-text-muted);
+}
+.command-palette__list {
+  max-height: 320px;
+  padding: 6px;
+  overflow-y: auto;
+}
+.command-palette__empty {
+  padding: 14px;
+  color: var(--app-text-muted);
+  font-size: 12px;
+}
+.command-palette__item {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px;
+  border: none;
+  border-radius: 7px;
+  color: var(--app-text);
+  background: transparent;
+  font-size: 12.5px;
+  text-align: left;
+  cursor: pointer;
+}
+.command-palette__item.is-active {
+  background: color-mix(in srgb, var(--el-color-primary) 16%, transparent);
+}
+.command-palette__label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.command-palette__label .is-hit {
+  color: var(--el-color-primary);
+  font-weight: 700;
+}
+.command-palette__binding {
+  flex: none;
+  color: var(--app-text-muted);
+  font-family: Consolas, 'Courier New', monospace;
+  font-size: 11px;
 }
 </style>

@@ -251,20 +251,24 @@ test('suggests history and completes command specs and paths in the GUI input', 
   await input.fill('git s')
   const autosuggestion = page.locator('.gui-autosuggestion')
   await expect(autosuggestion).toHaveValue('git status')
-  const inputLayers = await page.locator('.gui-input-editor input').evaluateAll((elements) =>
-    elements.map((element) => {
-      const rect = element.getBoundingClientRect()
-      const style = getComputedStyle(element)
-      return {
-        x: rect.x,
-        y: rect.y,
-        width: rect.width,
-        height: rect.height,
-        font: style.font,
-        padding: style.padding,
-      }
-    }),
-  )
+  // 灰字层(readonly input)与真输入层(textarea)几何必须完全重合,否则建议错位
+  const inputLayers = await page
+    .locator('.gui-input-editor input, .gui-input-editor textarea')
+    .evaluateAll((elements) =>
+      elements.map((element) => {
+        const rect = element.getBoundingClientRect()
+        const style = getComputedStyle(element)
+        return {
+          x: rect.x,
+          y: rect.y,
+          width: rect.width,
+          height: rect.height,
+          font: style.font,
+          padding: style.padding,
+        }
+      }),
+    )
+  expect(inputLayers).toHaveLength(2)
   expect(inputLayers[0]).toEqual(inputLayers[1])
   await input.press('ArrowRight')
   await expect(input).toHaveValue('git status')

@@ -11,6 +11,7 @@ export type TerminalShortcutAction =
   | { type: 'split-right' }
   | { type: 'split-down' }
   | { type: 'toggle-expand-pane' }
+  | { type: 'command-palette' }
 
 export type TerminalShortcutCommandId =
   | 'new-tab'
@@ -23,6 +24,7 @@ export type TerminalShortcutCommandId =
   | 'split-right'
   | 'split-down'
   | 'toggle-expand-pane'
+  | 'command-palette'
 
 export type TerminalShortcutPlatform = 'win32' | 'darwin' | 'linux'
 
@@ -78,6 +80,11 @@ export const TERMINAL_SHORTCUT_DEFINITIONS: readonly TerminalShortcutDefinition[
     id: 'toggle-expand-pane',
     category: 'terminal',
     labelKey: 'common.terminal.shortcutExpandPane',
+  },
+  {
+    id: 'command-palette',
+    category: 'terminal',
+    labelKey: 'common.terminal.shortcutCommandPalette',
   },
 ]
 
@@ -167,6 +174,7 @@ export function createDefaultTerminalShortcutMap(platform: string): TerminalShor
       ),
     ],
     'toggle-expand-pane': [createBinding('Enter', { ...primary, shiftKey: true }, 'Enter')],
+    'command-palette': [createBinding('p', { ...primary, shiftKey: true }, 'KeyP')],
   }
 }
 
