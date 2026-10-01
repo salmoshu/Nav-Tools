@@ -88,7 +88,8 @@ async function createCardWindowShortcut(): Promise<void> {
     const windowId = typeof payload.windowId === 'string' ? payload.windowId : ''
     const definition = getWindowsByIds([windowId])[0]
     if (!definition) return
-    await createComponentDesktopShortcut(definition.id, t(definition.title))
+    const saved = await createComponentDesktopShortcut(definition.id, t(definition.title))
+    if (!saved) return
     ElMessage({
       message: t('app.cardWindow.shortcutCreated'),
       type: 'success',

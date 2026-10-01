@@ -107,16 +107,18 @@ function loadImage(src: string): Promise<HTMLImageElement> {
 }
 
 /**
- * 创建桌面快捷方式并提示结果。图标合成在渲染端(需要 canvas 渲染 SVG),
- * .lnk/ICO 落盘在主进程。
+ * 创建桌面快捷方式(保存位置由用户在对话框中自选)。
+ * 图标合成在渲染端(需要 canvas 渲染 SVG),.lnk/ICO 落盘在主进程。
+ * 返回 true 表示已创建;用户在保存对话框中取消返回 false,不视为错误。
  */
-export async function createComponentDesktopShortcut(windowId: string, name: string): Promise<string> {
+export async function createComponentDesktopShortcut(windowId: string, name: string): Promise<boolean> {
   const iconDataUrl = await buildComponentIconDataUrl(windowId)
   const result = (await window.ipcRenderer.invoke('create-desktop-shortcut', {
     windowId,
     name,
     iconDataUrl,
-  })) as { ok: boolean; shortcutPath?: string; error?: string }
+  })) as { ok: boolean; cancelled?: boolean; shortcutPath?: string; error?: string }
+  if (result.cancelled) return false
   if (!result.ok) throw new Error(result.error || '创建快捷方式失败')
-  return result.shortcutPath ?? ''
+  return true
 }

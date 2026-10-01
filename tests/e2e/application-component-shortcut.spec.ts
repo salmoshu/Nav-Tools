@@ -53,7 +53,7 @@ test('caps component chips on the application card and lists the rest in the ove
   await expect(overflowItems).toHaveCount(9 - visibleCount)
 })
 
-test('opens a component standalone window from the card header shortcut button', async ({
+test('creates a location-choosing shortcut from the card header button (no standalone window)', async ({
   page,
 }) => {
   await page.addInitScript(() => {
@@ -72,21 +72,25 @@ test('opens a component standalone window from the card header shortcut button',
     )
     localStorage.setItem('nav-tools:selected-application', 'shortcut-app')
   })
-  const invokeLog: Array<{ channel: string; payload: string }> = []
-  await page.exposeFunction('__recordInvoke', (channel: string, payload: string) => {
+  const invokeLog: Array<{ channel: string; payload: unknown }> = []
+  await page.exposeFunction('__recordInvoke', (channel: string, payload: unknown) => {
     invokeLog.push({ channel, payload })
   })
   await page.addInitScript(() => {
-    const originalInvoke = window.ipcRenderer?.invoke?.bind(window.ipcRenderer)
     Object.defineProperty(window, 'ipcRenderer', {
       configurable: true,
       value: {
         invoke: async (channel: string, payload: unknown) => {
-          if (channel === 'open-card-window') {
-            void window.__recordInvoke(channel, String(payload))
-            return 12345
+          if (channel === 'create-desktop-shortcut') {
+            void window.__recordInvoke(channel, payload)
+            return { ok: true }
           }
-          return originalInvoke ? originalInvoke(channel, payload) : undefined
+          if (channel === 'terminal-capabilities') {
+            return { platform: 'win32', localShells: [], wslDistros: [], sshAvailable: true }
+          }
+          if (channel === 'terminal-session-list') return []
+          if (channel === 'terminal-ssh-config-list') return []
+          return undefined
         },
         on: () => undefined,
         off: () => undefined,
@@ -106,13 +110,18 @@ test('opens a component standalone window from the card header shortcut button',
   await expect(shortcut).toBeVisible()
   await shortcut.click()
 
+  // 主界面按钮只创建快捷方式,不再打开独立窗口
   await expect
-    .poll(() => invokeLog.filter((call) => call.channel === 'open-card-window').map((c) => c.payload))
+    .poll(() =>
+      invokeLog
+        .filter((call) => call.channel === 'create-desktop-shortcut')
+        .map((c) => c.payload),
+    )
     .toHaveLength(1)
-  const payload = JSON.parse(invokeLog[0].payload)
-  expect(payload.componentName).toBe('Terminal')
+  const payload = invokeLog[0].payload as { windowId: string; iconDataUrl: string }
   expect(payload.windowId).toBe('terminal')
-  // 卡片仍保留在布局中:分离按钮与卡片都还在
+  expect(typeof payload.iconDataUrl).toBe('string')
+  // 卡片保留在布局中:分离按钮与卡片都还在
   await expect(page.locator('.card-actions .detach-btn').first()).toBeVisible()
   await expect(page.locator('.layout-component').first()).toBeVisible()
 })

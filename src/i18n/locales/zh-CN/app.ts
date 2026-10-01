@@ -203,8 +203,9 @@ export default {
   },
   dashboard: {
     detach: '分离到独立窗口',
-    shortcutWindow: '在独立窗口打开（右键：创建桌面快捷方式）',
-    shortcutCreated: '已创建桌面快捷方式',
+    shortcutWindow: '在独立窗口打开（保留原卡片）',
+    createShortcut: '创建快捷方式（保存位置可选）',
+    shortcutCreated: '已创建快捷方式',
     fullscreen: '全屏展示',
     removeCard: '移除卡片',
     openWindowFailed: '无法打开应用窗口',

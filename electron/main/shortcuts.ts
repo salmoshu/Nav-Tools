@@ -56,22 +56,31 @@ interface ShortcutRequest {
 
 export interface ShortcutResult {
   ok: boolean
+  /** 用户在保存对话框中取消 */
+  cancelled?: boolean
   shortcutPath?: string
   error?: string
 }
 
+/** 快捷方式显示名清理:去掉文件系统非法字符,空名回退面板 id */
+export function sanitizeShortcutName(name: string, panelId: string): string {
+  return name.replace(/[\\/:*?"<>|]/g, ' ').trim() || panelId
+}
+
 /**
- * 在桌面创建组件快捷方式:.lnk 指向当前可执行文件,带 --open-component 启动参数,
+ * 创建组件快捷方式:.lnk 指向当前可执行文件,带 --open-component 启动参数,
  * 图标用渲染端合成的「主图标 + 组件角标」ICO(存 userData,同名覆盖)。
+ * 保存位置由调用方给出(通常来自保存对话框,默认桌面)。
  */
 export async function createDesktopShortcut(
   request: ShortcutRequest,
-  options: { desktopPath: string; execPath: string; userDataPath: string },
+  options: { shortcutPath: string; execPath: string; userDataPath: string },
 ): Promise<ShortcutResult> {
   const panel = getPanelById(request.windowId)
   if (!panel) return { ok: false, error: '未知的组件' }
-  const safeName = (request.name || panel.id).replace(/[\\/:*?"<>|]/g, ' ').trim() || panel.id
-  const shortcutPath = path.join(options.desktopPath, `Nav-Tools ${safeName}.lnk`)
+  const shortcutPath = options.shortcutPath.endsWith('.lnk')
+    ? options.shortcutPath
+    : `${options.shortcutPath}.lnk`
 
   try {
     const icoPath = path.join(options.userDataPath, 'shortcuts', `${panel.id}.ico`)

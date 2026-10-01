@@ -38,7 +38,7 @@ import { TerminalService } from './services/TerminalService'
 import { createNodeTerminalServiceHost } from './services/TerminalServiceHost'
 import { TerminalCredentialService } from './services/TerminalCredentialService'
 import { registerTerminalIpc } from './terminalIpc'
-import { createDesktopShortcut, parseOpenComponentArg } from './shortcuts'
+import { createDesktopShortcut, parseOpenComponentArg, sanitizeShortcutName } from './shortcuts'
 import { getPanelById } from '../../src/core/panels/registry'
 
 const require = createRequire(import.meta.url)
@@ -619,7 +619,7 @@ function openComponentStandalone(windowId: string): void {
 
 ipcMain.handle(
   'create-desktop-shortcut',
-  async (_event, request: { windowId: string; name: string; iconDataUrl: string }) => {
+  async (event, request: { windowId: string; name: string; iconDataUrl: string }) => {
     if (!request || typeof request.windowId !== 'string') {
       return { ok: false, error: 'Invalid shortcut request' }
     }
@@ -628,14 +628,30 @@ ipcMain.handle(
     if (!app.isPackaged) {
       return { ok: false, error: '开发模式下无法创建桌面快捷方式，请在安装版中使用' }
     }
+    const panel = getPanelById(request.windowId)
+    if (!panel) return { ok: false, error: '未知的组件' }
+
+    // 保存位置自选:默认桌面 + 建议文件名,用户可改任意目录
+    const suggestedName = sanitizeShortcutName(String(request.name || ''), panel.id)
+    const defaultPath = path.join(app.getPath('desktop'), `Nav-Tools ${suggestedName}.lnk`)
+    const save = await dialog.showSaveDialog(
+      BrowserWindow.fromWebContents(event.sender) ?? win ?? undefined!,
+      {
+        title: `创建快捷方式 - ${suggestedName}`,
+        defaultPath,
+        filters: [{ name: '快捷方式', extensions: ['lnk'] }],
+      },
+    )
+    if (save.canceled || !save.filePath) return { ok: false, cancelled: true }
+
     return createDesktopShortcut(
       {
         windowId: request.windowId,
-        name: String(request.name || ''),
+        name: suggestedName,
         iconDataUrl: String(request.iconDataUrl || ''),
       },
       {
-        desktopPath: app.getPath('desktop'),
+        shortcutPath: save.filePath,
         execPath: process.execPath,
         userDataPath: app.getPath('userData'),
       },

@@ -72,10 +72,9 @@
                     <div class="card-actions">
                       <el-button
                         type="text"
-                        @click="openComponentWindow(item.windowId, item)"
-                        @contextmenu.prevent="createItemDesktopShortcut(item)"
+                        @click="createItemDesktopShortcut(item)"
                         class="shortcut-btn"
-                        :title="t('app.dashboard.shortcutWindow')"
+                        :title="t('app.dashboard.createShortcut')"
                       >
                         <SquareArrowOutUpRight :size="16" :stroke-width="1.8" />
                       </el-button>
@@ -250,14 +249,15 @@ const openApplicationWindow = async (applicationId: string) => {
 }
 
 /**
- * 组件卡片 ↗ 按钮右键:为该组件创建桌面快捷方式(双击直达独立窗口,
- * 图标 = 应用主图标 + 组件角标)。
+ * 组件卡片 ↗ 按钮:为该组件创建桌面快捷方式(保存位置自选,双击直达独立窗口,
+ * 图标 = 应用主图标 + 组件角标)。用户在保存对话框取消时静默返回。
  */
-const createItemDesktopShortcut = async (item: { windowId: string; titleName: string }) => {
+const createItemDesktopShortcut = async (item: { windowId: string }) => {
   const definition = getWindowsByIds([item.windowId])[0]
   if (!definition) return
   try {
-    await createComponentDesktopShortcut(definition.id, t(definition.title))
+    const saved = await createComponentDesktopShortcut(definition.id, t(definition.title))
+    if (!saved) return
     ElMessage({
       message: t('app.dashboard.shortcutCreated'),
       type: 'success',

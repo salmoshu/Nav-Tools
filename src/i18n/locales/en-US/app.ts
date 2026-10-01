@@ -206,8 +206,9 @@ export default {
   },
   dashboard: {
     detach: 'Detach to Separate Window',
-    shortcutWindow: 'Open in standalone window (right-click: desktop shortcut)',
-    shortcutCreated: 'Desktop shortcut created',
+    shortcutWindow: 'Open in standalone window (keep card)',
+    createShortcut: 'Create shortcut (choose location)',
+    shortcutCreated: 'Shortcut created',
     fullscreen: 'Show Fullscreen',
     removeCard: 'Remove Card',
     openWindowFailed: 'Cannot open application window',

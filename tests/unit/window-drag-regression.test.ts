@@ -36,10 +36,12 @@ describe('frameless window dragging regression', () => {
     expect(globalStyle).toMatch(/\.el-message\s*\{\s*z-index:\s*9100 !important/)
   })
 
-  it('allows multiple Nav-Tools application instances', () => {
+  it('enforces single instance so serial ports and devices cannot be claimed twice', () => {
     const main = readProjectFile('electron/main/index.ts')
 
-    expect(main).not.toContain('requestSingleInstanceLock')
-    expect(main).not.toContain("'second-instance'")
+    // v1.7.x 起数据接入与设备连接由主窗口持有,多实例会互抢串口;
+    // 桌面组件快捷方式也依赖 second-instance 转发在已运行实例中开窗
+    expect(main).toContain('requestSingleInstanceLock')
+    expect(main).toContain("'second-instance'")
   })
 })

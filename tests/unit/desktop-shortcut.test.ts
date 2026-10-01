@@ -5,8 +5,16 @@ import { afterEach, describe, expect, it } from 'vitest'
 import {
   buildOpenComponentArg,
   parseOpenComponentArg,
+  sanitizeShortcutName,
   writeIcoFromPngDataUrl,
 } from '../../electron/main/shortcuts'
+
+describe('sanitizeShortcutName', () => {
+  it('strips filesystem-illegal characters and falls back to the panel id', () => {
+    expect(sanitizeShortcutName('终端:测试*1', 'terminal')).toBe('终端 测试 1')
+    expect(sanitizeShortcutName('   ', 'plot')).toBe('plot')
+  })
+})
 
 describe('parseOpenComponentArg', () => {
   it('extracts a known component id from argv', () => {
