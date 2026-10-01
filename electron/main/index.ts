@@ -74,6 +74,12 @@ if (os.release().startsWith('6.1')) app.disableHardwareAcceleration()
 if (process.platform === 'win32') app.setAppUserModelId(app.getName())
 
 let win: BrowserWindow | null = null
+/**
+ * 桌面快捷方式冷启动标志:主窗口因 --open-component 隐藏创建。
+ * 此状态下最后一个组件窗口关闭即退出应用,不在后台残留隐藏进程;
+ * 主窗口被显式唤出(second-instance 无组件参数)后恢复常规模型。
+ */
+let mainWindowHiddenForShortcut = false
 const preload = path.join(__dirname, '../preload/index.mjs')
 const indexHtml = path.join(RENDERER_DIST, 'index.html')
 const ffmpegExecutable = (ffmpegStatic || 'ffmpeg').replace(
@@ -347,7 +353,7 @@ function createDefaultLogName(): string {
   )}${digits(now.getMinutes())}${digits(now.getSeconds())}.log`
 }
 
-async function createWindow() {
+async function createWindow(options?: { hidden?: boolean }) {
   win = new BrowserWindow({
     width: 1200,
     height: 800,
@@ -357,14 +363,17 @@ async function createWindow() {
     backgroundColor: '#f3f5f7',
     title: `Nav-Tools ${appVersion}`,
     icon: path.join(VITE_PUBLIC, 'favicon.ico'),
+    // 桌面快捷方式冷启动时主窗口隐藏创建:渲染进程照常工作(数据路由/自动重连),
+    // 但不出现在桌面与任务栏,用户只看到组件独立窗口
+    show: !options?.hidden,
     webPreferences: {
       preload,
       // Warning: Enable nodeIntegration and disable contextIsolation is not secure in production
       // nodeIntegration: true,
 
       // Consider using contextBridge.exposeInMainWorld
-      // Read more on https://www.electronjs.org/docs/latest/tutorial/context-isolation
-      // contextIsolation: false,
+      // Read more: https://docs/develop-advanced/security#security-checklist
+      contextIsolation: true,
     },
   })
   configureWebTitleBar(win)
@@ -414,11 +423,13 @@ app.whenReady().then(() => {
   offlineTileService.registerHandler()
   ipcMain.handle('get-offline-tiles-dir', () => offlineTileService.getTilesDir())
 
-  createWindow()
+  // 桌面快捷方式冷启动:主窗口隐藏创建(数据路由等渲染侧职责照常),
+  // 桌面上只出现快捷方式指向的组件独立窗口
+  const startupComponent = parseOpenComponentArg(process.argv)
+  mainWindowHiddenForShortcut = Boolean(startupComponent)
+  createWindow(startupComponent ? { hidden: true } : undefined)
   Menu.setApplicationMenu(null)
 
-  // 桌面快捷方式冷启动:主窗口照常创建后,再打开快捷方式指向的组件窗口
-  const startupComponent = parseOpenComponentArg(process.argv)
   if (startupComponent) openComponentStandalone(startupComponent)
 
   // 注册获取版本号的 IPC 处理器
@@ -439,13 +450,30 @@ if (!app.requestSingleInstanceLock()) {
   app.quit()
 } else {
   app.on('second-instance', (_event, argv) => {
+    const requested = parseOpenComponentArg(argv)
     if (win) {
-      if (win.isMinimized()) win.restore()
+      // 组件快捷方式只开组件窗口,不把主界面顶到前台;
+      // 用户打开应用本体(无组件参数)时才唤出主界面(可能正被快捷方式冷启动隐藏着)
+      if (!requested) {
+        if (win.isMinimized()) win.restore()
+        win.show()
+        mainWindowHiddenForShortcut = false
+      }
       win.focus()
     }
-    const requested = parseOpenComponentArg(argv)
     if (requested) openComponentStandalone(requested)
   })
+}
+
+/** 快捷方式冷启动模式下,最后一个组件窗口关闭即退出,不残留隐藏的后台进程 */
+function quitIfShortcutOrphaned(): void {
+  if (!mainWindowHiddenForShortcut) return
+  if (win?.isVisible()) {
+    mainWindowHiddenForShortcut = false
+    return
+  }
+  if (BrowserWindow.getAllWindows().some((window) => window.isVisible())) return
+  app.quit()
 }
 
 app.on('window-all-closed', () => {
@@ -543,7 +571,10 @@ async function openCardWindow(
       detachedPanel.closeInProgress = false
     }
   })
-  cardWindow.once('closed', () => detachedPanels.delete(cardWindow.id))
+  cardWindow.once('closed', () => {
+    detachedPanels.delete(cardWindow.id)
+    quitIfShortcutOrphaned()
+  })
 
   const params = encodeURIComponent(JSON.stringify(cardData))
   const hash = `card/${params}`
