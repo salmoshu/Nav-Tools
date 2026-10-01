@@ -427,6 +427,8 @@ export default {
       'Type a command (Right accepts suggestion, Tab completes, Ctrl+R searches history)',
     guiHistorySearchEmpty: 'No matching history command',
     guiCompletionEmpty: 'No matching completion',
+    guiCopySelection: 'Copy selection',
+    guiScrollToBottom: 'Scroll to bottom',
     completionCommand: 'command',
     completionSubcommand: 'subcommand',
     completionOption: 'option',

@@ -12,6 +12,7 @@
         class="command-block"
         :class="[blockStatus(entry.block), { 'is-nav-target': entry.block.id === navBlockId }]"
         :data-block-id="entry.block.id"
+        @contextmenu="openBlockMenu($event, entry.block, entry.output)"
       >
         <header class="command-block__header" @click="toggleCollapsed(entry.block.id)">
           <span class="command-block__status" aria-hidden="true"></span>
@@ -214,6 +215,64 @@
         </template>
       </article>
     </div>
+    <!-- 回底按钮:向上翻阅历史块后出现,一键回最新输出并恢复吸底 -->
+    <button
+      v-if="showScrollToBottom"
+      type="button"
+      class="scroll-to-bottom"
+      :aria-label="t('common.terminal.guiScrollToBottom')"
+      :title="t('common.terminal.guiScrollToBottom')"
+      @click="scrollToLatest"
+    >
+      <el-icon><ArrowDownBold /></el-icon>
+    </button>
+    <!-- 块右键菜单(Warp 交互):复制所选/命令/输出、重跑、折叠,菜单项按块能力裁剪 -->
+    <div
+      v-if="blockMenu.visible"
+      class="block-menu"
+      :style="{ left: `${blockMenu.x}px`, top: `${blockMenu.y}px` }"
+      role="menu"
+      @contextmenu.prevent
+      @mousedown.stop
+    >
+      <button v-if="blockMenu.selectionText" class="block-menu__item" type="button" role="menuitem" @click="copyBlockSelection">
+        {{ t('common.terminal.guiCopySelection') }}
+      </button>
+      <button
+        v-if="blockMenu.hasCommand"
+        class="block-menu__item"
+        type="button"
+        role="menuitem"
+        @click="copyBlockCommand"
+      >
+        {{ t('common.terminal.copyCommand') }}
+      </button>
+      <button
+        v-if="blockMenu.hasOutput"
+        class="block-menu__item"
+        type="button"
+        role="menuitem"
+        @click="copyBlockOutput"
+      >
+        {{ t('common.terminal.copyOutput') }}
+      </button>
+      <button
+        v-if="blockMenu.hasCommand"
+        class="block-menu__item"
+        type="button"
+        role="menuitem"
+        @click="rerunBlockCommand"
+      >
+        {{ t('common.terminal.rerunCommand') }}
+      </button>
+      <button class="block-menu__item" type="button" role="menuitem" @click="toggleBlockCollapsed">
+        {{
+          blockMenu.collapsed
+            ? t('common.terminal.expandBlock')
+            : t('common.terminal.collapseBlock')
+        }}
+      </button>
+    </div>
     <div class="gui-input-row">
       <!-- Ctrl+R 历史模糊搜索:输入行即查询框,回车选中回填,Esc 关闭 -->
       <div v-if="historySearchOpen" class="history-search" role="listbox">
@@ -323,7 +382,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import {
   ArrowDownBold,
   ArrowUpBold,
@@ -1254,7 +1313,126 @@ function handleScroll(): void {
   const element = scrollElement.value
   if (!element) return
   stickToBottom = element.scrollHeight - element.scrollTop - element.clientHeight < 40
+  showScrollToBottom.value = !stickToBottom
+  // 菜单锚定在视口,块区一滚就错位,直接收掉
+  if (blockMenu.visible) closeBlockMenu()
 }
+
+/** 一键回底:跳到最新输出并恢复吸底跟随 */
+function scrollToLatest(): void {
+  const element = scrollElement.value
+  if (!element) return
+  element.scrollTop = element.scrollHeight
+  stickToBottom = true
+  showScrollToBottom.value = false
+}
+
+const showScrollToBottom = ref(false)
+
+// ---- 块右键菜单:复制所选/命令/输出、重跑、折叠,动作与块头按钮同源 ----
+interface BlockMenuState {
+  visible: boolean
+  x: number
+  y: number
+  block: TerminalCommandBlock | undefined
+  output: string
+  selectionText: string
+  hasCommand: boolean
+  hasOutput: boolean
+  collapsed: boolean
+}
+
+const blockMenu = reactive<BlockMenuState>({
+  visible: false,
+  x: 0,
+  y: 0,
+  block: undefined,
+  output: '',
+  selectionText: '',
+  hasCommand: false,
+  hasOutput: false,
+  collapsed: false,
+})
+
+const MENU_WIDTH_PX = 168
+const MENU_ITEM_HEIGHT_PX = 30
+
+function openBlockMenu(event: MouseEvent, block: TerminalCommandBlock, output: string): void {
+  // 路径链接/文件树/预览里的右键保留原生菜单(复制链接地址等场景)
+  const target = event.target
+  if (target instanceof HTMLElement && target.closest('a, .command-block__preview, .file-tree')) {
+    return
+  }
+  event.preventDefault()
+  const selection = window.getSelection()?.toString() ?? ''
+  const itemCount = [
+    Boolean(selection),
+    Boolean(block.command), // 复制命令
+    Boolean(output),
+    Boolean(block.command), // 重新运行
+    true, // 折叠/展开
+  ].filter(Boolean).length
+  blockMenu.visible = true
+  blockMenu.x = Math.min(event.clientX, window.innerWidth - MENU_WIDTH_PX - 8)
+  blockMenu.y = Math.min(event.clientY, window.innerHeight - itemCount * MENU_ITEM_HEIGHT_PX - 12)
+  blockMenu.block = block
+  blockMenu.output = output
+  blockMenu.selectionText = selection
+  blockMenu.hasCommand = Boolean(block.command)
+  blockMenu.hasOutput = Boolean(output)
+  blockMenu.collapsed = collapsed.value.has(block.id)
+}
+
+function closeBlockMenu(): void {
+  blockMenu.visible = false
+}
+
+function copyBlockSelection(): void {
+  if (blockMenu.selectionText) emit('copy', blockMenu.selectionText)
+  closeBlockMenu()
+}
+
+function copyBlockCommand(): void {
+  if (blockMenu.block?.command) emit('copy', blockMenu.block.command)
+  closeBlockMenu()
+}
+
+function copyBlockOutput(): void {
+  if (blockMenu.output) emit('copy', blockMenu.output)
+  closeBlockMenu()
+}
+
+function rerunBlockCommand(): void {
+  const command = blockMenu.block?.command
+  closeBlockMenu()
+  if (command) emit('rerun', command)
+}
+
+function toggleBlockCollapsed(): void {
+  const block = blockMenu.block
+  closeBlockMenu()
+  if (block) toggleCollapsed(block.id)
+}
+
+function handleBlockMenuPageClick(event: MouseEvent): void {
+  if (!blockMenu.visible) return
+  const target = event.target
+  if (target instanceof HTMLElement && target.closest('.block-menu')) return
+  closeBlockMenu()
+}
+
+function handleBlockMenuPageKeydown(event: KeyboardEvent): void {
+  if (event.key === 'Escape' && blockMenu.visible) closeBlockMenu()
+}
+
+onMounted(() => {
+  window.addEventListener('mousedown', handleBlockMenuPageClick, { capture: true })
+  window.addEventListener('keydown', handleBlockMenuPageKeydown, { capture: true })
+})
+onUnmounted(() => {
+  window.removeEventListener('mousedown', handleBlockMenuPageClick, { capture: true })
+  window.removeEventListener('keydown', handleBlockMenuPageKeydown, { capture: true })
+})
 
 watch(
   () => props.blocks,
@@ -1274,6 +1452,7 @@ watch(scrollElement, (element, previous) => {
 <style scoped>
 /* 终端画布固定为深色(--terminal-bg),GUI 视图整体取终端配色而非应用浅色表面 */
 .terminal-gui-view {
+  position: relative;
   flex: 1;
   min-width: 0;
   min-height: 0;
@@ -1281,6 +1460,54 @@ watch(scrollElement, (element, previous) => {
   flex-direction: column;
   background: var(--terminal-bg);
   text-align: left;
+}
+/* 回底按钮:块区滚动离开底部后浮现于右下角 */
+.scroll-to-bottom {
+  position: absolute;
+  right: 16px;
+  bottom: 56px;
+  z-index: 6;
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--terminal-fg) 18%, transparent);
+  border-radius: 50%;
+  color: var(--terminal-fg);
+  background: var(--terminal-bg);
+  box-shadow: 0 4px 14px rgb(0 0 0 / 30%);
+  cursor: pointer;
+}
+.scroll-to-bottom:hover {
+  border-color: var(--el-color-primary);
+  color: var(--el-color-primary);
+}
+/* 块右键菜单:视口锚定的小浮层,与补全/历史搜索同风格 */
+.block-menu {
+  position: fixed;
+  z-index: 20;
+  display: flex;
+  min-width: 168px;
+  flex-direction: column;
+  padding: 4px;
+  border: 1px solid color-mix(in srgb, var(--terminal-fg) 16%, transparent);
+  border-radius: 8px;
+  background: var(--terminal-bg);
+  box-shadow: 0 8px 22px rgb(0 0 0 / 38%);
+}
+.block-menu__item {
+  padding: 5px 10px;
+  border: none;
+  border-radius: 6px;
+  color: color-mix(in srgb, var(--terminal-fg) 85%, transparent);
+  background: transparent;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+.block-menu__item:hover {
+  color: var(--terminal-fg);
+  background: color-mix(in srgb, var(--el-color-primary) 20%, var(--terminal-bg));
 }
 .terminal-gui-view__blocks {
   flex: 1;

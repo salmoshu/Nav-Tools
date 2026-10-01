@@ -419,6 +419,8 @@ export default {
     guiInputPlaceholder: '输入命令（→ 接受提示，Tab 补全，Ctrl+R 搜历史）',
     guiHistorySearchEmpty: '没有匹配的历史命令',
     guiCompletionEmpty: '没有匹配的补全候选',
+    guiCopySelection: '复制所选',
+    guiScrollToBottom: '回到底部',
     completionCommand: '命令',
     completionSubcommand: '子命令',
     completionOption: '选项',

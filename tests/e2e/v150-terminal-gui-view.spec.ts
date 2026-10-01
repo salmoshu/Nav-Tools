@@ -221,6 +221,69 @@ test('submits commands from the GUI input bar and recalls them with arrow keys',
   await expect(input).toHaveValue('echo hello')
 })
 
+test('opens a context menu on command blocks and shows scroll-to-bottom after scrolling up', async ({
+  page,
+}) => {
+  // 足够多的输出行让块区产生真实溢出,回底按钮才有出现的条件
+  const output = Array.from({ length: 80 }, (_, index) => `line-${index}`).join('\r\n')
+  const scrollback =
+    `${osc133('A')}$ git status\r\n${osc133('C', btoa('git status'))}` +
+    `${output}\r\n${osc133('D', '0')}${osc133('A')}$ `
+  await seedTerminalApp(page, {
+    appId: 'terminal-gui-context-menu',
+    paneId: 'gui-pane',
+    session: { id: 'gui-context-session', kind: 'local', title: 'Git Bash', status: 'ready' },
+    presentation: 'gui',
+    scrollback,
+  })
+
+  await page.goto('/#app/terminal-gui-context-menu')
+  const block = page.locator('.command-block').first()
+  await expect(block).toBeVisible()
+
+  // 右键块头弹出自定义菜单,动作项与块能力一致
+  await block.locator('.command-block__header').click({ button: 'right' })
+  const menu = page.locator('.block-menu')
+  await expect(menu).toBeVisible()
+  await expect(menu.locator('.block-menu__item')).toHaveText([
+    'Copy command',
+    'Copy output',
+    'Re-run this command',
+    'Collapse output',
+  ])
+
+  // 菜单动作走剪贴板通道
+  await menu.locator('.block-menu__item', { hasText: 'Copy output' }).click()
+  await expect(menu).toHaveCount(0)
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (
+            window as unknown as {
+              __ipcInvokeLog?: Array<{ channel: string; payload: unknown }>
+            }
+          )
+            .__ipcInvokeLog?.filter((call) => call.channel === 'clipboard-write-text')
+            .map((call) => call.payload),
+      ),
+    )
+    .toEqual([output.replace(/\r\n/g, '\n')])
+
+  // 块区滚离底部后出现回底按钮,点击恢复吸底
+  const blocks = page.locator('.terminal-gui-view__blocks')
+  await blocks.evaluate((element) => {
+    element.scrollTop = 0
+    element.dispatchEvent(new Event('scroll'))
+  })
+  const scrollButton = page.locator('.scroll-to-bottom')
+  await expect(scrollButton).toBeVisible()
+  await scrollButton.click()
+  await expect(scrollButton).toBeHidden()
+  const maxScrollTop = await blocks.evaluate((element) => element.scrollHeight - element.clientHeight)
+  await expect(blocks).toHaveJSProperty('scrollTop', maxScrollTop)
+})
+
 test('suggests history and completes command specs and paths in the GUI input', async ({
   page,
 }) => {

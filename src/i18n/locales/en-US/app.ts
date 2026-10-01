@@ -171,6 +171,7 @@ export default {
     currentApp: 'Current Application',
     noDescription: 'No description',
     openWindow: 'Open in New Window',
+    openComponentWindow: 'Open "{v}" in standalone window',
     editApp: 'Edit Application',
     deleteApp: 'Delete Application',
     resetConfirm:

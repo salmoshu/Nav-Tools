@@ -93,12 +93,17 @@
               </div>
               <p>{{ application.description || t('app.selector.noDescription') }}</p>
               <div class="panel-list">
-                <span
+                <button
                   v-for="windowDefinition in applicationWindows(application)"
                   :key="windowDefinition.id"
+                  type="button"
+                  class="panel-chip"
+                  :title="t('app.selector.openComponentWindow', { v: t(windowDefinition.title) })"
+                  @click.stop="$emit('open-component-window', windowDefinition.id)"
                 >
-                  {{ t(windowDefinition.title) }}
-                </span>
+                  <el-icon :size="11"><TopRight /></el-icon>
+                  <span>{{ t(windowDefinition.title) }}</span>
+                </button>
               </div>
             </div>
             <div class="application-actions">
@@ -159,6 +164,7 @@ import {
   Grid,
   Plus,
   Refresh,
+  TopRight,
 } from '@element-plus/icons-vue'
 import type { UserApplication } from '@/settings/config'
 import { useApplicationSelector } from '@/composables/useApplicationSelector'
@@ -174,6 +180,7 @@ const emit = defineEmits<{
   close: []
   select: [applicationId: string]
   'open-window': [applicationId: string]
+  'open-component-window': [windowId: string]
 }>()
 
 const {
@@ -509,13 +516,30 @@ onUnmounted(() => window.removeEventListener('keydown', handleEscape, { capture:
   gap: 6px;
 }
 
-.panel-list span {
+/* 组件快捷方式按钮:点击即把该组件单独开成桌面独立窗口 */
+.panel-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   padding: 3px 7px;
   border: 1px solid var(--app-border);
   border-radius: 4px;
   color: var(--app-text-secondary);
   background: var(--app-surface-muted);
   font-size: 12px;
+  cursor: pointer;
+  transition:
+    border-color 120ms ease,
+    color 120ms ease,
+    background 120ms ease;
+}
+
+.panel-chip:hover,
+.panel-chip:focus-visible {
+  border-color: var(--application-accent);
+  color: var(--app-text);
+  background: color-mix(in srgb, var(--application-accent) 10%, var(--app-surface));
+  outline: none;
 }
 
 .application-actions {

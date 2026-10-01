@@ -168,6 +168,7 @@ export default {
     currentApp: '当前应用',
     noDescription: '无描述',
     openWindow: '在新窗口打开',
+    openComponentWindow: '在独立窗口打开「{v}」',
     editApp: '编辑应用',
     deleteApp: '删除应用',
     resetConfirm:

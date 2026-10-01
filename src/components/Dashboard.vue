@@ -112,6 +112,7 @@
       @close="closeApplicationSelector"
       @select="handleApplicationSelect"
       @open-window="openApplicationWindow"
+      @open-component-window="openComponentWindow"
     />
   </div>
 </template>
@@ -132,7 +133,7 @@ import {
   toolbarPosition,
   statusbarPosition,
 } from '@/composables/useStatusManager'
-import { getWindowById, windowCatalog } from '@/settings/config'
+import { getWindowById, getWindowsByIds, windowCatalog } from '@/settings/config'
 import { getPanelIconComponent } from '@/settings/panelIcons'
 import { useDevice } from '@/hooks/useDevice'
 import { useApplicationSelector } from '@/composables/useApplicationSelector'
@@ -230,6 +231,45 @@ const openApplicationWindow = async (applicationId: string) => {
   if (windowId === null) {
     ElMessage({
       message: t('app.dashboard.openWindowFailed'),
+      type: 'error',
+      placement: 'bottom-right',
+      offset: 50,
+    })
+  }
+}
+
+/**
+ * 组件快捷方式:把单个组件直接开成桌面独立窗口。
+ * windowId 沿用面板目录 id,独立窗口据此接收主窗口广播的实时数据路由。
+ */
+const openComponentWindow = async (windowId: string) => {
+  const definition = getWindowsByIds([windowId])[0]
+  if (!definition || !window.ipcRenderer) return
+
+  const cardData = {
+    componentName: definition.componentName,
+    windowId: definition.id,
+    title: t(definition.title),
+    props: {},
+    width: 980,
+    height: 660,
+  }
+  try {
+    const opened = await window.ipcRenderer.invoke(
+      'open-card-window',
+      JSON.stringify(cardData),
+    )
+    if (typeof opened !== 'number') {
+      ElMessage({
+        message: t('app.dashboard.openWindowFailed'),
+        type: 'error',
+        placement: 'bottom-right',
+        offset: 50,
+      })
+    }
+  } catch (error) {
+    ElMessage({
+      message: error instanceof Error ? error.message : String(error),
       type: 'error',
       placement: 'bottom-right',
       offset: 50,
