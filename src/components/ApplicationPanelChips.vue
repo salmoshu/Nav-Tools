@@ -11,7 +11,7 @@
       :title="t('app.selector.openComponentWindow', { v: t(windowDefinition.title) })"
       @click.stop="emit('open', windowDefinition.id)"
     >
-      <el-icon :size="11"><TopRight /></el-icon>
+      <SquareArrowOutUpRight :size="12" :stroke-width="2" aria-hidden="true" />
       <span>{{ t(windowDefinition.title) }}</span>
     </button>
     <el-popover
@@ -39,7 +39,7 @@
           class="panel-overflow__item"
           @click="emit('open', windowDefinition.id)"
         >
-          <el-icon :size="11"><TopRight /></el-icon>
+          <SquareArrowOutUpRight :size="12" :stroke-width="2" aria-hidden="true" />
           <span>{{ t(windowDefinition.title) }}</span>
         </button>
       </div>
@@ -49,7 +49,7 @@
 
 <script setup lang="ts">
 import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { TopRight } from '@element-plus/icons-vue'
+import { SquareArrowOutUpRight } from '@lucide/vue'
 import { t } from '@/i18n'
 import type { WindowDefinition } from '@/settings/config'
 

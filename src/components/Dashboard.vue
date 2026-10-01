@@ -77,7 +77,7 @@
                         class="shortcut-btn"
                         :title="t('app.dashboard.shortcutWindow')"
                       >
-                        <el-icon><TopRight /></el-icon>
+                        <SquareArrowOutUpRight :size="16" :stroke-width="1.8" />
                       </el-button>
                       <el-button
                         type="text"
@@ -133,7 +133,8 @@ import ApplicationSelector from './ApplicationSelector.vue'
 import { ref, computed, nextTick, onMounted, onUnmounted, provide, watch } from 'vue'
 import { GridLayout, GridItem } from 'grid-layout-plus'
 import { ElButton, ElCard, ElIcon, ElMessage, ElMessageBox } from 'element-plus'
-import { Close, Share, FullScreen, TopRight } from '@element-plus/icons-vue'
+import { Close, Share, FullScreen } from '@element-plus/icons-vue'
+import { SquareArrowOutUpRight } from '@lucide/vue'
 import emitter from '@/hooks/useMitt'
 import { useLayoutManager } from '@/composables/useLayoutManager'
 import {
