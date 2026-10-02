@@ -3,7 +3,9 @@ import { tokenizeShellLine } from '../../src/core/terminal/ShellSyntax'
 
 /** 展开成 `kind:chunks` 的紧凑形式,断言可读 */
 function outline(line: string, family: 'posix' | 'powershell' | 'cmd' = 'posix') {
-  return tokenizeShellLine(line, family).map(token => `${token.kind}:${JSON.stringify(token.text)}`)
+  return tokenizeShellLine(line, family).map(
+    (token) => `${token.kind}:${JSON.stringify(token.text)}`,
+  )
 }
 
 describe('tokenizeShellLine (posix)', () => {
@@ -90,11 +92,7 @@ describe('tokenizeShellLine (posix)', () => {
       'text:" "',
       'comment:"# comment here"',
     ])
-    expect(outline('echo a#b')).toEqual([
-      'command:"echo"',
-      'text:" "',
-      'text:"a#b"',
-    ])
+    expect(outline('echo a#b')).toEqual(['command:"echo"', 'text:" "', 'text:"a#b"'])
   })
 
   it('含通配符的词是 glob', () => {
@@ -109,7 +107,7 @@ describe('tokenizeShellLine (posix)', () => {
 
   it('空白作为独立 text token 保留原样(与 textarea 对齐)', () => {
     const tokens = tokenizeShellLine('a  b', 'posix')
-    expect(tokens.map(t => t.text).join('')).toBe('a  b')
+    expect(tokens.map((t) => t.text).join('')).toBe('a  b')
     expect(outline('a  b')).toEqual(['command:"a"', 'text:"  "', 'text:"b"'])
   })
 })
@@ -151,7 +149,11 @@ describe('tokenizeShellLine (不变量)', () => {
     ]
     for (const line of samples) {
       for (const family of ['posix', 'powershell', 'cmd'] as const) {
-        expect(tokenizeShellLine(line, family).map(t => t.text).join('')).toBe(line)
+        expect(
+          tokenizeShellLine(line, family)
+            .map((t) => t.text)
+            .join(''),
+        ).toBe(line)
       }
     }
   })

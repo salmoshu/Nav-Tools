@@ -257,6 +257,7 @@
         :cols="termCols"
         :session-id="sessionInfo?.id"
         :history-scope="historyScope"
+        :shell-family="shellFamily"
         :search-query="searchVisible ? searchQuery : ''"
         :search-next-tick="searchNextTick"
         :search-prev-tick="searchPrevTick"
@@ -358,6 +359,7 @@ import { FitAddon } from '@xterm/addon-fit'
 import { SearchAddon } from '@xterm/addon-search'
 import '@xterm/xterm/css/xterm.css'
 import { CommandBlockAssembler, type TerminalCommandBlock } from '@/core/terminal/CommandBlocks'
+import { shellFamilyFor, type ShellFamily } from '@/core/terminal/ShellQuote'
 import { createTerminalHistoryScope } from '@/core/terminal/TerminalHistoryStorage'
 import type { TerminalPaneNode, TerminalSplitDirection } from '@/core/terminal/TerminalLayout'
 import {
@@ -478,6 +480,17 @@ const historyScope = computed(() => {
   if (session?.kind === 'local') return createTerminalHistoryScope('local', session.title)
   if (session?.kind === 'wsl') return createTerminalHistoryScope('wsl', session.title)
   return undefined
+})
+
+/**
+ * 目标 shell 家族:驱动 GUI 输入行/块头的语法着色。
+ * 宿主平台按渲染进程所在系统判断(本应用为 Windows 上位机,system shell 按 PowerShell)。
+ */
+const shellFamily = computed<ShellFamily>(() => {
+  const launch = props.pane.launch
+  const localShell = launch?.kind === 'local' ? launch.localShell : undefined
+  const kind = launch?.kind ?? props.sessionInfo?.kind ?? 'local'
+  return shellFamilyFor(kind, localShell, navigator.platform.startsWith('Win') ? 'win32' : 'linux')
 })
 
 function feedCommandBlocks(data: string): void {

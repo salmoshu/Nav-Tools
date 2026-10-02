@@ -48,7 +48,10 @@ export function tokenizeShellLine(line: string, family: ShellFamily): ShellSynta
     }
 
     // 注释:bash 仅在词首才把 # 当注释;PowerShell 任意位置的 # 都开始注释
-    if (char === '#' && (family === 'powershell' || atCommandPosition || isWordStart(line, position))) {
+    if (
+      char === '#' &&
+      (family === 'powershell' || atCommandPosition || isWordStart(line, position))
+    ) {
       push(line.slice(position), 'comment')
       break
     }
@@ -126,7 +129,9 @@ export function tokenizeShellLine(line: string, family: ShellFamily): ShellSynta
     if (atCommandPosition) {
       push(word, 'command')
       atCommandPosition = false
-    } else if (family === 'powershell' ? /^\/[A-Za-z]/.test(word) : /^--?[^-\s]/.test(word) || word === '-') {
+    } else if (
+      family === 'powershell' ? /^\/[A-Za-z]/.test(word) : /^--?[^-\s]/.test(word) || word === '-'
+    ) {
       push(word, 'option')
     } else if (/[*?]/.test(word)) {
       push(word, 'glob')

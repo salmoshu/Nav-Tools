@@ -20,6 +20,8 @@ export interface CompletionCandidate {
   /** 用于替换 [CompletionToken.start, 光标) 区间的文本 */
   text: string
   kind: CompletionKind
+  /** 候选说明,展示在补全弹层右侧详情面板;历史/路径类候选没有描述 */
+  description?: string
 }
 
 export interface CommandSpec {
@@ -287,6 +289,92 @@ export const BUILTIN_SPECS: readonly CommandSpec[] = [
   },
 ]
 
+/** 命令位补全的说明文案(补全弹层详情面板展示);只覆盖高频命令,长尾留空 */
+export const SPEC_DESCRIPTIONS: Readonly<Record<string, string>> = {
+  git: '版本控制',
+  docker: '容器管理',
+  npm: 'Node.js 包管理',
+  pnpm: '高性能 Node.js 包管理',
+  yarn: 'Node.js 包管理',
+  ls: '列出目录内容',
+  cd: '切换工作目录',
+  pwd: '打印当前目录',
+  cat: '输出文件内容',
+  less: '分页查看文件',
+  grep: '按模式搜索文本',
+  find: '按条件查找文件',
+  rg: '递归搜索文本(ripgrep)',
+  echo: '输出文本',
+  mkdir: '创建目录',
+  rm: '删除文件或目录',
+  cp: '复制文件',
+  mv: '移动或重命名',
+  touch: '创建空文件/更新时间戳',
+  chmod: '修改文件权限',
+  chown: '修改文件所有者',
+  ps: '查看进程',
+  kill: '终止进程',
+  df: '查看磁盘空间',
+  du: '统计目录大小',
+  tar: '打包/解包归档',
+  unzip: '解压 zip 归档',
+  curl: '发起 HTTP 请求',
+  wget: '下载文件',
+  ssh: '远程登录',
+  scp: '远程复制文件',
+  make: '执行构建',
+  python: '运行 Python',
+  node: '运行 Node.js',
+  jq: '处理 JSON',
+  sed: '流式编辑文本',
+  xargs: '把输入拼成命令参数',
+  wsl: '管理 WSL 子系统',
+  code: '打开 VS Code',
+}
+
+/** 子命令说明,键为 `命令 子命令`;只覆盖最常用的组合 */
+export const SUBCOMMAND_DESCRIPTIONS: Readonly<Record<string, string>> = {
+  'git add': '把变更加入暂存区',
+  'git branch': '列出/创建/删除分支',
+  'git checkout': '切换分支或恢复文件',
+  'git commit': '记录变更到仓库',
+  'git diff': '查看变更内容',
+  'git fetch': '拉取远端引用',
+  'git log': '查看提交历史',
+  'git merge': '合并分支',
+  'git pull': '拉取并合并远端更新',
+  'git push': '推送提交到远端',
+  'git rebase': '把提交变基到另一分支',
+  'git reset': '重置当前分支状态',
+  'git restore': '恢复工作区文件',
+  'git show': '查看某次提交的详情',
+  'git stash': '暂存未提交的变更',
+  'git status': '查看工作区状态',
+  'git switch': '切换分支',
+  'git tag': '管理标签',
+  'docker build': '从 Dockerfile 构建镜像',
+  'docker compose': '编排多容器应用',
+  'docker exec': '在运行中的容器里执行命令',
+  'docker images': '列出本地镜像',
+  'docker ps': '列出容器',
+  'docker pull': '拉取镜像',
+  'docker push': '推送镜像',
+  'docker run': '创建并运行容器',
+  'docker stop': '停止容器',
+  'npm install': '安装依赖',
+  'npm run': '运行 package.json 脚本',
+  'npm test': '运行测试',
+  'npm uninstall': '卸载依赖',
+  'pnpm install': '安装依赖',
+  'pnpm run': '运行 package.json 脚本',
+}
+
+/** 取候选说明:子命令按 `命令 子命令` 查,其次按命令名查 */
+function descriptionFor(commandName: string, token: string): string | undefined {
+  if (!commandName) return SPEC_DESCRIPTIONS[token]
+  return SUBCOMMAND_DESCRIPTIONS[`${commandName} ${token}`] ?? SPEC_DESCRIPTIONS[token]
+}
+
 /**
  * 取光标所在 token。光标可能超出输入长度(理论上),先夹到合法范围。
  * 只按空白切分,不做引号解析——引号内的 token 带引号参与前缀匹配,自然匹配不到
@@ -344,10 +432,10 @@ export function completeCommandLine(
 
   const results: CompletionCandidate[] = []
   const seen = new Set<string>()
-  const push = (text: string, kind: CompletionKind): void => {
+  const push = (text: string, kind: CompletionKind, description?: string): void => {
     if (seen.has(text)) return
     seen.add(text)
-    results.push({ text, kind })
+    results.push({ text, kind, description })
   }
   const pushPaths = (): void => {
     const context = completionPathContext(input, cursor)
@@ -364,11 +452,13 @@ export function completeCommandLine(
   // 命令位:内置规格的命令名在前,历史里用过的命令名补在后(最近优先)
   if (headTokens.length === 0) {
     for (const spec of specs) {
-      if (spec.name.startsWith(prefix)) push(spec.name, 'command')
+      if (spec.name.startsWith(prefix)) {
+        push(spec.name, 'command', SPEC_DESCRIPTIONS[spec.name])
+      }
     }
     for (let index = history.length - 1; index >= 0; index -= 1) {
       const first = history[index].trim().split(/\s+/)[0]
-      if (first && first.startsWith(prefix)) push(first, 'history')
+      if (first && first.startsWith(prefix)) push(first, 'history', SPEC_DESCRIPTIONS[first])
     }
     return results.slice(0, limit)
   }
@@ -386,7 +476,9 @@ export function completeCommandLine(
       }
     } else if (argumentIndex === 0) {
       for (const subcommand of spec.subcommands ?? []) {
-        if (subcommand.startsWith(prefix)) push(subcommand, 'subcommand')
+        if (subcommand.startsWith(prefix)) {
+          push(subcommand, 'subcommand', descriptionFor(commandName, subcommand))
+        }
       }
     }
   }

@@ -429,6 +429,7 @@ export default {
     guiCommandFailedToast: '命令失败：{command}（退出码 {code}）',
     guiCopySelection: '复制所选',
     guiScrollToBottom: '回到底部',
+    guiBlockRail: '命令块预览',
     completionCommand: '命令',
     completionSubcommand: '子命令',
     completionOption: '选项',

@@ -34,6 +34,12 @@ export interface TerminalCommandBlock {
   finishedAt?: number
   /** 输出超过单块上限后被截断 */
   truncated: boolean
+  /** 运行中命令经 OSC 9;4(ConEmu/Windows Terminal)上报的进度百分比 0-100 */
+  progress?: number
+  /** OSC 9;4 进度状态:indeterminate 不确定流转,error 红色 */
+  progressState?: 'indeterminate' | 'error'
+  /** 命令周期内经 OSC 9 / OSC 777;notify 上报的通知,GUI 据此弹 toast */
+  notification?: { title?: string; body: string }
 }
 
 /** GUI 视图白名单 renderer 覆盖的 MIME 类型;未列入的序列直接忽略 */
@@ -57,10 +63,13 @@ export const MAX_RICH_PAYLOAD_CHARS = 4_000_000
 const MAX_TAIL_CHARS = 4096
 
 /** 统一标记匹配:g1/g2 = OSC 133 字母与参数;g3/g4 = OSC 1338 富内容的 MIME 与 base64;
- *  g5/g6 = OSC 7 cwd 的 host 与 path;g7 = ConPTY OSC 9;9 的 Windows cwd */
+ *  g5/g6 = OSC 7 cwd 的 host 与 path;g7 = ConPTY OSC 9;9 的 Windows cwd;
+ *  g8/g9 = OSC 9;4 进度的状态与百分比;g10 = iTerm2 OSC 9 通知文本;
+ *  g11/g12 = OSC 777;notify 的标题与正文。
+ *  注意 9;9 与 9;4 必须排在裸 9; 之前,否则会被通知分支抢先吃掉。 */
 const MARKER_PATTERN =
   // eslint-disable-next-line no-control-regex -- 终端转义序列解析必须匹配控制字符
-  /\x1b\]133;([A-Za-z])(?:;([^\x07\x1b]*))?(?:\x07|\x1b\\)|\x1b\]1338;([a-z0-9.+-]+\/[a-z0-9.+-]+);([A-Za-z0-9+/=]*)(?:\x07|\x1b\\)|\x1b\]7;file:\/\/([^\x07\x1b/]*)(\/[^\x07\x1b]*?)(?:\x07|\x1b\\)|\x1b\]9;9;"?([^"\x07\x1b]+?)"?(?:\x07|\x1b\\)/gi
+  /\x1b\]133;([A-Za-z])(?:;([^\x07\x1b]*))?(?:\x07|\x1b\\)|\x1b\]1338;([a-z0-9.+-]+\/[a-z0-9.+-]+);([A-Za-z0-9+/=]*)(?:\x07|\x1b\\)|\x1b\]7;file:\/\/([^\x07\x1b/]*)(\/[^\x07\x1b]*?)(?:\x07|\x1b\\)|\x1b\]9;9;"?([^"\x07\x1b]+?)"?(?:\x07|\x1b\\)|\x1b\]9;4;(\d)(?:;(\d+))?(?:\x07|\x1b\\)|\x1b\]9;((?![49];)[^\x07\x1b]+)(?:\x07|\x1b\\)|\x1b\]777;notify;([^\x07\x1b]*);([^\x07\x1b]*)(?:\x07|\x1b\\)/gi
 // eslint-disable-next-line no-control-regex -- 同上
 const PARTIAL_OSC_TAIL = /\x1b(?:\][^\x07\x1b]*)?$/
 
@@ -350,6 +359,12 @@ export class CommandBlockAssembler {
         this.handleCwd(match[5], match[6] || '')
       } else if (match[7] !== undefined) {
         this.handleCwd('', match[7])
+      } else if (match[8] !== undefined) {
+        this.handleProgress(match[8], match[9])
+      } else if (match[10] !== undefined) {
+        this.handleNotification('', match[10])
+      } else if (match[11] !== undefined) {
+        this.handleNotification(match[11], match[12] || '')
       } else {
         this.handleMarker(match[1], match[2])
       }
@@ -402,6 +417,31 @@ export class CommandBlockAssembler {
     const rich = this.current.rich ?? []
     rich.push({ mime: normalized, data })
     this.current.rich = rich
+  }
+
+  /** OSC 9;4 进度(ConEmu 协议):state 0=移除 1=不确定 2=正常 3=错误;progress 0-100 */
+  private handleProgress(state: string, progress: string | undefined): void {
+    if (!this.current) return
+    if (state === '0') {
+      delete this.current.progress
+      delete this.current.progressState
+      return
+    }
+    if (state === '1') {
+      this.current.progress = undefined
+      this.current.progressState = 'indeterminate'
+      return
+    }
+    const value = Number.parseInt(progress ?? '', 10)
+    this.current.progress = Number.isInteger(value) ? Math.min(100, Math.max(0, value)) : 0
+    this.current.progressState = state === '3' ? 'error' : undefined
+  }
+
+  /** OSC 9(iTerm2)与 OSC 777;notify 的命令内通知,归属当前运行块 */
+  private handleNotification(title: string, body: string): void {
+    const text = body.trim()
+    if (!text || !this.current) return
+    this.current.notification = { title: title.trim() || undefined, body: text }
   }
 
   private handleMarker(letter: string, params?: string): void {

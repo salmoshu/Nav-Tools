@@ -274,3 +274,63 @@ describe('CommandBlockAssembler cwd tracking', () => {
     expect(assembler.currentCwd).toBe('')
   })
 })
+
+describe('CommandBlockAssembler 进度与通知(OSC 9;4 / 9 / 777)', () => {
+  it('OSC 9;4 更新运行块的进度,百分比钳制在 0-100', () => {
+    const assembler = new CommandBlockAssembler()
+    assembler.feed(`${osc('C', base64('scoop install git'))}`)
+    assembler.feed('\x1b]9;4;2;37\x07')
+    assembler.feed('\x1b]9;4;2;999\x07')
+    assembler.feed('\x1b]9;4;2;-5\x07')
+    const running = assembler.getBlocks().at(-1)
+    expect(running?.progress).toBe(100)
+    expect(running?.progressState).toBeUndefined()
+  })
+
+  it('OSC 9;4 state=1 不确定进度、state=3 错误、state=0 移除', () => {
+    const assembler = new CommandBlockAssembler()
+    assembler.feed(`${osc('C', base64('winget upgrade --all'))}`)
+    assembler.feed('\x1b]9;4;1\x07')
+    expect(assembler.getBlocks().at(-1)?.progressState).toBe('indeterminate')
+    assembler.feed('\x1b]9;4;3;50\x07')
+    expect(assembler.getBlocks().at(-1)?.progressState).toBe('error')
+    assembler.feed('\x1b]9;4;0\x07')
+    expect(assembler.getBlocks().at(-1)?.progress).toBeUndefined()
+    expect(assembler.getBlocks().at(-1)?.progressState).toBeUndefined()
+  })
+
+  it('无运行块时进度序列被忽略,不产生幻影块', () => {
+    const assembler = new CommandBlockAssembler()
+    assembler.feed('\x1b]9;4;2;50\x07')
+    expect(assembler.getBlocks()).toHaveLength(0)
+  })
+
+  it('OSC 777;notify 标题与正文归属当前块', () => {
+    const assembler = new CommandBlockAssembler()
+    assembler.feed(`${osc('C', base64('make'))}`)
+    assembler.feed('\x1b]777;notify;构建完成;全部 12 个目标通过\x07')
+    const running = assembler.getBlocks().at(-1)
+    expect(running?.notification).toEqual({ title: '构建完成', body: '全部 12 个目标通过' })
+  })
+
+  it('OSC 9 纯通知不与 9;9 cwd / 9;4 进度混淆', () => {
+    const assembler = new CommandBlockAssembler()
+    assembler.feed('\x1b]9;9;"C:\\work"\x07')
+    assembler.feed(`${osc('C', base64('deploy'))}`)
+    assembler.feed('\x1b]9;部署完成\x07')
+    assembler.feed('\x1b]9;4;2;80\x07')
+    const running = assembler.getBlocks().at(-1)
+    expect(running?.notification).toEqual({ title: undefined, body: '部署完成' })
+    expect(running?.progress).toBe(80)
+    expect(running?.cwd).toBe('C:\\work')
+    expect(assembler.currentCwd).toBe('C:\\work')
+  })
+
+  it('通知与进度序列不进入块输出文本', () => {
+    const assembler = new CommandBlockAssembler()
+    assembler.feed(`${osc('C', base64('x'))}`)
+    assembler.feed('before\x1b]9;4;2;10\x07after\x1b]777;notify;t;b\x07')
+    const running = assembler.getBlocks().at(-1)
+    expect(running?.output).toBe('beforeafter')
+  })
+})

@@ -33,8 +33,10 @@ describe('completionToken', () => {
 })
 
 describe('completeCommandLine 命令位', () => {
-  it('按前缀补内置命令名', () => {
-    expect(completeCommandLine('gi', 2, [], SPECS)).toEqual([{ text: 'git', kind: 'command' }])
+  it('按前缀补内置命令名,并携带说明文案', () => {
+    expect(completeCommandLine('gi', 2, [], SPECS)).toEqual([
+      { text: 'git', kind: 'command', description: '版本控制' },
+    ])
     // cat 不以 g 开头,不应出现在候选里
     expect(completeCommandLine('g', 1, [], SPECS).map((item) => item.text)).toEqual(['git'])
     expect(completeCommandLine('c', 1, [], SPECS).map((item) => item.text)).toEqual(['cat'])
@@ -50,7 +52,7 @@ describe('completeCommandLine 命令位', () => {
 
   it('内置命令与历史重名时以内置为准,不重复出现', () => {
     expect(completeCommandLine('gi', 2, ['git status'], SPECS)).toEqual([
-      { text: 'git', kind: 'command' },
+      { text: 'git', kind: 'command', description: '版本控制' },
     ])
   })
 })

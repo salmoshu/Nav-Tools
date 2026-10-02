@@ -437,6 +437,7 @@ export default {
     guiCommandFailedToast: 'Command failed: {command} (exit {code})',
     guiCopySelection: 'Copy selection',
     guiScrollToBottom: 'Scroll to bottom',
+    guiBlockRail: 'Command block rail',
     completionCommand: 'command',
     completionSubcommand: 'subcommand',
     completionOption: 'option',

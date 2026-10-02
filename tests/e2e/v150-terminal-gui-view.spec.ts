@@ -312,11 +312,14 @@ test('suggests history and completes command specs and paths in the GUI input', 
   const input = page.locator('.gui-input')
 
   await input.fill('git s')
-  const autosuggestion = page.locator('.gui-autosuggestion')
-  await expect(autosuggestion).toHaveValue('git status')
-  // 灰字层(readonly input)与真输入层(textarea)几何必须完全重合,否则建议错位
+  // 敲下非空 token 自动弹出补全(Warp 行为);Esc 关掉后灰字建议才独占 → 键
+  await expect(page.locator('.completion__item').first()).toBeVisible()
+  await input.press('Escape')
+  const suggestionLayer = page.locator('.gui-input-highlight .syn-suggestion')
+  await expect(suggestionLayer).toHaveText('tatus')
+  // 着色层(pre)与真输入层(textarea)几何必须完全重合,否则着色/建议错位
   const inputLayers = await page
-    .locator('.gui-input-editor input, .gui-input-editor textarea')
+    .locator('.gui-input-editor pre, .gui-input-editor textarea')
     .evaluateAll((elements) =>
       elements.map((element) => {
         const rect = element.getBoundingClientRect()
@@ -337,14 +340,16 @@ test('suggests history and completes command specs and paths in the GUI input', 
   await expect(input).toHaveValue('git status')
 
   await input.fill('git st')
-  await input.press('Tab')
+  // 自动弹层已开;Tab 首按选中第一条(不直接补全,避免误补)
   await expect(page.locator('.completion__item')).toHaveCount(2)
-  await expect(page.locator('.completion__item.is-active')).toHaveCount(0)
+  await input.press('Tab')
+  await expect(page.locator('.completion__item.is-active')).toHaveCount(1)
   await expect(page.locator('.completion__text').first()).toHaveText('stash')
 
   await input.press('Escape')
   await input.fill('cat RE')
-  await expect(page.locator('.gui-autosuggestion')).toHaveValue('cat README.md')
+  // 弹层开着灰字建议照样渲染(两者共存,Warp 形态)
+  await expect(page.locator('.gui-input-highlight .syn-suggestion')).toHaveText('ADME.md')
   await input.press('Tab')
-  await expect(page.locator('.completion__text')).toHaveText('README.md')
+  await expect(page.locator('.completion__text').first()).toHaveText('README.md')
 })

@@ -1,6 +1,7 @@
 <template>
-  <div class="terminal-gui-view">
-    <div ref="scrollElement" class="terminal-gui-view__blocks" @click="handleBlocksClick">
+  <div class="terminal-gui-view" :class="{ 'has-rail': railEntries.length > 0 }">
+    <div class="terminal-gui-view__body">
+      <div ref="scrollElement" class="terminal-gui-view__blocks" @click="handleBlocksClick">
       <div v-if="blocks.length === 0" class="gui-empty" role="status">
         <span class="gui-empty__icon"><LayoutGrid /></span>
         <strong>{{ t('common.terminal.guiEmptyTitle') }}</strong>
@@ -15,11 +16,31 @@
         @contextmenu="openBlockMenu($event, entry.block, entry.output)"
       >
         <header class="command-block__header" @click="toggleCollapsed(entry.block.id)">
-          <span class="command-block__status" aria-hidden="true"></span>
-          <span class="command-block__command" :title="entry.block.command">{{
-            entry.block.command || t('common.terminal.guiUnknownCommand')
-          }}</span>
+          <span class="command-block__status" aria-hidden="true">
+            <el-icon v-if="blockStatus(entry.block) === 'success'"><Select /></el-icon>
+            <el-icon v-else-if="blockStatus(entry.block) === 'error'"><CloseBold /></el-icon>
+            <el-icon v-else-if="blockStatus(entry.block) === 'running'" class="is-spinning"
+              ><Loading
+            /></el-icon>
+          </span>
+          <span class="command-block__command" :title="entry.block.command"
+            ><template v-if="entry.block.command">
+              <span
+                v-for="(token, tokenIndex) in headerTokens(entry.block.command)"
+                :key="tokenIndex"
+                :class="`syn-${token.kind}`"
+                >{{ token.text }}</span
+              > </template
+            ><template v-else>{{ t('common.terminal.guiUnknownCommand') }}</template></span
+          >
           <span class="command-block__meta">
+            <span
+              v-if="entry.block.notification"
+              class="command-block__notify"
+              :title="entry.block.notification.title || entry.block.notification.body"
+            >
+              <el-icon><Bell /></el-icon>
+            </span>
             <span v-if="entry.block.cwd" class="command-block__cwd" :title="entry.block.cwd">{{
               entry.block.cwd
             }}</span>
@@ -111,6 +132,31 @@
             </el-tooltip>
           </span>
         </header>
+        <!-- OSC 9;4 进度:仅在运行中的块显示;不确定流转/错误态各有样式 -->
+        <div
+          v-if="blockStatus(entry.block) === 'running' && entry.block.progressState"
+          class="command-block__progress"
+          role="progressbar"
+          :aria-valuenow="entry.block.progress"
+        >
+          <div
+            class="command-block__progress-bar"
+            :class="{
+              'is-indeterminate': entry.block.progressState === 'indeterminate',
+              'is-error': entry.block.progressState === 'error',
+            }"
+            :style="
+              entry.block.progress !== undefined
+                ? { width: `${entry.block.progress}%` }
+                : undefined
+            "
+          ></div>
+          <span
+            v-if="entry.block.progress !== undefined"
+            class="command-block__progress-text"
+            >{{ entry.block.progress }}%</span
+          >
+        </div>
         <template v-if="!collapsed.has(entry.block.id)">
           <TerminalRichContent
             v-for="(payload, index) in entry.block.rich ?? []"
@@ -214,6 +260,17 @@
           </div>
         </template>
       </article>
+      </div>
+      <!-- 命令块预览导航条：快速查看/跳转到任意块，条目多时自身可滚动 -->
+      <TerminalBlockRail
+        v-if="railEntries.length > 0"
+        :entries="railEntries"
+        :active-id="activeRailBlockId"
+        :nav-id="navBlockId"
+        :follow-tail="!showScrollToBottom"
+        :unknown-label="t('common.terminal.guiUnknownCommand')"
+        @select="scrollBlockIntoView"
+      />
     </div>
     <!-- 回底按钮:向上翻阅历史块后出现,一键回最新输出并恢复吸底 -->
     <button
@@ -299,38 +356,45 @@
           >
         </button>
       </div>
-      <!-- 命令补全:Ctrl+Space 或 Tab 唤起，候选来自内置规格、输入历史与会话路径 -->
+      <!-- 命令补全:输入时自动弹出,Ctrl+Space/Tab 显式唤起;候选带图标与说明,右侧详情面板(Warp 形态) -->
       <div v-if="completionOpen" class="completion" role="listbox">
-        <div v-if="completionCandidates.length === 0" class="completion__empty">
-          {{ t('common.terminal.guiCompletionEmpty') }}
+        <div class="completion__list">
+          <div v-if="completionCandidates.length === 0" class="completion__empty">
+            {{ t('common.terminal.guiCompletionEmpty') }}
+          </div>
+          <button
+            v-for="(candidate, index) in completionCandidates"
+            :key="`${candidate.kind}-${candidate.text}`"
+            class="completion__item"
+            :class="{ 'is-active': index === completionIndex }"
+            type="button"
+            role="option"
+            :aria-selected="index === completionIndex"
+            @click="applyCompletion(candidate)"
+            @mousemove="completionIndex = index"
+          >
+            <el-icon class="completion__icon"><component :is="completionIcon(candidate.kind)" /></el-icon>
+            <span class="completion__text">{{ candidate.text }}</span>
+            <span class="completion__kind">{{ completionKindLabel(candidate.kind) }}</span>
+          </button>
         </div>
-        <button
-          v-for="(candidate, index) in completionCandidates"
-          :key="`${candidate.kind}-${candidate.text}`"
-          class="completion__item"
-          :class="{ 'is-active': index === completionIndex }"
-          type="button"
-          role="option"
-          :aria-selected="index === completionIndex"
-          @click="applyCompletion(candidate)"
-          @mousemove="completionIndex = index"
-        >
-          <span class="completion__text">{{ candidate.text }}</span>
-          <span class="completion__kind">{{ completionKindLabel(candidate.kind) }}</span>
-        </button>
+        <div v-if="activeCompletion" class="completion__detail">
+          <strong class="completion__detail-title">{{ activeCompletion.text }}</strong>
+          <small class="completion__detail-body">{{ completionDetailText(activeCompletion) }}</small>
+          <small class="completion__detail-kind">{{ completionKindLabel(activeCompletion.kind) }}</small>
+        </div>
+        <div class="completion__hint">{{ t('common.terminal.guiCompletionHint') }}</div>
       </div>
       <el-icon class="gui-input-row__prompt"><ChevronRight /></el-icon>
       <span v-if="cwd" class="gui-input-row__cwd" :title="cwd">{{ cwd }}</span>
       <div class="gui-input-editor">
-        <input
-          v-if="suggestedLine"
-          class="gui-autosuggestion"
-          type="text"
-          :value="suggestedLine"
-          tabindex="-1"
-          readonly
-          aria-hidden="true"
-        />
+        <!-- 语法着色层:与 textarea 同网格叠放,逐字符对齐;文字本体在 textarea 里透明 -->
+        <pre class="gui-input-highlight" aria-hidden="true"><span
+          v-for="(token, index) in inputTokens"
+          :key="index"
+          :class="`syn-${token.kind}`"
+          >{{ token.text }}</span
+        ><span v-if="suggestionRemainder" class="syn-suggestion">{{ suggestionRemainder }}</span></pre>
         <textarea
           ref="inputElement"
           v-model="draft"
@@ -383,13 +447,22 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
+import { ElMessage } from 'element-plus'
 import {
   ArrowDownBold,
   ArrowUpBold,
+  Bell,
+  Clock,
   CloseBold,
   CopyDocument,
+  Document,
   DocumentCopy,
+  Folder,
+  Loading,
+  Operation,
   RefreshRight,
+  Select,
+  Star,
   View,
   WarningFilled,
 } from '@element-plus/icons-vue'
@@ -399,6 +472,7 @@ import {
   encodeTextBase64,
   type TerminalCommandBlock,
 } from '@/core/terminal/CommandBlocks'
+import { tokenizeShellLine, type ShellSyntaxToken } from '@/core/terminal/ShellSyntax'
 import { splitOutputByPaths, type DetectedPath } from '@/core/terminal/PathDetection'
 import { sniffContent, type SniffedContent } from '@/core/terminal/ContentSniff'
 import { fuzzySearch } from '@/core/terminal/FuzzyMatch'
@@ -421,6 +495,8 @@ import {
 import type { TerminalPathStat, TerminalSessionDir } from '@/core/terminal/TerminalTypes'
 import TerminalFileTree from './TerminalFileTree.vue'
 import TerminalRichContent from './TerminalRichContent.vue'
+import TerminalBlockRail from './TerminalBlockRail.vue'
+import { railAnchorIndex } from '@/core/terminal/BlockRail'
 
 const t = useTerminalTranslate()
 
@@ -449,6 +525,8 @@ const props = defineProps<{
    * 同类会话共享历史并在重启后保留;缺省时历史仅存内存。
    */
   historyScope?: string
+  /** 目标 shell 家族,驱动输入行/块头的语法着色;缺省按 posix */
+  shellFamily?: 'posix' | 'powershell' | 'cmd'
 }>()
 const emit = defineEmits<{
   rerun: [command: string]
@@ -580,6 +658,7 @@ function handleInput(): void {
   }
   caret.value = caretPosition()
   autoGrow()
+  autoOpenCompletion()
 }
 
 const INPUT_LINE_HEIGHT_PX = 20
@@ -714,10 +793,9 @@ const completionCandidates = computed<CompletionCandidate[]>(() =>
 )
 
 const suggestedLine = computed(() => {
-  // 多行草稿不给灰字建议:单行的建议层无法对齐换行后的文本
+  // 多行草稿不给灰字建议:着色层的建议段无法对齐换行后的文本
   if (
     historySearchOpen.value ||
-    completionOpen.value ||
     caret.value !== draft.value.length ||
     draft.value.includes('\n')
   ) {
@@ -725,6 +803,29 @@ const suggestedLine = computed(() => {
   }
   return suggestCommandLine(draft.value, history, BUILTIN_SPECS, availableCompletionPaths.value)
 })
+
+/** 灰字建议的剩余部分(建议行去掉已输入前缀),直接渲染在着色层尾部,与正文逐字对齐 */
+const suggestionRemainder = computed(() => {
+  const suggestion = suggestedLine.value
+  if (!suggestion || !suggestion.startsWith(draft.value)) return ''
+  return suggestion.slice(draft.value.length)
+})
+
+/** 输入行着色 token:与 textarea 内容逐字符对齐,拼接恒等于草稿原文 */
+const inputTokens = computed<ShellSyntaxToken[]>(() =>
+  tokenizeShellLine(draft.value, props.shellFamily ?? 'posix'),
+)
+
+/** 块头命令的着色 token;无命令时由模板走占位文案 */
+function headerTokens(command: string | undefined): ShellSyntaxToken[] {
+  if (!command) return []
+  return tokenizeShellLine(command, props.shellFamily ?? 'posix')
+}
+
+/** 自动补全开关(Warp 行为):敲下任意非空 token 自动开弹层;Esc 关闭后
+ * 同一个 token 内不再打扰,换词后恢复。显式 Ctrl+Space/Tab 不受此限。 */
+let autoCompletionOpen = false
+let dismissedToken = ''
 
 /** 有候选才开弹层;返回是否打开,供 Tab 决定要不要拦住焦点移动 */
 function openCompletion(): boolean {
@@ -748,6 +849,17 @@ function openCompletion(): boolean {
 function closeCompletion(): void {
   completionOpen.value = false
   completionIndex.value = -1
+  autoCompletionOpen = false
+}
+
+function autoOpenCompletion(): void {
+  const token = completionToken(draft.value, caret.value)
+  if (token.text.length === 0) {
+    if (autoCompletionOpen) closeCompletion()
+    return
+  }
+  if (token.text === dismissedToken) return
+  if (openCompletion()) autoCompletionOpen = true
 }
 
 /**
@@ -763,6 +875,7 @@ function applyCompletion(candidate: CompletionCandidate): void {
   draft.value = draft.value.slice(0, start) + inserted + draft.value.slice(position)
   const cursor = start + inserted.length
   closeCompletion()
+  dismissedToken = ''
   void nextTick(() => {
     inputElement.value?.setSelectionRange(cursor, cursor)
     caret.value = cursor
@@ -776,6 +889,68 @@ function completionKindLabel(kind: CompletionKind): string {
   if (kind === 'path') return t('common.terminal.completionPath')
   return t('common.terminal.completionHistory')
 }
+
+/** 详情面板跟随的候选:已选中的那条,未选时取第一条(与 Enter 行为一致) */
+const activeCompletion = computed<CompletionCandidate | undefined>(() => {
+  const candidates = completionCandidates.value
+  if (candidates.length === 0) return undefined
+  return candidates[completionIndex.value >= 0 ? completionIndex.value : 0]
+})
+
+function completionIcon(kind: CompletionKind) {
+  if (kind === 'command') return Star
+  if (kind === 'subcommand') return Folder
+  if (kind === 'option') return Operation
+  if (kind === 'path') return Document
+  return Clock
+}
+
+function completionDetailText(candidate: CompletionCandidate): string {
+  if (candidate.description) return candidate.description
+  if (candidate.kind === 'history') return t('common.terminal.guiCompletionFromHistory')
+  if (candidate.kind === 'path') return t('common.terminal.guiCompletionFromDirectory')
+  return t('common.terminal.completionKindLabel', {
+    kind: completionKindLabel(candidate.kind),
+  })
+}
+
+/**
+ * 完成注意力(Warp 行为):命令结束(或命令内主动上报通知)时,若用户焦点不在
+ * 输入行,弹 toast 把结果带回来;正在终端里敲命令时保持安静。
+ */
+const notifiedBlockIds = new Set<number>()
+watch(
+  () => props.blocks,
+  blocks => {
+    const focused = document.activeElement === inputElement.value
+    for (const block of blocks) {
+      if (notifiedBlockIds.has(block.id)) continue
+      const finished = block.finishedAt !== undefined
+      if (!block.notification && !finished) continue
+      notifiedBlockIds.add(block.id)
+      if (focused) continue
+      if (block.notification) {
+        const title = block.notification.title || block.command || t('common.terminal.guiNotificationTitle')
+        ElMessage({
+          message: `${title}: ${block.notification.body}`,
+          type: 'info',
+          duration: 4000,
+          showClose: true,
+        })
+        continue
+      }
+      if (block.exitCode !== undefined && block.exitCode !== 0) {
+        ElMessage.error(
+          t('common.terminal.guiCommandFailedToast', {
+            command: block.command || t('common.terminal.guiUnknownCommand'),
+            code: block.exitCode,
+          }),
+        )
+      }
+    }
+  },
+  { flush: 'post' },
+)
 
 /** 选中一条历史:回填输入行但不直接执行,让用户确认后再回车 */
 function pickHistory(command: string): void {
@@ -824,29 +999,39 @@ function handleInputKeydown(event: KeyboardEvent): void {
     return
   }
 
-  // Warp 风格灰字提示:光标在行尾时按 → 接受整条建议。
+  // → 优先接受补全弹层的选中候选(未选时取第一条),其次接受灰字建议(Warp 行为)
   if (
     event.key === 'ArrowRight' &&
     !event.ctrlKey &&
     !event.altKey &&
     !event.metaKey &&
-    caretPosition() === draft.value.length &&
-    suggestedLine.value
+    caretPosition() === draft.value.length
   ) {
-    event.preventDefault()
-    draft.value = suggestedLine.value
-    const cursor = draft.value.length
-    void nextTick(() => {
-      inputElement.value?.setSelectionRange(cursor, cursor)
-      caret.value = cursor
-    })
-    return
+    if (completionOpen.value && completionCandidates.value.length > 0) {
+      event.preventDefault()
+      applyCompletion(
+        completionCandidates.value[completionIndex.value >= 0 ? completionIndex.value : 0],
+      )
+      return
+    }
+    if (suggestedLine.value) {
+      event.preventDefault()
+      draft.value = suggestedLine.value
+      const cursor = draft.value.length
+      void nextTick(() => {
+        inputElement.value?.setSelectionRange(cursor, cursor)
+        caret.value = cursor
+      })
+      return
+    }
   }
 
   // 初始不预选候选，避免 Enter 误补全；方向键或再次 Tab 才选择。
   if (completionOpen.value) {
     if (event.key === 'Escape') {
       event.preventDefault()
+      // Esc 关掉自动弹层后,当前 token 内不再自动重开(换词恢复)
+      dismissedToken = completionToken(draft.value, caretPosition()).text
       closeCompletion()
       return
     }
@@ -1073,6 +1258,56 @@ function stepBlock(direction: 1 | -1): void {
     return
   }
   scrollBlockIntoView(Math.min(count - 1, Math.max(0, navIndex.value + direction)))
+}
+
+// ---- 命令块预览导航条：条目映射 + 主视图滚动位置跟踪「当前块」 ----
+const railEntries = computed(() =>
+  props.blocks.map((block, index) => ({
+    id: block.id,
+    index,
+    command: block.command ?? '',
+    status: blockStatus(block),
+    title: railEntryTitle(block),
+  })),
+)
+
+function railEntryTitle(block: TerminalCommandBlock): string {
+  const parts = [block.command ?? t('common.terminal.guiUnknownCommand')]
+  if (block.cwd) parts.push(block.cwd)
+  parts.push(formatTime(block.startedAt))
+  if (block.exitCode !== undefined) {
+    parts.push(t('common.terminal.guiExitCode', { code: block.exitCode }))
+  }
+  return parts.join(' · ')
+}
+
+/** 主视图滚动位置锚线（视口顶部 25%）命中的块，预览条据此高亮「当前块」 */
+const activeRailBlockId = ref<number | undefined>(undefined)
+
+function updateActiveRailBlock(): void {
+  const element = scrollElement.value
+  if (!element || props.blocks.length === 0) {
+    activeRailBlockId.value = undefined
+    return
+  }
+  const containerTop = element.getBoundingClientRect().top
+  const anchor = containerTop + element.clientHeight * 0.25
+  const tops: number[] = []
+  const articles = Array.from(element.querySelectorAll<HTMLElement>('[data-block-id]'))
+  for (const article of articles) {
+    tops.push(article.getBoundingClientRect().top)
+  }
+  const index = railAnchorIndex(tops, anchor)
+  activeRailBlockId.value = index >= 0 ? props.blocks[index]?.id : undefined
+}
+
+let railRaf = 0
+function scheduleRailUpdate(): void {
+  if (railRaf) return
+  railRaf = requestAnimationFrame(() => {
+    railRaf = 0
+    updateActiveRailBlock()
+  })
 }
 
 /** 跳到最近一个失败的块;没有失败块就保持不动 */
@@ -1314,6 +1549,7 @@ function handleScroll(): void {
   if (!element) return
   stickToBottom = element.scrollHeight - element.scrollTop - element.clientHeight < 40
   showScrollToBottom.value = !stickToBottom
+  scheduleRailUpdate()
   // 菜单锚定在视口,块区一滚就错位,直接收掉
   if (blockMenu.visible) closeBlockMenu()
 }
@@ -1428,10 +1664,13 @@ function handleBlockMenuPageKeydown(event: KeyboardEvent): void {
 onMounted(() => {
   window.addEventListener('mousedown', handleBlockMenuPageClick, { capture: true })
   window.addEventListener('keydown', handleBlockMenuPageKeydown, { capture: true })
+  scheduleRailUpdate()
 })
 onUnmounted(() => {
   window.removeEventListener('mousedown', handleBlockMenuPageClick, { capture: true })
   window.removeEventListener('keydown', handleBlockMenuPageKeydown, { capture: true })
+  if (railRaf) cancelAnimationFrame(railRaf)
+  railRaf = 0
 })
 
 watch(
@@ -1440,6 +1679,7 @@ watch(
     await nextTick()
     const element = scrollElement.value
     if (element && stickToBottom) element.scrollTop = element.scrollHeight
+    scheduleRailUpdate()
   },
 )
 
@@ -1460,6 +1700,15 @@ watch(scrollElement, (element, previous) => {
   flex-direction: column;
   background: var(--terminal-bg);
   text-align: left;
+}
+.terminal-gui-view__body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+/* 预览导航条占右側 136px 时,回底按钮左移让位 */
+.terminal-gui-view.has-rail .scroll-to-bottom {
+  right: 152px;
 }
 /* 回底按钮:块区滚动离开底部后浮现于右下角 */
 .scroll-to-bottom {
@@ -1572,20 +1821,86 @@ watch(scrollElement, (element, previous) => {
   background: color-mix(in srgb, var(--terminal-fg) 4%, var(--terminal-bg));
 }
 .command-block__status {
-  width: 8px;
-  height: 8px;
+  display: inline-flex;
+  width: 16px;
+  height: 16px;
   flex: none;
-  border-radius: 50%;
-  background: color-mix(in srgb, var(--terminal-fg) 40%, transparent);
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
 }
 .command-block.success .command-block__status {
-  background: var(--el-color-success);
+  color: var(--el-color-success);
 }
 .command-block.error .command-block__status {
-  background: var(--el-color-danger);
+  color: var(--el-color-danger);
 }
 .command-block.running .command-block__status {
-  background: var(--el-color-warning);
+  color: var(--el-color-warning);
+}
+.command-block__status .is-spinning {
+  animation: terminal-spin 1s linear infinite;
+}
+@keyframes terminal-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+/* OSC 9;4 进度条:贴在块头下方,细条 + 右侧百分比 */
+.command-block__progress {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 4px;
+  margin: 2px 8px 4px 24px;
+}
+.command-block__progress-bar {
+  flex: 1;
+  height: 100%;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--el-color-primary) 65%, transparent);
+  transition: width 200ms ease;
+  overflow: hidden;
+}
+.command-block__progress-bar.is-indeterminate {
+  position: relative;
+  background: color-mix(in srgb, var(--terminal-fg) 12%, transparent);
+}
+.command-block__progress-bar.is-indeterminate::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -30%;
+  width: 30%;
+  border-radius: 2px;
+  background: var(--el-color-primary);
+  animation: terminal-progress-slide 1.2s ease-in-out infinite;
+}
+.command-block__progress-bar.is-error {
+  background: color-mix(in srgb, var(--el-color-danger) 70%, transparent);
+}
+@keyframes terminal-progress-slide {
+  0% {
+    left: -30%;
+  }
+  100% {
+    left: 100%;
+  }
+}
+.command-block__progress-text {
+  position: absolute;
+  right: 0;
+  bottom: 6px;
+  color: color-mix(in srgb, var(--terminal-fg) 45%, transparent);
+  font-size: 10px;
+}
+.command-block__notify {
+  display: inline-flex;
+  align-items: center;
+  color: color-mix(in srgb, var(--el-color-warning) 80%, transparent);
+  font-size: 12px;
 }
 .command-block__command {
   flex: 1;
@@ -1784,24 +2099,28 @@ watch(scrollElement, (element, previous) => {
 .gui-input-row:focus-within {
   background: color-mix(in srgb, var(--terminal-fg) 7%, var(--terminal-bg));
 }
-/* 补全弹层:与历史搜索同款浮层,但底部对齐输入行左侧,不抢整行宽度 */
+/* 补全弹层:底部对齐输入行左侧;左列候选 + 右列详情面板(Warp 形态) */
 .completion {
   position: absolute;
   bottom: 100%;
   left: 12px;
   z-index: 11;
   display: flex;
-  flex-direction: column;
-  max-height: 260px;
-  min-width: 220px;
-  max-width: 60%;
+  max-height: 300px;
+  min-width: 300px;
+  max-width: 72%;
   margin-bottom: 6px;
-  padding: 4px;
-  overflow-y: auto;
   border: 1px solid color-mix(in srgb, var(--terminal-fg) 16%, transparent);
   border-radius: 8px;
   background: var(--terminal-bg);
   box-shadow: 0 6px 18px rgb(0 0 0 / 35%);
+}
+.completion__list {
+  flex: 1;
+  min-width: 180px;
+  max-height: 260px;
+  padding: 4px;
+  overflow-y: auto;
 }
 .completion__empty {
   padding: 8px 10px;
@@ -1812,7 +2131,8 @@ watch(scrollElement, (element, previous) => {
   display: flex;
   flex: none;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
+  width: 100%;
   padding: 4px 8px;
   border: none;
   border-radius: 6px;
@@ -1826,6 +2146,14 @@ watch(scrollElement, (element, previous) => {
 .completion__item.is-active {
   background: color-mix(in srgb, var(--el-color-primary) 22%, var(--terminal-bg));
 }
+.completion__icon {
+  flex: none;
+  color: color-mix(in srgb, var(--terminal-fg) 50%, transparent);
+  font-size: 12px;
+}
+.completion__item.is-active .completion__icon {
+  color: var(--el-color-primary);
+}
 .completion__text {
   flex: 1;
   min-width: 0;
@@ -1837,6 +2165,46 @@ watch(scrollElement, (element, previous) => {
   flex: none;
   color: color-mix(in srgb, var(--terminal-fg) 42%, transparent);
   font-size: 10px;
+}
+/* 详情面板:仅当存在候选时渲染,占右侧固定宽度 */
+.completion__detail {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 180px;
+  flex: none;
+  padding: 10px;
+  border-left: 1px solid color-mix(in srgb, var(--terminal-fg) 12%, transparent);
+  background: color-mix(in srgb, var(--terminal-fg) 4%, var(--terminal-bg));
+  border-radius: 0 8px 8px 0;
+  overflow: hidden;
+}
+.completion__detail-title {
+  overflow: hidden;
+  color: var(--terminal-fg);
+  font-family: 'Cascadia Mono', Consolas, 'Noto Sans Mono', monospace;
+  font-size: 12px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.completion__detail-body {
+  color: color-mix(in srgb, var(--terminal-fg) 72%, transparent);
+  font-size: 11px;
+  line-height: 1.5;
+  word-break: break-word;
+}
+.completion__detail-kind {
+  margin-top: auto;
+  color: color-mix(in srgb, var(--terminal-fg) 42%, transparent);
+  font-size: 10px;
+}
+.completion__hint {
+  position: absolute;
+  right: 8px;
+  bottom: 3px;
+  color: color-mix(in srgb, var(--terminal-fg) 35%, transparent);
+  font-size: 10px;
+  pointer-events: none;
 }
 .gui-input-row__nav {
   display: flex;
@@ -1875,24 +2243,36 @@ watch(scrollElement, (element, previous) => {
   white-space: nowrap;
   user-select: text;
 }
+/* 输入编辑器:着色层与 textarea 叠在同一网格单元,靠完全一致的字体/行高/换行
+   规则逐字对齐;textarea 文字透明只留光标与选区,颜色由着色层负责 */
 .gui-input-editor {
   position: relative;
+  display: grid;
   flex: 1;
   min-width: 0;
 }
-.gui-input,
-.gui-autosuggestion {
+.gui-input-highlight,
+.gui-input {
+  grid-area: 1 / 1;
   display: block;
   width: 100%;
   min-width: 0;
+  margin: 0;
   padding: 0;
   border: none;
   outline: none;
-  color: var(--terminal-fg);
-  background: transparent;
   font-family: 'Cascadia Mono', Consolas, 'Noto Sans Mono', monospace;
   font-size: 12px;
   line-height: 20px;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  word-break: normal;
+  tab-size: 4;
+}
+.gui-input-highlight {
+  pointer-events: none;
+  color: var(--terminal-fg);
+  overflow: hidden;
 }
 .gui-input {
   position: relative;
@@ -1901,17 +2281,43 @@ watch(scrollElement, (element, previous) => {
   overflow-y: hidden;
   /* 覆盖 textarea 的默认可拖拽调整尺寸;换行行为保持浏览器默认的软换行 */
   resize: none;
+  color: transparent;
+  caret-color: var(--terminal-fg);
+  background: transparent;
 }
-.gui-autosuggestion {
-  position: absolute;
-  z-index: 0;
-  inset: 0;
-  overflow: hidden;
-  color: color-mix(in srgb, var(--terminal-fg) 34%, transparent);
-  white-space: nowrap;
-  pointer-events: none;
+.gui-input::selection {
+  background: color-mix(in srgb, var(--el-color-primary) 35%, transparent);
 }
 .gui-input::placeholder {
   color: color-mix(in srgb, var(--terminal-fg) 38%, transparent);
+  /* 占位符在透明文字的 textarea 上仍要可见:着色层不渲染占位文本 */
+  -webkit-text-fill-color: color-mix(in srgb, var(--terminal-fg) 38%, transparent);
+}
+/* shell 语法着色(输入行与块头共用) */
+.syn-command {
+  color: var(--el-color-success);
+  font-weight: 600;
+}
+.syn-option {
+  color: var(--el-color-primary);
+}
+.syn-string {
+  color: var(--el-color-warning);
+}
+.syn-variable {
+  color: color-mix(in srgb, var(--el-color-primary) 45%, var(--el-color-danger));
+}
+.syn-operator {
+  color: color-mix(in srgb, var(--terminal-fg) 55%, transparent);
+}
+.syn-comment {
+  color: color-mix(in srgb, var(--terminal-fg) 42%, transparent);
+  font-style: italic;
+}
+.syn-glob {
+  color: var(--el-color-warning);
+}
+.syn-suggestion {
+  color: color-mix(in srgb, var(--terminal-fg) 34%, transparent);
 }
 </style>
