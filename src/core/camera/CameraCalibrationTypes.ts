@@ -111,6 +111,8 @@ export interface CameraCalibrationRecovery {
   detail: string
   /** true = strace/TracerPid 核查待「停止观测」时执行（观测仍在运行） */
   pendingChecks: boolean
+  /** 标定开关已恢复 0；undefined = 本次标定未开启过开关（或固件不支持） */
+  calibSwitchRestored?: boolean
 }
 
 export interface CameraCalibrationSnapshot extends CameraCalibrationProgress {
@@ -134,7 +136,8 @@ export function isCalibrationRunning(phase: CameraCalibrationPhase): boolean {
 }
 
 /** 规格默认值：参数模板 0.55,62.292,-22；默认单目标（人员右侧 1.2 m），允许偏差 -2~+2 cm。
- *  双目标（1.2 m + 2.0 m）可在下拉框选择启用：需两人均处于固件串口上报窗口内（非跟随目标 ≤1.5 m） */
+ *  双目标（1.2 m + 2.0 m）可在下拉框选择启用：标定启动时自动开启标定开关（set_calibParam=1），
+ *  固件全量上报后 >1.5 m 的非跟随目标也可测量；结束时自动归 0 */
 export const DEFAULT_CALIBRATION_CONFIG: Readonly<CameraCalibrationConfig> = Object.freeze({
   height: 0.55,
   fov: 62.292,

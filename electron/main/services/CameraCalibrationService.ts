@@ -17,6 +17,8 @@ export interface CameraCalibrationHost {
   startMeasurement(access: CameraMeasurementAccess): Promise<void>
   /** 拆除测量通道并核实现场（无 strace 残留、TracerPid 归零） */
   stopMeasurement(): Promise<CameraMeasurementTeardown>
+  /** 标定开关 set_calibParam：1 = 串口全量上报，0 = 跟随 + ≤1.5 m 过滤（重启归 0）；固件不支持时缺省 */
+  writeCalibSwitch?(enabled: boolean): Promise<void>
 }
 
 export class CameraCalibrationService {
@@ -30,6 +32,7 @@ export class CameraCalibrationService {
   private manualWrites = 0
   private finalizing = false
   private finalized = false
+  private calibSwitchOn = false
   private publish: (state: CameraCalibrationSnapshot) => void = () => undefined
 
   public constructor(private readonly host: CameraCalibrationHost) {}
@@ -57,6 +60,7 @@ export class CameraCalibrationService {
     this.engine = undefined
     this.finalized = false
     this.finalizing = false
+    this.calibSwitchOn = false
     this.parser.reset()
     this.rawBuffer = ''
     this.lastFrameAt = -Infinity
@@ -91,45 +95,73 @@ export class CameraCalibrationService {
     if (!this.state.observing || this.host.now() - this.lastFrameAt > 1500) throw new Error('请先取得实时 INSSEG 数据')
     if (!this.host.tcpTarget()) throw new Error('相机控制连接已断开，请检查工具栏数据接入的 TCP 连接')
 
-    const last = this.state.lastFrame
-    if (!last || last.targets.length !== config.targets.length ||
-      last.targets.some((t) => t.classId !== config.personClassId)) {
-      const reported = last
-        ? `${last.targets.length} 个目标（${last.targets
-            .map((t) => `${t.distance.toFixed(2)}m`)
-            .join('、')}）`
-        : '尚无有效帧'
-      throw new Error(
-        `串口当前上报 ${reported}，与配置的 ${config.targets.length} 个人形不符。` +
-        `注意：固件仅上报 1.5 m 内的非跟随目标，RTSP 画面中更远的目标不会出现在串口流里`,
-      )
-    }
-    // 先构造引擎校验配置合法性，再进行任何写入
-    const engine = new CameraCalibration(config, this.host.now())
-    this.state.config = { ...config }
-
-    // 表单即真值：启动时把表单参数整组下发作为搜索基线（不回读核对），
-    // 随后等待 settle 时长，让设备应用参数并重建 INSSEG 流，再开始采样
-    const baseline = `${config.height},${config.fov},${config.initialOffset}`
-    this.ensureControlLink()
-    this.writing = true
-    this.state.originalParams = baseline
-    this.state.lastSentParams = baseline
-    this.emit()
-    try {
-      await this.writeWithTimeout(baseline)
-      await new Promise((resolve) => setTimeout(resolve, Math.max(500, config.settleMs)))
-    } catch (error) {
-      throw new Error(`基线参数下发失败，未启动标定：${errorMessage(error)}`)
-    } finally {
-      this.writing = false
+    // 标定开关（2026-10 固件新增）：默认 0 时固件仅上报跟随目标 + ≤1.5 m 非跟随目标，
+    // 开启后全量上报，>1.5 m 的双目标标定才可行。开启失败则拒绝启动，不动任何参数。
+    if (this.host.writeCalibSwitch) {
+      this.writing = true
       this.emit()
+      try {
+        await this.sendCalibSwitch(true)
+        this.calibSwitchOn = true
+      } catch (error) {
+        throw new Error(`标定开关开启失败，未启动标定：${errorMessage(error)}`)
+      } finally {
+        this.writing = false
+        this.emit()
+      }
     }
 
-    this.engine = engine
-    this.parser.reset()
-    this.finalized = false
-    this.finalizing = false
+    try {
+      // 等待开关生效后的新一帧再做人数核对（INSSEG 约 47 Hz，正常几十毫秒内到达）
+      if (this.calibSwitchOn) await this.waitForFreshFrame(2000)
+
+      const last = this.state.lastFrame
+      if (!last || last.targets.length !== config.targets.length ||
+        last.targets.some((t) => t.classId !== config.personClassId)) {
+        const reported = last
+          ? `${last.targets.length} 个目标（${last.targets
+              .map((t) => `${t.distance.toFixed(2)}m`)
+              .join('、')}）`
+          : '尚无有效帧'
+        throw new Error(
+          this.calibSwitchOn
+            ? `串口当前上报 ${reported}，与配置的 ${config.targets.length} 个人形不符。` +
+              `标定开关已开启（固件应全量上报），请核对现场人数与目标对应关系`
+            : `串口当前上报 ${reported}，与配置的 ${config.targets.length} 个人形不符。` +
+              `注意：固件仅上报 1.5 m 内的非跟随目标，RTSP 画面中更远的目标不会出现在串口流里`,
+        )
+      }
+      // 先构造引擎校验配置合法性，再进行任何写入
+      const engine = new CameraCalibration(config, this.host.now())
+      this.state.config = { ...config }
+
+      // 表单即真值：启动时把表单参数整组下发作为搜索基线（不回读核对），
+      // 随后等待 settle 时长，让设备应用参数并重建 INSSEG 流，再开始采样
+      const baseline = `${config.height},${config.fov},${config.initialOffset}`
+      this.ensureControlLink()
+      this.writing = true
+      this.state.originalParams = baseline
+      this.state.lastSentParams = baseline
+      this.emit()
+      try {
+        await this.writeWithTimeout(baseline)
+        await new Promise((resolve) => setTimeout(resolve, Math.max(500, config.settleMs)))
+      } catch (error) {
+        throw new Error(`基线参数下发失败，未启动标定：${errorMessage(error)}`)
+      } finally {
+        this.writing = false
+        this.emit()
+      }
+
+      this.engine = engine
+      this.parser.reset()
+      this.finalized = false
+      this.finalizing = false
+    } catch (error) {
+      // 启动中途失败：开关已开则尽力恢复 0（观测不受影响，设备重启后也默认 0）
+      if (this.calibSwitchOn) await this.resetSwitchQuietly()
+      throw error
+    }
     return this.emit()
   }
 
@@ -299,6 +331,18 @@ export class CameraCalibrationService {
       recovery.detail = '标定成功，标定参数已保持'
     }
 
+    // 标定开关归 0：成功/失败/停止都恢复；失败时提示设备重启后也会自动归 0
+    if (this.calibSwitchOn && this.host.writeCalibSwitch) {
+      try {
+        await this.sendCalibSwitch(false)
+        this.calibSwitchOn = false
+        recovery.calibSwitchRestored = true
+      } catch {
+        recovery.calibSwitchRestored = false
+        recovery.detail = `${recovery.detail}；标定开关恢复失败（设备重启后自动归 0）`
+      }
+    }
+
     this.state.recovery = recovery
     this.finalized = true
     this.finalizing = false
@@ -347,6 +391,41 @@ export class CameraCalibrationService {
         }),
       ])
     } finally { if (timer) clearTimeout(timer) }
+  }
+
+  /** 标定开关写入（set_calibParam 1/0），与参数写入同样的 5 秒超时兜底 */
+  private async sendCalibSwitch(enabled: boolean): Promise<void> {
+    const write = this.host.writeCalibSwitch
+    if (!write) return
+    let timer: ReturnType<typeof setTimeout> | undefined
+    try {
+      await Promise.race([
+        write.call(this.host, enabled),
+        new Promise<never>((_resolve, reject) => {
+          timer = setTimeout(() => reject(new Error('标定开关命令等待超过 5 秒')), 5000)
+        }),
+      ])
+    } finally { if (timer) clearTimeout(timer) }
+  }
+
+  /** 等待开关生效后的新一帧 INSSEG（47 Hz 流，正常几十毫秒内到达） */
+  private async waitForFreshFrame(timeoutMs: number): Promise<void> {
+    const startedAt = this.host.now()
+    const baseline = this.lastFrameAt
+    while (this.host.now() - startedAt < timeoutMs) {
+      if (this.lastFrameAt > baseline) return
+      await new Promise((resolve) => setTimeout(resolve, 50))
+    }
+    throw new Error('开启标定开关后未取得新的 INSSEG 数据，请检查测量通道')
+  }
+
+  /** 尽力恢复标定开关为 0（启动中途失败的路径；失败不阻塞，设备重启后默认 0） */
+  private async resetSwitchQuietly(): Promise<void> {
+    if (!this.host.writeCalibSwitch) return
+    try {
+      await this.sendCalibSwitch(false)
+      this.calibSwitchOn = false
+    } catch { /* 设备重启后默认 0，此处失败不阻塞 */ }
   }
 
   private ensureControlLink(): void {

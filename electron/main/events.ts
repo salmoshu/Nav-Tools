@@ -36,6 +36,14 @@ const cameraCalibrationService = new CameraCalibrationService({
   writeParams: async (content) => {
     await cameraCommandService.send({ subCommand: 'set_params', content, contentFormat: 'text' })
   },
+  // 标定开关（2026-10 固件新增）：1 = 串口全量上报跟踪目标，0 = 跟随目标 + ≤1.5 m 非跟随目标；设备重启后默认 0
+  writeCalibSwitch: async (enabled) => {
+    await cameraCommandService.send({
+      subCommand: 'set_calibParam',
+      content: enabled ? '1' : '0',
+      contentFormat: 'text',
+    })
+  },
   startMeasurement: async (access) => {
     await measurementChannel.start(access, {
       onText: (text) => cameraCalibrationService.receive(text),

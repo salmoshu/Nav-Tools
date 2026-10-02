@@ -1190,6 +1190,19 @@ const recoveryItems = computed(() => {
         : t('common.camera.calibration.recoveryKept'),
       detail: recovery.detail,
     },
+    // 标定开关项仅在本次标定开启过开关时出现
+    ...(recovery.calibSwitchRestored === undefined
+      ? []
+      : [
+          {
+            ok: recovery.calibSwitchRestored,
+            pending: false,
+            label: t('common.camera.calibration.recoveryCalibSwitch'),
+            detail: recovery.calibSwitchRestored
+              ? ''
+              : t('common.camera.calibration.calibSwitchRebootHint'),
+          },
+        ]),
   ]
 })
 

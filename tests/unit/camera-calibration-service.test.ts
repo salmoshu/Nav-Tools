@@ -12,7 +12,9 @@ class FakeHost implements Partial<CameraCalibrationHost> {
   public startCalls = 0
   public stopCalls = 0
   public writes: string[] = []
+  public calibWrites: boolean[] = []
   public failWrites = false
+  public failCalibSwitch = false
   public device = { version: 'test', height: 0.55, fov: 1.087, thetaOffset: -21.5, raw: 'test' }
   private ticks = 0
 
@@ -35,6 +37,12 @@ class FakeHost implements Partial<CameraCalibrationHost> {
       fov: (fovDeg * Math.PI) / 180,
       raw: `test, ${height},${(fovDeg * Math.PI) / 180},${offset}`,
     }
+  }
+
+  /** 模拟设备：set_calibParam 开关写入 */
+  public async writeCalibSwitch(enabled: boolean): Promise<void> {
+    if (this.failCalibSwitch) throw new Error('模拟开关写入失败')
+    this.calibWrites.push(enabled)
   }
 
   public async readbackParams() {
@@ -100,7 +108,7 @@ describe('CameraCalibrationService 观测生命周期', () => {
   })
 })
 
-// ---- 启动基线直发（表单即真值，不回读） ----
+// ---- 启动基线直发（表单即真值，不回读） + 标定开关 ----
 function sentence(payload: string): string {
   let checksum = 0
   for (const char of payload) checksum ^= char.charCodeAt(0)
@@ -134,10 +142,21 @@ describe('CameraCalibrationService 启动基线直发', () => {
     return service
   }
 
+  /** 启动期间补一帧：开关开启后服务会等待新鲜帧再做人数核对 */
+  async function startWithFreshFrame(
+    service: CameraCalibrationService,
+    config: CameraCalibrationConfig = calConfig(),
+  ): Promise<ReturnType<typeof service.start>> {
+    const promise = service.start(1, config)
+    await flushMicrotasks()
+    service.receive(TWO_PEOPLE)
+    return promise
+  }
+
   it('启动时把表单参数整组下发作为搜索基线', async () => {
     const host = new FakeHost()
     const service = await readyToStart(host)
-    const state = await service.start(1, calConfig())
+    const state = await startWithFreshFrame(service)
     expect(state.phase).toBe('sampling')
     expect(host.writes).toEqual(['0.55,62.292,-21.5'])
     expect(host.device.thetaOffset).toBe(-21.5)
@@ -149,7 +168,7 @@ describe('CameraCalibrationService 启动基线直发', () => {
     const host = new FakeHost()
     host.failWrites = true
     const service = await readyToStart(host)
-    await expect(service.start(1, calConfig())).rejects.toThrow(/基线参数下发失败/)
+    await expect(startWithFreshFrame(service)).rejects.toThrow(/基线参数下发失败/)
     expect(service.snapshot().phase).toBe('observing')
     expect(host.writes).toEqual([])
   })
@@ -158,7 +177,69 @@ describe('CameraCalibrationService 启动基线直发', () => {
     const host = new FakeHost()
     const service = await readyToStart(host)
     const started = Date.now()
-    await service.start(1, calConfig())
+    await startWithFreshFrame(service)
     expect(Date.now() - started).toBeGreaterThanOrEqual(450)
+  })
+})
+
+describe('CameraCalibrationService 标定开关', () => {
+  async function readyToStart(host: FakeHost): Promise<CameraCalibrationService> {
+    const service = new CameraCalibrationService(host as unknown as CameraCalibrationHost)
+    await service.observe(1, ACCESS)
+    service.receive(TWO_PEOPLE)
+    return service
+  }
+
+  it('启动先开启标定开关、等待新鲜帧后才下发基线参数', async () => {
+    const host = new FakeHost()
+    const service = await readyToStart(host)
+    const promise = service.start(1, calConfig())
+    await flushMicrotasks()
+    // 开关已开、基线未发：人数核对与参数写入都在等待新鲜帧之后
+    expect(host.calibWrites).toEqual([true])
+    expect(host.writes).toEqual([])
+    service.receive(TWO_PEOPLE)
+    const state = await promise
+    expect(state.phase).toBe('sampling')
+    expect(host.writes).toEqual(['0.55,62.292,-21.5'])
+  })
+
+  it('开关开启失败时拒绝启动且不写任何参数', async () => {
+    const host = new FakeHost()
+    host.failCalibSwitch = true
+    const service = await readyToStart(host)
+    await expect(service.start(1, calConfig())).rejects.toThrow(/标定开关开启失败/)
+    expect(host.writes).toEqual([])
+    expect(service.snapshot().phase).toBe('observing')
+  })
+
+  it('目标数不符时拒绝启动并自动恢复开关为 0', async () => {
+    const host = new FakeHost()
+    const service = await readyToStart(host)
+    const promise = service.start(
+      1,
+      calConfig({ targets: [{ distance: 1.2, biasMinCm: 2, biasMaxCm: 6 }] }),
+    )
+    await flushMicrotasks()
+    service.receive(TWO_PEOPLE) // 上报 2 个目标，配置 1 个 → 不符
+    await expect(promise).rejects.toThrow(/与配置的 1 个人形不符/)
+    expect(host.calibWrites).toEqual([true, false])
+    expect(service.snapshot().phase).toBe('observing')
+  })
+
+  it('停止标定后现场恢复包含开关归 0', async () => {
+    const host = new FakeHost()
+    const service = await readyToStart(host)
+    const promise = service.start(1, calConfig())
+    await flushMicrotasks()
+    service.receive(TWO_PEOPLE)
+    await promise
+
+    service.stop()
+    // finalize 异步执行：参数恢复 + 开关归 0
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(host.calibWrites).toEqual([true, false])
+    expect(host.writes).toEqual(['0.55,62.292,-21.5', '0.55,62.292,-21.5'])
+    expect(service.snapshot().recovery?.calibSwitchRestored).toBe(true)
   })
 })

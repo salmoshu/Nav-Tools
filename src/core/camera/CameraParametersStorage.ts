@@ -11,6 +11,8 @@ export const CAMERA_SUB_COMMANDS = [
   'read_imu',
   'read_range',
   'set_range',
+  'set_calibParam',
+  'read_calibParam',
 ] as const
 
 export type CameraSubCommand = (typeof CAMERA_SUB_COMMANDS)[number] | ''
