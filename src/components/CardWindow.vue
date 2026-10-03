@@ -18,6 +18,7 @@ import { markRaw, onMounted, onUnmounted, ref } from 'vue'
 import type { Component } from 'vue'
 import { routeDataToWindow } from '@/hooks/useDevice'
 import { getWindowById } from '@/settings/config'
+import { buildComponentIconDataUrl } from '@/core/panels/componentIcon'
 import { t } from '@/i18n'
 
 // 构建后动态 import 的路径会被打包成哈希文件名，
@@ -69,6 +70,15 @@ onMounted(async () => {
     if (cardWindowId.value) {
       const definition = getWindowById(cardWindowId.value)
       if (definition) document.title = t(definition.title)
+      // 组件独立窗口的任务栏/Alt+Tab 图标换成「主图标+组件角标」，
+      // 主进程同时缓存 PNG 供下次开窗口（含快捷方式冷启动）直接使用
+      void buildComponentIconDataUrl(cardWindowId.value)
+        .then((dataUrl) =>
+          window.ipcRenderer?.invoke('set-component-window-icon', { dataUrl }),
+        )
+        .catch(() => {
+          /* 图标合成失败时使用默认应用图标 */
+        })
     }
   } catch (error) {
     console.error('Error loading card component:', error)

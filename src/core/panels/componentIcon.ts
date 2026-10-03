@@ -120,13 +120,14 @@ export async function buildComponentIconDataUrl(windowId: string): Promise<strin
   }
 
   if (svg) {
-    const badgeRadius = 82
-    const center = size - badgeRadius - 10
+    // 角标为主图标的一半直径,贴右下角,主图标辨识度优先
+    const badgeRadius = 41
+    const center = size - badgeRadius - 6
     // 角标圆:白底 + 组色描边 + 轻微投影,在深浅壁纸上都可辨
     context.save()
     context.shadowColor = 'rgba(0, 0, 0, 0.35)'
-    context.shadowBlur = 8
-    context.shadowOffsetY = 2
+    context.shadowBlur = 4
+    context.shadowOffsetY = 1
     context.beginPath()
     context.arc(center, center, badgeRadius, 0, Math.PI * 2)
     context.fillStyle = '#ffffff'
@@ -134,7 +135,7 @@ export async function buildComponentIconDataUrl(windowId: string): Promise<strin
     context.restore()
     context.beginPath()
     context.arc(center, center, badgeRadius, 0, Math.PI * 2)
-    context.lineWidth = 10
+    context.lineWidth = 5
     context.strokeStyle = color
     context.stroke()
     try {
@@ -142,16 +143,16 @@ export async function buildComponentIconDataUrl(windowId: string): Promise<strin
         `data:image/svg+xml;charset=utf-8,${encodeURIComponent(recolorSvg(svg, color))}`,
       )
       // svg 自带 16/24px 尺寸,统一按目标框缩放绘制
-      const iconSize = 96
+      const iconSize = 48
       context.drawImage(icon, center - iconSize / 2, center - iconSize / 2, iconSize, iconSize)
     } catch {
       // 组件图标绘制失败时退化为角标内绘制组件名首字符,快捷方式仍可辨识
       const label = (definition?.componentName ?? 'N').slice(0, 1).toUpperCase()
       context.fillStyle = color
-      context.font = 'bold 64px sans-serif'
+      context.font = 'bold 32px sans-serif'
       context.textAlign = 'center'
       context.textBaseline = 'middle'
-      context.fillText(label, center, center + 4)
+      context.fillText(label, center, center + 2)
     }
   }
 
