@@ -84,12 +84,13 @@ const OSC133_BASH_INTEGRATION = [
 ].join('; ')
 /**
  * PowerShell 提示符集成:PSReadLine 在执行前上报命令文本(C),prompt 函数在
- * 每次提示符处上报上一条命令的退出码(D)与提示符起点(A);同时注入
+ * 每次提示符处上报上一条命令的退出码(D)、提示符起点(A)与当前目录(OSC 9;9,
+ * ConPTY 不会代报 cwd,GUI 补全/文件树的目录解析都依赖这条);同时注入
  * nav-render 函数上报 OSC 1338 富内容块。
  * 经 -Command 启动参数注入,不会作为输入回显进 scrollback。
  * 注意:这会覆盖用户 $PROFILE 里的自定义 prompt。
  */
-const POWERSHELL_PROMPT_INTEGRATION =
+export const POWERSHELL_PROMPT_INTEGRATION =
   'function global:nav-render { param($f, $m) ' +
   'if (-not $f -or -not (Test-Path $f)) { Write-Host "nav-render: file not found: $f"; return } ' +
   'if (-not $m) { switch -Regex ([IO.Path]::GetExtension($f)) { ' +
@@ -103,8 +104,9 @@ const POWERSHELL_PROMPT_INTEGRATION =
   '$e = $global:LASTEXITCODE; ' +
   '$c = 0; if ($null -ne $e) { $c = $e }; ' +
   '$s = [char]27; $b = [char]7; ' +
-  '[Console]::Out.Write("$s]133;D;$c$b$s]133;A$b"); ' +
-  '"PS $((Get-Location).Path)> " }; ' +
+  '$loc = (Get-Location).Path; ' +
+  '[Console]::Out.Write("$s]133;D;$c$b$s]133;A$b$s]9;9;`"$loc`"$b"); ' +
+  '"PS $loc> " }; ' +
   'if (Get-Module PSReadLine) { Set-PSReadLineKeyHandler -Chord Enter -ScriptBlock { param($key, $arg) ' +
   '$line = ""; $cursor = 0; [Microsoft.PowerShell.PSConsoleReadLine]::GetBufferState([ref]$line, [ref]$cursor); ' +
   'if ($line.Trim()) { $encoded = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($line)); ' +
@@ -114,7 +116,7 @@ const POWERSHELL_PROMPT_INTEGRATION =
 const INPUT_ECHO_WINDOW_MS = 600
 /** Terminal redraws emitted immediately after a PTY resize are layout feedback, not user activity. */
 const RESIZE_REDRAW_WINDOW_MS = 250
-/** OSC 7: file://host/path;OSC 9;9: ConPTY 的 cwd 上报 */
+/** OSC 7: file://host/path(bash/WSL 注入 PROMPT_COMMAND 上报);OSC 9;9: PowerShell 注入 prompt 上报 */
 const OSC_CWD_PATTERN =
   // eslint-disable-next-line no-control-regex -- 终端转义序列解析必须匹配控制字符
   /\x1b\]7;file:\/\/[^/\x07\x1b]*(\/[^\x07\x1b]*?)(?:\x07|\x1b\\)|\x1b\]9;9;"?([^"\x07\x1b]+?)"?(?:\x07|\x1b\\)/g

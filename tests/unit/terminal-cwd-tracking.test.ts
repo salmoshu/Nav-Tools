@@ -1,7 +1,7 @@
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
-import { TerminalService } from '../../electron/main/services/TerminalService'
+import { POWERSHELL_PROMPT_INTEGRATION, TerminalService } from '../../electron/main/services/TerminalService'
 import { createNodeTerminalServiceHost } from '../../electron/main/services/TerminalServiceHost'
 import { sshConnectionKey, type SshConnectionProfile } from '@/core/terminal/TerminalTypes'
 
@@ -100,6 +100,13 @@ describe('TerminalService cwd tracking (OSC 7 / OSC 9;9)', () => {
     trackCwd(session, '\x1b]7;file://host/c/Users/essz/work\x07')
 
     expect(session.info.cwd).toBe('C:/Users/essz/work')
+  })
+
+  it('injected PowerShell prompt reports cwd via OSC 9;9 (GUI completion depends on it)', () => {
+    // ConPTY 不代报 cwd:cd 之后 GUI 补全/文件树的目录解析全靠注入 prompt 的这条上报,
+    // 删掉它 PowerShell 会话的目录感知会整体失效(见 tmp/pty-probe 实测记录)
+    expect(POWERSHELL_PROMPT_INTEGRATION).toContain(']9;9;')
+    expect(POWERSHELL_PROMPT_INTEGRATION).toContain('(Get-Location).Path')
   })
 })
 
