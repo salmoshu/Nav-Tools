@@ -6,98 +6,116 @@
     @keydown="handlePaneKeydown"
   >
     <header class="pane-header">
-      <div class="pane-actions" :style="{ transform: `translateY(${actionsDragOffset}px)` }">
+      <div
+        class="pane-actions"
+        :class="{ collapsed: actionsCollapsed }"
+        :style="{ transform: `translateY(${actionsDragOffset}px)` }"
+      >
+        <template v-if="!actionsCollapsed">
+          <el-tooltip
+            :content="
+              isGui
+                ? t('common.terminal.switchToTerminalView')
+                : t('common.terminal.switchToGuiView')
+            "
+            placement="bottom"
+            :show-after="400"
+          >
+            <el-button
+              text
+              class="pane-action pane-action--toggle-presentation"
+              :aria-label="t('common.terminal.togglePresentation')"
+              :aria-pressed="isGui"
+              @click="$emit('toggle-presentation', pane.id)"
+            >
+              <el-icon><component :is="isGui ? TerminalIcon : LayoutGrid" /></el-icon>
+            </el-button>
+          </el-tooltip>
+          <el-tooltip
+            v-if="pane.sessionId"
+            :content="t('common.terminal.searchPlaceholder')"
+            placement="bottom"
+            :show-after="400"
+          >
+            <el-button
+              text
+              class="pane-action"
+              :aria-label="t('common.terminal.searchPlaceholder')"
+              @click="openSearch"
+            >
+              <el-icon><Search /></el-icon>
+            </el-button>
+          </el-tooltip>
+          <el-tooltip
+            v-if="paneCount > 1"
+            :content="
+              expanded ? t('common.terminal.restorePane') : t('common.terminal.maximizePaneShortcut')
+            "
+            placement="bottom"
+            :show-after="400"
+          >
+            <el-button text class="pane-action" @click="$emit('expand', pane.id)">
+              <el-icon><component :is="expanded ? ScaleToOriginal : FullScreen" /></el-icon>
+            </el-button>
+          </el-tooltip>
+          <el-tooltip
+            :content="t('common.terminal.splitRight')"
+            placement="bottom"
+            :show-after="400"
+          >
+            <el-button
+              text
+              class="pane-action pane-action--split-right"
+              :aria-label="t('common.terminal.splitRight')"
+              @click="emitSplit('horizontal', Boolean(props.pane.sessionId))"
+            >
+              <el-icon><SquareSplitVertical /></el-icon>
+            </el-button>
+          </el-tooltip>
+          <el-tooltip
+            :content="t('common.terminal.splitDown')"
+            placement="bottom"
+            :show-after="400"
+          >
+            <el-button
+              text
+              class="pane-action pane-action--split-down"
+              :aria-label="t('common.terminal.splitDown')"
+              @click="emitSplit('vertical', Boolean(props.pane.sessionId))"
+            >
+              <el-icon><SquareSplitVertical /></el-icon>
+            </el-button>
+          </el-tooltip>
+          <el-tooltip
+            v-if="paneCount > 1"
+            :content="t('common.terminal.closePaneShortcut')"
+            placement="bottom"
+            :show-after="400"
+          >
+            <el-button
+              text
+              class="pane-action pane-action--danger"
+              :aria-label="t('common.terminal.closePaneShortcut')"
+              @click="$emit('close', pane.id)"
+            >
+              <el-icon><Close /></el-icon>
+            </el-button>
+          </el-tooltip>
+        </template>
+        <!-- 手柄常驻末尾(右缘):单击切换折叠,长按拖拽;折叠/展开两种状态下位置不动 -->
         <span
           class="pane-actions-grip"
+          :class="{ 'is-dragging': actionsDragging }"
           role="button"
-          :aria-label="t('common.terminal.movePaneActions')"
-          :title="t('common.terminal.movePaneActions')"
+          :aria-label="gripLabel"
+          :title="gripLabel"
           @pointerdown="startActionsDrag"
           @pointermove="onActionsDrag"
           @pointerup="endActionsDrag"
           @pointercancel="endActionsDrag"
         >
-          <el-icon><GripVertical /></el-icon>
+          <el-icon><component :is="actionsCollapsed ? ChevronsLeft : GripVertical" /></el-icon>
         </span>
-        <el-tooltip
-          :content="
-            isGui ? t('common.terminal.switchToTerminalView') : t('common.terminal.switchToGuiView')
-          "
-          placement="bottom"
-          :show-after="400"
-        >
-          <el-button
-            text
-            class="pane-action pane-action--toggle-presentation"
-            :aria-label="t('common.terminal.togglePresentation')"
-            :aria-pressed="isGui"
-            @click="$emit('toggle-presentation', pane.id)"
-          >
-            <el-icon><component :is="isGui ? TerminalIcon : LayoutGrid" /></el-icon>
-          </el-button>
-        </el-tooltip>
-        <el-tooltip
-          v-if="pane.sessionId"
-          :content="t('common.terminal.searchPlaceholder')"
-          placement="bottom"
-          :show-after="400"
-        >
-          <el-button
-            text
-            class="pane-action"
-            :aria-label="t('common.terminal.searchPlaceholder')"
-            @click="openSearch"
-          >
-            <el-icon><Search /></el-icon>
-          </el-button>
-        </el-tooltip>
-        <el-tooltip
-          v-if="paneCount > 1"
-          :content="
-            expanded ? t('common.terminal.restorePane') : t('common.terminal.maximizePaneShortcut')
-          "
-          placement="bottom"
-          :show-after="400"
-        >
-          <el-button text class="pane-action" @click="$emit('expand', pane.id)">
-            <el-icon><component :is="expanded ? ScaleToOriginal : FullScreen" /></el-icon>
-          </el-button>
-        </el-tooltip>
-        <el-tooltip :content="t('common.terminal.splitRight')" placement="bottom" :show-after="400">
-          <el-button
-            text
-            class="pane-action pane-action--split-right"
-            :aria-label="t('common.terminal.splitRight')"
-            @click="emitSplit('horizontal', Boolean(props.pane.sessionId))"
-          >
-            <el-icon><SquareSplitVertical /></el-icon>
-          </el-button>
-        </el-tooltip>
-        <el-tooltip :content="t('common.terminal.splitDown')" placement="bottom" :show-after="400">
-          <el-button
-            text
-            class="pane-action pane-action--split-down"
-            :aria-label="t('common.terminal.splitDown')"
-            @click="emitSplit('vertical', Boolean(props.pane.sessionId))"
-          >
-            <el-icon><SquareSplitVertical /></el-icon>
-          </el-button>
-        </el-tooltip>
-        <el-tooltip
-          v-if="paneCount > 1"
-          :content="t('common.terminal.closePaneShortcut')"
-          placement="bottom"
-          :show-after="400"
-        >
-          <el-button
-            text
-            class="pane-action pane-action--danger"
-            :aria-label="t('common.terminal.closePaneShortcut')"
-            @click="$emit('close', pane.id)"
-          >
-            <el-icon><Close /></el-icon>
-          </el-button>
-        </el-tooltip>
       </div>
     </header>
 
@@ -353,6 +371,7 @@ import {
   LayoutGrid,
   Terminal as TerminalIcon,
   GripVertical,
+  ChevronsLeft,
 } from '@lucide/vue'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
@@ -360,6 +379,15 @@ import { SearchAddon } from '@xterm/addon-search'
 import '@xterm/xterm/css/xterm.css'
 import { CommandBlockAssembler, type TerminalCommandBlock } from '@/core/terminal/CommandBlocks'
 import { shellFamilyFor, type ShellFamily } from '@/core/terminal/ShellQuote'
+import {
+  activateGripDrag,
+  beginGripPress,
+  GRIP_LONG_PRESS_MS,
+  gripDragOffset,
+  isGripClick,
+  trackGripMove,
+  type GripPress,
+} from '@/core/terminal/PaneActionsGrip'
 import { createTerminalHistoryScope } from '@/core/terminal/TerminalHistoryStorage'
 import type { TerminalPaneNode, TerminalSplitDirection } from '@/core/terminal/TerminalLayout'
 import {
@@ -827,36 +855,68 @@ function focusPane(): void {
 }
 
 /**
- * 窗格操作栏(分割/关闭等图标所在工具栏)拖动手柄:
- * 只允许沿右侧上下移动(水平始终吸附右侧),拖动范围限制在窗格内部。
+ * 窗格操作栏(分割/关闭等图标所在工具栏)手柄:
+ * 单击切换折叠(折叠后只剩手柄,图标换为展开图标);
+ * 长按(GRIP_LONG_PRESS_MS)进入拖拽——只允许沿右侧上下移动(水平始终吸附右侧),
+ * 拖动范围限制在窗格内部。单击/长按的判定逻辑见 PaneActionsGrip(纯函数)。
  */
 const actionsDragOffset = ref(0)
-let actionsDrag: { pointerId: number; startY: number; startOffset: number } | null = null
+const actionsCollapsed = ref(false)
+/** 长按已激活拖拽:给手柄「正在拖动」的视觉反馈 */
+const actionsDragging = ref(false)
+let gripPress: GripPress | null = null
+let gripTimer: ReturnType<typeof setTimeout> | null = null
+
+const gripLabel = computed(() =>
+  actionsCollapsed.value
+    ? t('common.terminal.expandPaneActions')
+    : t('common.terminal.collapsePaneActions'),
+)
 
 function startActionsDrag(event: PointerEvent): void {
   const grip = event.currentTarget as HTMLElement
-  actionsDrag = {
-    pointerId: event.pointerId,
-    startY: event.clientY,
-    startOffset: actionsDragOffset.value,
-  }
+  gripPress = beginGripPress(
+    event.pointerId,
+    event.clientX,
+    event.clientY,
+    actionsDragOffset.value,
+  )
+  gripTimer = setTimeout(() => {
+    gripTimer = null
+    if (!gripPress) return
+    activateGripDrag(gripPress, actionsDragOffset.value)
+    actionsDragging.value = true
+  }, GRIP_LONG_PRESS_MS)
   grip.setPointerCapture(event.pointerId)
   event.preventDefault()
 }
 
 function onActionsDrag(event: PointerEvent): void {
-  if (!actionsDrag || event.pointerId !== actionsDrag.pointerId) return
+  const press = gripPress
+  if (!press || event.pointerId !== press.pointerId) return
+  trackGripMove(press, event.clientY)
+  if (!press.dragging) return
   const grip = event.currentTarget as HTMLElement
   const bar = grip.parentElement
   const pane = bar?.closest('.terminal-pane')
   if (!bar || !pane) return
   const max = Math.max(0, pane.clientHeight - bar.clientHeight - 10)
-  const next = actionsDrag.startOffset + event.clientY - actionsDrag.startY
-  actionsDragOffset.value = Math.min(max, Math.max(0, next))
+  actionsDragOffset.value = gripDragOffset(press, event.clientY, max)
 }
 
 function endActionsDrag(event: PointerEvent): void {
-  if (actionsDrag && event.pointerId === actionsDrag.pointerId) actionsDrag = null
+  const press = gripPress
+  if (!press || event.pointerId !== press.pointerId) return
+  if (gripTimer) {
+    clearTimeout(gripTimer)
+    gripTimer = null
+  }
+  gripPress = null
+  actionsDragging.value = false
+  // 未达长按就抬起且位移在阈值内:单击,切换折叠
+  if (event.type === 'pointerup' && isGripClick(press, event.clientX, event.clientY)) {
+    actionsCollapsed.value = !actionsCollapsed.value
+  }
 }
 
 /**
@@ -1168,14 +1228,16 @@ function withTimeout<T>(
   justify-content: center;
   width: 12px;
   height: 22px;
-  margin-right: 1px;
+  margin-left: 1px;
   border-radius: 6px;
   color: var(--app-text-muted);
   cursor: grab;
   touch-action: none;
 }
-.pane-actions-grip:active {
+.pane-actions-grip:active,
+.pane-actions-grip.is-dragging {
   cursor: grabbing;
+  color: var(--app-text);
 }
 .pane-actions-grip:hover {
   color: var(--app-text);

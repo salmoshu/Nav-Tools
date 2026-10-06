@@ -15,7 +15,7 @@ describe('Terminal pane chrome', () => {
     expect(paneSource).toContain('.pane-header {\n  position: absolute;')
     expect(paneSource).not.toContain('class="pane-title"')
     expect(paneSource).toContain(
-      'v-if="paneCount > 1"\n          :content="t(\'common.terminal.closePaneShortcut\')"',
+      'v-if="paneCount > 1"\n            :content="t(\'common.terminal.closePaneShortcut\')"',
     )
     expect(paneSource).toContain(':aria-label="t(\'common.terminal.closePaneShortcut\')"')
   })
