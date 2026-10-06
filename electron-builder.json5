@@ -3,6 +3,10 @@
   "$schema": "https://raw.githubusercontent.com/electron-userland/electron-builder/master/packages/app-builder-lib/scheme.json",
   "appId": "com.salmoshu.navtools",
   "asar": true,
+  // 原生依赖(@serialport/bindings-cpp、node-pty)均随包自带 N-API 预编译二进制,
+  // ABI 稳定、跨 Electron 版本通用,@electron/rebuild 纯属多余且依赖本机 MSVC。
+  // 若将来引入不带 N-API 预编译的原生依赖,需要改回 true。
+  "npmRebuild": false,
   "asarUnpack": [
     "node_modules/ffmpeg-static/**",
     "node_modules/node-pty/**"

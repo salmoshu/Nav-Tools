@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { detectPaths, splitOutputByPaths } from '@/core/terminal/PathDetection'
+import {
+  detectListingPaths,
+  detectPaths,
+  isListingCommand,
+  splitOutputByPaths,
+} from '@/core/terminal/PathDetection'
 import { fileExtension, isPathExtension, mimeFromPath } from '@/core/terminal/FileMime'
 
 describe('detectPaths', () => {
@@ -103,6 +108,90 @@ describe('splitOutputByPaths', () => {
   it('round-trips: joined segments equal the original text', () => {
     const text = 'error in src/main.c:42 see docs/note.md; done'
     expect(splitOutputByPaths(text).map((s) => s.text).join('')).toBe(text)
+  })
+})
+
+
+describe('isListingCommand', () => {
+  it('matches listing commands and aliases', () => {
+    expect(isListingCommand('ls')).toBe(true)
+    expect(isListingCommand('ls -la')).toBe(true)
+    expect(isListingCommand('ll')).toBe(true)
+    expect(isListingCommand('dir')).toBe(true)
+    expect(isListingCommand('Get-ChildItem -Recurse')).toBe(true)
+    expect(isListingCommand('gci')).toBe(true)
+    expect(isListingCommand('sudo ls /root')).toBe(true)
+    expect(isListingCommand('/bin/ls -l')).toBe(true)
+  })
+
+  it('rejects non-listing commands', () => {
+    expect(isListingCommand('pwd')).toBe(false)
+    expect(isListingCommand('cat file.txt')).toBe(false)
+    expect(isListingCommand('')).toBe(false)
+    expect(isListingCommand('lsof -i')).toBe(false)
+  })
+})
+
+describe('detectListingPaths', () => {
+  it('detects bare names in PowerShell ls table output, skipping mode/date/time/size columns', () => {
+    const output = [
+      'Mode                 LastWriteTime         Length Name',
+      '----                 -------------         ------ ----',
+      'd-----         2026/9/26     15:05                Contacts',
+      'd-r---         2026/10/3      0:48                Desktop',
+      '-a----         2026/9/27     22:31       12332    .bash_history',
+    ].join('\n')
+    const found = detectListingPaths(output)
+    const paths = found.map((item) => item.path)
+    expect(paths).toContain('Contacts')
+    expect(paths).toContain('Desktop')
+    expect(paths).toContain('.bash_history')
+    expect(paths).not.toContain('d-----')
+    expect(paths).not.toContain('2026/9/26')
+    expect(paths).not.toContain('15:05')
+    expect(paths).not.toContain('12332')
+  })
+
+  it('detects bare names in POSIX ls -l output, skipping permission bits', () => {
+    const output = '-rw-r--r-- 1 winch winch 136 Sep 27 22:31 notes\ndrwxr-xr-x 3 winch winch 4096 Sep 26 10:00 src'
+    const paths = detectListingPaths(output).map((item) => item.path)
+    expect(paths).toContain('notes')
+    expect(paths).toContain('src')
+    expect(paths).not.toContain('-rw-r--r--')
+    expect(paths).not.toContain('136')
+  })
+
+  it('detects names in plain multi-column ls output, including non-ASCII names', () => {
+    const output = 'Desktop  Documents  迅雷下载  readme'
+    const paths = detectListingPaths(output).map((item) => item.path)
+    expect(paths).toEqual(['Desktop', 'Documents', '迅雷下载', 'readme'])
+  })
+
+  it('keeps offsets pointing at the original text', () => {
+    const output = 'd-----  2026/9/26  15:05  Contacts'
+    const found = detectListingPaths(output).find((item) => item.path === 'Contacts')
+    expect(output.slice(found.start, found.end)).toBe('Contacts')
+  })
+
+  it('does not duplicate tokens already detected as standard paths', () => {
+    const output = 'src/main.c  notes'
+    const found = detectListingPaths(output)
+    expect(found.filter((item) => item.path === 'src/main.c')).toHaveLength(1)
+    expect(found.map((item) => item.path)).toEqual(['src/main.c', 'notes'])
+  })
+
+  it('round-trips through splitOutputByPaths with listing enabled', () => {
+    const text = 'd-----  2026/9/26  15:05  Saved Games'
+    const segments = splitOutputByPaths(text, { listing: true })
+    expect(segments.map((segment) => segment.text).join('')).toBe(text)
+    // 带空格的名字按既有约定不支持(漏检换低误报)
+    expect(segments.find((segment) => segment.text === 'Saved')?.path?.path).toBe('Saved')
+  })
+
+  it('leaves free-text output untouched when listing is off', () => {
+    const text = 'wrote notes today'
+    expect(splitOutputByPaths(text, { listing: false }).every((segment) => !segment.path)).toBe(true)
+    expect(splitOutputByPaths(text).every((segment) => !segment.path)).toBe(true)
   })
 })
 

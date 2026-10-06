@@ -58,10 +58,10 @@ const Passthrough = defineComponent({
   },
 })
 
-function commandBlock(output: string): TerminalCommandBlock {
+function commandBlock(output: string, command = 'pwd'): TerminalCommandBlock {
   return {
     id: 1,
-    command: 'pwd',
+    command,
     output,
     startedAt: Date.now(),
     finishedAt: Date.now(),
@@ -70,11 +70,11 @@ function commandBlock(output: string): TerminalCommandBlock {
   }
 }
 
-function mountGui(output: string): { app: App; host: HTMLDivElement } {
+function mountGui(output: string, command = 'pwd'): { app: App; host: HTMLDivElement } {
   const host = document.createElement('div')
   document.body.append(host)
   const app = createApp(TerminalGuiView, {
-    blocks: [commandBlock(output)],
+    blocks: [commandBlock(output, command)],
     sessionId: 'session-1',
   })
   app.provide(TERMINAL_TRANSLATE_KEY, translate)
@@ -156,5 +156,70 @@ describe('TerminalGuiView Windows 路径点击预览(用户现场复现)', () =>
     expect(preview, '点击后应出现块内预览').not.toBeNull()
     expect(mounted.host.querySelector('.terminal-file-tree')).not.toBeNull()
     expect(mounted.host.textContent).toContain('Desktop')
+  })
+
+  it('ls 表格输出里的裸目录名,悬停确认后点击同样展开目录树', async () => {
+    const output = [
+      'Mode                 LastWriteTime         Length Name',
+      '----                 -------------         ------ ----',
+      'd-----         2026/10/3      0:48                Desktop',
+      '-a----         2026/9/27     22:31       12332    notes.txt',
+    ].join('\n')
+    window.ipcRenderer.invoke = vi.fn((channel: string, request?: { path?: string }) => {
+      if (channel === 'terminal-path-stat') {
+        return Promise.resolve({
+          exists: true,
+          directory: request?.path === 'Desktop',
+          resolvedPath: `C:\\Users\\winch\\${request?.path ?? ''}`,
+          size: 0,
+        })
+      }
+      if (channel === 'terminal-session-list-dir') {
+        return Promise.resolve({
+          resolvedPath: 'C:\\Users\\winch\\Desktop',
+          truncated: false,
+          entries: [
+            {
+              name: 'git',
+              path: 'C:\\Users\\winch\\Desktop\\git',
+              directory: true,
+              size: 0,
+              modifiedAt: 0,
+              mode: 0,
+            },
+          ],
+        })
+      }
+      return Promise.resolve(null)
+    })
+    mounted = mountGui(output, 'ls')
+
+    await flushUpdates()
+    // 裸目录名成为候选;权限位/日期/大小列不是候选
+    const candidates = [...mounted.host.querySelectorAll('.command-block__path-candidate')].map(
+      (el) => el.textContent,
+    )
+    expect(candidates).toContain('Desktop')
+    expect(candidates).not.toContain('d-----')
+    expect(candidates).not.toContain('2026/10/3')
+
+    const desktop = [...mounted.host.querySelectorAll('.command-block__path-candidate')].find(
+      (el) => el.textContent === 'Desktop',
+    ) as HTMLElement
+    desktop.dispatchEvent(new MouseEvent('mouseenter'))
+    await flushUpdates()
+
+    const link = mounted.host.querySelector('.command-block__path') as HTMLAnchorElement
+    expect(link?.textContent, '确认存在后应渲染为链接').toBe('Desktop')
+
+    link.click()
+    await flushUpdates()
+
+    expect(window.ipcRenderer.invoke).toHaveBeenCalledWith('terminal-session-list-dir', {
+      sessionId: 'session-1',
+      path: 'Desktop',
+    })
+    expect(mounted.host.querySelector('.terminal-file-tree')).not.toBeNull()
+    expect(mounted.host.textContent).toContain('git')
   })
 })

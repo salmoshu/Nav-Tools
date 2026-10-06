@@ -473,7 +473,11 @@ import {
   type TerminalCommandBlock,
 } from '@/core/terminal/CommandBlocks'
 import { tokenizeShellLine, type ShellSyntaxToken } from '@/core/terminal/ShellSyntax'
-import { splitOutputByPaths, type DetectedPath } from '@/core/terminal/PathDetection'
+import {
+  isListingCommand,
+  splitOutputByPaths,
+  type DetectedPath,
+} from '@/core/terminal/PathDetection'
 import { sniffContent, type SniffedContent } from '@/core/terminal/ContentSniff'
 import { fuzzySearch } from '@/core/terminal/FuzzyMatch'
 import {
@@ -1392,7 +1396,10 @@ const renderedBlocks = computed(() => {
       : []
     const currentMatch = queryActive ? searchMatches.value[activeMatchIndex.value] : undefined
     let offset = 0
-    const segments = splitOutputByPaths(output).map((segment) => {
+    // 列举命令(ls/dir)的输出里裸文件名也作为路径候选,与 pwd 的绝对路径同一交互
+    const segments = splitOutputByPaths(output, {
+      listing: isListingCommand(block.command ?? ''),
+    }).map((segment) => {
       const parts = buildSearchParts(segment.text, offset, blockMatches, currentMatch)
       offset += segment.text.length
       return { ...segment, parts }
@@ -1997,8 +2004,14 @@ watch(scrollElement, (element, previous) => {
   text-decoration-style: solid;
 }
 .command-block__preview {
-  border-top: 1px solid color-mix(in srgb, var(--terminal-fg) 12%, transparent);
+  /* 内嵌卡片:与块边缘(尤其是整体滚动条所在右缘)留出间距,
+     预览自己的滚动条不会贴着整体滚动条,左右层次分明 */
+  margin: 0 8px 8px;
+  border: 1px solid color-mix(in srgb, var(--terminal-fg) 12%, transparent);
+  border-radius: 6px;
   background: color-mix(in srgb, var(--terminal-fg) 3%, var(--terminal-bg));
+  /* clip 不创建滚动容器,内部树的 sticky 截断提示不受影响 */
+  overflow: clip;
 }
 .command-block__preview-header {
   display: flex;
@@ -2319,5 +2332,24 @@ watch(scrollElement, (element, previous) => {
 }
 .syn-suggestion {
   color: color-mix(in srgb, var(--terminal-fg) 34%, transparent);
+}
+/* 细滚动条(整体滚动条与预览等内嵌滚动区统一):透明轨道 + 终端色圆角滑块,
+   替代默认 Windows 粗滚动条,与深色终端融为一体;悬停加深 */
+.terminal-gui-view ::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.terminal-gui-view ::-webkit-scrollbar-track {
+  background: transparent;
+}
+.terminal-gui-view ::-webkit-scrollbar-thumb {
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--terminal-fg) 22%, transparent);
+}
+.terminal-gui-view ::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--terminal-fg) 38%, transparent);
+}
+.terminal-gui-view ::-webkit-scrollbar-corner {
+  background: transparent;
 }
 </style>

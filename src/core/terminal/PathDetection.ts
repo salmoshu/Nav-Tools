@@ -127,6 +127,76 @@ export function detectPaths(text: string): DetectedPath[] {
   return results
 }
 
+/** 目录列举命令:这些命令的输出里,裸文件名(无分隔符/扩展名)也按路径候选处理 */
+const LISTING_COMMAND_NAMES = new Set([
+  'ls',
+  'll',
+  'la',
+  'l',
+  'dir',
+  'gci',
+  'get-childitem',
+  'tree',
+])
+/** 命令包装器:真正命令在它们之后(`sudo ls`、`time ls`) */
+const COMMAND_WRAPPERS = new Set(['sudo', 'doas', 'env', 'command', 'builtin', 'time', 'noglob'])
+
+/** 判断一条命令是否是目录列举命令(ls/dir/Get-ChildItem/tree 及其常用别名) */
+export function isListingCommand(command: string): boolean {
+  const words = command.trim().split(/\s+/)
+  let index = 0
+  while (index < words.length && COMMAND_WRAPPERS.has(words[index].toLowerCase())) index++
+  const first = words[index]?.toLowerCase()
+  if (!first) return false
+  return LISTING_COMMAND_NAMES.has(first.split('/').pop() ?? first)
+}
+
+/** 列表输出的列噪声(权限位/日期/时间/大小/标记),它们不是文件名 */
+const LISTING_NOISE = [
+  /^[-bcdlps][-rwxstST]{9}$/, // POSIX 权限位 drwxr-xr-x
+  /^[-darshl]{6}$/, // PowerShell Mode 列(d----- / -a---- / dar--l)
+  /^<DIR>$/i, // cmd dir 的目录标记
+  /^\d{4}[-/]\d{1,2}[-/]\d{1,2}$/, // 日期 2026/9/26
+  /^\d{1,2}[-/]\d{1,2}[-/]\d{2,4}$/, // 日期 9/26/2026
+  /^\d{1,2}:\d{2}(:\d{2})?(\s?[AP]M)?$/i, // 时间 15:05 / 01:03:04 / 9:26 PM
+  /^\d+$/, // 大小列
+]
+/** 列表输出的 token:任意非空白串(中文名、特殊字符名都允许,存在性由调用方校验) */
+const LISTING_TOKEN = /[^\s]+/g
+/** 列表模式候选上限:大目录列举(截断上限 2000 条)也要全覆盖 */
+const LISTING_MAX_RESULTS = 2000
+
+/**
+ * 目录列举输出的路径检测:在 detectPaths 的基础上,把裸文件名也列为候选。
+ *
+ * 只在块命令是列举命令时使用——这些输出里每个 token 大概率是文件名,
+ * 漏判的代价远高于误判(误判由悬停存在性校验兜掉,仅表现为不可点击)。
+ */
+export function detectListingPaths(text: string): DetectedPath[] {
+  // 列噪声(日期等)在自由文本里是合法候选,但在列举输出里一定是列,先滤掉
+  const results = detectPaths(text).filter(
+    (found) => !LISTING_NOISE.some((pattern) => pattern.test(found.path)),
+  )
+  if (!text) return results
+
+  LISTING_TOKEN.lastIndex = 0
+  for (let match = LISTING_TOKEN.exec(text); match; match = LISTING_TOKEN.exec(text)) {
+    const raw = stripTrailingPunctuation(match[0])
+    // 须含字母/数字/非 ASCII 字符(中文文件名),纯标点(----、│)不是文件名
+    if (!raw || !(/[A-Za-z0-9]/.test(raw) || /[^\x20-\x7e]/.test(raw))) continue
+    if (LISTING_NOISE.some((pattern) => pattern.test(raw))) continue
+
+    const start = match.index
+    const end = match.index + raw.length
+    if (results.some((found) => start < found.end && end > found.start)) continue
+
+    results.push({ start, end, path: raw })
+    if (results.length >= LISTING_MAX_RESULTS) break
+  }
+  results.sort((a, b) => a.start - b.start)
+  return results
+}
+
 /**
  * 把一段文本按路径候选切成片段,供渲染层直接 v-for。
  * 非路径片段的 `path` 为 undefined。
@@ -136,8 +206,13 @@ export interface OutputSegment {
   path?: DetectedPath
 }
 
-export function splitOutputByPaths(text: string): OutputSegment[] {
-  const paths = detectPaths(text)
+export interface SplitOutputOptions {
+  /** 目录列举输出(ls/dir):裸文件名也按路径候选处理 */
+  listing?: boolean
+}
+
+export function splitOutputByPaths(text: string, options?: SplitOutputOptions): OutputSegment[] {
+  const paths = options?.listing ? detectListingPaths(text) : detectPaths(text)
   if (paths.length === 0) return text ? [{ text }] : []
 
   const segments: OutputSegment[] = []
