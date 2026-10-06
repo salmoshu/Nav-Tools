@@ -3,6 +3,7 @@ import { chooseOpenFiles, showScopedSaveDialog } from './dialogs'
 import {
   BrowserWindow,
   ipcMain,
+  shell,
 } from 'electron'
 import type {
   PortForwardRule,
@@ -128,6 +129,13 @@ export function registerTerminalIpc(
     (_event, request: { sessionId: string; path: string; maxBytes?: number }) =>
       service.readSessionPath(request.sessionId, request.path, request.maxBytes),
   )
+
+  // GUI 输出里的 http(s) 链接:交给系统默认浏览器;其他 scheme(file: 等)不放行
+  ipcMain.handle('terminal-open-external', (_event, url: string) => {
+    if (typeof url !== 'string' || !/^https?:\/\//i.test(url)) return false
+    void shell.openExternal(url)
+    return true
+  })
 
   // 预设命令:主进程按会话自己的 shell 家族转义参数值后再写入,渲染层不参与转义
   ipcMain.handle(

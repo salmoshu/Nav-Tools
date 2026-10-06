@@ -41,6 +41,10 @@ const LINE_COLUMN_SUFFIX = /:(\d+)(?::(\d+))?$/
 const TRAILING_PUNCTUATION = /[.,;:!?)\]}'"]+$/
 /** URL:含 `//` 的 scheme,不应按路径处理 */
 const URL_SCHEME = /^[a-z][a-z0-9+.-]*:\/\//i
+/** http(s) 链接:空白/引号/成对括号一律不收,包在括号里的链接由此保持干净 */
+const URL_RUN = /https?:\/\/[^\s"'<>\\`|^[\]{}()（）【】《》「」『』]+/gi
+/** 链接结尾常被相邻标点污染:`详见 https://a.com/b。` */
+const URL_TRAILING_PUNCTUATION = /[.,;:!?…、。，；：？！]+$/
 
 /** 单个候选的长度上限,避免压缩代码之类的超长 token 拖慢扫描 */
 const MAX_CANDIDATE_LENGTH = 4096
@@ -127,6 +131,35 @@ export function detectPaths(text: string): DetectedPath[] {
   return results
 }
 
+export interface DetectedUrl {
+  /** 在原始文本中的起始下标(含) */
+  start: number
+  /** 在原始文本中的结束下标(不含) */
+  end: number
+  url: string
+}
+
+/**
+ * 扫描一段终端输出,返回其中的 http(s) 链接。
+ * 与路径候选不同:链接无需存在性校验,点击直接在系统浏览器打开,
+ * 所以不做两级策略,语法上像链接就给出候选。
+ */
+export function detectUrls(text: string): DetectedUrl[] {
+  const results: DetectedUrl[] = []
+  if (!text) return results
+
+  URL_RUN.lastIndex = 0
+  for (let match = URL_RUN.exec(text); match; match = URL_RUN.exec(text)) {
+    if (match[0].length > MAX_CANDIDATE_LENGTH) continue
+    const url = match[0].replace(URL_TRAILING_PUNCTUATION, '')
+    // 剥完结尾标点可能只剩 scheme(输入到一半的链接),没有意义
+    if (url.length <= 'https://'.length) continue
+    results.push({ start: match.index, end: match.index + url.length, url })
+    if (results.length >= MAX_RESULTS) break
+  }
+  return results
+}
+
 /** 目录列举命令:这些命令的输出里,裸文件名(无分隔符/扩展名)也按路径候选处理 */
 const LISTING_COMMAND_NAMES = new Set([
   'ls',
@@ -185,6 +218,8 @@ export function detectListingPaths(text: string): DetectedPath[] {
     // 须含字母/数字/非 ASCII 字符(中文文件名),纯标点(----、│)不是文件名
     if (!raw || !(/[A-Za-z0-9]/.test(raw) || /[^\x20-\x7e]/.test(raw))) continue
     if (LISTING_NOISE.some((pattern) => pattern.test(raw))) continue
+    // 输出里混进的 URL 不是文件名(链接有专门的检测)
+    if (URL_SCHEME.test(raw)) continue
 
     const start = match.index
     const end = match.index + raw.length
@@ -198,12 +233,14 @@ export function detectListingPaths(text: string): DetectedPath[] {
 }
 
 /**
- * 把一段文本按路径候选切成片段,供渲染层直接 v-for。
- * 非路径片段的 `path` 为 undefined。
+ * 把一段文本按路径候选与 http(s) 链接切成片段,供渲染层直接 v-for。
+ * 非路径、非链接片段的 `path` / `url` 均为 undefined;两者互斥——
+ * URL 内部的片段(query 里的 /a/b 之类)不再按路径处理。
  */
 export interface OutputSegment {
   text: string
   path?: DetectedPath
+  url?: DetectedUrl
 }
 
 export interface SplitOutputOptions {
@@ -212,15 +249,29 @@ export interface SplitOutputOptions {
 }
 
 export function splitOutputByPaths(text: string, options?: SplitOutputOptions): OutputSegment[] {
-  const paths = options?.listing ? detectListingPaths(text) : detectPaths(text)
-  if (paths.length === 0) return text ? [{ text }] : []
+  const urls = detectUrls(text)
+  const paths = (options?.listing ? detectListingPaths(text) : detectPaths(text)).filter(
+    (found) => !urls.some((url) => found.start < url.end && found.end > url.start),
+  )
+  if (urls.length === 0 && paths.length === 0) return text ? [{ text }] : []
+
+  const marks = [
+    ...urls.map((url) => ({ start: url.start, end: url.end, url })),
+    ...paths.map((found) => ({ start: found.start, end: found.end, path: found })),
+  ].sort((a, b) => a.start - b.start)
 
   const segments: OutputSegment[] = []
   let cursor = 0
-  for (const found of paths) {
-    if (found.start > cursor) segments.push({ text: text.slice(cursor, found.start) })
-    segments.push({ text: text.slice(found.start, found.end), path: found })
-    cursor = found.end
+  for (const mark of marks) {
+    // 候选之间不重叠(URL 重叠已滤除);防御性地跳过异常交叠
+    if (mark.start < cursor) continue
+    if (mark.start > cursor) segments.push({ text: text.slice(cursor, mark.start) })
+    segments.push(
+      'url' in mark
+        ? { text: text.slice(mark.start, mark.end), url: mark.url }
+        : { text: text.slice(mark.start, mark.end), path: mark.path },
+    )
+    cursor = mark.end
   }
   if (cursor < text.length) segments.push({ text: text.slice(cursor) })
   return segments

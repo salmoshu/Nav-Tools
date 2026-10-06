@@ -171,7 +171,24 @@
           <div v-else-if="entry.output" class="command-block__output">
             <template v-for="(segment, index) in entry.segments" :key="index">
               <a
-                v-if="segment.path && isExistingPath(segment.path.path)"
+                v-if="segment.url"
+                class="command-block__url"
+                :title="t('common.terminal.guiUrlClickHint')"
+                href="#"
+                @click.prevent="openExternalLink(segment.url.url)"
+                ><template v-if="segment.parts.length">
+                  <span
+                    v-for="(part, partIndex) in segment.parts"
+                    :key="partIndex"
+                    class="search-hit"
+                    :class="{ 'is-hit': part.hit, 'is-current': part.current }"
+                    >{{ part.text }}</span
+                  >
+                </template>
+                <template v-else>{{ segment.text }}</template></a
+              >
+              <a
+                v-else-if="segment.path && isExistingPath(segment.path.path)"
                 class="command-block__path"
                 :title="t('common.terminal.guiPathClickHint')"
                 href="#"
@@ -1467,6 +1484,11 @@ async function probePath(found: DetectedPath): Promise<void> {
   }
 }
 
+/** http(s) 链接:点击交给系统默认浏览器(scheme 由主进程再校验一道,只放行 http/https) */
+function openExternalLink(url: string): void {
+  void window.ipcRenderer.invoke('terminal-open-external', url)
+}
+
 const previews = ref(new Map<number, PreviewState>())
 
 function closePreview(blockId: number): void {
@@ -1992,15 +2014,17 @@ watch(scrollElement, (element, previous) => {
   color: var(--el-color-warning);
   font-size: 10px;
 }
-/* 已确认存在的路径:可点击展开块内预览 */
-.command-block__path {
+/* 已确认存在的路径(点击块内预览)与 http(s) 链接(点击在默认浏览器打开) */
+.command-block__path,
+.command-block__url {
   color: var(--el-color-primary);
   text-decoration: underline;
   text-decoration-style: dotted;
   text-underline-offset: 2px;
   cursor: pointer;
 }
-.command-block__path:hover {
+.command-block__path:hover,
+.command-block__url:hover {
   text-decoration-style: solid;
 }
 .command-block__preview {

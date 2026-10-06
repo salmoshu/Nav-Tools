@@ -412,6 +412,7 @@ export default {
     collapseBlock: '折叠输出',
     guiOutputTruncated: '（输出过长，已截断）',
     guiPathClickHint: '点击预览文件或展开目录',
+    guiUrlClickHint: '点击在默认浏览器中打开链接',
     guiShowRaw: '查看原始输出',
     guiShowRendered: '查看渲染输出',
     guiPreviewClose: '关闭预览',

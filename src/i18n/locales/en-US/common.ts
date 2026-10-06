@@ -419,6 +419,7 @@ export default {
     collapseBlock: 'Collapse output',
     guiOutputTruncated: '(output truncated)',
     guiPathClickHint: 'Click to preview a file or expand a directory',
+    guiUrlClickHint: 'Click to open the link in your default browser',
     guiShowRaw: 'Show raw output',
     guiShowRendered: 'Show rendered output',
     guiPreviewClose: 'Close preview',

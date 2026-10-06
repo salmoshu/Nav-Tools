@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   detectListingPaths,
   detectPaths,
+  detectUrls,
   isListingCommand,
   splitOutputByPaths,
 } from '@/core/terminal/PathDetection'
@@ -108,6 +109,72 @@ describe('splitOutputByPaths', () => {
   it('round-trips: joined segments equal the original text', () => {
     const text = 'error in src/main.c:42 see docs/note.md; done'
     expect(splitOutputByPaths(text).map((s) => s.text).join('')).toBe(text)
+  })
+
+  it('marks http(s) links as url segments instead of path candidates', () => {
+    const segments = splitOutputByPaths('docs at https://example.com/guide/index.html online')
+    const link = segments.find((s) => s.url)
+    expect(link?.text).toBe('https://example.com/guide/index.html')
+    expect(link?.url?.url).toBe('https://example.com/guide/index.html')
+    expect(link?.path).toBeUndefined()
+  })
+
+  it('keeps urls and paths side by side, round-tripping the original text', () => {
+    const text = 'see https://example.com/a and src/main.c:42'
+    const segments = splitOutputByPaths(text)
+    expect(segments.map((s) => s.text).join('')).toBe(text)
+    expect(segments.find((s) => s.url)?.url?.url).toBe('https://example.com/a')
+    expect(segments.find((s) => s.path)?.path?.path).toBe('src/main.c')
+  })
+
+  it('does not treat path-like fragments inside a url query as paths', () => {
+    const segments = splitOutputByPaths('open https://example.com/b?next=/tmp/c now')
+    expect(segments.map((s) => s.text).join('')).toBe('open https://example.com/b?next=/tmp/c now')
+    expect(segments.filter((s) => s.path)).toHaveLength(0)
+    expect(segments.find((s) => s.url)?.url?.url).toBe('https://example.com/b?next=/tmp/c')
+  })
+
+  it('does not report urls as bare names in listing mode', () => {
+    const segments = splitOutputByPaths('notes https://example.com/x', { listing: true })
+    expect(segments.find((s) => s.url)?.text).toBe('https://example.com/x')
+    expect(segments.filter((s) => s.path).map((s) => s.text)).toEqual(['notes'])
+  })
+})
+
+describe('detectUrls', () => {
+  it('detects http and https links with offsets', () => {
+    const text = 'home http://example.com and https://example.com/docs'
+    const found = detectUrls(text)
+    expect(found.map((item) => item.url)).toEqual([
+      'http://example.com',
+      'https://example.com/docs',
+    ])
+    for (const item of found) {
+      expect(text.slice(item.start, item.end)).toBe(item.url)
+    }
+  })
+
+  it('keeps query strings, ports and fragments intact', () => {
+    const found = detectUrls('see https://example.com:8080/a?x=1&y=2#frag')
+    expect(found).toHaveLength(1)
+    expect(found[0].url).toBe('https://example.com:8080/a?x=1&y=2#frag')
+  })
+
+  it('strips trailing ASCII and CJK punctuation from links', () => {
+    expect(detectUrls('详见 https://example.com/a。')[0].url).toBe('https://example.com/a')
+    expect(detectUrls('docs: https://example.com/a, more')[0].url).toBe('https://example.com/a')
+    expect(detectUrls('(https://example.com/a)')[0].url).toBe('https://example.com/a')
+  })
+
+  it('stops at whitespace and quotes', () => {
+    expect(detectUrls('a https://example.com/x y')[0].url).toBe('https://example.com/x')
+    expect(detectUrls('"https://example.com/x"')[0].url).toBe('https://example.com/x')
+  })
+
+  it('ignores bare schemes and non-http schemes', () => {
+    expect(detectUrls('https://')).toHaveLength(0)
+    expect(detectUrls('ftp://example.com/x')).toHaveLength(0)
+    expect(detectUrls('')).toEqual([])
   })
 })
 
