@@ -142,4 +142,57 @@ describe('CameraCalibration', () => {
     // 画面左=2.03（对人员 2 合格），画面右=1.3（对人员 1 偏远）；人员 1 配置为右侧
     expect(window(engine, 1, 0, [2.03, 1.3])).toBe(-22)
   })
+
+  it('fails after repeated interruptions instead of resampling silently forever', () => {
+    // 双目标现场目标 flicker：每个「采样 → 第三人闯入暂停 → 恢复重采」循环都拿不到
+    // 写入或成功；修复前只有 maxDurationMs 兜底，期间表现为卡死式静默循环
+    const engine = new CameraCalibration(config(), 0)
+    window(engine, 1, 0)
+    expect(engine.snapshot().phase).toBe('verifying')
+    let index = 4
+    let at = 300
+    const thirdPersonBurst = () => {
+      const burst = frame(index, [1.26, 2.03])
+      burst.targets.push({ ...burst.targets[0], trackId: 30 })
+      index += 1
+      engine.push(burst, at)
+      at += 100
+    }
+    for (let i = 0; i < 9; i++) {
+      thirdPersonBurst()
+      expect(engine.snapshot()).toMatchObject({ phase: 'paused', sampleCount: 0 })
+      window(engine, index, at)
+      index += 3
+      at += 400
+      expect(engine.snapshot().phase).toBe('verifying')
+    }
+    thirdPersonBurst()
+    const snapshot = engine.snapshot()
+    expect(snapshot.phase).toBe('failed')
+    expect(snapshot.reason).toContain('连续 10 次采样被打断')
+    expect(snapshot.reason).toContain('必须恰好上报 2 个')
+  })
+
+  it('resets the interruption streak after each confirmed parameter write', () => {
+    const engine = new CameraCalibration(config(), 0)
+    let offset = window(engine, 1, 0, [1.3, 2.1])
+    expect(offset).toBe(-22)
+    let index = 4
+    let at = 300
+    for (let i = 0; i < 3; i++) {
+      engine.written(offset!, at)
+      const burst = frame(index, [1.3, 2.1])
+      burst.targets.push({ ...burst.targets[0], trackId: 30 })
+      index += 1
+      engine.push(burst, at + 100)
+      expect(engine.snapshot().phase).toBe('paused')
+      at += 700
+      offset = window(engine, index, at, [1.3, 2.1])
+      expect(offset).toBeCloseTo(-22.5 - i * 0.5, 6)
+      index += 3
+      at += 300
+    }
+    // 三次打断各自被随后的写入清零：既未触发死循环防护，也未被全局兜底停止
+    expect(engine.snapshot()).toMatchObject({ phase: 'writing', writeCount: 3 })
+  })
 })

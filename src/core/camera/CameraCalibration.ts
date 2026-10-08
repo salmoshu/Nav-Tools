@@ -7,6 +7,15 @@ import {
 } from './CameraCalibrationTypes'
 
 const EPSILON = 1e-9
+/**
+ * 连续采样被打断（人数/身份/序号/波动/复验失败等）的容忍上限。
+ * 双目标现场更容易出现目标 flicker 或测距波动：引擎会无限循环
+ * 「采样 → 暂停 → 恢复 → 重新采样」，既不写入也不失败，全局只有
+ * maxDurationMs（默认 90 秒）兜底，期间表现为「卡住不动」。
+ * 连续达到该次数仍未取得参数写入或成功时直接失败并说明原因，
+ * 把静默死循环变成可见的终止。参数写入（written）会清零计数。
+ */
+const MAX_CONSECUTIVE_INTERRUPTIONS = 10
 
 export function validateCalibrationConfig(c: CameraCalibrationConfig): void {
   const numbers = [c.height, c.fov, c.initialOffset, c.minOffset, c.maxOffset, c.step, c.minStep,
@@ -72,6 +81,8 @@ export class CameraCalibration {
   private pending: number | undefined
   private lower: number | undefined
   private upper: number | undefined
+  /** 连续采样被打断的次数：参数写入或成功清零，连续达到上限则失败退出 */
+  private interruptionStreak = 0
 
   public constructor(config: CameraCalibrationConfig, now: number) {
     validateCalibrationConfig(config)
@@ -135,6 +146,9 @@ export class CameraCalibration {
 
   public invalidate(reason: string, _now: number): void {
     if (!isCalibrationRunning(this.progress.phase)) return
+    // 已处于 paused 时的重复 invalidate（如数据中断期间每个 tick 触发一次）
+    // 算同一次打断，不累计，避免短暂的链路抖动被误判为死循环
+    const isNewInterruption = this.progress.phase !== 'paused'
     this.samples = []
     this.verifying = false
     this.progress.sampleCount = 0
@@ -143,6 +157,14 @@ export class CameraCalibration {
     this.pending = undefined
     this.progress.phase = 'paused'
     this.progress.reason = reason
+    if (!isNewInterruption) return
+    this.interruptionStreak += 1
+    if (this.interruptionStreak >= MAX_CONSECUTIVE_INTERRUPTIONS) {
+      this.fail(
+        `连续 ${this.interruptionStreak} 次采样被打断（最近原因：${reason}）；` +
+          '现场目标无法稳定，请检查人数/站位或放宽稳定性参数后重试',
+      )
+    }
   }
 
   public written(offset: number, now: number): void {
@@ -152,6 +174,8 @@ export class CameraCalibration {
     this.progress.writeCount++
     this.samples = []
     this.progress.sampleCount = 0
+    // 一次经回读核实的参数写入是实质进展，打断计数清零
+    this.interruptionStreak = 0
     this.progress.phase = 'settling'
     this.progress.reason = '参数已写入并经回读核对，等待测量稳定'
     this.settleUntil = now + this.config.settleMs
@@ -242,6 +266,7 @@ export class CameraCalibration {
     this.pending = undefined
     this.samples = []
     this.verifying = false
+    this.interruptionStreak = 0
     this.progress.sampleCount = 0
   }
 }
