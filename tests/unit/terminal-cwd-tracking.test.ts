@@ -108,6 +108,18 @@ describe('TerminalService cwd tracking (OSC 7 / OSC 9;9)', () => {
     expect(POWERSHELL_PROMPT_INTEGRATION).toContain(']9;9;')
     expect(POWERSHELL_PROMPT_INTEGRATION).toContain('(Get-Location).Path')
   })
+
+  it('PowerShell session switches console codepage to UTF-8 (GBK mojibake guard)', () => {
+    // 中文 Windows 默认 OEM 代码页 GBK(936):ConPTY 按它解码子进程字节输出,
+    // Node 等 UTF-8 CLI 会输出「鍚姩澶辫触」式乱码。注入命令必须先把
+    // 输入/输出编码切到 UTF-8(等效 chcp 65001,cmd 会话已如此)
+    expect(POWERSHELL_PROMPT_INTEGRATION).toContain(
+      '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8',
+    )
+    expect(POWERSHELL_PROMPT_INTEGRATION).toContain(
+      '[Console]::InputEncoding = [System.Text.Encoding]::UTF8',
+    )
+  })
 })
 
 describe('sshConnectionKey', () => {

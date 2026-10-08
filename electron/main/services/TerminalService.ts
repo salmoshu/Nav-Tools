@@ -89,8 +89,16 @@ const OSC133_BASH_INTEGRATION = [
  * nav-render 函数上报 OSC 1338 富内容块。
  * 经 -Command 启动参数注入,不会作为输入回显进 scrollback。
  * 注意:这会覆盖用户 $PROFILE 里的自定义 prompt。
+ *
+ * 首两条把控制台输入/输出代码页切到 UTF-8(等效 chcp 65001,cmd 会话已如此)。
+ * 中文 Windows 默认 OEM 代码页是 GBK(936),ConPTY 按该代码页解码子进程的
+ * 字节输出再转 UTF-8 给终端——Node/pnpm 等输出 UTF-8 字节的 CLI 就会变成
+ * 「鍚姩澶辫触」式乱码(UTF-8 字节被按 GBK 误读)。系统开启「Beta: 使用
+ * UTF-8 提供全球语言支持」的机器代码页本就是 65001,不受影响。
  */
 export const POWERSHELL_PROMPT_INTEGRATION =
+  '[Console]::InputEncoding = [System.Text.Encoding]::UTF8; ' +
+  '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; ' +
   'function global:nav-render { param($f, $m) ' +
   'if (-not $f -or -not (Test-Path $f)) { Write-Host "nav-render: file not found: $f"; return } ' +
   'if (-not $m) { switch -Regex ([IO.Path]::GetExtension($f)) { ' +
@@ -1417,7 +1425,8 @@ function resolvePtyLaunch(
   if (kind === 'powershell')
     return {
       executable: 'powershell.exe',
-      // 经启动参数注入 PSReadLine/prompt 钩子,上报 OSC 133 命令/提示符/退出码标记
+      // 经启动参数注入:控制台代码页切 UTF-8(防中文系统 GBK 乱码) +
+      // PSReadLine/prompt 钩子,上报 OSC 133 命令/提示符/退出码标记
       args: ['-NoLogo', '-NoExit', '-Command', POWERSHELL_PROMPT_INTEGRATION],
       title: 'PowerShell',
     }
