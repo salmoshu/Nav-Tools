@@ -11,6 +11,20 @@
         :class="{ collapsed: actionsCollapsed }"
         :style="{ transform: `translateY(${actionsDragOffset}px)` }"
       >
+        <!-- 手柄常驻最左侧:单击切换折叠,长按拖拽;展开后操作按钮跟随其后 -->
+        <span
+          class="pane-actions-grip"
+          :class="{ 'is-dragging': actionsDragging }"
+          role="button"
+          :aria-label="gripLabel"
+          :title="gripLabel"
+          @pointerdown="startActionsDrag"
+          @pointermove="onActionsDrag"
+          @pointerup="endActionsDrag"
+          @pointercancel="endActionsDrag"
+        >
+          <el-icon><component :is="actionsCollapsed ? ChevronsRight : GripVertical" /></el-icon>
+        </span>
         <template v-if="!actionsCollapsed">
           <el-tooltip
             :content="
@@ -102,20 +116,6 @@
             </el-button>
           </el-tooltip>
         </template>
-        <!-- 手柄常驻末尾(右缘):单击切换折叠,长按拖拽;折叠/展开两种状态下位置不动 -->
-        <span
-          class="pane-actions-grip"
-          :class="{ 'is-dragging': actionsDragging }"
-          role="button"
-          :aria-label="gripLabel"
-          :title="gripLabel"
-          @pointerdown="startActionsDrag"
-          @pointermove="onActionsDrag"
-          @pointerup="endActionsDrag"
-          @pointercancel="endActionsDrag"
-        >
-          <el-icon><component :is="actionsCollapsed ? ChevronsLeft : GripVertical" /></el-icon>
-        </span>
       </div>
     </header>
 
@@ -371,7 +371,7 @@ import {
   LayoutGrid,
   Terminal as TerminalIcon,
   GripVertical,
-  ChevronsLeft,
+  ChevronsRight,
 } from '@lucide/vue'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
@@ -855,8 +855,8 @@ function focusPane(): void {
 }
 
 /**
- * 窗格操作栏(分割/关闭等图标所在工具栏)手柄:
- * 单击切换折叠(折叠后只剩手柄,图标换为展开图标);
+ * 窗格操作栏(分割/关闭等图标所在工具栏)手柄,固定在操作栏最左侧:
+ * 单击切换折叠(折叠后只剩手柄,图标换为右向展开箭头——展开后按钮出现在手柄右侧);
  * 长按(GRIP_LONG_PRESS_MS)进入拖拽——只允许沿右侧上下移动(水平始终吸附右侧),
  * 拖动范围限制在窗格内部。单击/长按的判定逻辑见 PaneActionsGrip(纯函数)。
  */
@@ -1228,7 +1228,7 @@ function withTimeout<T>(
   justify-content: center;
   width: 12px;
   height: 22px;
-  margin-left: 1px;
+  margin-right: 1px;
   border-radius: 6px;
   color: var(--app-text-muted);
   cursor: grab;
