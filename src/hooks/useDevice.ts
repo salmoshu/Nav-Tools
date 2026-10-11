@@ -1489,6 +1489,9 @@ export function useDevice() {
         })
       } else if (globalDevice.value.type === 'network') {
         cancelNetworkReconnect()
+        // 移除设备时一并作废在途的连接尝试: 否则循环重连的迟到 open() 一旦成功,
+        // 会在 socket 已被销毁后把 connected 重新置为 true(假「已连接」)
+        networkOpenAttempt++
         networkService.close().then(() => {
           activeDataTransport.clear('network')
           globalDevice.value = { connected: null }
@@ -1515,6 +1518,8 @@ export function useDevice() {
         })
       } else if (globalDevice.value.type === 'network') {
         cancelNetworkReconnect()
+        // 手动断开同样作废在途尝试, 避免迟到 open() 成功后状态复活为「已连接」
+        networkOpenAttempt++
         networkService.close().then(() => {
           activeDataTransport.clear('network')
           if (globalDevice.value.type === 'network') globalDevice.value.connected = false
