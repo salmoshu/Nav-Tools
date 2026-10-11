@@ -3,7 +3,8 @@
  *
  * 手柄身兼两职,靠时序与位移区分:
  * - 单击(按下-抬起,位移在阈值内,未达长按时长)= 切换操作栏折叠;
- * - 长按(按住超过阈值)= 进入拖拽,此后按指针位移更新操作栏偏移;
+ * - 长按(按住超过阈值)= 进入拖拽,锚点保持在按下点——长按期间的位移在激活瞬间
+ *   一次性生效(立即跟上指针),此后按指针位移 1:1 更新操作栏偏移;
  * - 未达长按就抬起且位移超阈值(快速甩动):既不是点击也不是拖拽,不产生任何动作。
  *
  * 计时器由组件持有(到点调用 activateGripDrag),本模块只管状态与判定。
@@ -19,11 +20,11 @@ export interface GripPress {
   /** 按下点坐标:点击位移的判定基准,全程不变 */
   readonly originX: number
   readonly originY: number
-  /** 最近一次指针纵坐标:长按激活时对齐为拖拽锚点,拖拽从当前位置继续而不跳变 */
+  /** 最近一次指针纵坐标:保留给交互诊断,拖拽锚点不随它移动 */
   lastY: number
   /** 长按是否已激活拖拽 */
   dragging: boolean
-  /** 拖拽锚点:激活瞬间的指针纵坐标与当时的操作栏偏移 */
+  /** 拖拽锚点:按下点的纵坐标与按下时的操作栏偏移(全程不变) */
   anchorY: number
   anchorOffset: number
 }
@@ -45,11 +46,10 @@ export function trackGripMove(press: GripPress, y: number): void {
   press.lastY = y
 }
 
-/** 长按计时到点:激活拖拽,锚点对齐当前指针位置与当前偏移,激活瞬间不跳变 */
-export function activateGripDrag(press: GripPress, currentOffset: number): void {
+/** 长按计时到点:激活拖拽。锚点保持按下点,长按窗口内积累的位移立即生效——
+ * 否则用户按住并拖动一段距离后操作栏仍停在原位,感觉「不跟手」。 */
+export function activateGripDrag(press: GripPress): void {
   press.dragging = true
-  press.anchorY = press.lastY
-  press.anchorOffset = currentOffset
 }
 
 /** 拖拽中的目标偏移:以锚点为基准累加位移,并夹在 [0, max] 内 */

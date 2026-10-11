@@ -23,7 +23,7 @@
           @pointerup="endActionsDrag"
           @pointercancel="endActionsDrag"
         >
-          <el-icon><component :is="actionsCollapsed ? ChevronsRight : GripVertical" /></el-icon>
+          <el-icon><component :is="actionsCollapsed ? ChevronsLeft : GripVertical" /></el-icon>
         </span>
         <template v-if="!actionsCollapsed">
           <el-tooltip
@@ -371,7 +371,7 @@ import {
   LayoutGrid,
   Terminal as TerminalIcon,
   GripVertical,
-  ChevronsRight,
+  ChevronsLeft,
 } from '@lucide/vue'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
@@ -856,7 +856,7 @@ function focusPane(): void {
 
 /**
  * 窗格操作栏(分割/关闭等图标所在工具栏)手柄,固定在操作栏最左侧:
- * 单击切换折叠(折叠后只剩手柄,图标换为右向展开箭头——展开后按钮出现在手柄右侧);
+ * 单击切换折叠(折叠后只剩手柄,图标换为左向展开箭头——操作栏吸附右缘,展开向左长出按钮);
  * 长按(GRIP_LONG_PRESS_MS)进入拖拽——只允许沿右侧上下移动(水平始终吸附右侧),
  * 拖动范围限制在窗格内部。单击/长按的判定逻辑见 PaneActionsGrip(纯函数)。
  */
@@ -884,7 +884,7 @@ function startActionsDrag(event: PointerEvent): void {
   gripTimer = setTimeout(() => {
     gripTimer = null
     if (!gripPress) return
-    activateGripDrag(gripPress, actionsDragOffset.value)
+    activateGripDrag(gripPress)
     actionsDragging.value = true
   }, GRIP_LONG_PRESS_MS)
   grip.setPointerCapture(event.pointerId)
@@ -1325,6 +1325,7 @@ function withTimeout<T>(
   flex: none;
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 9px;
   padding: 6px 10px;
   border-top: 1px solid color-mix(in srgb, var(--terminal-fg) 14%, var(--terminal-bg));
