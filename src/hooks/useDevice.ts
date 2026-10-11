@@ -34,6 +34,7 @@ import {
 } from '@/core/gnssraw/RtcmFileAccess'
 import { RecentInputFiles } from '@/core/file/RecentInputFiles'
 import { mcapBasename } from '@/core/lidar/McapFileAccess'
+import { mcapPartIndex } from '@/core/lidar/McapPartFamily'
 import { JsonStorage } from '@/core/storage/JsonStorage'
 import { useDataSourceManager } from '@/composables/useDataSourceManager'
 import type { TextDataParser } from '@/core/data/DataSourceStorage'
@@ -155,6 +156,8 @@ const isMcapPath = (path: string) => path.trim().toLowerCase().endsWith('.mcap')
 // 文件输入按扩展名自适应分发：.mcap 走 LiDAR 时间轴，以下文本类型走文本解析器
 const TEXT_FILE_EXTENSIONS = ['txt', 'csv', 'dat', 'log', 'nmea']
 const fileIsMcap = computed(() => isMcapPath(filePath.value))
+// 输入路径是板上轮转分片(part_N.mcap)时,确认后自动补齐同目录整族分片
+const fileIsMcapPartSlice = computed(() => mcapPartIndex(mcapBasename(filePath.value)) !== undefined)
 const selectedFileCount = computed(() =>
   selectedFilePath.value === filePath.value.trim()
     ? selectedFiles.value.length || selectedPaths.value.length
@@ -952,10 +955,12 @@ export function useDevice() {
             if (file !== mcapFiles[0]) continue
             const ok = await mcapPlayer.loadFromFiles(mcapFiles)
             if (ok) {
+              // 拖入单个分片可能已自动展开为整族,以实际加载的分片数为准
+              const partCount = mcapPlayer.fileInfo.value?.partCount ?? mcapFiles.length
               ElMessage({
                 message:
-                  mcapFiles.length > 1
-                    ? t('app.toolbar.mcapLoadedParts', { count: mcapFiles.length })
+                  partCount > 1
+                    ? t('app.toolbar.mcapLoadedParts', { count: partCount })
                     : t('app.toolbar.mcapLoaded', { name: file.name }),
                 type: 'success',
                 placement: 'bottom-right',
@@ -1696,6 +1701,7 @@ export function useDevice() {
     serialAdvanced,
     filePath,
     fileIsMcap,
+    fileIsMcapPartSlice,
     fileInputLoading,
     selectedFileCount,
     fileTimeTag,

@@ -7,6 +7,7 @@ import { ipcMain } from 'electron'
 import * as fs from 'node:fs'
 import * as fsPromises from 'node:fs/promises'
 import * as path from 'node:path'
+import { collectPartFamily, MCAP_PART_PATTERN } from '../../src/core/lidar/McapPartFamily'
 
 const MAX_MCAP_BYTES = 2 * 1024 * 1024 * 1024
 
@@ -26,5 +27,22 @@ export function registerLidarIpc(): void {
     // 拷成独立 ArrayBuffer，跨 IPC 结构化克隆到渲染进程
     const data = buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength)
     return { data, size: stat.size }
+  })
+
+  // 给定一个分片路径(part_N.mcap)，列出同目录整族分片的绝对路径(分片号升序)；
+  // 非分片名/目录不可读时返回空数组，渲染侧按单文件回落。
+  ipcMain.handle('lidar-mcap-list-family', async (_event, rawPath: unknown) => {
+    if (typeof rawPath !== 'string' || !rawPath.trim()) return []
+    const filePath = path.resolve(rawPath)
+    if (!MCAP_PART_PATTERN.test(path.basename(filePath))) return []
+    try {
+      const dir = path.dirname(filePath)
+      const entries = await fsPromises.readdir(dir)
+      return collectPartFamily(entries, path.basename(filePath)).map((name) =>
+        path.join(dir, name),
+      )
+    } catch {
+      return []
+    }
   })
 }

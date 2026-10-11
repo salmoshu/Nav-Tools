@@ -258,7 +258,9 @@ E-Wagon-Lidar on-board `--trace` sink (ROS 2 profile, CDR). It ships with four
 panels plus a toolbar timeline.
 
 1. Load a recording via `Input → File` (multi-select the `part_N` shards of one
-   session) or drop the `.mcap` file(s) onto the main window.
+   session) or drop the `.mcap` file(s) onto the main window. Importing a single
+   `part_N.mcap` shard (typed path, single pick, one-file drop, recent entry)
+   auto-expands to the whole shard family in that directory.
 2. Drive playback from the toolbar timeline: play/pause, ±1/±10 frame step,
    speed (×0.25–×8) and loop. Space / ← / → / Home / End shortcuts work while
    any LiDAR panel is open. The timeline info button opens the topic table

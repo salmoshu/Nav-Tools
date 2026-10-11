@@ -98,6 +98,7 @@ export default {
     mcapSource: 'LiDAR 录像（MCAP）',
     recentFiles: '最近文件',
     mcapSelectedParts: '已选择 {count} 个分片',
+    mcapPartFamilyHint: '单分片文件将自动补齐同目录的全部分片',
     mcapHint:
       '确认后加载到 LiDAR 时间轴，支持播放、逐帧和倍速。同一会话的 part_N.mcap 分片可多选，也可直接拖入主窗口。',
     mcapLoaded: '已打开录像：{name}',

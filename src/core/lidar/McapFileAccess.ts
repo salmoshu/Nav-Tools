@@ -36,6 +36,23 @@ export async function readMcapFromFile(file: File): Promise<LoadedMcapBytes> {
   return { name: file.name, path: path || undefined, sizeBytes: bytes.byteLength, bytes }
 }
 
+/**
+ * 单个分片路径自动展开为同目录整族分片(part_N.mcap,数值序)。
+ * 手动导入(路径输入/单选/最近文件重开)只给一片时,整段录像也能完整加载;
+ * 非分片名、目录不可读或族内仅自身时原样返回。仅 Electron 可用,Web 构建原样返回。
+ */
+export async function expandMcapPartPaths(paths: string[]): Promise<string[]> {
+  if (paths.length !== 1) return paths
+  const listFamily = window.electronAPI?.lidarMcapListFamily
+  if (!listFamily) return paths
+  try {
+    const family = await listFamily(paths[0])
+    return family.length > 1 ? family : paths
+  } catch {
+    return paths
+  }
+}
+
 /** 多个浏览器 File 对象，按分片数值序返回。 */
 export async function readMcapFromFiles(files: File[]): Promise<LoadedMcapBytes[]> {
   const parts: LoadedMcapBytes[] = []

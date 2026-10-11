@@ -100,6 +100,7 @@ export default {
     mcapSource: 'LiDAR recording (MCAP)',
     recentFiles: 'Recent files',
     mcapSelectedParts: '{count} parts selected',
+    mcapPartFamilyHint: 'A single part file auto-loads all sibling part_*.mcap slices',
     mcapHint:
       'Confirm to load the LiDAR timeline for playback, frame stepping and speed control. Select all part_N.mcap files from one session together, or drop them onto the main window.',
     mcapLoaded: 'Recording opened: {name}',

@@ -6,6 +6,7 @@ import { PlayerClock } from '@/core/lidar/PlayerClock'
 import { buildPlotSeries } from '@/core/lidar/LidarSeries'
 import { parseDwaScores } from '@/core/lidar/DwaScores'
 import {
+  expandMcapPartPaths,
   mcapCommonDirName,
   readMcapFromFiles,
   readMcapFromPaths,
@@ -201,6 +202,14 @@ export function useMcapPlayer() {
       return true
     })
     if (unique.length === 0) return false
+    // 只拖入/选中一个分片时: 能拿到磁盘路径就自动展开同族分片, 加载整段录像
+    if (unique.length === 1) {
+      const path = window.electronAPI?.getPathForFile?.(unique[0])
+      if (path) {
+        const family = await expandMcapPartPaths([path])
+        if (family.length > 1) return loadFromPaths(family)
+      }
+    }
     const parts = await readMcapFromFiles(unique)
     return loadBytes(parts)
   }
@@ -214,7 +223,8 @@ export function useMcapPlayer() {
     const unique = [...new Set(paths)]
     if (unique.length === 0) return false
     try {
-      const parts = await readMcapFromPaths(unique)
+      // 手动导入单个分片(路径输入/单选/最近文件重开)时自动补齐同族分片
+      const parts = await readMcapFromPaths(await expandMcapPartPaths(unique))
       return await loadBytes(parts)
     } catch (error) {
       status.value = 'error'

@@ -214,6 +214,9 @@
             <span v-if="selectedFileCount > 1">{{
               t('app.toolbar.mcapSelectedParts', { count: selectedFileCount })
             }}</span>
+            <span v-else-if="fileIsMcapPartSlice">{{
+              t('app.toolbar.mcapPartFamilyHint')
+            }}</span>
           </div>
           <template v-else>
             <div class="input-group compact-input-group">
@@ -729,6 +732,7 @@ const {
   fileIsMcap,
   fileInputLoading,
   selectedFileCount,
+  fileIsMcapPartSlice,
   fileTimeTag,
   fileReplaySpeed,
   fileStartOffset,
