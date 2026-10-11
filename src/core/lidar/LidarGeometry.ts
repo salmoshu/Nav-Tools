@@ -54,6 +54,23 @@ export interface PoseStampedMessage {
   pose: { position: { x: number; y: number; z: number }; orientation: { x: number; y: number; z: number; w: number } }
 }
 
+export interface OccupancyGridMessage {
+  /** 板上 schema 的 Header 字段名可能随通道不同（stamp/header），回放一律用 logTime，
+   *  渲染也不读消息内时间，故这里不作结构要求 */
+  stamp?: RosHeader
+  info: {
+    resolution: number
+    width: number
+    height: number
+    origin: {
+      position: { x: number; y: number; z: number }
+      orientation: { x: number; y: number; z: number; w: number }
+    }
+  }
+  /** 行主序 int8：-1 未知，0..100 占据概率（100=占据，0=已观测空闲） */
+  data: ArrayLike<number>
+}
+
 export interface OdometryMessage {
   stamp: RosHeader
   child_frame_id: string
@@ -116,6 +133,19 @@ export function asPoseStamped(value: unknown): PoseStampedMessage | undefined {
   const pose = (value as { pose?: unknown }).pose
   if (!isObject(pose) || !isObject(pose.position)) return undefined
   return value as unknown as PoseStampedMessage
+}
+
+export function asOccupancyGrid(value: unknown): OccupancyGridMessage | undefined {
+  if (!isObject(value)) return undefined
+  const info = (value as { info?: unknown }).info
+  if (!isObject(info)) return undefined
+  if (typeof info.resolution !== 'number' || !(info.resolution > 0)) return undefined
+  if (typeof info.width !== 'number' || typeof info.height !== 'number') return undefined
+  if (!(info.width > 0) || !(info.height > 0)) return undefined
+  const origin = (info as { origin?: unknown }).origin
+  if (!isObject(origin) || !isObject(origin.position)) return undefined
+  if (!isArrayLike((value as { data?: unknown }).data)) return undefined
+  return value as unknown as OccupancyGridMessage
 }
 
 export function asOdometry(value: unknown): OdometryMessage | undefined {
@@ -214,6 +244,45 @@ export function pathToXY(path: PathMessage): Float32Array {
     out[i * 2 + 1] = poses[i]?.pose?.position?.y ?? 0
   }
   return out
+}
+
+// ——— 占据栅格三态归一 ———
+
+export const CELL_UNKNOWN = 0
+export const CELL_FREE = 1
+export const CELL_OCCUPIED = 2
+
+/** 占据概率 → “占据”态的阈值（对齐 RViz/map_server 默认 occ_thresh 0.65）。 */
+export const OCCUPANCY_OCCUPIED_THRESHOLD = 65
+
+/**
+ * int8 占据数据（-1 未知 / 0..100 概率）→ 行主序三态数组（CELL_*）。
+ * 数据长度不足 width*height 时返回 undefined（结构异常，由调用方记 warning）。
+ */
+export function normalizeOccupancyCells(
+  data: ArrayLike<number>,
+  width: number,
+  height: number,
+): Uint8Array | undefined {
+  const count = Math.floor(width) * Math.floor(height)
+  if (count <= 0 || data.length < count) return undefined
+  const cells = new Uint8Array(count)
+  for (let i = 0; i < count; i++) {
+    const value = data[i]
+    cells[i] =
+      value < 0 ? CELL_UNKNOWN : value >= OCCUPANCY_OCCUPIED_THRESHOLD ? CELL_OCCUPIED : CELL_FREE
+  }
+  return cells
+}
+
+/** 栅格 origin（Pose，odom 系）→ 平面位姿。 */
+export function occupancyOriginPose(grid: OccupancyGridMessage): { x: number; y: number; yaw: number } {
+  const origin = grid.info.origin
+  return {
+    x: origin.position?.x ?? 0,
+    y: origin.position?.y ?? 0,
+    yaw: origin.orientation ? quaternionToYaw(origin.orientation) : 0,
+  }
 }
 
 export function quaternionToYaw(q: { x: number; y: number; z: number; w: number }): number {

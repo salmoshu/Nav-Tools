@@ -55,6 +55,12 @@
           }}</el-checkbox>
           <el-checkbox v-model="showMargin" size="small">{{ t('lidar.scene.margin') }}</el-checkbox>
           <el-checkbox v-model="showGoal" size="small">{{ t('lidar.scene.goal') }}</el-checkbox>
+          <el-checkbox v-model="showLocalMap" size="small" :disabled="!hasLocalMap">{{
+            t('lidar.scene.localMap')
+          }}</el-checkbox>
+          <el-checkbox v-model="showLocalMapPath" size="small" :disabled="!hasLocalMapPath">{{
+            t('lidar.scene.localMapPath')
+          }}</el-checkbox>
         </div>
         <div class="config-section">
           <div class="config-title">{{ t('lidar.scene.display') }}</div>
@@ -87,6 +93,10 @@
         <span><i class="dot dot-candidate"></i>{{ t('lidar.scene.candidates') }}</span>
         <span><i class="dot dot-best"></i>{{ t('lidar.scene.best') }}</span>
         <span><i class="dot dot-trail"></i>{{ t('lidar.scene.trail') }}</span>
+        <span v-if="hasLocalMap"><i class="dot dot-local-map"></i>{{ t('lidar.scene.localMap') }}</span>
+        <span v-if="hasLocalMapPath"
+          ><i class="dot dot-local-map-path"></i>{{ t('lidar.scene.localMapPath') }}</span
+        >
       </div>
       <div v-if="hasFrame && !configVisible" class="scene-controls-hint">
         {{ t('lidar.scene.controlsHint') }}
@@ -141,6 +151,14 @@ const showFootprint = topicFlag('/footprint')
 const showMargin = topicFlag('/footprint_margin')
 const showGoal = topicFlag('/goal')
 const showTrail = topicFlag('/odom_est')
+const showLocalMap = topicFlag('/local_map')
+const showLocalMapPath = topicFlag('/local_map_path')
+
+// 旧录像没有 local_map 通道：开关灰显（降级形态对齐时间轴话题表——只列文件内话题）
+const hasLocalMap = computed(() => player.document.value?.topicInfo('/local_map') !== undefined)
+const hasLocalMapPath = computed(
+  () => player.document.value?.topicInfo('/local_map_path') !== undefined,
+)
 
 const renderOptions = computed<SceneRenderOptions & { theme: 'dark' | 'light' }>(() => ({
   ...opts,
@@ -153,6 +171,8 @@ const renderOptions = computed<SceneRenderOptions & { theme: 'dark' | 'light' }>
   showMargin: showMargin.value,
   showGoal: showGoal.value,
   showTrail: showTrail.value,
+  showLocalMap: showLocalMap.value,
+  showLocalMapPath: showLocalMapPath.value,
 }))
 
 watch(
@@ -242,6 +262,8 @@ function emptyFrame() {
     footprintMarginXY: undefined,
     goalXY: undefined,
     odomTrailXY: undefined,
+    localMap: undefined,
+    localMapPathXY: undefined,
     warnings: [],
   }
 }
@@ -524,5 +546,11 @@ onUnmounted(() => {
 }
 .dot-trail {
   background: #f59e0b;
+}
+.dot-local-map {
+  background: #f97316;
+}
+.dot-local-map-path {
+  background: #c084fc;
 }
 </style>

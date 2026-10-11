@@ -13,6 +13,11 @@
         <span class="chip" v-if="scores.cache_hits">cache {{ scores.cache_hits }}</span>
         <span class="chip cmd">cmd v={{ scores.cmd.v.toFixed(2) }} w={{ scores.cmd.w.toFixed(2) }}</span>
         <span class="chip window">window [{{ scores.window.join(', ') }}]</span>
+        <!-- local_map 状态（旧录像无 local_map 组 → 整条不显示；组名/子键名见 DwaScores.LOCAL_MAP_SCORE_KEYS） -->
+        <span class="chip blocked" v-if="scores.local_map?.blk">{{ t('lidar.scores.localMapBlk') }}</span>
+        <span class="chip warn" v-if="scores.local_map?.nav_hold">{{ t('lidar.scores.localMapNavHold') }}</span>
+        <span class="chip warn" v-if="scores.local_map?.memory_paused">{{ t('lidar.scores.localMapMemoryPaused') }}</span>
+        <span class="chip" v-if="scores.local_map?.nav_reason">{{ scores.local_map.nav_reason }}</span>
       </div>
       <el-table
         :data="tableRows"

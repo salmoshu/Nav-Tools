@@ -3,7 +3,8 @@
 // 坐标约定：ROS 平面 x/y 直接映射到 three.js x/y（俯视时 x 右 y 上），z=0 平面。
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
-import type { SceneFrameData } from '@/core/lidar/types'
+import { CELL_FREE, CELL_OCCUPIED } from '@/core/lidar/LidarGeometry'
+import type { LocalMapView, SceneFrameData } from '@/core/lidar/types'
 
 export type SceneColorMode = 'flat' | 'intensity' | 'range'
 
@@ -20,6 +21,8 @@ export interface SceneRenderOptions {
   showGoal: boolean
   showTrail: boolean
   showRobot: boolean
+  showLocalMap: boolean
+  showLocalMapPath: boolean
   pointSize: number
   colorMode: SceneColorMode
   followRobot: boolean
@@ -53,7 +56,26 @@ const COLORS = {
   trail: 0xf59e0b,
   goal: 0xf43f5e,
   heading: 0xfacc15,
+  localMapPath: 0xc084fc,
 }
+
+/** 占据栅格配色（RGBA 0-255）：占据醒目暖色、已观测空闲极淡、未知全透明（不写 alpha）。 */
+const LOCAL_MAP_PALETTE: Record<
+  'dark' | 'light',
+  { occupied: [number, number, number, number]; free: [number, number, number, number] }
+> = {
+  dark: {
+    occupied: [251, 146, 60, 217],
+    free: [148, 163, 184, 22],
+  },
+  light: {
+    occupied: [234, 88, 12, 217],
+    free: [100, 116, 139, 20],
+  },
+}
+
+/** 栅格层 z 偏移：略低于 z=0 的点云/网格线，避免深度冲突。 */
+const LOCAL_MAP_Z = -0.01
 
 const MAX_TRAIL_POINTS = 4096
 
@@ -71,6 +93,10 @@ export class LidarSceneRenderer {
   private footprintLoop: THREE.LineLoop
   private marginLoop: THREE.LineLoop
   private trailLine: THREE.Line
+  private localMapPathLine: THREE.Line
+  private localMapMesh: THREE.Mesh
+  private localMapTexture: THREE.DataTexture
+  private localMapSize = { width: 0, height: 0 }
   private goalArrow: THREE.ArrowHelper
   private headingArrow: THREE.ArrowHelper
   private lastRobotPosition = new THREE.Vector3(Number.NaN, Number.NaN, Number.NaN)
@@ -151,6 +177,23 @@ export class LidarSceneRenderer {
     this.footprintLoop = this.makeLoop(COLORS.footprint, false)
     this.marginLoop = this.makeLoop(COLORS.margin, true)
     this.trailLine = this.makeLine(COLORS.trail)
+    this.localMapPathLine = this.makeLine(COLORS.localMapPath)
+
+    // 占据栅格层：1×1 占位纹理起步，首帧按真实 width×height 重建；
+    // 单位平面几何只随帧缩放/摆放，从不重建
+    this.localMapTexture = makeGridTexture(1, 1)
+    this.localMapMesh = new THREE.Mesh(
+      new THREE.PlaneGeometry(1, 1),
+      new THREE.MeshBasicMaterial({
+        map: this.localMapTexture,
+        transparent: true,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+      }),
+    )
+    this.localMapMesh.frustumCulled = false
+    this.localMapMesh.visible = false
+    this.scene.add(this.localMapMesh)
 
     this.goalArrow = new THREE.ArrowHelper(
       new THREE.Vector3(1, 0, 0),
@@ -311,6 +354,16 @@ export class LidarSceneRenderer {
       this.trailLine.visible = false
     }
 
+    // local_map 占据栅格与 A* 路径（odom 系，旧录像没有 → frame 字段为 undefined）
+    this.updateLocalMap(frame.localMap, options.showLocalMap, options.theme)
+
+    if (options.showLocalMapPath && frame.localMapPathXY && frame.localMapPathXY.length >= 4) {
+      this.setPositions(this.localMapPathLine.geometry, toThreeXYZ(frame.localMapPathXY))
+      this.localMapPathLine.visible = true
+    } else {
+      this.localMapPathLine.visible = false
+    }
+
     if (options.showGoal && frame.goalXY) {
       this.goalArrow.position.set(frame.goalXY.x, frame.goalXY.y, 0)
       this.goalArrow.visible = true
@@ -374,6 +427,8 @@ export class LidarSceneRenderer {
       for (const path of frame.candidatePathsXY) absorb(path)
       absorb(frame.footprintXY)
       absorb(frame.footprintMarginXY)
+      if (frame.localMap) absorb(localMapCorners(frame.localMap))
+      absorb(frame.localMapPathXY)
       if (frame.goalXY) absorb(Float32Array.of(frame.goalXY.x, frame.goalXY.y))
     }
     const cx = (minX + maxX) / 2
@@ -436,6 +491,58 @@ export class LidarSceneRenderer {
   }
 
   // ——— 内部工具 ———
+
+  /**
+   * 占据栅格层：每帧把三态 cell 翻译成 RGBA 写进 DataTexture（O(W×H) 填色 +
+   * 一次纹理上传，160×160≈102KB，远低于重建几何体的成本）；几何只做缩放/摆放。
+   * DataTexture 不开 flipY，纹理第 r 行即栅格第 r 行（行主序起点 origin），一一对应。
+   */
+  private updateLocalMap(
+    map: LocalMapView | undefined,
+    visible: boolean,
+    theme: 'dark' | 'light',
+  ): void {
+    if (!visible || !map || map.width <= 0 || map.height <= 0) {
+      this.localMapMesh.visible = false
+      return
+    }
+    if (map.width !== this.localMapSize.width || map.height !== this.localMapSize.height) {
+      this.localMapTexture.dispose()
+      this.localMapTexture = makeGridTexture(map.width, map.height)
+      const material = this.localMapMesh.material as THREE.MeshBasicMaterial
+      material.map = this.localMapTexture
+      material.needsUpdate = true
+      this.localMapSize = { width: map.width, height: map.height }
+    }
+    const palette = LOCAL_MAP_PALETTE[theme]
+    const data = this.localMapTexture.image.data as Uint8Array
+    const cells = map.cells
+    for (let i = 0; i < cells.length; i++) {
+      const color = cells[i] === CELL_OCCUPIED ? palette.occupied : cells[i] === CELL_FREE ? palette.free : undefined
+      if (color) {
+        data[i * 4] = color[0]
+        data[i * 4 + 1] = color[1]
+        data[i * 4 + 2] = color[2]
+        data[i * 4 + 3] = color[3]
+      } else {
+        data[i * 4 + 3] = 0
+      }
+    }
+    this.localMapTexture.needsUpdate = true
+    // PlaneGeometry 中心对称：网格起点在 origin，中心 = origin + R(yaw)·(半跨距)
+    const spanX = map.width * map.resolution
+    const spanY = map.height * map.resolution
+    const cos = Math.cos(map.originYaw)
+    const sin = Math.sin(map.originYaw)
+    this.localMapMesh.scale.set(spanX, spanY, 1)
+    this.localMapMesh.position.set(
+      map.originX + (cos * spanX - sin * spanY) / 2,
+      map.originY + (sin * spanX + cos * spanY) / 2,
+      LOCAL_MAP_Z,
+    )
+    this.localMapMesh.rotation.z = map.originYaw
+    this.localMapMesh.visible = true
+  }
 
   private updatePoints(
     points: THREE.Points,
@@ -531,6 +638,36 @@ export class LidarSceneRenderer {
     geometry.setAttribute('position', new THREE.BufferAttribute(xyz, 3))
     geometry.setDrawRange(0, xyz.length / 3)
   }
+}
+
+/** 栅格数据纹理：RGBA8 + Nearest（格点硬边），尺寸与栅格一致。 */
+function makeGridTexture(width: number, height: number): THREE.DataTexture {
+  const texture = new THREE.DataTexture(new Uint8Array(width * height * 4), width, height)
+  texture.minFilter = THREE.NearestFilter
+  texture.magFilter = THREE.NearestFilter
+  texture.generateMipmaps = false
+  return texture
+}
+
+/** 栅格四角（世界系）平铺 xy，供视野适配。 */
+function localMapCorners(map: LocalMapView): Float32Array {
+  const spanX = map.width * map.resolution
+  const spanY = map.height * map.resolution
+  const cos = Math.cos(map.originYaw)
+  const sin = Math.sin(map.originYaw)
+  const out = new Float32Array(8)
+  const corners: [number, number][] = [
+    [0, 0],
+    [spanX, 0],
+    [0, spanY],
+    [spanX, spanY],
+  ]
+  for (let i = 0; i < corners.length; i++) {
+    const [x, y] = corners[i]
+    out[i * 2] = map.originX + x * cos - y * sin
+    out[i * 2 + 1] = map.originY + x * sin + y * cos
+  }
+  return out
 }
 
 /** 平铺 xy → three.js 顶点（z=0）。 */

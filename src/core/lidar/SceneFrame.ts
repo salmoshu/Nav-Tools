@@ -2,10 +2,11 @@
 // 坐标约定（ADR-035）：base_link = 后轮轴心；/tf 给出 laser 相对 base_link 的外参；
 // /odom_est 给出 base_link 在估计里程计系下的位姿（会漂移，仅用于显示）。
 // 输出几何一律已在“世界系”（有里程计=odom_est，无里程计=base_link）。
-import type { CurrentFrame, SceneFrameData } from './types'
+import type { CurrentFrame, LocalMapView, SceneFrameData } from './types'
 import type { McapDocument } from './McapDocument'
 import {
   asLaserScan,
+  asOccupancyGrid,
   asOdometry,
   asPath,
   asPointCloud2,
@@ -13,6 +14,8 @@ import {
   asPoseStamped,
   asTfMessage,
   laserScanToXY,
+  normalizeOccupancyCells,
+  occupancyOriginPose,
   odometryToPose,
   pathToXY,
   pointCloud2ToXYZ,
@@ -34,6 +37,10 @@ export const LIDAR_TOPICS = {
   odom: '/odom_est',
   cmd: '/cmd_raw',
   scores: '/dwa_scores',
+  /** 绕障在役时段的局部占据栅格（约 3Hz 节流；旧录像没有） */
+  localMap: '/local_map',
+  /** local_map 当前 A* 路径（odom 系；旧录像没有） */
+  localMapPath: '/local_map_path',
 } as const
 
 export interface BuildSceneOptions {
@@ -172,6 +179,39 @@ export function buildSceneFrameData(
     }
   }
 
+  // ——— local_map 占据栅格与 A* 路径（odom 系数据，按 origin 摆放，
+  //      不走 laser→base_link→odom 变换链；旧录像没有这两个 channel） ———
+  let localMap: LocalMapView | undefined
+  const localMapEntry = frame.entries.get(LIDAR_TOPICS.localMap)
+  if (localMapEntry) {
+    const grid = asOccupancyGrid(localMapEntry.message)
+    if (grid) {
+      const cells = normalizeOccupancyCells(grid.data, grid.info.width, grid.info.height)
+      if (cells) {
+        const origin = occupancyOriginPose(grid)
+        localMap = {
+          resolution: grid.info.resolution,
+          width: Math.floor(grid.info.width),
+          height: Math.floor(grid.info.height),
+          originX: origin.x,
+          originY: origin.y,
+          originYaw: origin.yaw,
+          cells,
+        }
+      } else {
+        warnings.push('/local_map 数据长度与 width×height 不符')
+      }
+    } else {
+      warnings.push('/local_map 消息结构异常')
+    }
+  }
+  let localMapPathXY: Float32Array | undefined
+  const localMapPathEntry = frame.entries.get(LIDAR_TOPICS.localMapPath)
+  if (localMapPathEntry) {
+    const path = asPath(localMapPathEntry.message)
+    if (path) localMapPathXY = pathToXY(path)
+  }
+
   // ——— 里程计轨迹（估计位姿的历史） ———
   let odomTrailXY: Float32Array | undefined
   if (odomEntry) {
@@ -201,6 +241,8 @@ export function buildSceneFrameData(
     footprintMarginXY,
     goalXY,
     odomTrailXY,
+    localMap,
+    localMapPathXY,
     warnings,
   }
 }

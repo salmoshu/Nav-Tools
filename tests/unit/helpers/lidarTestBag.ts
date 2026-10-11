@@ -206,6 +206,40 @@ float64 x
 float64 y
 float64 z`
 
+export const SCHEMA_OCCUPANCY_GRID = `std_msgs/Header stamp
+nav_msgs/MapMetaData info
+int8[] data
+================================================================================
+MSG: std_msgs/Header
+builtin_interfaces/Time stamp
+string frame_id
+================================================================================
+MSG: builtin_interfaces/Time
+int32 sec
+uint32 nanosec
+================================================================================
+MSG: nav_msgs/MapMetaData
+builtin_interfaces/Time map_load_time
+float32 resolution
+uint32 width
+uint32 height
+geometry_msgs/Pose origin
+================================================================================
+MSG: geometry_msgs/Pose
+geometry_msgs/Point position
+geometry_msgs/Quaternion orientation
+================================================================================
+MSG: geometry_msgs/Point
+float64 x
+float64 y
+float64 z
+================================================================================
+MSG: geometry_msgs/Quaternion
+float64 x
+float64 y
+float64 z
+float64 w`
+
 export const SCHEMA_TWIST = `geometry_msgs/Vector3 linear
 geometry_msgs/Vector3 angular
 ================================================================================
@@ -382,6 +416,34 @@ export function makeOdometry(
     twist: {
       twist: { linear: { x: v, y: 0, z: 0 }, angular: { x: 0, y: 0, z: w } },
     },
+  }
+}
+
+/** OccupancyGrid：odom 系局部栅格（行主序 int8，起点 origin；yaw 缺省 0）。 */
+export function makeOccupancyGrid(
+  frameId: string,
+  sec: number,
+  nanosec: number,
+  resolution: number,
+  width: number,
+  height: number,
+  origin: { x: number; y: number; yaw?: number },
+  data: number[],
+) {
+  const halfYaw = (origin.yaw ?? 0) / 2
+  return {
+    stamp: header(frameId, sec, nanosec),
+    info: {
+      map_load_time: { sec, nanosec },
+      resolution,
+      width,
+      height,
+      origin: {
+        position: { x: origin.x, y: origin.y, z: 0 },
+        orientation: { x: 0, y: 0, z: Math.sin(halfYaw), w: Math.cos(halfYaw) },
+      },
+    },
+    data,
   }
 }
 

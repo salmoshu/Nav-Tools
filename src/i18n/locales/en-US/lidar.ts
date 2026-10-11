@@ -26,6 +26,8 @@ export default {
     footprint: 'Footprint',
     margin: 'Margin footprint',
     goal: 'Rolling goal',
+    localMap: 'Local map',
+    localMapPath: 'A* path',
     display: 'Display',
     colorMode: 'Coloring',
     colorFlat: 'Flat',
@@ -67,6 +69,9 @@ export default {
     collision: 'Collision',
     cached: 'Cached',
     chosen: 'Chosen',
+    localMapBlk: 'local_map blocked',
+    localMapNavHold: 'Nav hold',
+    localMapMemoryPaused: 'Memory paused',
     noScores: 'No /dwa_scores message at the current frame',
   },
   inspector: {

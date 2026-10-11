@@ -1,6 +1,10 @@
 # LiDAR 可视化：E-Wagon MCAP 决策录像回放
 
-> 状态：已实现并通过完整测试（单元 682 绿 / E2E 4 绿 / typecheck / lint / 生产构建）。
+> 状态：已实现（typecheck / lint / 生产构建通过；lidar-* 单元 74 项绿）。
+> 2026-10 增补：local_map 双通道（`/local_map` 占据栅格 + `/local_map_path` A* 路径）
+> 按车端定稿契约实现，并经真实样例 `tests/fixtures/lidar/localmap-sample.mcap`
+> （14 通道 trace_sink 产物）联调验证；dwa_scores local_map 组键名单点可配，
+> 旧录像自动降级。
 > 服务对象：E-Wagon-Lidar v1.1.0"可视化黑匣子"（板上 `--trace` 录制的 MCAP）。
 > 对应板上文档：`E-Wagon-Lidar/doc/versions/v1.1.0/`（visualization-plan.md §6 调试界面
 > 的"空间场景 / 执行曲线 / 决策状态"三区在本工具中落地）。
@@ -8,7 +12,8 @@
 ## 1. 背景与目标
 
 E-Wagon-Lidar v1.1.0 让雷达避障进程把"思考过程"录成 MCAP（ros2 profile，
-CDR 编码，12 通道）。板上的验收标准是：拿回电脑，**拖时间轴同屏看到障碍点、
+CDR 编码，12 通道；绕障在役时段再加 `/local_map`、`/local_map_path` 两个
+local_map 通道，共 14）。板上的验收标准是：拿回电脑，**拖时间轴同屏看到障碍点、
 候选轨迹、逐候选评分、最终指令，解释清每一次停顿和转向**。
 
 原方案依赖外部工具 Foxglove Studio。本功能把这层"录像带回放"能力直接内置进
@@ -37,7 +42,10 @@ Nav-Tools：  拖拽（可多文件）/ 对话框（可多选）/ 最近文件 �
 `/tf`（base_link→laser 0.75m）、`/footprint` `/footprint_margin`（PolygonStamped）、
 `/traj_best` `/traj_candidates`（Path，一次规划多条候选=同戳多条消息）、
 `/goal`（PoseStamped）、`/odom_est`（Odometry，标注估计）、`/cmd_raw`（Twist）、
-`/dwa_scores`（String 装 JSON）。
+`/dwa_scores`（String 装 JSON）、`/local_map`（OccupancyGrid，odom 系，约 3Hz
+节流，仅绕障在役时段有数据）、`/local_map_path`（Path，local_map 当前 A\* 路径，
+同 odom 系）。后两个是 v1.1.0 之后加入的 local_map 通道，**旧录像没有**：场景面板的
+对应开关灰显，话题表自然不列。
 
 ## 3. 关键实现事实（回放语义对齐 Foxglove/Lichtblick）
 
@@ -59,7 +67,19 @@ Nav-Tools：  拖拽（可多文件）/ 对话框（可多选）/ 最近文件 �
   会话头出现「不完整」徽标，problems 写明"仅加载前 N 条消息"；压缩 chunk
   无解压器时给可读提示而不是静默丢数据。
 - **dwa_scores**：JSON 宽容解析为强类型（逐候选 v/w/h/obs/vel/cm/bonus/tot、
-  collision 淘汰、cached 复验、samples/evaluated/early_terminated/plan_ms/window）。
+  collision 淘汰、cached 复验、samples/evaluated/early_terminated/plan_ms/window）；
+  local_map 状态标志为顶层嵌套组 `"local_map":{"blk":…,"nav_hold":…,"nav_reason":…,
+  "memory_paused":…}`（JSON 布尔；0/1 数值兼容），组名与子键名集中在
+  `DwaScores.LOCAL_MAP_SCORE_KEYS` 单点配置（车端改键名时只动这一处），
+  旧录像没有该组时评分面板不显示对应 chips。
+- **占据栅格渲染**：`/local_map`（odom 系 OccupancyGrid）在 SceneFrame 归一为
+  三态（-1/负数→未知、≥65→占据、其余→已观测空闲，阈值对齐 RViz/map_server
+  occ_thresh），渲染端用 **DataTexture + 单位 PlaneGeometry**：每帧只做
+  O(W×H) 的 RGBA 填色 + 一次纹理上传（160×160≈102KB），几何体永不重建，
+  只按 header(info).origin 缩放/平移/旋转（z 略低于 0 避免与网格线深度冲突）；
+  占据格醒目暖色、空闲极淡、未知全透明，暗/亮双主题。`/local_map_path` 与
+  `/traj_best` 同为 nav_msgs/Path，但**已在 odom 系**，不经过 base 变换链，
+  用不同颜色（紫）的 THREE.Line 区分。
 - **性能形态**：加载时一次全量索引（logTime 升序 + 负载拷贝），绘图序列
   （cmd/odom/scores）一次性预提取为 Float64Array；播放期间每帧只解码
   "播放头之前最近的一组消息"，O(消息数/帧) 与文件大小无关。里程计轨迹
@@ -78,7 +98,7 @@ Nav-Tools：  拖拽（可多文件）/ 对话框（可多选）/ 最近文件 �
 | 纯逻辑 | `src/core/lidar/LidarSeries.ts` | 绘图序列预提取（cmd/odom/scores） |
 | 纯逻辑 | `src/core/lidar/DwaScores.ts`、`PlayerClock.ts`、`timeFormat.ts`、`McapFileAccess.ts`、`src/core/file/RecentInputFiles.ts` | 评分解析 / 回放时钟 / 时间格式化 / 平台文件接入 / 统一最近文件（含旧 MCAP 键迁移） |
 | Store | `src/composables/useMcapPlayer.ts` | 单例播放器：加载/播放/seek/步进/偏好持久化/全局快捷键 |
-| 渲染 | `src/components/windows/lidar/scene/LidarSceneRenderer.ts` | three.js 封装（点云着色、轨迹、轮廓、goal、跟随相机、主题） |
+| 渲染 | `src/components/windows/lidar/scene/LidarSceneRenderer.ts` | three.js 封装（点云着色、轨迹、轮廓、goal、跟随相机、主题、占据栅格 DataTexture 层） |
 | 面板 | `LidarScene.vue` 等 4 个 + `JsonTreeNode.vue` | 注册于 `panelRegistry`，`catalogGroup: 'lidar'` |
 | 工具栏 | `src/components/LidarTimelineControl.vue` | 回放时间轴（形态对齐 FileTimelineControl）+ 信息弹层（话题表/会话指纹/problems/快捷键/截断徽标），随工具栏停靠自适应；ToolBar 内挂载，Input 对话框的文件输入自动识别 MCAP |
 | 主进程 | `electron/main/lidarIpc.ts` + preload 两个方法 | 打开对话框 / 按路径读取 |
@@ -141,7 +161,7 @@ Electron+React），无法作为组件嵌入 Vue 应用；但其核心能力来�
 
 ## 7. 测试与验收记录
 
-- 单元（全量 682 绿，其中 `tests/unit/lidar-*.test.ts` 54 项）：
+- 单元（其中 `tests/unit/lidar-*.test.ts` 74 项）：
   - `lidar-mcap-document`：合成同构 MCAP 验证索引/解码/播放头语义/同戳候选/步进；
   - `lidar-mcap-fallback`：截断分片流式挽回（50%/80% 截断精确挽回完整前缀）、
     压缩 chunk 可读提示、两片归并/乱序分片/`[part_N]` 标识/垃圾输入可读报错；
@@ -150,6 +170,14 @@ Electron+React），无法作为组件嵌入 Vue 应用；但其核心能力来�
   - `lidar-geometry`：极坐标→笛卡尔、无效点剔除、PointCloud2 字段偏移、四元数、变换；
   - `lidar-player-clock`：倍速/边界/循环/seek 收敛；`DwaScores` 真实样例与坏输入；
   - `lidar-scene-frame`：laser→base_link→odom 两级变换数值断言、轨迹增长；
+  - `lidar-local-map`：OccupancyGrid→LocalMapView（origin 含 yaw 原样摆放、
+    cell 三态阈值归一、数据长度异常 warning）、/local_map_path 不过 base 变换、
+    旧录像缺通道降级、dwa_scores local_map 嵌套组按 LOCAL_MAP_SCORE_KEYS 解析
+    （布尔/0/1 兼容、缺子键默认值、组非对象忽略）；
+  - `lidar-localmap-fixture`：车端真实样例 `localmap-sample.mcap` 字段级联调
+    （14 通道齐全、/local_map 17 条结构完整 data==width*height、int8 符号链路
+    验证（Int8Array、未知格 -1 非 255）、三态分布有占据、SceneFrame 无 warning、
+    dwa_scores local_map 组真实值断言）；
   - `lidar-registration`：注册表/glob/双语词条/默认应用迁移/preload 接线（源码扫描）。
 - 端到端（`tests/e2e/lidar-visualizer.spec.ts`，4 绿）：真实板上 Trace 分片
   （`tests/fixtures/lidar/trace-selftest.mcap`，WSL 内 `--trace-selftest` 产物）

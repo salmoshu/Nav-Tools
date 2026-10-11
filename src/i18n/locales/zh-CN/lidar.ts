@@ -24,6 +24,8 @@ export default {
     footprint: '车体轮廓',
     margin: '含裕量轮廓',
     goal: '滚动目标',
+    localMap: '局部栅格',
+    localMapPath: 'A* 路径',
     display: '显示',
     colorMode: '着色',
     colorFlat: '纯色',
@@ -65,6 +67,9 @@ export default {
     collision: '碰撞淘汰',
     cached: '缓存复验',
     chosen: '已选中',
+    localMapBlk: 'local_map 隔断',
+    localMapNavHold: '导航挂起',
+    localMapMemoryPaused: '记忆暂停',
     noScores: '当前帧没有 /dwa_scores 消息',
   },
   inspector: {

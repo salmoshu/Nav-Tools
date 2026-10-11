@@ -62,6 +62,10 @@ instead of each asking for a port again.
 | GNSS-Raw | **SNR Distribution** | Signal-strength histograms per constellation and frequency |
 | GNSS-Raw | **Ephemeris Events** | Broadcast ephemeris updates: iode changes/flaps, expiry, per-type decode failures |
 | Motor | **Motor Parameters** | Read, configure and write motor parameters |
+| LiDAR | **LiDAR Scene** | MCAP replay 3D scene: point clouds, candidate/best paths, local occupancy grid and A* path, footprints and goal |
+| LiDAR | **DWA Scores** | Per-candidate DWA scores, elimination reasons and decision summary |
+| LiDAR | **Command Curves** | Command/odometry/score time series linked to the playhead; click to seek |
+| LiDAR | **Message Inspector** | Decoded message of the current frame as a JSON tree |
 
 ---
 
@@ -246,6 +250,34 @@ ephemeris-update anomaly investigation.
 
 > GNSS-Raw analyzes recorded files only; live serial RTCM streaming is not
 > wired into these panels yet.
+
+### 5.10 LiDAR Replay (MCAP)
+
+The LiDAR application replays MCAP decision traces recorded by the
+E-Wagon-Lidar on-board `--trace` sink (ROS 2 profile, CDR). It ships with four
+panels plus a toolbar timeline.
+
+1. Load a recording via `Input → File` (multi-select the `part_N` shards of one
+   session) or drop the `.mcap` file(s) onto the main window.
+2. Drive playback from the toolbar timeline: play/pause, ±1/±10 frame step,
+   speed (×0.25–×8) and loop. Space / ← / → / Home / End shortcuts work while
+   any LiDAR panel is open. The timeline info button opens the topic table
+   (per-topic scene visibility), the session fingerprint and load problems.
+
+- **LiDAR Scene** — raw/filtered point clouds, planned obstacles,
+  candidate/best paths, footprints, rolling goal and odometry trail. Recordings
+  that contain the local_map channels additionally show the `/local_map`
+  occupancy grid (occupied cells in a warm color, observed-free cells faint,
+  unknown cells transparent) and the `/local_map_path` A* path (purple). On
+  older recordings without these channels the corresponding toggles are greyed
+  out.
+- **DWA Scores** — per-candidate score table with elimination reasons and a
+  summary strip; local_map status chips (blocked / nav hold / memory paused /
+  reason) appear when the trace carries those fields.
+- **Command Curves** — cmd/odom/scores time series linked to the playhead.
+- **Message Inspector** — decoded message of the current frame as a JSON tree.
+
+Topic visibility, speed, loop and follow-robot preferences are persisted.
 
 ---
 

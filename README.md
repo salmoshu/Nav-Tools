@@ -33,7 +33,7 @@ Nav-Tools 是一个基于 Electron + Vue 3 的机器人开发调试工作台。�
 | 通用  | Raw Messages     | 查看、筛选、暂停、保存原始消息，并通过当前串口执行 IAP   |
 | 通用  | Terminal         | 本地、WSL、SSH 终端，支持分屏、SFTP 和 SSH 端口转发      |
 | 通用  | Camera Video     | 播放 RTSP 实时视频，支持缩放、平移和画面标签提示         |
-| LiDAR | LiDAR Scene      | MCAP 回放三维场景：点云、候选/最优轨迹、轮廓与目标       |
+| LiDAR | LiDAR Scene      | MCAP 回放三维场景：点云、候选/最优轨迹、局部占据栅格与 A* 路径、轮廓与目标 |
 | LiDAR | DWA Scores       | DWA 逐候选评分明细、淘汰原因与决策摘要                   |
 | LiDAR | Command Curves   | 指令/里程/评分时间序列，与播放头联动，点击定位           |
 | LiDAR | Message Inspector| 查看当前帧各话题的解码消息（JSON 树）                    |

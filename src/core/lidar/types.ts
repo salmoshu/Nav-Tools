@@ -62,6 +62,18 @@ export interface CandidateScore {
   tot?: number
 }
 
+/** local_map 状态标志（/dwa_scores JSON 顶层 local_map 组的解析视图；旧录像没有该组 → undefined）。 */
+export interface LocalMapStatus {
+  /** blk 隔断（local_map 判定行进受阻） */
+  blk: boolean
+  /** 导航挂起 */
+  nav_hold: boolean
+  /** 挂起/隔断原因文本（可为空串） */
+  nav_reason: string
+  /** 记忆层暂停更新 */
+  memory_paused: boolean
+}
+
 /** /dwa_scores 消息的结构化内容。 */
 export interface DwaScores {
   frame: number
@@ -77,6 +89,8 @@ export interface DwaScores {
   window: [number, number, number, number]
   cmd: { v: number; w: number }
   candidates: CandidateScore[]
+  /** local_map 状态标志；仅当 JSON 携带顶层 local_map 组时存在 */
+  local_map?: LocalMapStatus
 }
 
 /** 回放视图中“车体”的位姿与几何上下文（base_link 系）。 */
@@ -89,6 +103,19 @@ export interface RobotView {
   laserOffsetX: number
   laserOffsetY: number
   hasOdom: boolean
+}
+
+/** 局部占据栅格的渲染视图（odom 系，三态已归一；单位米/弧度）。 */
+export interface LocalMapView {
+  resolution: number
+  width: number
+  height: number
+  /** origin 位姿（odom 系；行主序数据从该起点铺起，不假设为 (0,0)） */
+  originX: number
+  originY: number
+  originYaw: number
+  /** 行主序三态：0 未知 / 1 已观测空闲 / 2 占据（值见 LidarGeometry 的 CELL_* 常量） */
+  cells: Uint8Array
 }
 
 /** 场景面板一帧的渲染数据（全部是世界系/车体系下的平面几何，单位米）。 */
@@ -108,6 +135,10 @@ export interface SceneFrameData {
   goalXY: { x: number; y: number } | undefined
   /** 里程计轨迹（odom_est 系，播放头之前的历史段） */
   odomTrailXY: Float32Array | undefined
+  /** 局部占据栅格（odom 系，按 info.origin 摆放；旧录像无 /local_map → undefined） */
+  localMap: LocalMapView | undefined
+  /** local_map 当前 A* 路径（odom 系平铺 xy；旧录像无 /local_map_path → undefined） */
+  localMapPathXY: Float32Array | undefined
   /** 解码失败或缺失的提示 */
   warnings: string[]
 }
