@@ -77,7 +77,7 @@ export default {
   },
   'gnssraw-snr': {
     title: 'SNR Distribution',
-    desc: 'Per-constellation per-frequency SNR histogram',
+    desc: 'Per-constellation per-frequency SNR histogram with per-satellite time-series overlay',
   },
   'gnssraw-eph': {
     title: 'Ephemeris Status',

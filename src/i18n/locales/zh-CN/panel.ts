@@ -77,7 +77,7 @@ export default {
   },
   'gnssraw-snr': {
     title: 'SNR 分布',
-    desc: '分星座分频点载噪比分布直方图',
+    desc: '分星座分频点载噪比直方图,支持逐星 SNR 时间序列叠加对比',
   },
   'gnssraw-eph': {
     title: '星历状态',

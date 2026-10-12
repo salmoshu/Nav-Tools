@@ -277,6 +277,58 @@ export function computeSnrStats(dataset: GnssRawDataset): SnrBand[] {
   return result
 }
 
+/** 逐星×逐频点 SNR 统计行(SNR 面板逐星表格用) */
+export interface SnrSatRow {
+  /** `${sys}:${prn}:${slot}`,选中联动用 */
+  key: string
+  sys: number
+  prn: number
+  slot: number
+  code: number
+  freqHz: number
+  samples: number
+  mean: number
+  min: number
+  max: number
+}
+
+export function computeSnrPerSat(dataset: GnssRawDataset): SnrSatRow[] {
+  const rows: SnrSatRow[] = []
+  for (const key of Object.keys(dataset.sats)) {
+    const series = dataset.sats[key]
+    for (let slot = 0; slot < series.slots.length; slot++) {
+      const slotSeries = series.slots[slot]
+      if (!slotSeries) continue
+      let samples = 0
+      let sum = 0
+      let min = Infinity
+      let max = -Infinity
+      for (const snr of slotSeries.snr) {
+        if (!Number.isFinite(snr) || snr <= 0) continue
+        samples++
+        sum += snr
+        if (snr < min) min = snr
+        if (snr > max) max = snr
+      }
+      if (samples === 0) continue
+      rows.push({
+        key: `${series.sys}:${series.prn}:${slot}`,
+        sys: series.sys,
+        prn: series.prn,
+        slot,
+        code: slotSeries.code,
+        freqHz: slotSeries.freqHz,
+        samples,
+        mean: sum / samples,
+        min,
+        max,
+      })
+    }
+  }
+  rows.sort((a, b) => a.sys - b.sys || a.prn - b.prn || a.slot - b.slot)
+  return rows
+}
+
 // —— 星历更新异常 ——
 
 export interface EphSatSummary {

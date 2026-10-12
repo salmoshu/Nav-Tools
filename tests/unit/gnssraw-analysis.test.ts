@@ -5,6 +5,7 @@ import {
   computeGfSeries,
   computePseudorangeNoise,
   computeSampling,
+  computeSnrPerSat,
   computeSnrStats,
   computeVisibility,
   ephValidityS,
@@ -267,6 +268,57 @@ describe('computeSnrStats', () => {
     expect(bands[0].mean).toBeCloseTo(44.5, 6)
     expect(bands[0].histogram.reduce((acc, h) => acc + h.count, 0)).toBe(10)
     expect(bands[1].mean).toBe(38)
+  })
+})
+
+describe('computeSnrPerSat', () => {
+  it('computes per-sat per-slot stats sorted by sys/prn/slot', () => {
+    const builder = new GnssRawDatasetBuilder(stubCodeFreq)
+    for (let i = 0; i < 10; i++) {
+      builder.push([
+        makeEpoch(100 + i, [
+          makeSat(GNSS_SYS.GPS, 2, [{ code: 1, snr: 40 + i }]),
+          makeSat(GNSS_SYS.GPS, 1, [
+            { code: 1, snr: 44 },
+            { code: 2, snr: 38 },
+          ]),
+        ]),
+      ])
+    }
+    const rows = computeSnrPerSat(builder.result())
+    expect(rows.map((r) => r.key)).toEqual([
+      `${GNSS_SYS.GPS}:1:0`,
+      `${GNSS_SYS.GPS}:1:1`,
+      `${GNSS_SYS.GPS}:2:0`,
+    ])
+    const g02 = rows[2]
+    expect(g02.samples).toBe(10)
+    expect(g02.mean).toBeCloseTo(44.5, 6)
+    expect(g02.min).toBe(40)
+    expect(g02.max).toBe(49)
+    const g01l2 = rows[1]
+    expect(g01l2.samples).toBe(10)
+    expect(g01l2.mean).toBe(38)
+  })
+
+  it('drops NaN/zero SNR samples and skips empty slots', () => {
+    const builder = new GnssRawDatasetBuilder(stubCodeFreq)
+    builder.push([
+      makeEpoch(100, [makeSat(GNSS_SYS.GPS, 1, [{ code: 1, snr: 42 }, { code: 2 }])]),
+    ])
+    builder.push([
+      makeEpoch(101, [makeSat(GNSS_SYS.GPS, 1, [{ code: 1, snr: Number.NaN }, { code: 2 }])]),
+    ])
+    builder.push([
+      makeEpoch(102, [makeSat(GNSS_SYS.GPS, 1, [{ code: 1, snr: 46 }, { code: 2 }])]),
+    ])
+    const rows = computeSnrPerSat(builder.result())
+    // slot0 只有 2 个有效样本(0 与 NaN 剔除);slot1 全为 0 -> 整槽跳过
+    expect(rows).toHaveLength(1)
+    expect(rows[0].samples).toBe(2)
+    expect(rows[0].mean).toBe(44)
+    expect(rows[0].min).toBe(42)
+    expect(rows[0].max).toBe(46)
   })
 })
 

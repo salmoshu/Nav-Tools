@@ -65,6 +65,11 @@ export default {
     histogram: 'SNR 直方图',
     band: '频点',
     samples: '样本数',
+    satellite: '卫星',
+    allSys: '全部星座',
+    overview: '总览',
+    selectedCount: '已选 {n} 条曲线',
+    clickRowHint: '点击表格行叠加逐星曲线',
   },
   eph: {
     totalEvents: '星历事件',

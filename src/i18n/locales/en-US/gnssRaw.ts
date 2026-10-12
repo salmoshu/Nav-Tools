@@ -65,6 +65,11 @@ export default {
     histogram: 'SNR histogram',
     band: 'Band',
     samples: 'Samples',
+    satellite: 'Satellite',
+    allSys: 'All constellations',
+    overview: 'Overview',
+    selectedCount: '{n} series selected',
+    clickRowHint: 'Click table rows to overlay per-satellite series',
   },
   eph: {
     totalEvents: 'Ephemeris events',
