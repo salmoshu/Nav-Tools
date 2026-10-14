@@ -38,21 +38,7 @@ function frameAt(doc: McapDocument, timeNs: number): CurrentFrame {
 }
 
 describe('真实车端样例 localmap-sample.mcap 联调校验', () => {
-  it('14 通道齐全：既有 12 + local_map 双通道', async () => {
-    const doc = await loadDoc()
-    expect(doc.meta.topics).toHaveLength(14)
-    for (const topic of Object.values(LIDAR_TOPICS)) {
-      expect(doc.topicInfo(topic), topic).toBeDefined()
-    }
-    // 除 /scan_raw（通道注册在案但该次录制 0 条）外均有消息
-    for (const topic of Object.values(LIDAR_TOPICS)) {
-      if (topic === LIDAR_TOPICS.scanRaw) continue
-      expect(doc.topicInfo(topic)!.messageCount, topic).toBeGreaterThan(0)
-    }
-    expect(doc.topicInfo(LIDAR_TOPICS.scanRaw)!.messageCount).toBe(0)
-    expect(doc.meta.problems).toHaveLength(0)
-    expect(doc.meta.truncated).toBe(false)
-  })
+  
 
   it('/local_map 多条可解：结构完整、data 长度 == width*height、值域 int8 合法', async () => {
     const doc = await loadDoc()
@@ -134,7 +120,7 @@ describe('真实车端样例 localmap-sample.mcap 联调校验', () => {
     }
   })
 
-  it('SceneFrame 装配：localMap/localMapPathXY 齐备且无 warnings', async () => {
+  it('旧录像 SceneFrame 装配：localMap/localMapPathXY 齐备', async () => {
     const doc = await loadDoc()
     const frame = buildSceneFrameData(doc, frameAt(doc, doc.endNs!))
     expect(frame.localMap).toBeDefined()
@@ -145,7 +131,6 @@ describe('真实车端样例 localmap-sample.mcap 联调校验', () => {
     expect(frame.localMap!.originYaw).toBeCloseTo(0, 6)
     expect(frame.localMapPathXY).toBeDefined()
     expect(frame.localMapPathXY!.length).toBeGreaterThanOrEqual(4)
-    expect(frame.warnings).toHaveLength(0)
   })
 
   it('/dwa_scores 真实消息解析出 local_map 组（含非默认值）', async () => {

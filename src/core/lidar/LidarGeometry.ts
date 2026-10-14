@@ -1,7 +1,7 @@
 // 对解码后的 ROS 消息做几何/字段提取。
 // 消息是 @foxglove/rosmsg2-serialization 按文件内 schema 产出的普通对象/TypedArray，
 // 这里只做结构守卫与数值提取，绝不改数值本身。
-// 注意板上 schema：Header 字段名是 stamp（内层才是 Time），故 stamp.stamp 为时间。
+// 新录像使用标准 header.stamp；旧录像的 stamp.stamp 仅用于明确标注的兼容显示。
 
 export interface RosTime {
   sec: number
@@ -9,13 +9,32 @@ export interface RosTime {
 }
 
 export interface RosHeader {
-  /** 板上 schema 中 Header 的内嵌 Time 字段恰好也叫 stamp */
+  /** ROS 2 builtin_interfaces/Time，不能替换为消息到达时间。 */
   stamp?: RosTime
   frame_id?: string
 }
 
-export interface LaserScanMessage {
-  stamp: RosHeader
+export interface RosStampedMessage {
+  header?: RosHeader
+  /** 历史非标准 Header 字段；兼容旧录像，不代表精确采样时序。 */
+  stamp?: RosHeader
+}
+
+export function messageHeader(value: unknown): RosHeader | undefined {
+  if (!isObject(value)) return undefined
+  const header = value.header ?? value.stamp
+  return isObject(header) ? header as RosHeader : undefined
+}
+
+/** 保留整数纳秒，避免把相邻采样戳合并成一个浮点数。 */
+export function headerStampNs(header: RosHeader | undefined): bigint | undefined {
+  const stamp = header?.stamp
+  if (!stamp || !Number.isInteger(stamp.sec) || !Number.isInteger(stamp.nanosec) ||
+      stamp.nanosec < 0 || stamp.nanosec >= 1_000_000_000) return undefined
+  return BigInt(stamp.sec) * 1_000_000_000n + BigInt(stamp.nanosec)
+}
+
+export interface LaserScanMessage extends RosStampedMessage {
   angle_min: number
   angle_max: number
   angle_increment: number
@@ -27,8 +46,7 @@ export interface LaserScanMessage {
   intensities?: ArrayLike<number>
 }
 
-export interface PointCloud2Message {
-  stamp: RosHeader
+export interface PointCloud2Message extends RosStampedMessage {
   height: number
   width: number
   fields: { name: string; offset: number; datatype: number; count: number }[]
@@ -39,25 +57,19 @@ export interface PointCloud2Message {
   is_dense: boolean
 }
 
-export interface PolygonStampedMessage {
-  stamp: RosHeader
+export interface PolygonStampedMessage extends RosStampedMessage {
   polygon: { points: ArrayLike<{ x: number; y: number; z: number }> }
 }
 
-export interface PathMessage {
-  stamp: RosHeader
+export interface PathMessage extends RosStampedMessage {
   poses: ArrayLike<{ pose: { position: { x: number; y: number; z: number }; orientation: { x: number; y: number; z: number; w: number } } }>
 }
 
-export interface PoseStampedMessage {
-  stamp: RosHeader
+export interface PoseStampedMessage extends RosStampedMessage {
   pose: { position: { x: number; y: number; z: number }; orientation: { x: number; y: number; z: number; w: number } }
 }
 
-export interface OccupancyGridMessage {
-  /** 板上 schema 的 Header 字段名可能随通道不同（stamp/header），回放一律用 logTime，
-   *  渲染也不读消息内时间，故这里不作结构要求 */
-  stamp?: RosHeader
+export interface OccupancyGridMessage extends RosStampedMessage {
   info: {
     resolution: number
     width: number
@@ -71,8 +83,7 @@ export interface OccupancyGridMessage {
   data: ArrayLike<number>
 }
 
-export interface OdometryMessage {
-  stamp: RosHeader
+export interface OdometryMessage extends RosStampedMessage {
   child_frame_id: string
   pose: {
     pose: {
@@ -89,14 +100,13 @@ export interface TwistMessage {
 }
 
 export interface TfMessage {
-  transforms: {
-    stamp: RosHeader
+  transforms: (RosStampedMessage & {
     child_frame_id: string
     transform: {
       translation: { x: number; y: number; z: number }
       rotation: { x: number; y: number; z: number; w: number }
     }
-  }[]
+  })[]
 }
 
 // ——— 结构守卫 ———

@@ -1,5 +1,5 @@
 export default {
-  system: 'Follow System',
+  system: 'System',
   light: 'Light',
   dark: 'Dark',
 }

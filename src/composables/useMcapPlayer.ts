@@ -4,7 +4,7 @@ import { computed, onUnmounted, ref, shallowRef, watch } from 'vue'
 import { McapDocument } from '@/core/lidar/McapDocument'
 import { PlayerClock } from '@/core/lidar/PlayerClock'
 import { buildPlotSeries } from '@/core/lidar/LidarSeries'
-import { parseDwaScores } from '@/core/lidar/DwaScores'
+import { currentFrameScores, parsePlannerState } from '@/core/lidar/PlannerState'
 import {
   expandMcapPartPaths,
   mcapCommonDirName,
@@ -140,12 +140,14 @@ export function useMcapPlayer() {
     return currentFrame.value?.entries.get(topic)
   }
 
-  /** 当前 /dwa_scores 的结构化解析结果（评分面板与 HUD 共用）。 */
+  const currentPlannerState = computed(() =>
+    parsePlannerState(currentFrame.value?.entries.get(LIDAR_TOPICS.plannerState)?.message),
+  )
+
+  /** Scores from an older successful frame must never replace a current hold/failure. */
   const currentScores = computed<DwaScores | undefined>(() => {
-    const entry = currentFrame.value?.entries.get(LIDAR_TOPICS.scores)
-    if (!entry) return undefined
-    const text = (entry.message as { data?: unknown }).data
-    return typeof text === 'string' ? parseDwaScores(text) : undefined
+    const frame = currentFrame.value
+    return frame ? currentFrameScores(frame, docRef.value?.topicInfo(LIDAR_TOPICS.plannerState) !== undefined) : undefined
   })
 
   /** 加载一个或多个分片（板上 part_N.mcap 轮转产物），按 logTime 归并为单一文档。 */
@@ -301,6 +303,7 @@ export function useMcapPlayer() {
     loop,
     currentFrame,
     currentScores,
+    currentPlannerState,
     series,
     followRobot,
     topicVisibility,

@@ -37,8 +37,9 @@ tempCodeRunnerFile*
 tmp
 *.tsbuildinfo
 
-# workbuddy
+# agents
 .workbuddy/
+.zcode/
 
 # pnpm 本地包缓存（codex 进程级配置产生）
 .pnpm-store/

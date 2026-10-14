@@ -125,7 +125,7 @@ describe('OccupancyGrid → LocalMapView', () => {
     expect(frame.localMapPathXY![3]).toBeCloseTo(1.5, 6)
   })
 
-  it('旧录像没有 /local_map 与 /local_map_path：字段为 undefined 且无 warning', async () => {
+  it('旧录像没有 /local_map 与 /local_map_path：保留缺通道显示', async () => {
     const odom: BagChannelInput = {
       topic: '/odom_est',
       schemaName: 'nav_msgs/msg/Odometry',
@@ -136,7 +136,6 @@ describe('OccupancyGrid → LocalMapView', () => {
     const frame = buildSceneFrameData(doc, frameAt(doc, Number(BASE)))
     expect(frame.localMap).toBeUndefined()
     expect(frame.localMapPathXY).toBeUndefined()
-    expect(frame.warnings).toHaveLength(0)
   })
 })
 

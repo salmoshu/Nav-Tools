@@ -1,9 +1,10 @@
-// 场景帧装配：把“播放头之前最近的消息集合”变成渲染端可直接绘制的几何数组。
-// 坐标约定（ADR-035）：base_link = 后轮轴心；/tf 给出 laser 相对 base_link 的外参；
-// /odom_est 给出 base_link 在估计里程计系下的位姿（会漂移，仅用于显示）。
-// 输出几何一律已在“世界系”（有里程计=odom_est，无里程计=base_link）。
-import type { CurrentFrame, LocalMapView, SceneFrameData } from './types'
+// 场景帧装配：播放头按事件时间取消息，几何按各自 Header 采样时间定锚。
+// 固定链：odom_est → base_link（后轮轴心）→ laser；map/path 已在 odom_est。
+// 旧录像缺动态 TF 时保留历史显示，但明确警告其时序不可作为真实世界锚点。
+import type { CurrentFrame, CurrentMessage, LocalMapView, SceneFrameData } from './types'
 import type { McapDocument } from './McapDocument'
+import { RecordedTransforms } from './RecordedTransforms'
+import { currentPlanEventNs } from './PlannerState'
 import {
   asLaserScan,
   asOccupancyGrid,
@@ -14,6 +15,7 @@ import {
   asPoseStamped,
   asTfMessage,
   laserScanToXY,
+  messageHeader,
   normalizeOccupancyCells,
   occupancyOriginPose,
   odometryToPose,
@@ -37,6 +39,7 @@ export const LIDAR_TOPICS = {
   odom: '/odom_est',
   cmd: '/cmd_raw',
   scores: '/dwa_scores',
+  plannerState: '/planner_state',
   /** 绕障在役时段的局部占据栅格（约 3Hz 节流；旧录像没有） */
   localMap: '/local_map',
   /** local_map 当前 A* 路径（odom 系；旧录像没有） */
@@ -57,6 +60,11 @@ export function buildSceneFrameData(
 ): SceneFrameData {
   const trailMaxPoints = options.trailMaxPoints ?? 4000
   const warnings: string[] = []
+  const transforms = RecordedTransforms.forDocument(doc)
+  const hasPlannerState = doc.topicInfo(LIDAR_TOPICS.plannerState) !== undefined
+  const legacyTiming = !transforms.hasDynamicTf && !hasPlannerState
+  if (legacyTiming) warnings.push('旧录像缺少动态 TF：历史回退使用当前里程计，缓存几何的采样世界锚点不可靠')
+  if (!hasPlannerState) warnings.push('缺少 /planner_state：逐帧停止原因、输入新鲜度与执行状态不可确认')
 
   // ——— 车体位姿与雷达外参 ———
   const odomEntry = frame.entries.get(LIDAR_TOPICS.odom)
@@ -91,12 +99,22 @@ export function buildSceneFrameData(
     }
   }
 
-  const toWorld = (xy: Float32Array): Float32Array => {
-    const inBase = transformXY(xy, laserOffsetX, laserOffsetY, laserYaw)
-    return hasOdom ? transformXY(inBase, odomX!, odomY!, odomYaw!) : inBase
-  }
   const baseToWorld = (xy: Float32Array): Float32Array =>
     hasOdom ? transformXY(xy, odomX!, odomY!, odomYaw!) : xy
+  const toWorld = (xy: Float32Array, entry: CurrentMessage, legacyFrame: string): Float32Array | undefined => {
+    const exact = transforms.toWorld(xy, entry.message, entry.logTimeNs)
+    if (exact) return exact
+    if (!legacyTiming) {
+      warnings.push(`${entry.topic} 缺少对应 Header 采样时间的精确 TF/扫描位姿关联，几何已隐藏`)
+      return undefined
+    }
+    const frameId = messageHeader(entry.message)?.frame_id ?? legacyFrame
+    if (frameId === 'odom_est') return xy
+    if (frameId === 'base_link') return baseToWorld(xy)
+    if (frameId === 'laser') return baseToWorld(transformXY(xy, laserOffsetX, laserOffsetY, laserYaw))
+    warnings.push(`${entry.topic} 未知坐标系 ${frameId}，几何已隐藏`)
+    return undefined
+  }
 
   // ——— 雷达点云两层 ———
   let scanRawXY: Float32Array | undefined
@@ -107,7 +125,7 @@ export function buildSceneFrameData(
     const scan = asLaserScan(scanRawEntry.message)
     if (scan) {
       const { xy, intensity } = laserScanToXY(scan)
-      scanRawXY = toWorld(xy)
+      scanRawXY = toWorld(xy, scanRawEntry, 'laser')
       scanRawIntensity = intensity
     } else {
       warnings.push('/scan_raw 消息结构异常')
@@ -117,7 +135,7 @@ export function buildSceneFrameData(
   if (scanFilteredEntry) {
     const scan = asLaserScan(scanFilteredEntry.message)
     if (scan) {
-      scanFilteredXY = toWorld(laserScanToXY(scan).xy)
+      scanFilteredXY = toWorld(laserScanToXY(scan).xy, scanFilteredEntry, 'laser')
     } else {
       warnings.push('/scan_filtered 消息结构异常')
     }
@@ -135,23 +153,28 @@ export function buildSceneFrameData(
         xy[i * 2] = xyz[i * 3]
         xy[i * 2 + 1] = xyz[i * 3 + 1]
       }
-      obstaclesXY = baseToWorld(xy)
+      obstaclesXY = toWorld(xy, obstaclesEntry, 'base_link')
     } else {
       warnings.push('/obstacles_planned 消息结构异常')
     }
   }
 
   // ——— 轨迹（base_link 系 Path） ———
+  const planEvent = currentPlanEventNs(frame)
   let bestPathXY: Float32Array | undefined
   const bestEntry = frame.entries.get(LIDAR_TOPICS.trajBest)
-  if (bestEntry) {
+  if (bestEntry && (!hasPlannerState || bestEntry.logTimeNs === planEvent)) {
     const path = asPath(bestEntry.message)
-    if (path) bestPathXY = baseToWorld(pathToXY(path))
+    if (path) bestPathXY = toWorld(pathToXY(path), bestEntry, 'base_link')
   }
   const candidatePathsXY: Float32Array[] = []
   for (const entry of doc.decodeAllAtOrBefore(LIDAR_TOPICS.trajCandidates, frame.timeNs)) {
+    if (hasPlannerState && entry.logTimeNs !== planEvent) continue
     const path = asPath(entry.message)
-    if (path) candidatePathsXY.push(baseToWorld(pathToXY(path)))
+    if (path) {
+      const world = toWorld(pathToXY(path), entry, 'base_link')
+      if (world) candidatePathsXY.push(world)
+    }
   }
 
   // ——— 轮廓与目标 ———
@@ -174,8 +197,8 @@ export function buildSceneFrameData(
     if (goal) {
       const gx = goal.pose.position.x
       const gy = goal.pose.position.y
-      const world = baseToWorld(Float32Array.of(gx, gy))
-      goalXY = { x: world[0], y: world[1] }
+      const world = toWorld(Float32Array.of(gx, gy), goalEntry, 'base_link')
+      if (world) goalXY = { x: world[0], y: world[1] }
     }
   }
 
@@ -210,6 +233,19 @@ export function buildSceneFrameData(
   if (localMapPathEntry) {
     const path = asPath(localMapPathEntry.message)
     if (path) localMapPathXY = pathToXY(path)
+  }
+  // A* path is throttled and world-fixed. Keep it visible, but do not imply it is a current plan.
+  const stateEvent = frame.entries.get(LIDAR_TOPICS.plannerState)?.logTimeNs
+  for (const topic of [LIDAR_TOPICS.localMap, LIDAR_TOPICS.localMapPath]) {
+    const entry = frame.entries.get(topic)
+    if (entry && (stateEvent === undefined || entry.logTimeNs !== stateEvent)) {
+      warnings.push(`${topic} 缓存数据：事件年龄 ${Math.max(0, (frame.timeNs - entry.logTimeNs) / 1e6).toFixed(1)} ms`)
+    }
+  }
+  if (bestEntry && hasPlannerState && bestEntry.logTimeNs !== planEvent) {
+    warnings.push('旧帧 DWA 轨迹已隐藏；当前 /planner_state 未提供同帧观测')
+  } else if (bestEntry && !hasPlannerState && bestEntry.logTimeNs < frame.timeNs) {
+    warnings.push(`/traj_best 历史数据：事件年龄 ${((frame.timeNs - bestEntry.logTimeNs) / 1e6).toFixed(1)} ms`)
   }
 
   // ——— 里程计轨迹（估计位姿的历史） ———

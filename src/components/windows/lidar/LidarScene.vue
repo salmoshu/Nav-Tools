@@ -8,16 +8,33 @@
         <el-icon><FullScreen /></el-icon>&nbsp;{{ t('lidar.scene.fitView') }}
       </el-button>
       <div class="scene-hud" v-if="hasFrame">
-        <span class="hud-chip" :class="successClass">{{ hudState }}</span>
+        <span class="hud-chip" :class="successClass" data-testid="planner-status">{{ hudState }}</span>
         <span class="hud-chip">t = {{ hudTime }}</span>
         <span class="hud-chip" v-if="hudPlanMs">plan {{ hudPlanMs }} ms</span>
-        <span class="hud-chip hud-cmd" v-if="hudCmd"
-          >cmd v={{ hudCmd.v.toFixed(2) }} w={{ hudCmd.w.toFixed(2) }}</span
-        >
+        <span class="hud-chip hud-cmd" v-if="hudCmd" data-testid="planner-command"
+          >{{ t('lidar.scene.request') }} v={{ hudCmd.v }} w={{ hudCmd.w }}</span>
+        <span class="hud-chip" v-if="planner" data-testid="planner-source">#{{ planner.frame }} {{ planner.source }}</span>
+        <span class="hud-chip blocked" v-if="planner?.local_map.nav_reason" data-testid="planner-hold-reason">{{ planner.local_map.nav_reason }}</span>
       </div>
       <div class="scene-hud" v-else>
         <span class="hud-hint">{{ t('lidar.scene.noData') }}</span>
       </div>
+    </div>
+    <div v-if="hasFrame" class="planner-diagnostics" data-testid="planner-diagnostics">
+      <template v-if="planner">
+        <span data-testid="planner-dispatch">{{ planner.dispatch.accepted ? t('lidar.scene.socketAccepted') : t('lidar.scene.socketRejected') }} ({{ planner.dispatch.state }}; attempted={{ planner.dispatch.attempted }})</span>
+        <span data-testid="planner-freshness">wheel: {{ freshnessText(planner.wheel) }} · target: {{ freshnessText(planner.target) }}</span>
+        <span data-testid="planner-bypass">bypass: {{ planner.bypass.reason }} · attempted={{ planner.bypass.attempted }} · found={{ planner.bypass.found }} · complete={{ planner.bypass.complete }}</span>
+        <details data-testid="planner-facts">
+          <summary>{{ t('lidar.scene.plannerDetails') }} · {{ plannerAgeMs }} ms</summary>
+          <pre>{{ JSON.stringify(planner, null, 2) }}</pre>
+        </details>
+      </template>
+      <span v-else>{{ t('lidar.scene.noPlannerState') }}</span>
+      <span data-testid="planner-execution">{{ t('lidar.scene.executionUnknown') }}</span>
+      <ul v-if="sceneFrame?.warnings.length" class="scene-warnings" data-testid="scene-warnings">
+        <li v-for="warning in sceneFrame.warnings" :key="warning">{{ warning }}</li>
+      </ul>
     </div>
 
     <div ref="canvasWrap" class="scene-canvas-wrap" :class="{ empty: !hasFrame }">
@@ -114,6 +131,8 @@ import { useLidarPanelPresence, useMcapPlayer } from '@/composables/useMcapPlaye
 import { buildSceneFrameData } from '@/core/lidar/SceneFrame'
 import { formatRelativeNs } from '@/core/lidar/timeFormat'
 import type { DwaScores } from '@/core/lidar/types'
+import type { InputFreshness } from '@/core/lidar/PlannerState'
+import { asTwist, twistToVW } from '@/core/lidar/LidarGeometry'
 import { LidarSceneRenderer, type SceneRenderOptions } from './scene/LidarSceneRenderer'
 
 const player = useMcapPlayer()
@@ -217,20 +236,46 @@ const hasFrame = computed(() => sceneFrame.value !== undefined)
 
 // ——— HUD ———
 const scores = computed<DwaScores | undefined>(() => player.currentScores.value)
+const planner = player.currentPlannerState
 const hudState = computed(() => {
+  const state = planner.value
+  if (state) {
+    if (state.local_map.nav_hold || state.source === 'navigation_hold') return t('lidar.scene.stateHold')
+    return state.source
+  }
+  if (player.document.value?.topicInfo('/planner_state')) return t('lidar.scene.stateUnknown')
   const value = scores.value
   if (!value) return t('lidar.scene.stateUnknown')
+  if (value.local_map?.nav_hold) return t('lidar.scene.stateHold')
   if (!value.success) return t('lidar.scene.stateBlocked')
   return `${t('lidar.scene.stateMoving')} #${value.best}`
 })
-const successClass = computed(() => (scores.value?.success ? 'ok' : 'blocked'))
+const successClass = computed(() => {
+  const state = planner.value
+  return state ? (state.local_map.nav_hold || !state.success ? 'blocked' : 'ok') : 'blocked'
+})
 const hudTime = computed(() => {
   const doc = player.document.value
   if (!doc?.startNs) return '-'
   return formatRelativeNs(player.playheadNs.value, doc.startNs)
 })
 const hudPlanMs = computed(() => scores.value?.plan_ms?.toFixed(2))
-const hudCmd = computed(() => scores.value?.cmd)
+const hudCmd = computed(() => {
+  if (planner.value) return planner.value.cmd
+  if (player.document.value?.topicInfo('/planner_state')) return undefined
+  const twist = asTwist(player.currentEntry('/cmd_raw')?.message)
+  return twist ? twistToVW(twist) : undefined
+})
+const plannerAgeMs = computed(() => {
+  const entry = player.currentEntry('/planner_state')
+  return entry ? Math.max(0, (player.playheadNs.value - entry.logTimeNs) / 1e6).toFixed(1) : '-'
+})
+
+function freshnessText(input: InputFreshness): string {
+  const status = !input.known ? 'freshnessUnknown' : !input.present ? 'freshnessMissing'
+    : input.fresh ? 'freshnessFresh' : 'freshnessStale'
+  return `${t(`lidar.scene.${status}`)} · seq=${input.sequence} · age=${input.age_ms ?? '?'} ms`
+}
 
 // ——— 渲染循环 ———
 
@@ -377,6 +422,30 @@ onUnmounted(() => {
 .hud-hint {
   font-size: 12px;
   color: var(--app-text-secondary);
+}
+
+.planner-diagnostics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  padding: 4px 10px;
+  max-height: 180px;
+  overflow: auto;
+  font-size: 12px;
+  font-family: monospace;
+  border-bottom: 1px solid var(--app-border);
+}
+
+.planner-diagnostics pre {
+  white-space: pre-wrap;
+  margin: 4px 0;
+}
+
+.scene-warnings {
+  width: 100%;
+  margin: 0;
+  padding-left: 16px;
+  color: #d97706;
 }
 
 .scene-canvas-wrap {

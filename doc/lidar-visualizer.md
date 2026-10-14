@@ -1,6 +1,6 @@
 # LiDAR 可视化：E-Wagon MCAP 决策录像回放
 
-> 状态：已实现（typecheck / lint / 生产构建通过；lidar-* 单元 74 项绿）。
+> 状态：已有回放功能；下述精确 Header-time 定锚与逐帧诊断更新需由集成验收运行门禁。历史验收记录见 §7。
 > 2026-10 增补：local_map 双通道（`/local_map` 占据栅格 + `/local_map_path` A* 路径）
 > 按车端定稿契约实现，并经真实样例 `tests/fixtures/lidar/localmap-sample.mcap`
 > （14 通道 trace_sink 产物）联调验证；dwa_scores local_map 组键名单点可配，
@@ -12,13 +12,13 @@
 ## 1. 背景与目标
 
 E-Wagon-Lidar v1.1.0 让雷达避障进程把"思考过程"录成 MCAP（ros2 profile，
-CDR 编码，12 通道；绕障在役时段再加 `/local_map`、`/local_map_path` 两个
-local_map 通道，共 14）。板上的验收标准是：拿回电脑，**拖时间轴同屏看到障碍点、
+CDR 编码，历史 12 通道；绕障在役时段另有 `/local_map`、`/local_map_path`）。
+新录像增加每个处理帧的 `/planner_state`，包括没有 DWA 观测的挂起与失败帧。板上的验收标准是：拿回电脑，**拖时间轴同屏看到障碍点、
 候选轨迹、逐候选评分、最终指令，解释清每一次停顿和转向**。
 
 原方案依赖外部工具 Foxglove Studio。本功能把这层"录像带回放"能力直接内置进
 Nav-Tools：打开 `.mcap`（拖拽/文件对话框/最近文件），四个联动面板 +
-工具栏时间轴完成空间场景、决策评分、执行曲线、消息检查与回放控制。
+工具栏时间轴完成空间场景、决策评分、请求/里程估计曲线、消息检查与回放控制。
 
 ## 2. 数据链路
 
@@ -39,25 +39,37 @@ Nav-Tools：  拖拽（可多文件）/ 对话框（可多选）/ 最近文件 �
 
 通道集（板上 `trace_schemas.cpp` 定义，解码端零硬编码、全部以文件内 schema 为准）：
 `/scan_raw` `/scan_filtered`（LaserScan）、`/obstacles_planned`（PointCloud2）、
-`/tf`（base_link→laser 0.75m）、`/footprint` `/footprint_margin`（PolygonStamped）、
+`/tf`（odom_est→base_link 动态估计位姿，以及 base_link→laser 外参）、`/footprint` `/footprint_margin`（PolygonStamped）、
 `/traj_best` `/traj_candidates`（Path，一次规划多条候选=同戳多条消息）、
 `/goal`（PoseStamped）、`/odom_est`（Odometry，标注估计）、`/cmd_raw`（Twist）、
-`/dwa_scores`（String 装 JSON）、`/local_map`（OccupancyGrid，odom 系，约 3Hz
+`/dwa_scores`（String 装 JSON）、`/planner_state`（String 装逐帧请求/诊断 JSON）、`/local_map`（OccupancyGrid，odom 系，约 3Hz
 节流，仅绕障在役时段有数据）、`/local_map_path`（Path，local_map 当前 A\* 路径，
 同 odom 系）。后两个是 v1.1.0 之后加入的 local_map 通道，**旧录像没有**：场景面板的
 对应开关灰显，话题表自然不列。
 
 ## 3. 关键实现事实（回放语义对齐 Foxglove/Lichtblick）
 
-- **播放头"current"语义**：任意时刻每话题取"播放头之前最近一条"（二分查找），
-  静态几何（/tf、轮廓）与低频话题在任意播放头位置都有完整上下文。
+- **播放头"current"语义**：消息可用性仍按 logTime 取"播放头之前最近一条"（二分查找）。
+  机器人用最新有效里程计显示；缓存扫描/规划几何不随当前机器人位姿重新移动。
 - **同戳多条消息**：/traj_candidates 一次规划写 N 条同时间戳消息，
   `decodeAllAtOrBefore` 整组取回，候选轨迹不会丢。
 - **逐帧步进**：跨话题合并去重的全局时间点数组上 ±1/±10 步（Foxglove 式）。
-- **坐标变换两级链**：laser→base_link（/tf 外参 0.75m）→ odom_est（轮速积分
-  估计位姿）；场景默认"跟随车体"，里程轨迹虚线标注"估计"。
-- **时间戳**：板上 CLOCK_MONOTONIC（非 epoch），UI 一律显示会话相对时间
-  `mm:ss.mmm`，不伪造墙钟。
+- **采样坐标定锚**：新录像读取标准 `header.frame_id` / `header.stamp`，全文件 `/tf`
+  以 TransformStamped 的 Header 时间建精确整数纳秒索引，而非只看播放头前的 TF。
+  固定两级链 laser→base_link→odom_est，雷达外参只用一次；base_link 几何不再加雷达偏移。
+  扫描捕获时间与实际查询到的历史位姿时间不同时，用全文件 `/planner_state` 的
+  `scan_capture_ns → scan_pose_ns` 明确关联，再查该历史位姿的精确 TF，外参查同帧 `pose_ns`。
+  这些关联/TF 可以晚于扫描事件写入；不插值、不跨重置选最近位姿、不凭空制造零位姿。
+  新录像缺少精确采样 TF/关联时隐藏该几何并警告。旧录像没有动态 TF/逐帧状态时，
+  保留显式警告的历史最新里程计回退（兼容旧 `stamp.stamp`），不可当作真实定锚。
+- **时间戳**：logTime 是事件可用时间，Header 是采样时间；板上 CLOCK_MONOTONIC
+  （非 epoch），UI 显示会话相对时间 `mm:ss.mmm`，不伪造墙钟或物理定位真值。
+- **逐帧状态优先**：场景 HUD 显示 `/planner_state` 的 frame/source、挂起原因、
+  最终请求 v/w、Lidar socket API 是否接受、wheel/target 新鲜度与 bypass 搜索结果。
+  展开「记录的规划事实」可看实际搜索时间、完整拒绝计数与输入序列/年龄。
+  socket 接受不等于 Host 选择，更不等于 MCU 执行；执行证据始终标注不可确认。
+  当前帧没有观测、导航挂起或 frame 不一致时，不显示旧成功帧的评分和 DWA 轨迹。
+  旧录像评分标注历史 frame/事件年龄；低频缓存地图/A* 路径保留世界锚点，并显示事件年龄。
 - **多分片会话**：part_N.mcap 轮转产物一次多选/多拖加载，按 logTime 归并为
   单一文档（各分片独立 schema/channel 自举，同话题跨片复用索引，同戳消息
   保持到达序）；分片按数值序排列（part_10 不会排到 part_2 前面）；只导入单个分片
@@ -97,6 +109,8 @@ Nav-Tools：  拖拽（可多文件）/ 对话框（可多选）/ 最近文件 �
 | 纯逻辑 | `src/core/lidar/McapDocument.ts` | MCAP 索引/解码/二分定位/步进时间点 |
 | 纯逻辑 | `src/core/lidar/LidarGeometry.ts` | 消息结构守卫 + 点云/轨迹/多边形提取 + 平面变换 |
 | 纯逻辑 | `src/core/lidar/SceneFrame.ts` | 播放帧 → 世界系渲染几何（含里程计轨迹降采样） |
+| 纯逻辑 | `src/core/lidar/RecordedTransforms.ts` | 全文件采样 TF/扫描位姿关联精确查找，固定两级坐标链 |
+| 纯逻辑 | `src/core/lidar/PlannerState.ts` | 逐帧诊断解析及当前评分/轨迹时序优先级 |
 | 纯逻辑 | `src/core/lidar/LidarSeries.ts` | 绘图序列预提取（cmd/odom/scores） |
 | 纯逻辑 | `src/core/lidar/DwaScores.ts`、`PlayerClock.ts`、`timeFormat.ts`、`McapFileAccess.ts`、`src/core/file/RecentInputFiles.ts` | 评分解析 / 回放时钟 / 时间格式化 / 平台文件接入 / 统一最近文件（含旧 MCAP 键迁移） |
 | Store | `src/composables/useMcapPlayer.ts` | 单例播放器：加载/播放/seek/步进/偏好持久化/全局快捷键 |
@@ -122,7 +136,7 @@ Electron+React），无法作为组件嵌入 Vue 应用；但其核心能力来�
 - 时间轴拖拽 + 播放/暂停/逐帧步进/倍速(0.25–8x)/循环；
 - "current = 播放头之前最近一条"的面板语义；
 - 3D 场景：话题可见性开关、点大小、按强度/距离着色、跟随车体、网格、图例；
-- Plot 面板与播放头联动、点击图表定位播放头；cmd×odom 指令-执行叠图预设、
+- Plot 面板与播放头联动、点击图表定位播放头；cmd×odom Lidar 请求-里程估计叠图预设、
   全灭（success=0）区段红色高亮与「上一处/下一处受阻」帧跳转；
 - Raw Messages 检查器（JSON 树、大数组折叠、复制）；
 - 布局持久化（经由 Nav-Tools 既有应用/布局系统，等价于 Foxglove layout 入库）；
@@ -159,7 +173,7 @@ Electron+React），无法作为组件嵌入 Vue 应用；但其核心能力来�
   加载新文件会替换当前会话。
 - Space 播放/暂停，←/→ 逐帧，Shift+←/→ ±10 帧，Home/End 跳转；
   DWA Scores / 场景 / 曲线 / 检查器全部随播放头联动。
-- "执行曲线"点击图表任意位置可跳转播放头。
+- 请求/里程估计曲线点击图表任意位置可跳转播放头；它不是 MCU 执行反馈。
 
 ## 7. 测试与验收记录
 
@@ -171,14 +185,15 @@ Electron+React），无法作为组件嵌入 Vue 应用；但其核心能力来�
     PointCloud2 字段偏移、/tf 0.75m 外参、footprint 顶点、会话 Metadata、dwa_scores JSON）；
   - `lidar-geometry`：极坐标→笛卡尔、无效点剔除、PointCloud2 字段偏移、四元数、变换；
   - `lidar-player-clock`：倍速/边界/循环/seek 收敛；`DwaScores` 真实样例与坏输入；
-  - `lidar-scene-frame`：laser→base_link→odom 两级变换数值断言、轨迹增长；
+  - `lidar-scene-frame`：laser→base_link→odom 两级变换、轨迹增长；标准 Header
+    延迟捕获关联、相邻整数纳秒/位姿重置定锚、缺精确样本不插值、挂起/无观测压过旧成功评分与轨迹；
   - `lidar-local-map`：OccupancyGrid→LocalMapView（origin 含 yaw 原样摆放、
     cell 三态阈值归一、数据长度异常 warning）、/local_map_path 不过 base 变换、
     旧录像缺通道降级、dwa_scores local_map 嵌套组按 LOCAL_MAP_SCORE_KEYS 解析
     （布尔/0/1 兼容、缺子键默认值、组非对象忽略）；
   - `lidar-localmap-fixture`：车端真实样例 `localmap-sample.mcap` 字段级联调
     （14 通道齐全、/local_map 17 条结构完整 data==width*height、int8 符号链路
-    验证（Int8Array、未知格 -1 非 255）、三态分布有占据、SceneFrame 无 warning、
+    验证（Int8Array、未知格 -1 非 255）、三态分布有占据、SceneFrame 旧格式几何保持可用、
     dwa_scores local_map 组真实值断言）；
   - `lidar-registration`：注册表/glob/双语词条/默认应用迁移/preload 接线（源码扫描）。
 - 端到端（`tests/e2e/lidar-visualizer.spec.ts`，4 绿）：真实板上 Trace 分片
@@ -188,9 +203,9 @@ Electron+React），无法作为组件嵌入 Vue 应用；但其核心能力来�
 - 全量门禁：`pnpm typecheck` ✓、`pnpm lint` ✓、`pnpm build:dir` ✓（three.js 正常分块）。
 - 探针记录：解码链路先用真实 C++ 产物逐通道验证后才开始面板开发；当前回归
   fixture（`trace-selftest.mcap`）为 763 条消息、12 通道、3 个未压缩 chunk，
-  字段级断言见 `tests/unit/lidar-real-fixture.test.ts`。板上 schema 的 Header
-  两层 `stamp` 嵌套、TypedArray 返回类型、非单调时钟 wall-clock 缺失均已确认
-  并适配。
+  字段级断言见 `tests/unit/lidar-real-fixture.test.ts`。该历史 fixture 使用非标准 Header
+  两层 `stamp` 嵌套；新录像标准 `header.stamp` 与历史格式分别兼容。
+  TypedArray 返回类型及非 epoch 单调时钟仍按文件事实解释。
 
 ## 8. 边界与不做
 

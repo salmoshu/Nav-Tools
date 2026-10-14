@@ -1,6 +1,9 @@
 <template>
   <div class="lidar-scores">
     <template v-if="scores">
+      <div class="scores-summary" v-if="!player.document.value?.topicInfo('/planner_state')" data-testid="scores-historical">
+        {{ t('lidar.scene.historicalScores') }} · {{ scoreAgeMs }} ms
+      </div>
       <div class="scores-summary">
         <span class="chip" :class="scores.success ? 'ok' : 'blocked'">
           {{ scores.success ? t('lidar.scores.success') : t('lidar.scores.blocked') }}
@@ -78,6 +81,10 @@ const player = useMcapPlayer()
 useLidarPanelPresence()
 const scores = computed(() => player.currentScores.value)
 
+const scoreAgeMs = computed(() => {
+  const entry = player.currentEntry('/dwa_scores')
+  return entry ? Math.max(0, (player.playheadNs.value - entry.logTimeNs) / 1e6).toFixed(1) : '-'
+})
 interface ScoreRow {
   i: number
   v: number
