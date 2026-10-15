@@ -377,9 +377,19 @@ const { chartRef: timelineChartRef } = useGnssRawChart(({ colors, dataset }) => 
               endValue: maxVisible - 1,
               showDetail: false,
               brushSelect: false,
-              borderColor: colors.border,
-              fillerColor: colors.surfaceMuted,
-              handleStyle: { color: colors.surfaceMuted },
+              // 自定义甘特系列的自动数据阴影没有意义，显式关闭
+              showDataShadow: false,
+              // 对齐仓内原生滚动条：muted 圆角轨道 + 加深滑块；
+              // 默认手柄是带描边握柄的方块且探出轨道两端，换成扁平端帽
+              backgroundColor: colors.surfaceMuted,
+              borderColor: 'transparent',
+              borderRadius: 5,
+              fillerColor: colors.border,
+              handleIcon: 'path://M0,0 h10 v5 h-10 z',
+              handleSize: '100%',
+              handleStyle: { color: colors.textMuted, borderColor: 'transparent' },
+              moveHandleSize: 0,
+              emphasis: { handleStyle: { color: colors.text } },
             } as const,
           ]
         : []),
