@@ -10,6 +10,7 @@ import {
   SatelliteDetailEpochStore,
   type SatelliteDetailSample,
 } from '@/core/gnss/SatelliteDetailEpochStore'
+import { SnrHistoryStore } from '@/core/gnss/SnrHistoryStore'
 import { t } from '@/i18n'
 
 // Keep object-heavy legacy histories bounded; reuse the same count as a roughly
@@ -25,6 +26,7 @@ const mapTrackPoints = shallowRef<Array<[number, number, number]>>([])
 const satelliteSnrData = shallowRef<SatelliteSnrData[]>([])
 const satelliteEpochHistory = shallowRef(new SatelliteEpochStore())
 const satelliteDetailEpochHistory = new SatelliteDetailEpochStore()
+const snrHistory = shallowRef(new SnrHistoryStore())
 const positionEpochHistory = shallowRef(new NumericEpochStore(['E', 'N', 'U', 'QUALITY']))
 const speedEpochHistory = shallowRef(new NumericEpochStore(['SPEED', 'QUALITY']))
 const mapPositionEpochHistory = new NumericEpochStore(
@@ -63,6 +65,7 @@ let deviationPointsDirty = false
 let mapTrackPointsDirty = false
 let satelliteDataDirty = false
 let satelliteEpochHistoryDirty = false
+let snrHistoryDirty = false
 let positionEpochHistoryDirty = false
 let speedEpochHistoryDirty = false
 let statusEpochHistoryDirty = false
@@ -114,6 +117,10 @@ function publishPendingData(): void {
   if (satelliteEpochHistoryDirty) {
     satelliteEpochHistoryDirty = false
     triggerRef(satelliteEpochHistory)
+  }
+  if (snrHistoryDirty) {
+    snrHistoryDirty = false
+    triggerRef(snrHistory)
   }
   if (positionEpochHistoryDirty) {
     positionEpochHistoryDirty = false
@@ -562,12 +569,13 @@ function addSatelliteSnrData(data: SatelliteSnrData) {
 
 function commitSatelliteEpoch(rawGgaTime: string): void {
   satelliteEpochHistory.value.append(satelliteEpochAssembler.commit(rawGgaTime))
-  satelliteDetailEpochHistory.append(
-    rawGgaTime,
-    pendingSatelliteDetails.size > 0 ? [...pendingSatelliteDetails.values()] : undefined,
-  )
+  const details =
+    pendingSatelliteDetails.size > 0 ? [...pendingSatelliteDetails.values()] : undefined
+  satelliteDetailEpochHistory.append(rawGgaTime, details)
+  snrHistory.value.appendEpoch(rawGgaTime, details ?? [])
   pendingSatelliteDetails.clear()
   satelliteEpochHistoryDirty = true
+  snrHistoryDirty = true
   publishPendingData()
 }
 
@@ -576,6 +584,9 @@ function clearSatelliteEpochHistory(): void {
   satelliteEpochHistoryDirty = false
   satelliteEpochHistory.value.clear()
   triggerRef(satelliteEpochHistory)
+  snrHistoryDirty = false
+  snrHistory.value.clear()
+  triggerRef(snrHistory)
 }
 
 enum NmeaType {
@@ -1274,6 +1285,9 @@ export function useNmea() {
     satelliteSnrData.value = []  // 确保清除卫星数据
     satelliteEpochHistory.value.clear()
     triggerRef(satelliteEpochHistory)
+    snrHistoryDirty = false
+    snrHistory.value.clear()
+    triggerRef(snrHistory)
     positionEpochHistory.value.clear()
     triggerRef(positionEpochHistory)
     speedEpochHistory.value.clear()
@@ -1381,6 +1395,7 @@ export function useNmea() {
       satelliteSnrData, // 添加卫星SNR数据
       satelliteEpochHistory,
       satelliteDetailEpochHistory,
+      snrHistory, // 逐星 SNR 滚动历史（实时面板逐星视图）
       positionEpochHistory,
       speedEpochHistory,
       statusEpochHistory,

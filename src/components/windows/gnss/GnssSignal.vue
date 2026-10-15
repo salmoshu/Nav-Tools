@@ -6,6 +6,7 @@
           <el-option :label="t('gnss.signal.tableView')" value="table" />
           <el-option :label="t('gnss.signal.chartView')" value="chart" />
           <el-option :label="t('gnss.signal.satCount')" value="nsat" />
+          <el-option :label="t('gnss.signal.perSatView')" value="persat" />
         </el-select>
 
         <el-select
@@ -21,6 +22,26 @@
           <el-option label="BEIDOU" value="BEIDOU" />
           <el-option label="GALILEO" value="GALILEO" />
           <el-option label="OTHER" value="OTHER" />
+        </el-select>
+
+        <el-select
+          v-show="currentView === 'persat'"
+          v-model="selectedSatKeys"
+          multiple
+          filterable
+          collapse-tags
+          collapse-tags-tooltip
+          :multiple-limit="MAX_PER_SAT_SELECTION"
+          :placeholder="t('gnss.signal.selectSatellites')"
+          size="small"
+          class="persat-select"
+        >
+          <el-option
+            v-for="option in perSatOptions"
+            :key="option.key"
+            :label="option.label"
+            :value="option.key"
+          />
         </el-select>
 
         <!-- NSat 视图：明确选择最近 40 个历元或全部数据 -->
@@ -170,6 +191,14 @@
         class="snr-chart-container"
       ></div>
 
+      <div v-show="currentView === 'persat'" class="persat-chart-wrapper">
+        <div ref="perSatChartRef" class="snr-chart-container persat-chart"></div>
+        <div v-if="perSatEmpty" class="persat-empty">
+          <div class="persat-empty-title">{{ perSatEmptyTitle }}</div>
+          <div class="persat-empty-sub">{{ t('gnss.signal.perSatEmptyHint') }}</div>
+        </div>
+      </div>
+
       <SatelliteCountChart
         v-show="currentView === 'nsat'"
         :active="currentView === 'nsat'"
@@ -185,6 +214,8 @@ import { computed, ref, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import * as echarts from 'echarts'
 import { Delete, Timer } from '@element-plus/icons-vue'
 import { useNmea } from '@/composables/gnss/useNmea'
+import { snrHistoryKey, formatSnrEpochLabel } from '@/core/gnss/SnrHistoryStore'
+import { assignSnrSeriesColors } from '@/core/gnss/SnrSeriesColors'
 import { useTheme } from '@/composables/useTheme'
 import { t } from '@/i18n'
 import SatelliteCountChart from './SatelliteCountChart.vue'
@@ -192,6 +223,7 @@ import SatelliteCountChart from './SatelliteCountChart.vue'
 // 初始化NMEA解析器与主题
 const {
   satelliteSnrData,
+  snrHistory,
   clearSatelliteEpochHistory,
 } = useNmea()
 const { chartTheme, resolvedTheme } = useTheme()
@@ -207,6 +239,14 @@ let resizeObserver = null
 const DATA_UPDATE_INTERVAL_MS = 200
 let dataUpdateTimer = null
 let themeRefreshRaf = null
+
+// 逐星视图：选中的卫星（constellation-prn 键）与折线图实例
+const MAX_PER_SAT_SELECTION = 6
+const selectedSatKeys = ref([])
+const perSatChartRef = ref(null)
+const perSatChartInstance = ref(null)
+let perSatResizeObserver = null
+let perSatUpdateTimer = null
 
 // 默认展示全部历元；用户也可明确切换到最新 40 个历元。
 const nsatSlidingWindow = ref(false)
@@ -266,6 +306,53 @@ const chartData = computed(() => {
   }
   return data
 })
+
+// 逐星可选卫星：滚动历史 ∪ 当前快照（刚出现、历史尚未累积的卫星也能预选）
+const perSatOptions = computed(() => {
+  const keys = new Set(snrHistory.value.keys)
+  for (const sat of satelliteSnrData.value) {
+    keys.add(snrHistoryKey(sat.constellation, sat.prn))
+  }
+  return [...keys]
+    .map((key) => {
+      const [constellation, prn] = key.split('-')
+      return {
+        key,
+        constellation,
+        label: `${constellationPrefixes[constellation] || 'U'}${prn} · ${constellation}`
+      }
+    })
+    .sort((a, b) => {
+      if (a.constellation !== b.constellation) {
+        return a.constellation.localeCompare(b.constellation)
+      }
+      return parseInt(a.key.split('-')[1]) - parseInt(b.key.split('-')[1])
+    })
+})
+
+// 逐星折线颜色：默认星座色，同星座多选时按亮度错开（对齐 GNSS-Raw 逐星视图）
+const perSatColors = computed(() =>
+  assignSnrSeriesColors(
+    selectedSatKeys.value,
+    (key) => constellationColors[key.split('-')[0]] || '#757575'
+  )
+)
+
+// 空态：未选卫星或历史尚未累积
+const perSatEmpty = computed(
+  () => selectedSatKeys.value.length === 0 || snrHistory.value.length === 0
+)
+const perSatEmptyTitle = computed(() =>
+  snrHistory.value.length === 0
+    ? t('gnss.signal.perSatNoHistory')
+    : t('gnss.signal.perSatEmptyTitle')
+)
+
+// 逐星折线图系列名（如 G20、C12）
+function perSatSeriesName(key) {
+  const [constellation, prn] = key.split('-')
+  return `${constellationPrefixes[constellation] || 'U'}${prn}`
+}
 
 // 获取星座标签类型
 function getConstellationTagType(constellation) {
@@ -346,6 +433,33 @@ function setupResizeObserver() {
   const parentElement = chartRef.value.parentElement
   if (parentElement) {
     resizeObserver.observe(parentElement)
+  }
+}
+
+// 逐星折线图的尺寸监听
+function setupPerSatResizeObserver() {
+  if (!perSatChartRef.value || typeof ResizeObserver === 'undefined') return
+
+  if (perSatResizeObserver) {
+    perSatResizeObserver.disconnect()
+    perSatResizeObserver = null
+  }
+
+  perSatResizeObserver = new ResizeObserver(() => {
+    nextTick(() => {
+      if (perSatChartInstance.value) {
+        try {
+          perSatChartInstance.value.resize()
+        } catch (error) {
+          // 图表调整大小失败不影响正常使用，静默处理
+        }
+      }
+    })
+  })
+
+  const parentElement = perSatChartRef.value.parentElement
+  if (parentElement) {
+    perSatResizeObserver.observe(parentElement)
   }
 }
 
@@ -496,6 +610,7 @@ function initChart() {
     }
 
     chartInstance.value.setOption(option)
+    chartInstance.value.on('click', handleBarClick)
     updateChart()
   })
 }
@@ -533,6 +648,137 @@ function scheduleDataUpdate() {
   }, DATA_UPDATE_INTERVAL_MS)
 }
 
+// 点击柱状图某颗卫星的柱子：选中该星并切换到逐星视图
+function handleBarClick(params) {
+  const data = params && params.data
+  if (!data || data.prn === undefined) return
+  selectSatellite(snrHistoryKey(data.constellation, data.prn))
+}
+
+function selectSatellite(key) {
+  if (!selectedSatKeys.value.includes(key)) {
+    if (selectedSatKeys.value.length >= MAX_PER_SAT_SELECTION) return
+    selectedSatKeys.value = [...selectedSatKeys.value, key]
+  }
+  currentView.value = 'persat'
+}
+
+// 初始化逐星折线图
+function initPerSatChart() {
+  if (!perSatChartRef.value) return
+
+  if (perSatChartInstance.value) {
+    perSatChartInstance.value.dispose()
+    perSatChartInstance.value = null
+  }
+
+  setupPerSatResizeObserver()
+
+  nextTick(() => {
+    perSatChartInstance.value = echarts.init(perSatChartRef.value, null, { renderer: 'canvas' })
+    const colors = chartTheme.value
+
+    perSatChartInstance.value.setOption({
+      tooltip: {
+        trigger: 'axis',
+        backgroundColor: colors.surface,
+        borderColor: colors.border,
+        textStyle: { color: colors.text },
+        valueFormatter: (value) => (typeof value === 'number' ? `${value} dB` : '—')
+      },
+      legend: {
+        top: 2,
+        textStyle: { color: colors.text, fontSize: 11 }
+      },
+      grid: {
+        left: '3%',
+        right: '4%',
+        bottom: '8%',
+        top: '14%',
+        containLabel: true
+      },
+      xAxis: {
+        type: 'category',
+        data: [],
+        axisLabel: {
+          color: colors.textMuted,
+          fontSize: 11
+        },
+        axisLine: {
+          lineStyle: {
+            color: colors.border
+          }
+        },
+        splitLine: {
+          show: false
+        }
+      },
+      yAxis: {
+        type: 'value',
+        min: 0,
+        max: 60,
+        name: 'SNR (dB)',
+        nameTextStyle: {
+          color: colors.text,
+          padding: [0, 0, 0, 40]
+        },
+        axisLabel: {
+          color: colors.textMuted,
+          fontSize: 12
+        },
+        axisLine: {
+          lineStyle: {
+            color: colors.border
+          }
+        },
+        splitLine: {
+          lineStyle: {
+            color: colors.grid
+          }
+        }
+      },
+      series: [],
+      animation: false
+    })
+    updatePerSatChart()
+  })
+}
+
+// 更新逐星折线图：每条选中卫星一条 SNR 逐历元折线
+function updatePerSatChart() {
+  if (!perSatChartInstance.value) return
+  if (document.hidden) return
+
+  const history = snrHistory.value
+  const labels = history.getEpochTimes().map((time) => formatSnrEpochLabel(time))
+  const series = selectedSatKeys.value.map((key) => ({
+    name: perSatSeriesName(key),
+    type: 'line',
+    color: perSatColors.value.get(key),
+    showSymbol: true,
+    symbol: 'circle',
+    symbolSize: 4,
+    lineStyle: { width: 1.6 },
+    connectNulls: false,
+    data: history.getSeries(key).map((point) => point.snr)
+  }))
+
+  perSatChartInstance.value.dispatchAction({ type: 'hideTip' })
+  perSatChartInstance.value.setOption({
+    xAxis: { data: labels },
+    series
+  })
+}
+
+function schedulePerSatUpdate() {
+  if (currentView.value !== 'persat') return
+  if (perSatUpdateTimer !== null) return
+  perSatUpdateTimer = window.setTimeout(() => {
+    perSatUpdateTimer = null
+    updatePerSatChart()
+  }, DATA_UPDATE_INTERVAL_MS)
+}
+
 // 清除卫星数目历史；WebGL 子组件会通过共享 store 的变更自动清空。
 function clearNsatHistory() {
   clearSatelliteEpochHistory()
@@ -564,7 +810,33 @@ watch(currentView, (view) => {
         updateChart()
       }
     })
+  } else if (view === 'persat') {
+    nextTick(() => {
+      if (!perSatChartInstance.value) {
+        initPerSatChart()
+      } else {
+        perSatChartInstance.value.resize()
+        updatePerSatChart()
+      }
+    })
   }
+})
+
+// 监听逐星历史变化（仅在逐星视图激活时节流刷新）
+watch(snrHistory, () => {
+  schedulePerSatUpdate()
+})
+
+// 监听逐星选择变化
+watch(selectedSatKeys, () => {
+  updatePerSatChart()
+})
+
+// 卫星滑出滚动窗口后，同步移除失效的选中项
+watch(perSatOptions, (options) => {
+  const available = new Set(options.map((option) => option.key))
+  const kept = selectedSatKeys.value.filter((key) => available.has(key))
+  if (kept.length !== selectedSatKeys.value.length) selectedSatKeys.value = kept
 })
 
 // 监听主题变化
@@ -575,6 +847,8 @@ function scheduleThemeRefresh() {
       themeRefreshRaf = null
       if (currentView.value === 'chart') {
         initChart()
+      } else if (currentView.value === 'persat') {
+        initPerSatChart()
       }
     })
   })
@@ -587,6 +861,8 @@ onMounted(() => {
   setTimeout(() => {
     if (currentView.value === 'chart') {
       initChart()
+    } else if (currentView.value === 'persat') {
+      initPerSatChart()
     }
   }, 100)
 })
@@ -611,6 +887,21 @@ onUnmounted(() => {
   if (chartInstance.value) {
     chartInstance.value.dispose()
     chartInstance.value = null
+  }
+
+  if (perSatUpdateTimer !== null) {
+    clearTimeout(perSatUpdateTimer)
+    perSatUpdateTimer = null
+  }
+
+  if (perSatResizeObserver) {
+    perSatResizeObserver.disconnect()
+    perSatResizeObserver = null
+  }
+
+  if (perSatChartInstance.value) {
+    perSatChartInstance.value.dispose()
+    perSatChartInstance.value = null
   }
 })
 </script>
@@ -696,6 +987,43 @@ onUnmounted(() => {
   min-height: 0;
   border-radius: 4px;
   background-color: var(--app-surface);
+}
+
+.persat-select {
+  width: 280px;
+}
+
+.persat-chart-wrapper {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.persat-chart {
+  flex: 1;
+}
+
+.persat-empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  pointer-events: none;
+}
+
+.persat-empty-title {
+  font-size: 13px;
+  color: var(--app-text);
+}
+
+.persat-empty-sub {
+  font-size: 12px;
+  color: var(--app-text-secondary);
 }
 
 .snr-cell {
