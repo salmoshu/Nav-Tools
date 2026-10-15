@@ -15,9 +15,12 @@ async function loadDoc(): Promise<McapDocument> {
 describe('真实板端录像 trace-selftest.mcap 字段级校验', () => {
   it('12 个板端通道全部存在且有消息', async () => {
     const doc = await loadDoc()
-    // trace-selftest 录制于 local_map 通道加入之前：只断言 12 个既有通道
+    // trace-selftest 录制于 local_map / planner_state 通道加入之前：只断言 12 个既有通道
     const legacyTopics = Object.values(LIDAR_TOPICS).filter(
-      (topic) => topic !== LIDAR_TOPICS.localMap && topic !== LIDAR_TOPICS.localMapPath,
+      (topic) =>
+        topic !== LIDAR_TOPICS.localMap &&
+        topic !== LIDAR_TOPICS.localMapPath &&
+        topic !== LIDAR_TOPICS.plannerState,
     )
     expect(legacyTopics).toHaveLength(12)
     for (const topic of legacyTopics) {
@@ -27,10 +30,11 @@ describe('真实板端录像 trace-selftest.mcap 字段级校验', () => {
     expect(doc.endNs!).toBeGreaterThan(doc.startNs!)
   })
 
-  it('旧录像没有 local_map 通道（场景开关灰显降级的前提）', async () => {
+  it('旧录像没有 local_map / planner_state 通道（场景开关灰显降级的前提）', async () => {
     const doc = await loadDoc()
     expect(doc.topicInfo(LIDAR_TOPICS.localMap)).toBeUndefined()
     expect(doc.topicInfo(LIDAR_TOPICS.localMapPath)).toBeUndefined()
+    expect(doc.topicInfo(LIDAR_TOPICS.plannerState)).toBeUndefined()
   })
 
   it('LaserScan：360 点、1° 角分辨率、量程 0.1~12 m', async () => {
