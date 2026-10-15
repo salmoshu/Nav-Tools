@@ -354,6 +354,7 @@ export default {
     splitDown: 'Split Down',
     resizeSplitHint: 'Drag to resize panes; double-click to equalize',
     resizeSftpPanel: 'Drag to resize the SFTP panel',
+    resizeFileTreePanel: 'Drag to resize the file tree panel',
     maximizePaneShortcut: 'Maximize pane (Ctrl/Cmd+Shift+Enter)',
     restorePane: 'Restore Pane',
     closePaneShortcut: 'Close Pane (Ctrl+W)',
@@ -370,6 +371,10 @@ export default {
     fileTreeDownload: 'Download to local…',
     fileTreeDownloadDone: 'Downloaded: {name}',
     fileTreeDownloadFailed: 'Download failed: {message}',
+    fileTreeStatusIdle: 'Ready',
+    fileTreeStatusDownloading: 'Downloading: {name}',
+    fileTreeStatusDone: 'Download complete: {name}',
+    fileTreeStatusFailed: 'Download failed: {name}',
     fileTreeCopyPath: 'Copy path',
     fileTreeCopyPathDone: 'Path copied: {path}',
     fileTreeRename: 'Rename…',
@@ -538,6 +543,9 @@ export default {
       'Closing this tab terminates all of its shells, SSH sessions, SFTP transfers, and forwarding. Continue?',
     closeComponentConfirm:
       'Removing Terminal terminates all shells, SSH sessions, SFTP transfers, and forwarding. Continue?',
+    closeWindowTitle: 'Close Terminal',
+    closeWindowConfirm:
+      'Closing Terminal terminates all shells, SSH sessions, SFTP transfers, and port forwarding. Continue?',
     tabName: 'Enter a tab name',
     renameTab: 'Rename Tab',
     unknownHost: 'Unknown SSH Host',

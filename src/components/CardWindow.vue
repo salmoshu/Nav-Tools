@@ -16,6 +16,7 @@
 <script setup lang="ts">
 import { markRaw, onMounted, onUnmounted, ref } from 'vue'
 import type { Component } from 'vue'
+import { ElMessageBox } from 'element-plus'
 import { routeDataToWindow } from '@/hooks/useDevice'
 import { getWindowById } from '@/settings/config'
 import { buildComponentIconDataUrl } from '@/core/panels/componentIcon'
@@ -38,6 +39,7 @@ const cardWindowId = ref<string | undefined>(undefined)
 const loadError = ref('')
 
 onMounted(async () => {
+  void pollPendingCloseRequest()
   const hash = window.location.hash.slice(1) // 移除 #
   if (!hash.startsWith('card/')) {
     loadError.value = t('app.cardWindow.invalidAddress')
@@ -96,6 +98,48 @@ window.ipcRenderer?.on('incoming-data', incomingDataListener)
 onUnmounted(() => {
   window.ipcRenderer?.off('incoming-data', incomingDataListener)
 })
+
+// 主进程拦截 Terminal 独立窗口的关闭后推送确认请求,这里弹应用内确认框并回报结果
+const closeRequestListener = () => {
+  void confirmWindowClose()
+}
+window.ipcRenderer?.on('card-window-close-request', closeRequestListener)
+onUnmounted(() => {
+  window.ipcRenderer?.off('card-window-close-request', closeRequestListener)
+})
+
+let closeConfirmOpen = false
+
+async function confirmWindowClose(): Promise<void> {
+  if (closeConfirmOpen) return
+  closeConfirmOpen = true
+  let confirmed = false
+  try {
+    await ElMessageBox.confirm(
+      t('common.terminal.closeWindowConfirm'),
+      t('common.terminal.closeWindowTitle'),
+      { type: 'warning', customClass: 'app-message-box' },
+    )
+    confirmed = true
+  } catch {
+    confirmed = false
+  } finally {
+    closeConfirmOpen = false
+  }
+  try {
+    await window.ipcRenderer?.invoke('card-window-close-response', confirmed)
+  } catch {
+    // 窗口正在销毁时回报可能失败,关闭流程保持原状,用户可再次触发关闭
+  }
+}
+
+// 补查挂载前已发出的关闭确认请求(主进程的推送可能早于监听器注册)
+async function pollPendingCloseRequest(): Promise<void> {
+  const pending = await window.ipcRenderer
+    ?.invoke('card-window-close-request-pending')
+    .catch(() => false)
+  if (pending) void confirmWindowClose()
+}
 
 function closeWindow() {
   void window.electronAPI?.closeWindow()

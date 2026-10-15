@@ -739,25 +739,60 @@ export class TerminalService {
         }
         return
       }
-      await this.host.fileSystem.copyFile(target.path, localPath)
+      await this.downloadLocalFile(sessionId, target.path, localPath, stats.size)
       return
     }
 
     if (target.kind === 'wsl') {
-      // tar -cf - 输出二进制流到 stdout;文件名可能含换行等病态字符时以 tar 结构保证完整
-      const buffer = await this.wslExecBuffer(
-        target.distro,
-        `tar -cf - ${quoteShellArg(target.path, 'posix')}`,
-        [],
-      )
-      // GNU tar 在 stderr 干扰时可能混入告警;tar 结构本身带长度校验,提取时失败会抛错
-      const tarPath = `${localPath}.navtools.tar`
-      await this.host.fileSystem.writeFile(tarPath, buffer)
+      // tar 流式打包没有字节级进度;仍发 running/success/error,让状态栏有统一生命周期
+      const operationId = this.host.createId('sftp')
+      const downloadName = path.posix.basename(target.path)
+      this.emitTransfer({
+        sessionId,
+        operationId,
+        direction: 'download',
+        name: downloadName,
+        transferred: 0,
+        total: 0,
+        status: 'running',
+      })
       try {
-        await this.extractTarToDirectory(tarPath, path.dirname(localPath))
-      } finally {
-        await this.host.fileSystem.rm(tarPath, { force: true }).catch(() => undefined)
+        // tar -cf - 输出二进制流到 stdout;文件名可能含换行等病态字符时以 tar 结构保证完整
+        const buffer = await this.wslExecBuffer(
+          target.distro,
+          `tar -cf - ${quoteShellArg(target.path, 'posix')}`,
+          [],
+        )
+        // GNU tar 在 stderr 干扰时可能混入告警;tar 结构本身带长度校验,提取时失败会抛错
+        const tarPath = `${localPath}.navtools.tar`
+        await this.host.fileSystem.writeFile(tarPath, buffer)
+        try {
+          await this.extractTarToDirectory(tarPath, path.dirname(localPath))
+        } finally {
+          await this.host.fileSystem.rm(tarPath, { force: true }).catch(() => undefined)
+        }
+      } catch (error) {
+        this.emitTransfer({
+          sessionId,
+          operationId,
+          direction: 'download',
+          name: downloadName,
+          transferred: 0,
+          total: 0,
+          status: 'error',
+          error: error instanceof Error ? error.message : String(error),
+        })
+        throw error
       }
+      this.emitTransfer({
+        sessionId,
+        operationId,
+        direction: 'download',
+        name: downloadName,
+        transferred: 0,
+        total: 0,
+        status: 'success',
+      })
       return
     }
 
@@ -1312,6 +1347,53 @@ export class TerminalService {
     })
   }
 
+  /**
+   * 本机文件下载:copyFile 没有字节级回调,按文件粒度发 running/success/error 事件,
+   * 让文件树状态栏在本机会话上也能消费统一的传输生命周期。
+   */
+  private async downloadLocalFile(
+    sessionId: string,
+    sourcePath: string,
+    localPath: string,
+    size: number,
+  ): Promise<void> {
+    const operationId = this.host.createId('sftp')
+    const name = path.basename(sourcePath)
+    this.emitTransfer({
+      sessionId,
+      operationId,
+      direction: 'download',
+      name,
+      transferred: 0,
+      total: size,
+      status: 'running',
+    })
+    try {
+      await this.host.fileSystem.copyFile(sourcePath, localPath)
+    } catch (error) {
+      this.emitTransfer({
+        sessionId,
+        operationId,
+        direction: 'download',
+        name,
+        transferred: 0,
+        total: size,
+        status: 'error',
+        error: error instanceof Error ? error.message : String(error),
+      })
+      throw error
+    }
+    this.emitTransfer({
+      sessionId,
+      operationId,
+      direction: 'download',
+      name,
+      transferred: size,
+      total: size,
+      status: 'success',
+    })
+  }
+
   private async downloadEntry(
     sftp: SFTPWrapper,
     sessionId: string,
@@ -1334,25 +1416,39 @@ export class TerminalService {
     }
     const operationId = this.host.createId('sftp')
     await this.host.fileSystem.mkdir(path.dirname(localPath), { recursive: true })
-    await new Promise<void>((resolve, reject) => {
-      sftp.fastGet(
-        remotePath,
-        localPath,
-        {
-          step: (transferred, _chunk, total) =>
-            this.emitTransfer({
-              sessionId,
-              operationId,
-              direction: 'download',
-              name: path.posix.basename(remotePath),
-              transferred,
-              total,
-              status: 'running',
-            }),
-        },
-        (error) => (error ? reject(error) : resolve()),
-      )
-    })
+    try {
+      await new Promise<void>((resolve, reject) => {
+        sftp.fastGet(
+          remotePath,
+          localPath,
+          {
+            step: (transferred, _chunk, total) =>
+              this.emitTransfer({
+                sessionId,
+                operationId,
+                direction: 'download',
+                name: path.posix.basename(remotePath),
+                transferred,
+                total,
+                status: 'running',
+              }),
+          },
+          (error) => (error ? reject(error) : resolve()),
+        )
+      })
+    } catch (error) {
+      this.emitTransfer({
+        sessionId,
+        operationId,
+        direction: 'download',
+        name: path.posix.basename(remotePath),
+        transferred: 0,
+        total: attrs.size,
+        status: 'error',
+        error: error instanceof Error ? error.message : String(error),
+      })
+      throw error
+    }
     this.emitTransfer({
       sessionId,
       operationId,

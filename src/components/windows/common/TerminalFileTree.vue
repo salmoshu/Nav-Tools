@@ -70,6 +70,8 @@ const emit = defineEmits<{
   loading: [loading: boolean]
   'root-resolved': [path: string]
   'load-error': [path: string, root: boolean, error?: unknown]
+  'download-start': [name: string]
+  'download-settle': [ok: boolean, error?: string]
 }>()
 
 function onNodeCommand(command: string, entry: SftpEntry): void {
@@ -108,14 +110,17 @@ async function downloadEntry(entry: SftpEntry): Promise<void> {
     directory: entry.directory,
   })) as string | null
   if (!localPath) return
+  emit('download-start', entry.name)
   try {
     await window.ipcRenderer.invoke('terminal-session-download', {
       sessionId: props.sessionId,
       sessionPath: entry.path,
       localPath,
     })
+    emit('download-settle', true)
     ElMessage.success(t('common.terminal.fileTreeDownloadDone', { name: entry.name }))
   } catch (error) {
+    emit('download-settle', false, errorMessage(error))
     ElMessage.error(
       t('common.terminal.fileTreeDownloadFailed', {
         name: entry.name,

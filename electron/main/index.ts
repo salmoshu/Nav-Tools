@@ -41,6 +41,7 @@ import { createNodeTerminalServiceHost } from './services/TerminalServiceHost'
 import { TerminalCredentialService } from './services/TerminalCredentialService'
 import { registerTerminalIpc } from './terminalIpc'
 import { createDesktopShortcut, parseOpenComponentArg, sanitizeShortcutName } from './shortcuts'
+import { decideCardWindowClose, isCloseConfirmPending } from './cardWindowClose'
 import { getPanelById } from '../../src/core/panels/registry'
 
 const require = createRequire(import.meta.url)
@@ -206,6 +207,29 @@ ipcMain.handle('window-restore-detached-panel', (event) => {
 
 ipcMain.handle('window-close', (event) => {
   BrowserWindow.fromWebContents(event.sender)?.close()
+})
+
+// ---- Terminal 组件独立窗口关闭确认:主进程拦截 close 并推送 card-window-close-request,
+// 渲染进程(CardWindow.vue)弹应用内确认框,再经 card-window-close-response 回报结果 ----
+
+/** 渲染进程挂载后主动补查挂起的关闭确认,覆盖推送早于监听器注册的时序 */
+ipcMain.handle('card-window-close-request-pending', (event) => {
+  const target = BrowserWindow.fromWebContents(event.sender)
+  const detachedPanel = target ? detachedPanels.get(target.id) : undefined
+  return isCloseConfirmPending(detachedPanel)
+})
+
+ipcMain.handle('card-window-close-response', async (event, confirmed: unknown) => {
+  const target = BrowserWindow.fromWebContents(event.sender)
+  if (!target) return
+  const detachedPanel = detachedPanels.get(target.id)
+  // 只接受 Terminal 面板确有挂起确认的回报,忽略重复或越权调用
+  if (!isCloseConfirmPending(detachedPanel)) return
+  detachedPanel.closeInProgress = false
+  if (confirmed !== true) return
+  await terminalService.closeAll()
+  detachedPanel.closeConfirmed = true
+  target.close()
 })
 
 ipcMain.handle('window-resize-start', (event, edge: WindowResizeEdge) => {
@@ -546,35 +570,16 @@ async function openCardWindow(
         typeof cardData.componentName === 'string' ? cardData.componentName : undefined,
     })
   }
-  cardWindow.on('close', async (closeEvent) => {
+  cardWindow.on('close', (closeEvent) => {
+    // 确认交给渲染进程的应用内弹框(见 CardWindow.vue),结果经 card-window-close-response 回报
     const detachedPanel = detachedPanels.get(cardWindow.id)
-    if (
-      detachedPanel?.componentName !== 'Terminal' ||
-      detachedPanel.closeConfirmed ||
-      terminalService.listSessions().length === 0
-    ) {
-      return
-    }
-
+    const action = decideCardWindowClose(detachedPanel, terminalService.listSessions().length)
+    if (action === 'allow') return
     closeEvent.preventDefault()
-    if (detachedPanel.closeInProgress) return
+    if (action === 'wait' || !detachedPanel) return
     detachedPanel.closeInProgress = true
-    try {
-      const result = await dialog.showMessageBox(cardWindow, {
-        type: 'warning',
-        buttons: ['关闭并终止 / Close and terminate', '取消 / Cancel'],
-        defaultId: 1,
-        cancelId: 1,
-        title: '关闭终端 / Close Terminal',
-        message:
-          '关闭终端组件会终止全部 Shell、SSH、SFTP 传输和端口转发。\nClosing Terminal will terminate all shells, SSH sessions, SFTP transfers, and port forwarding.',
-      })
-      if (result.response !== 0) return
-      await terminalService.closeAll()
-      detachedPanel.closeConfirmed = true
-      cardWindow.close()
-    } finally {
-      detachedPanel.closeInProgress = false
+    if (!cardWindow.webContents.isDestroyed()) {
+      cardWindow.webContents.send('card-window-close-request')
     }
   })
   cardWindow.once('closed', () => {
