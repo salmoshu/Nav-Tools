@@ -188,6 +188,7 @@
               <div class="field-row content-field">
                 <span class="field-label">{{ t('common.camera.subCommandContent') }}</span>
                 <el-input
+                  ref="contentInput"
                   v-model="content"
                   :aria-label="t('common.camera.subCommandContent')"
                   type="textarea"
@@ -932,6 +933,8 @@ const port = computed(() => dataSourceSettings.network.port ?? 0)
 const portText = computed(() => (port.value > 0 ? String(port.value) : '—'))
 const subCommand = ref(savedSettings.subCommand)
 const content = ref(savedSettings.content)
+/** 命令内容输入框:发送期间 disabled 失焦后用于恢复焦点 */
+const contentInput = ref<{ focus: () => void } | null>(null)
 const contentIsHex = ref(savedSettings.contentIsHex)
 const showCommandHelp = ref(false)
 const showFullOutput = ref(false)
@@ -1076,6 +1079,8 @@ async function sendCommand() {
     ElMessage.error(t('common.camera.sendFailed') + message)
   } finally {
     sending.value = false
+    // 发送期间 textarea 被 disable 会失焦(Ctrl+Enter 发送后光标消失),恢复后还给输入区
+    void nextTick().then(() => contentInput.value?.focus())
   }
 }
 
