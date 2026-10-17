@@ -1,20 +1,27 @@
 <template>
   <div class="gnss-sky-container" ref="containerRef" :class="{ 'is-narrow': isNarrow }">
     <aside
-      v-show="panelOpen"
       class="control-panel"
-      :class="{ drawer: isNarrow }"
+      :class="{ drawer: isNarrow, closed: !panelOpen }"
+      @transitionend="onPanelTransitionEnd"
     >
       <div class="panel-header">
         <span class="panel-title">{{ t('gnss.sky.controlPanel') }}</span>
         <button
-          class="icon-btn collapse-btn"
+          class="sky-toggle collapse-btn"
           type="button"
           @click="collapsePanel"
           :title="isNarrow ? t('gnss.sky.closePanel') : t('gnss.sky.collapsePanel')"
         >
           <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M15 18l-6-6 6-6" />
+            <g class="toggle-panel-glyph">
+              <rect x="3.5" y="5" width="17" height="14" rx="3.5" />
+              <path d="M9.5 5v14" />
+            </g>
+            <g class="toggle-arrow-glyph">
+              <path d="M12 7.5 7.75 12 12 16.5" />
+              <path d="M17.25 7.5 13 12l4.25 4.5" />
+            </g>
           </svg>
         </button>
       </div>
@@ -102,13 +109,20 @@
     <div class="chart-area">
       <button
         v-if="!panelOpen"
-        class="icon-btn expand-btn"
+        class="sky-toggle expand-btn"
         type="button"
         @click="expandPanel"
         :title="t('gnss.sky.expandPanel')"
       >
         <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M4 6h16M4 12h16M4 18h16" />
+          <g class="toggle-panel-glyph">
+            <rect x="3.5" y="5" width="17" height="14" rx="3.5" />
+            <path d="M9.5 5v14" />
+          </g>
+          <g class="toggle-arrow-glyph">
+            <path d="M12 7.5 7.75 12 12 16.5" />
+            <path d="M17.25 7.5 13 12l4.25 4.5" />
+          </g>
         </svg>
       </button>
       <div class="sky-chart" ref="chartRef" @mouseleave="hideSkyTooltip"></div>
@@ -157,6 +171,15 @@ function collapsePanel() {
 
 function expandPanel() {
   panelOpen.value = true
+}
+
+// 面板开合的滑动过渡结束后，按最终布局尺寸重算图表
+// （过渡期间 ResizeObserver 逐帧协同，这里保证落定后的精确铺满）
+function onPanelTransitionEnd(event) {
+  if (event.target !== event.currentTarget) return
+  if (event.propertyName === 'margin-left' || event.propertyName === 'transform') {
+    scheduleResize()
+  }
 }
 
 // 在下一帧统一触发图表 resize，避免 ResizeObserver 高频回调造成抖动
@@ -660,6 +683,16 @@ onUnmounted(() => {
   overflow-y: auto;
   background: var(--app-surface);
   z-index: 5;
+  /* 折叠时整体滑出（负 margin 抵消自身宽度，内容不压缩、直接平移），
+     宽屏滑 margin-left，抽屉模式滑 transform；收起后延迟隐藏保证焦点不可达 */
+  transition: margin-left 0.28s ease, transform 0.28s ease, opacity 0.2s ease, visibility 0s;
+}
+
+.control-panel.closed {
+  margin-left: calc(-1 * min(260px, 30%) - 2px);
+  visibility: hidden;
+  opacity: 0;
+  transition: margin-left 0.28s ease, transform 0.28s ease, opacity 0.2s ease, visibility 0s 0.28s;
 }
 
 /* 小窗模式下面板变为抽屉，浮在图表之上，不占用布局宽度 */
@@ -675,6 +708,12 @@ onUnmounted(() => {
   z-index: 20;
 }
 
+/* 抽屉收起改为整体平移滑出（覆盖宽屏负边距：两者宽度基准不同） */
+.control-panel.drawer.closed {
+  margin-left: 0;
+  transform: translateX(-100%);
+}
+
 .panel-header {
   display: flex;
   align-items: center;
@@ -688,34 +727,71 @@ onUnmounted(() => {
   color: var(--app-text);
 }
 
-.icon-btn {
+/* 侧边栏开合切换按钮：默认显示“侧边栏”字形（圆角矩形+分隔线），
+   悬浮/聚焦时字形淡出、浮现指向操作方向的双箭头（收起«、展开»） */
+.sky-toggle {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
+  width: 30px;
+  height: 30px;
   padding: 0;
   border: 1px solid var(--app-border);
-  border-radius: 6px;
+  border-radius: 9px;
   background: var(--app-surface-raised);
-  color: var(--app-text);
+  color: var(--app-text-muted);
   cursor: pointer;
-  transition: background 0.15s ease, border-color 0.15s ease;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
 }
 
-.icon-btn:hover {
-  background: rgba(64, 158, 255, 0.1);
-  border-color: #409EFF;
+.sky-toggle:hover,
+.sky-toggle:focus-visible {
+  background: var(--app-hover);
+  color: var(--app-text);
 }
 
-.icon-btn svg {
-  width: 18px;
-  height: 18px;
+.sky-toggle svg {
+  width: 17px;
+  height: 17px;
   fill: none;
   stroke: currentColor;
   stroke-width: 2;
   stroke-linecap: round;
   stroke-linejoin: round;
+}
+
+.toggle-panel-glyph,
+.toggle-arrow-glyph {
+  transform-box: fill-box;
+  transform-origin: center;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+.toggle-arrow-glyph {
+  opacity: 0;
+  transform: translateX(2.5px);
+}
+
+.sky-toggle:hover .toggle-panel-glyph,
+.sky-toggle:focus-visible .toggle-panel-glyph {
+  opacity: 0;
+}
+
+.sky-toggle:hover .toggle-arrow-glyph,
+.sky-toggle:focus-visible .toggle-arrow-glyph {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+/* 展开按钮箭头朝右（»）：整体镜像，入场位移方向同步翻转 */
+.expand-btn .toggle-arrow-glyph {
+  transform: scaleX(-1) translateX(-2.5px);
+}
+
+.expand-btn:hover .toggle-arrow-glyph,
+.expand-btn:focus-visible .toggle-arrow-glyph {
+  opacity: 1;
+  transform: scaleX(-1) translateX(0);
 }
 
 /* 抽屉展开时的半透明遮罩，点击可关闭面板 */
