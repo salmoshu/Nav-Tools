@@ -32,9 +32,6 @@
       </template>
       <span v-else>{{ t('lidar.scene.noPlannerState') }}</span>
       <span data-testid="planner-execution">{{ t('lidar.scene.executionUnknown') }}</span>
-      <ul v-if="sceneFrame?.warnings.length" class="scene-warnings" data-testid="scene-warnings">
-        <li v-for="warning in sceneFrame.warnings" :key="warning">{{ warning }}</li>
-      </ul>
     </div>
 
     <div ref="canvasWrap" class="scene-canvas-wrap" :class="{ empty: !hasFrame }">
@@ -47,6 +44,10 @@
         @dblclick="fitView"
       ></canvas>
       <div v-show="sceneInteracting && hasFrame" class="scene-crosshair" aria-hidden="true"></div>
+      <!-- 警告悬浮在画布之上而非挤占文档流：条数随播放帧在 0/2/4 间变化时画布不再跳动 -->
+      <ul v-if="sceneFrame?.warnings.length" class="scene-warnings" data-testid="scene-warnings">
+        <li v-for="warning in sceneFrame.warnings" :key="warning">{{ warning }}</li>
+      </ul>
       <div class="scene-empty" v-if="!hasFrame">
         <el-icon :size="42"><DataLine /></el-icon>
         <p>{{ t('lidar.scene.emptyHint') }}</p>
@@ -442,10 +443,21 @@ onUnmounted(() => {
 }
 
 .scene-warnings {
-  width: 100%;
+  position: absolute;
+  left: 10px;
+  bottom: 8px;
+  z-index: 2;
+  max-width: calc(100% - 20px);
+  max-height: 60%;
+  overflow: hidden;
   margin: 0;
-  padding-left: 16px;
+  padding: 4px 10px 4px 24px;
+  font-size: 11px;
+  line-height: 1.5;
   color: #d97706;
+  background: color-mix(in srgb, var(--app-surface) 78%, transparent);
+  border-radius: 8px;
+  pointer-events: none;
 }
 
 .scene-canvas-wrap {

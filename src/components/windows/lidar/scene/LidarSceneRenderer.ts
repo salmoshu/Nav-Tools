@@ -97,7 +97,7 @@ export class LidarSceneRenderer {
   private localMapMesh: THREE.Mesh
   private localMapTexture: THREE.DataTexture
   private localMapSize = { width: 0, height: 0 }
-  private goalArrow: THREE.ArrowHelper
+  private goalPoint: THREE.Points
   private headingArrow: THREE.ArrowHelper
   private lastRobotPosition = new THREE.Vector3(Number.NaN, Number.NaN, Number.NaN)
   private viewInitialized = false
@@ -195,15 +195,7 @@ export class LidarSceneRenderer {
     this.localMapMesh.visible = false
     this.scene.add(this.localMapMesh)
 
-    this.goalArrow = new THREE.ArrowHelper(
-      new THREE.Vector3(1, 0, 0),
-      new THREE.Vector3(),
-      0.6,
-      COLORS.goal,
-      0.25,
-      0.14,
-    )
-    this.scene.add(this.goalArrow)
+    this.goalPoint = this.makePoints(COLORS.goal, 9)
     this.headingArrow = new THREE.ArrowHelper(
       new THREE.Vector3(1, 0, 0),
       new THREE.Vector3(),
@@ -217,12 +209,12 @@ export class LidarSceneRenderer {
 
   // ——— 资源构造 ———
 
-  private makePoints(color: number): THREE.Points {
+  private makePoints(color: number, size = 3): THREE.Points {
     const geometry = new THREE.BufferGeometry()
     geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(0), 3))
     const material = new THREE.PointsMaterial({
       color,
-      size: 3,
+      size,
       sizeAttenuation: false,
       vertexColors: false,
     })
@@ -364,16 +356,19 @@ export class LidarSceneRenderer {
       this.localMapPathLine.visible = false
     }
 
+    // 隐藏车体箭头时仍更新朝向。
+    this.headingArrow.setDirection(new THREE.Vector3(Math.cos(worldYaw), Math.sin(worldYaw), 0))
+
+    // 滚动 goal 只有位置语义（录像中四元数恒为单位占位，无朝向），画点标记，不跟车头朝向。
     if (options.showGoal && frame.goalXY) {
-      this.goalArrow.position.set(frame.goalXY.x, frame.goalXY.y, 0)
-      this.goalArrow.visible = true
+      this.setPositions(this.goalPoint.geometry, Float32Array.of(frame.goalXY.x, frame.goalXY.y, 0))
+      this.goalPoint.visible = true
     } else {
-      this.goalArrow.visible = false
+      this.goalPoint.visible = false
     }
 
     if (options.showRobot) {
       this.headingArrow.position.set(worldX, worldY, 0)
-      this.headingArrow.setDirection(new THREE.Vector3(Math.cos(worldYaw), Math.sin(worldYaw), 0))
       this.headingArrow.visible = true
     } else {
       this.headingArrow.visible = false
