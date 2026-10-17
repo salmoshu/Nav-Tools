@@ -14,9 +14,9 @@ const sftpSource = readFileSync('src/components/windows/common/TerminalSftpPanel
 const terminalThemeSource = readFileSync('src/core/terminal/TerminalTheme.ts', 'utf8')
 
 describe('Terminal v1.4.1 visual controls', () => {
-  it('uses Orca Ghostty colors for the terminal and ANSI output', () => {
+  it('pairs the brand deep-navy surface with Orca ANSI output colors', () => {
     expect(paneSource).toContain('...ORCA_TERMINAL_THEME')
-    expect(terminalThemeSource).toContain("background: '#282c34'")
+    expect(terminalThemeSource).toContain("background: '#0d1b2e'")
     expect(terminalThemeSource).toContain("foreground: '#ffffff'")
     expect(terminalThemeSource).toContain("red: '#cc6666'")
     expect(terminalThemeSource).toContain("green: '#b5bd68'")

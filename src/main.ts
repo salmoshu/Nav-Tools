@@ -9,6 +9,8 @@ import 'element-plus/theme-chalk/dark/css-vars.css'
 import * as ElementPlusIconsVue from '@element-plus/icons-vue'
 import { useDevice } from '@/hooks/useDevice'
 import 'vue-virtual-scroller/dist/vue-virtual-scroller.css'
+// Kimi 品牌令牌最后引入：与 EP 变量同优先级时靠后生效
+import './styles/kimi-tokens.css'
 import VirtualScroller from 'vue-virtual-scroller'
 import { i18n } from './i18n'
 

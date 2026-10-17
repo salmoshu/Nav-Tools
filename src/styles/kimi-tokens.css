@@ -1,0 +1,337 @@
+/* ============================================================
+   Kimi 品牌设计令牌 —— 实抽自 kimi.ai 全站 CSS（2026-10-17）
+   源：Mind-Forge/raw/03-项目/00-综合/Brand/design-tokens.css
+   深色模式：根元素切换 class="dark"（src/composables/useTheme.ts）。
+   本文件在 element-plus 样式之后引入（src/main.ts 末尾）；
+   暗色覆盖统一用 :root.dark —— 与 EP 的 html.dark 同优先级、靠后生效。
+   ============================================================ */
+
+:root {
+  /* ---------- 字体 ---------- */
+  --system-fonts: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, "PingFang SC", "Hiragino Sans GB",
+    "Microsoft YaHei", "微软雅黑", sans-serif;
+  --title-fonts: "MiSans VF", var(--system-fonts);
+  --font-mono: "Geist Mono", "SF Mono", Monaco, Inconsolata, "Fira Code",
+    "Droid Sans Mono", "Source Code Pro", Consolas, "Courier New", monospace;
+  --font-family-base: var(--system-fonts);
+
+  --font-weight-light: 300;
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+  --font-weight-extrabold: 800;
+
+  /* ---------- UI 字号梯度 ---------- */
+  --ui-T1-font-size: 18px;  --ui-T1-line-height: 26px;   /* 页面标题 */
+  --ui-T2-font-size: 16px;  --ui-T2-line-height: 24px;   /* 区块标题 */
+  --ui-B1-font-size: 15px;  --ui-B1-line-height: 22px;   /* 正文 */
+  --ui-B2-font-size: 14px;  --ui-B2-line-height: 20px;   /* 次级正文 */
+  --ui-C1-font-size: 12px;  --ui-C1-line-height: 18px;   /* 辅助 */
+  --ui-C2-font-size: 10px;  --ui-C2-line-height: 14px;   /* 徽标 */
+
+  /* ---------- 品牌蓝（唯一强调色） ---------- */
+  --Colors-KMBlue: #1783ff;
+  --Colors-KMBlue-hover: #167ff7;
+  --Colors-KMBlue-active: #167cf2;
+  --Others-KMBlue10: #1783ff1a;
+  --Others-KMBlueDisabled: #1783ff66;
+  --Others-TextSelected: #1783ff33;
+  --Others-LightBlueBg: #e8f3ff;
+
+  /* ---------- 功能色 ---------- */
+  --Colors-Red: #ff3849;           --Colors-Red-hover: #f73647;           --Colors-Red-active: #f23545;
+  --Colors-Red25: #ff384940;
+  --Colors-PositiveGreen: #16c456; --Colors-PositiveGreen-hover: #15be53; --Colors-PositiveGreen-active: #15ba52;
+  --Colors-PositiveGreen25: #16c45640;
+  --Colors-Green: #32ff7d;
+  --Colors-Yellow: #ffd230;
+  --Colors-Orange: #ff9500;        --Colors-Orange-hover: #f79100;        --Colors-Orange-active: #f28e00;
+  --Colors-Purple: #985ffb;        --Colors-Purple-hover: #935cf3;        --Colors-Purple-active: #905aee;
+  --Others-LightRedBg: #ff4d4d1a;
+  --Others-LightOrangeBg: #ff95001a;
+  --Others-LightGreenBg: #16c4561a;
+  --Others-LightYellowBg: #ffc80033;
+
+  /* ---------- 背景层级 ---------- */
+  --Bg-Primary: #fff;            --Bg-Primary-hover: #f7f7f7;   --Bg-Primary-active: #f2f2f2;
+  --Bg-Primary90: #ffffffe6;
+  --Bg-Primary70: #ffffffb3;     /* 毛玻璃悬浮层 */
+  --Bg-Secondary: #f5f5f5;       --Bg-Secondary-hover: #eee;    --Bg-Secondary-active: #e9e9e9;
+  --Bg-Tertiary: #fff;
+  --Bg-Quaternary: #fff;
+  --Bg-GroundPC: #f9fbfc;        /* 桌面端大底 */
+
+  /* ---------- 文字标签（透明度体系） ---------- */
+  --Labels-Primary: #000000e6;    /* 90% 黑 */
+  --Labels-Secondary: #0009;      /* 60% 黑 */
+  --Labels-Tertiary: #00000073;   /* 45% 黑 */
+  --Labels-Quaternary: #0000004d; /* 30% 黑 */
+
+  /* ---------- 填充 / 分割线 ---------- */
+  --Fills-F1: #00000008; --Fills-F1-hover: #0000000f; --Fills-F1-active: #00000014;
+  --Fills-F2: #0000000d; --Fills-F2-hover: #00000014; --Fills-F2-active: #00000019;
+  --Fills-F3: #00000026; --Fills-F3-hover: #0000002d; --Fills-F3-active: #00000031;
+  --Fills-F4: #00000040; --Fills-F4-hover: #00000045; --Fills-F4-active: #00000049;
+  --Separators-S1: #00000021; --Separators-S1-hover: #00000028; --Separators-S1-active: #0000002c;
+
+  /* ---------- 遮罩 ---------- */
+  --MaskBg-Light: #0000001a;
+  --MaskBg-Base: #0006;
+  --MaskBg-Dark: #0009;
+  --MaskBg-ToastPC: #2b2b2b;
+
+  /* ---------- 恒色 ---------- */
+  --Always-White: #fff;
+  --Always-WhiteSecondary: #ffffffd6;
+  --Always-WhiteTertiary: #ffffff8f;
+  --Always-WhiteQuaternary: #ffffff6b;
+  --Always-Black: #000;
+
+  /* ---------- 品牌书色板（终端深蓝变体取源） ---------- */
+  --brand-navy: #002f5b;
+
+  /* ---------- 圆角 ---------- */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+  --radius-2xl: 16px;
+  --radius-3xl: 24px;
+  --radius-full: 9999px;         /* 正圆 / pill */
+
+  /* ---------- 阴影（低透明度弥散） ---------- */
+  --shadow-xs: 0 1px 2px 0 #00000014;
+  --shadow-card: 0 4px 16px 0 #0000001a;
+  --shadow-pop: 0 12px 40px 0 #00000029;
+  --shadow-overlay: 0 25px 50px -12px #00000040;
+
+  /* ---------- 毛玻璃 ---------- */
+  --backdrop-header: blur(6px);
+  --backdrop-strong: blur(12px);
+
+  /* ---------- 动效 ---------- */
+  --duration-fast: 75ms;
+  --duration-default: 150ms;
+  --duration-panel: 300ms;
+  --ease-out: cubic-bezier(0, 0, 0.2, 1);
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* ============================================================
+     应用令牌映射层：--app-* 的唯一来源，全部引用 Kimi 令牌
+     ============================================================ */
+  --app-bg: var(--Bg-GroundPC);
+  --app-surface: var(--Bg-Primary);
+  --app-surface-muted: var(--Bg-Secondary);
+  --app-surface-raised: var(--Bg-Primary);
+  --app-hover: var(--Fills-F2-hover);
+  --app-border: var(--Separators-S1);
+  --app-border-strong: var(--Separators-S1-active);
+  --app-text: var(--Labels-Primary);
+  --app-text-secondary: var(--Labels-Secondary);
+  --app-text-muted: var(--Labels-Tertiary);
+  --app-toolbar: var(--Bg-Primary);
+  --app-toolbar-control: var(--Fills-F2);
+  /* --app-shadow 是颜色值（供 box-shadow / color-mix 组合），完整阴影用 --app-shadow-* */
+  --app-shadow: #00000029;
+
+  --app-radius-sm: var(--radius-sm);
+  --app-radius-md: var(--radius-md);
+  --app-radius-lg: var(--radius-lg);
+  --app-radius-xl: var(--radius-xl);
+  --app-radius-2xl: var(--radius-2xl);
+  --app-duration-fast: var(--duration-fast);
+  --app-duration-default: var(--duration-default);
+  --app-duration-panel: var(--duration-panel);
+  --app-ease-out: var(--ease-out);
+  --app-shadow-xs: var(--shadow-xs);
+  --app-shadow-card: var(--shadow-card);
+  --app-shadow-pop: var(--shadow-pop);
+
+  /* ============================================================
+     Element Plus 令牌覆盖：品牌蓝主色 + 中性色映射 + 品牌动效
+     ============================================================ */
+  --el-color-primary: var(--Colors-KMBlue);
+  --el-color-primary-light-3: color-mix(in srgb, var(--Colors-KMBlue) 70%, #ffffff);
+  --el-color-primary-light-5: color-mix(in srgb, var(--Colors-KMBlue) 50%, #ffffff);
+  --el-color-primary-light-7: color-mix(in srgb, var(--Colors-KMBlue) 30%, #ffffff);
+  --el-color-primary-light-8: color-mix(in srgb, var(--Colors-KMBlue) 20%, #ffffff);
+  --el-color-primary-light-9: color-mix(in srgb, var(--Colors-KMBlue) 10%, #ffffff);
+  --el-color-primary-dark-2: color-mix(in srgb, var(--Colors-KMBlue) 80%, #000000);
+
+  --el-font-family: var(--system-fonts);
+  --el-bg-color-page: var(--Bg-GroundPC);
+  --el-bg-color: var(--Bg-Primary);
+  --el-bg-color-overlay: var(--Bg-Primary);
+  --el-box-shadow: var(--shadow-pop);
+  --el-box-shadow-light: var(--shadow-card);
+  --el-box-shadow-lighter: var(--shadow-xs);
+  --el-box-shadow-dark: var(--shadow-overlay);
+  --el-text-color-primary: var(--Labels-Primary);
+  --el-text-color-regular: var(--Labels-Secondary);
+  --el-text-color-secondary: var(--Labels-Tertiary);
+  --el-text-color-placeholder: var(--Labels-Quaternary);
+  --el-text-color-disabled: var(--Labels-Quaternary);
+  --el-border-color: var(--Separators-S1);
+  --el-border-color-light: var(--Separators-S1);
+  --el-border-color-lighter: var(--Separators-S1);
+  --el-border-color-extra-light: var(--Separators-S1);
+  --el-fill-color: var(--Fills-F2);
+  --el-fill-color-light: var(--Fills-F1);
+  --el-fill-color-lighter: var(--Fills-F1);
+  --el-fill-color-extra-light: var(--Fills-F1);
+  --el-fill-color-blank: var(--Bg-Primary);
+  --el-border-radius-base: var(--radius-md);
+  --el-border-radius-small: var(--radius-sm);
+  --el-border-radius-round: var(--radius-full);
+  --el-mask-color: var(--MaskBg-Base);
+  --el-transition-duration: var(--duration-panel);
+  --el-transition-duration-fast: var(--duration-default);
+  --el-transition-function-ease-in-out-bezier: var(--ease-out);
+  --el-transition-function-fast-bezier: var(--ease-out);
+}
+
+/* ============ 深色模式（官方暗色调色板 + 映射层差异项） ============ */
+:root.dark {
+  --Colors-KMBlue: #1a88ff;
+  --Colors-KMBlue-hover: #258eff;
+  --Colors-KMBlue-active: #3194ff;
+  --Others-KMBlue10: #1a88ff1a;
+  --Others-KMBlueDisabled: #1a88ff66;
+  --Others-TextSelected: #1a88ff33;
+  --Others-LightBlueBg: #1e2a38;
+
+  --Colors-Red: #ff4756;
+  --Colors-PositiveGreen: #16c456;
+  --Colors-Orange: #ff9f0a;
+  --Colors-Purple: #a16bff;
+  --Others-LightRedBg: #ff52521a;
+  --Others-LightOrangeBg: #ff9f0a1a;
+  --Others-LightGreenBg: #16c4561a;
+  --Others-LightYellowBg: #ffd23033;
+
+  --Bg-Primary: #121212;         --Bg-Primary-hover: #1e1e1e;  --Bg-Primary-active: #2a2a2a;
+  --Bg-Primary90: #121212e6;
+  --Bg-Primary70: #121212b3;
+  --Bg-Secondary: #1f1f1f;       --Bg-Secondary-hover: #2a2a2a; --Bg-Secondary-active: #353535;
+  --Bg-Tertiary: #292929;        --Bg-Tertiary-hover: #343434;  --Bg-Tertiary-active: #3e3e3e;
+  --Bg-Quaternary: #4d4d4d;
+  --Bg-GroundPC: #161717;
+
+  --Labels-Primary: #ffffffd6;
+  --Labels-Secondary: #ffffff8f;
+  --Labels-Tertiary: #ffffff6b;
+  --Labels-Quaternary: #ffffff42;
+
+  --Fills-F1: #ffffff0d; --Fills-F1-hover: #ffffff19; --Fills-F1-active: #ffffff25;
+  --Fills-F2: #ffffff1a; --Fills-F2-hover: #ffffff25; --Fills-F2-active: #ffffff30;
+  --Fills-F3: #ffffff2e; --Fills-F3-hover: #ffffff38; --Fills-F3-active: #ffffff43;
+  --Fills-F4: #ffffff40; --Fills-F4-hover: #ffffff49; --Fills-F4-active: #ffffff53;
+  --Separators-S1: #ffffff1f; --Separators-S1-hover: #ffffff2a; --Separators-S1-active: #ffffff35;
+
+  --MaskBg-Light: #0000004d;
+  --MaskBg-ToastPC: #404040;
+
+  /* ---------- 映射层暗色差异项 ---------- */
+  --app-surface-raised: var(--Bg-Tertiary);
+  --app-toolbar: var(--Bg-Secondary);
+  --app-toolbar-control: var(--Bg-Tertiary);
+  --app-shadow: #00000066;
+
+  /* ---------- EP 覆盖暗色重写（EP html.dark 同优先级，本文件靠后生效） ---------- */
+  --el-color-primary: var(--Colors-KMBlue);
+  --el-color-primary-light-3: color-mix(in srgb, var(--Colors-KMBlue) 70%, var(--Bg-Primary));
+  --el-color-primary-light-5: color-mix(in srgb, var(--Colors-KMBlue) 50%, var(--Bg-Primary));
+  --el-color-primary-light-7: color-mix(in srgb, var(--Colors-KMBlue) 30%, var(--Bg-Primary));
+  --el-color-primary-light-8: color-mix(in srgb, var(--Colors-KMBlue) 20%, var(--Bg-Primary));
+  --el-color-primary-light-9: color-mix(in srgb, var(--Colors-KMBlue) 10%, var(--Bg-Primary));
+  --el-color-primary-dark-2: color-mix(in srgb, var(--Colors-KMBlue) 80%, #000000);
+
+  --el-bg-color-page: var(--Bg-GroundPC);
+  --el-bg-color: var(--Bg-Primary);
+  --el-bg-color-overlay: var(--Bg-Primary);
+  --el-box-shadow: var(--shadow-pop);
+  --el-box-shadow-light: var(--shadow-card);
+  --el-box-shadow-lighter: var(--shadow-xs);
+  --el-box-shadow-dark: var(--shadow-overlay);
+  --el-text-color-primary: var(--Labels-Primary);
+  --el-text-color-regular: var(--Labels-Secondary);
+  --el-text-color-secondary: var(--Labels-Tertiary);
+  --el-text-color-placeholder: var(--Labels-Quaternary);
+  --el-text-color-disabled: var(--Labels-Quaternary);
+  --el-border-color: var(--Separators-S1);
+  --el-border-color-light: var(--Separators-S1);
+  --el-border-color-lighter: var(--Separators-S1);
+  --el-border-color-extra-light: var(--Separators-S1);
+  --el-fill-color: var(--Fills-F2);
+  --el-fill-color-light: var(--Fills-F1);
+  --el-fill-color-lighter: var(--Fills-F1);
+  --el-fill-color-extra-light: var(--Fills-F1);
+  --el-fill-color-blank: var(--Bg-Primary);
+  --el-mask-color: var(--MaskBg-Base);
+}
+
+/* ============================================================
+   全局皮肤规则：圆角 / 阴影 / 毛玻璃 / 动效按品牌规格
+   ============================================================ */
+
+::selection {
+  background: var(--Others-TextSelected);
+}
+
+.el-button {
+  border-radius: var(--radius-xl);
+  transition-duration: var(--duration-default);
+  transition-timing-function: var(--ease-out);
+}
+
+.el-button.is-text,
+.el-button.is-link,
+.el-button.is-circle {
+  border-radius: var(--radius-full);
+}
+
+.el-dialog,
+.el-message-box {
+  border-radius: var(--radius-3xl);
+  box-shadow: var(--shadow-pop);
+}
+
+.el-card {
+  border-radius: var(--radius-3xl);
+  border-color: var(--Separators-S1);
+}
+
+.el-input__wrapper,
+.el-select__wrapper,
+.el-textarea__inner {
+  border-radius: var(--radius-lg);
+  transition-duration: var(--duration-default);
+  transition-timing-function: var(--ease-out);
+}
+
+/* 悬浮层：毛玻璃 blur(6px) + 70% 透明度底色 */
+.el-popper.is-dark,
+.el-popover.el-popper {
+  border: 1px solid var(--Separators-S1);
+  color: var(--Labels-Primary);
+  background: var(--Bg-Primary70);
+  box-shadow: var(--shadow-pop);
+  backdrop-filter: var(--backdrop-header);
+}
+
+.el-popper.is-dark .el-popper__arrow::before,
+.el-popover.el-popper .el-popper__arrow::before {
+  border-color: var(--Separators-S1);
+  background: var(--Bg-Primary70);
+}
+
+.el-tabs__item {
+  transition: color var(--duration-default) var(--ease-out);
+}
+
+.el-tabs__nav-wrap::after {
+  background: var(--Separators-S1);
+}

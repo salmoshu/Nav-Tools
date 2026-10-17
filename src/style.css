@@ -1,57 +1,26 @@
+/* --app-* 令牌唯一来源已迁至 src/styles/kimi-tokens.css（Kimi 品牌调色板）。 */
 :root {
-  font-family:
-    Inter,
-    'Segoe UI',
-    system-ui,
-    -apple-system,
-    BlinkMacSystemFont,
-    Arial,
-    sans-serif;
+  font-family: var(--system-fonts);
   color-scheme: light;
-  color: #1f2937;
-  background: #f3f5f7;
+  color: var(--Labels-Primary);
+  background: var(--Bg-GroundPC);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   -webkit-text-size-adjust: 100%;
 
-  --app-bg: #f3f5f7;
-  --app-surface: #ffffff;
-  --app-surface-muted: #f8fafc;
-  --app-surface-raised: #ffffff;
-  --app-hover: #e9edf2;
-  --app-border: #d6dbe3;
-  --app-border-strong: #c6ccd6;
-  --app-text: #172033;
-  --app-text-secondary: #465164;
-  --app-text-muted: #6b7585;
-  --app-toolbar: #2c3e50;
-  --app-toolbar-control: #34495e;
-  --app-shadow: rgba(15, 23, 42, 0.14);
-  --terminal-bg: #282c34;
+  /* 终端为品牌深蓝变体（--brand-navy #002f5b 深色区间），深浅主题同值 */
+  --terminal-bg: #0d1b2e;
   --terminal-fg: #ffffff;
 }
 
 :root.dark {
   color-scheme: dark;
-  color: #d2d6dc;
-  background: #14161b;
+  color: var(--Labels-Primary);
+  background: var(--Bg-GroundPC);
 
-  --app-bg: #14161b;
-  --app-surface: #1d2027;
-  --app-surface-muted: #242832;
-  --app-surface-raised: #292e38;
-  --app-hover: #303641;
-  --app-border: #363b46;
-  --app-border-strong: #474e5b;
-  --app-text: #d2d6dc;
-  --app-text-secondary: #b7bdc7;
-  --app-text-muted: #9aa1ab;
-  --app-toolbar: #181b21;
-  --app-toolbar-control: #292e38;
-  --app-shadow: rgba(0, 0, 0, 0.36);
-  --terminal-bg: #282c34;
+  --terminal-bg: #0d1b2e;
   --terminal-fg: #ffffff;
 }
 
@@ -133,7 +102,8 @@ a {
 
 code {
   padding: 2px 4px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
   background: var(--app-surface-muted);
 }
 
@@ -156,10 +126,10 @@ code {
   flex-direction: column;
   overflow: hidden;
   border: 1px solid var(--app-border);
-  border-radius: 10px;
+  border-radius: var(--radius-3xl);
   color: var(--app-text);
   background: var(--app-surface);
-  box-shadow: 0 20px 52px var(--app-shadow);
+  box-shadow: var(--shadow-pop);
 }
 
 .app-dialog .el-dialog__header {
@@ -175,7 +145,7 @@ code {
   right: 12px;
   width: 38px;
   height: 38px;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
 }
 
 .app-dialog .el-dialog__headerbtn:hover {
@@ -217,10 +187,10 @@ code {
   padding: 0;
   overflow: hidden;
   border: 1px solid var(--app-border);
-  border-radius: 10px;
+  border-radius: var(--radius-3xl);
   color: var(--app-text);
   background: var(--app-surface);
-  box-shadow: 0 20px 52px var(--app-shadow);
+  box-shadow: var(--shadow-pop);
 }
 
 .el-overlay.is-message-box {
