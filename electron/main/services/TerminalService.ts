@@ -157,6 +157,18 @@ type TerminalSession = LocalSession | SshSession
 type SessionPathTarget =
   { kind: 'local' | 'ssh'; path: string } | { kind: 'wsl'; path: string; distro: string }
 
+/** 目录下载的递归清单:先 walk 求出 totalBytes,整棵树共用一个 operationId 发聚合进度 */
+interface LocalDownloadManifest {
+  /** 需要创建的目标目录(含空目录) */
+  dirs: string[]
+  files: { source: string; dest: string; size: number; name: string }[]
+}
+
+interface SftpDownloadManifest {
+  dirs: string[]
+  files: { remote: string; local: string; size: number; name: string }[]
+}
+
 interface SshConnection {
   id: string
   client: Client
@@ -730,55 +742,54 @@ export class TerminalService {
 
     if (target.kind === 'local') {
       const stats = await this.host.fileSystem.stat(target.path)
-      if (stats.isDirectory()) {
-        await this.host.fileSystem.mkdir(localPath, { recursive: true })
-        const names = await this.host.fileSystem.readdir(target.path)
-        for (const name of names) {
-          await this.downloadSessionPath(
-            sessionId, path.win32.join(target.path, name), path.win32.join(localPath, name))
-        }
+      if (!stats.isDirectory()) {
+        await this.downloadLocalFile(sessionId, target.path, localPath, stats.size)
         return
       }
-      await this.downloadLocalFile(sessionId, target.path, localPath, stats.size)
-      return
-    }
-
-    if (target.kind === 'wsl') {
-      // tar 流式打包没有字节级进度;仍发 running/success/error,让状态栏有统一生命周期
+      // 本机目录:copyFile 没有字节级回调,先递归预 stat 求出总量,
+      // 整棵树共用一个 operationId,每完成一个文件发一次聚合进度
+      const manifest: LocalDownloadManifest = { dirs: [], files: [] }
+      await this.collectLocalManifest(target.path, localPath, manifest)
+      const totalBytes = manifest.files.reduce((sum, file) => sum + file.size, 0)
       const operationId = this.host.createId('sftp')
-      const downloadName = path.posix.basename(target.path)
+      const rootName = path.basename(target.path)
       this.emitTransfer({
         sessionId,
         operationId,
         direction: 'download',
-        name: downloadName,
+        name: rootName,
         transferred: 0,
-        total: 0,
+        total: totalBytes,
         status: 'running',
       })
+      let completed = 0
+      let currentName = rootName
       try {
-        // tar -cf - 输出二进制流到 stdout;文件名可能含换行等病态字符时以 tar 结构保证完整
-        const buffer = await this.wslExecBuffer(
-          target.distro,
-          `tar -cf - ${quoteShellArg(target.path, 'posix')}`,
-          [],
-        )
-        // GNU tar 在 stderr 干扰时可能混入告警;tar 结构本身带长度校验,提取时失败会抛错
-        const tarPath = `${localPath}.navtools.tar`
-        await this.host.fileSystem.writeFile(tarPath, buffer)
-        try {
-          await this.extractTarToDirectory(tarPath, path.dirname(localPath))
-        } finally {
-          await this.host.fileSystem.rm(tarPath, { force: true }).catch(() => undefined)
+        for (const dir of manifest.dirs) {
+          await this.host.fileSystem.mkdir(dir, { recursive: true })
+        }
+        for (const file of manifest.files) {
+          currentName = file.name
+          await this.host.fileSystem.copyFile(file.source, file.dest)
+          completed += file.size
+          this.emitTransfer({
+            sessionId,
+            operationId,
+            direction: 'download',
+            name: file.name,
+            transferred: completed,
+            total: totalBytes,
+            status: 'running',
+          })
         }
       } catch (error) {
         this.emitTransfer({
           sessionId,
           operationId,
           direction: 'download',
-          name: downloadName,
-          transferred: 0,
-          total: 0,
+          name: currentName,
+          transferred: completed,
+          total: totalBytes,
           status: 'error',
           error: error instanceof Error ? error.message : String(error),
         })
@@ -788,9 +799,84 @@ export class TerminalService {
         sessionId,
         operationId,
         direction: 'download',
+        name: rootName,
+        transferred: totalBytes,
+        total: totalBytes,
+        status: 'success',
+      })
+      return
+    }
+
+    if (target.kind === 'wsl') {
+      // tar 经管道流式写本地临时文件,不经内存缓冲(规避 execFile maxBuffer 上限);
+      // 没有字节级回调,先用 du -sb 估算总量让进度条有值,失败则退化为不定态
+      const operationId = this.host.createId('sftp')
+      const downloadName = path.posix.basename(target.path) || target.path
+      let totalBytes = 0
+      try {
+        const duOutput = await this.wslExec(
+          target.distro,
+          `du -sb -- ${quoteShellArg(target.path, 'posix')}`,
+          [],
+        )
+        const parsed = Number.parseInt(duOutput.split(/\s/, 1)[0] ?? '', 10)
+        if (Number.isFinite(parsed) && parsed > 0) totalBytes = parsed
+      } catch {
+        totalBytes = 0
+      }
+      this.emitTransfer({
+        sessionId,
+        operationId,
+        direction: 'download',
         name: downloadName,
         transferred: 0,
-        total: 0,
+        total: totalBytes,
+        status: 'running',
+      })
+      const tarPath = `${localPath}.navtools.tar`
+      try {
+        // -C 到父目录后只打包 basename:归档不含绝对路径,解包结构与 SSH/本机一致
+        // (<父目录>/<名>/...),不再镜像 home/user/... 整棵路径;病态文件名由 tar 结构保证完整
+        const parentDir = path.posix.dirname(target.path)
+        const baseName = path.posix.basename(target.path)
+        const script = baseName
+          ? `tar -cf - -C ${quoteShellArg(parentDir, 'posix')} ${quoteShellArg(baseName, 'posix')}`
+          : `tar -cf - ${quoteShellArg(target.path, 'posix')}`
+        await this.host.pipeOutputToFile(
+          'wsl.exe',
+          ['--distribution', target.distro, '--', 'sh', '-c', script],
+          tarPath,
+        )
+        const destParent = path.dirname(localPath)
+        await this.extractTarToDirectory(tarPath, destParent)
+        // 保存对话框里改过名时落盘的是原 basename,尽力改名成用户所选(目标已存在则保留原名)
+        if (baseName && baseName !== path.basename(localPath)) {
+          await this.host.fileSystem
+            .rename(path.join(destParent, baseName), localPath)
+            .catch(() => undefined)
+        }
+      } catch (error) {
+        this.emitTransfer({
+          sessionId,
+          operationId,
+          direction: 'download',
+          name: downloadName,
+          transferred: 0,
+          total: totalBytes,
+          status: 'error',
+          error: error instanceof Error ? error.message : String(error),
+        })
+        throw error
+      } finally {
+        await this.host.fileSystem.rm(tarPath, { force: true }).catch(() => undefined)
+      }
+      this.emitTransfer({
+        sessionId,
+        operationId,
+        direction: 'download',
+        name: downloadName,
+        transferred: totalBytes,
+        total: totalBytes,
         status: 'success',
       })
       return
@@ -1394,56 +1480,69 @@ export class TerminalService {
     })
   }
 
+  /**
+   * SSH 递归下载:先 walk 出整棵树的 [path,size] 清单求得 totalBytes,整棵树共用
+   * 一个 operationId;进度事件的 transferred 为「已完成文件字节和 + 当前文件已传」,
+   * total 恒为 totalBytes。单文件失败发 error 事件并中断整次下载。
+   */
   private async downloadEntry(
     sftp: SFTPWrapper,
     sessionId: string,
     remotePath: string,
     localPath: string,
   ): Promise<void> {
-    const attrs = await sftpStat(sftp, remotePath)
-    if (attrs.isDirectory()) {
-      await this.host.fileSystem.mkdir(localPath, { recursive: true })
-      const entries = await sftpReadDir(sftp, remotePath)
-      for (const entry of entries) {
-        await this.downloadEntry(
-          sftp,
-          sessionId,
-          path.posix.join(remotePath, entry.filename),
-          path.join(localPath, entry.filename),
-        )
-      }
-      return
-    }
+    const manifest: SftpDownloadManifest = { dirs: [], files: [] }
+    await this.collectSftpManifest(sftp, remotePath, localPath, manifest)
+    const totalBytes = manifest.files.reduce((sum, file) => sum + file.size, 0)
     const operationId = this.host.createId('sftp')
-    await this.host.fileSystem.mkdir(path.dirname(localPath), { recursive: true })
+    const rootName = path.posix.basename(remotePath)
+    this.emitTransfer({
+      sessionId,
+      operationId,
+      direction: 'download',
+      name: rootName,
+      transferred: 0,
+      total: totalBytes,
+      status: 'running',
+    })
+    let completed = 0
+    let currentName = rootName
     try {
-      await new Promise<void>((resolve, reject) => {
-        sftp.fastGet(
-          remotePath,
-          localPath,
-          {
-            step: (transferred, _chunk, total) =>
-              this.emitTransfer({
-                sessionId,
-                operationId,
-                direction: 'download',
-                name: path.posix.basename(remotePath),
-                transferred,
-                total,
-                status: 'running',
-              }),
-          },
-          (error) => (error ? reject(error) : resolve()),
-        )
-      })
+      for (const dir of manifest.dirs) {
+        await this.host.fileSystem.mkdir(dir, { recursive: true })
+      }
+      for (const file of manifest.files) {
+        currentName = file.name
+        await this.host.fileSystem.mkdir(path.dirname(file.local), { recursive: true })
+        await new Promise<void>((resolve, reject) => {
+          sftp.fastGet(
+            file.remote,
+            file.local,
+            {
+              step: (transferred, _chunk, _total) =>
+                this.emitTransfer({
+                  sessionId,
+                  operationId,
+                  direction: 'download',
+                  name: file.name,
+                  transferred: completed + transferred,
+                  total: totalBytes,
+                  status: 'running',
+                }),
+            },
+            (error) => (error ? reject(error) : resolve()),
+          )
+        })
+        completed += file.size
+      }
     } catch (error) {
       this.emitTransfer({
         sessionId,
         operationId,
         direction: 'download',
-        name: path.posix.basename(remotePath),
-        transferred: 0,
-        total: attrs.size,
+        name: currentName,
+        transferred: completed,
+        total: totalBytes,
         status: 'error',
         error: error instanceof Error ? error.message : String(error),
       })
@@ -1453,11 +1552,58 @@ export class TerminalService {
       sessionId,
       operationId,
       direction: 'download',
-      name: path.posix.basename(remotePath),
-      transferred: attrs.size,
-      total: attrs.size,
+      name: rootName,
+      transferred: totalBytes,
+      total: totalBytes,
       status: 'success',
     })
+  }
+
+  /** 递归收集 SSH 下载清单(含空目录),供聚合进度与逐个 fastGet 使用 */
+  private async collectSftpManifest(
+    sftp: SFTPWrapper,
+    remotePath: string,
+    localPath: string,
+    manifest: SftpDownloadManifest,
+  ): Promise<void> {
+    const attrs = await sftpStat(sftp, remotePath)
+    if (!attrs.isDirectory()) {
+      manifest.files.push({
+        remote: remotePath,
+        local: localPath,
+        size: attrs.size,
+        name: path.posix.basename(remotePath),
+      })
+      return
+    }
+    manifest.dirs.push(localPath)
+    for (const entry of await sftpReadDir(sftp, remotePath)) {
+      await this.collectSftpManifest(
+        sftp,
+        path.posix.join(remotePath, entry.filename),
+        path.join(localPath, entry.filename),
+        manifest,
+      )
+    }
+  }
+
+  /** 递归收集本机目录的文件清单(含空目录),供聚合进度与逐个 copyFile 使用 */
+  private async collectLocalManifest(
+    sourceDir: string,
+    destDir: string,
+    manifest: LocalDownloadManifest,
+  ): Promise<void> {
+    manifest.dirs.push(destDir)
+    for (const name of await this.host.fileSystem.readdir(sourceDir)) {
+      const source = path.win32.join(sourceDir, name)
+      const dest = path.win32.join(destDir, name)
+      const stats = await this.host.fileSystem.stat(source)
+      if (stats.isDirectory()) {
+        await this.collectLocalManifest(source, dest, manifest)
+      } else {
+        manifest.files.push({ source, dest, size: stats.size, name })
+      }
+    }
   }
 
   private emitTransfer(event: SftpTransferEvent): void {

@@ -375,6 +375,8 @@ export default {
     fileTreeStatusDownloading: 'Downloading: {name}',
     fileTreeStatusDone: 'Download complete: {name}',
     fileTreeStatusFailed: 'Download failed: {name}',
+    fileTreeTransferEta: '{time} left',
+    filePreviewSessionGone: 'Session disconnected; the file cannot be previewed',
     fileTreeCopyPath: 'Copy path',
     fileTreeCopyPathDone: 'Path copied: {path}',
     fileTreeRename: 'Rename…',

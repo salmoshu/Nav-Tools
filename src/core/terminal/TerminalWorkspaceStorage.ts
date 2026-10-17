@@ -87,7 +87,12 @@ export class TerminalWorkspaceStorage {
   }
 
   public save(workspace: TerminalWorkspace): void {
-    this.storage.setItem(STORAGE_KEY, JSON.stringify({ version: 3, ...workspace }))
+    // 文件预览 tab 是会话内的临时视图,不持久化;normalizeTab 侧也只拷贝已知字段
+    const tabs = workspace.tabs.filter((tab) => !tab.preview)
+    const activeTabId = tabs.some((tab) => tab.id === workspace.activeTabId)
+      ? workspace.activeTabId
+      : tabs[0]?.id || ''
+    this.storage.setItem(STORAGE_KEY, JSON.stringify({ version: 3, tabs, activeTabId }))
   }
 }
 

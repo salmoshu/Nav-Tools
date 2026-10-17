@@ -7,6 +7,7 @@
       :kind="activeFileTreeKind"
       :local-shell="activeFileTreeLocalShell"
       :platform="capabilities.platform"
+      @open-file="handleFileTreeOpenFile"
     />
     <div class="terminal-workbench__main">
       <div class="terminal-tabs">
@@ -38,13 +39,16 @@
               @auxclick="closeTabWithMiddleClick($event, tab.id)"
               @keydown.enter="activateTab(tab.id)"
             >
+              <!-- 预览 tab 没有会话,不渲染状态点 -->
               <span
+                v-if="!tab.preview"
                 class="tab-leading"
                 :class="[tabStatus(tab), { busy: tabBusy(tab) }]"
                 aria-hidden="true"
               >
                 <i class="tab-status-dot"></i>
               </span>
+              <el-icon v-else class="tab-preview-icon" aria-hidden="true"><Document /></el-icon>
               <input
                 v-if="renamingTabId === tab.id"
                 ref="renameInput"
@@ -170,7 +174,14 @@
       </div>
 
       <div v-if="activeTab && activeLayoutNode" class="terminal-tab-content">
-        <div class="terminal-tab-content__layout">
+        <TerminalFilePreviewTab
+          v-if="activeTab.preview"
+          :session-id="activeTab.preview.sessionId"
+          :path="activeTab.preview.path"
+          :name="activeTab.preview.name"
+          :session-active="Boolean(sessionInfos[activeTab.preview.sessionId])"
+        />
+        <div v-else class="terminal-tab-content__layout">
           <TerminalLayoutNodeComponent
             :node="activeLayoutNode"
             :focused-pane-id="activeFocusedPaneId"
@@ -257,6 +268,7 @@ import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import {
   Close,
   Connection,
+  Document,
   Files,
   FolderOpened,
   Lightning,
@@ -269,6 +281,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import draggable from 'vuedraggable'
 import {
   createEmptyPane,
+  createPreviewTab,
   createTerminalTab,
   findTerminalPane,
   listTerminalPanes,
@@ -298,6 +311,7 @@ import {
   type HostKeyMismatchEvent,
   type HostKeyPromptEvent,
   type LocalShellKind,
+  type SftpEntry,
   type SshConnectionProfile,
   type TerminalCapabilities,
   type TerminalCwdEvent,
@@ -308,6 +322,7 @@ import {
 import { TerminalProfileStorage } from '@/core/terminal/TerminalProfileStorage'
 import { useTerminalEventBus } from '@/core/terminal/TerminalEventBus'
 import { useTerminalTranslate } from '@/core/terminal/TerminalI18n'
+import TerminalFilePreviewTab from './TerminalFilePreviewTab.vue'
 import TerminalFileTreePanel from './TerminalFileTreePanel.vue'
 import TerminalLayoutNodeComponent from './TerminalLayoutNode.vue'
 import TerminalPresetPanel from './TerminalPresetPanel.vue'
@@ -549,6 +564,7 @@ function closeTabWithMiddleClick(event: MouseEvent, tabId: string): void {
 }
 
 function beginRenameTab(tab: TerminalTabLayout): void {
+  if (tab.preview) return
   renamingTabId.value = tab.id
   renameValue.value = tabDisplayTitle(tab)
   void nextTick(() => {
@@ -653,6 +669,7 @@ function handleCwdUpdate(_event: unknown, value: TerminalCwdEvent): void {
 }
 
 function tabDisplayTitle(tab: TerminalTabLayout): string {
+  if (tab.preview) return tab.preview.name
   const storedTitle = tab.title.trim()
   if (storedTitle && !isDefaultTerminalTitle(storedTitle)) return storedTitle
   const panes = listTerminalPanes(tab.root)
@@ -756,6 +773,26 @@ function toggleActiveTabFileTree(): void {
     ...fileTreeSessionByTabId.value,
     [tab.id]: activeFileTreeSessionId.value ? undefined : sessionId,
   }
+}
+
+/** 文件树点击文件:同会话同路径复用已有预览 tab,否则新建并激活 */
+function openPreviewTab(sessionId: string, entry: { path: string; name: string }): void {
+  const existing = tabs.value.find(
+    (tab) => tab.preview?.sessionId === sessionId && tab.preview.path === entry.path,
+  )
+  if (existing) {
+    activeTabId.value = existing.id
+    return
+  }
+  const tab = createPreviewTab({ sessionId, path: entry.path, name: entry.name })
+  tabs.value.push(tab)
+  activeTabId.value = tab.id
+}
+
+function handleFileTreeOpenFile(entry: SftpEntry): void {
+  const sessionId = activeFileTreeSessionId.value
+  if (!sessionId) return
+  openPreviewTab(sessionId, entry)
 }
 
 function toggleActiveTabPresets(): void {
@@ -1294,6 +1331,11 @@ function withTimeout<T>(
   border-radius: 7px;
   background: var(--app-surface-raised);
   box-shadow: 0 7px 20px var(--app-shadow);
+}
+.tab-preview-icon {
+  flex: none;
+  color: var(--app-text-muted);
+  font-size: 12px;
 }
 .tab-leading {
   display: flex;

@@ -25,11 +25,20 @@ export interface TerminalSplitNode {
 
 export type TerminalLayoutNode = TerminalPaneNode | TerminalSplitNode
 
+/** 文件预览 tab 的目标:由哪个会话读哪个远端路径;tab 本体不持有终端会话 */
+export interface TerminalPreviewTarget {
+  sessionId: string
+  path: string
+  name: string
+}
+
 export interface TerminalTabLayout {
   id: string
   title: string
   root: TerminalLayoutNode
   focusedPaneId?: string
+  /** 文件预览 tab 标记;普通终端 tab 没有该字段,且不随工作区持久化 */
+  preview?: TerminalPreviewTarget
 }
 
 export function createEmptyPane(title = 'Terminal'): TerminalPaneNode {
@@ -39,6 +48,21 @@ export function createEmptyPane(title = 'Terminal'): TerminalPaneNode {
 export function createTerminalTab(title = 'Terminal'): TerminalTabLayout {
   const root = createEmptyPane(title)
   return { id: createTerminalId('tab'), title, root, focusedPaneId: root.id }
+}
+
+/**
+ * 文件预览 tab:root 持一个无会话的空 pane,只是为了让 listTerminalPanes /
+ * closeTab 等树型 helper 不必为预览分支特判;渲染走 Terminal.vue 的 preview 分支。
+ */
+export function createPreviewTab(target: TerminalPreviewTarget): TerminalTabLayout {
+  const root = createEmptyPane(target.name)
+  return {
+    id: createTerminalId('tab'),
+    title: target.name,
+    root,
+    focusedPaneId: root.id,
+    preview: target,
+  }
 }
 
 export function splitTerminalPane(

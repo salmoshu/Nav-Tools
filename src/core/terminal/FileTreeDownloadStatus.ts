@@ -62,3 +62,58 @@ export function fileTreeDownloadPercent(status: FileTreeDownloadStatus): number 
   if (status.total <= 0) return null
   return Math.min(100, Math.round((status.transferred / status.total) * 100))
 }
+
+/** 一个 running 进度采样点;at 为毫秒时间戳 */
+export interface TransferProgressSample {
+  at: number
+  transferred: number
+  total: number
+}
+
+/**
+ * 相邻两个 running 采样差分估算速率(字节/秒)。以下情况返回 null:
+ * 没有上一个采样、total 变化(视为新任务)、字节数回退(新任务或重传)、时间没有前进。
+ */
+export function estimateTransferRate(
+  prev: TransferProgressSample | null,
+  next: TransferProgressSample,
+): number | null {
+  if (!prev || prev.total !== next.total) return null
+  const elapsedMs = next.at - prev.at
+  const bytes = next.transferred - prev.transferred
+  if (elapsedMs <= 0 || bytes <= 0) return null
+  return (bytes / elapsedMs) * 1000
+}
+
+/** 估算剩余秒数;总量未知、速率不可得或已完成(0)时返回 null */
+export function remainingTransferSeconds(
+  transferred: number,
+  total: number,
+  rateBytesPerSecond: number | null,
+): number | null {
+  if (total <= 0 || !rateBytesPerSecond || rateBytesPerSecond <= 0) return null
+  const remaining = total - transferred
+  if (remaining <= 0) return null
+  return remaining / rateBytesPerSecond
+}
+
+/** 紧凑时长:`8s` / `2m 05s` / `1h 03m`;负数与非法输入返回空串 */
+export function formatRemainingSeconds(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds < 0) return ''
+  const total = Math.max(1, Math.ceil(seconds))
+  if (total < 60) return `${total}s`
+  const minutes = Math.floor(total / 60)
+  const secs = total % 60
+  if (minutes < 60) return `${minutes}m ${String(secs).padStart(2, '0')}s`
+  const hours = Math.floor(minutes / 60)
+  return `${hours}h ${String(minutes % 60).padStart(2, '0')}m`
+}
+
+/** 字节量的人性化格式,与 SFTP 面板 formatSize 同一约定(1 位小数),补 GB 档 */
+export function formatTransferBytes(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes < 0) return ''
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`
+  return `${(bytes / 1024 / 1024 / 1024).toFixed(1)} GB`
+}

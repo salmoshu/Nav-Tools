@@ -372,6 +372,8 @@ export default {
     fileTreeStatusDownloading: '正在下载：{name}',
     fileTreeStatusDone: '下载完成：{name}',
     fileTreeStatusFailed: '下载失败：{name}',
+    fileTreeTransferEta: '预计剩余 {time}',
+    filePreviewSessionGone: '会话已断开，无法预览文件',
     fileTreeCopyPath: '复制路径',
     fileTreeCopyPathDone: '路径已复制：{path}',
     fileTreeRename: '重命名…',

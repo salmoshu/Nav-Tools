@@ -37,28 +37,6 @@
       @download-settle="handleDownloadSettle"
     />
 
-    <div v-if="preview" class="file-tree-preview">
-      <header class="file-tree-preview__bar">
-        <span class="file-tree-preview__name" :title="preview.path">{{ preview.path }}</span>
-        <el-button text size="small" @click="preview = null">
-          <el-icon><Close /></el-icon>
-        </el-button>
-      </header>
-      <div class="file-tree-preview__body">
-        <span v-if="preview.status === 'loading'">{{
-          t('common.terminal.guiPreviewLoading')
-        }}</span>
-        <span v-else-if="preview.status === 'unavailable'">{{
-          t('common.terminal.guiPreviewUnavailable')
-        }}</span>
-        <template v-else>
-          <TerminalRichContent :payload="preview.payload" />
-          <span v-if="preview.truncated" class="file-tree-preview__note">{{
-            t('common.terminal.guiPreviewTruncated')
-          }}</span>
-        </template>
-      </div>
-    </div>
     <footer class="file-tree-status" :class="`file-tree-status--${download.phase}`" role="status">
       <el-icon v-if="download.phase === 'running'" class="file-tree-status__icon is-loading">
         <Loading />
@@ -83,6 +61,7 @@
         class="file-tree-status__percent"
         >{{ downloadPercent }}%</span
       >
+      <span v-if="transferDetail" class="file-tree-status__detail">{{ transferDetail }}</span>
     </footer>
     <div
       ref="resizeHandle"
@@ -107,16 +86,8 @@
 
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
-import {
-  CircleCheck,
-  CircleClose,
-  Close,
-  Loading,
-  Position,
-  Refresh,
-} from '@element-plus/icons-vue'
+import { CircleCheck, CircleClose, Loading, Position, Refresh } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
-import type { TerminalRichPayload } from '@/core/terminal/CommandBlocks'
 import { useTerminalTranslate } from '@/core/terminal/TerminalI18n'
 import { buildShellCdCommand, shellFamilyFor } from '@/core/terminal/ShellQuote'
 import type {
@@ -128,13 +99,17 @@ import type {
 import {
   IDLE_FILE_TREE_DOWNLOAD,
   beginFileTreeDownload,
+  estimateTransferRate,
   fileTreeDownloadPercent,
+  formatRemainingSeconds,
+  formatTransferBytes,
   reduceFileTreeTransferEvent,
+  remainingTransferSeconds,
   settleFileTreeDownload,
   type FileTreeDownloadStatus,
+  type TransferProgressSample,
 } from '@/core/terminal/FileTreeDownloadStatus'
 import TerminalFileTree from './TerminalFileTree.vue'
-import TerminalRichContent from './TerminalRichContent.vue'
 
 const t = useTerminalTranslate()
 
@@ -147,20 +122,16 @@ const props = defineProps<{
   platform: string
 }>()
 
-/** 预览读文件上限,与 GUI 视图的块内预览一致 */
-const PREVIEW_MAX_BYTES = 512 * 1024
-
-type PreviewState =
-  | { status: 'loading'; path: string }
-  | { status: 'ready'; path: string; payload: TerminalRichPayload; truncated: boolean }
-  | { status: 'unavailable'; path: string }
+const emit = defineEmits<{
+  /** 点击文件:交给上层开预览 Tab,面板自身不再内嵌预览区 */
+  'open-file': [entry: SftpEntry]
+}>()
 
 const pathInput = ref('.')
 /** 根路径;`'.'` 交给主进程按会话运行时 cwd 解析 */
 const rootPath = ref('.')
 const resolvedRoot = ref('.')
 const loading = ref(false)
-const preview = ref<PreviewState | null>(null)
 /** 变更即重挂载 el-tree:懒加载树的根节点只在挂载时拉一次 */
 const treeKey = ref(0)
 const currentNode = ref<SftpEntry | null>(null)
@@ -227,6 +198,29 @@ function resizeWithKeyboard(event: KeyboardEvent): void {
 
 const download = ref<FileTreeDownloadStatus>(IDLE_FILE_TREE_DOWNLOAD)
 const downloadPercent = computed(() => fileTreeDownloadPercent(download.value))
+/** 连续 running 事件的差分速率(字节/秒);非 running 或新任务时归零 */
+const transferRate = ref<number | null>(null)
+let lastSample: TransferProgressSample | null = null
+
+/** 状态栏聚合详情:`1.2 MB / 3.4 MB · 300.0 KB/s · 预计剩余 8s` */
+const transferDetail = computed(() => {
+  const status = download.value
+  if (status.phase !== 'running') return ''
+  const bytes =
+    status.total > 0
+      ? `${formatTransferBytes(status.transferred)} / ${formatTransferBytes(status.total)}`
+      : formatTransferBytes(status.transferred)
+  const parts = [bytes]
+  const rate = transferRate.value
+  if (rate && rate > 0) {
+    parts.push(`${formatTransferBytes(rate)}/s`)
+    const remaining = remainingTransferSeconds(status.transferred, status.total, rate)
+    if (remaining !== null) {
+      parts.push(t('common.terminal.fileTreeTransferEta', { time: formatRemainingSeconds(remaining) }))
+    }
+  }
+  return parts.join(' · ')
+})
 const statusText = computed(() => {
   switch (download.value.phase) {
     case 'running':
@@ -241,6 +235,8 @@ const statusText = computed(() => {
 })
 
 function handleDownloadStart(name: string): void {
+  lastSample = null
+  transferRate.value = null
   download.value = beginFileTreeDownload(name)
 }
 
@@ -250,7 +246,20 @@ function handleDownloadSettle(ok: boolean, error?: string): void {
 
 function handleTransfer(_event: unknown, event: SftpTransferEvent): void {
   if (event.sessionId !== props.sessionId) return
-  download.value = reduceFileTreeTransferEvent(download.value, event)
+  const next = reduceFileTreeTransferEvent(download.value, event)
+  if (event.status === 'running') {
+    const sample: TransferProgressSample = {
+      at: Date.now(),
+      transferred: next.transferred,
+      total: next.total,
+    }
+    transferRate.value = estimateTransferRate(lastSample, sample)
+    lastSample = sample
+  } else {
+    lastSample = null
+    transferRate.value = null
+  }
+  download.value = next
 }
 
 onMounted(() => window.ipcRenderer?.on('terminal-sftp-transfer', handleTransfer))
@@ -258,36 +267,12 @@ onUnmounted(() => window.ipcRenderer?.off('terminal-sftp-transfer', handleTransf
 
 function handleNodeClick(data: SftpEntry): void {
   currentNode.value = data
-  if (data.directory) {
-    preview.value = null
-    return
-  }
-  void showPreview(data.path)
+  if (data.directory) return
+  emit('open-file', data)
 }
 
 function handleTreeLoadError(_path: string, _root: boolean, error?: unknown): void {
   ElMessage.error(error ? errorMessage(error) : t('common.terminal.fileTreeLoadFailed'))
-}
-
-async function showPreview(path: string): Promise<void> {
-  preview.value = { status: 'loading', path }
-  try {
-    const read = (await window.ipcRenderer.invoke('terminal-path-read', {
-      sessionId: props.sessionId,
-      path,
-      maxBytes: PREVIEW_MAX_BYTES,
-    })) as { mime: string; data: string; size: number; truncated: boolean } | null
-    preview.value = read
-      ? {
-          status: 'ready',
-          path,
-          payload: { mime: read.mime, data: read.data },
-          truncated: read.truncated,
-        }
-      : { status: 'unavailable', path }
-  } catch {
-    preview.value = { status: 'unavailable', path }
-  }
 }
 
 /**
@@ -315,7 +300,6 @@ function applyRoot(): void {
   rootPath.value = pathInput.value.trim() || '.'
   resolvedRoot.value = rootPath.value
   loading.value = false
-  preview.value = null
   currentNode.value = null
   treeKey.value += 1
 }
@@ -323,7 +307,6 @@ function applyRoot(): void {
 function reload(): void {
   pathInput.value = rootPath.value
   loading.value = false
-  preview.value = null
   treeKey.value += 1
 }
 
@@ -334,7 +317,6 @@ watch(
     pathInput.value = '.'
     resolvedRoot.value = '.'
     loading.value = false
-    preview.value = null
     currentNode.value = null
     download.value = IDLE_FILE_TREE_DOWNLOAD
     treeKey.value += 1
@@ -418,38 +400,6 @@ function errorMessage(error: unknown): string {
   min-height: 0;
   overflow: auto;
 }
-.file-tree-preview {
-  display: flex;
-  max-height: 45%;
-  flex: none;
-  flex-direction: column;
-  border-top: 1px solid var(--app-border);
-}
-.file-tree-preview__bar {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 2px 4px 2px 8px;
-}
-.file-tree-preview__name {
-  overflow: hidden;
-  flex: 1;
-  color: var(--app-text-muted);
-  font-size: 11px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.file-tree-preview__body {
-  min-height: 0;
-  overflow: auto;
-  padding: 0 8px 8px;
-  font-size: 12px;
-}
-.file-tree-preview__note {
-  display: block;
-  color: var(--app-text-muted);
-  font-size: 10px;
-}
 .file-tree-status {
   display: flex;
   align-items: center;
@@ -478,6 +428,10 @@ function errorMessage(error: unknown): string {
   color: var(--el-color-error);
 }
 .file-tree-status__percent {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+}
+.file-tree-status__detail {
   flex: none;
   font-variant-numeric: tabular-nums;
 }

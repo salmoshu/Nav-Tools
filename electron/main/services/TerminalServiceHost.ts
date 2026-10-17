@@ -1,5 +1,5 @@
-import { execFile } from 'node:child_process'
-import { existsSync, statSync } from 'node:fs'
+import { execFile, spawn as spawnProcess } from 'node:child_process'
+import { createWriteStream, existsSync, statSync } from 'node:fs'
 import fs from 'node:fs/promises'
 import os from 'node:os'
 import { promisify } from 'node:util'
@@ -57,6 +57,8 @@ export interface TerminalServiceHost {
     args: string[],
     options?: { windowsHide?: boolean; maxBuffer?: number },
   ): Promise<Buffer>
+  /** 把子进程 stdout 流式写入文件:大输出(如 WSL tar 打包)规避 execFile 的 maxBuffer 上限 */
+  pipeOutputToFile(executable: string, args: string[], destPath: string): Promise<void>
   spawnPty: typeof spawn
   createSshClient(): Client
   createPortForwarder: TerminalPortForwarderFactory
@@ -94,6 +96,41 @@ export function createNodeTerminalServiceHost(): TerminalServiceHost {
       })
       return Buffer.isBuffer(result.stdout) ? result.stdout : Buffer.from(result.stdout)
     },
+    pipeOutputToFile: (executable, args, destPath) =>
+      new Promise<void>((resolve, reject) => {
+        const child = spawnProcess(executable, args, { windowsHide: true })
+        const output = createWriteStream(destPath)
+        let stderr = ''
+        child.stderr.on('data', (chunk: Buffer) => {
+          // stderr 仅用于拼报错信息,截断保留尾部,防止异常进程刷屏撑爆内存
+          stderr = (stderr + chunk.toString('utf8')).slice(-4096)
+        })
+        child.stdout.pipe(output)
+        child.on('error', (error) => {
+          output.destroy()
+          reject(error)
+        })
+        output.on('error', (error) => {
+          child.kill()
+          reject(error)
+        })
+        // stdout 经 pipe 自动 end 输出流;close(拿到退出码)与 finish(落盘完成)都到才算完
+        let exitCode: number | null = null
+        let finished = false
+        const maybeDone = () => {
+          if (exitCode === null || !finished) return
+          if (exitCode === 0) resolve()
+          else reject(new Error(stderr.trim() || `${executable} exited with code ${exitCode}`))
+        }
+        child.on('close', (code) => {
+          exitCode = code ?? 1
+          maybeDone()
+        })
+        output.on('finish', () => {
+          finished = true
+          maybeDone()
+        })
+      }),
     spawnPty: (file, args, options): IPty => spawn(file, args, options),
     createSshClient: () => new Client(),
     createPortForwarder: (client, connectionId, emit) =>

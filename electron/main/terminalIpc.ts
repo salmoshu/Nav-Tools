@@ -1,4 +1,3 @@
-import path from 'node:path'
 import { chooseOpenFiles, showScopedSaveDialog } from './dialogs'
 import {
   BrowserWindow,
@@ -93,12 +92,11 @@ export function registerTerminalIpc(
     async (event, request: { name: string; directory: boolean }) => {
       const target = BrowserWindow.fromWebContents(event.sender)
       if (request.directory) {
+        // 目录下载:filePath 即最终落盘目录(defaultPath 已含目录名),再拼一层会出 name\name
         const result = await showScopedSaveDialog(target, 'terminal-download', {
           defaultPath: request.name,
         })
-        return result.canceled || !result.filePath
-          ? null
-          : path.join(result.filePath, request.name)
+        return result.canceled || !result.filePath ? null : result.filePath
       }
       const result = await showScopedSaveDialog(target, 'terminal-download', {
         defaultPath: request.name,

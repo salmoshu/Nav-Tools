@@ -22,7 +22,7 @@ describe('终端国际化依赖注入', () => {
     for (const source of terminalComponentSources) expect(source).not.toContain("from '@/i18n'")
     expect(
       terminalComponentSources.filter((source) => source.includes('useTerminalTranslate()')),
-    ).toHaveLength(10)
+    ).toHaveLength(11)
   })
 
   it('应用组合根提供终端翻译适配器', () => {
