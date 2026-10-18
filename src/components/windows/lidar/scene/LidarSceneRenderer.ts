@@ -204,6 +204,8 @@ export class LidarSceneRenderer {
       0.2,
       0.12,
     )
+    // 与 makePoints/makeLine 一致默认隐藏:无数据时(renderFrame 未被调用)不在原点显示黄色箭头
+    this.headingArrow.visible = false
     this.scene.add(this.headingArrow)
   }
 
