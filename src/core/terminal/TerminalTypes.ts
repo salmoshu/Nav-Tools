@@ -148,6 +148,17 @@ export interface SftpEntry {
   mode: number
 }
 
+/**
+ * 取路径的父目录,同时兼容 POSIX 与 Windows 分隔符(SftpEntry.path 两种都可能有)。
+ * `C:` / `/` 这类盘符与根要保留分隔符,否则 cd 不认;无分隔符时退化为首字符(与面板原 parentOf 一致)。
+ */
+export function parentPathOf(value: string): string {
+  const index = Math.max(value.lastIndexOf('/'), value.lastIndexOf('\\'))
+  if (index <= 0) return value.slice(0, 1) || value
+  const parent = value.slice(0, index)
+  return /^[A-Za-z]:$/.test(parent) ? value.slice(0, index + 1) : parent
+}
+
 export interface SftpTransferEvent {
   sessionId: string
   operationId: string

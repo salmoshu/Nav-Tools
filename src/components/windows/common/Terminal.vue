@@ -7,6 +7,7 @@
       :kind="activeFileTreeKind"
       :local-shell="activeFileTreeLocalShell"
       :platform="capabilities.platform"
+      :reveal-path="activeFileTreeRevealPath"
       @open-file="handleFileTreeOpenFile"
     />
     <div class="terminal-workbench__main">
@@ -311,6 +312,7 @@ import {
   type HostKeyMismatchEvent,
   type HostKeyPromptEvent,
   type LocalShellKind,
+  parentPathOf,
   type SftpEntry,
   type SshConnectionProfile,
   type TerminalCapabilities,
@@ -420,10 +422,22 @@ const activeReadySession = computed<TerminalSessionInfo | undefined>(() => {
 })
 const activeReadySessionId = computed(() => activeReadySession.value?.id)
 const activeFileTreeSessionId = computed(() => {
-  const tabId = activeTab.value?.id
-  const sessionId = tabId ? fileTreeSessionByTabId.value[tabId] : undefined
+  const tab = activeTab.value
+  // 预览 tab 没有自己的文件树开关状态:回退到预览来源会话,面板保持打开并绑定同一棵树;
+  // 会话断开(sessionInfos 查不到或非 ready)时照旧降级为隐藏
+  const sessionId = tab?.preview
+    ? tab.preview.sessionId
+    : tab?.id
+      ? fileTreeSessionByTabId.value[tab.id]
+      : undefined
   const session = sessionId ? sessionInfos.value[sessionId] : undefined
   return session?.status === 'ready' ? sessionId : undefined
+})
+/** 预览 tab 激活时文件树跟随到被预览文件所在目录;普通 tab 为 undefined,不打扰用户浏览位置 */
+const activeFileTreeRevealPath = computed(() => {
+  const preview = activeTab.value?.preview
+  if (!preview || preview.sessionId !== activeFileTreeSessionId.value) return undefined
+  return parentPathOf(preview.path)
 })
 const activeFileTreeKind = computed(
   () =>

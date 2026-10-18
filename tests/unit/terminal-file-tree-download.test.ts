@@ -7,14 +7,18 @@ import { promisify } from 'node:util'
 import { describe, expect, it, vi } from 'vitest'
 import {
   IDLE_FILE_TREE_DOWNLOAD,
+  TRANSFER_RATE_WINDOW_MS,
   beginFileTreeDownload,
   estimateTransferRate,
   fileTreeDownloadPercent,
   formatRemainingSeconds,
   formatTransferBytes,
+  formatTransferPair,
+  pushTransferSample,
   reduceFileTreeTransferEvent,
   remainingTransferSeconds,
   settleFileTreeDownload,
+  windowTransferRate,
   type FileTreeDownloadStatus,
   type TransferProgressSample,
 } from '../../src/core/terminal/FileTreeDownloadStatus'
@@ -450,11 +454,13 @@ describe('传输速率与剩余时间估算(纯函数)', () => {
     expect(remainingTransferSeconds(50, 100, 25)).toBe(2)
   })
 
-  it('格式化剩余时间:秒/分/时分档', () => {
-    expect(formatRemainingSeconds(0.4)).toBe('1s')
-    expect(formatRemainingSeconds(8.2)).toBe('9s')
-    expect(formatRemainingSeconds(65)).toBe('1m 05s')
-    expect(formatRemainingSeconds(3600)).toBe('1h 00m')
+  it('格式化剩余时间:定宽 mm:ss,超 1 小时为 h:mm:ss', () => {
+    expect(formatRemainingSeconds(0)).toBe('00:00')
+    expect(formatRemainingSeconds(0.4)).toBe('00:01')
+    expect(formatRemainingSeconds(8.2)).toBe('00:09')
+    expect(formatRemainingSeconds(65)).toBe('01:05')
+    expect(formatRemainingSeconds(3600)).toBe('1:00:00')
+    expect(formatRemainingSeconds(3723)).toBe('1:02:03')
     expect(formatRemainingSeconds(-1)).toBe('')
     expect(formatRemainingSeconds(Number.NaN)).toBe('')
   })
@@ -465,6 +471,93 @@ describe('传输速率与剩余时间估算(纯函数)', () => {
     expect(formatTransferBytes(2 * 1024 * 1024)).toBe('2.0 MB')
     expect(formatTransferBytes(3 * 1024 * 1024 * 1024)).toBe('3.0 GB')
     expect(formatTransferBytes(-5)).toBe('')
+  })
+})
+
+describe('滑动窗口速率采样(纯函数)', () => {
+  const sample = (at: number, transferred: number, total = 1000): TransferProgressSample => ({
+    at,
+    transferred,
+    total,
+  })
+
+  it('窗口默认 1000ms;稠密事件下裁剪掉窗口前的样本,速率按窗口首尾差分', () => {
+    expect(TRANSFER_RATE_WINDOW_MS).toBe(1000)
+    let samples: TransferProgressSample[] = []
+    for (let i = 0; i <= 8; i += 1) {
+      samples = pushTransferSample(samples, sample(i * 250, i * 250))
+    }
+    // 1s 前的样本被裁剪,队列覆盖最近 >=1s
+    expect(samples.map((entry) => entry.at)).toEqual([1000, 1250, 1500, 1750, 2000])
+    expect(windowTransferRate(samples)).toBe(1000)
+  })
+
+  it('突发被窗口平滑:末尾相邻差分 400 B/s,窗口差分 1100 B/s', () => {
+    let samples: TransferProgressSample[] = []
+    samples = pushTransferSample(samples, sample(0, 0))
+    samples = pushTransferSample(samples, sample(1000, 100))
+    samples = pushTransferSample(samples, sample(1100, 1000))
+    samples = pushTransferSample(samples, sample(2000, 1200))
+    expect(samples.map((entry) => entry.at)).toEqual([1000, 1100, 2000])
+    expect(windowTransferRate(samples)).toBe(1100)
+  })
+
+  it('事件稀疏时保留上一个样本作锚点,长间隔也能估算', () => {
+    let samples: TransferProgressSample[] = []
+    samples = pushTransferSample(samples, sample(0, 0))
+    samples = pushTransferSample(samples, sample(3000, 900))
+    expect(samples).toHaveLength(2)
+    expect(windowTransferRate(samples)).toBe(300)
+  })
+
+  it('total 变化或字节回退视为新任务:队列重置,速率回到 null', () => {
+    let samples = pushTransferSample([], sample(1000, 100, 1000))
+    samples = pushTransferSample(samples, sample(2000, 300, 2000))
+    expect(samples).toEqual([sample(2000, 300, 2000)])
+    expect(windowTransferRate(samples)).toBeNull()
+
+    samples = pushTransferSample(samples, sample(3000, 100, 2000))
+    expect(samples).toEqual([sample(3000, 100, 2000)])
+  })
+
+  it('样本不足或时间不前进时速率为 null', () => {
+    expect(windowTransferRate([])).toBeNull()
+    expect(windowTransferRate([sample(1000, 100)])).toBeNull()
+    let samples = pushTransferSample([], sample(1000, 100))
+    samples = pushTransferSample(samples, sample(1000, 200))
+    expect(windowTransferRate(samples)).toBeNull()
+  })
+})
+
+describe('同单位定宽格式(纯函数)', () => {
+  it('formatTransferPair:档位取 total,数值统一 1 位小数', () => {
+    expect(formatTransferPair(12918456, 100 * 1024 * 1024)).toEqual({
+      transferred: '12.3',
+      total: '100.0',
+      unit: 'MB',
+    })
+    // transferred 远小于 total 所在档位时也用同一单位,避免档位切换跳变
+    expect(formatTransferPair(512, 2048)).toEqual({
+      transferred: '0.5',
+      total: '2.0',
+      unit: 'KB',
+    })
+    expect(formatTransferPair(512, 900)).toEqual({
+      transferred: '512.0',
+      total: '900.0',
+      unit: 'B',
+    })
+    expect(formatTransferPair(0, 3 * 1024 * 1024 * 1024)).toEqual({
+      transferred: '0.0',
+      total: '3.0',
+      unit: 'GB',
+    })
+  })
+
+  it('formatTransferPair:总量未知或输入非法时返回 null', () => {
+    expect(formatTransferPair(10, 0)).toBeNull()
+    expect(formatTransferPair(-1, 100)).toBeNull()
+    expect(formatTransferPair(Number.NaN, 100)).toBeNull()
   })
 })
 
@@ -543,9 +636,26 @@ describe('文件树侧边栏接线(源码扫描)', () => {
   })
 
   it('面板状态栏展示聚合字节与估算剩余时间', () => {
-    expect(panelSource).toContain('estimateTransferRate')
     expect(panelSource).toContain('transferDetail')
+    expect(panelSource).toContain('formatTransferPair')
     expect(panelSource).toContain("t('common.terminal.fileTreeTransferEta'")
+    // 定宽:等宽数字 + min-width,避免位数变化引起布局抖动
+    expect(panelSource).toContain('font-variant-numeric: tabular-nums')
+    expect(panelSource).toContain('min-width: 24ch')
+  })
+
+  it('速率用 >=1s 滑动窗口估算,采样队列在 download-start/终态/会话切换时清空', () => {
+    expect(panelSource).toContain('pushTransferSample')
+    expect(panelSource).toContain('windowTransferRate')
+    expect(panelSource).not.toContain('estimateTransferRate')
+    // 清空点:handleDownloadStart、handleDownloadSettle、非 running 事件、会话切换
+    expect(panelSource.match(/transferSamples = \[\]/g)?.length).toBeGreaterThanOrEqual(4)
+  })
+
+  it('预览 tab 跟随:面板接收 revealPath 并导航到文件所在目录', () => {
+    expect(panelSource).toContain('revealPath?: string')
+    expect(panelSource).toContain('() => props.revealPath')
+    expect(panelSource).toContain('navigateToRoot(reveal')
   })
 
   it('zh-CN / en-US 状态栏与拖拽文案同步', () => {

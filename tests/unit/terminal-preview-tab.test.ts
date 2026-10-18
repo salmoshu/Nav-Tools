@@ -118,6 +118,20 @@ describe('文件预览 Tab 接线(源码扫描)', () => {
     expect(terminalSource).toContain('v-if="!tab.preview"')
   })
 
+  it('Terminal.vue:预览 tab 激活时文件树回退到预览会话并跟随文件所在目录', () => {
+    // 预览 tab 无会话:computed 回退到 preview.sessionId,面板保持打开
+    expect(terminalSource).toContain('tab.preview.sessionId')
+    // 跟随:revealPath = 被预览文件的父目录,仅预览 tab 激活且会话匹配时提供
+    expect(terminalSource).toContain(':reveal-path="activeFileTreeRevealPath"')
+    expect(terminalSource).toContain('parentPathOf(preview.path)')
+  })
+
+  it('文件树面板:revealPath 驱动目录跟随;面板未打开时不会被强制打开', () => {
+    expect(panelSource).toContain('revealPath?: string')
+    expect(panelSource).toContain('() => props.revealPath')
+    expect(panelSource).toContain('navigateToRoot')
+  })
+
   it('文件树面板:点击文件向上抛 open-file,不再内嵌预览区', () => {
     expect(panelSource).toContain("'open-file': [entry: SftpEntry]")
     expect(panelSource).toContain("emit('open-file', data)")

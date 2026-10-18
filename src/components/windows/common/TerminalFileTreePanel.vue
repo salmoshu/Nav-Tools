@@ -90,6 +90,7 @@ import { CircleCheck, CircleClose, Loading, Position, Refresh } from '@element-p
 import { ElMessage } from 'element-plus'
 import { useTerminalTranslate } from '@/core/terminal/TerminalI18n'
 import { buildShellCdCommand, shellFamilyFor } from '@/core/terminal/ShellQuote'
+import { parentPathOf } from '@/core/terminal/TerminalTypes'
 import type {
   LocalShellKind,
   SftpEntry,
@@ -99,13 +100,15 @@ import type {
 import {
   IDLE_FILE_TREE_DOWNLOAD,
   beginFileTreeDownload,
-  estimateTransferRate,
   fileTreeDownloadPercent,
   formatRemainingSeconds,
   formatTransferBytes,
+  formatTransferPair,
+  pushTransferSample,
   reduceFileTreeTransferEvent,
   remainingTransferSeconds,
   settleFileTreeDownload,
+  windowTransferRate,
   type FileTreeDownloadStatus,
   type TransferProgressSample,
 } from '@/core/terminal/FileTreeDownloadStatus'
@@ -120,6 +123,11 @@ const props = defineProps<{
   localShell?: LocalShellKind
   /** system 本地 shell 需按宿主平台区分 PowerShell 与 POSIX */
   platform: string
+  /**
+   * 预览 tab 激活/打开文件时跟随的目录(被预览文件所在目录);
+   * undefined 表示普通 tab,面板保持用户当前浏览位置
+   */
+  revealPath?: string
 }>()
 
 const emit = defineEmits<{
@@ -138,7 +146,7 @@ const currentNode = ref<SftpEntry | null>(null)
 const openTarget = computed(() => {
   const node = currentNode.value
   if (!node) return resolvedRoot.value
-  return node.directory ? node.path : parentOf(node.path)
+  return node.directory ? node.path : parentPathOf(node.path)
 })
 
 const MIN_FILE_TREE_WIDTH = 220
@@ -198,18 +206,19 @@ function resizeWithKeyboard(event: KeyboardEvent): void {
 
 const download = ref<FileTreeDownloadStatus>(IDLE_FILE_TREE_DOWNLOAD)
 const downloadPercent = computed(() => fileTreeDownloadPercent(download.value))
-/** 连续 running 事件的差分速率(字节/秒);非 running 或新任务时归零 */
+/** 滑动窗口(>=1s)估算的速率(字节/秒);非 running 或新任务时归零 */
 const transferRate = ref<number | null>(null)
-let lastSample: TransferProgressSample | null = null
+/** 最近一段窗口内的 running 采样队列;download-start/终态/会话切换时清空 */
+let transferSamples: TransferProgressSample[] = []
 
-/** 状态栏聚合详情:`1.2 MB / 3.4 MB · 300.0 KB/s · 预计剩余 8s` */
+/** 状态栏聚合详情:`12.3 / 100.0 MB · 300.0 KB/s · 预计剩余 01:05`(同单位定宽,避免跳变) */
 const transferDetail = computed(() => {
   const status = download.value
   if (status.phase !== 'running') return ''
-  const bytes =
-    status.total > 0
-      ? `${formatTransferBytes(status.transferred)} / ${formatTransferBytes(status.total)}`
-      : formatTransferBytes(status.transferred)
+  const pair = formatTransferPair(status.transferred, status.total)
+  const bytes = pair
+    ? `${pair.transferred} / ${pair.total} ${pair.unit}`
+    : formatTransferBytes(status.transferred)
   const parts = [bytes]
   const rate = transferRate.value
   if (rate && rate > 0) {
@@ -235,12 +244,14 @@ const statusText = computed(() => {
 })
 
 function handleDownloadStart(name: string): void {
-  lastSample = null
+  transferSamples = []
   transferRate.value = null
   download.value = beginFileTreeDownload(name)
 }
 
 function handleDownloadSettle(ok: boolean, error?: string): void {
+  transferSamples = []
+  transferRate.value = null
   download.value = settleFileTreeDownload(download.value, ok, error)
 }
 
@@ -248,15 +259,14 @@ function handleTransfer(_event: unknown, event: SftpTransferEvent): void {
   if (event.sessionId !== props.sessionId) return
   const next = reduceFileTreeTransferEvent(download.value, event)
   if (event.status === 'running') {
-    const sample: TransferProgressSample = {
+    transferSamples = pushTransferSample(transferSamples, {
       at: Date.now(),
       transferred: next.transferred,
       total: next.total,
-    }
-    transferRate.value = estimateTransferRate(lastSample, sample)
-    lastSample = sample
+    })
+    transferRate.value = windowTransferRate(transferSamples)
   } else {
-    lastSample = null
+    transferSamples = []
     transferRate.value = null
   }
   download.value = next
@@ -310,26 +320,34 @@ function reload(): void {
   treeKey.value += 1
 }
 
+/** 导航到指定根目录并重挂载树(懒加载树的根节点只在挂载时拉一次) */
+function navigateToRoot(path: string): void {
+  rootPath.value = path
+  pathInput.value = path
+  resolvedRoot.value = path
+  loading.value = false
+  currentNode.value = null
+  treeKey.value += 1
+}
+
 watch(
-  () => props.sessionId,
-  () => {
-    rootPath.value = '.'
-    pathInput.value = '.'
-    resolvedRoot.value = '.'
-    loading.value = false
-    currentNode.value = null
-    download.value = IDLE_FILE_TREE_DOWNLOAD
-    treeKey.value += 1
+  [() => props.sessionId, () => props.revealPath],
+  ([sessionId, reveal], [prevSessionId, prevReveal]) => {
+    if (sessionId !== prevSessionId) {
+      // 会话切换:落在 reveal 目录(若有)否则默认根;下载状态随旧会话失效
+      transferSamples = []
+      transferRate.value = null
+      download.value = IDLE_FILE_TREE_DOWNLOAD
+      navigateToRoot(reveal || '.')
+      return
+    }
+    // 同会话内激活/打开预览:跟随到文件所在目录;已在该目录则不动,避免重挂载打断浏览
+    if (reveal && reveal !== prevReveal && reveal !== rootPath.value) navigateToRoot(reveal)
+    // reveal 变回 undefined(切回普通 tab):保持当前位置,不打扰
   },
+  { immediate: true },
 )
 
-/** 取父目录:`C:` / `/` 这类盘符与根要保留分隔符,否则 cd 不认 */
-function parentOf(value: string): string {
-  const index = Math.max(value.lastIndexOf('/'), value.lastIndexOf('\\'))
-  if (index <= 0) return value.slice(0, 1) || value
-  const parent = value.slice(0, index)
-  return /^[A-Za-z]:$/.test(parent) ? value.slice(0, index + 1) : parent
-}
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
@@ -429,10 +447,14 @@ function errorMessage(error: unknown): string {
 }
 .file-tree-status__percent {
   flex: none;
+  min-width: 4ch;
+  text-align: right;
   font-variant-numeric: tabular-nums;
 }
 .file-tree-status__detail {
   flex: none;
+  min-width: 24ch;
+  text-align: right;
   font-variant-numeric: tabular-nums;
 }
 </style>
