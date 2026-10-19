@@ -18,6 +18,15 @@ describe('Kimi brand design tokens', () => {
     expect(tokens).toContain('--font-mono:')
     expect(tokens).toContain('--radius-3xl: 24px')
     expect(tokens).toContain('--radius-full: 9999px')
+    // 组件级圆角令牌（实测修正版分层）
+    expect(tokens).toContain('--radius-badge: 4px')
+    expect(tokens).toContain('--radius-check: 6px')
+    expect(tokens).toContain('--radius-button: 8px')
+    expect(tokens).toContain('--radius-button-2: 10px')
+    expect(tokens).toContain('--radius-input: 12px')
+    expect(tokens).toContain('--radius-card: 16px')
+    expect(tokens).toContain('--radius-panel: 20px')
+    expect(tokens).toContain('--radius-hero: 24px')
     expect(tokens).toContain('--shadow-pop: 0 12px 40px 0 #00000029')
     expect(tokens).toContain('--duration-fast: 75ms')
     expect(tokens).toContain('--duration-default: 150ms')
@@ -92,7 +101,12 @@ describe('Kimi brand design tokens', () => {
 
     expect(tokens).toContain('::selection {')
     expect(tokens).toContain('.el-button {')
-    expect(tokens).toContain('border-radius: var(--radius-3xl)')
+    expect(tokens).toContain('border-radius: var(--radius-button)')
+    expect(tokens).toContain('border-radius: var(--radius-card)')
+    expect(tokens).toContain('border-radius: var(--radius-input)')
+    // 普通按钮永不 pill：is-text/is-link 不再参与正圆规则
+    expect(tokens).not.toContain('.el-button.is-link')
+    expect(tokens).toContain('.el-button.is-circle {')
     expect(tokens).toContain('box-shadow: var(--shadow-pop)')
     expect(tokens).toContain('.el-input__wrapper,')
     expect(tokens).toContain('.el-popper.is-dark,')
@@ -140,7 +154,7 @@ describe('Kimi brand design tokens', () => {
   it('uses the Kimi font stack and tokenized dialog shells in style.css', () => {
     expect(style).toContain('font-family: var(--system-fonts)')
     expect(style).toContain('font-family: var(--font-mono)')
-    expect(style).toContain('border-radius: var(--radius-3xl)')
+    expect(style).toContain('border-radius: var(--radius-card)')
     expect(style).toContain('box-shadow: var(--shadow-pop)')
   })
 })

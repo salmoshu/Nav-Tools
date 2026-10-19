@@ -175,11 +175,12 @@ function handleIgnore(): void {
   margin: 6px 0 12px;
   font-size: 13px;
   color: var(--app-text-secondary);
+  text-align: left;
 }
 
 .update-dialog-actions {
   display: flex;
-  justify-content: flex-end;
+  justify-content: flex-start;
   gap: 8px;
 }
 </style>

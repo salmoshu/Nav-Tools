@@ -126,7 +126,7 @@ code {
   flex-direction: column;
   overflow: hidden;
   border: 1px solid var(--app-border);
-  border-radius: var(--radius-3xl);
+  border-radius: var(--radius-card);
   color: var(--app-text);
   background: var(--app-surface);
   box-shadow: var(--shadow-pop);
@@ -187,7 +187,7 @@ code {
   padding: 0;
   overflow: hidden;
   border: 1px solid var(--app-border);
-  border-radius: var(--radius-3xl);
+  border-radius: var(--radius-card);
   color: var(--app-text);
   background: var(--app-surface);
   box-shadow: var(--shadow-pop);

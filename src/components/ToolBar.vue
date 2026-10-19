@@ -1756,7 +1756,7 @@ onUnmounted(() => {
   margin-left: auto;
   padding: 2px 14px;
   border: 1px solid color-mix(in srgb, var(--el-color-primary) 45%, transparent);
-  border-radius: 999px;
+  border-radius: var(--radius-button);
   background: transparent;
   color: var(--el-color-primary);
   cursor: pointer;

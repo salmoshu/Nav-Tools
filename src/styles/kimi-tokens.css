@@ -1,6 +1,9 @@
 /* ============================================================
    Kimi 品牌设计令牌 —— 实抽自 kimi.ai 全站 CSS（2026-10-17）
    源：Mind-Forge/raw/03-项目/00-综合/Brand/design-tokens.css
+   圆角：按 11-圆角体系-实测修正.md（2026-10 实测修正版）分层——
+   「Kimi 很圆」是错觉：按钮 8px、卡片/对话框 16px、24px 仅聊天主输入卡，
+   pill/正圆仅用于纯图标圆钮、头像/状态点、建议胶囊/分段开关/小 tab。
    深色模式：根元素切换 class="dark"（src/composables/useTheme.ts）。
    本文件在 element-plus 样式之后引入（src/main.ts 末尾）；
    暗色覆盖统一用 :root.dark —— 与 EP 的 html.dark 同优先级、靠后生效。
@@ -92,14 +95,26 @@
   /* ---------- 品牌书色板（终端深蓝变体取源） ---------- */
   --brand-navy: #002f5b;
 
-  /* ---------- 圆角 ---------- */
+  /* ---------- 圆角（实测修正版分层：徽章4-6 / 按钮·输入框8-10 /
+       popover·菜单·列表容器10-12 / 卡片·对话框·面板16 / 展开大面板20 /
+       24 仅聊天主输入卡） ---------- */
   --radius-sm: 4px;
   --radius-md: 6px;
   --radius-lg: 8px;
   --radius-xl: 12px;
   --radius-2xl: 16px;
   --radius-3xl: 24px;
-  --radius-full: 9999px;         /* 正圆 / pill */
+
+  /* 组件级令牌（对齐品牌 design-tokens.css 实测修正版） */
+  --radius-badge: 4px;      /* 徽章/标签/快捷键键帽 */
+  --radius-check: 6px;      /* 复选框/关闭小钮 */
+  --radius-button: 8px;     /* 标准按钮 */
+  --radius-button-2: 10px;  /* 次级按钮 */
+  --radius-input: 12px;     /* popover/菜单/列表容器/代码块 */
+  --radius-card: 16px;      /* 卡片/对话框/面板 */
+  --radius-panel: 20px;     /* 展开态大面板/任务条 */
+  --radius-hero: 24px;      /* 聊天主输入卡（每屏最多一个） */
+  --radius-full: 9999px;    /* 仅：正圆图标钮、头像/状态点、建议胶囊/分段开关/小 tab；普通按钮禁用 */
 
   /* ---------- 阴影（低透明度弥散） ---------- */
   --shadow-xs: 0 1px 2px 0 #00000014;
@@ -183,6 +198,8 @@
   --el-fill-color-lighter: var(--Fills-F1);
   --el-fill-color-extra-light: var(--Fills-F1);
   --el-fill-color-blank: var(--Bg-Primary);
+  /* 保留 6px：base 主要驱动 tag/分页等小型控件，落在徽章档 4-6px；
+     按钮/输入/弹窗/卡片/popper 均由下方皮肤规则显式覆盖 */
   --el-border-radius-base: var(--radius-md);
   --el-border-radius-small: var(--radius-sm);
   --el-border-radius-round: var(--radius-full);
@@ -282,28 +299,28 @@
 }
 
 .el-button {
-  border-radius: var(--radius-xl);
+  border-radius: var(--radius-button);
   transition-duration: var(--duration-default);
   transition-timing-function: var(--ease-out);
 }
 
-.el-button.is-text,
-.el-button.is-link,
+/* 普通按钮永不 pill（实测修正版铁律）；仅纯图标圆钮允许正圆 */
 .el-button.is-circle {
   border-radius: var(--radius-full);
 }
 
 .el-dialog,
 .el-message-box {
-  border-radius: var(--radius-3xl);
+  border-radius: var(--radius-card);
   box-shadow: var(--shadow-pop);
 }
 
 .el-card {
-  border-radius: var(--radius-3xl);
+  border-radius: var(--radius-card);
   border-color: var(--Separators-S1);
 }
 
+/* 输入框/下拉：文档允许 8-12px，取 8px 与标准按钮同档 */
 .el-input__wrapper,
 .el-select__wrapper,
 .el-textarea__inner {
@@ -316,6 +333,7 @@
 .el-popper.is-dark,
 .el-popover.el-popper {
   border: 1px solid var(--Separators-S1);
+  border-radius: var(--radius-input);
   color: var(--Labels-Primary);
   background: var(--Bg-Primary70);
   box-shadow: var(--shadow-pop);
