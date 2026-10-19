@@ -1,9 +1,13 @@
 <template>
   <div
     class="terminal-pane"
-    :class="{ focused }"
+    :class="{ focused, 'file-tree-drop-target': fileTreeDropHover }"
     @pointerdown="focusPane"
     @keydown="handlePaneKeydown"
+    @dragenter="onFileTreeDragEnter"
+    @dragover="onFileTreeDragOver"
+    @dragleave="onFileTreeDragLeave"
+    @drop="onFileTreeDrop"
   >
     <header class="pane-header">
       <div
@@ -378,7 +382,12 @@ import { FitAddon } from '@xterm/addon-fit'
 import { SearchAddon } from '@xterm/addon-search'
 import '@xterm/xterm/css/xterm.css'
 import { CommandBlockAssembler, type TerminalCommandBlock } from '@/core/terminal/CommandBlocks'
-import { shellFamilyFor, type ShellFamily } from '@/core/terminal/ShellQuote'
+import {
+  FILE_TREE_DRAG_MIME,
+  markFileTreeDragHandled,
+  type FileTreeDragPayload,
+} from '@/core/terminal/FileTreeDrag'
+import { quoteShellArg, shellFamilyFor, type ShellFamily } from '@/core/terminal/ShellQuote'
 import {
   activateGripDrag,
   beginGripPress,
@@ -532,6 +541,55 @@ function rerunCommand(command: string): void {
   if (!command || !props.pane.sessionId || !terminalInputEnabled) return
   void window.ipcRenderer
     .invoke('terminal-session-write', { sessionId: props.pane.sessionId, data: `${command}\r` })
+    .catch(() => undefined)
+}
+
+/**
+ * 文件树节点拖入窗格:把远端路径按本窗格 shell 家族转义后写进会话输入(不附回车)。
+ * 只认文件树自定义 MIME;系统文件拖入等其它拖拽一律不接管。
+ */
+const fileTreeDropDepth = ref(0)
+const fileTreeDropHover = computed(() => fileTreeDropDepth.value > 0)
+
+function isFileTreeDrag(event: DragEvent): boolean {
+  return Boolean(props.pane.sessionId && event.dataTransfer?.types.includes(FILE_TREE_DRAG_MIME))
+}
+
+function onFileTreeDragEnter(event: DragEvent): void {
+  if (!isFileTreeDrag(event)) return
+  fileTreeDropDepth.value += 1
+}
+
+function onFileTreeDragOver(event: DragEvent): void {
+  if (!isFileTreeDrag(event)) return
+  event.preventDefault()
+  if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy'
+}
+
+function onFileTreeDragLeave(event: DragEvent): void {
+  if (!event.dataTransfer?.types.includes(FILE_TREE_DRAG_MIME)) return
+  // relatedTarget 为空 = 拖出窗格(或窗口),直接复位,避免计数泄漏导致高亮卡死
+  fileTreeDropDepth.value =
+    event.relatedTarget === null ? 0 : Math.max(0, fileTreeDropDepth.value - 1)
+}
+
+function onFileTreeDrop(event: DragEvent): void {
+  fileTreeDropDepth.value = 0
+  if (!isFileTreeDrag(event)) return
+  const raw = event.dataTransfer?.getData(FILE_TREE_DRAG_MIME)
+  if (!raw) return
+  event.preventDefault()
+  let payload: FileTreeDragPayload
+  try {
+    payload = JSON.parse(raw) as FileTreeDragPayload
+  } catch {
+    return
+  }
+  // 拖进窗格即视为已处理,不再触发「拖出应用」的兜底下载
+  markFileTreeDragHandled()
+  const data = quoteShellArg(payload.path, shellFamily.value)
+  void window.ipcRenderer
+    .invoke('terminal-session-write', { sessionId: props.pane.sessionId, data })
     .catch(() => undefined)
 }
 
@@ -1181,6 +1239,17 @@ function withTimeout<T>(
 .terminal-pane.focused {
   opacity: 1;
 }
+/* 文件树节点拖入窗格时的高亮边框(品牌蓝) */
+.terminal-pane.file-tree-drop-target::after {
+  position: absolute;
+  z-index: 30;
+  inset: 0;
+  border: 2px dashed color-mix(in srgb, var(--el-color-primary) 75%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--el-color-primary) 8%, transparent);
+  content: '';
+  pointer-events: none;
+}
 .pane-header {
   position: absolute;
   z-index: 5;
@@ -1328,9 +1397,11 @@ function withTimeout<T>(
   justify-content: center;
   gap: 9px;
   padding: 6px 10px;
-  border-top: 1px solid color-mix(in srgb, var(--terminal-fg) 14%, var(--terminal-bg));
+  border-top: 1px solid color-mix(in srgb, var(--terminal-fg) 14%, transparent);
   color: var(--terminal-fg);
-  background: color-mix(in srgb, var(--terminal-bg) 92%, var(--el-color-warning));
+  /* 品牌悬浮层规则:70% 深色半透明底 + 毛玻璃 blur(6px);文字一律取终端浅色档 */
+  background: color-mix(in srgb, var(--terminal-bg) 70%, transparent);
+  backdrop-filter: blur(6px);
 }
 .session-disconnected__icon {
   display: grid;
@@ -1366,8 +1437,14 @@ function withTimeout<T>(
 }
 .session-disconnected__copy small,
 .launcher-restore__copy small {
-  color: var(--app-text-muted);
   font-size: 11px;
+}
+/* 深色终端底上不能沿用 --app-text-muted(浅主题下是 45% 黑,叠在 #0d1b2e 上近乎不可见) */
+.session-disconnected__copy small {
+  color: color-mix(in srgb, var(--terminal-fg) 62%, transparent);
+}
+.launcher-restore__copy small {
+  color: var(--app-text-muted);
 }
 .session-reconnect {
   flex: none;

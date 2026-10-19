@@ -389,6 +389,11 @@ export default {
       'Delete the directory {name}? All of its contents will be removed recursively. This cannot be undone.',
     fileTreeDeleteDone: 'Deleted: {name}',
     fileTreeOpFailed: 'Operation failed: {message}',
+    fileTreeMove: 'Move',
+    fileTreeMoveDone: 'Moved: {name}',
+    fileTreeMoveOverwriteConfirm:
+      '"{name}" already exists in the target folder. Overwriting deletes the existing item first and cannot be undone. Continue?',
+    fileTreeDragOutReady: 'Ready: drag "{name}" again to drop it into File Explorer',
     openPresets: 'Open preset commands panel',
     presetPanel: 'Preset Commands',
     presetAdd: 'New Preset',

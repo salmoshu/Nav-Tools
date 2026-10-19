@@ -6,14 +6,19 @@ import path from 'node:path'
 import { promisify } from 'node:util'
 import { describe, expect, it, vi } from 'vitest'
 import {
+  FILE_TREE_RING_RADIUS,
   IDLE_FILE_TREE_DOWNLOAD,
   TRANSFER_RATE_WINDOW_MS,
   beginFileTreeDownload,
   estimateTransferRate,
   fileTreeDownloadPercent,
+  fileTreeRingCircumference,
+  fileTreeRingDasharray,
+  fileTreeRingIndeterminateDasharray,
   formatRemainingSeconds,
   formatTransferBytes,
   formatTransferPair,
+  formatTransferPairText,
   pushTransferSample,
   reduceFileTreeTransferEvent,
   remainingTransferSeconds,
@@ -561,6 +566,44 @@ describe('同单位定宽格式(纯函数)', () => {
   })
 })
 
+describe('进度环与紧凑格式化(纯函数)', () => {
+  it('周长随半径换算', () => {
+    expect(fileTreeRingCircumference()).toBeCloseTo(2 * Math.PI * FILE_TREE_RING_RADIUS, 6)
+    expect(fileTreeRingCircumference(10)).toBeCloseTo(62.8318, 3)
+  })
+
+  it('dasharray 弧长 = 百分比 × 周长,缺口顺延到一整圈', () => {
+    const c = fileTreeRingCircumference()
+    const [arc50, gap50] = fileTreeRingDasharray(50)!.split(' ').map(Number)
+    expect(arc50).toBeCloseTo(c / 2, 1)
+    expect(gap50).toBeCloseTo(c, 1)
+    expect(fileTreeRingDasharray(0)!.split(' ')[0]).toBe('0.00')
+    const [arcFull] = fileTreeRingDasharray(100)!.split(' ').map(Number)
+    expect(arcFull).toBeCloseTo(c, 1)
+  })
+
+  it('百分比钳制在 0-100;总量未知(null)返回 null 交给不定态', () => {
+    expect(fileTreeRingDasharray(null)).toBeNull()
+    const c = fileTreeRingCircumference()
+    const [arcOver] = fileTreeRingDasharray(150)!.split(' ').map(Number)
+    expect(arcOver).toBeCloseTo(c, 1)
+    expect(fileTreeRingDasharray(-5)!.split(' ')[0]).toBe('0.00')
+  })
+
+  it('不定态开口弧固定 1/4 弧长 + 3/4 缺口', () => {
+    const c = fileTreeRingCircumference()
+    const [arc, gap] = fileTreeRingIndeterminateDasharray().split(' ').map(Number)
+    expect(arc).toBeCloseTo(c / 4, 1)
+    expect(gap).toBeCloseTo((c * 3) / 4, 1)
+  })
+
+  it('formatTransferPairText 斜杠两侧无空格', () => {
+    expect(formatTransferPairText({ transferred: '12.3', total: '100.0', unit: 'MB' })).toBe(
+      '12.3/100.0 MB',
+    )
+  })
+})
+
 describe('文件树侧边栏接线(源码扫描)', () => {
   const panelSource = readFileSync(
     'src/components/windows/common/TerminalFileTreePanel.vue',
@@ -604,6 +647,21 @@ describe('文件树侧边栏接线(源码扫描)', () => {
     expect(panelSource).toContain("t('common.terminal.fileTreeStatusDone'")
     expect(panelSource).toContain("t('common.terminal.fileTreeStatusFailed'")
     expect(panelSource).toContain("t('common.terminal.fileTreeStatusIdle')")
+  })
+
+  it('状态栏用 SVG 进度环替代百分比文本,环形配色跟随相位', () => {
+    expect(panelSource).toContain('file-tree-status__ring')
+    expect(panelSource).toContain('fileTreeRingDasharray')
+    expect(panelSource).toContain('fileTreeRingIndeterminateDasharray')
+    expect(panelSource).toContain('stroke-linecap: round')
+    expect(panelSource).toContain('.file-tree-status--success .file-tree-status__ring-arc')
+    expect(panelSource).toContain('.file-tree-status--error .file-tree-status__ring-arc')
+    // 百分比文本与 Loading 旋转图标已移除
+    expect(panelSource).not.toContain('file-tree-status__percent')
+    expect(panelSource).not.toContain('<Loading />')
+    // transferDetail 的斜杠两侧不再有空格
+    expect(panelSource).toContain('formatTransferPairText')
+    expect(panelSource).not.toContain('${pair.transferred} / ${pair.total}')
   })
 
   it('文件树在下载前后抛出 begin/settle 事件', () => {

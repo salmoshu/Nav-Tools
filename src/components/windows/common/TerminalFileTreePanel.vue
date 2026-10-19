@@ -38,29 +38,25 @@
     />
 
     <footer class="file-tree-status" :class="`file-tree-status--${download.phase}`" role="status">
-      <el-icon v-if="download.phase === 'running'" class="file-tree-status__icon is-loading">
-        <Loading />
-      </el-icon>
-      <el-icon
-        v-else-if="download.phase === 'success'"
-        class="file-tree-status__icon file-tree-status__icon--success"
+      <svg
+        v-if="download.phase !== 'idle'"
+        class="file-tree-status__ring"
+        :class="{ 'file-tree-status__ring--indeterminate': ringIndeterminate }"
+        viewBox="0 0 16 16"
+        aria-hidden="true"
       >
-        <CircleCheck />
-      </el-icon>
-      <el-icon
-        v-else-if="download.phase === 'error'"
-        class="file-tree-status__icon file-tree-status__icon--error"
-      >
-        <CircleClose />
-      </el-icon>
+        <circle class="file-tree-status__ring-track" cx="8" cy="8" :r="FILE_TREE_RING_RADIUS" />
+        <circle
+          class="file-tree-status__ring-arc"
+          cx="8"
+          cy="8"
+          :r="FILE_TREE_RING_RADIUS"
+          :stroke-dasharray="ringDasharray"
+        />
+      </svg>
       <span class="file-tree-status__text" :title="download.error || download.name || undefined">{{
         statusText
       }}</span>
-      <span
-        v-if="download.phase === 'running' && downloadPercent !== null"
-        class="file-tree-status__percent"
-        >{{ downloadPercent }}%</span
-      >
       <span v-if="transferDetail" class="file-tree-status__detail">{{ transferDetail }}</span>
     </footer>
     <div
@@ -86,7 +82,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
-import { CircleCheck, CircleClose, Loading, Position, Refresh } from '@element-plus/icons-vue'
+import { Position, Refresh } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { useTerminalTranslate } from '@/core/terminal/TerminalI18n'
 import { buildShellCdCommand, shellFamilyFor } from '@/core/terminal/ShellQuote'
@@ -98,12 +94,16 @@ import type {
   TerminalSessionKind,
 } from '@/core/terminal/TerminalTypes'
 import {
+  FILE_TREE_RING_RADIUS,
   IDLE_FILE_TREE_DOWNLOAD,
   beginFileTreeDownload,
   fileTreeDownloadPercent,
+  fileTreeRingDasharray,
+  fileTreeRingIndeterminateDasharray,
   formatRemainingSeconds,
   formatTransferBytes,
   formatTransferPair,
+  formatTransferPairText,
   pushTransferSample,
   reduceFileTreeTransferEvent,
   remainingTransferSeconds,
@@ -206,19 +206,28 @@ function resizeWithKeyboard(event: KeyboardEvent): void {
 
 const download = ref<FileTreeDownloadStatus>(IDLE_FILE_TREE_DOWNLOAD)
 const downloadPercent = computed(() => fileTreeDownloadPercent(download.value))
+/** 进度环弧长:success 恒为满环;error 冻结在失败时的百分比(总量未知则满环) */
+const ringArcPercent = computed(() =>
+  download.value.phase === 'success' ? 100 : downloadPercent.value,
+)
+/** 不定态只在 running 且总量未知(WSL tar 流式)时开启;终态冻结成满环着色 */
+const ringIndeterminate = computed(
+  () => download.value.phase === 'running' && downloadPercent.value === null,
+)
+const ringDasharray = computed(
+  () => fileTreeRingDasharray(ringArcPercent.value) ?? fileTreeRingIndeterminateDasharray(),
+)
 /** 滑动窗口(>=1s)估算的速率(字节/秒);非 running 或新任务时归零 */
 const transferRate = ref<number | null>(null)
 /** 最近一段窗口内的 running 采样队列;download-start/终态/会话切换时清空 */
 let transferSamples: TransferProgressSample[] = []
 
-/** 状态栏聚合详情:`12.3 / 100.0 MB · 300.0 KB/s · 预计剩余 01:05`(同单位定宽,避免跳变) */
+/** 状态栏聚合详情:`12.3/100.0 MB · 300.0 KB/s · 预计剩余 01:05`(同单位定宽,避免跳变) */
 const transferDetail = computed(() => {
   const status = download.value
   if (status.phase !== 'running') return ''
   const pair = formatTransferPair(status.transferred, status.total)
-  const bytes = pair
-    ? `${pair.transferred} / ${pair.total} ${pair.unit}`
-    : formatTransferBytes(status.transferred)
+  const bytes = pair ? formatTransferPairText(pair) : formatTransferBytes(status.transferred)
   const parts = [bytes]
   const rate = transferRate.value
   if (rate && rate > 0) {
@@ -427,14 +436,42 @@ function errorMessage(error: unknown): string {
   font-size: 11px;
   border-top: 1px solid var(--app-border);
 }
-.file-tree-status__icon {
+.file-tree-status__ring {
+  width: 14px;
+  height: 14px;
   flex: none;
 }
-.file-tree-status__icon--success {
-  color: var(--el-color-success);
+.file-tree-status__ring circle {
+  fill: none;
+  stroke-width: 2;
 }
-.file-tree-status__icon--error {
-  color: var(--el-color-error);
+.file-tree-status__ring-track {
+  stroke: color-mix(in srgb, var(--app-text-muted) 28%, transparent);
+}
+.file-tree-status__ring-arc {
+  stroke: var(--el-color-primary);
+  stroke-linecap: round;
+  transform: rotate(-90deg);
+  transform-origin: center;
+  transition: stroke-dasharray 0.2s ease;
+}
+/* 终态环形配色跟随相位:成功绿/失败红 */
+.file-tree-status--success .file-tree-status__ring-arc {
+  stroke: var(--el-color-success);
+}
+.file-tree-status--error .file-tree-status__ring-arc {
+  stroke: var(--el-color-error);
+}
+.file-tree-status__ring--indeterminate {
+  animation: file-tree-ring-spin 0.9s linear infinite;
+}
+.file-tree-status__ring--indeterminate .file-tree-status__ring-arc {
+  transition: none;
+}
+@keyframes file-tree-ring-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 .file-tree-status__text {
   overflow: hidden;
@@ -444,12 +481,6 @@ function errorMessage(error: unknown): string {
 }
 .file-tree-status--error .file-tree-status__text {
   color: var(--el-color-error);
-}
-.file-tree-status__percent {
-  flex: none;
-  min-width: 4ch;
-  text-align: right;
-  font-variant-numeric: tabular-nums;
 }
 .file-tree-status__detail {
   flex: none;

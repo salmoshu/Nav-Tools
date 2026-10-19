@@ -1,15 +1,15 @@
 import { chooseOpenFiles, showScopedSaveDialog } from './dialogs'
-import {
-  BrowserWindow,
-  ipcMain,
-  shell,
-} from 'electron'
+import { existsSync } from 'node:fs'
+import fs from 'node:fs/promises'
+import path from 'node:path'
+import { BrowserWindow, app, ipcMain, nativeImage, shell, type NativeImage } from 'electron'
 import type {
   PortForwardRule,
   SshConnectionProfile,
   SshConnectionSecrets,
   TerminalCreateRequest,
 } from '../../src/core/terminal/TerminalTypes'
+import { sanitizeDragTempName } from '../../src/core/terminal/FileTreeDrag'
 import type { TerminalCredentialService } from './services/TerminalCredentialService'
 import type { TerminalService } from './services/TerminalService'
 
@@ -186,6 +186,35 @@ export function registerTerminalIpc(
       filters: [{ name: 'SSH Private Key', extensions: ['pem', 'key', 'ppk', '*'] }],
     })
     return result?.[0] ?? null
+  })
+
+  // 文件树拖出应用:远端文件先下载到系统临时目录,再经 webContents.startDrag 发起系统级拖拽。
+  // startDrag 依赖调用时鼠标仍处于按住状态;渲染层在缓存未就绪时先下载、提示「再拖一次」。
+  const dragTempRoot = () => path.join(app.getPath('temp'), 'navtools-drag')
+  // 启动时清掉上次运行的拖出缓存,避免把过期内容拖出去
+  void fs.rm(dragTempRoot(), { recursive: true, force: true }).catch(() => undefined)
+  let dragIcon: NativeImage | undefined
+  const fileTreeDragIcon = (): NativeImage => {
+    if (dragIcon) return dragIcon
+    const candidate = path.join(app.getAppPath(), 'public', 'logo_transparent.png')
+    const image = nativeImage.createFromPath(candidate)
+    dragIcon = image.isEmpty() ? nativeImage.createEmpty() : image.resize({ width: 32 })
+    return dragIcon
+  }
+  ipcMain.handle(
+    'terminal-file-tree-drag-temp-path',
+    async (_event, request: { sessionId: string; name: string }) => {
+      const dir = path.join(dragTempRoot(), request.sessionId)
+      await fs.mkdir(dir, { recursive: true })
+      return path.join(dir, sanitizeDragTempName(request.name))
+    },
+  )
+  ipcMain.on('terminal-file-tree-start-drag', (event, request: { path?: string }) => {
+    const file = typeof request?.path === 'string' ? request.path : ''
+    // 只放行本功能生成的临时缓存,避免任意本地路径被拖出
+    if (!file.startsWith(dragTempRoot() + path.sep)) return
+    if (!existsSync(file)) return
+    event.sender.startDrag({ file, icon: fileTreeDragIcon() })
   })
 }
 

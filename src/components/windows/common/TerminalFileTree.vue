@@ -6,15 +6,21 @@
     <el-tree
       :key="treeKey"
       class="terminal-file-tree__tree"
+      :class="{ 'terminal-file-tree__tree--dragging': treeDragging }"
       :props="treeProps"
       :load="loadNode"
       node-key="path"
       lazy
+      draggable
+      :allow-drop="allowTreeDrop"
       highlight-current
       :default-expanded-keys="expandedKeys"
       @node-expand="rememberExpanded"
       @node-collapse="forgetExpanded"
       @node-click="emit('node-click', $event)"
+      @node-drag-start="onNodeDragStart"
+      @node-drop="onNodeDrop"
+      @node-drag-end="onNodeDragEnd"
     >
       <template #default="{ data }">
         <el-dropdown
@@ -51,9 +57,21 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { onBeforeUnmount, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Document, Folder } from '@element-plus/icons-vue'
+import {
+  FILE_TREE_DRAG_MIME,
+  beginFileTreeDrag,
+  canDropFileTreeNode,
+  endFileTreeDrag,
+  isNoopFileTreeMove,
+  isOutsideWindow,
+  joinFileTreePath,
+  markFileTreeDragHandled,
+  type FileTreeDragPayload,
+  type FileTreeDropPosition,
+} from '@/core/terminal/FileTreeDrag'
 import { useTerminalTranslate } from '@/core/terminal/TerminalI18n'
 import type { SftpEntry, TerminalSessionDir } from '@/core/terminal/TerminalTypes'
 
@@ -182,6 +200,183 @@ async function deleteEntry(entry: SftpEntry): Promise<void> {
   }
 }
 
+/** el-tree 拖拽回调里的节点形状:只需要 data 载荷 */
+interface TreeDragNode {
+  data: FileTreeNode
+}
+
+/** 拖拽进行中:给树加拖拽态类名,目标目录的品牌蓝高亮见样式表的 is-drop-inner 规则 */
+const treeDragging = ref(false)
+
+/** 只允许 inner 落入目录,禁止落入自身/子孙(规则纯函数在 FileTreeDrag.ts) */
+function allowTreeDrop(
+  draggingNode: TreeDragNode,
+  dropNode: TreeDragNode,
+  position: FileTreeDropPosition,
+): boolean {
+  return canDropFileTreeNode(draggingNode.data, dropNode.data, position)
+}
+
+function onNodeDrop(draggingNode: TreeDragNode, dropNode: TreeDragNode, dropType: string): void {
+  markFileTreeDragHandled()
+  if (dropType !== 'inner') return
+  void moveEntry(draggingNode.data, dropNode.data)
+}
+
+/** 拖入目录 = 远端移动:复用三通道 rename IPC(SSH SFTP / 本机 fs.rename / WSL mv) */
+async function moveEntry(source: SftpEntry, targetDir: SftpEntry): Promise<void> {
+  const newPath = joinFileTreePath(targetDir.path, source.name)
+  // el-tree 在 drop 时已改过客户端树模型,无论成败都重建回服务端真实状态
+  try {
+    if (isNoopFileTreeMove(source.path, source.name, targetDir.path)) return
+    // 覆盖检查:目标目录已有同名条目时先确认;确认后先删再移,三通道语义统一
+    const existing = (await window.ipcRenderer.invoke('terminal-path-stat', {
+      sessionId: props.sessionId,
+      path: newPath,
+    })) as { exists: boolean; directory: boolean } | null
+    if (existing?.exists) {
+      await ElMessageBox.confirm(
+        t('common.terminal.fileTreeMoveOverwriteConfirm', { name: source.name }),
+        t('common.terminal.fileTreeMove'),
+        { type: 'warning' },
+      )
+      await window.ipcRenderer.invoke('terminal-session-delete', {
+        sessionId: props.sessionId,
+        path: newPath,
+        directory: existing.directory,
+      })
+    }
+    await window.ipcRenderer.invoke('terminal-session-rename', {
+      sessionId: props.sessionId,
+      oldPath: source.path,
+      newPath,
+    })
+    ElMessage.success(t('common.terminal.fileTreeMoveDone', { name: source.name }))
+    // 源子树的展开键整体改前缀到移动后路径;目标目录加入展开集,让用户看到落点
+    remapExpandedPrefix(source.path, newPath)
+    expandedSet.add(targetDir.path)
+  } catch (error) {
+    if (error !== 'cancel' && error !== 'close') {
+      ElMessage.error(t('common.terminal.fileTreeOpFailed', { message: errorMessage(error) }))
+    }
+  } finally {
+    expandedKeys.value = [...expandedSet]
+    treeKey.value += 1
+  }
+}
+
+/** 把 expandedSet 里 oldPrefix 自身/子孙的键整体改到 newPrefix 下 */
+function remapExpandedPrefix(oldPrefix: string, newPrefix: string): void {
+  const separator = oldPrefix.includes('\\') ? '\\' : '/'
+  for (const key of [...expandedSet]) {
+    if (key !== oldPrefix && !key.startsWith(oldPrefix + separator)) continue
+    expandedSet.delete(key)
+    expandedSet.add(newPrefix + key.slice(oldPrefix.length))
+  }
+}
+
+/** 拖出应用的临时缓存:远端路径 → 已就绪的本地临时文件 */
+const dragOutCache = new Map<string, string>()
+/** 正在下载到临时缓存的路径(防重入) */
+const dragOutPreparing = new Set<string>()
+/** 上次拖出未遂后武装的路径:下一次 dragstart 直接由主进程 startDrag 原生拖出 */
+let armedDragOutPath: string | null = null
+let armedTimer: ReturnType<typeof setTimeout> | undefined
+/** 武装有效期:超时后该条目下一次拖拽恢复为普通应用内拖拽 */
+const DRAG_OUT_ARM_MS = 60_000
+
+function onNodeDragStart(node: TreeDragNode, event: DragEvent): void {
+  const entry = node.data
+  const cached = dragOutCache.get(entry.path)
+  // 上次拖出未遂后再次拖拽:取消 HTML5 拖拽,改由主进程 startDrag 发起系统级拖拽
+  // (startDrag 依赖当前鼠标按住状态,dragstart 时机必然满足)
+  if (armedDragOutPath === entry.path && cached) {
+    disarmDragOut()
+    event.preventDefault()
+    window.ipcRenderer.send('terminal-file-tree-start-drag', { path: cached })
+    return
+  }
+  disarmDragOut()
+  treeDragging.value = true
+  const payload: FileTreeDragPayload = {
+    sessionId: props.sessionId,
+    path: entry.path,
+    name: entry.name,
+    directory: entry.directory,
+  }
+  beginFileTreeDrag(payload)
+  if (event.dataTransfer) {
+    // 树内落点是移动、拖到终端窗格是插入(copy),两种 dropEffect 都放行
+    event.dataTransfer.effectAllowed = 'copyMove'
+    event.dataTransfer.setData(FILE_TREE_DRAG_MIME, JSON.stringify(payload))
+  }
+}
+
+function onNodeDragEnd(
+  _draggingNode: TreeDragNode,
+  _dropNode: TreeDragNode | null,
+  _dropType: string,
+  event: DragEvent,
+): void {
+  treeDragging.value = false
+  const gesture = endFileTreeDrag()
+  if (!gesture || gesture.handledInApp) return
+  // 窗口内无效落点(不允许的节点等)不触发;dragend 坐标越出窗口才算拖出应用
+  if (!isOutsideWindow(event.clientX, event.clientY, window.innerWidth, window.innerHeight)) return
+  void handleDragOut(gesture.payload)
+}
+
+/** 拖出应用:远端文件先下载到系统临时目录(状态栏有进度),就绪后武装并提示再拖一次 */
+async function handleDragOut(payload: FileTreeDragPayload): Promise<void> {
+  if (dragOutCache.has(payload.path)) {
+    armDragOut(payload.path)
+    ElMessage.success(t('common.terminal.fileTreeDragOutReady', { name: payload.name }))
+    return
+  }
+  if (dragOutPreparing.has(payload.path)) return
+  dragOutPreparing.add(payload.path)
+  emit('download-start', payload.name)
+  try {
+    const localPath = (await window.ipcRenderer.invoke('terminal-file-tree-drag-temp-path', {
+      sessionId: payload.sessionId,
+      name: payload.name,
+    })) as string
+    await window.ipcRenderer.invoke('terminal-session-download', {
+      sessionId: payload.sessionId,
+      sessionPath: payload.path,
+      localPath,
+    })
+    dragOutCache.set(payload.path, localPath)
+    emit('download-settle', true)
+    armDragOut(payload.path)
+    ElMessage.success(t('common.terminal.fileTreeDragOutReady', { name: payload.name }))
+  } catch (error) {
+    emit('download-settle', false, errorMessage(error))
+    ElMessage.error(t('common.terminal.fileTreeOpFailed', { message: errorMessage(error) }))
+  } finally {
+    dragOutPreparing.delete(payload.path)
+  }
+}
+
+function armDragOut(path: string): void {
+  armedDragOutPath = path
+  if (armedTimer) clearTimeout(armedTimer)
+  armedTimer = setTimeout(() => {
+    armedDragOutPath = null
+    armedTimer = undefined
+  }, DRAG_OUT_ARM_MS)
+}
+
+function disarmDragOut(): void {
+  armedDragOutPath = null
+  if (armedTimer) {
+    clearTimeout(armedTimer)
+    armedTimer = undefined
+  }
+}
+
+onBeforeUnmount(() => disarmDragOut())
+
 type FileTreeNode = SftpEntry & { isLeaf: boolean }
 
 interface LazyNode {
@@ -298,5 +493,14 @@ watch(
 }
 .terminal-file-tree__delete-item {
   color: var(--el-color-error);
+}
+/* 拖拽态:品牌蓝高亮可落入的目标目录(el-tree 给 inner 目标节点加 is-drop-inner) */
+.terminal-file-tree__tree--dragging :deep(.el-tree-node__content) {
+  transition: background 0.12s ease;
+}
+.terminal-file-tree :deep(.el-tree-node.is-drop-inner) > .el-tree-node__content {
+  background: color-mix(in srgb, var(--el-color-primary) 16%, transparent);
+  box-shadow: inset 0 0 0 1px var(--el-color-primary);
+  border-radius: 6px;
 }
 </style>

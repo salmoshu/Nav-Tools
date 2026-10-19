@@ -385,6 +385,11 @@ export default {
     fileTreeDeleteDirectoryConfirm: '确定删除目录 {name} 吗？其中的全部内容都会被递归删除，且不可撤销。',
     fileTreeDeleteDone: '已删除：{name}',
     fileTreeOpFailed: '操作失败：{message}',
+    fileTreeMove: '移动',
+    fileTreeMoveDone: '已移动：{name}',
+    fileTreeMoveOverwriteConfirm:
+      '目标目录中已存在同名条目「{name}」。覆盖将先删除现有内容且不可撤销，确定继续吗？',
+    fileTreeDragOutReady: '已就绪：再次拖拽「{name}」即可拖出到资源管理器',
     openPresets: '打开预设命令面板',
     presetPanel: '预设命令',
     presetAdd: '新增预设',

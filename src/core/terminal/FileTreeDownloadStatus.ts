@@ -182,3 +182,37 @@ export function formatTransferPair(transferred: number, total: number): Transfer
     unit: scale.unit,
   }
 }
+
+/** 进度环半径:viewBox 16×16、线宽 2 时恰好内接(r 6.5 + stroke/2 = 7.5 ≤ 8) */
+export const FILE_TREE_RING_RADIUS = 6.5
+
+/** 进度环周长:弧长/缺口换算的基准 */
+export function fileTreeRingCircumference(radius: number = FILE_TREE_RING_RADIUS): number {
+  return 2 * Math.PI * radius
+}
+
+/**
+ * 进度弧的 stroke-dasharray:`<弧长> <周长>`(缺口从弧尾顺延到一整圈)。
+ * percent 为 null(总量未知)时返回 null,UI 改用不定态开口弧;百分比钳制在 0-100。
+ */
+export function fileTreeRingDasharray(
+  percent: number | null,
+  radius: number = FILE_TREE_RING_RADIUS,
+): string | null {
+  if (percent === null) return null
+  const clamped = Math.min(100, Math.max(0, percent))
+  const circumference = fileTreeRingCircumference(radius)
+  return `${((clamped / 100) * circumference).toFixed(2)} ${circumference.toFixed(2)}`
+}
+
+/** 不定态(总量未知)开口弧:固定 1/4 弧长,由 CSS 动画整体旋转 */
+export function fileTreeRingIndeterminateDasharray(radius: number = FILE_TREE_RING_RADIUS): string {
+  const circumference = fileTreeRingCircumference(radius)
+  return `${(circumference / 4).toFixed(2)} ${((circumference * 3) / 4).toFixed(2)}`
+}
+
+/** transferred/total 的紧凑展示:'12.3/100.0 MB'(斜杠两侧无空格,状态栏宽度更稳定) */
+export function formatTransferPairText(pair: TransferBytesPair): string {
+  return `${pair.transferred}/${pair.total} ${pair.unit}`
+}
+
