@@ -542,7 +542,7 @@ async function openCardWindow(
   },
   originWebContentsId?: number,
 ): Promise<number> {
-  // 组件角标图标缓存存在时直接作为窗口图标（任务栏/Alt+Tab）；
+  // 组件合成图标缓存存在时直接作为窗口图标（任务栏/Alt+Tab）；
   // 缓存由独立窗口渲染端合成后回写（见 set-component-window-icon）
   const cachedIcon = cardData.windowId ? componentWindowIconPath(cardData.windowId) : undefined
   const cardWindow = new BrowserWindow({
@@ -611,11 +611,11 @@ ipcMain.handle('open-card-window', async (event, serializedData) => {
   return openCardWindow(cardData, event.sender.id)
 })
 
-// ---- 组件独立窗口图标:渲染端合成「主图标+角标」PNG 回传,主进程 setIcon 并缓存 ----
+// ---- 组件独立窗口图标:渲染端合成「组件主体+logo角标」PNG 回传,主进程 setIcon 并缓存 ----
 
 /** 角标 PNG 缓存路径（与快捷方式 ICO 同目录,供下次开窗口/冷启动直接读取） */
 function componentWindowIconPath(windowId: string): string {
-  return path.join(app.getPath('userData'), 'shortcuts', `${windowId}-badge2.png`)
+  return path.join(app.getPath('userData'), 'shortcuts', `${windowId}-badge3.png`)
 }
 
 ipcMain.handle('set-component-window-icon', async (event, request: { dataUrl?: string }) => {

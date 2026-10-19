@@ -69,7 +69,7 @@ export function sanitizeShortcutName(name: string, panelId: string): string {
 
 /**
  * 创建组件快捷方式:.lnk 指向当前可执行文件,带 --open-component 启动参数,
- * 图标用渲染端合成的「主图标 + 组件角标」ICO(存 userData,同名覆盖)。
+ * 图标用渲染端合成的「组件主体 + logo角标」ICO(存 userData,同名覆盖)。
  * 保存位置由调用方给出(通常来自保存对话框,默认桌面)。
  */
 export async function createDesktopShortcut(
@@ -83,9 +83,9 @@ export async function createDesktopShortcut(
     : `${options.shortcutPath}.lnk`
 
   try {
-    // 文件名带样式版本：角标样式升级后同名旧 ICO 会被 Windows 图标缓存拖累，
+    // 文件名带样式版本：图标构图升级后同名旧 ICO 会被 Windows 图标缓存拖累，
     // 换新文件名让重新创建的快捷方式立刻拿到新图标
-    const icoPath = path.join(options.userDataPath, 'shortcuts', `${panel.id}-badge2.ico`)
+    const icoPath = path.join(options.userDataPath, 'shortcuts', `${panel.id}-badge3.ico`)
     await writeIcoFromPngDataUrl(request.iconDataUrl, icoPath)
 
     // PowerShell 的 WScript.Shell COM 是 Windows 建快捷方式的标准途径;

@@ -1,7 +1,7 @@
 <template>
   <header class="app-header">
     <div class="brand">
-      <img src="/logo.svg" alt="" class="brand-logo" />
+      <img :src="brandIconUrl || '/logo.svg'" alt="" class="brand-logo" />
       <span class="brand-copy">
         <span class="brand-name">{{ brandTitle || 'Nav-Tools' }}</span>
         <span v-if="version" class="brand-version">V{{ version }}</span>
@@ -167,6 +167,8 @@ import { t } from '@/i18n'
 
 defineProps<{
   brandTitle?: string
+  /** 品牌位图标 URL:缺省用应用 logo;组件独立窗口传入「组件主体+logo角标」合成图标 */
+  brandIconUrl?: string
   contextTitle?: string
   contextPanelTitle?: string
   contextIconAction?: string

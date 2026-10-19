@@ -72,7 +72,7 @@ onMounted(async () => {
     if (cardWindowId.value) {
       const definition = getWindowById(cardWindowId.value)
       if (definition) document.title = t(definition.title)
-      // 组件独立窗口的任务栏/Alt+Tab 图标换成「主图标+组件角标」，
+      // 组件独立窗口的任务栏/Alt+Tab 图标换成「组件主体+logo角标」合成图标，
       // 主进程同时缓存 PNG 供下次开窗口（含快捷方式冷启动）直接使用
       void buildComponentIconDataUrl(cardWindowId.value)
         .then((dataUrl) =>

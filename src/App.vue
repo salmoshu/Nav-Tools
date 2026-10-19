@@ -13,7 +13,10 @@ import emitter from '@/hooks/useMitt'
 import { useApplicationSelector } from '@/composables/useApplicationSelector'
 import { useLocale } from '@/composables/useLocale'
 import { getWindowsByIds } from '@/settings/config'
-import { createComponentDesktopShortcut } from '@/core/panels/componentIcon'
+import {
+  buildComponentIconDataUrl,
+  createComponentDesktopShortcut,
+} from '@/core/panels/componentIcon'
 import { ElMessage } from 'element-plus'
 import { t } from '@/i18n'
 import { TERMINAL_EVENT_BUS_KEY, type TerminalEventBus } from '@/core/terminal/TerminalEventBus'
@@ -70,6 +73,22 @@ const contextTitle = computed(() => {
 
 const panelTitleFallback = computed(() => t('app.panel'))
 
+/** 独立组件窗口标题栏品牌位图标:与任务栏/桌面快捷方式同一合成图标(组件主体+logo角标) */
+const cardWindowIconUrl = ref<string>()
+
+async function resolveCardWindowIcon(): Promise<void> {
+  if (!isCardWindow.value) return
+  try {
+    const payload = JSON.parse(
+      decodeURIComponent(window.location.hash.slice('#card/'.length)),
+    ) as { windowId?: unknown }
+    if (typeof payload.windowId !== 'string' || !payload.windowId) return
+    cardWindowIconUrl.value = await buildComponentIconDataUrl(payload.windowId)
+  } catch {
+    /* 合成失败时标题栏回退默认应用 logo */
+  }
+}
+
 const openApplicationSelector = () => emitter.emit('open-application-selector')
 const openSettings = () => {
   settingsOpen.value = true
@@ -112,6 +131,7 @@ const handleFullscreenPanelChange = (panel?: FullscreenPanelContext) => {
 
 onMounted(() => {
   emitter.on('open-settings', openSettings)
+  void resolveCardWindowIcon()
 })
 
 onUnmounted(() => {
@@ -125,6 +145,7 @@ onUnmounted(() => {
       <WindowResizeHandles v-if="!maximized" />
       <AppHeader
         :brand-title="isCardWindow ? contextTitle : 'Nav-Tools'"
+        :brand-icon-url="isCardWindow ? cardWindowIconUrl : undefined"
         :context-title="isCardWindow ? undefined : contextTitle"
         :context-panel-title="fullscreenPanel?.title"
         :context-icon-action="fullscreenPanel?.action"

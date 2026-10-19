@@ -6,7 +6,7 @@ import { getPanelById, type PanelCatalogGroup } from '@/core/panels/registry'
 /**
  * 面板 action 没有专属图标时的借用表（同一查找链：先 toolBarIcon 内联 SVG，
  * 后 applicationIconComponents 的 element-plus 图标）。保证每个组件都有
- * 与其特性相关的角标图形，而不是退化成纯应用 logo。
+ * 与其特性相关的专属图形，而不是退化成纯应用 logo。
  */
 const ACTION_BADGE_FALLBACK: Record<string, string> = {
   terminal: 'monitor',
@@ -21,7 +21,7 @@ const ACTION_BADGE_FALLBACK: Record<string, string> = {
   'gnssraw-eph': 'compass',
 }
 
-/** 角标配色按组件所属应用分组（registry 的 catalogGroup），桌面上一眼区分应用家族 */
+/** 组件图形与角标描边配色按组件所属应用分组（registry 的 catalogGroup），桌面上一眼区分应用家族 */
 const GROUP_BADGE_COLORS: Record<PanelCatalogGroup, string> = {
   general: '#475569',
   flow: '#475569',
@@ -47,7 +47,7 @@ function lookupIconSvg(key: string): string | undefined {
   )
 }
 
-/** 面板 action → 角标 SVG：专属图标优先，缺失时按 ACTION_BADGE_FALLBACK 借用 */
+/** 面板 action → 组件图形 SVG（合成图标的主体）：专属图标优先，缺失时按 ACTION_BADGE_FALLBACK 借用 */
 export function componentBadgeSvg(action: string): string | undefined {
   const direct = lookupIconSvg(action)
   if (direct) return direct
@@ -93,9 +93,10 @@ export function recolorSvg(svg: string, color: string): string {
 }
 
 /**
- * 合成桌面快捷方式图标:Nav-Tools 主图标为底,右下角叠加组件角标
- * (白底圆 + 组色描边 + 组色组件图形),输出 256px PNG data URL,
- * 由主进程封装成 .ico 供 .lnk 使用。
+ * 合成组件图标:组件元素图标为主体(组色单色素描,居中撑满画面),
+ * Nav-Tools logo 缩为右下角角标(白底圆 + 组色描边),输出 256px PNG
+ * data URL。桌面快捷方式由主进程封装成 .ico 供 .lnk 使用;组件独立
+ * 窗口的标题栏/任务栏图标也复用同一合成结果。
  */
 export async function buildComponentIconDataUrl(windowId: string): Promise<string> {
   const size = 256
@@ -109,21 +110,45 @@ export async function buildComponentIconDataUrl(windowId: string): Promise<strin
   const panel = getPanelById(windowId)
   const color = GROUP_BADGE_COLORS[panel?.catalogGroup ?? 'general'] ?? GROUP_BADGE_COLORS.general
   const svg = definition ? componentBadgeSvg(definition.action) : undefined
+  const logoUrl = new URL('logo_transparent.png', document.baseURI).href
 
-  // 底图:应用 logo;加载失败也要给出角标版图标
-  try {
-    const logo = await loadImage(new URL('logo_transparent.png', document.baseURI).href)
-    context.drawImage(logo, 0, 0, size, size)
-  } catch {
-    context.fillStyle = '#1f6feb'
-    context.fillRect(0, 0, size, size)
+  // 主体:组件元素图标(单色素描化为组色)居中撑满;无专属图形或绘制
+  // 失败时退化为应用 logo 整图,此时右下角角标冗余,不再叠加
+  let mainIsLogo = true
+  if (svg) {
+    try {
+      const icon = await loadImage(
+        `data:image/svg+xml;charset=utf-8,${encodeURIComponent(recolorSvg(svg, color))}`,
+      )
+      // svg 自带 16/24px 尺寸,统一按目标框缩放绘制;轻微投影让图形在深浅壁纸上都能分离
+      const mainSize = 176
+      context.save()
+      context.shadowColor = 'rgba(0, 0, 0, 0.35)'
+      context.shadowBlur = 6
+      context.shadowOffsetY = 2
+      context.drawImage(icon, (size - mainSize) / 2, (size - mainSize) / 2, mainSize, mainSize)
+      context.restore()
+      mainIsLogo = false
+    } catch {
+      mainIsLogo = true
+    }
+  }
+  if (mainIsLogo) {
+    // 退化底图:应用 logo;加载失败也要给出底色版图标
+    try {
+      const logo = await loadImage(logoUrl)
+      context.drawImage(logo, 0, 0, size, size)
+    } catch {
+      context.fillStyle = '#1f6feb'
+      context.fillRect(0, 0, size, size)
+    }
   }
 
-  if (svg) {
-    // 角标为主图标的一半直径,贴右下角,主图标辨识度优先
+  if (!mainIsLogo) {
+    // 角标沿用旧构图的几何:半径 41 贴右下角,白底圆 + 组色描边 + 轻微
+    // 投影;透明底 logo 落在白圆上,深浅壁纸/深浅主题下都可辨
     const badgeRadius = 41
     const center = size - badgeRadius - 6
-    // 角标圆:白底 + 组色描边 + 轻微投影,在深浅壁纸上都可辨
     context.save()
     context.shadowColor = 'rgba(0, 0, 0, 0.35)'
     context.shadowBlur = 4
@@ -139,20 +164,15 @@ export async function buildComponentIconDataUrl(windowId: string): Promise<strin
     context.strokeStyle = color
     context.stroke()
     try {
-      const icon = await loadImage(
-        `data:image/svg+xml;charset=utf-8,${encodeURIComponent(recolorSvg(svg, color))}`,
-      )
-      // svg 自带 16/24px 尺寸,统一按目标框缩放绘制
-      const iconSize = 48
-      context.drawImage(icon, center - iconSize / 2, center - iconSize / 2, iconSize, iconSize)
+      const logo = await loadImage(logoUrl)
+      const logoSize = 52
+      context.drawImage(logo, center - logoSize / 2, center - logoSize / 2, logoSize, logoSize)
     } catch {
-      // 组件图标绘制失败时退化为角标内绘制组件名首字符,快捷方式仍可辨识
-      const label = (definition?.componentName ?? 'N').slice(0, 1).toUpperCase()
+      // logo 加载失败时角标内画组色圆点,图标仍可辨识归属应用家族
+      context.beginPath()
+      context.arc(center, center, 12, 0, Math.PI * 2)
       context.fillStyle = color
-      context.font = 'bold 32px sans-serif'
-      context.textAlign = 'center'
-      context.textBaseline = 'middle'
-      context.fillText(label, center, center + 2)
+      context.fill()
     }
   }
 
