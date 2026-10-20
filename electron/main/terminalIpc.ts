@@ -189,7 +189,8 @@ export function registerTerminalIpc(
   })
 
   // 文件树拖出应用:远端文件先下载到系统临时目录,再经 webContents.startDrag 发起系统级拖拽。
-  // startDrag 依赖调用时鼠标仍处于按住状态;渲染层在缓存未就绪时先下载、提示「再拖一次」。
+  // startDrag 依赖调用时鼠标仍处于按住状态;渲染层的指针手势在出窗后异步下载,
+  // 下载完成时按键仍按住即同一手势移交 OLE;已松开则武装缓存、提示「再拖一次」兜底。
   const dragTempRoot = () => path.join(app.getPath('temp'), 'navtools-drag')
   // 启动时清掉上次运行的拖出缓存,避免把过期内容拖出去
   void fs.rm(dragTempRoot(), { recursive: true, force: true }).catch(() => undefined)

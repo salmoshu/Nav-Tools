@@ -31,6 +31,13 @@ body,
   height: 100%;
 }
 
+/* 文件树指针拖拽手势期间全局禁用文本选择(拖拽幽灵已跟随光标) */
+body.file-tree-dragging,
+body.file-tree-dragging * {
+  user-select: none !important;
+  -webkit-user-select: none !important;
+}
+
 body {
   min-width: 320px;
   min-height: 100vh;

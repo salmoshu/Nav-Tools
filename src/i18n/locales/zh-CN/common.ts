@@ -392,6 +392,8 @@ export default {
     fileTreeMoveOverwriteConfirm:
       '目标目录中已存在同名条目「{name}」。覆盖将先删除现有内容且不可撤销，确定继续吗？',
     fileTreeDragOutReady: '已就绪：再次拖拽「{name}」即可拖出到资源管理器',
+    fileTreeDragPreparing: '正在准备拖出…',
+    fileTreeDragOutCached: '缓存已就绪：拖出窗口即可放下',
     openPresets: '打开预设命令面板',
     presetPanel: '预设命令',
     presetAdd: '新增预设',

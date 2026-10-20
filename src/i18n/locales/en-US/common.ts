@@ -396,6 +396,8 @@ export default {
     fileTreeMoveOverwriteConfirm:
       '"{name}" already exists in the target folder. Overwriting deletes the existing item first and cannot be undone. Continue?',
     fileTreeDragOutReady: 'Ready: drag "{name}" again to drop it into File Explorer',
+    fileTreeDragPreparing: 'Preparing drag-out…',
+    fileTreeDragOutCached: 'Cached: drag out of the window to drop',
     openPresets: 'Open preset commands panel',
     presetPanel: 'Preset Commands',
     presetAdd: 'New Preset',

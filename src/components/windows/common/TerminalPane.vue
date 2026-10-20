@@ -1,13 +1,10 @@
 <template>
   <div
+    ref="paneRootElement"
     class="terminal-pane"
-    :class="{ focused, 'file-tree-drop-target': fileTreeDropHover }"
+    :class="{ focused }"
     @pointerdown="focusPane"
     @keydown="handlePaneKeydown"
-    @dragenter="onFileTreeDragEnter"
-    @dragover="onFileTreeDragOver"
-    @dragleave="onFileTreeDragLeave"
-    @drop="onFileTreeDrop"
   >
     <header class="pane-header">
       <div
@@ -383,8 +380,8 @@ import { SearchAddon } from '@xterm/addon-search'
 import '@xterm/xterm/css/xterm.css'
 import { CommandBlockAssembler, type TerminalCommandBlock } from '@/core/terminal/CommandBlocks'
 import {
-  FILE_TREE_DRAG_MIME,
-  markFileTreeDragHandled,
+  registerFileTreePaneTarget,
+  unregisterFileTreePaneTarget,
   type FileTreeDragPayload,
 } from '@/core/terminal/FileTreeDrag'
 import { quoteShellArg, shellFamilyFor, type ShellFamily } from '@/core/terminal/ShellQuote'
@@ -545,51 +542,18 @@ function rerunCommand(command: string): void {
 }
 
 /**
- * 文件树节点拖入窗格:把远端路径按本窗格 shell 家族转义后写进会话输入(不附回车)。
- * 只认文件树自定义 MIME;系统文件拖入等其它拖拽一律不接管。
+ * 文件树节点拖入窗格:自定义指针手势命中本窗格后,松手由树侧回调 insert,
+ * 把远端路径按本窗格 shell 家族转义后写进会话输入(不附回车)。
+ * 窗格挂载时注册为落点;命中高亮由手势侧切换 file-tree-drop-target 类。
  */
-const fileTreeDropDepth = ref(0)
-const fileTreeDropHover = computed(() => fileTreeDropDepth.value > 0)
+const paneRootElement = ref<HTMLElement | null>(null)
 
-function isFileTreeDrag(event: DragEvent): boolean {
-  return Boolean(props.pane.sessionId && event.dataTransfer?.types.includes(FILE_TREE_DRAG_MIME))
-}
-
-function onFileTreeDragEnter(event: DragEvent): void {
-  if (!isFileTreeDrag(event)) return
-  fileTreeDropDepth.value += 1
-}
-
-function onFileTreeDragOver(event: DragEvent): void {
-  if (!isFileTreeDrag(event)) return
-  event.preventDefault()
-  if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy'
-}
-
-function onFileTreeDragLeave(event: DragEvent): void {
-  if (!event.dataTransfer?.types.includes(FILE_TREE_DRAG_MIME)) return
-  // relatedTarget 为空 = 拖出窗格(或窗口),直接复位,避免计数泄漏导致高亮卡死
-  fileTreeDropDepth.value =
-    event.relatedTarget === null ? 0 : Math.max(0, fileTreeDropDepth.value - 1)
-}
-
-function onFileTreeDrop(event: DragEvent): void {
-  fileTreeDropDepth.value = 0
-  if (!isFileTreeDrag(event)) return
-  const raw = event.dataTransfer?.getData(FILE_TREE_DRAG_MIME)
-  if (!raw) return
-  event.preventDefault()
-  let payload: FileTreeDragPayload
-  try {
-    payload = JSON.parse(raw) as FileTreeDragPayload
-  } catch {
-    return
-  }
-  // 拖进窗格即视为已处理,不再触发「拖出应用」的兜底下载
-  markFileTreeDragHandled()
+function insertFileTreePath(payload: FileTreeDragPayload): void {
+  const sessionId = props.pane.sessionId
+  if (!sessionId) return
   const data = quoteShellArg(payload.path, shellFamily.value)
   void window.ipcRenderer
-    .invoke('terminal-session-write', { sessionId: props.pane.sessionId, data })
+    .invoke('terminal-session-write', { sessionId, data })
     .catch(() => undefined)
 }
 
@@ -1104,6 +1068,14 @@ watch(isGui, async (gui) => {
   if (props.focused) terminal?.focus()
 })
 onMounted(() => {
+  // 文件树指针拖拽的落点注册:命中判定与高亮由手势侧(FileTreeDrag)驱动
+  if (paneRootElement.value) {
+    registerFileTreePaneTarget({
+      paneId: props.pane.id,
+      element: paneRootElement.value,
+      insert: insertFileTreePath,
+    })
+  }
   const rootStyle = getComputedStyle(document.documentElement)
   terminal = new Terminal({
     cursorBlink: true,
@@ -1177,6 +1149,7 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  unregisterFileTreePaneTarget(props.pane.id)
   window.ipcRenderer?.off('terminal-output', handleOutput)
   terminalEventBus.off(TERMINAL_SSH_RECOVERED_EVENT, handleSshRecovered)
   cancelConnection()

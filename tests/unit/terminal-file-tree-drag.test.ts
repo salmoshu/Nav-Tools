@@ -4,16 +4,25 @@ import os from 'node:os'
 import path from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import {
-  FILE_TREE_DRAG_MIME,
-  beginFileTreeDrag,
+  activateFileTreeDrag,
+  beginFileTreePointerDrag,
   canDropFileTreeNode,
-  endFileTreeDrag,
+  completeFileTreeDragOutPrep,
+  enterFileTreeDragOutPrep,
+  exitFileTreeDragOutPrep,
+  fileTreeDragExceededThreshold,
+  FILE_TREE_DRAG_THRESHOLD_PX,
+  finishFileTreeGesture,
+  isFileTreePointerOutside,
   isNoopFileTreeMove,
-  isOutsideWindow,
   isSelfOrDescendant,
   joinFileTreePath,
-  markFileTreeDragHandled,
+  resolveFileTreeHitTarget,
   sanitizeDragTempName,
+  setFileTreeGestureHover,
+  trackFileTreePointer,
+  type FileTreeDragPayload,
+  type FileTreePointerGesture,
 } from '../../src/core/terminal/FileTreeDrag'
 
 vi.mock('electron', () => ({
@@ -45,7 +54,7 @@ describe('isSelfOrDescendant', () => {
   })
 })
 
-describe('canDropFileTreeNode(el-tree allow-drop 规则)', () => {
+describe('canDropFileTreeNode(树内落点规则)', () => {
   const dir = (p: string) => ({ path: p, directory: true })
   const file = (p: string) => ({ path: p, directory: false })
 
@@ -79,29 +88,154 @@ describe('sanitizeDragTempName', () => {
   })
 })
 
-describe('isOutsideWindow', () => {
-  it('dragend 坐标越出窗口才算拖出应用', () => {
-    expect(isOutsideWindow(-1, 100, 1000, 700)).toBe(true)
-    expect(isOutsideWindow(100, 701, 1000, 700)).toBe(true)
-    expect(isOutsideWindow(1001, 100, 1000, 700)).toBe(true)
-    expect(isOutsideWindow(100, 100, 1000, 700)).toBe(false)
-    expect(isOutsideWindow(1000, 700, 1000, 700)).toBe(false)
+describe('isFileTreePointerOutside', () => {
+  it('指针坐标越出窗口即判定拖出应用', () => {
+    expect(isFileTreePointerOutside(-1, 100, 1000, 700)).toBe(true)
+    expect(isFileTreePointerOutside(100, 701, 1000, 700)).toBe(true)
+    expect(isFileTreePointerOutside(1001, 100, 1000, 700)).toBe(true)
+    expect(isFileTreePointerOutside(100, 100, 1000, 700)).toBe(false)
+    expect(isFileTreePointerOutside(1000, 700, 1000, 700)).toBe(false)
   })
 })
 
-describe('跨组件拖拽手势状态', () => {
-  it('begin/mark/end 闭环,end 后状态清空', () => {
-    const gesture = beginFileTreeDrag({
-      sessionId: 's1',
-      path: '/a',
-      name: 'a',
-      directory: false,
+const payload: FileTreeDragPayload = {
+  sessionId: 's1',
+  path: '/a/f.txt',
+  name: 'f.txt',
+  directory: false,
+}
+
+function newGesture(): FileTreePointerGesture {
+  return beginFileTreePointerDrag(payload, 1, 100, 100)
+}
+
+describe('指针拖拽手势:激活阈值', () => {
+  it('begin 后是 pending;阈值内移动不激活,松手结论是 click(点击行为不受影响)', () => {
+    const g = newGesture()
+    expect(g.phase).toBe('pending')
+    trackFileTreePointer(g, 100 + FILE_TREE_DRAG_THRESHOLD_PX, 100)
+    expect(fileTreeDragExceededThreshold(g)).toBe(false)
+    expect(activateFileTreeDrag(g)).toBe(false)
+    expect(g.phase).toBe('pending')
+    expect(finishFileTreeGesture(g)).toEqual({ kind: 'click' })
+  })
+
+  it('位移超过阈值激活为 dragging;重复激活返回 false', () => {
+    const g = newGesture()
+    trackFileTreePointer(g, 100 + FILE_TREE_DRAG_THRESHOLD_PX + 1, 100)
+    expect(activateFileTreeDrag(g)).toBe(true)
+    expect(g.phase).toBe('dragging')
+    expect(activateFileTreeDrag(g)).toBe(false)
+  })
+})
+
+describe('resolveFileTreeHitTarget(命中判定规则)', () => {
+  it('窗口外优先于一切应用内落点', () => {
+    expect(
+      resolveFileTreeHitTarget({
+        insideWindow: false,
+        paneId: 'p1',
+        treeDir: { path: '/b', directory: true },
+        draggingPath: '/a/f.txt',
+      }),
+    ).toEqual({ kind: 'outside' })
+  })
+
+  it('窗格优先于树内目录', () => {
+    expect(
+      resolveFileTreeHitTarget({
+        insideWindow: true,
+        paneId: 'p1',
+        treeDir: { path: '/b', directory: true },
+        draggingPath: '/a/f.txt',
+      }),
+    ).toEqual({ kind: 'pane', paneId: 'p1' })
+  })
+
+  it('树内目录命中要过落点规则:文件/自身/子孙都归为 none', () => {
+    expect(
+      resolveFileTreeHitTarget({
+        insideWindow: true,
+        treeDir: { path: '/b', directory: true },
+        draggingPath: '/a/f.txt',
+      }),
+    ).toEqual({ kind: 'tree-dir', path: '/b' })
+    expect(
+      resolveFileTreeHitTarget({
+        insideWindow: true,
+        treeDir: { path: '/b/g.txt', directory: false },
+        draggingPath: '/a/f.txt',
+      }),
+    ).toEqual({ kind: 'none' })
+    expect(
+      resolveFileTreeHitTarget({
+        insideWindow: true,
+        treeDir: { path: '/a/d/sub', directory: true },
+        draggingPath: '/a/d',
+      }),
+    ).toEqual({ kind: 'none' })
+  })
+})
+
+describe('指针拖拽手势:出窗准备与移交', () => {
+  it('dragging 出窗 → preparing;回窗恢复 dragging;preparing 完成 → external', () => {
+    const g = newGesture()
+    trackFileTreePointer(g, 200, 100)
+    activateFileTreeDrag(g)
+
+    expect(enterFileTreeDragOutPrep(g)).toBe(true)
+    expect(g.phase).toBe('preparing')
+    // 重复出窗不重入
+    expect(enterFileTreeDragOutPrep(g)).toBe(false)
+
+    expect(exitFileTreeDragOutPrep(g)).toBe(true)
+    expect(g.phase).toBe('dragging')
+
+    expect(enterFileTreeDragOutPrep(g)).toBe(true)
+    expect(completeFileTreeDragOutPrep(g)).toBe(true)
+    expect(g.phase).toBe('external')
+    // external 后松手结论是 noop:系统已接管
+    expect(finishFileTreeGesture(g)).toEqual({ kind: 'noop' })
+  })
+
+  it('pending 不能直接进入 preparing;dragging 不能跳到 external', () => {
+    const g = newGesture()
+    expect(enterFileTreeDragOutPrep(g)).toBe(false)
+    expect(completeFileTreeDragOutPrep(g)).toBe(false)
+    trackFileTreePointer(g, 200, 100)
+    activateFileTreeDrag(g)
+    expect(completeFileTreeDragOutPrep(g)).toBe(false)
+  })
+})
+
+describe('finishFileTreeGesture(松手结论)', () => {
+  function draggingGesture(hover: Parameters<typeof setFileTreeGestureHover>[1]): FileTreePointerGesture {
+    const g = newGesture()
+    trackFileTreePointer(g, 200, 100)
+    activateFileTreeDrag(g)
+    setFileTreeGestureHover(g, hover)
+    return g
+  }
+
+  it('树内目录落点 → move;窗格落点 → insert-path', () => {
+    expect(finishFileTreeGesture(draggingGesture({ kind: 'tree-dir', path: '/b' }))).toEqual({
+      kind: 'move',
+      targetDirPath: '/b',
     })
-    expect(gesture.handledInApp).toBe(false)
-    markFileTreeDragHandled()
-    expect(gesture.handledInApp).toBe(true)
-    expect(endFileTreeDrag()).toBe(gesture)
-    expect(endFileTreeDrag()).toBeNull()
+    expect(finishFileTreeGesture(draggingGesture({ kind: 'pane', paneId: 'p1' }))).toEqual({
+      kind: 'insert-path',
+      paneId: 'p1',
+    })
+  })
+
+  it('无效落点 → noop;出窗松手(未就绪) → arm-drag-out 降级', () => {
+    expect(finishFileTreeGesture(draggingGesture({ kind: 'none' }))).toEqual({ kind: 'noop' })
+    expect(finishFileTreeGesture(draggingGesture({ kind: 'outside' }))).toEqual({
+      kind: 'arm-drag-out',
+    })
+    const g = draggingGesture({ kind: 'outside' })
+    enterFileTreeDragOutPrep(g)
+    expect(finishFileTreeGesture(g)).toEqual({ kind: 'arm-drag-out' })
   })
 })
 
@@ -135,20 +269,28 @@ describe('文件树拖拽接线(源码扫描)', () => {
   const treeSource = readFileSync(
     'src/components/windows/common/TerminalFileTree.vue',
     'utf8',
-  ).replace(/\\r\\n/g, '\\n')
+  ).replace(/\r\n/g, '\n')
   const paneSource = readFileSync(
     'src/components/windows/common/TerminalPane.vue',
     'utf8',
-  ).replace(/\\r\\n/g, '\\n')
-  const ipcSource = readFileSync('electron/main/terminalIpc.ts', 'utf8').replace(/\\r\\n/g, '\\n')
+  ).replace(/\r\n/g, '\n')
+  const ipcSource = readFileSync('electron/main/terminalIpc.ts', 'utf8').replace(/\r\n/g, '\n')
 
-  it('el-tree 开启 draggable 并接 allow-drop/node-drop/drag 事件', () => {
-    expect(treeSource).toContain('draggable')
-    expect(treeSource).toContain(':allow-drop="allowTreeDrop"')
-    expect(treeSource).toContain('@node-drop="onNodeDrop"')
-    expect(treeSource).toContain('@node-drag-start="onNodeDragStart"')
-    expect(treeSource).toContain('@node-drag-end="onNodeDragEnd"')
-    expect(treeSource).toContain('canDropFileTreeNode')
+  it('树改为自实现指针拖拽:不再用 el-tree draggable,改为 pointer 事件 + 命中判定', () => {
+    expect(treeSource).not.toContain('draggable')
+    expect(treeSource).not.toContain('allow-drop')
+    expect(treeSource).not.toContain('@node-drop')
+    expect(treeSource).toContain('@pointerdown="onTreePointerDown"')
+    expect(treeSource).toContain('@pointermove="onTreePointerMove"')
+    expect(treeSource).toContain('@pointerup="onTreePointerUp"')
+    expect(treeSource).toContain('setPointerCapture')
+    expect(treeSource).toContain('document.elementFromPoint')
+    expect(treeSource).toContain('resolveFileTreeHitTarget')
+    // 阈值内不捕获不拦截,单击/双击展开选择不受影响(阈值判定在状态机纯函数内)
+    expect(treeSource).toContain('beginFileTreePointerDrag')
+    expect(treeSource).toContain('activateFileTreeDrag')
+    // 跟随光标的拖拽幽灵(文件名+图标,品牌蓝描边)
+    expect(treeSource).toContain('file-tree-drag-ghost')
     // 拖拽态品牌蓝高亮目标目录
     expect(treeSource).toContain('is-drop-inner')
     expect(treeSource).toContain('terminal-file-tree__tree--dragging')
@@ -161,17 +303,22 @@ describe('文件树拖拽接线(源码扫描)', () => {
     expect(treeSource).toContain('remapExpandedPrefix')
   })
 
-  it('终端窗格接受文件树拖拽并插入转义后的路径', () => {
-    expect(paneSource).toContain('FILE_TREE_DRAG_MIME')
-    expect(paneSource).toContain('@drop="onFileTreeDrop"')
+  it('终端窗格注册为指针手势落点:命中后按窗格 shell 家族转义插入路径', () => {
+    expect(paneSource).not.toContain('@drop=')
+    expect(paneSource).not.toContain('FILE_TREE_DRAG_MIME')
+    expect(paneSource).toContain('registerFileTreePaneTarget')
+    expect(paneSource).toContain('unregisterFileTreePaneTarget')
     expect(paneSource).toContain('quoteShellArg(payload.path, shellFamily.value)')
-    expect(paneSource).toContain('markFileTreeDragHandled()')
     expect(paneSource).toContain('file-tree-drop-target')
   })
 
-  it('拖出应用:先下载到系统临时目录,再经主进程 startDrag;只放行临时缓存路径', () => {
+  it('拖出应用:出窗下载到系统临时目录,按钮仍按住即经主进程 startDrag 同手势移交', () => {
     expect(treeSource).toContain("window.ipcRenderer.invoke('terminal-file-tree-drag-temp-path'")
     expect(treeSource).toContain("window.ipcRenderer.send('terminal-file-tree-start-drag'")
+    expect(treeSource).toContain('completeFileTreeDragOutPrep')
+    // 降级:出窗松手未就绪时武装缓存并提示「再拖一次」
+    expect(treeSource).toContain('armAfterReleaseOutside')
+    expect(treeSource).toContain('DRAG_OUT_ARM_MS')
     expect(ipcSource).toContain("ipcMain.on('terminal-file-tree-start-drag'")
     expect(ipcSource).toContain('event.sender.startDrag({ file, icon: fileTreeDragIcon() })')
     expect(ipcSource).toContain('dragTempRoot() + path.sep')
@@ -186,6 +333,8 @@ describe('文件树拖拽接线(源码扫描)', () => {
         'fileTreeMoveDone',
         'fileTreeMoveOverwriteConfirm',
         'fileTreeDragOutReady',
+        'fileTreeDragPreparing',
+        'fileTreeDragOutCached',
       ]) {
         expect(source).toContain(`${key}:`)
       }

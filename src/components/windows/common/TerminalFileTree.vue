@@ -1,5 +1,12 @@
 <template>
-  <div class="terminal-file-tree">
+  <div
+    ref="treeElement"
+    class="terminal-file-tree"
+    @pointerdown="onTreePointerDown"
+    @pointermove="onTreePointerMove"
+    @pointerup="onTreePointerUp"
+    @pointercancel="onTreePointerCancel"
+  >
     <div v-if="truncatedEntryCount !== null" class="terminal-file-tree__truncated" role="status">
       {{ t('common.terminal.fileTreeTruncated', { count: truncatedEntryCount }) }}
     </div>
@@ -11,23 +18,23 @@
       :load="loadNode"
       node-key="path"
       lazy
-      draggable
-      :allow-drop="allowTreeDrop"
       highlight-current
       :default-expanded-keys="expandedKeys"
       @node-expand="rememberExpanded"
       @node-collapse="forgetExpanded"
       @node-click="emit('node-click', $event)"
-      @node-drag-start="onNodeDragStart"
-      @node-drop="onNodeDrop"
-      @node-drag-end="onNodeDragEnd"
     >
       <template #default="{ data }">
         <el-dropdown
           trigger="contextmenu"
           @command="(command: string) => onNodeCommand(command, data)"
         >
-          <span class="terminal-file-tree__node">
+          <span
+            class="terminal-file-tree__node"
+            :data-file-tree-path="data.path"
+            :data-file-tree-dir="data.directory ? '1' : '0'"
+            :data-file-tree-name="data.name"
+          >
             <el-icon class="terminal-file-tree__icon">
               <Folder v-if="data.directory" />
               <Document v-else />
@@ -53,24 +60,54 @@
         </el-dropdown>
       </template>
     </el-tree>
+    <Teleport to="body">
+      <div
+        v-if="dragGhost.visible"
+        class="file-tree-drag-ghost"
+        :class="{ 'file-tree-drag-ghost--preparing': dragGhost.preparing }"
+        :style="{ transform: `translate(${dragGhost.x + 14}px, ${dragGhost.y + 16}px)` }"
+      >
+        <el-icon class="file-tree-drag-ghost__icon">
+          <Folder v-if="dragGhost.directory" />
+          <Document v-else />
+        </el-icon>
+        <span class="file-tree-drag-ghost__name">{{ dragGhost.name }}</span>
+        <span v-if="dragGhost.preparing" class="file-tree-drag-ghost__badge">
+          {{ t('common.terminal.fileTreeDragPreparing') }}
+        </span>
+        <span
+          v-else-if="dragGhost.cached"
+          class="file-tree-drag-ghost__badge file-tree-drag-ghost__badge--ready"
+        >
+          {{ t('common.terminal.fileTreeDragOutCached') }}
+        </span>
+      </div>
+    </Teleport>
   </div>
 </template>
 
 <script setup lang="ts">
-import { onBeforeUnmount, ref, watch } from 'vue'
+import { onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Document, Folder } from '@element-plus/icons-vue'
 import {
-  FILE_TREE_DRAG_MIME,
-  beginFileTreeDrag,
-  canDropFileTreeNode,
-  endFileTreeDrag,
+  activateFileTreeDrag,
+  beginFileTreePointerDrag,
+  completeFileTreeDragOutPrep,
+  enterFileTreeDragOutPrep,
+  exitFileTreeDragOutPrep,
+  fileTreePaneTargetById,
+  fileTreePaneTargetForElement,
+  finishFileTreeGesture,
+  isFileTreePointerOutside,
   isNoopFileTreeMove,
-  isOutsideWindow,
   joinFileTreePath,
-  markFileTreeDragHandled,
+  resolveFileTreeHitTarget,
+  setFileTreeGestureHover,
+  setFileTreePaneHover,
+  trackFileTreePointer,
   type FileTreeDragPayload,
-  type FileTreeDropPosition,
+  type FileTreePointerGesture,
 } from '@/core/terminal/FileTreeDrag'
 import { useTerminalTranslate } from '@/core/terminal/TerminalI18n'
 import type { SftpEntry, TerminalSessionDir } from '@/core/terminal/TerminalTypes'
@@ -200,33 +237,10 @@ async function deleteEntry(entry: SftpEntry): Promise<void> {
   }
 }
 
-/** el-tree 拖拽回调里的节点形状:只需要 data 载荷 */
-interface TreeDragNode {
-  data: FileTreeNode
-}
-
-/** 拖拽进行中:给树加拖拽态类名,目标目录的品牌蓝高亮见样式表的 is-drop-inner 规则 */
-const treeDragging = ref(false)
-
-/** 只允许 inner 落入目录,禁止落入自身/子孙(规则纯函数在 FileTreeDrag.ts) */
-function allowTreeDrop(
-  draggingNode: TreeDragNode,
-  dropNode: TreeDragNode,
-  position: FileTreeDropPosition,
-): boolean {
-  return canDropFileTreeNode(draggingNode.data, dropNode.data, position)
-}
-
-function onNodeDrop(draggingNode: TreeDragNode, dropNode: TreeDragNode, dropType: string): void {
-  markFileTreeDragHandled()
-  if (dropType !== 'inner') return
-  void moveEntry(draggingNode.data, dropNode.data)
-}
-
 /** 拖入目录 = 远端移动:复用三通道 rename IPC(SSH SFTP / 本机 fs.rename / WSL mv) */
 async function moveEntry(source: SftpEntry, targetDir: SftpEntry): Promise<void> {
   const newPath = joinFileTreePath(targetDir.path, source.name)
-  // el-tree 在 drop 时已改过客户端树模型,无论成败都重建回服务端真实状态
+  // 指针拖拽不改客户端树模型,但移动/覆盖同样要重建回服务端真实状态
   try {
     if (isNoopFileTreeMove(source.path, source.name, targetDir.path)) return
     // 覆盖检查:目标目录已有同名条目时先确认;确认后先删再移,三通道语义统一
@@ -275,62 +289,220 @@ function remapExpandedPrefix(oldPrefix: string, newPrefix: string): void {
   }
 }
 
+/** 拖拽进行中:给树加拖拽态类名,目标目录的品牌蓝高亮见样式表的 is-drop-inner 规则 */
+const treeDragging = ref(false)
+const treeElement = ref<HTMLElement | null>(null)
+
+/** 当前指针拖拽手势;null = 无手势(状态机纯函数在 FileTreeDrag.ts,可单测) */
+let gesture: FileTreePointerGesture | null = null
+/** 拖拽幽灵:跟随光标的浮动卡片(半透明、品牌蓝描边),出窗准备时显示进度徽标 */
+const dragGhost = reactive({
+  visible: false,
+  x: 0,
+  y: 0,
+  name: '',
+  directory: false,
+  preparing: false,
+  cached: false,
+})
+/** 当前高亮的树内目录行(.el-tree-node__content 元素,命中判定时一并拿到) */
+let hoverTreeDirElement: HTMLElement | null = null
+/** 出窗松手时缓存未就绪:下载完成时武装并提示一次「再拖一次」 */
+let notifyArmOnReady: string | null = null
+
 /** 拖出应用的临时缓存:远端路径 → 已就绪的本地临时文件 */
 const dragOutCache = new Map<string, string>()
 /** 正在下载到临时缓存的路径(防重入) */
 const dragOutPreparing = new Set<string>()
-/** 上次拖出未遂后武装的路径:下一次 dragstart 直接由主进程 startDrag 原生拖出 */
+/** 上次拖出未遂后武装的路径:武装期内完成提示只发一次;60s 后过期 */
 let armedDragOutPath: string | null = null
 let armedTimer: ReturnType<typeof setTimeout> | undefined
-/** 武装有效期:超时后该条目下一次拖拽恢复为普通应用内拖拽 */
+/** 武装有效期:超时后该条目恢复为普通应用内拖拽反馈 */
 const DRAG_OUT_ARM_MS = 60_000
 
-function onNodeDragStart(node: TreeDragNode, event: DragEvent): void {
-  const entry = node.data
-  const cached = dragOutCache.get(entry.path)
-  // 上次拖出未遂后再次拖拽:取消 HTML5 拖拽,改由主进程 startDrag 发起系统级拖拽
-  // (startDrag 依赖当前鼠标按住状态,dragstart 时机必然满足)
-  if (armedDragOutPath === entry.path && cached) {
-    disarmDragOut()
-    event.preventDefault()
-    window.ipcRenderer.send('terminal-file-tree-start-drag', { path: cached })
+interface TreeNodeHit {
+  path: string
+  name: string
+  directory: boolean
+  contentElement: HTMLElement
+}
+
+/** 命中元素所在的树节点:数据属性挂在节点内容区的 span 上(整行内容区都可命中) */
+function treeNodeHitFrom(element: Element | null): TreeNodeHit | null {
+  const content = element?.closest('.el-tree-node__content')
+  if (!content || !treeElement.value?.contains(content)) return null
+  const span = content.querySelector('[data-file-tree-path]')
+  const path = span?.getAttribute('data-file-tree-path')
+  if (!span || !path) return null
+  return {
+    path,
+    name: span.getAttribute('data-file-tree-name') ?? path,
+    directory: span.getAttribute('data-file-tree-dir') === '1',
+    contentElement: content as HTMLElement,
+  }
+}
+
+/** 树内目录高亮:is-drop-inner 复用原 el-tree 品牌蓝高亮样式 */
+function setHoverTreeDirElement(element: HTMLElement | null): void {
+  if (hoverTreeDirElement === element) return
+  hoverTreeDirElement?.classList.remove('is-drop-inner')
+  hoverTreeDirElement = element
+  hoverTreeDirElement?.classList.add('is-drop-inner')
+}
+
+/** 每次移动重算落点:窗口外 > 终端窗格 > 树内目录 > 无;出窗即进入准备拖出 */
+function updateGestureHover(active: FileTreePointerGesture): void {
+  const { lastX, lastY } = active
+  const inside = !isFileTreePointerOutside(lastX, lastY, window.innerWidth, window.innerHeight)
+  const hit = inside ? document.elementFromPoint(lastX, lastY) : null
+  // 本树命中优先:GUI 视图的内联树本身就在某个 .terminal-pane 里,
+  // 先问树再问窗格,树内行永不误判成窗格插入
+  const treeHit = treeNodeHitFrom(hit)
+  const pane = treeHit ? null : fileTreePaneTargetForElement(hit)
+  const hover = resolveFileTreeHitTarget({
+    insideWindow: inside,
+    paneId: pane?.paneId ?? null,
+    treeDir: treeHit ? { path: treeHit.path, directory: treeHit.directory } : null,
+    draggingPath: active.payload.path,
+  })
+  setFileTreeGestureHover(active, hover)
+  setFileTreePaneHover(hover.kind === 'pane' ? pane : null)
+  setHoverTreeDirElement(hover.kind === 'tree-dir' && treeHit ? treeHit.contentElement : null)
+  if (hover.kind === 'outside') {
+    if (enterFileTreeDragOutPrep(active)) {
+      dragGhost.preparing = true
+      void prepareDragOut(active.payload)
+    }
     return
   }
-  disarmDragOut()
-  treeDragging.value = true
-  const payload: FileTreeDragPayload = {
-    sessionId: props.sessionId,
-    path: entry.path,
-    name: entry.name,
-    directory: entry.directory,
+  // 指针回窗:恢复应用内拖拽;后台下载不取消,完成时填入缓存
+  if (active.phase === 'preparing' && exitFileTreeDragOutPrep(active)) dragGhost.preparing = false
+}
+
+function onTreePointerDown(event: PointerEvent): void {
+  // 只认鼠标/触控笔左键;触摸留给树的滚动手势
+  if (event.button !== 0 || event.pointerType === 'touch') return
+  // 上一次手势可能孤儿化(pending 未捕获指针时在窗外松手,pointerup 丢失):直接重置
+  if (gesture) cancelGesture()
+  const hit = treeNodeHitFrom(event.target as Element | null)
+  if (!hit) return
+  notifyArmOnReady = null
+  gesture = beginFileTreePointerDrag(
+    { sessionId: props.sessionId, path: hit.path, name: hit.name, directory: hit.directory },
+    event.pointerId,
+    event.clientX,
+    event.clientY,
+  )
+  // 阈值内不 setPointerCapture、不 preventDefault:单击/双击展开选择完全不受影响
+}
+
+function onTreePointerMove(event: PointerEvent): void {
+  const active = gesture
+  if (!active || event.pointerId !== active.pointerId) return
+  trackFileTreePointer(active, event.clientX, event.clientY)
+  if (active.phase === 'pending') {
+    if (!activateFileTreeDrag(active)) return
+    // 激活瞬间才捕获指针:之后 move/up 直达树容器,也不会误触节点 click/展开
+    treeElement.value?.setPointerCapture(event.pointerId)
+    treeDragging.value = true
+    document.body.classList.add('file-tree-dragging')
+    dragGhost.visible = true
+    dragGhost.name = active.payload.name
+    dragGhost.directory = active.payload.directory
+    dragGhost.cached = dragOutCache.has(active.payload.path)
   }
-  beginFileTreeDrag(payload)
-  if (event.dataTransfer) {
-    // 树内落点是移动、拖到终端窗格是插入(copy),两种 dropEffect 都放行
-    event.dataTransfer.effectAllowed = 'copyMove'
-    event.dataTransfer.setData(FILE_TREE_DRAG_MIME, JSON.stringify(payload))
+  dragGhost.x = event.clientX
+  dragGhost.y = event.clientY
+  updateGestureHover(active)
+}
+
+function onTreePointerUp(event: PointerEvent): void {
+  const active = gesture
+  if (!active || event.pointerId !== active.pointerId) return
+  if (active.phase === 'pending') {
+    // 阈值内松手 = 单击:全程未捕获未拦截,el-tree 的 node-click 照常触发
+    gesture = null
+    return
+  }
+  const outcome = finishFileTreeGesture(active)
+  const payload = active.payload
+  cleanupGesture()
+  gesture = null
+  switch (outcome.kind) {
+    case 'move': {
+      // 手势载荷还原出移动所需的条目形状;目标目录只需路径(规则已校验是目录)
+      const source: SftpEntry = {
+        name: payload.name,
+        path: payload.path,
+        directory: payload.directory,
+        size: 0,
+        modifiedAt: 0,
+        mode: 0,
+      }
+      const targetDir: SftpEntry = {
+        name: '',
+        path: outcome.targetDirPath,
+        directory: true,
+        size: 0,
+        modifiedAt: 0,
+        mode: 0,
+      }
+      void moveEntry(source, targetDir)
+      break
+    }
+    case 'insert-path':
+      // 窗格注册回调内部按目标 shell 家族转义后写入会话输入
+      fileTreePaneTargetById(outcome.paneId)?.insert(payload)
+      break
+    case 'arm-drag-out':
+      armAfterReleaseOutside(payload)
+      break
+    default:
+      break
   }
 }
 
-function onNodeDragEnd(
-  _draggingNode: TreeDragNode,
-  _dropNode: TreeDragNode | null,
-  _dropType: string,
-  event: DragEvent,
-): void {
+function onTreePointerCancel(event: PointerEvent): void {
+  const active = gesture
+  if (!active || event.pointerId !== active.pointerId) return
+  cancelGesture()
+}
+
+/** Esc 取消手势:不删除已缓存文件;在途下载完成后静默武装缓存 */
+function onGestureKeydown(event: KeyboardEvent): void {
+  if (event.key !== 'Escape' || !gesture) return
+  event.preventDefault()
+  cancelGesture()
+}
+
+function cancelGesture(): void {
+  cleanupGesture()
+  gesture = null
+}
+
+/** 手势收尾:释放指针捕获、撤掉幽灵与高亮。external 相位时 OLE 已接管,这里只清理 */
+function cleanupGesture(): void {
+  const active = gesture
+  if (active && treeElement.value?.hasPointerCapture(active.pointerId)) {
+    treeElement.value.releasePointerCapture(active.pointerId)
+  }
   treeDragging.value = false
-  const gesture = endFileTreeDrag()
-  if (!gesture || gesture.handledInApp) return
-  // 窗口内无效落点(不允许的节点等)不触发;dragend 坐标越出窗口才算拖出应用
-  if (!isOutsideWindow(event.clientX, event.clientY, window.innerWidth, window.innerHeight)) return
-  void handleDragOut(gesture.payload)
+  document.body.classList.remove('file-tree-dragging')
+  dragGhost.visible = false
+  dragGhost.preparing = false
+  setHoverTreeDirElement(null)
+  setFileTreePaneHover(null)
 }
 
-/** 拖出应用:远端文件先下载到系统临时目录(状态栏有进度),就绪后武装并提示再拖一次 */
-async function handleDragOut(payload: FileTreeDragPayload): Promise<void> {
-  if (dragOutCache.has(payload.path)) {
-    armDragOut(payload.path)
-    ElMessage.success(t('common.terminal.fileTreeDragOutReady', { name: payload.name }))
+/**
+ * 拖出应用:远端文件先下载到系统临时目录(状态栏复用聚合进度)。
+ * 下载完成时按钮仍按住且指针仍在窗外 → 同一手势内移交系统 OLE 拖放,拖到哪落到哪;
+ * 按钮已松开 → 武装缓存作为降级,提示「再拖一次」立即可用。
+ */
+async function prepareDragOut(payload: FileTreeDragPayload): Promise<void> {
+  const cached = dragOutCache.get(payload.path)
+  if (cached) {
+    startSystemDrag(payload, cached)
     return
   }
   if (dragOutPreparing.has(payload.path)) return
@@ -348,14 +520,42 @@ async function handleDragOut(payload: FileTreeDragPayload): Promise<void> {
     })
     dragOutCache.set(payload.path, localPath)
     emit('download-settle', true)
+    const active = gesture
+    if (active && active.payload.path === payload.path && active.phase === 'preparing') {
+      startSystemDrag(payload, localPath)
+      return
+    }
     armDragOut(payload.path)
-    ElMessage.success(t('common.terminal.fileTreeDragOutReady', { name: payload.name }))
+    if (notifyArmOnReady === payload.path) {
+      notifyArmOnReady = null
+      ElMessage.success(t('common.terminal.fileTreeDragOutReady', { name: payload.name }))
+    }
   } catch (error) {
     emit('download-settle', false, errorMessage(error))
     ElMessage.error(t('common.terminal.fileTreeOpFailed', { message: errorMessage(error) }))
+    if (gesture?.payload.path === payload.path) cancelGesture()
   } finally {
     dragOutPreparing.delete(payload.path)
   }
+}
+
+/** 移交系统拖出:先释放指针捕获再发 startDrag,避免捕获抢占 OLE 的鼠标消息 */
+function startSystemDrag(payload: FileTreeDragPayload, localPath: string): void {
+  const active = gesture
+  if (active && active.payload.path === payload.path) completeFileTreeDragOutPrep(active)
+  cleanupGesture()
+  gesture = null
+  window.ipcRenderer.send('terminal-file-tree-start-drag', { path: localPath })
+}
+
+/** 出窗松手时缓存未就绪的收尾:已缓存直接武装并提示;在途则标记完成时提示一次 */
+function armAfterReleaseOutside(payload: FileTreeDragPayload): void {
+  if (dragOutCache.has(payload.path)) {
+    armDragOut(payload.path)
+    ElMessage.success(t('common.terminal.fileTreeDragOutReady', { name: payload.name }))
+    return
+  }
+  if (dragOutPreparing.has(payload.path)) notifyArmOnReady = payload.path
 }
 
 function armDragOut(path: string): void {
@@ -375,7 +575,12 @@ function disarmDragOut(): void {
   }
 }
 
-onBeforeUnmount(() => disarmDragOut())
+onMounted(() => window.addEventListener('keydown', onGestureKeydown, true))
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', onGestureKeydown, true)
+  cancelGesture()
+  disarmDragOut()
+})
 
 type FileTreeNode = SftpEntry & { isLeaf: boolean }
 
@@ -494,13 +699,62 @@ watch(
 .terminal-file-tree__delete-item {
   color: var(--el-color-error);
 }
-/* 拖拽态:品牌蓝高亮可落入的目标目录(el-tree 给 inner 目标节点加 is-drop-inner) */
+/* 拖拽态:品牌蓝高亮可落入的目标目录(指针手势命中时给内容区加 is-drop-inner) */
 .terminal-file-tree__tree--dragging :deep(.el-tree-node__content) {
   transition: background 0.12s ease;
 }
-.terminal-file-tree :deep(.el-tree-node.is-drop-inner) > .el-tree-node__content {
+.terminal-file-tree :deep(.el-tree-node__content.is-drop-inner) {
   background: color-mix(in srgb, var(--el-color-primary) 16%, transparent);
   box-shadow: inset 0 0 0 1px var(--el-color-primary);
   border-radius: 6px;
+}
+/* 拖拽幽灵:跟随光标的文件名卡片,半透明 + 品牌蓝描边;不拦截命中判定 */
+.file-tree-drag-ghost {
+  position: fixed;
+  z-index: 9200;
+  top: 0;
+  left: 0;
+  display: flex;
+  max-width: 320px;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border: 1px solid var(--el-color-primary);
+  border-radius: 8px;
+  color: var(--app-text);
+  background: color-mix(in srgb, var(--app-surface) 82%, transparent);
+  box-shadow: 0 6px 18px color-mix(in srgb, var(--el-color-primary) 24%, transparent);
+  font-size: 12px;
+  opacity: 0.92;
+  pointer-events: none;
+}
+.file-tree-drag-ghost__icon {
+  flex: none;
+  color: var(--el-color-primary);
+}
+.file-tree-drag-ghost__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.file-tree-drag-ghost__badge {
+  flex: none;
+  padding: 1px 6px;
+  border-radius: 6px;
+  color: var(--el-color-primary);
+  background: color-mix(in srgb, var(--el-color-primary) 14%, transparent);
+  font-size: 11px;
+}
+.file-tree-drag-ghost--preparing .file-tree-drag-ghost__badge {
+  animation: file-tree-drag-ghost-blink 1s ease-in-out infinite;
+}
+.file-tree-drag-ghost__badge--ready {
+  color: var(--el-color-success);
+  background: color-mix(in srgb, var(--el-color-success) 14%, transparent);
+}
+@keyframes file-tree-drag-ghost-blink {
+  50% {
+    opacity: 0.45;
+  }
 }
 </style>
