@@ -22,6 +22,26 @@ describe('RawMessages bottom composer layout', () => {
     expect(source).not.toContain('style="width: 90px; margin-right: 8px;"')
   })
 
+  it('spaces every adjacent pair of composer buttons with a single shared gap', () => {
+    // One shared rule must own the gap so 换行↔发送 and 发送↔IAP stay identical.
+    const shared = source.match(
+      /\.composer-actions,\s*\.message-actions,\s*\.iap-actions\s*\{([^}]*)\}/,
+    )?.[1]
+    expect(shared).toBeDefined()
+    expect(shared).toContain('gap: 6px')
+
+    // The composer-only override may adjust flex/justify, but never the gap.
+    const composerOnly = source.match(/\.composer-actions\s*\{([^}]*)\}/)?.[1]
+    expect(composerOnly).toBeDefined()
+    expect(composerOnly).not.toContain('gap')
+
+    // No stray per-group gap overrides or duplicate group rules: each group
+    // selector appears exactly once, inside the shared rule.
+    expect(source).not.toContain('gap: 2px')
+    expect(source.match(/\.message-actions/g)).toHaveLength(1)
+    expect(source.match(/\.iap-actions/g)).toHaveLength(1)
+  })
+
   it('replaces generic file sending with the IAP dialog entry', () => {
     expect(source).toContain('@click="iapDialogVisible = true"')
     expect(source).toContain(':title="t(\'common.rawMessages.iapUpgrade\')"')

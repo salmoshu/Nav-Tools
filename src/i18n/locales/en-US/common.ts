@@ -320,6 +320,8 @@ export default {
     retries: 'Retries {count}',
     log: 'Upgrade Log',
     clearLog: 'Clear Log',
+    expandLog: 'Expand upgrade log',
+    collapseLog: 'Collapse upgrade log',
     waiting: 'Waiting to start…',
     close: 'Close',
     cancel: 'Cancel Upgrade',

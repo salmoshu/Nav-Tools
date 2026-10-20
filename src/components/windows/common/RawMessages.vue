@@ -861,20 +861,14 @@ onUnmounted(() => {
   display: flex;
   flex: 0 0 auto;
   align-items: center;
+  flex-wrap: wrap;
   gap: 6px;
 }
 
 .composer-actions {
   flex: 0 1 auto;
-  flex-wrap: wrap;
   justify-content: flex-end;
-  gap: 2px;
   margin-left: auto;
-}
-
-.message-actions,
-.iap-actions {
-  flex-wrap: wrap;
 }
 
 .input-container :deep(.el-button) {

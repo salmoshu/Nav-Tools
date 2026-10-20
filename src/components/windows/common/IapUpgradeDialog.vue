@@ -6,6 +6,8 @@
     :close-on-click-modal="false"
     :before-close="beforeClose"
     append-to-body
+    align-center
+    class="app-dialog"
   >
     <div class="iap-dialog-body">
       <section class="iap-section">
@@ -275,10 +277,23 @@
 
       <section class="iap-log-section">
         <div class="section-heading">
-          <strong>{{ t('common.iap.log') }}</strong>
+          <button
+            type="button"
+            class="iap-log-toggle"
+            :aria-expanded="logExpanded"
+            :title="logExpanded ? t('common.iap.collapseLog') : t('common.iap.expandLog')"
+            @click="logExpanded = !logExpanded"
+          >
+            <el-icon class="iap-log-chevron" :class="{ expanded: logExpanded }"><ArrowDown /></el-icon>
+            <strong>{{ t('common.iap.log') }}</strong>
+          </button>
           <el-button size="small" text @click="logs = []">{{ t('common.iap.clearLog') }}</el-button>
         </div>
-        <pre ref="logElement" class="iap-log">{{ logs.join('\n') || t('common.iap.waiting') }}</pre>
+        <div class="iap-log-collapse" :class="{ expanded: logExpanded }">
+          <div class="iap-log-collapse-inner">
+            <pre ref="logElement" class="iap-log">{{ logs.join('\n') || t('common.iap.waiting') }}</pre>
+          </div>
+        </div>
       </section>
     </div>
 
@@ -301,7 +316,7 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
-import { FolderOpened } from '@element-plus/icons-vue'
+import { ArrowDown, FolderOpened } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { t } from '@/i18n'
 import {
@@ -333,6 +348,7 @@ const advanced = ref(false)
 const firmwarePath = ref('')
 const firmwareName = ref('')
 const logs = ref<string[]>([])
+const logExpanded = ref(false)
 const logElement = ref<HTMLElement | null>(null)
 const snapshot = ref<IapUpgradeSnapshot>({ ...EMPTY_IAP_SNAPSHOT })
 
@@ -529,9 +545,6 @@ onUnmounted(() => window.ipcRenderer?.off('iap-upgrade-event', handleUpgradeEven
   display: flex;
   flex-direction: column;
   gap: 12px;
-  max-height: 70vh;
-  overflow: auto;
-  padding-right: 4px;
 }
 .iap-section,
 .iap-log-section {
@@ -598,6 +611,39 @@ onUnmounted(() => window.ipcRenderer?.off('iap-upgrade-event', handleUpgradeEven
 .error-text {
   color: var(--el-color-danger);
   font-weight: 600;
+}
+.iap-log-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.iap-log-toggle:hover {
+  color: var(--el-color-primary);
+}
+.iap-log-chevron {
+  transform: rotate(-90deg);
+  transition: transform var(--app-duration-default) var(--app-ease-out);
+}
+.iap-log-chevron.expanded {
+  transform: rotate(0deg);
+}
+.iap-log-collapse {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows var(--app-duration-panel) var(--app-ease-out);
+}
+.iap-log-collapse.expanded {
+  grid-template-rows: 1fr;
+}
+.iap-log-collapse-inner {
+  min-height: 0;
+  overflow: hidden;
 }
 .iap-log {
   height: 150px;

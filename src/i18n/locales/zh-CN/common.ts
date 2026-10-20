@@ -317,6 +317,8 @@ export default {
     retries: '重发 {count}',
     log: '升级日志',
     clearLog: '清空日志',
+    expandLog: '展开升级日志',
+    collapseLog: '收起升级日志',
     waiting: '等待开始升级…',
     close: '关闭',
     cancel: '取消升级',
