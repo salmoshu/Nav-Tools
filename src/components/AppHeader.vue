@@ -1,7 +1,8 @@
 <template>
   <header class="app-header">
     <div class="brand">
-      <img :src="brandIconUrl || '/logo.svg'" alt="" class="brand-logo" />
+      <!-- 相对路径:打包后走 file:// 协议,绝对路径 /logo.svg 会解析到盘符根导致图裂 -->
+      <img :src="brandIconUrl || './logo.svg'" alt="" class="brand-logo" />
       <span class="brand-copy">
         <span class="brand-name">{{ brandTitle || 'Nav-Tools' }}</span>
         <span v-if="version" class="brand-version">V{{ version }}</span>

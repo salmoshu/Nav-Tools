@@ -615,7 +615,7 @@ ipcMain.handle('open-card-window', async (event, serializedData) => {
 
 /** 角标 PNG 缓存路径（与快捷方式 ICO 同目录,供下次开窗口/冷启动直接读取） */
 function componentWindowIconPath(windowId: string): string {
-  return path.join(app.getPath('userData'), 'shortcuts', `${windowId}-badge3.png`)
+  return path.join(app.getPath('userData'), 'shortcuts', `${windowId}-badge4.png`)
 }
 
 ipcMain.handle('set-component-window-icon', async (event, request: { dataUrl?: string }) => {

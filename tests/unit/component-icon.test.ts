@@ -63,6 +63,31 @@ describe('buildComponentIconDataUrl 构图(源码扫描)', () => {
     )
   })
 
+  it('浅色 squircle 底板画在构图最底层:240px 圆角方板 + 1px 描边 + 弥散投影', () => {
+    const plateStart = source.indexOf('const plateMargin = 8')
+    const mainDraw = source.indexOf('const mainSize = 176')
+    const badgeStart = source.indexOf('const badgeRadius = 41')
+    // 底板先于主体与角标绘制(构图最底层)
+    expect(plateStart).toBeGreaterThan(-1)
+    expect(plateStart).toBeLessThan(mainDraw)
+    expect(mainDraw).toBeLessThan(badgeStart)
+    const plate = source.slice(plateStart, mainDraw)
+    // 近铺满 256px 的大圆角方形:240px 边长,58px 圆角 ≈ 24% 边长
+    expect(plate).toContain('const plateSize = size - plateMargin * 2')
+    expect(plate).toContain('const plateRadius = 58')
+    expect(plate).toContain(
+      'context.roundRect(plateMargin, plateMargin, plateSize, plateSize, plateRadius)',
+    )
+    // 浅色填充 + 1px 半透明描边:浅底衬出深色素描主体,浅色壁纸上靠描边分离
+    expect(plate).toContain("context.fillStyle = '#ffffff'")
+    expect(plate).toContain('context.lineWidth = 1')
+    expect(plate).toContain("context.strokeStyle = 'rgba(0, 0, 0, 0.08)'")
+    // 极浅弥散投影,对齐 --shadow-card 0 4px 16px #0000001a
+    expect(plate).toContain("context.shadowColor = 'rgba(0, 0, 0, 0.10)'")
+    expect(plate).toContain('context.shadowBlur = 16')
+    expect(plate).toContain('context.shadowOffsetY = 4')
+  })
+
   it('Nav-Tools logo 缩为右下角角标:沿用白底圆 + 组色描边机制', () => {
     const badge = source.slice(source.indexOf('const badgeRadius = 41'))
     // 角标几何不变:半径 41,贴右下角
@@ -78,12 +103,16 @@ describe('buildComponentIconDataUrl 构图(源码扫描)', () => {
     expect(badge).not.toContain('recolorSvg')
   })
 
-  it('无专属图形或主体绘制失败时退化为 logo 整图,且不再叠加角标', () => {
+  it('无专属图形或主体绘制失败时退化为 logo(缩到底板内),且不再叠加角标', () => {
     expect(source).toContain('let mainIsLogo = true')
     expect(source).toContain('if (mainIsLogo) {')
     expect(source).toContain('if (!mainIsLogo) {')
-    // logo 加载失败的底色兜底保留
+    // logo 不再整图铺满:192px 居中缩到底板内,保住底板圆角与留白
+    expect(source).toContain('const fallbackLogoSize = 192')
+    expect(source).not.toContain('context.drawImage(logo, 0, 0, size, size)')
+    // logo 加载失败的底色兜底保留,且收进底板圆角轮廓
     expect(source).toContain("context.fillStyle = '#1f6feb'")
+    expect(source).not.toContain('context.fillRect(0, 0, size, size)')
   })
 })
 
@@ -103,14 +132,15 @@ describe('组件合成图标消费方接线(源码扫描)', () => {
   it('AppHeader 品牌位优先显示合成图标,缺省回退应用 logo', () => {
     const header = readFileSync('src/components/AppHeader.vue', 'utf8')
     expect(header).toContain('brandIconUrl?: string')
-    expect(header).toContain(":src=\"brandIconUrl || '/logo.svg'\"")
+    // 打包后走 file:// 协议,缺省回退用相对路径 ./logo.svg(绝对路径会解析到盘符根)
+    expect(header).toContain(":src=\"brandIconUrl || './logo.svg'\"")
   })
 
-  it('主进程窗口图标缓存与快捷方式 ICO 使用同一样式版本文件名(badge3)', () => {
+  it('主进程窗口图标缓存与快捷方式 ICO 使用同一样式版本文件名(badge4)', () => {
     const main = readFileSync('electron/main/index.ts', 'utf8')
     const shortcuts = readFileSync('electron/main/shortcuts.ts', 'utf8')
-    expect(main).toContain('`${windowId}-badge3.png`')
-    expect(shortcuts).toContain('`${panel.id}-badge3.ico`')
+    expect(main).toContain('`${windowId}-badge4.png`')
+    expect(shortcuts).toContain('`${panel.id}-badge4.ico`')
     // 旧版本文件名不应残留,避免 Windows 图标缓存继续命中旧构图
     expect(main).not.toContain('badge2')
     expect(shortcuts).not.toContain('badge2')

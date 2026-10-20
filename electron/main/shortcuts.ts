@@ -85,7 +85,7 @@ export async function createDesktopShortcut(
   try {
     // 文件名带样式版本：图标构图升级后同名旧 ICO 会被 Windows 图标缓存拖累，
     // 换新文件名让重新创建的快捷方式立刻拿到新图标
-    const icoPath = path.join(options.userDataPath, 'shortcuts', `${panel.id}-badge3.ico`)
+    const icoPath = path.join(options.userDataPath, 'shortcuts', `${panel.id}-badge4.ico`)
     await writeIcoFromPngDataUrl(request.iconDataUrl, icoPath)
 
     // PowerShell 的 WScript.Shell COM 是 Windows 建快捷方式的标准途径;

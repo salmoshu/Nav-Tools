@@ -93,10 +93,12 @@ export function recolorSvg(svg: string, color: string): string {
 }
 
 /**
- * 合成组件图标:组件元素图标为主体(组色单色素描,居中撑满画面),
- * Nav-Tools logo 缩为右下角角标(白底圆 + 组色描边),输出 256px PNG
- * data URL。桌面快捷方式由主进程封装成 .ico 供 .lnk 使用;组件独立
- * 窗口的标题栏/任务栏图标也复用同一合成结果。
+ * 合成组件图标:浅色 squircle 大圆角方形底板垫底(深色素描主体在深色
+ * 桌面壁纸上靠浅底板衬出,浅色壁纸上靠 1px 描边与弥散投影分离),组件
+ * 元素图标为主体(组色单色素描,176px 居中),Nav-Tools logo 缩为右下
+ * 角角标(白底圆 + 组色描边),输出 256px PNG data URL。桌面快捷方式
+ * 由主进程封装成 .ico 供 .lnk 使用;组件独立窗口的标题栏/任务栏图标
+ * 也复用同一合成结果。
  */
 export async function buildComponentIconDataUrl(windowId: string): Promise<string> {
   const size = 256
@@ -112,8 +114,30 @@ export async function buildComponentIconDataUrl(windowId: string): Promise<strin
   const svg = definition ? componentBadgeSvg(definition.action) : undefined
   const logoUrl = new URL('logo_transparent.png', document.baseURI).href
 
-  // 主体:组件元素图标(单色素描化为组色)居中撑满;无专属图形或绘制
-  // 失败时退化为应用 logo 整图,此时右下角角标冗余,不再叠加
+  // 底板:品牌 squircle 风格大圆角方形,画在构图最底层。近铺满 256px
+  // (240px 边长,58px 圆角 ≈ 24% 边长),白色填充 + 1px 半透明描边 +
+  // 极浅弥散投影(对齐 --shadow-card 0 4px 16px #0000001a)
+  const plateMargin = 8
+  const plateSize = size - plateMargin * 2
+  const plateRadius = 58
+  context.save()
+  context.shadowColor = 'rgba(0, 0, 0, 0.10)'
+  context.shadowBlur = 16
+  context.shadowOffsetY = 4
+  context.beginPath()
+  context.roundRect(plateMargin, plateMargin, plateSize, plateSize, plateRadius)
+  context.fillStyle = '#ffffff'
+  context.fill()
+  context.restore()
+  context.beginPath()
+  context.roundRect(plateMargin, plateMargin, plateSize, plateSize, plateRadius)
+  context.lineWidth = 1
+  context.strokeStyle = 'rgba(0, 0, 0, 0.08)'
+  context.stroke()
+
+  // 主体:组件元素图标(单色素描化为组色)176px 居中,画在底板之上;
+  // 无专属图形或绘制失败时退化为应用 logo(缩到底板内),此时右下角
+  // 角标冗余,不再叠加
   let mainIsLogo = true
   if (svg) {
     try {
@@ -134,13 +158,23 @@ export async function buildComponentIconDataUrl(windowId: string): Promise<strin
     }
   }
   if (mainIsLogo) {
-    // 退化底图:应用 logo;加载失败也要给出底色版图标
+    // 退化底图:应用 logo 缩到底板内居中(不再整图铺满,保住底板圆角
+    // 与留白);加载失败时底板整体改填品牌蓝,仍保持 squircle 轮廓
     try {
       const logo = await loadImage(logoUrl)
-      context.drawImage(logo, 0, 0, size, size)
+      const fallbackLogoSize = 192
+      context.drawImage(
+        logo,
+        (size - fallbackLogoSize) / 2,
+        (size - fallbackLogoSize) / 2,
+        fallbackLogoSize,
+        fallbackLogoSize,
+      )
     } catch {
+      context.beginPath()
+      context.roundRect(plateMargin, plateMargin, plateSize, plateSize, plateRadius)
       context.fillStyle = '#1f6feb'
-      context.fillRect(0, 0, size, size)
+      context.fill()
     }
   }
 
