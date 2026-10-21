@@ -15,4 +15,11 @@ describe('LiDAR scene renderer initial visibility', () => {
     expect(source).toContain('points.visible = false')
     expect(source).toContain('line.visible = false')
   })
+
+  it('renders the person independently and hides it when this frame has no target', () => {
+    expect(source).toContain('this.targetPoint = this.makePoints(COLORS.target, 14)')
+    expect(source).toContain('options.showTarget && frame.targetXY')
+    expect(source).toContain('this.targetPoint.visible = false')
+    expect(source).toContain('if (frame.targetXY) absorb(')
+  })
 })

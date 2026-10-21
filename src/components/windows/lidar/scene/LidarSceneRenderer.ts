@@ -19,6 +19,7 @@ export interface SceneRenderOptions {
   showFootprint: boolean
   showMargin: boolean
   showGoal: boolean
+  showTarget: boolean
   showTrail: boolean
   showRobot: boolean
   showLocalMap: boolean
@@ -55,6 +56,7 @@ const COLORS = {
   margin: 0x8b98a8,
   trail: 0xf59e0b,
   goal: 0xf43f5e,
+  target: 0x38bdf8,
   heading: 0xfacc15,
   localMapPath: 0xc084fc,
 }
@@ -98,6 +100,7 @@ export class LidarSceneRenderer {
   private localMapTexture: THREE.DataTexture
   private localMapSize = { width: 0, height: 0 }
   private goalPoint: THREE.Points
+  private targetPoint: THREE.Points
   private headingArrow: THREE.ArrowHelper
   private lastRobotPosition = new THREE.Vector3(Number.NaN, Number.NaN, Number.NaN)
   private viewInitialized = false
@@ -196,6 +199,7 @@ export class LidarSceneRenderer {
     this.scene.add(this.localMapMesh)
 
     this.goalPoint = this.makePoints(COLORS.goal, 9)
+    this.targetPoint = this.makePoints(COLORS.target, 14)
     this.headingArrow = new THREE.ArrowHelper(
       new THREE.Vector3(1, 0, 0),
       new THREE.Vector3(),
@@ -369,6 +373,13 @@ export class LidarSceneRenderer {
       this.goalPoint.visible = false
     }
 
+    if (options.showTarget && frame.targetXY) {
+      this.setPositions(this.targetPoint.geometry, Float32Array.of(frame.targetXY.x, frame.targetXY.y, 0.02))
+      this.targetPoint.visible = true
+    } else {
+      this.targetPoint.visible = false
+    }
+
     if (options.showRobot) {
       this.headingArrow.position.set(worldX, worldY, 0)
       this.headingArrow.visible = true
@@ -427,6 +438,7 @@ export class LidarSceneRenderer {
       if (frame.localMap) absorb(localMapCorners(frame.localMap))
       absorb(frame.localMapPathXY)
       if (frame.goalXY) absorb(Float32Array.of(frame.goalXY.x, frame.goalXY.y))
+      if (frame.targetXY) absorb(Float32Array.of(frame.targetXY.x, frame.targetXY.y))
     }
     const cx = (minX + maxX) / 2
     const cy = (minY + maxY) / 2

@@ -133,6 +133,8 @@ export interface SceneFrameData {
   footprintXY: Float32Array | undefined
   footprintMarginXY: Float32Array | undefined
   goalXY: { x: number; y: number } | undefined
+  /** Live observed person, independent of vehicle goal. Absent on loss/stale or old recordings. */
+  targetXY: { x: number; y: number } | undefined
   /** 里程计轨迹（odom_est 系，播放头之前的历史段） */
   odomTrailXY: Float32Array | undefined
   /** 局部占据栅格（odom 系，按 info.origin 摆放；旧录像无 /local_map → undefined） */

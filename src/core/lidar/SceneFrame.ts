@@ -12,6 +12,7 @@ import {
   asPath,
   asPointCloud2,
   asPolygonStamped,
+  asPoseArray,
   asPoseStamped,
   asTfMessage,
   laserScanToXY,
@@ -36,6 +37,7 @@ export const LIDAR_TOPICS = {
   trajBest: '/traj_best',
   trajCandidates: '/traj_candidates',
   goal: '/goal',
+  target: '/target',
   odom: '/odom_est',
   cmd: '/cmd_raw',
   scores: '/dwa_scores',
@@ -202,6 +204,24 @@ export function buildSceneFrameData(
     }
   }
 
+  // Live pedestrian is not the standoff/bypass goal. An empty array explicitly
+  // clears it; missing messages in a newer planner frame must not reuse an old
+  // observation. Unlike trajectories, a nav_hold frame may still observe a person.
+  let targetXY: { x: number; y: number } | undefined
+  const targetEntry = frame.entries.get(LIDAR_TOPICS.target)
+  if (targetEntry && (!hasPlannerState ||
+      targetEntry.logTimeNs === frame.entries.get(LIDAR_TOPICS.plannerState)?.logTimeNs)) {
+    const target = asPoseArray(targetEntry.message)
+    if (!target) warnings.push('/target 消息结构异常，行人位置已隐藏')
+    else if (target.poses.length === 1) {
+      const { x, y } = target.poses[0].position
+      // /target is new-format only: never apply the legacy nearest-odom fallback.
+      const world = transforms.toWorld(Float32Array.of(x, y), targetEntry.message, targetEntry.logTimeNs)
+      if (world) targetXY = { x: world[0], y: world[1] }
+      else warnings.push('/target 缺少对应 Header 采样时间的精确 TF，行人位置已隐藏')
+    }
+  }
+
   // ——— local_map 占据栅格与 A* 路径（odom 系数据，按 origin 摆放，
   //      不走 laser→base_link→odom 变换链；旧录像没有这两个 channel） ———
   let localMap: LocalMapView | undefined
@@ -276,6 +296,7 @@ export function buildSceneFrameData(
     footprintXY,
     footprintMarginXY,
     goalXY,
+    targetXY,
     odomTrailXY,
     localMap,
     localMapPathXY,

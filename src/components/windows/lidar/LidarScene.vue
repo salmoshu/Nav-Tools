@@ -73,6 +73,7 @@
           }}</el-checkbox>
           <el-checkbox v-model="showMargin" size="small">{{ t('lidar.scene.margin') }}</el-checkbox>
           <el-checkbox v-model="showGoal" size="small">{{ t('lidar.scene.goal') }}</el-checkbox>
+          <el-checkbox v-model="showTarget" size="small" :disabled="!hasTarget">{{ t('lidar.scene.target') }}</el-checkbox>
           <el-checkbox v-model="showLocalMap" size="small" :disabled="!hasLocalMap">{{
             t('lidar.scene.localMap')
           }}</el-checkbox>
@@ -111,6 +112,8 @@
         <span><i class="dot dot-candidate"></i>{{ t('lidar.scene.candidates') }}</span>
         <span><i class="dot dot-best"></i>{{ t('lidar.scene.best') }}</span>
         <span><i class="dot dot-trail"></i>{{ t('lidar.scene.trail') }}</span>
+        <span><i class="dot dot-goal"></i>{{ t('lidar.scene.goal') }}</span>
+        <span v-if="hasTarget"><i class="dot dot-target"></i>{{ t('lidar.scene.target') }}</span>
         <span v-if="hasLocalMap"><i class="dot dot-local-map"></i>{{ t('lidar.scene.localMap') }}</span>
         <span v-if="hasLocalMapPath"
           ><i class="dot dot-local-map-path"></i>{{ t('lidar.scene.localMapPath') }}</span
@@ -170,6 +173,8 @@ const showBest = topicFlag('/traj_best')
 const showFootprint = topicFlag('/footprint')
 const showMargin = topicFlag('/footprint_margin')
 const showGoal = topicFlag('/goal')
+const showTarget = topicFlag('/target')
+const hasTarget = computed(() => player.document.value?.topicInfo('/target') !== undefined)
 const showTrail = topicFlag('/odom_est')
 const showLocalMap = topicFlag('/local_map')
 const showLocalMapPath = topicFlag('/local_map_path')
@@ -190,6 +195,7 @@ const renderOptions = computed<SceneRenderOptions & { theme: 'dark' | 'light' }>
   showFootprint: showFootprint.value,
   showMargin: showMargin.value,
   showGoal: showGoal.value,
+  showTarget: showTarget.value,
   showTrail: showTrail.value,
   showLocalMap: showLocalMap.value,
   showLocalMapPath: showLocalMapPath.value,
@@ -307,6 +313,7 @@ function emptyFrame() {
     footprintXY: undefined,
     footprintMarginXY: undefined,
     goalXY: undefined,
+    targetXY: undefined,
     odomTrailXY: undefined,
     localMap: undefined,
     localMapPathXY: undefined,
@@ -627,6 +634,12 @@ onUnmounted(() => {
 }
 .dot-trail {
   background: #f59e0b;
+}
+.dot-goal {
+  background: #f43f5e;
+}
+.dot-target {
+  background: #38bdf8;
 }
 .dot-local-map {
   background: #f97316;

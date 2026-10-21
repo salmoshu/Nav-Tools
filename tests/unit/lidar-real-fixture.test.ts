@@ -20,6 +20,7 @@ describe('真实板端录像 trace-selftest.mcap 字段级校验', () => {
       (topic) =>
         topic !== LIDAR_TOPICS.localMap &&
         topic !== LIDAR_TOPICS.localMapPath &&
+        topic !== LIDAR_TOPICS.target &&
         topic !== LIDAR_TOPICS.plannerState,
     )
     expect(legacyTopics).toHaveLength(12)
@@ -35,6 +36,7 @@ describe('真实板端录像 trace-selftest.mcap 字段级校验', () => {
     expect(doc.topicInfo(LIDAR_TOPICS.localMap)).toBeUndefined()
     expect(doc.topicInfo(LIDAR_TOPICS.localMapPath)).toBeUndefined()
     expect(doc.topicInfo(LIDAR_TOPICS.plannerState)).toBeUndefined()
+    expect(doc.topicInfo(LIDAR_TOPICS.target)).toBeUndefined()
   })
 
   it('LaserScan：360 点、1° 角分辨率、量程 0.1~12 m', async () => {

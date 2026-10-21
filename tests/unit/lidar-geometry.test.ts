@@ -1,6 +1,7 @@
 // 几何提取函数的单元测试。
 import { describe, expect, it } from 'vitest'
 import {
+  asPoseArray,
   laserScanToXY,
   odometryToPose,
   pathToXY,
@@ -10,6 +11,20 @@ import {
   transformXY,
 } from '../../src/core/lidar/LidarGeometry'
 import { makeLaserScan, makePath, makePointCloud2, makePolygon } from './helpers/lidarTestBag'
+
+describe('live pedestrian PoseArray', () => {
+  it('accepts a clear or one finite person, rejecting malformed/multiple/nonfinite positions', () => {
+    expect(asPoseArray({ poses: [] })).toBeDefined()
+    const person = { position: { x: 8, y: -2, z: 0 } }
+    expect(asPoseArray({ poses: [person] })).toBeDefined()
+    expect(asPoseArray({ poses: [person, person] })).toBeUndefined()
+    expect(asPoseArray({ poses: [{ position: { x: NaN, y: 2, z: 0 } }] })).toBeUndefined()
+    expect(asPoseArray({ poses: [{ position: { x: 0, y: Infinity, z: 0 } }] })).toBeUndefined()
+    expect(asPoseArray({ poses: [{}] })).toBeUndefined()
+    expect(asPoseArray({ poses: 'not an array' })).toBeUndefined()
+    expect(asPoseArray(null)).toBeUndefined()
+  })
+})
 
 describe('laserScanToXY', () => {
   it('极坐标转笛卡尔并剔除无效点', () => {

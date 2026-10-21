@@ -124,6 +124,65 @@ function dynamicTf(nanosec: number, x: number) {
 }
 
 describe('buildSceneFrameData', () => {
+  it('separates the live person from goal, clears on loss, and restores on reacquisition', async () => {
+    const targetSchema = SCHEMA_POSE_STAMPED
+      .replace('std_msgs/Header stamp', 'std_msgs/Header header')
+      .replace('geometry_msgs/Pose pose', 'geometry_msgs/Pose[] poses')
+    const pose = { position: { x: 7.75, y: 2, z: 0 }, orientation: { x: 0, y: 0, z: 0, w: 1 } }
+    const events = [BASE, BASE+100_000_000n, BASE+200_000_000n, BASE+300_000_000n]
+    const doc = await McapDocument.load(await buildMcapBytes([
+      {
+        topic: '/target', schemaName: 'geometry_msgs/msg/PoseArray', schemaText: targetSchema,
+        messages: events.slice(0, 3).map((time, i) => ({
+          logTimeNs: time,
+          message: { header: header('base_link', 10_000_000, i+1), poses: i === 1 ? [] : [pose] },
+        })),
+      },
+      {
+        topic: '/goal', schemaName: 'geometry_msgs/msg/PoseStamped',
+        schemaText: SCHEMA_POSE_STAMPED.replace('std_msgs/Header stamp', 'std_msgs/Header header'),
+        messages: [{ logTimeNs: BASE, message: {
+          header: header('base_link', 10_000_000, 1),
+          pose: { ...pose, position: { x: 0.5, y: -0.5, z: 0 } },
+        } }],
+      },
+      {
+        topic: '/tf', schemaName: 'tf2_msgs/msg/TFMessage',
+        schemaText: SCHEMA_TF_MESSAGE.replaceAll('std_msgs/Header stamp', 'std_msgs/Header header'),
+        messages: events.map((time, i) => ({ logTimeNs: time, message: dynamicTf(i+1, 10+i) })),
+      },
+      {
+        topic: '/planner_state', schemaName: 'std_msgs/msg/String', schemaText: SCHEMA_STRING,
+        messages: events.map((time, i) => ({ logTimeNs: time, message: {
+          // A navigation hold without DWA scores still has a live observation.
+          data: JSON.stringify(plannerState(i+1, 'navigation_hold', false)),
+        } })),
+      },
+    ]))
+    const live = buildSceneFrameData(doc, frameAt(doc, Number(events[0])))
+    expect(live.targetXY).toEqual({ x: 17.75, y: 2 }) // Offset already included, not +0.75 twice.
+    expect(live.goalXY).toEqual({ x: 10.5, y: -0.5 })
+    expect(buildSceneFrameData(doc, frameAt(doc, Number(events[1]))).targetXY).toBeUndefined()
+    expect(buildSceneFrameData(doc, frameAt(doc, Number(events[2]))).targetXY).toEqual({ x: 19.75, y: 2 })
+    expect(buildSceneFrameData(doc, frameAt(doc, Number(events[3]))).targetXY).toBeUndefined()
+    // Seeking backward must restore the recorded observation, not retain a clear latch.
+    expect(buildSceneFrameData(doc, frameAt(doc, Number(events[0]))).targetXY).toEqual(live.targetXY)
+    const oldDoc = await buildSceneDoc()
+    expect(buildSceneFrameData(oldDoc, frameAt(oldDoc, Number(BASE))).targetXY)
+      .toBeUndefined() // Old recordings never synthesize a person from /goal.
+    const missingTf = frameAt(doc, Number(events[0]))
+    missingTf.entries.set('/target', {
+      topic: '/target', index: 0, logTimeNs: Number(BASE),
+      message: { header: header('base_link', 10_000_000, 99), poses: [pose] },
+    })
+    const hidden = buildSceneFrameData(doc, missingTf)
+    expect(hidden.targetXY).toBeUndefined()
+    expect(hidden.warnings.some((warning) => warning.includes('/target'))).toBe(true)
+    const noDynamicTf = frameAt(oldDoc, Number(BASE))
+    noDynamicTf.entries.set('/target', missingTf.entries.get('/target')!)
+    expect(buildSceneFrameData(oldDoc, noDynamicTf).targetXY).toBeUndefined()
+  })
+
   it('扫描点经 laser→base_link→odom 两级变换', async () => {
     const doc = await buildSceneDoc()
     const frame = buildSceneFrameData(doc, frameAt(doc, Number(BASE)))

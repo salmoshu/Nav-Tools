@@ -69,6 +69,11 @@ export interface PoseStampedMessage extends RosStampedMessage {
   pose: { position: { x: number; y: number; z: number }; orientation: { x: number; y: number; z: number; w: number } }
 }
 
+/** Zero poses clears the live pedestrian; one pose is position-only (no heading). */
+export interface PoseArrayMessage extends RosStampedMessage {
+  poses: PoseStampedMessage['pose'][]
+}
+
 export interface OccupancyGridMessage extends RosStampedMessage {
   info: {
     resolution: number
@@ -143,6 +148,17 @@ export function asPoseStamped(value: unknown): PoseStampedMessage | undefined {
   const pose = (value as { pose?: unknown }).pose
   if (!isObject(pose) || !isObject(pose.position)) return undefined
   return value as unknown as PoseStampedMessage
+}
+
+export function asPoseArray(value: unknown): PoseArrayMessage | undefined {
+  if (!isObject(value) || !Array.isArray(value.poses) || value.poses.length > 1) return undefined
+  if (!value.poses.every((pose: unknown) => {
+    if (!isObject(pose) || !isObject(pose.position)) return false
+    const { x, y, z } = pose.position
+    return typeof x === 'number' && Number.isFinite(x) &&
+      typeof y === 'number' && Number.isFinite(y) && typeof z === 'number' && Number.isFinite(z)
+  })) return undefined
+  return value as unknown as PoseArrayMessage
 }
 
 export function asOccupancyGrid(value: unknown): OccupancyGridMessage | undefined {
