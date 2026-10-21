@@ -6,12 +6,12 @@ import path from 'node:path'
 import { promisify } from 'node:util'
 import { describe, expect, it, vi } from 'vitest'
 import {
+  EMPTY_FILE_TREE_DOWNLOAD_QUEUE,
   FILE_TREE_RING_RADIUS,
-  IDLE_FILE_TREE_DOWNLOAD,
   TRANSFER_RATE_WINDOW_MS,
-  beginFileTreeDownload,
+  aggregateFileTreeDownloads,
   estimateTransferRate,
-  fileTreeDownloadPercent,
+  fileTreeQueuePercent,
   fileTreeRingCircumference,
   fileTreeRingDasharray,
   fileTreeRingIndeterminateDasharray,
@@ -20,11 +20,12 @@ import {
   formatTransferPair,
   formatTransferPairText,
   pushTransferSample,
+  queueFileTreeDownload,
   reduceFileTreeTransferEvent,
   remainingTransferSeconds,
   settleFileTreeDownload,
   windowTransferRate,
-  type FileTreeDownloadStatus,
+  type FileTreeDownloadQueue,
   type TransferProgressSample,
 } from '../../src/core/terminal/FileTreeDownloadStatus'
 
@@ -54,67 +55,191 @@ function transferEvent(partial: Partial<SftpTransferEvent> = {}): SftpTransferEv
   }
 }
 
-describe('FileTreeDownloadStatus 归约', () => {
-  it('beginFileTreeDownload 返回 running 占位,总量未知', () => {
-    const status = beginFileTreeDownload('logs.zip')
-    expect(status).toEqual({ phase: 'running', name: 'logs.zip', transferred: 0, total: 0 })
-    expect(fileTreeDownloadPercent(status)).toBeNull()
+describe('文件树下载队列归约', () => {
+  it('queueFileTreeDownload 追加 running 占位,总量未知', () => {
+    const queue = queueFileTreeDownload(EMPTY_FILE_TREE_DOWNLOAD_QUEUE, 'logs.zip')
+    expect(queue.tasks).toHaveLength(1)
+    expect(queue.tasks[0]).toMatchObject({
+      name: 'logs.zip',
+      transferred: 0,
+      total: 0,
+      phase: 'running',
+    })
+    const agg = aggregateFileTreeDownloads(queue)
+    expect(agg.phase).toBe('running')
+    expect(agg.name).toBe('logs.zip')
+    expect(fileTreeQueuePercent(agg)).toBeNull()
   })
 
-  it('running 事件更新字节数并换算百分比', () => {
-    const status = reduceFileTreeTransferEvent(
-      beginFileTreeDownload('a.bin'),
-      transferEvent({ transferred: 25, total: 100 }),
-    )
-    expect(status.phase).toBe('running')
-    expect(fileTreeDownloadPercent(status)).toBe(25)
+  it('running 事件收养占位任务并更新字节数', () => {
+    let queue = queueFileTreeDownload(EMPTY_FILE_TREE_DOWNLOAD_QUEUE, 'a.bin')
+    queue = reduceFileTreeTransferEvent(queue, transferEvent({ transferred: 25, total: 100 }))
+    // 占位被收养:任务 id 换成真实 operationId
+    expect(queue.tasks[0].id).toBe('op-1')
+    const agg = aggregateFileTreeDownloads(queue)
+    expect(agg.phase).toBe('running')
+    expect(fileTreeQueuePercent(agg)).toBe(25)
   })
 
   it('上传方向的事件与文件树状态栏无关,原样返回', () => {
-    const current = beginFileTreeDownload('a.bin')
+    const queue = queueFileTreeDownload(EMPTY_FILE_TREE_DOWNLOAD_QUEUE, 'a.bin')
     const event = transferEvent({ direction: 'upload', transferred: 50 })
-    expect(reduceFileTreeTransferEvent(current, event)).toBe(current)
+    expect(reduceFileTreeTransferEvent(queue, event)).toBe(queue)
   })
 
-  it('success/error 事件把相位推进到对应终态', () => {
-    const running = beginFileTreeDownload('a.bin')
-    const done = reduceFileTreeTransferEvent(
-      running,
+  it('success/error 事件把对应任务推进到终态', () => {
+    let queue = queueFileTreeDownload(EMPTY_FILE_TREE_DOWNLOAD_QUEUE, 'a.bin')
+    queue = reduceFileTreeTransferEvent(
+      queue,
       transferEvent({ status: 'success', transferred: 100, total: 100 }),
     )
-    expect(done.phase).toBe('success')
-    expect(fileTreeDownloadPercent(done)).toBe(100)
-    const failed = reduceFileTreeTransferEvent(
-      running,
-      transferEvent({ status: 'error', error: 'boom' }),
-    )
-    expect(failed.phase).toBe('error')
-    expect(failed.error).toBe('boom')
+    let agg = aggregateFileTreeDownloads(queue)
+    expect(agg.phase).toBe('success')
+    expect(fileTreeQueuePercent(agg)).toBe(100)
+
+    queue = queueFileTreeDownload(EMPTY_FILE_TREE_DOWNLOAD_QUEUE, 'b.bin')
+    queue = reduceFileTreeTransferEvent(queue, transferEvent({ status: 'error', error: 'boom' }))
+    agg = aggregateFileTreeDownloads(queue)
+    expect(agg.phase).toBe('error')
+    expect(agg.error).toBe('boom')
   })
 
-  it('settle 失败是权威结果;成功只在仍在 running 时收尾', () => {
-    const running = beginFileTreeDownload('a.bin')
-    const failed = settleFileTreeDownload(running, false, '磁盘已满')
-    expect(failed).toMatchObject({ phase: 'error', name: 'a.bin', error: '磁盘已满' })
-    // 事件已给出 error 时,settle 无新消息则保留事件里的消息
-    const withEventError = { ...running, phase: 'error' as const, error: 'sftp boom' }
-    expect(settleFileTreeDownload(withEventError, false).error).toBe('sftp boom')
+  it('settle 只兜底未收到事件的占位任务;真实事件已覆盖的任务不被改写', () => {
+    // invoke 直接抛错(未发任何事件):占位被标记 error
+    let queue = queueFileTreeDownload(EMPTY_FILE_TREE_DOWNLOAD_QUEUE, 'a.bin')
+    queue = settleFileTreeDownload(queue, false, '磁盘已满')
+    expect(queue.tasks[0]).toMatchObject({ phase: 'error', error: '磁盘已满' })
 
-    const succeeded = settleFileTreeDownload(running, true)
-    expect(succeeded.phase).toBe('success')
-    // 成功事件通常先于 invoke 落定:已 success 的状态不被 settle 改写
-    const alreadyDone: FileTreeDownloadStatus = { ...running, phase: 'success' }
-    expect(settleFileTreeDownload(alreadyDone, true)).toBe(alreadyDone)
-    expect(settleFileTreeDownload(IDLE_FILE_TREE_DOWNLOAD, true)).toBe(IDLE_FILE_TREE_DOWNLOAD)
+    // 事件已推进到 success 的任务:settle 不再改写
+    queue = queueFileTreeDownload(EMPTY_FILE_TREE_DOWNLOAD_QUEUE, 'b.bin')
+    queue = reduceFileTreeTransferEvent(queue, transferEvent({ status: 'success', transferred: 100 }))
+    const settled = settleFileTreeDownload(queue, false, '迟到错误')
+    expect(settled).toBe(queue)
+
+    // 空队列 settle 无操作
+    expect(settleFileTreeDownload(EMPTY_FILE_TREE_DOWNLOAD_QUEUE, true)).toBe(
+      EMPTY_FILE_TREE_DOWNLOAD_QUEUE,
+    )
   })
 
   it('百分比在总量未知时为 null,且不会越过 100', () => {
-    expect(
-      fileTreeDownloadPercent({ phase: 'running', name: 'x', transferred: 10, total: 0 }),
-    ).toBeNull()
-    expect(
-      fileTreeDownloadPercent({ phase: 'running', name: 'x', transferred: 120, total: 100 }),
-    ).toBe(100)
+    let queue: FileTreeDownloadQueue = {
+      tasks: [{ id: 'op-1', name: 'x', transferred: 10, total: 0, phase: 'running' }],
+    }
+    expect(fileTreeQueuePercent(aggregateFileTreeDownloads(queue))).toBeNull()
+    queue = {
+      tasks: [{ id: 'op-1', name: 'x', transferred: 120, total: 100, phase: 'running' }],
+    }
+    expect(fileTreeQueuePercent(aggregateFileTreeDownloads(queue))).toBe(100)
+  })
+})
+
+describe('并发下载聚合(多任务边界)', () => {
+  it('两个任务并发:进度按 operationId 各归各位,聚合为字节和', () => {
+    let queue = queueFileTreeDownload(EMPTY_FILE_TREE_DOWNLOAD_QUEUE, 'dirA')
+    queue = queueFileTreeDownload(queue, 'dirB')
+    queue = reduceFileTreeTransferEvent(
+      queue,
+      transferEvent({ operationId: 'op-a', name: 'dirA', transferred: 50, total: 100 }),
+    )
+    queue = reduceFileTreeTransferEvent(
+      queue,
+      transferEvent({ operationId: 'op-b', name: 'dirB', transferred: 60, total: 200 }),
+    )
+    queue = reduceFileTreeTransferEvent(
+      queue,
+      transferEvent({ operationId: 'op-a', name: 'dirA/a1.txt', transferred: 80, total: 100 }),
+    )
+    const agg = aggregateFileTreeDownloads(queue)
+    expect(agg.phase).toBe('running')
+    expect(agg.runningCount).toBe(2)
+    // 并发时不冠单任务名
+    expect(agg.name).toBe('')
+    expect(agg.knownTransferred).toBe(140)
+    expect(agg.total).toBe(300)
+    // B 的任务不受 A 的事件覆盖
+    expect(queue.tasks.find((task) => task.id === 'op-b')).toMatchObject({
+      name: 'dirB',
+      transferred: 60,
+    })
+  })
+
+  it('单任务完成不把队列切成终态:仍有 running 时聚合保持 running', () => {
+    let queue = queueFileTreeDownload(EMPTY_FILE_TREE_DOWNLOAD_QUEUE, 'A')
+    queue = queueFileTreeDownload(queue, 'B')
+    queue = reduceFileTreeTransferEvent(
+      queue,
+      transferEvent({
+        operationId: 'op-a',
+        name: 'A',
+        transferred: 100,
+        total: 100,
+        status: 'success',
+      }),
+    )
+    queue = reduceFileTreeTransferEvent(
+      queue,
+      transferEvent({ operationId: 'op-b', name: 'B', transferred: 10, total: 50 }),
+    )
+    const agg = aggregateFileTreeDownloads(queue)
+    // 关键:不出现 success→running 的相位闪烁
+    expect(agg.phase).toBe('running')
+    expect(agg.successCount).toBe(1)
+    // 已完成任务的字节留在分子分母里:聚合百分比不回跳
+    expect(agg.knownTransferred).toBe(110)
+    expect(agg.total).toBe(150)
+  })
+
+  it('全部结束后聚合为终态:含失败时报部分失败并保留首个错误', () => {
+    let queue: FileTreeDownloadQueue = {
+      tasks: [
+        { id: 'op-a', name: 'A', transferred: 100, total: 100, phase: 'success' },
+        { id: 'op-b', name: 'B', transferred: 0, total: 50, phase: 'error', error: '权限不足' },
+      ],
+    }
+    let agg = aggregateFileTreeDownloads(queue)
+    expect(agg.phase).toBe('error')
+    expect(agg.successCount).toBe(1)
+    expect(agg.failedCount).toBe(1)
+    expect(agg.error).toBe('权限不足')
+
+    queue = {
+      tasks: [
+        { id: 'op-a', name: 'A', transferred: 100, total: 100, phase: 'success' },
+        { id: 'op-b', name: 'B', transferred: 50, total: 50, phase: 'success' },
+      ],
+    }
+    agg = aggregateFileTreeDownloads(queue)
+    expect(agg.phase).toBe('success')
+    expect(agg.successCount).toBe(2)
+  })
+
+  it('新任务在队列无 running 时清掉终态条目;有 running 时保留', () => {
+    const finished: FileTreeDownloadQueue = {
+      tasks: [{ id: 'op-a', name: 'A', transferred: 100, total: 100, phase: 'success' }],
+    }
+    let queue = queueFileTreeDownload(finished, 'B')
+    expect(queue.tasks.map((task) => task.name)).toEqual(['B'])
+
+    const running: FileTreeDownloadQueue = {
+      tasks: [{ id: 'op-a', name: 'A', transferred: 10, total: 100, phase: 'running' }],
+    }
+    queue = queueFileTreeDownload(running, 'B')
+    expect(queue.tasks.map((task) => task.name)).toEqual(['A', 'B'])
+  })
+
+  it('存在总量未知的 running 任务时百分比按已知部分计算并标记 hasUnknownTotal', () => {
+    const queue: FileTreeDownloadQueue = {
+      tasks: [
+        { id: 'op-a', name: 'A', transferred: 50, total: 100, phase: 'running' },
+        { id: 'op-b', name: 'B', transferred: 500, total: 0, phase: 'running' },
+      ],
+    }
+    const agg = aggregateFileTreeDownloads(queue)
+    expect(agg.hasUnknownTotal).toBe(true)
+    // 未知任务的字节进总字节文本,但不进百分比分子
+    expect(agg.transferred).toBe(550)
+    expect(fileTreeQueuePercent(agg)).toBe(50)
   })
 })
 
@@ -702,12 +827,12 @@ describe('文件树侧边栏接线(源码扫描)', () => {
     expect(panelSource).toContain('min-width: 24ch')
   })
 
-  it('速率用 >=1s 滑动窗口估算,采样队列在 download-start/终态/会话切换时清空', () => {
+  it('速率用 >=1s 滑动窗口估算,采样队列在队列清空/会话切换时清空', () => {
     expect(panelSource).toContain('pushTransferSample')
     expect(panelSource).toContain('windowTransferRate')
     expect(panelSource).not.toContain('estimateTransferRate')
-    // 清空点:handleDownloadStart、handleDownloadSettle、非 running 事件、会话切换
-    expect(panelSource.match(/transferSamples = \[\]/g)?.length).toBeGreaterThanOrEqual(4)
+    // 清空点:聚合终态停留结束的复位、会话切换(单任务终态不再打断速率窗口)
+    expect(panelSource.match(/transferSamples = \[\]/g)?.length).toBeGreaterThanOrEqual(2)
   })
 
   it('预览 tab 跟随:面板接收 revealPath 并导航到文件所在目录', () => {
@@ -725,6 +850,10 @@ describe('文件树侧边栏接线(源码扫描)', () => {
         'fileTreeStatusDownloading',
         'fileTreeStatusDone',
         'fileTreeStatusFailed',
+        'fileTreeStatusDownloadingMany',
+        'fileTreeStatusDoneMany',
+        'fileTreeStatusPartial',
+        'fileTreeStatusFailedMany',
         'fileTreeTransferEta',
         'filePreviewSessionGone',
       ]) {

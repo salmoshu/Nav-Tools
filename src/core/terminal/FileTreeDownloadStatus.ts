@@ -2,65 +2,204 @@ import type { SftpTransferEvent } from './TerminalTypes'
 
 /**
  * 文件树底部状态栏的下载相位:idle 空态,running 进行中,
- * success/error 为最近一次任务的终态(保留展示直到下次下载或会话切换)。
+ * success/error 为队列清空后的聚合终态(短暂停留,直到下次下载或会话切换)。
  */
 export type FileTreeDownloadPhase = 'idle' | 'running' | 'success' | 'error'
 
-export interface FileTreeDownloadStatus {
-  phase: FileTreeDownloadPhase
-  /** 当前/最近任务的展示名;目录下载时随进度事件切换为正在传输的那个文件 */
+/** 一个下载任务:目录下载整棵树共用主进程的一个 operationId,进度按聚合字节推进 */
+export interface FileTreeDownloadTask {
+  /** 主进程事件的 operationId;首个事件到达前的本地占位为 `pending-N` */
+  id: string
+  /** 展示名;目录下载时随进度事件切换为正在传输的那个文件 */
   name: string
   transferred: number
-  /** 0 表示总量未知(WSL tar 流式打包等场景),UI 应显示不定态而非 0% */
+  /** 0 表示总量未知(WSL tar 流式打包等场景),聚合时按不定态处理 */
   total: number
+  phase: Exclude<FileTreeDownloadPhase, 'idle'>
   error?: string
 }
 
-export const IDLE_FILE_TREE_DOWNLOAD: FileTreeDownloadStatus = {
-  phase: 'idle',
-  name: '',
-  transferred: 0,
-  total: 0,
+/**
+ * 下载任务队列:并发下载各占一条,事件按 operationId 各归各位。
+ * 状态栏只渲染队列的聚合视图(见 aggregateFileTreeDownloads),
+ * 单任务完成/失败不再把整条状态栏切成终态——这是并发与首尾相接时不闪烁的关键。
+ */
+export interface FileTreeDownloadQueue {
+  tasks: FileTreeDownloadTask[]
 }
 
-/** 保存对话框确认后、首个进度事件到达前的本地占位(本机/WSL 通道没有字节级事件) */
-export function beginFileTreeDownload(name: string): FileTreeDownloadStatus {
-  return { phase: 'running', name, transferred: 0, total: 0 }
+export const EMPTY_FILE_TREE_DOWNLOAD_QUEUE: FileTreeDownloadQueue = { tasks: [] }
+
+let placeholderSeq = 0
+
+/** 队列里没有 running 任务时,新任务到来前清掉终态条目(聚合终态的展示由 UI 的停留计时负责) */
+function pruneFinishedWhenIdle(tasks: FileTreeDownloadTask[]): FileTreeDownloadTask[] {
+  if (tasks.some((task) => task.phase === 'running')) return tasks
+  return tasks.filter((task) => task.phase === 'running')
 }
 
-/** 归约一条 transfer 事件:事件代表此刻真实进度,直接以事件为准;上传方向与状态栏无关 */
-export function reduceFileTreeTransferEvent(
-  current: FileTreeDownloadStatus,
-  event: SftpTransferEvent,
-): FileTreeDownloadStatus {
-  if (event.direction !== 'download') return current
+/**
+ * 保存对话框确认后、首个进度事件到达前的本地占位(三通道都有事件,但 du 估算/
+ * 清单预 stat 等前置步骤会让首事件晚到一拍)。返回追加占位任务后的新队列。
+ */
+export function queueFileTreeDownload(
+  queue: FileTreeDownloadQueue,
+  name: string,
+): FileTreeDownloadQueue {
   return {
-    phase: event.status === 'running' ? 'running' : event.status,
-    name: event.name,
-    transferred: event.transferred,
-    total: event.total,
-    error: event.error,
+    tasks: [
+      ...pruneFinishedWhenIdle(queue.tasks),
+      { id: `pending-${++placeholderSeq}`, name, transferred: 0, total: 0, phase: 'running' },
+    ],
   }
 }
 
 /**
- * 下载 invoke 落定。失败是权威结果,直接覆盖(本机/WSL 无事件通道,只能在此收尾);
- * 成功只在仍停留 running 时收尾——主进程的成功事件通常已先把相位推进到 success。
+ * 归约一条 transfer 事件:按 operationId 归属到既有任务并就地更新;
+ * 未知 operationId 的 running 事件按 FIFO 收养最老的占位任务(占位先于事件创建,
+ * 顺序一致),没有占位时直接新建。上传方向与状态栏无关,原样返回。
  */
-export function settleFileTreeDownload(
-  current: FileTreeDownloadStatus,
-  ok: boolean,
-  error?: string,
-): FileTreeDownloadStatus {
-  if (!ok) return { ...current, phase: 'error', error: error ?? current.error }
-  if (current.phase !== 'running') return current
-  return { ...current, phase: 'success' }
+export function reduceFileTreeTransferEvent(
+  queue: FileTreeDownloadQueue,
+  event: SftpTransferEvent,
+): FileTreeDownloadQueue {
+  if (event.direction !== 'download') return queue
+  const phase = event.status === 'running' ? 'running' : event.status
+  const patch = (task: FileTreeDownloadTask): FileTreeDownloadTask => ({
+    ...task,
+    phase,
+    name: event.name,
+    transferred: event.transferred,
+    total: event.total,
+    error: event.error,
+  })
+  const index = queue.tasks.findIndex((task) => task.id === event.operationId)
+  if (index >= 0) {
+    const tasks = queue.tasks.slice()
+    tasks[index] = patch(tasks[index])
+    return { tasks }
+  }
+  // 收养最老的占位任务:占位换成真实 operationId,后续事件按 id 归位
+  const pendingIndex = queue.tasks.findIndex((task) => task.id.startsWith('pending-'))
+  if (pendingIndex >= 0) {
+    const tasks = queue.tasks.slice()
+    tasks[pendingIndex] = { ...patch(tasks[pendingIndex]), id: event.operationId }
+    return { tasks }
+  }
+  return {
+    tasks: [
+      ...pruneFinishedWhenIdle(queue.tasks),
+      {
+        id: event.operationId,
+        name: event.name,
+        transferred: event.transferred,
+        total: event.total,
+        phase,
+        error: event.error,
+      },
+    ],
+  }
 }
 
-/** 百分比;total 未知(<=0)时返回 null,UI 显示不定态 */
-export function fileTreeDownloadPercent(status: FileTreeDownloadStatus): number | null {
-  if (status.total <= 0) return null
-  return Math.min(100, Math.round((status.transferred / status.total) * 100))
+/**
+ * 下载 invoke 落定。三通道的 success/error 事件都先于 invoke 落定到达,
+ * 这里只兜底还没收到任何事件的占位任务(如参数解析即抛错):失败把最老的
+ * running 占位标记为 error,成功补记 success;其余情况不动作,避免误伤
+ * 并发队列里仍在正常推进的任务。
+ */
+export function settleFileTreeDownload(
+  queue: FileTreeDownloadQueue,
+  ok: boolean,
+  error?: string,
+): FileTreeDownloadQueue {
+  const index = queue.tasks.findIndex(
+    (task) => task.id.startsWith('pending-') && task.phase === 'running',
+  )
+  if (index < 0) return queue
+  const tasks = queue.tasks.slice()
+  const task = tasks[index]
+  tasks[index] = ok
+    ? { ...task, phase: 'success' }
+    : { ...task, phase: 'error', error: error ?? task.error }
+  return { tasks }
+}
+
+/** 队列聚合视图:状态栏唯一的数据来源 */
+export interface FileTreeDownloadAggregate {
+  phase: FileTreeDownloadPhase
+  runningCount: number
+  successCount: number
+  failedCount: number
+  /** 恰好一个任务(或恰一个 running)时给它冠名;并发时为 ''(UI 按数量组织文案) */
+  name: string
+  /** 全部任务已传字节之和(含总量未知任务),字节数文本用它 */
+  transferred: number
+  /** 总量已知任务的已传字节之和,与 total 配对算百分比/ETA */
+  knownTransferred: number
+  /** 总量已知任务的分母之和;0 表示没有可算的已知部分 */
+  total: number
+  /** 存在总量未知的 running 任务:已知百分比不代表全局,ETA 不展示 */
+  hasUnknownTotal: boolean
+  /** 首个失败任务的错误信息(tooltip 展示) */
+  error?: string
+}
+
+export function aggregateFileTreeDownloads(queue: FileTreeDownloadQueue): FileTreeDownloadAggregate {
+  let runningCount = 0
+  let successCount = 0
+  let failedCount = 0
+  let transferred = 0
+  let knownTransferred = 0
+  let total = 0
+  let hasUnknownTotal = false
+  let runningName = ''
+  let firstError: string | undefined
+  for (const task of queue.tasks) {
+    transferred += task.transferred
+    if (task.total > 0) {
+      knownTransferred += task.transferred
+      total += task.total
+    }
+    if (task.phase === 'running') {
+      runningCount += 1
+      runningName = task.name
+      if (task.total <= 0) hasUnknownTotal = true
+    } else if (task.phase === 'success') {
+      successCount += 1
+    } else {
+      failedCount += 1
+      firstError = firstError ?? task.error
+    }
+  }
+  const phase: FileTreeDownloadPhase =
+    queue.tasks.length === 0
+      ? 'idle'
+      : runningCount > 0
+        ? 'running'
+        : failedCount > 0
+          ? 'error'
+          : 'success'
+  return {
+    phase,
+    runningCount,
+    successCount,
+    failedCount,
+    name: queue.tasks.length === 1 ? queue.tasks[0].name : runningCount === 1 ? runningName : '',
+    transferred,
+    knownTransferred,
+    total,
+    hasUnknownTotal,
+    error: firstError,
+  }
+}
+
+/**
+ * 聚合百分比:没有任何已知分母时返回 null(不定态);
+ * 否则按已知部分换算并钳制在 100 以内(未知总量任务的字节不进分子)。
+ */
+export function fileTreeQueuePercent(aggregate: FileTreeDownloadAggregate): number | null {
+  if (aggregate.total <= 0) return null
+  return Math.min(100, Math.round((aggregate.knownTransferred / aggregate.total) * 100))
 }
 
 /** 一个 running 进度采样点;at 为毫秒时间戳 */

@@ -144,6 +144,19 @@ describe('UpdaterService status cache', () => {
     expect(received.at(-1)).toMatchObject({ version: '1.3.1', releaseNotes: 'notes', percent: 20 })
   })
 
+  it('clamps download progress so it never regresses within one download', () => {
+    const { service, emit } = createUpdater()
+    emit({ type: 'update-available', version: '1.3.1' })
+    emit({ type: 'download-progress', percent: 100 })
+    // 主进程因重试/回退重新下载时,界面进度不回跳
+    emit({ type: 'download-progress', percent: 12 })
+    expect(service.getLastStatus()?.percent).toBe(100)
+    // 新一轮版本检查后,进度允许重新从低位累计
+    emit({ type: 'update-available', version: '1.3.2' })
+    emit({ type: 'download-progress', percent: 5 })
+    expect(service.getLastStatus()?.percent).toBe(5)
+  })
+
   it('ignores malformed payloads', () => {
     const { service, emit } = createUpdater()
     emit({ type: 'bogus' } as unknown as UpdateStatusEvent)

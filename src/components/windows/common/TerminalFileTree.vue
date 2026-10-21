@@ -207,7 +207,7 @@ async function renameEntry(entry: SftpEntry): Promise<void> {
     })
     ElMessage.success(t('common.terminal.fileTreeRenameDone', { name }))
     if (expandedSet.delete(entry.path)) expandedSet.add(siblingPath(entry.path, name))
-    expandedKeys.value = [...expandedSet]
+    snapshotExpandedKeys()
     treeKey.value += 1
   } catch (error) {
     if (error === 'cancel' || error === 'close') return
@@ -230,6 +230,8 @@ async function deleteEntry(entry: SftpEntry): Promise<void> {
       directory: entry.directory,
     })
     ElMessage.success(t('common.terminal.fileTreeDeleteDone', { name: entry.name }))
+    expandedSet.delete(entry.path)
+    snapshotExpandedKeys()
     treeKey.value += 1
   } catch (error) {
     if (error === 'cancel' || error === 'close') return
@@ -274,7 +276,7 @@ async function moveEntry(source: SftpEntry, targetDir: SftpEntry): Promise<void>
       ElMessage.error(t('common.terminal.fileTreeOpFailed', { message: errorMessage(error) }))
     }
   } finally {
-    expandedKeys.value = [...expandedSet]
+    snapshotExpandedKeys()
     treeKey.value += 1
   }
 }
@@ -410,6 +412,12 @@ function onTreePointerMove(event: PointerEvent): void {
     dragGhost.name = active.payload.name
     dragGhost.directory = active.payload.directory
     dragGhost.cached = dragOutCache.has(active.payload.path)
+    // 手势一激活就预下载到临时缓存:指针出窗时多半已就绪,可同手势移交 OLE 拖放,
+    // 落点即松手处的文件夹;仅在窗内完成的移动/插入只是多下一次临时副本
+    if (!dragGhost.cached && !dragOutPreparing.has(active.payload.path)) {
+      dragGhost.preparing = true
+      void prepareDragOut(active.payload)
+    }
   }
   dragGhost.x = event.clientX
   dragGhost.y = event.clientY
@@ -495,9 +503,9 @@ function cleanupGesture(): void {
 }
 
 /**
- * 拖出应用:远端文件先下载到系统临时目录(状态栏复用聚合进度)。
- * 下载完成时按钮仍按住且指针仍在窗外 → 同一手势内移交系统 OLE 拖放,拖到哪落到哪;
- * 按钮已松开 → 武装缓存作为降级,提示「再拖一次」立即可用。
+ * 拖出应用的预下载:拖拽手势一激活就把远端文件下载到系统临时缓存(状态栏复用聚合进度),
+ * 指针出窗时不再临时开始下载。下载完成时按钮仍按住且指针在窗外 → 同一手势内移交
+ * 系统 OLE 拖放,拖到哪落到哪;按钮已松开 → 武装缓存作为降级,提示「再拖一次」立即可用。
  */
 async function prepareDragOut(payload: FileTreeDragPayload): Promise<void> {
   const cached = dragOutCache.get(payload.path)
@@ -521,9 +529,14 @@ async function prepareDragOut(payload: FileTreeDragPayload): Promise<void> {
     dragOutCache.set(payload.path, localPath)
     emit('download-settle', true)
     const active = gesture
-    if (active && active.payload.path === payload.path && active.phase === 'preparing') {
-      startSystemDrag(payload, localPath)
-      return
+    if (active && active.payload.path === payload.path) {
+      if (active.phase === 'preparing') {
+        startSystemDrag(payload, localPath)
+        return
+      }
+      // 指针仍在窗内:徽标切换为已就绪,出窗即可直接移交
+      dragGhost.cached = true
+      dragGhost.preparing = false
     }
     armDragOut(payload.path)
     if (notifyArmOnReady === payload.path) {
@@ -593,19 +606,26 @@ const treeProps = { label: 'name', children: 'children', isLeaf: 'isLeaf' }
 const treeKey = ref(0)
 const truncatedEntryCount = ref<number | null>(null)
 let pendingLoads = 0
-// 展开状态跨刷新保持: 删除/重命名等操作触发重建时, 已展开目录自动恢复
+// 展开状态跨刷新保持: 删除/重命名等操作触发重建时, 已展开目录自动恢复。
+// expandedSet 是唯一事实来源,expand/collapse 事件只维护它;
+// expandedKeys 是喂给 default-expanded-keys 的重挂载快照,只在重建前更新——
+// el-tree 会 watch 该 prop 并以 autoExpandParent 重新展开其中的键,
+// 实时更新会让已折叠的祖先被残留的子孙键"复活"(折叠A后展开B,A也被展开)。
 const expandedKeys = ref<string[]>([])
 const expandedSet = new Set<string>()
+
+/** 重挂载树前调用:把当前展开集合打快照给新树的 default-expanded-keys */
+function snapshotExpandedKeys(): void {
+  expandedKeys.value = [...expandedSet]
+}
 
 function rememberExpanded(data: SftpEntry): void {
   if (expandedSet.has(data.path)) return
   expandedSet.add(data.path)
-  expandedKeys.value = [...expandedSet]
 }
 
 function forgetExpanded(data: SftpEntry): void {
-  if (!expandedSet.delete(data.path)) return
-  expandedKeys.value = [...expandedSet]
+  expandedSet.delete(data.path)
 }
 
 async function copyPath(entry: SftpEntry): Promise<void> {

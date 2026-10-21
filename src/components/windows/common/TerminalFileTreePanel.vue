@@ -37,9 +37,9 @@
       @download-settle="handleDownloadSettle"
     />
 
-    <footer class="file-tree-status" :class="`file-tree-status--${download.phase}`" role="status">
+    <footer class="file-tree-status" :class="`file-tree-status--${aggregate.phase}`" role="status">
       <svg
-        v-if="download.phase !== 'idle'"
+        v-if="aggregate.phase !== 'idle'"
         class="file-tree-status__ring"
         :class="{ 'file-tree-status__ring--indeterminate': ringIndeterminate }"
         viewBox="0 0 16 16"
@@ -54,7 +54,7 @@
           :stroke-dasharray="ringDasharray"
         />
       </svg>
-      <span class="file-tree-status__text" :title="download.error || download.name || undefined">{{
+      <span class="file-tree-status__text" :title="aggregate.error || aggregate.name || undefined">{{
         statusText
       }}</span>
       <span v-if="transferDetail" class="file-tree-status__detail">{{ transferDetail }}</span>
@@ -94,10 +94,10 @@ import type {
   TerminalSessionKind,
 } from '@/core/terminal/TerminalTypes'
 import {
+  EMPTY_FILE_TREE_DOWNLOAD_QUEUE,
   FILE_TREE_RING_RADIUS,
-  IDLE_FILE_TREE_DOWNLOAD,
-  beginFileTreeDownload,
-  fileTreeDownloadPercent,
+  aggregateFileTreeDownloads,
+  fileTreeQueuePercent,
   fileTreeRingDasharray,
   fileTreeRingIndeterminateDasharray,
   formatRemainingSeconds,
@@ -105,11 +105,12 @@ import {
   formatTransferPair,
   formatTransferPairText,
   pushTransferSample,
+  queueFileTreeDownload,
   reduceFileTreeTransferEvent,
   remainingTransferSeconds,
   settleFileTreeDownload,
   windowTransferRate,
-  type FileTreeDownloadStatus,
+  type FileTreeDownloadQueue,
   type TransferProgressSample,
 } from '@/core/terminal/FileTreeDownloadStatus'
 import TerminalFileTree from './TerminalFileTree.vue'
@@ -151,7 +152,7 @@ const openTarget = computed(() => {
 
 const MIN_FILE_TREE_WIDTH = 220
 const MAX_FILE_TREE_WIDTH = 560
-const DEFAULT_FILE_TREE_WIDTH = 300
+const DEFAULT_FILE_TREE_WIDTH = 240
 const panelElement = ref<HTMLElement | null>(null)
 const resizeHandle = ref<HTMLElement | null>(null)
 const panelWidth = ref(DEFAULT_FILE_TREE_WIDTH)
@@ -204,85 +205,141 @@ function resizeWithKeyboard(event: KeyboardEvent): void {
   panelWidth.value = clampPanelWidth(panelWidth.value + (event.key === 'ArrowRight' ? delta : -delta))
 }
 
-const download = ref<FileTreeDownloadStatus>(IDLE_FILE_TREE_DOWNLOAD)
-const downloadPercent = computed(() => fileTreeDownloadPercent(download.value))
-/** 进度环弧长:success 恒为满环;error 冻结在失败时的百分比(总量未知则满环) */
+/** 下载队列:并发任务各占一条;状态栏只渲染聚合视图,单任务终态不再切换整条栏 */
+const download = ref<FileTreeDownloadQueue>(EMPTY_FILE_TREE_DOWNLOAD_QUEUE)
+const aggregate = computed(() => aggregateFileTreeDownloads(download.value))
+const downloadPercent = computed(() => fileTreeQueuePercent(aggregate.value))
+/** running 期间进度环只进不退:新任务加入撑大分母时环不回跳;idle/会话切换时复位 */
+const ringPeak = ref(0)
+watch(downloadPercent, (percent) => {
+  if (percent === null || aggregate.value.phase !== 'running') return
+  if (percent > ringPeak.value) ringPeak.value = percent
+})
+/** 进度环弧长:success 恒为满环;running/error 冻结在到达过的最高百分比 */
 const ringArcPercent = computed(() =>
-  download.value.phase === 'success' ? 100 : downloadPercent.value,
+  aggregate.value.phase === 'success' ? 100 : ringPeak.value,
 )
-/** 不定态只在 running 且总量未知(WSL tar 流式)时开启;终态冻结成满环着色 */
+/** 不定态只在 running 且没有已知分母(WSL tar 流式等)时开启 */
 const ringIndeterminate = computed(
-  () => download.value.phase === 'running' && downloadPercent.value === null,
+  () => aggregate.value.phase === 'running' && downloadPercent.value === null,
 )
-const ringDasharray = computed(
-  () => fileTreeRingDasharray(ringArcPercent.value) ?? fileTreeRingIndeterminateDasharray(),
+const ringDasharray = computed(() =>
+  ringIndeterminate.value
+    ? fileTreeRingIndeterminateDasharray()
+    : (fileTreeRingDasharray(ringArcPercent.value) ?? fileTreeRingIndeterminateDasharray()),
 )
-/** 滑动窗口(>=1s)估算的速率(字节/秒);非 running 或新任务时归零 */
+/** 滑动窗口(>=1s)估算的速率(字节/秒);无 running 任务或队列复位时归零 */
 const transferRate = ref<number | null>(null)
-/** 最近一段窗口内的 running 采样队列;download-start/终态/会话切换时清空 */
+/** 最近一段窗口内的 running 采样队列;队列清空/会话切换时清空 */
 let transferSamples: TransferProgressSample[] = []
+
+/** 聚合终态的停留时长:队列清空后展示结果再收起;衔接中的下一个下载直接接管,不闪烁 */
+const TERMINAL_STATUS_LINGER_MS = 1600
+let lingerTimer: ReturnType<typeof setTimeout> | undefined
+
+function clearLingerTimer(): void {
+  if (lingerTimer) {
+    clearTimeout(lingerTimer)
+    lingerTimer = undefined
+  }
+}
+
+watch(
+  () => aggregate.value.phase,
+  (phase) => {
+    if (phase === 'success' || phase === 'error') {
+      clearLingerTimer()
+      lingerTimer = setTimeout(() => {
+        lingerTimer = undefined
+        download.value = EMPTY_FILE_TREE_DOWNLOAD_QUEUE
+        transferSamples = []
+        transferRate.value = null
+        ringPeak.value = 0
+      }, TERMINAL_STATUS_LINGER_MS)
+      return
+    }
+    clearLingerTimer()
+    if (phase === 'idle') ringPeak.value = 0
+  },
+)
 
 /** 状态栏聚合详情:`12.3/100.0 MB · 300.0 KB/s · 预计剩余 01:05`(同单位定宽,避免跳变) */
 const transferDetail = computed(() => {
-  const status = download.value
-  if (status.phase !== 'running') return ''
-  const pair = formatTransferPair(status.transferred, status.total)
-  const bytes = pair ? formatTransferPairText(pair) : formatTransferBytes(status.transferred)
+  const agg = aggregate.value
+  if (agg.phase !== 'running') return ''
+  const pair = agg.total > 0 ? formatTransferPair(agg.knownTransferred, agg.total) : null
+  const bytes = pair ? formatTransferPairText(pair) : formatTransferBytes(agg.transferred)
   const parts = [bytes]
   const rate = transferRate.value
   if (rate && rate > 0) {
     parts.push(`${formatTransferBytes(rate)}/s`)
-    const remaining = remainingTransferSeconds(status.transferred, status.total, rate)
-    if (remaining !== null) {
-      parts.push(t('common.terminal.fileTreeTransferEta', { time: formatRemainingSeconds(remaining) }))
+    // 存在总量未知的任务时已知分母不代表全局,不展示预计剩余
+    if (!agg.hasUnknownTotal) {
+      const remaining = remainingTransferSeconds(agg.knownTransferred, agg.total, rate)
+      if (remaining !== null) {
+        parts.push(
+          t('common.terminal.fileTreeTransferEta', { time: formatRemainingSeconds(remaining) }),
+        )
+      }
     }
   }
   return parts.join(' · ')
 })
 const statusText = computed(() => {
-  switch (download.value.phase) {
+  const agg = aggregate.value
+  switch (agg.phase) {
     case 'running':
-      return t('common.terminal.fileTreeStatusDownloading', { name: download.value.name })
+      return agg.runningCount > 1
+        ? t('common.terminal.fileTreeStatusDownloadingMany', { count: agg.runningCount })
+        : t('common.terminal.fileTreeStatusDownloading', { name: agg.name })
     case 'success':
-      return t('common.terminal.fileTreeStatusDone', { name: download.value.name })
+      return agg.successCount > 1
+        ? t('common.terminal.fileTreeStatusDoneMany', { count: agg.successCount })
+        : t('common.terminal.fileTreeStatusDone', { name: agg.name })
     case 'error':
-      return t('common.terminal.fileTreeStatusFailed', { name: download.value.name })
+      if (agg.successCount > 0) {
+        return t('common.terminal.fileTreeStatusPartial', {
+          done: agg.successCount,
+          failed: agg.failedCount,
+        })
+      }
+      return agg.failedCount > 1
+        ? t('common.terminal.fileTreeStatusFailedMany', { count: agg.failedCount })
+        : t('common.terminal.fileTreeStatusFailed', { name: agg.name })
     default:
       return t('common.terminal.fileTreeStatusIdle')
   }
 })
 
 function handleDownloadStart(name: string): void {
-  transferSamples = []
-  transferRate.value = null
-  download.value = beginFileTreeDownload(name)
+  download.value = queueFileTreeDownload(download.value, name)
 }
 
 function handleDownloadSettle(ok: boolean, error?: string): void {
-  transferSamples = []
-  transferRate.value = null
   download.value = settleFileTreeDownload(download.value, ok, error)
 }
 
 function handleTransfer(_event: unknown, event: SftpTransferEvent): void {
   if (event.sessionId !== props.sessionId) return
-  const next = reduceFileTreeTransferEvent(download.value, event)
+  const nextQueue = reduceFileTreeTransferEvent(download.value, event)
+  download.value = nextQueue
   if (event.status === 'running') {
+    // 聚合采样:并发时速率=全部 running 任务的总带宽,正好回答"这批还要多久"
+    const agg = aggregateFileTreeDownloads(nextQueue)
     transferSamples = pushTransferSample(transferSamples, {
       at: Date.now(),
-      transferred: next.transferred,
-      total: next.total,
+      transferred: agg.knownTransferred,
+      total: agg.total,
     })
     transferRate.value = windowTransferRate(transferSamples)
-  } else {
-    transferSamples = []
-    transferRate.value = null
   }
-  download.value = next
 }
 
 onMounted(() => window.ipcRenderer?.on('terminal-sftp-transfer', handleTransfer))
-onUnmounted(() => window.ipcRenderer?.off('terminal-sftp-transfer', handleTransfer))
+onUnmounted(() => {
+  window.ipcRenderer?.off('terminal-sftp-transfer', handleTransfer)
+  clearLingerTimer()
+})
 
 function handleNodeClick(data: SftpEntry): void {
   currentNode.value = data
@@ -344,9 +401,11 @@ watch(
   ([sessionId, reveal], [prevSessionId, prevReveal]) => {
     if (sessionId !== prevSessionId) {
       // 会话切换:落在 reveal 目录(若有)否则默认根;下载状态随旧会话失效
+      clearLingerTimer()
       transferSamples = []
       transferRate.value = null
-      download.value = IDLE_FILE_TREE_DOWNLOAD
+      ringPeak.value = 0
+      download.value = EMPTY_FILE_TREE_DOWNLOAD_QUEUE
       navigateToRoot(reveal || '.')
       return
     }

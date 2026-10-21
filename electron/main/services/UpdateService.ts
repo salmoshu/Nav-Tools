@@ -1,4 +1,6 @@
 import { app } from 'electron'
+import { appendFileSync, statSync, truncateSync } from 'node:fs'
+import { join } from 'node:path'
 // electron-updater 是 CJS 包,ESM 主进程产物下需走默认导入再解构
 import updaterPkg from 'electron-updater'
 const { autoUpdater } = updaterPkg
@@ -38,6 +40,29 @@ export interface UpdateStatusTarget {
 export const UPDATE_STATUS_CHANNEL = 'update-status-changed'
 
 const DEFAULT_PREFS: UpdaterPrefs = { autoCheck: true, autoDownload: true }
+
+/**
+ * electron-updater 默认只向 console 输出,差量回退/校验失败等关键信息无处可查。
+ * 落到 userData/updater.log,超过 1MB 截断重写;日志失败不影响主流程。
+ */
+function createUpdaterFileLogger(): { info(m: unknown): void; warn(m: unknown): void; error(m: unknown): void } {
+  const file = join(app.getPath('userData'), 'updater.log')
+  const write = (level: string, message: unknown) => {
+    try {
+      const text = message instanceof Error ? (message.stack ?? message.message) : String(message)
+      appendFileSync(file, `[${new Date().toISOString()}] [${level}] ${text}
+`)
+      if (statSync(file).size > 1024 * 1024) truncateSync(file)
+    } catch {
+      // 忽略日志写入失败
+    }
+  }
+  return {
+    info: (m) => write('info', m),
+    warn: (m) => write('warn', m),
+    error: (m) => write('error', m),
+  }
+}
 
 /**
  * 清洗发布说明:electron-updater 在 latest.yml 缺省时回退到 GitHub Atom 源,
@@ -157,6 +182,11 @@ export class UpdateService {
     // 缺省全开:渲染端偏好到达前的兜底配置
     autoUpdater.autoDownload = this.prefs.autoDownload
     autoUpdater.autoInstallOnAppQuit = true
+    // 关闭差量更新:差分下载一旦校验/拼装失败会静默回退全量重下,
+    // 进度条呈现 100%→0→100% 的回退假象且总流量翻倍;
+    // 全量下载单调推进并经 sha512 校验,行为可预期
+    autoUpdater.disableDifferentialDownload = true
+    autoUpdater.logger = createUpdaterFileLogger()
     this.maybeAutoCheck()
   }
 

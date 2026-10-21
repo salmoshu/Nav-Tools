@@ -339,5 +339,29 @@ describe('文件树拖拽接线(源码扫描)', () => {
         expect(source).toContain(`${key}:`)
       }
     }
-  })
+  })
+  it('拖拽手势激活即预下载到临时缓存,出窗移交不再临时起步', () => {
+    // 激活块(越过阈值、捕获指针)内立即预下载,出窗时多半已就绪
+    expect(treeSource).toContain('!dragGhost.cached && !dragOutPreparing.has(active.payload.path)')
+    // 预下载完成时若手势仍在窗内,徽标切换为已就绪,出窗直接命中缓存移交
+    expect(treeSource).toContain('dragGhost.cached = true')
+    expect(treeSource).toContain('dragGhost.preparing = false')
+    // 出窗分支的 prepareDragOut 保留(缓存就绪即 startSystemDrag,在途则防重入)
+    expect(treeSource.match(/void prepareDragOut\(active\.payload\)/g)?.length).toBeGreaterThanOrEqual(2)
+  })
+
+  it('展开状态以 expandedSet 为准,default-expanded-keys 只在重挂载前打快照', () => {
+    // expand/collapse 事件只维护 Set:实时回写 expandedKeys 会触发 el-tree 的
+    // defaultExpandedKeys watch 以 autoExpandParent 复活已折叠祖先
+    // (展开A→展开A的子目录→折叠A→展开B,A 被复活的串扰)
+    const remember = treeSource.match(/function rememberExpanded[\s\S]*?\n\}/)?.[0] ?? ''
+    const forget = treeSource.match(/function forgetExpanded[\s\S]*?\n\}/)?.[0] ?? ''
+    expect(remember).toContain('expandedSet.add(data.path)')
+    expect(remember).not.toContain('expandedKeys.value')
+    expect(forget).toContain('expandedSet.delete(data.path)')
+    expect(forget).not.toContain('expandedKeys.value')
+    // 重建前打快照:定义 1 处 + 重命名/删除/移动 3 处调用
+    expect(treeSource).toContain('function snapshotExpandedKeys()')
+    expect(treeSource.match(/snapshotExpandedKeys\(\)/g)?.length).toBeGreaterThanOrEqual(4)
+  })
 })

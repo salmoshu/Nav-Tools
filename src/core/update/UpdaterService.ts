@@ -97,9 +97,14 @@ export class UpdaterService {
 
   private record(event: UpdateStatusEvent): UpdateStatusEvent {
     if (event.type === 'download-progress' || event.type === 'update-downloaded') {
+      // 进度只进不退:主进程若因重试/回退重新下载,进度条不回跳造成假象;
+      // 新一轮下载(available/checking 之后)自然从 0 重新累计
+      const prevPercent = this.lastStatus?.type === 'download-progress' ? (this.lastStatus.percent ?? 0) : 0
       // 进度/下载完成事件不携带版本与更新内容:从 available 事件的缓存合并
       this.lastStatus = {
         ...event,
+        percent:
+          event.type === 'download-progress' ? Math.max(event.percent ?? 0, prevPercent) : event.percent,
         version: event.version ?? this.lastStatus?.version,
         releaseNotes: this.lastStatus?.releaseNotes,
       }
