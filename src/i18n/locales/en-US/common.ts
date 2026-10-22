@@ -371,6 +371,7 @@ export default {
     fileTreeLoadFailed: 'Unable to list this directory',
     fileTreeTruncated: 'Only the first {count} entries are shown',
     fileTreeDownload: 'Download to local…',
+    fileTreeDownloadMany: 'Download {count} items to local…',
     fileTreeDownloadDone: 'Downloaded: {name}',
     fileTreeDownloadFailed: 'Download failed: {message}',
     fileTreeStatusIdle: 'Ready',
@@ -385,6 +386,7 @@ export default {
     filePreviewSessionGone: 'Session disconnected; the file cannot be previewed',
     fileTreeCopyPath: 'Copy path',
     fileTreeCopyPathDone: 'Path copied: {path}',
+    fileTreeCopyPathManyDone: 'Copied {count} paths',
     fileTreeRename: 'Rename…',
     fileTreeRenamePrompt: 'Enter a new name for {name}',
     fileTreeRenameInvalidName: 'Name must not be empty or contain / or \\',
@@ -394,6 +396,11 @@ export default {
     fileTreeDeleteDirectoryConfirm:
       'Delete the directory {name}? All of its contents will be removed recursively. This cannot be undone.',
     fileTreeDeleteDone: 'Deleted: {name}',
+    fileTreeDeleteMany: 'Delete {count} items',
+    fileTreeDeleteManyConfirm:
+      'Delete the selected {count} items? All contents will be removed recursively and cannot be undone.',
+    fileTreeDeleteManyDone: 'Deleted {count} items',
+    fileTreeDeleteFailedMany: '{count} items failed to delete',
     fileTreeOpFailed: 'Operation failed: {message}',
     fileTreeMove: 'Move',
     fileTreeMoveDone: 'Moved: {name}',

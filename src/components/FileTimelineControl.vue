@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { ArrowLeft, ArrowRight, Clock, Close, VideoPause, VideoPlay } from '@element-plus/icons-vue'
 import { ElIcon } from 'element-plus'
 import { useFileTimeline } from '@/composables/useFileTimeline'
@@ -35,6 +35,38 @@ const {
 const isVertical = computed(() => props.position === 'right' || props.position === 'left')
 const popoverOpen = ref(false)
 const rootElement = ref<HTMLElement | null>(null)
+const popoverElement = ref<HTMLElement | null>(null)
+/** 弹层 fixed 定位(teleport 到 body):工具栏 content 有 overflow,绝对定位会被整个裁掉 */
+const popoverStyle = ref<Record<string, string>>({})
+
+/** 按工具栏停靠边的反方向放置弹层,并钳制在视口内(8px 边距) */
+function placePopover(anchor: DOMRect, size: { width: number; height: number }): Record<string, string> {
+  const gap = 7
+  const margin = 8
+  let x = 0
+  let y = 0
+  switch (props.position) {
+    case 'top':
+      x = anchor.right - size.width
+      y = anchor.bottom + gap
+      break
+    case 'right':
+      x = anchor.left - gap - size.width
+      y = anchor.top
+      break
+    case 'left':
+      x = anchor.right + gap
+      y = anchor.top
+      break
+    default:
+      x = anchor.right - size.width
+      y = anchor.top - gap - size.height
+      break
+  }
+  x = Math.min(Math.max(margin, x), Math.max(margin, window.innerWidth - size.width - margin))
+  y = Math.min(Math.max(margin, y), Math.max(margin, window.innerHeight - size.height - margin))
+  return { left: `${Math.round(x)}px`, top: `${Math.round(y)}px` }
+}
 
 const elapsedLabel = computed(() => {
   const format = (milliseconds: number) => {
@@ -49,8 +81,18 @@ const elapsedLabel = computed(() => {
   return `${format(elapsedMilliseconds.value)} / ${format(durationMilliseconds.value)}`
 })
 
-function togglePopover(): void {
-  if (active.value && !indexing.value) popoverOpen.value = !popoverOpen.value
+async function togglePopover(event?: MouseEvent): Promise<void> {
+  if (!active.value || indexing.value) return
+  popoverOpen.value = !popoverOpen.value
+  if (!popoverOpen.value) return
+  const anchor = (event?.currentTarget as HTMLElement | null)?.getBoundingClientRect()
+  if (!anchor) return
+  // 先隐身渲染测出真实尺寸,再按停靠边反方向定位显示
+  popoverStyle.value = { left: '0px', top: '0px', visibility: 'hidden' }
+  await nextTick()
+  const element = popoverElement.value
+  if (!element) return
+  popoverStyle.value = placePopover(anchor, { width: element.offsetWidth, height: element.offsetHeight })
 }
 
 function previewSlider(event: Event): void {
@@ -58,7 +100,14 @@ function previewSlider(event: Event): void {
 }
 
 function closeOnOutsidePointer(event: MouseEvent): void {
-  if (popoverOpen.value && rootElement.value && !rootElement.value.contains(event.target as Node)) {
+  // 弹层已 teleport 到 body,不在 rootElement 内;点弹层内部不算外部点击
+  const target = event.target as Node
+  if (
+    popoverOpen.value &&
+    rootElement.value &&
+    !rootElement.value.contains(target) &&
+    !popoverElement.value?.contains(target)
+  ) {
     popoverOpen.value = false
   }
 }
@@ -152,14 +201,16 @@ watch(active, (visible) => {
       <button
         class="timeline-button timeline-trigger"
         :title="t('data.timelineOpen')"
-        @click.stop="togglePopover"
+        @click.stop="togglePopover($event)"
       >
         <el-icon><Clock /></el-icon>
       </button>
+      <Teleport to="body">
       <div
         v-if="popoverOpen"
+        ref="popoverElement"
         class="timeline-panel timeline-popover"
-        :class="`timeline-popover--${position}`"
+        :style="popoverStyle"
       >
         <div class="timeline-actions">
           <button
@@ -214,6 +265,7 @@ watch(active, (visible) => {
           <span class="timeline-epoch">{{ cursorIndex + 1 }} / {{ totalEpochs }}</span>
         </div>
       </div>
+      </Teleport>
     </template>
   </div>
 </template>
@@ -410,9 +462,8 @@ watch(active, (visible) => {
 }
 
 .timeline-popover {
-  position: absolute;
-  top: 0;
-  z-index: 1000;
+  position: fixed;
+  z-index: 9000;
   width: 280px;
   padding: 9px;
   flex-direction: column;
@@ -422,14 +473,6 @@ watch(active, (visible) => {
   border: 1px solid var(--app-border);
   border-radius: 8px;
   box-shadow: 0 8px 24px var(--app-shadow);
-}
-
-.timeline-popover--right {
-  right: calc(100% + 7px);
-}
-
-.timeline-popover--left {
-  left: calc(100% + 7px);
 }
 
 .timeline-actions {

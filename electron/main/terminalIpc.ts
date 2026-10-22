@@ -1,4 +1,4 @@
-import { chooseOpenFiles, showScopedSaveDialog } from './dialogs'
+import { chooseOpenDirectory, chooseOpenFiles, showScopedSaveDialog } from './dialogs'
 import { existsSync } from 'node:fs'
 import fs from 'node:fs/promises'
 import path from 'node:path'
@@ -215,8 +215,103 @@ export function registerTerminalIpc(
     // 只放行本功能生成的临时缓存,避免任意本地路径被拖出
     if (!file.startsWith(dragTempRoot() + path.sep)) return
     if (!existsSync(file)) return
+    hideDragOverlay()
     event.sender.startDrag({ file, icon: fileTreeDragIcon() })
   })
+  // 文件树多选批量下载:一次选一个目标目录,各条目以原名逐个落入
+  ipcMain.handle('terminal-sftp-choose-download-dir', async (event) => {
+    const target = BrowserWindow.fromWebContents(event.sender)
+    return chooseOpenDirectory(target, 'terminal-download')
+  })
+
+  // —— 拖出未就绪时的系统级跟随浮层 ——
+  // OLE 拖放要求本地文件已存在,文件仍在下载时无法移交;
+  // 用置顶小窗跟随光标显示「正在准备」,维持"手上有文件"的拖拽感,
+  // 就绪后同手势移交 startDrag 并关闭浮层。浮层不抢焦点、不进任务栏。
+  let dragOverlay: BrowserWindow | null = null
+  const hideDragOverlay = (): void => {
+    if (dragOverlay && !dragOverlay.isDestroyed()) dragOverlay.destroy()
+    dragOverlay = null
+  }
+  const DRAG_OVERLAY_ESCAPES: Record<string, string> = {
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;',
+  }
+  const dragOverlayHtml = (name: string): string => {
+    const safe = name.replace(/[&<>"']/g, (ch) => DRAG_OVERLAY_ESCAPES[ch] ?? ch)
+    return (
+      '<!doctype html><html><head><meta charset="utf-8"><style>' +
+      'html,body{margin:0;background:transparent;overflow:hidden}' +
+      '.card{display:flex;align-items:center;gap:8px;height:32px;margin:4px;padding:0 10px;' +
+      'border:1px solid #1783FF;border-radius:8px;background:rgba(255,255,255,.94);' +
+      'box-shadow:0 6px 18px rgba(23,131,255,.25);' +
+      'font:12px/1 -apple-system,"Segoe UI","Microsoft YaHei",sans-serif;color:#1f2328}' +
+      '.spin{width:12px;height:12px;flex:none;border:2px solid rgba(23,131,255,.25);' +
+      'border-top-color:#1783FF;border-radius:50%;animation:sp .7s linear infinite}' +
+      '@keyframes sp{to{transform:rotate(360deg)}}' +
+      '.name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:180px}' +
+      '</style></head><body><div class="card"><span class="spin"></span><span class="name">' +
+      safe +
+      '</span></div></body></html>'
+    )
+  }
+  ipcMain.on(
+    'terminal-file-tree-drag-overlay',
+    (
+      _event,
+      request: { action?: string; x?: number; y?: number; name?: string },
+    ) => {
+      if (!request || typeof request !== 'object') return
+      if (request.action === 'hide') {
+        hideDragOverlay()
+        return
+      }
+      const x = typeof request.x === 'number' ? Math.round(request.x) : 0
+      const y = typeof request.y === 'number' ? Math.round(request.y) : 0
+      if (request.action === 'show') {
+        hideDragOverlay()
+        const win = new BrowserWindow({
+          width: 240,
+          height: 40,
+          useContentSize: true,
+          frame: false,
+          transparent: true,
+          resizable: false,
+          movable: false,
+          minimizable: false,
+          maximizable: false,
+          fullscreenable: false,
+          skipTaskbar: true,
+          focusable: false,
+          show: false,
+          alwaysOnTop: true,
+          webPreferences: { sandbox: true, contextIsolation: true },
+        })
+        dragOverlay = win
+        win.setAlwaysOnTop(true, 'screen-saver')
+        win.on('closed', () => {
+          if (dragOverlay === win) dragOverlay = null
+        })
+        win.once('ready-to-show', () => {
+          if (win.isDestroyed()) return
+          win.setPosition(x + 14, y + 16)
+          win.showInactive()
+        })
+        void win.loadURL(
+          'data:text/html;charset=utf-8,' +
+            encodeURIComponent(dragOverlayHtml(String(request.name ?? ''))),
+        )
+        return
+      }
+      if (request.action === 'move' && dragOverlay && !dragOverlay.isDestroyed()) {
+        dragOverlay.setPosition(x + 14, y + 16)
+      }
+    },
+  )
+
 }
 
 // Compile-time assertion that renderer and main share the same profile shape.

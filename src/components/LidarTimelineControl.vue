@@ -4,7 +4,7 @@
 // 横向（上/下）内联展示，纵向（左/右）折叠为时钟按钮 + 弹出面板。
 // 信息按钮弹出「话题 / 会话 / 快捷键」诊断面板（原回放控制面板的只读信息区）；
 // 文件接入走 Input 对话框的文件输入或全窗拖放，时间轴不承担接入。
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import {
   ArrowLeft,
   ArrowRight,
@@ -38,6 +38,59 @@ const popoverOpen = ref(false)
 const infoOpen = ref(false)
 const infoTab = ref('topics')
 const rootElement = ref<HTMLElement | null>(null)
+const popoverElement = ref<HTMLElement | null>(null)
+const infoPopoverElement = ref<HTMLElement | null>(null)
+/** 弹层 fixed 定位(teleport 到 body):工具栏 content 有 overflow,绝对定位会被整个裁掉 */
+const popoverStyle = ref<Record<string, string>>({})
+const infoPopoverStyle = ref<Record<string, string>>({})
+/** 打开弹层时的锚点 rect:按钮自身;弹层尺寸在 nextTick 实测后按停靠边反方向落位 */
+let popoverAnchor: DOMRect | null = null
+
+/** 按工具栏停靠边的反方向放置弹层,并钳制在视口内(8px 边距) */
+function placePopover(
+  anchor: DOMRect,
+  size: { width: number; height: number },
+): Record<string, string> {
+  const gap = 7
+  const margin = 8
+  let x = 0
+  let y = 0
+  switch (props.position) {
+    case 'top':
+      x = anchor.right - size.width
+      y = anchor.bottom + gap
+      break
+    case 'right':
+      x = anchor.left - gap - size.width
+      y = anchor.top
+      break
+    case 'left':
+      x = anchor.right + gap
+      y = anchor.top
+      break
+    default:
+      x = anchor.right - size.width
+      y = anchor.top - gap - size.height
+      break
+  }
+  x = Math.min(Math.max(margin, x), Math.max(margin, window.innerWidth - size.width - margin))
+  y = Math.min(Math.max(margin, y), Math.max(margin, window.innerHeight - size.height - margin))
+  return { left: `${Math.round(x)}px`, top: `${Math.round(y)}px` }
+}
+
+/** 先隐身渲染测出真实尺寸,再定位显示,避免弹层闪现在错误位置 */
+async function showPopoverAt(
+  anchor: DOMRect,
+  apply: (style: Record<string, string>) => void,
+  measure: () => HTMLElement | null,
+): Promise<void> {
+  popoverAnchor = anchor
+  apply({ left: '0px', top: '0px', visibility: 'hidden' })
+  await nextTick()
+  const element = measure()
+  if (!element) return
+  apply(placePopover(popoverAnchor, { width: element.offsetWidth, height: element.offsetHeight }))
+}
 
 const startNs = computed(() => player.document.value?.startNs ?? 0)
 const endNs = computed(() => player.document.value?.endNs ?? 0)
@@ -124,20 +177,39 @@ function onSpeedChange(event: Event): void {
   if (Number.isFinite(value)) player.setSpeed(value)
 }
 
-function togglePopover(): void {
+function togglePopover(event?: MouseEvent): void {
   if (!ready.value) return
   popoverOpen.value = !popoverOpen.value
-  if (popoverOpen.value) infoOpen.value = false
+  if (popoverOpen.value) {
+    infoOpen.value = false
+    const anchor = (event?.currentTarget as HTMLElement | null)?.getBoundingClientRect()
+    if (anchor) {
+      void showPopoverAt(anchor, (style) => (popoverStyle.value = style), () => popoverElement.value)
+    }
+  }
 }
 
-function toggleInfo(): void {
+function toggleInfo(event?: MouseEvent): void {
   if (!ready.value) return
   infoOpen.value = !infoOpen.value
-  if (infoOpen.value) popoverOpen.value = false
+  if (infoOpen.value) {
+    popoverOpen.value = false
+    const anchor = (event?.currentTarget as HTMLElement | null)?.getBoundingClientRect()
+    if (anchor) {
+      void showPopoverAt(anchor, (style) => (infoPopoverStyle.value = style), () => infoPopoverElement.value)
+    }
+  }
 }
 
 function closeOnOutsidePointer(event: MouseEvent): void {
-  if (rootElement.value && !rootElement.value.contains(event.target as Node)) {
+  const target = event.target as Node
+  // 弹层已 teleport 到 body,不在 rootElement 内;点弹层内部不算外部点击
+  if (
+    rootElement.value &&
+    !rootElement.value.contains(target) &&
+    !popoverElement.value?.contains(target) &&
+    !infoPopoverElement.value?.contains(target)
+  ) {
     popoverOpen.value = false
     infoOpen.value = false
   }
@@ -237,7 +309,7 @@ watch(ready, (visible) => {
           class="timeline-button timeline-info-trigger"
           :class="{ 'timeline-button--warn': hasIssues }"
           :title="t('lidar.playback.info')"
-          @click.stop="toggleInfo"
+          @click.stop="toggleInfo($event)"
         >
           <el-icon><InfoFilled /></el-icon>
         </button>
@@ -249,7 +321,7 @@ watch(ready, (visible) => {
         <button
           class="timeline-button timeline-trigger"
           :title="t('data.timelineOpen')"
-          @click.stop="togglePopover"
+          @click.stop="togglePopover($event)"
         >
           <el-icon><Clock /></el-icon>
         </button>
@@ -257,15 +329,17 @@ watch(ready, (visible) => {
           class="timeline-button timeline-trigger"
           :class="{ 'timeline-button--warn': hasIssues }"
           :title="t('lidar.playback.info')"
-          @click.stop="toggleInfo"
+          @click.stop="toggleInfo($event)"
         >
           <el-icon><InfoFilled /></el-icon>
         </button>
       </div>
+      <Teleport to="body">
       <div
         v-if="popoverOpen"
+        ref="popoverElement"
         class="timeline-panel timeline-popover"
-        :class="`timeline-popover--${position}`"
+        :style="popoverStyle"
       >
         <div class="timeline-actions">
           <button
@@ -336,10 +410,12 @@ watch(ready, (visible) => {
           <option v-for="option in SPEED_OPTIONS" :key="option" :value="option">×{{ option }}</option>
         </select>
       </div>
+      </Teleport>
     </template>
 
     <!-- 诊断信息弹层：话题表 / 会话指纹与加载提示 / 快捷键（原回放控制面板内容） -->
-    <div v-if="infoOpen" class="lidar-info-popover" :class="`lidar-info-popover--${position}`">
+    <Teleport to="body">
+    <div v-if="infoOpen" ref="infoPopoverElement" class="lidar-info-popover" :style="infoPopoverStyle">
       <div class="info-header">
         <span class="info-file" :title="fileInfo?.path ?? fileInfo?.name">
           {{ fileInfo?.name }}<template v-if="(fileInfo?.partCount ?? 1) > 1">（{{ t('lidar.playback.partCount', { count: fileInfo!.partCount }) }}）</template>
@@ -377,11 +453,11 @@ watch(ready, (visible) => {
             <div class="info-row"><span>library</span><b>{{ meta?.library || '-' }}</b></div>
             <div class="info-row"><span>{{ t('lidar.playback.size') }}</span><b>{{ formatByteSize(fileInfo?.sizeBytes ?? 0) }}</b></div>
             <div class="info-row"><span>{{ t('lidar.playback.duration') }}</span><b>{{ durationLabel }}</b></div>
-            <div class="info-row" v-for="(value, key) in sessionMetadata" :key="key">
+            <div v-for="(value, key) in sessionMetadata" :key="key" class="info-row">
               <span>{{ key }}</span><b>{{ value }}</b>
             </div>
           </div>
-          <div class="problems" v-if="problems.length > 0">
+          <div v-if="problems.length > 0" class="problems">
             <div class="problems-title">{{ t('lidar.playback.problems') }}</div>
             <p v-for="(problem, index) in problems" :key="index" class="problem-line">{{ problem }}</p>
           </div>
@@ -396,6 +472,7 @@ watch(ready, (visible) => {
         </el-tab-pane>
       </el-tabs>
     </div>
+    </Teleport>
   </div>
 </template>
 
@@ -600,9 +677,8 @@ watch(ready, (visible) => {
 }
 
 .timeline-popover {
-  position: absolute;
-  top: 0;
-  z-index: 1000;
+  position: fixed;
+  z-index: 9000;
   width: 280px;
   padding: 9px;
   flex-direction: column;
@@ -612,14 +688,6 @@ watch(ready, (visible) => {
   border: 1px solid var(--app-border);
   border-radius: 8px;
   box-shadow: 0 8px 24px var(--app-shadow);
-}
-
-.timeline-popover--right {
-  right: calc(100% + 7px);
-}
-
-.timeline-popover--left {
-  left: calc(100% + 7px);
 }
 
 .timeline-actions {
@@ -642,34 +710,14 @@ watch(ready, (visible) => {
 
 /* —— 诊断信息弹层 —— */
 .lidar-info-popover {
-  position: absolute;
-  z-index: 1001;
+  position: fixed;
+  z-index: 9001;
   width: min(560px, 86vw);
   padding: 8px 12px 10px;
   background: var(--app-surface);
   border: 1px solid var(--app-border);
   border-radius: 8px;
   box-shadow: 0 8px 24px var(--app-shadow);
-}
-
-.lidar-info-popover--bottom {
-  bottom: calc(100% + 7px);
-  right: 0;
-}
-
-.lidar-info-popover--top {
-  top: calc(100% + 7px);
-  right: 0;
-}
-
-.lidar-info-popover--right {
-  right: calc(100% + 7px);
-  top: 0;
-}
-
-.lidar-info-popover--left {
-  left: calc(100% + 7px);
-  top: 0;
 }
 
 .info-header {

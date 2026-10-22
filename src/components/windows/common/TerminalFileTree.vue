@@ -6,12 +6,14 @@
     @pointermove="onTreePointerMove"
     @pointerup="onTreePointerUp"
     @pointercancel="onTreePointerCancel"
+    @contextmenu="onTreeContextMenu"
   >
     <div v-if="truncatedEntryCount !== null" class="terminal-file-tree__truncated" role="status">
       {{ t('common.terminal.fileTreeTruncated', { count: truncatedEntryCount }) }}
     </div>
     <el-tree
       :key="treeKey"
+      ref="treeRef"
       class="terminal-file-tree__tree"
       :class="{ 'terminal-file-tree__tree--dragging': treeDragging }"
       :props="treeProps"
@@ -22,44 +24,64 @@
       :default-expanded-keys="expandedKeys"
       @node-expand="rememberExpanded"
       @node-collapse="forgetExpanded"
-      @node-click="emit('node-click', $event)"
+      @node-click="onNodeClick"
     >
       <template #default="{ data }">
-        <el-dropdown
-          trigger="contextmenu"
-          @command="(command: string) => onNodeCommand(command, data)"
+        <span
+          class="terminal-file-tree__node"
+          :class="{ 'terminal-file-tree__node--selected': selectedPaths.has(data.path) }"
+          :data-file-tree-path="data.path"
+          :data-file-tree-dir="data.directory ? '1' : '0'"
+          :data-file-tree-name="data.name"
         >
-          <span
-            class="terminal-file-tree__node"
-            :data-file-tree-path="data.path"
-            :data-file-tree-dir="data.directory ? '1' : '0'"
-            :data-file-tree-name="data.name"
-          >
-            <el-icon class="terminal-file-tree__icon">
-              <Folder v-if="data.directory" />
-              <Document v-else />
-            </el-icon>
-            <span class="terminal-file-tree__name">{{ data.name }}</span>
-          </span>
-          <template #dropdown>
-            <el-dropdown-menu>
-              <el-dropdown-item command="download">
-                {{ t('common.terminal.fileTreeDownload') }}
-              </el-dropdown-item>
-              <el-dropdown-item command="copy-path" divided>
-                {{ t('common.terminal.fileTreeCopyPath') }}
-              </el-dropdown-item>
-              <el-dropdown-item command="rename">
-                {{ t('common.terminal.fileTreeRename') }}
-              </el-dropdown-item>
-              <el-dropdown-item command="delete" class="terminal-file-tree__delete-item">
-                {{ t('common.terminal.fileTreeDelete') }}
-              </el-dropdown-item>
-            </el-dropdown-menu>
-          </template>
-        </el-dropdown>
+          <el-icon class="terminal-file-tree__icon">
+            <Folder v-if="data.directory" />
+            <Document v-else />
+          </el-icon>
+          <span class="terminal-file-tree__name">{{ data.name }}</span>
+        </span>
       </template>
     </el-tree>
+    <Teleport to="body">
+      <div
+        v-if="contextMenu.visible"
+        ref="contextMenuElement"
+        class="file-tree-context-menu"
+        :style="{ left: `${contextMenu.x}px`, top: `${contextMenu.y}px` }"
+        @contextmenu.prevent
+      >
+        <button type="button" class="file-tree-context-menu__item" @click="onMenuCommand('download')">
+          {{
+            contextMenu.count > 1
+              ? t('common.terminal.fileTreeDownloadMany', { count: contextMenu.count })
+              : t('common.terminal.fileTreeDownload')
+          }}
+        </button>
+        <button type="button" class="file-tree-context-menu__item" @click="onMenuCommand('copy-path')">
+          {{ t('common.terminal.fileTreeCopyPath') }}
+        </button>
+        <button
+          v-if="contextMenu.count === 1"
+          type="button"
+          class="file-tree-context-menu__item"
+          @click="onMenuCommand('rename')"
+        >
+          {{ t('common.terminal.fileTreeRename') }}
+        </button>
+        <div class="file-tree-context-menu__divider" role="separator"></div>
+        <button
+          type="button"
+          class="file-tree-context-menu__item file-tree-context-menu__item--danger"
+          @click="onMenuCommand('delete')"
+        >
+          {{
+            contextMenu.count > 1
+              ? t('common.terminal.fileTreeDeleteMany', { count: contextMenu.count })
+              : t('common.terminal.fileTreeDelete')
+          }}
+        </button>
+      </div>
+    </Teleport>
     <Teleport to="body">
       <div
         v-if="dragGhost.visible"
@@ -87,8 +109,9 @@
 </template>
 
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import type { LoadFunction } from 'element-plus'
 import { Document, Folder } from '@element-plus/icons-vue'
 import {
   activateFileTreeDrag,
@@ -129,21 +152,89 @@ const emit = defineEmits<{
   'download-settle': [ok: boolean, error?: string]
 }>()
 
-function onNodeCommand(command: string, entry: SftpEntry): void {
-  if (command === 'rename') {
-    void renameEntry(entry)
+/** 多选集合:ctrl/cmd+点击切换;右键命中集合内节点时菜单批量作用于整个集合 */
+const selectedPaths = reactive(new Set<string>())
+/** 路径 → 节点条目(目录标志等),多选批量操作时要还原 entry 形状 */
+const selectedEntries = new Map<string, SftpEntry>()
+
+function clearSelection(): void {
+  selectedPaths.clear()
+  selectedEntries.clear()
+}
+
+type NodeClickArgs = [data: SftpEntry, node: unknown, comp: unknown, event?: MouseEvent]
+
+/** 节点点击:ctrl/cmd+点击切换多选(不触发打开);普通点击清空多选并走原打开逻辑 */
+function onNodeClick(...args: NodeClickArgs): void {
+  const [data, , , event] = args
+  if (event && (event.ctrlKey || event.metaKey)) {
+    if (selectedPaths.has(data.path)) {
+      selectedPaths.delete(data.path)
+      selectedEntries.delete(data.path)
+    } else {
+      selectedPaths.add(data.path)
+      selectedEntries.set(data.path, data)
+    }
     return
   }
-  if (command === 'delete') {
-    void deleteEntry(entry)
-    return
+  clearSelection()
+  emit('node-click', data)
+}
+
+/** 共享右键菜单:单实例委托,替代每节点 el-dropdown(偶发不弹/嵌套开销) */
+const contextMenu = reactive({ visible: false, x: 0, y: 0, count: 0, targets: [] as SftpEntry[] })
+const contextMenuElement = ref<HTMLElement | null>(null)
+
+function closeContextMenu(): void {
+  contextMenu.visible = false
+}
+
+function onTreeContextMenu(event: MouseEvent): void {
+  const hit = treeNodeHitFrom(event.target as Element | null)
+  if (!hit) return // 空白区不弹菜单
+  event.preventDefault()
+  // 命中已在多选集合内的节点:保持集合批量作用;否则重置为单选该节点
+  if (!(selectedPaths.has(hit.path) && selectedPaths.size > 1)) {
+    clearSelection()
+    selectedPaths.add(hit.path)
+    selectedEntries.set(hit.path, {
+      name: hit.name,
+      path: hit.path,
+      directory: hit.directory,
+      size: 0,
+      modifiedAt: 0,
+      mode: 0,
+    })
   }
-  if (command === 'copy-path') {
-    void copyPath(entry)
-    return
-  }
-  if (command !== 'download') return
-  void downloadEntry(entry)
+  contextMenu.targets = [...selectedEntries.values()]
+  contextMenu.count = contextMenu.targets.length
+  contextMenu.x = event.clientX
+  contextMenu.y = event.clientY
+  contextMenu.visible = true
+  // 视口钳制:下一帧实测尺寸后收进界内
+  void nextTick(() => {
+    const element = contextMenuElement.value
+    if (!element) return
+    contextMenu.x = Math.min(contextMenu.x, Math.max(8, window.innerWidth - element.offsetWidth - 8))
+    contextMenu.y = Math.min(contextMenu.y, Math.max(8, window.innerHeight - element.offsetHeight - 8))
+  })
+}
+
+function onMenuCommand(command: string): void {
+  const targets = contextMenu.targets.slice()
+  closeContextMenu()
+  if (!targets.length) return
+  if (command === 'download') void downloadEntries(targets)
+  else if (command === 'copy-path') void copyPaths(targets)
+  else if (command === 'rename' && targets.length === 1) void renameEntry(targets[0])
+  else if (command === 'delete') void deleteEntries(targets)
+}
+
+/** 菜单打开后再点的第一下(任意键)关闭菜单;点菜单内部除外 */
+function onGlobalPointerDown(event: PointerEvent): void {
+  if (!contextMenu.visible) return
+  if (contextMenuElement.value?.contains(event.target as Node)) return
+  closeContextMenu()
 }
 
 function errorMessage(error: unknown): string {
@@ -185,6 +276,43 @@ async function downloadEntry(entry: SftpEntry): Promise<void> {
   }
 }
 
+/** 下载(支持多选批量):单条走原保存对话框;多条先选一个目标目录,再以原名并发落盘。
+ * 每条独立 emit download-start/settle,底部状态栏按队列聚合成总进度 */
+async function downloadEntries(entries: SftpEntry[]): Promise<void> {
+  if (entries.length === 1) {
+    await downloadEntry(entries[0])
+    return
+  }
+  const dir = (await window.ipcRenderer.invoke('terminal-sftp-choose-download-dir')) as
+    | string
+    | null
+  if (!dir) return
+  const separator = dir.includes('\\') ? '\\' : '/'
+  const base = dir.replace(/[\\/]+$/, '')
+  await Promise.all(
+    entries.map(async (entry) => {
+      const localPath = `${base}${separator}${entry.name}`
+      emit('download-start', entry.name)
+      try {
+        await window.ipcRenderer.invoke('terminal-session-download', {
+          sessionId: props.sessionId,
+          sessionPath: entry.path,
+          localPath,
+        })
+        emit('download-settle', true)
+      } catch (error) {
+        emit('download-settle', false, errorMessage(error))
+        ElMessage.error(
+          t('common.terminal.fileTreeDownloadFailed', {
+            name: entry.name,
+            message: errorMessage(error),
+          }),
+        )
+      }
+    }),
+  )
+}
+
 async function renameEntry(entry: SftpEntry): Promise<void> {
   try {
     const result = await ElMessageBox.prompt(
@@ -215,28 +343,57 @@ async function renameEntry(entry: SftpEntry): Promise<void> {
   }
 }
 
-async function deleteEntry(entry: SftpEntry): Promise<void> {
+/** 删除(支持多选批量):确认后逐条删除,成功即局部摘除节点并清理子孙展开键——
+ * 不再整树刷新,其余目录的展开与滚动位置都不动 */
+async function deleteEntries(entries: SftpEntry[]): Promise<void> {
+  const many = entries.length > 1
   try {
     await ElMessageBox.confirm(
-      entry.directory
-        ? t('common.terminal.fileTreeDeleteDirectoryConfirm', { name: entry.name })
-        : t('common.terminal.fileTreeDeleteFileConfirm', { name: entry.name }),
-      t('common.terminal.fileTreeDelete'),
+      many
+        ? t('common.terminal.fileTreeDeleteManyConfirm', { count: entries.length })
+        : entries[0].directory
+          ? t('common.terminal.fileTreeDeleteDirectoryConfirm', { name: entries[0].name })
+          : t('common.terminal.fileTreeDeleteFileConfirm', { name: entries[0].name }),
+      many
+        ? t('common.terminal.fileTreeDeleteMany', { count: entries.length })
+        : t('common.terminal.fileTreeDelete'),
       { type: 'warning' },
     )
-    await window.ipcRenderer.invoke('terminal-session-delete', {
-      sessionId: props.sessionId,
-      path: entry.path,
-      directory: entry.directory,
-    })
-    ElMessage.success(t('common.terminal.fileTreeDeleteDone', { name: entry.name }))
-    expandedSet.delete(entry.path)
-    snapshotExpandedKeys()
-    treeKey.value += 1
-  } catch (error) {
-    if (error === 'cancel' || error === 'close') return
-    ElMessage.error(t('common.terminal.fileTreeOpFailed', { message: errorMessage(error) }))
+  } catch {
+    return // 取消删除
   }
+  let failed = 0
+  for (const entry of entries) {
+    try {
+      await window.ipcRenderer.invoke('terminal-session-delete', {
+        sessionId: props.sessionId,
+        path: entry.path,
+        directory: entry.directory,
+      })
+      removeLocalNode(entry.path)
+      if (!many) ElMessage.success(t('common.terminal.fileTreeDeleteDone', { name: entry.name }))
+    } catch (error) {
+      failed += 1
+      if (!many) {
+        ElMessage.error(t('common.terminal.fileTreeOpFailed', { message: errorMessage(error) }))
+      }
+    }
+  }
+  if (!many) return
+  const done = entries.length - failed
+  if (done > 0) ElMessage.success(t('common.terminal.fileTreeDeleteManyDone', { count: done }))
+  if (failed > 0) ElMessage.error(t('common.terminal.fileTreeDeleteFailedMany', { count: failed }))
+}
+
+/** 局部摘除:el-tree remove(key) 直接摘节点;同时清掉该路径及子孙的展开键与多选残留 */
+function removeLocalNode(path: string): void {
+  treeRef.value?.remove(path)
+  const separator = path.includes('\\') ? '\\' : '/'
+  for (const key of [...expandedSet]) {
+    if (key === path || key.startsWith(path + separator)) expandedSet.delete(key)
+  }
+  selectedPaths.delete(path)
+  selectedEntries.delete(path)
 }
 
 /** 拖入目录 = 远端移动:复用三通道 rename IPC(SSH SFTP / 本机 fs.rename / WSL mv) */
@@ -322,6 +479,44 @@ let armedTimer: ReturnType<typeof setTimeout> | undefined
 /** 武装有效期:超时后该条目恢复为普通应用内拖拽反馈 */
 const DRAG_OUT_ARM_MS = 60_000
 
+/** 出窗未就绪时的系统级跟随浮层状态:维持手上有文件的拖拽感 */
+let dragOverlayShown = false
+let overlayLastX = 0
+let overlayLastY = 0
+/** 最近一次指针的屏幕坐标:浮层是独立置顶窗,setPosition 用的是屏幕坐标系 */
+let lastPointerScreenX = 0
+let lastPointerScreenY = 0
+
+/** 跟随浮层同步:仅出窗准备(preparing)且缓存未就绪时显示;位移 ≥3px 才重发,避免 IPC 刷屏 */
+function syncDragOverlay(active: FileTreePointerGesture | null): void {
+  const show =
+    active !== null && active.phase === 'preparing' && !dragOutCache.has(active.payload.path)
+  if (show && active) {
+    const x = lastPointerScreenX
+    const y = lastPointerScreenY
+    if (!dragOverlayShown) {
+      dragOverlayShown = true
+      overlayLastX = x
+      overlayLastY = y
+      window.ipcRenderer.send('terminal-file-tree-drag-overlay', {
+        action: 'show',
+        name: active.payload.name,
+        x,
+        y,
+      })
+    } else if (Math.abs(x - overlayLastX) >= 3 || Math.abs(y - overlayLastY) >= 3) {
+      overlayLastX = x
+      overlayLastY = y
+      window.ipcRenderer.send('terminal-file-tree-drag-overlay', { action: 'move', x, y })
+    }
+    return
+  }
+  if (dragOverlayShown) {
+    dragOverlayShown = false
+    window.ipcRenderer.send('terminal-file-tree-drag-overlay', { action: 'hide' })
+  }
+}
+
 interface TreeNodeHit {
   path: string
   name: string
@@ -375,10 +570,12 @@ function updateGestureHover(active: FileTreePointerGesture): void {
       dragGhost.preparing = true
       void prepareDragOut(active.payload)
     }
+    syncDragOverlay(active)
     return
   }
   // 指针回窗:恢复应用内拖拽;后台下载不取消,完成时填入缓存
   if (active.phase === 'preparing' && exitFileTreeDragOutPrep(active)) dragGhost.preparing = false
+  syncDragOverlay(active)
 }
 
 function onTreePointerDown(event: PointerEvent): void {
@@ -402,6 +599,8 @@ function onTreePointerMove(event: PointerEvent): void {
   const active = gesture
   if (!active || event.pointerId !== active.pointerId) return
   trackFileTreePointer(active, event.clientX, event.clientY)
+  lastPointerScreenX = event.screenX
+  lastPointerScreenY = event.screenY
   if (active.phase === 'pending') {
     if (!activateFileTreeDrag(active)) return
     // 激活瞬间才捕获指针:之后 move/up 直达树容器,也不会误触节点 click/展开
@@ -476,9 +675,19 @@ function onTreePointerCancel(event: PointerEvent): void {
   cancelGesture()
 }
 
-/** Esc 取消手势:不删除已缓存文件;在途下载完成后静默武装缓存 */
+/** Esc:优先关右键菜单,其次清多选,最后取消进行中的拖拽手势(不删已缓存文件) */
 function onGestureKeydown(event: KeyboardEvent): void {
-  if (event.key !== 'Escape' || !gesture) return
+  if (event.key !== 'Escape') return
+  if (contextMenu.visible) {
+    event.preventDefault()
+    closeContextMenu()
+    return
+  }
+  if (selectedPaths.size > 0) {
+    clearSelection()
+    return
+  }
+  if (!gesture) return
   event.preventDefault()
   cancelGesture()
 }
@@ -500,6 +709,7 @@ function cleanupGesture(): void {
   dragGhost.preparing = false
   setHoverTreeDirElement(null)
   setFileTreePaneHover(null)
+  syncDragOverlay(null)
 }
 
 /**
@@ -588,21 +798,27 @@ function disarmDragOut(): void {
   }
 }
 
-onMounted(() => window.addEventListener('keydown', onGestureKeydown, true))
+onMounted(() => {
+  window.addEventListener('keydown', onGestureKeydown, true)
+  document.addEventListener('pointerdown', onGlobalPointerDown, true)
+})
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', onGestureKeydown, true)
+  document.removeEventListener('pointerdown', onGlobalPointerDown, true)
   cancelGesture()
   disarmDragOut()
+  syncDragOverlay(null)
 })
 
 type FileTreeNode = SftpEntry & { isLeaf: boolean }
 
-interface LazyNode {
-  level: number
-  data?: FileTreeNode
-}
+/** el-tree load 的精确签名:node.data 是宽松的 TreeNodeData,本树节点实为 FileTreeNode */
+type ElTreeLoad = LoadFunction
+type ElTreeData = Parameters<Parameters<ElTreeLoad>[1]>[0]
 
 const treeProps = { label: 'name', children: 'children', isLeaf: 'isLeaf' }
+/** el-tree 实例(结构类型):仅需 remove 做删除后的局部摘节点 */
+const treeRef = ref<{ remove: (key: string) => void } | null>(null)
 const treeKey = ref(0)
 const truncatedEntryCount = ref<number | null>(null)
 let pendingLoads = 0
@@ -628,10 +844,16 @@ function forgetExpanded(data: SftpEntry): void {
   expandedSet.delete(data.path)
 }
 
-async function copyPath(entry: SftpEntry): Promise<void> {
+/** 复制路径(支持多选):多条时一行一个 */
+async function copyPaths(entries: SftpEntry[]): Promise<void> {
+  const text = entries.map((entry) => entry.path).join('\n')
   try {
-    await navigator.clipboard.writeText(entry.path)
-    ElMessage.success(t('common.terminal.fileTreeCopyPathDone', { path: entry.path }))
+    await navigator.clipboard.writeText(text)
+    ElMessage.success(
+      entries.length === 1
+        ? t('common.terminal.fileTreeCopyPathDone', { path: text })
+        : t('common.terminal.fileTreeCopyPathManyDone', { count: entries.length }),
+    )
   } catch (error) {
     ElMessage.error(errorMessage(error))
   }
@@ -659,12 +881,12 @@ async function listDirectory(path: string, root: boolean): Promise<TerminalSessi
   }
 }
 
-async function loadNode(node: LazyNode, resolve: (data: FileTreeNode[]) => void): Promise<void> {
+const loadNode: ElTreeLoad = async (node, resolve) => {
   const root = node.level === 0
-  const path = root ? props.rootPath : node.data?.path
+  const path = root ? props.rootPath : (node.data as FileTreeNode | undefined)?.path
   const dir = path ? await listDirectory(path, root) : null
   if (root && dir) emit('root-resolved', dir.resolvedPath)
-  resolve(toNodes(dir?.entries ?? []))
+  resolve(toNodes(dir?.entries ?? []) as ElTreeData)
 }
 
 function toNodes(entries: SftpEntry[]): FileTreeNode[] {
@@ -674,6 +896,8 @@ function toNodes(entries: SftpEntry[]): FileTreeNode[] {
 watch(
   () => [props.sessionId, props.rootPath],
   () => {
+    closeContextMenu()
+    clearSelection()
     truncatedEntryCount.value = null
     expandedSet.clear()
     expandedKeys.value = []
@@ -776,5 +1000,44 @@ watch(
   50% {
     opacity: 0.45;
   }
+}
+/* 共享右键菜单:teleport 到 body 的单实例菜单,替代每节点 el-dropdown */
+.file-tree-context-menu {
+  position: fixed;
+  z-index: 9000;
+  display: flex;
+  min-width: 168px;
+  flex-direction: column;
+  padding: 4px;
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  background: var(--app-surface);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 18%);
+}
+.file-tree-context-menu__item {
+  padding: 6px 10px;
+  border: none;
+  border-radius: 6px;
+  color: var(--app-text);
+  background: transparent;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+.file-tree-context-menu__item:hover {
+  background: var(--app-hover);
+}
+.file-tree-context-menu__item--danger {
+  color: var(--el-color-error);
+}
+.file-tree-context-menu__divider {
+  height: 1px;
+  margin: 4px 6px;
+  background: var(--app-border);
+}
+/* ctrl/cmd 多选中的节点底色 */
+.terminal-file-tree__node--selected {
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--el-color-primary) 16%, transparent);
 }
 </style>

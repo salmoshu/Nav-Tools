@@ -335,33 +335,79 @@ describe('文件树拖拽接线(源码扫描)', () => {
         'fileTreeDragOutReady',
         'fileTreeDragPreparing',
         'fileTreeDragOutCached',
+        'fileTreeDownloadMany',
+        'fileTreeDeleteMany',
+        'fileTreeDeleteManyConfirm',
+        'fileTreeDeleteManyDone',
+        'fileTreeDeleteFailedMany',
+        'fileTreeCopyPathManyDone',
       ]) {
         expect(source).toContain(`${key}:`)
       }
     }
-  })
-  it('拖拽手势激活即预下载到临时缓存,出窗移交不再临时起步', () => {
-    // 激活块(越过阈值、捕获指针)内立即预下载,出窗时多半已就绪
-    expect(treeSource).toContain('!dragGhost.cached && !dragOutPreparing.has(active.payload.path)')
-    // 预下载完成时若手势仍在窗内,徽标切换为已就绪,出窗直接命中缓存移交
-    expect(treeSource).toContain('dragGhost.cached = true')
-    expect(treeSource).toContain('dragGhost.preparing = false')
-    // 出窗分支的 prepareDragOut 保留(缓存就绪即 startSystemDrag,在途则防重入)
-    expect(treeSource.match(/void prepareDragOut\(active\.payload\)/g)?.length).toBeGreaterThanOrEqual(2)
-  })
-
-  it('展开状态以 expandedSet 为准,default-expanded-keys 只在重挂载前打快照', () => {
-    // expand/collapse 事件只维护 Set:实时回写 expandedKeys 会触发 el-tree 的
-    // defaultExpandedKeys watch 以 autoExpandParent 复活已折叠祖先
-    // (展开A→展开A的子目录→折叠A→展开B,A 被复活的串扰)
-    const remember = treeSource.match(/function rememberExpanded[\s\S]*?\n\}/)?.[0] ?? ''
-    const forget = treeSource.match(/function forgetExpanded[\s\S]*?\n\}/)?.[0] ?? ''
-    expect(remember).toContain('expandedSet.add(data.path)')
-    expect(remember).not.toContain('expandedKeys.value')
-    expect(forget).toContain('expandedSet.delete(data.path)')
-    expect(forget).not.toContain('expandedKeys.value')
-    // 重建前打快照:定义 1 处 + 重命名/删除/移动 3 处调用
-    expect(treeSource).toContain('function snapshotExpandedKeys()')
-    expect(treeSource.match(/snapshotExpandedKeys\(\)/g)?.length).toBeGreaterThanOrEqual(4)
-  })
+  })
+  it('拖拽手势激活即预下载到临时缓存,出窗移交不再临时起步', () => {
+    // 激活块(越过阈值、捕获指针)内立即预下载,出窗时多半已就绪
+    expect(treeSource).toContain('!dragGhost.cached && !dragOutPreparing.has(active.payload.path)')
+    // 预下载完成时若手势仍在窗内,徽标切换为已就绪,出窗直接命中缓存移交
+    expect(treeSource).toContain('dragGhost.cached = true')
+    expect(treeSource).toContain('dragGhost.preparing = false')
+    // 出窗分支的 prepareDragOut 保留(缓存就绪即 startSystemDrag,在途则防重入)
+    expect(treeSource.match(/void prepareDragOut\(active\.payload\)/g)?.length).toBeGreaterThanOrEqual(2)
+  })
+
+  it('展开状态以 expandedSet 为准,default-expanded-keys 只在重挂载前打快照', () => {
+    // expand/collapse 事件只维护 Set:实时回写 expandedKeys 会触发 el-tree 的
+    // defaultExpandedKeys watch 以 autoExpandParent 复活已折叠祖先
+    // (展开A→展开A的子目录→折叠A→展开B,A 被复活的串扰)
+    const remember = treeSource.match(/function rememberExpanded[\s\S]*?\n\}/)?.[0] ?? ''
+    const forget = treeSource.match(/function forgetExpanded[\s\S]*?\n\}/)?.[0] ?? ''
+    expect(remember).toContain('expandedSet.add(data.path)')
+    expect(remember).not.toContain('expandedKeys.value')
+    expect(forget).toContain('expandedSet.delete(data.path)')
+    expect(forget).not.toContain('expandedKeys.value')
+    // 重建前打快照:定义 1 处 + 重命名/移动 2 处调用(删除已改局部摘除,不再整树重建)
+    expect(treeSource).toContain('function snapshotExpandedKeys()')
+    expect(treeSource.match(/snapshotExpandedKeys\(\)/g)?.length).toBeGreaterThanOrEqual(3)
+  })
+
+  it('删除改为局部摘除节点:不整树刷新,子孙展开键与多选残留一并清理', () => {
+    expect(treeSource).toContain('async function deleteEntries')
+    expect(treeSource).not.toContain('async function deleteEntry(')
+    expect(treeSource).toContain('treeRef.value?.remove(path)')
+    const remove = treeSource.match(/function removeLocalNode[\s\S]*?\n\}/)?.[0] ?? ''
+    expect(remove).toContain('expandedSet.delete(key)')
+    expect(remove).toContain('selectedPaths.delete(path)')
+    // 删除链路不得再触发 treeKey 重建
+    const del = treeSource.match(/async function deleteEntries[\s\S]*?\n\}/)?.[0] ?? ''
+    expect(del).not.toContain('treeKey.value += 1')
+  })
+
+  it('ctrl/cmd 多选与共享右键菜单:批量下载/删除作用于整个选择集合', () => {
+    expect(treeSource).toContain('const selectedPaths = reactive(new Set<string>())')
+    expect(treeSource).toContain('event.ctrlKey || event.metaKey')
+    // 单实例共享菜单替代每节点 el-dropdown(后者偶发不弹)
+    expect(treeSource).toContain('file-tree-context-menu')
+    expect(treeSource).toContain('function onTreeContextMenu')
+    expect(treeSource).toContain('function onMenuCommand')
+    expect(treeSource).not.toContain('<el-dropdown')
+    // 批量入口:多条先选一个目标目录再以原名并发落盘
+    expect(treeSource).toContain('async function downloadEntries')
+    expect(treeSource).toContain('terminal-sftp-choose-download-dir')
+    expect(treeSource).toContain('async function copyPaths')
+    expect(ipcSource).toContain("ipcMain.handle('terminal-sftp-choose-download-dir'")
+  })
+
+  it('拖出未就绪时主进程置顶浮层跟随光标:维持拖拽感,就绪/回窗即隐藏', () => {
+    expect(treeSource).toContain('function syncDragOverlay')
+    expect(treeSource).toContain("window.ipcRenderer.send('terminal-file-tree-drag-overlay'")
+    expect(treeSource).toContain("action: 'show'")
+    expect(treeSource).toContain("action: 'move'")
+    expect(treeSource).toContain("action: 'hide'")
+    // 浮层是独立置顶窗:必须用屏幕坐标系,位移阈值防 IPC 刷屏
+    expect(treeSource).toContain('event.screenX')
+    expect(ipcSource).toContain("'terminal-file-tree-drag-overlay'")
+    expect(ipcSource).toContain('alwaysOnTop')
+    expect(ipcSource).toContain('hideDragOverlay')
+  })
 })

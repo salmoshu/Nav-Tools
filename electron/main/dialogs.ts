@@ -66,6 +66,16 @@ export function showScopedSaveDialog(
   })
 }
 
+/** 通用「选择目录」便捷封装:返回目录路径,取消返回 null */
+export function chooseOpenDirectory(
+  target: BrowserWindow | null,
+  scope: string,
+): Promise<string | null> {
+  return showScopedOpenDialog(target, scope, {
+    properties: ['openDirectory', 'createDirectory'],
+  }).then((result) => (result.canceled || result.filePaths.length === 0 ? null : result.filePaths[0]))
+}
+
 /** 通用「选择文件」便捷封装:返回选中路径数组,取消返回 null */
 export function chooseOpenFiles(
   target: BrowserWindow | null,
