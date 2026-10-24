@@ -346,6 +346,57 @@
   background: var(--Bg-Primary70);
 }
 
+/* ============================================================
+   下拉框（el-select 浮层）· 品牌《12-下拉框与弹出菜单》：
+   容器 12px 圆角 + 4px 内边距 + 弥散阴影 + 半像素细边，实底非毛玻璃；
+   菜单项 36px 高 + 10px 圆角，hover/选中 3% 黑浅灰底，
+   选中不加粗、对勾为品牌蓝（菜单里唯一彩色元素）
+   ============================================================ */
+.el-select__popper.el-popper {
+  --el-bg-color-overlay: var(--Bg-Tertiary);
+  border: 0.5px solid var(--Separators-S1);
+  border-radius: var(--radius-input);
+  background: var(--Bg-Tertiary);
+  box-shadow: var(--shadow-card);
+}
+
+.el-select__popper.el-popper .el-popper__arrow::before {
+  border-color: var(--Separators-S1);
+  background: var(--Bg-Tertiary);
+}
+
+.el-select-dropdown {
+  padding: 4px;
+}
+
+.el-select-dropdown__item {
+  height: auto;
+  min-height: 36px;
+  padding: 8px 26px 8px 10px;
+  border-radius: 10px;
+  line-height: 20px;
+  font-weight: 400;
+  transition:
+    background-color var(--duration-default) var(--ease-out),
+    color var(--duration-default) var(--ease-out);
+}
+
+.el-select-dropdown__item.is-hovering,
+.el-select-dropdown__item:hover {
+  background: var(--Fills-F1);
+}
+
+.el-select-dropdown__item.is-selected {
+  background: var(--Fills-F1);
+  color: var(--Labels-Primary);
+  font-weight: 400;
+}
+
+.el-select-dropdown__item.is-selected:after {
+  right: 8px;
+  background-color: var(--Colors-KMBlue);
+}
+
 .el-tabs__item {
   transition: color var(--duration-default) var(--ease-out);
 }

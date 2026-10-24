@@ -55,6 +55,30 @@ describe('completeCommandLine 命令位', () => {
       { text: 'git', kind: 'command', description: '版本控制' },
     ])
   })
+
+  it('命令位也补当前目录下的路径:./scr → ./scripts/、scr → scripts/', () => {
+    const paths = [
+      { name: 'scripts', directory: true },
+      { name: 'README.md', directory: false },
+      { name: 'build', directory: true },
+    ]
+    expect(completionPathContext('./scr', 5)).toEqual({ directory: './', prefix: 'scr' })
+    expect(completionPathContext('scr', 3)).toEqual({ directory: '.', prefix: 'scr' })
+    expect(completeCommandLine('./scr', 5, [], SPECS, 20, paths)).toEqual([
+      { text: './scripts/', kind: 'path' },
+    ])
+    expect(completeCommandLine('scr', 3, [], SPECS, 20, paths)).toEqual([
+      { text: 'scripts/', kind: 'path' },
+    ])
+  })
+
+  it('命令位内置命令优先于同前缀的路径候选', () => {
+    const paths = [{ name: 'gitignore', directory: false }]
+    expect(completeCommandLine('g', 1, [], SPECS, 20, paths)).toEqual([
+      { text: 'git', kind: 'command', description: '版本控制' },
+      { text: 'gitignore', kind: 'path' },
+    ])
+  })
 })
 
 describe('completeCommandLine 参数位', () => {

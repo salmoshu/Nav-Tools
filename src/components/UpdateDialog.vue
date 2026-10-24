@@ -135,7 +135,7 @@ function handleIgnore(): void {
   right: 16px;
   bottom: 16px;
   z-index: 9000;
-  width: 320px;
+  width: 240px;
   padding: 14px 16px;
   border: 1px solid var(--app-border);
   border-radius: 10px;

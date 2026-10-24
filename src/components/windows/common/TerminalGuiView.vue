@@ -821,6 +821,17 @@ const completionCandidates = computed<CompletionCandidate[]>(() =>
     : [],
 )
 
+// 命令位也参与路径补全后,输入未知命令会先以空候选开层等待目录列表;
+// 列表载入(或当前键无匹配)后仍无候选时自动收起,不留空弹层
+watch(
+  [() => completionCandidates.value.length, loadedPathKey],
+  () => {
+    if (completionOpen.value && autoCompletionOpen && completionCandidates.value.length === 0) {
+      closeCompletion()
+    }
+  },
+)
+
 const suggestedLine = computed(() => {
   // 多行草稿不给灰字建议:着色层的建议段无法对齐换行后的文本
   if (

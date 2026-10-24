@@ -387,14 +387,15 @@ export function completionToken(input: string, cursor: number): CompletionToken 
   return { start, text: input.slice(start, end) }
 }
 
-/** 参数位的路径查询上下文；命令位、选项与带引号 token 交给 shell 自己处理。 */
+/** 路径补全的查询上下文(命令位与参数位均可)；选项与带引号 token 交给 shell 自己处理。
+ *  命令位要求 token 非空——空输入不触发目录列表(挂载/清空时不应发 IPC)。 */
 export function completionPathContext(
   input: string,
   cursor: number,
 ): CompletionPathContext | undefined {
   const token = completionToken(input, cursor)
   if (
-    !input.slice(0, token.start).trim() ||
+    (!input.slice(0, token.start).trim() && !token.text) ||
     token.text.startsWith('-') ||
     /^["']/.test(token.text)
   ) {
@@ -449,7 +450,8 @@ export function completeCommandLine(
     }
   }
 
-  // 命令位:内置规格的命令名在前,历史里用过的命令名补在后(最近优先)
+  // 命令位:内置规格的命令名在前,历史里用过的命令名补在后(最近优先),
+  // 最后附上当前目录下匹配的路径(./scr → ./scripts/、scr → scripts/)
   if (headTokens.length === 0) {
     for (const spec of specs) {
       if (spec.name.startsWith(prefix)) {
@@ -460,6 +462,7 @@ export function completeCommandLine(
       const first = history[index].trim().split(/\s+/)[0]
       if (first && first.startsWith(prefix)) push(first, 'history', SPEC_DESCRIPTIONS[first])
     }
+    pushPaths()
     return results.slice(0, limit)
   }
 
