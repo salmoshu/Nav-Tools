@@ -473,10 +473,12 @@ function errorMessage(error: unknown): string {
   border-bottom: 1px solid var(--app-border);
 }
 .file-tree-root {
+  /* 全局 #app text-align:center 会继承到此,路径行显式靠左 */
   overflow: hidden;
   padding: 3px 8px;
   color: var(--app-text-muted);
   font-size: 10px;
+  text-align: left;
   text-overflow: ellipsis;
   white-space: nowrap;
   border-bottom: 1px solid var(--app-border);

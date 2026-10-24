@@ -403,7 +403,7 @@
         <div class="completion__hint">{{ t('common.terminal.guiCompletionHint') }}</div>
       </div>
       <el-icon class="gui-input-row__prompt"><ChevronRight /></el-icon>
-      <span v-if="cwd" class="gui-input-row__cwd" :title="cwd">{{ cwd }}</span>
+      <span v-if="cwd" class="gui-input-row__cwd" :title="cwd">{{ cwdDisplay }}</span>
       <div class="gui-input-editor">
         <!-- 语法着色层:与 textarea 同网格叠放,逐字符对齐;文字本体在 textarea 里透明 -->
         <pre class="gui-input-highlight" aria-hidden="true"><span
@@ -521,9 +521,17 @@ import { railAnchorIndex } from '@/core/terminal/BlockRail'
 
 const t = useTerminalTranslate()
 
+/** 输入行只展示路径:OSC 7 的 host:path 剥离多字符 host 前缀(WSL 会上报
+ *  Windows 主机名),Windows 盘符路径(C:\、C:/)与 ~ 开头之外的不动 */
+const cwdDisplay = computed(() => {
+  const value = props.cwd ?? ''
+  const match = /^([^:/\\]{2,}):([~/].*)$/.exec(value)
+  return match ? match[2] : value
+})
+
 const props = defineProps<{
   blocks: TerminalCommandBlock[]
-  /** 当前会话最近上报的工作目录,显示在输入行,告诉用户下一条命令在哪个目录执行 */
+  /** 当前会话最近上报的工作目录(OSC 7 为 host:path),显示在输入行,告诉用户下一条命令在哪个目录执行 */
   cwd?: string
   /** xterm 当前列宽,用于折行续写判定;未知时按 80 列处理 */
   cols?: number
@@ -938,17 +946,22 @@ function completionDetailText(candidate: CompletionCandidate): string {
 /**
  * 完成注意力(Warp 行为):命令结束(或命令内主动上报通知)时,若用户焦点不在
  * 输入行,弹 toast 把结果带回来;正在终端里敲命令时保持安静。
+ * 只跟踪「未完成→已完成」的实时迁移:切 tab 重挂载会用 scrollback 重建整段
+ * 历史命令块,首次见到的已完成块不补发 toast,否则每次切回都重复弹历史失败。
  */
-const notifiedBlockIds = new Set<number>()
+const blockFinishedSeen = new Map<number, boolean>()
 watch(
   () => props.blocks,
   blocks => {
+    if (blocks.length === 0) blockFinishedSeen.clear()
     const focused = document.activeElement === inputElement.value
     for (const block of blocks) {
-      if (notifiedBlockIds.has(block.id)) continue
       const finished = block.finishedAt !== undefined
+      const wasFinished = blockFinishedSeen.get(block.id)
+      blockFinishedSeen.set(block.id, finished)
+      // 首次见到(挂载/恢复历史)或早已完成:块列表本身可见,无需 toast
+      if (wasFinished === undefined || wasFinished) continue
       if (!block.notification && !finished) continue
-      notifiedBlockIds.add(block.id)
       if (focused) continue
       if (block.notification) {
         const title = block.notification.title || block.command || t('common.terminal.guiNotificationTitle')
