@@ -774,15 +774,18 @@ describe('文件树侧边栏接线(源码扫描)', () => {
     expect(panelSource).toContain("t('common.terminal.fileTreeStatusIdle')")
   })
 
-  it('状态栏用 SVG 进度环替代百分比文本,环形配色跟随相位', () => {
+  it('状态栏保留 SVG 进度环,并显示总百分比、总进度条与动画', () => {
     expect(panelSource).toContain('file-tree-status__ring')
     expect(panelSource).toContain('fileTreeRingDasharray')
     expect(panelSource).toContain('fileTreeRingIndeterminateDasharray')
     expect(panelSource).toContain('stroke-linecap: round')
     expect(panelSource).toContain('.file-tree-status--success .file-tree-status__ring-arc')
     expect(panelSource).toContain('.file-tree-status--error .file-tree-status__ring-arc')
-    // 百分比文本与 Loading 旋转图标已移除
-    expect(panelSource).not.toContain('file-tree-status__percent')
+    expect(panelSource).toContain('file-tree-status__percent')
+    expect(panelSource).toContain('role="progressbar"')
+    expect(panelSource).toContain('file-tree-status__progress--indeterminate')
+    expect(panelSource).toContain('@keyframes file-tree-progress-shimmer')
+    expect(panelSource).toContain('@keyframes file-tree-progress-indeterminate')
     expect(panelSource).not.toContain('<Loading />')
     // transferDetail 的斜杠两侧不再有空格
     expect(panelSource).toContain('formatTransferPairText')
@@ -822,9 +825,9 @@ describe('文件树侧边栏接线(源码扫描)', () => {
     expect(panelSource).toContain('transferDetail')
     expect(panelSource).toContain('formatTransferPair')
     expect(panelSource).toContain("t('common.terminal.fileTreeTransferEta'")
-    // 定宽:等宽数字 + min-width,避免位数变化引起布局抖动
+    // 等宽数字避免位数变化引起布局抖动;详情独占一行时可安全收缩
     expect(panelSource).toContain('font-variant-numeric: tabular-nums')
-    expect(panelSource).toContain('min-width: 24ch')
+    expect(panelSource).toContain('file-tree-status__detail')
   })
 
   it('速率用 >=1s 滑动窗口估算,采样队列在队列清空/会话切换时清空', () => {

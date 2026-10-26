@@ -91,6 +91,7 @@ test('renders command blocks in GUI view and toggles back to the terminal view',
   await page.goto('/#app/terminal-gui-view')
   const guiView = page.locator('.terminal-gui-view')
   await expect(guiView).toBeVisible()
+  await expect(guiView.locator('.gui-input')).toHaveAttribute('placeholder', 'Type a command')
   await expect(guiView.locator('.command-block')).toHaveCount(1)
   await expect(guiView.locator('.command-block__command')).toHaveText('ls -la')
   await expect(guiView.locator('.command-block__output')).toContainText('file1')

@@ -38,26 +38,47 @@
     />
 
     <footer class="file-tree-status" :class="`file-tree-status--${aggregate.phase}`" role="status">
-      <svg
-        v-if="aggregate.phase !== 'idle'"
-        class="file-tree-status__ring"
-        :class="{ 'file-tree-status__ring--indeterminate': ringIndeterminate }"
-        viewBox="0 0 16 16"
-        aria-hidden="true"
-      >
-        <circle class="file-tree-status__ring-track" cx="8" cy="8" :r="FILE_TREE_RING_RADIUS" />
-        <circle
-          class="file-tree-status__ring-arc"
-          cx="8"
-          cy="8"
-          :r="FILE_TREE_RING_RADIUS"
-          :stroke-dasharray="ringDasharray"
-        />
-      </svg>
-      <span class="file-tree-status__text" :title="aggregate.error || aggregate.name || undefined">{{
-        statusText
-      }}</span>
+      <div class="file-tree-status__line">
+        <svg
+          v-if="aggregate.phase !== 'idle'"
+          class="file-tree-status__ring"
+          :class="{ 'file-tree-status__ring--indeterminate': ringIndeterminate }"
+          viewBox="0 0 16 16"
+          aria-hidden="true"
+        >
+          <circle class="file-tree-status__ring-track" cx="8" cy="8" :r="FILE_TREE_RING_RADIUS" />
+          <circle
+            class="file-tree-status__ring-arc"
+            cx="8"
+            cy="8"
+            :r="FILE_TREE_RING_RADIUS"
+            :stroke-dasharray="ringDasharray"
+          />
+        </svg>
+        <span class="file-tree-status__text" :title="aggregate.error || aggregate.name || undefined">{{
+          statusText
+        }}</span>
+        <span
+          v-if="aggregate.phase === 'running' && totalDownloadPercent !== null"
+          class="file-tree-status__percent"
+          >{{ totalDownloadPercent }}%</span
+        >
+      </div>
       <span v-if="transferDetail" class="file-tree-status__detail">{{ transferDetail }}</span>
+      <div
+        v-if="aggregate.phase === 'running'"
+        class="file-tree-status__progress"
+        :class="{
+          'file-tree-status__progress--indeterminate': totalDownloadPercent === null,
+        }"
+        role="progressbar"
+        :aria-label="t('common.terminal.fileTreeTotalProgress')"
+        aria-valuemin="0"
+        aria-valuemax="100"
+        :aria-valuenow="totalDownloadPercent ?? undefined"
+      >
+        <span class="file-tree-status__progress-fill" :style="progressFillStyle"></span>
+      </div>
     </footer>
     <div
       ref="resizeHandle"
@@ -209,6 +230,16 @@ function resizeWithKeyboard(event: KeyboardEvent): void {
 const download = ref<FileTreeDownloadQueue>(EMPTY_FILE_TREE_DOWNLOAD_QUEUE)
 const aggregate = computed(() => aggregateFileTreeDownloads(download.value))
 const downloadPercent = computed(() => fileTreeQueuePercent(aggregate.value))
+const totalDownloadPercent = computed(() => {
+  const agg = aggregate.value
+  if (agg.phase !== 'running' || agg.hasUnknownTotal) return null
+  return fileTreeQueuePercent(agg)
+})
+const progressFillStyle = computed(() =>
+  totalDownloadPercent.value === null
+    ? {}
+    : { transform: `scaleX(${totalDownloadPercent.value / 100})` },
+)
 /** running 期间进度环只进不退:新任务加入撑大分母时环不回跳;idle/会话切换时复位 */
 const ringPeak = ref(0)
 watch(downloadPercent, (percent) => {
@@ -219,9 +250,9 @@ watch(downloadPercent, (percent) => {
 const ringArcPercent = computed(() =>
   aggregate.value.phase === 'success' ? 100 : ringPeak.value,
 )
-/** 不定态只在 running 且没有已知分母(WSL tar 流式等)时开启 */
+/** 任一 running 任务总量未知时,整批进度环与进度条都按不定态展示 */
 const ringIndeterminate = computed(
-  () => aggregate.value.phase === 'running' && downloadPercent.value === null,
+  () => aggregate.value.phase === 'running' && totalDownloadPercent.value === null,
 )
 const ringDasharray = computed(() =>
   ringIndeterminate.value
@@ -267,7 +298,10 @@ watch(
 const transferDetail = computed(() => {
   const agg = aggregate.value
   if (agg.phase !== 'running') return ''
-  const pair = agg.total > 0 ? formatTransferPair(agg.knownTransferred, agg.total) : null
+  const pair =
+    agg.total > 0 && !agg.hasUnknownTotal
+      ? formatTransferPair(agg.knownTransferred, agg.total)
+      : null
   const bytes = pair ? formatTransferPairText(pair) : formatTransferBytes(agg.transferred)
   const parts = [bytes]
   const rate = transferRate.value
@@ -489,13 +523,19 @@ function errorMessage(error: unknown): string {
   overflow: auto;
 }
 .file-tree-status {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 8px;
+  display: grid;
+  gap: 4px;
+  padding: 6px 8px;
   color: var(--app-text-muted);
   font-size: 11px;
   border-top: 1px solid var(--app-border);
+}
+.file-tree-status__line {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  min-height: 14px;
+  gap: 6px;
 }
 .file-tree-status__ring {
   width: 14px;
@@ -537,16 +577,80 @@ function errorMessage(error: unknown): string {
 .file-tree-status__text {
   overflow: hidden;
   flex: 1;
+  min-width: 0;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .file-tree-status--error .file-tree-status__text {
   color: var(--el-color-error);
 }
-.file-tree-status__detail {
+.file-tree-status__percent {
   flex: none;
-  min-width: 24ch;
+  min-width: 4ch;
+  color: var(--el-color-primary);
   text-align: right;
   font-variant-numeric: tabular-nums;
+}
+.file-tree-status__detail {
+  overflow: hidden;
+  min-width: 0;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.file-tree-status__progress {
+  position: relative;
+  height: 4px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--el-color-primary) 14%, transparent);
+}
+.file-tree-status__progress-fill {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  border-radius: inherit;
+  background: var(--el-color-primary);
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform 0.2s ease;
+}
+.file-tree-status__progress-fill::after {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgb(255 255 255 / 55%), transparent);
+  content: '';
+  transform: translateX(-100%);
+  animation: file-tree-progress-shimmer 1.4s linear infinite;
+}
+.file-tree-status__progress--indeterminate .file-tree-status__progress-fill {
+  width: 35%;
+  animation: file-tree-progress-indeterminate 1.1s ease-in-out infinite;
+}
+.file-tree-status__progress--indeterminate .file-tree-status__progress-fill::after {
+  animation: none;
+}
+@keyframes file-tree-progress-shimmer {
+  to {
+    transform: translateX(100%);
+  }
+}
+@keyframes file-tree-progress-indeterminate {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(300%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .file-tree-status__ring--indeterminate,
+  .file-tree-status__progress-fill,
+  .file-tree-status__progress-fill::after {
+    animation: none;
+  }
 }
 </style>

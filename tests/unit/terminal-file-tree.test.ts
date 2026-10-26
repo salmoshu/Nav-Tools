@@ -60,14 +60,20 @@ describe('terminal file tree listSessionPath', () => {
   })
 
   it('lists a local session directory relative to its runtime cwd', async () => {
-    injectSession(service, 'local-cwd', { kind: 'local', cwd: os.tmpdir() })
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'navtools-file-tree-'))
+    try {
+      await fs.writeFile(path.join(directory, 'entry.txt'), 'test')
+      injectSession(service, 'local-cwd', { kind: 'local', cwd: directory })
 
-    const result = await service.listSessionPath('local-cwd', '.')
+      const result = await service.listSessionPath('local-cwd', '.')
 
-    expect(result).not.toBeNull()
-    expect(result?.resolvedPath).toBe(path.win32.normalize(os.tmpdir()))
-    expect(result?.entries.length).toBeGreaterThan(0)
-    expect(result?.truncated).toBe(false)
+      expect(result).not.toBeNull()
+      expect(result?.resolvedPath).toBe(path.win32.normalize(directory))
+      expect(result?.entries.length).toBeGreaterThan(0)
+      expect(result?.truncated).toBe(false)
+    } finally {
+      await fs.rm(directory, { recursive: true, force: true })
+    }
   })
 
   it('falls back to the home directory when a local session has no cwd', async () => {

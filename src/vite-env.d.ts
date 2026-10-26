@@ -71,7 +71,7 @@ interface Window {
       port: number
       username: string
       password?: string
-      localPath: string
+      localPaths: string[]
       timeoutS: number
     }) => Promise<{ ok: boolean }>
     cameraScriptStop: () => Promise<void>

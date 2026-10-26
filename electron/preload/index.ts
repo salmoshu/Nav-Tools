@@ -38,7 +38,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     port: number
     username: string
     password?: string
-    localPath: string
+    localPaths: string[]
     timeoutS: number
   }) => ipcRenderer.invoke('camera-script-run', request),
   cameraScriptStop: () => ipcRenderer.invoke('camera-script-stop'),

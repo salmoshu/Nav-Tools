@@ -45,7 +45,7 @@ export function planTerminalRecovery(
       }
       if (node.sessionId && liveSessionIds.has(node.sessionId)) return node
       const pane = node.sessionId ? { ...node, sessionId: undefined } : node
-      if (pane.launch?.kind === 'local' || pane.launch?.kind === 'wsl') {
+      if (pane.launch?.kind === 'local') {
         targets.push({ tabId: tab.id, paneId: pane.id, launch: pane.launch })
       }
       return pane

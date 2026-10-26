@@ -3,6 +3,7 @@ import { expect, test } from '@playwright/test'
 test('opens the user application selector in the renderer', async ({ page }) => {
   const pageErrors: string[] = []
   page.on('pageerror', (error) => pageErrors.push(error.message))
+  await page.addInitScript(() => localStorage.setItem('nav-tools:locale', 'zh-CN'))
   await page.goto('/')
   await expect(page.getByText('Nav-Tools', { exact: true })).toBeVisible()
   await expect(page.getByText('选择应用', { exact: true })).toBeVisible()
@@ -16,7 +17,7 @@ test('opens the user application selector in the renderer', async ({ page }) => 
     '9000',
   )
   await expect(page.locator('.app-message-box')).toBeVisible()
-  await expect(page.getByText('只保留默认的 Serial、GNSS、Flow 和 Camera 应用')).toBeVisible()
+  await expect(page.getByText('只保留内置默认应用')).toBeVisible()
   await page.waitForTimeout(300)
   await page.screenshot({ path: 'test-results/ui-audit-confirmation-dialog.png' })
   await page.keyboard.press('Escape')
@@ -27,7 +28,7 @@ test('opens the user application selector in the renderer', async ({ page }) => 
   const editor = page.getByRole('dialog', { name: '新建应用' })
   await expect(editor).toBeVisible()
   await expect(editor.getByRole('radiogroup', { name: '应用图标' }).locator('button')).toHaveCount(
-    20,
+    21,
   )
 
   await editor.locator('.el-color-picker__trigger').click()
@@ -113,13 +114,17 @@ test('uses native window dragging without turning header controls into drag regi
 })
 
 test('opens the default Camera application and its RTSP player', async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem('nav-tools:locale', 'zh-CN'))
   await page.goto('/')
   await page.locator('.application-card').filter({ hasText: 'Camera' }).click()
 
-  await expect(page.getByText('Camera Video', { exact: true })).toBeVisible()
+  await expect(page.getByText('相机视频', { exact: true })).toBeVisible()
   await expect(page.locator('.context-app-name')).toHaveText('Camera')
-  const toolbarCameraIcon = page.getByTitle('Camera Video').locator('svg')
-  const titleCameraIcon = page.locator('.card-header .panel-title-icon svg')
+  const toolbarCameraIcon = page.locator('.toolbar-btn[title="相机视频"] svg')
+  const titleCameraIcon = page
+    .locator('.card-header')
+    .filter({ hasText: '相机视频' })
+    .locator('.panel-title-icon svg')
   await expect(toolbarCameraIcon).toBeVisible()
   await expect(titleCameraIcon).toBeVisible()
   expect(await toolbarCameraIcon.locator('path').first().getAttribute('d')).toBe(
@@ -134,29 +139,26 @@ test('opens the default Camera application and its RTSP player', async ({ page }
   expect(stageBox).not.toBeNull()
   expect(controlsBox).not.toBeNull()
   expect(controlsBox!.y).toBeGreaterThanOrEqual(stageBox!.y + stageBox!.height - 1)
-  const cameraSource = page.getByTitle('在 Input 中配置 Camera RTSP 数据源')
-  await expect(cameraSource).toContainText('rtsp://192.168.3.14:8554/rgbstream')
-  await expect(page.getByText('在 Input 中配置 RTSP 数据源后点击播放')).toBeVisible()
+  const cameraSource = page.locator('.source-reference')
+  await expect(cameraSource).toContainText('rtsp://127.0.0.1:8554/rgbstream')
+  await expect(page.getByText('配置 RTSP 地址后点击播放')).toBeVisible()
 
   await cameraSource.click()
-  const dataSourceDialog = page.getByRole('dialog')
+  const dataSourceDialog = page.getByRole('dialog', { name: '相机视频连接' })
   await expect(dataSourceDialog).toBeVisible()
-  await expect(page.getByRole('tab', { name: 'Camera RTSP' })).toHaveAttribute(
-    'aria-selected',
-    'true',
-  )
-  await expect(dataSourceDialog.getByRole('textbox', { name: 'RTSP 视频地址' })).toHaveValue(
-    'rtsp://192.168.3.14:8554/rgbstream',
+  await expect(dataSourceDialog.getByRole('textbox', { name: '端口' })).toHaveValue('8554')
+  await expect(dataSourceDialog.getByRole('textbox', { name: '路径后缀' })).toHaveValue(
+    'rgbstream',
   )
   await page.screenshot({ path: 'test-results/ui-audit-camera-source.png' })
-  await dataSourceDialog.getByRole('button', { name: '确认' }).click()
+  await dataSourceDialog.getByRole('button', { name: '保存配置' }).click()
   await expect(dataSourceDialog).toBeHidden()
 
-  await page.getByTitle('全屏展示').click()
+  await page.getByTitle('全屏展示').first().click()
   await expect(page.locator('.full-screen-header')).toHaveCount(0)
   await expect(page.locator('.full-screen-card .el-card__header')).toHaveCount(0)
   await expect(page.locator('.app-header .context-app-name')).toHaveText('Camera')
-  await expect(page.locator('.app-header .context-panel-title')).toHaveText('Camera Video')
+  await expect(page.locator('.app-header .context-panel-title')).toHaveText('相机视频')
   await expect(page.locator('.app-header .context-title-icon svg')).toBeVisible()
   await expect(page.getByRole('button', { name: '退出组件全屏' })).toBeVisible()
   await page.screenshot({ path: 'test-results/ui-audit-fullscreen-header.png' })
@@ -168,19 +170,19 @@ test('opens the default Camera application and its RTSP player', async ({ page }
   await page.getByRole('button', { name: '播放' }).click()
   await expect(page.getByText('RTSP 播放仅支持 Nav-Tools 桌面版').first()).toBeVisible()
 
-  await page.getByTitle('全屏展示').click()
+  await page.getByTitle('全屏展示').first().click()
   await expect(page.locator('.full-screen-card')).toBeVisible()
-  await page.getByTitle('Camera Video').click()
+  await page.locator('.toolbar-btn[title="相机视频"]').click()
   await expect(page.locator('.full-screen-card')).toHaveCount(0)
   await expect(page.locator('.app-header .context-panel-title')).toHaveCount(0)
-  await expect(page.locator('.card-header .title').filter({ hasText: 'Camera Video' })).toHaveCount(
+  await expect(page.locator('.card-header .title').filter({ hasText: '相机视频' })).toHaveCount(
     2,
   )
 
   await page.getByTitle('全屏展示').first().click()
   await page.getByTitle('Auto').click()
   await expect(page.locator('.full-screen-card')).toHaveCount(0)
-  await expect(page.locator('.card-header .title').filter({ hasText: 'Camera Video' })).toHaveCount(
+  await expect(page.locator('.card-header .title').filter({ hasText: '相机视频' })).toHaveCount(
     2,
   )
 
@@ -188,7 +190,7 @@ test('opens the default Camera application and its RTSP player', async ({ page }
   await page.getByTitle('Reset').click()
   await expect(page.locator('.full-screen-card')).toHaveCount(0)
   await expect(page.locator('.app-header .context-panel-title')).toHaveCount(0)
-  await expect(page.locator('.card-header .title').filter({ hasText: 'Camera Video' })).toHaveCount(
+  await expect(page.locator('.card-header .title').filter({ hasText: '相机视频' })).toHaveCount(
     1,
   )
 })
@@ -203,6 +205,7 @@ test('offers TCP and UDP network inputs in a compact dialog', async ({ page }) =
     windowIds: ['raw-messages'],
   }
   await page.addInitScript((value) => {
+    localStorage.setItem('nav-tools:locale', 'zh-CN')
     localStorage.setItem('nav-tools:custom-applications', JSON.stringify([value]))
     localStorage.setItem('nav-tools:selected-application', value.id)
   }, application)
@@ -240,8 +243,8 @@ test('offers TCP and UDP network inputs in a compact dialog', async ({ page }) =
   const parserSelect = dialog.locator('.parser-select:visible')
   await expect(parserSelect).toBeVisible()
   await parserSelect.click()
-  await page.locator('.el-cascader-node:has-text("协议")').first().hover()
-  await page.locator('.el-cascader-node:has-text("NMEA")').first().click()
+  await page.locator('.el-cascader-node:has-text("协议"):visible').first().hover()
+  await page.locator('.el-cascader-node:has-text("NMEA"):visible').first().click()
   await expect(dialog.locator('.parser-select:visible input')).toHaveValue('NMEA')
   await expect(page.locator('.data-parser-badge')).toContainText('无')
   await expect(page.locator('.data-input-overlay')).toHaveCSS('-webkit-app-region', 'no-drag')
@@ -287,9 +290,9 @@ test('offers TCP and UDP network inputs in a compact dialog', async ({ page }) =
   await page.getByRole('tab', { name: '文件输入' }).click()
   await filePathInput.fill('C:\\data\\sample.log')
   await dialog.locator('.parser-select:visible').click()
-  await page.locator('.el-cascader-node:has-text("结构化")').first().hover()
-  await page.locator('.el-cascader-node:has-text("JSON")').first().click()
-  await dialog.getByRole('button', { name: '确认' }).click()
+  await page.locator('.el-cascader-node:has-text("结构化"):visible').first().hover()
+  await page.locator('.el-cascader-node:has-text("JSON"):visible').first().click()
+  await dialog.getByRole('button', { name: '确定' }).click()
   await expect(dialog).toBeHidden()
   await expect(page.locator('.data-parser-badge')).toContainText('JSON')
   await expect

@@ -121,6 +121,25 @@ describe('TerminalWorkspaceStorage', () => {
     expect(plan.targets).toEqual([{ tabId: tab.id, paneId: tab.root.id, launch: tab.root.launch }])
   })
 
+  it('keeps a disconnected WSL launch for manual reconnect without recreating its process', () => {
+    const tab = createTerminalTab('WSL')
+    if (tab.root.kind !== 'pane') throw new Error('Expected a pane')
+    tab.root.sessionId = 'stale-wsl-session'
+    tab.root.launch = {
+      kind: 'wsl',
+      wslDistro: 'Ubuntu-20.04',
+      cwd: '/home/winchell/E-Wagon',
+      label: 'WSL · Ubuntu-20.04',
+    }
+
+    const plan = planTerminalRecovery([tab], new Set())
+    const pane = findTerminalPane(plan.tabs[0].root, tab.root.id)
+
+    expect(pane?.sessionId).toBeUndefined()
+    expect(pane?.launch).toEqual(tab.root.launch)
+    expect(plan.targets).toEqual([])
+  })
+
   it('keeps a disconnected SSH profile for manual reconnect without persisting credentials', () => {
     const tab = createTerminalTab('Robot')
     if (tab.root.kind !== 'pane') throw new Error('Expected a pane')

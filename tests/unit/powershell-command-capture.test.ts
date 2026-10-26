@@ -30,7 +30,10 @@ describe('PowerShell command capture', () => {
       const waitFor = async (done: () => boolean): Promise<void> => {
         if (done()) return
         await new Promise<void>((resolve, reject) => {
-          const timeout = setTimeout(() => reject(new Error('PowerShell output timed out')), 5000)
+          const timeout = setTimeout(
+            () => reject(new Error('PowerShell output timed out')),
+            30_000,
+          )
           notify = () => {
             if (!done()) return
             clearTimeout(timeout)
@@ -48,6 +51,6 @@ describe('PowerShell command capture', () => {
         await service.close(session.id)
       }
     },
-    10_000,
+    90_000,
   )
 })

@@ -18,7 +18,8 @@ export function registerCameraScriptIpc(
     if (!request || typeof request !== 'object') throw new Error('脚本注入配置无效')
     const request_ = request as Record<string, unknown>
     const stored = accessStore.load()
-    const host = typeof request_.host === 'string' && request_.host.trim() ? request_.host.trim() : stored.host
+    const host =
+      typeof request_.host === 'string' && request_.host.trim() ? request_.host.trim() : stored.host
     const port = Number(request_.port ?? stored.port ?? 22)
     const username =
       typeof request_.username === 'string' && request_.username.trim()
@@ -28,10 +29,16 @@ export function registerCameraScriptIpc(
     if (!host || !username) throw new Error('请填写相机地址与 SSH 用户名')
     if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('SSH 端口无效')
     const timeoutS = Math.floor(Number(request_.timeoutS ?? 120))
-    if (!Number.isFinite(timeoutS) || timeoutS < 1 || timeoutS > 600) throw new Error('运行时限须为 1~600 秒')
-    if (typeof request_.localPath !== 'string' || !request_.localPath.trim()) {
+    if (!Number.isFinite(timeoutS) || timeoutS < 1 || timeoutS > 600)
+      throw new Error('运行时限须为 1~600 秒')
+    if (
+      !Array.isArray(request_.localPaths) ||
+      request_.localPaths.length === 0 ||
+      request_.localPaths.some((localPath) => typeof localPath !== 'string' || !localPath.trim())
+    ) {
       throw new Error('请先选择脚本文件')
     }
+    const localPaths = request_.localPaths.map((localPath) => localPath.trim())
 
     const access = accessStore.resolve({ host, port, username, password })
     accessStore.save(access)
@@ -42,7 +49,7 @@ export function registerCameraScriptIpc(
         port: access.port,
         username: access.username,
         password: access.password,
-        localPath: request_.localPath,
+        localPaths,
         timeoutS,
       },
       (scriptEvent) => broadcast('camera-script-event', scriptEvent),

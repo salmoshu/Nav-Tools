@@ -97,6 +97,7 @@ test('skyplot fills panel on fullscreen/resize while paused', async ({ page }) =
     windowIds: ['sky-plot'],
   }
   await page.addInitScript((app) => {
+    localStorage.setItem('nav-tools:locale', 'zh-CN')
     localStorage.setItem('nav-tools:custom-applications', JSON.stringify([app]))
     localStorage.setItem('nav-tools:selected-application', app.id)
   }, application)

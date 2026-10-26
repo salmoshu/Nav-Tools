@@ -809,7 +809,9 @@
                     @click="scriptRunning ? stopScript() : runScript()"
                   >
                     <el-icon v-if="!scriptRunning"><VideoPlay /></el-icon>
-                    {{ scriptRunning ? t('common.camera.script.stop') : t('common.camera.script.run') }}
+                    {{
+                      scriptRunning ? t('common.camera.script.stop') : t('common.camera.script.run')
+                    }}
                   </el-button>
                 </div>
               </div>
@@ -905,6 +907,7 @@ import {
 } from '@/core/camera/CameraParametersStorage'
 import { JsonStorage } from '@/core/storage/JsonStorage'
 import { isCameraTcpDataConnected } from '@/core/camera/CameraConnectionStatus'
+import { matchCameraPackagePair } from '@/core/camera/CameraPackageSelection'
 import {
   DEFAULT_CALIBRATION_CONFIG,
   isCalibrationRunning,
@@ -1409,12 +1412,16 @@ type CameraScriptEvent =
     }
   | { type: 'output'; text: string }
 
-const scriptPath = ref('')
-const scriptFileName = computed(() => scriptPath.value.split(/[\\/]/).pop() ?? '')
+const scriptPaths = ref<string[]>([])
+const scriptPath = computed(() => scriptPaths.value.join('; '))
+const scriptFileName = computed(() =>
+  scriptPaths.value.map((localPath) => localPath.split(/[\\/]/).pop() ?? '').join('、'),
+)
 const scriptTimeoutS = ref(120)
 const scriptLogs = ref<string[]>([])
 const scriptOutputElement = ref<HTMLElement | null>(null)
 const scriptState = ref<{ state: string; detail: string } | null>(null)
+const scriptStarting = ref(false)
 
 const SCRIPT_STATE_TONES: Record<string, string> = {
   uploading: 'active',
@@ -1426,7 +1433,10 @@ const SCRIPT_STATE_TONES: Record<string, string> = {
 
 const scriptTone = computed(() => SCRIPT_STATE_TONES[scriptState.value?.state ?? 'idle'] ?? 'idle')
 const scriptRunning = computed(
-  () => scriptState.value?.state === 'uploading' || scriptState.value?.state === 'running',
+  () =>
+    scriptStarting.value ||
+    scriptState.value?.state === 'uploading' ||
+    scriptState.value?.state === 'running',
 )
 
 const scriptStateText = computed(() => {
@@ -1445,10 +1455,12 @@ async function pickScriptFile() {
   try {
     const paths = await window.electronAPI.openFileDialog({
       scope: 'camera-script',
-      filters: [{ name: 'Shell', extensions: ['sh'] }],
+      filters: [{ name: 'Shell', extensions: ['sh', 'gz'] }],
+      multi: true,
     })
     if (!paths || paths.length === 0) return
-    scriptPath.value = paths[0]
+    scriptPaths.value = paths
+    if (matchCameraPackagePair(paths)) await runScript()
   } catch (error) {
     reportCalibrationError(error)
   }
@@ -1460,6 +1472,7 @@ function appendScriptOutput(text: string) {
 }
 
 async function runScript() {
+  if (scriptRunning.value) return
   if (!window.electronAPI?.cameraScriptRun) {
     ElMessage.error(t('common.camera.errTcpNotSupported'))
     return
@@ -1468,17 +1481,20 @@ async function runScript() {
     ElMessage.warning(t('common.camera.calibration.errSshMissing'))
     return
   }
+  scriptStarting.value = true
   try {
     await window.electronAPI.cameraScriptRun({
       host: sshForm.host.trim(),
       port: sshForm.port,
       username: sshForm.username.trim(),
       password: sshForm.password,
-      localPath: scriptPath.value,
+      localPaths: [...scriptPaths.value],
       timeoutS: scriptTimeoutS.value,
     })
   } catch (error) {
     await reportCalibrationError(error)
+  } finally {
+    scriptStarting.value = false
   }
 }
 
@@ -2353,6 +2369,12 @@ onUnmounted(() => {
     display: none;
   }
   .cal-source-value {
+    flex-basis: 100%;
+  }
+  .calibration-pane > .cal-actions {
+    flex-wrap: wrap;
+  }
+  .cal-action-hint {
     flex-basis: 100%;
   }
   .cal-target-group {

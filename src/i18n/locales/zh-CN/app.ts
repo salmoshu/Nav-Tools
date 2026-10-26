@@ -174,7 +174,7 @@ export default {
     editApp: '编辑应用',
     deleteApp: '删除应用',
     resetConfirm:
-      '该操作会删除所有自定义应用和对应用的编辑，只保留默认的 Serial、GNSS、Flow 和 Camera 应用。重置后不可恢复，确定继续吗？',
+      '该操作会删除所有自定义应用和对应用的编辑，只保留内置默认应用。重置后不可恢复，确定继续吗？',
     resetConfirmTitle: '重置应用',
     resetConfirmButton: '重置应用',
     deleteConfirm: '删除后不可恢复，确定删除应用「{v}」吗？',

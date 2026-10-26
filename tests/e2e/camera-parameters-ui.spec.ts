@@ -1,5 +1,54 @@
-import { expect, test } from '@playwright/test'
+import { expect, test, type Page } from '@playwright/test'
 import { createCalibrationSnapshot } from '../../src/core/camera/CameraCalibrationTypes'
+
+interface ScriptRequestRecord {
+  localPaths: string[]
+  timeoutS: number
+}
+
+async function mockScriptSelection(page: Page, paths: string[]): Promise<void> {
+  await page.addInitScript((selectedPaths) => {
+    localStorage.setItem('nav-tools:locale', 'zh-CN')
+    localStorage.setItem('nav-tools:theme', 'system')
+    Object.defineProperty(window, 'cameraScriptRequests', { value: [] })
+    Object.defineProperty(window, 'ipcRenderer', {
+      value: {
+        on(channel: string, listener: (event: unknown, data: unknown) => void) {
+          window.addEventListener(channel, (event) => listener(null, (event as CustomEvent).detail))
+        },
+        off() {},
+        send() {},
+        invoke: async () => undefined,
+      },
+    })
+    Object.defineProperty(window, 'electronAPI', {
+      value: {
+        getAppVersion: async () => '1.7.22',
+        getWindowState: async () => ({ maximized: false, alwaysOnTop: false }),
+        setUpdaterPrefs() {},
+        openFileDialog: async () => selectedPaths,
+        cameraScriptRun: async (request: ScriptRequestRecord) => {
+          const target = window as unknown as { cameraScriptRequests: ScriptRequestRecord[] }
+          target.cameraScriptRequests.push(request)
+          window.dispatchEvent(
+            new CustomEvent('camera-script-event', {
+              detail: { type: 'state', state: 'success', detail: 'completed' },
+            }),
+          )
+          return { ok: true }
+        },
+      },
+    })
+  }, paths)
+}
+
+async function scriptRequests(page: Page): Promise<ScriptRequestRecord[]> {
+  return page.evaluate(() =>
+    (window as unknown as { cameraScriptRequests: ScriptRequestRecord[] }).cameraScriptRequests.map(
+      (request) => ({ localPaths: request.localPaths, timeoutS: request.timeoutS }),
+    ),
+  )
+}
 
 test('preserves camera inputs across tabs and displays background task states at card widths', async ({
   page,
@@ -26,6 +75,9 @@ test('preserves camera inputs across tabs and displays background task states at
         setUpdaterPrefs() {},
         cameraCalibrationSnapshot: async () => snapshot,
         getPathForFile: (file: File) => `C:\\camera-tools\\scripts\\${file.name}`,
+        openFileDialog: async () => [
+          'C:\\camera-tools\\scripts\\camera-diagnostics-with-a-long-file-name.sh',
+        ],
         cameraScriptRun: async () => {
           window.dispatchEvent(
             new CustomEvent('camera-script-event', {
@@ -67,11 +119,7 @@ test('preserves camera inputs across tabs and displays background task states at
   await expect(page.locator('.cal-target-group')).toHaveCount(2)
   await page.getByRole('tab', { name: '脚本注入' }).click()
   await expect(page.locator('.script-connection')).toContainText('192.168.3.20')
-  await page.locator('input[type="file"]').setInputFiles({
-    name: 'camera-diagnostics-with-a-long-file-name.sh',
-    mimeType: 'text/x-shellscript',
-    buffer: Buffer.from('echo camera-ui-test'),
-  })
+  await page.getByRole('button', { name: '选择脚本' }).click()
   await expect(page.locator('.script-file-info strong')).toHaveText(
     'camera-diagnostics-with-a-long-file-name.sh',
   )
@@ -152,4 +200,45 @@ test('keeps the default English interface usable in a narrow panel', async ({ pa
   }
   await expect(page.getByRole('button', { name: 'Inject & Run' })).toBeInViewport()
   await page.screenshot({ animations: 'disabled', path: 'test-results/camera-script-english.png' })
+})
+
+test('selects multiple shell scripts and sends them together only after clicking run', async ({
+  page,
+}) => {
+  const paths = ['C:\\camera-tools\\first.sh', 'D:\\diagnostics\\second.sh']
+  await mockScriptSelection(page, paths)
+  await page.goto(
+    `/#card/${encodeURIComponent(JSON.stringify({ componentName: 'CameraParameters', title: '相机参数' }))}`,
+  )
+  await page.getByRole('tab', { name: '脚本注入' }).click()
+  await page.getByRole('button', { name: '选择脚本' }).click()
+
+  await expect(page.locator('.script-file-info strong')).toHaveText('first.sh、second.sh')
+  expect(await scriptRequests(page)).toEqual([])
+  await page.getByRole('button', { name: '注入并执行' }).click()
+  await expect.poll(async () => (await scriptRequests(page)).length).toBe(1)
+  expect((await scriptRequests(page))[0]).toMatchObject({ localPaths: paths, timeoutS: 120 })
+})
+
+test('automatically runs a matching host and lidar package pair without a deployment button', async ({
+  page,
+}) => {
+  const paths = [
+    'C:\\Users\\Salmos\\Desktop\\E-Wagon固件\\0.5.3\\e-wagon-lidar-1.3.2-aarch64-20261026_0846.tar.gz',
+    'C:\\Users\\Salmos\\Desktop\\E-Wagon固件\\0.5.3\\e-wagon-0.5.3-aarch64-20261026_0845.tar.gz',
+  ]
+  await mockScriptSelection(page, paths)
+  await page.goto(
+    `/#card/${encodeURIComponent(JSON.stringify({ componentName: 'CameraParameters', title: '相机参数' }))}`,
+  )
+  await page.getByRole('tab', { name: '脚本注入' }).click()
+  await expect(page.getByRole('button', { name: /部署/ })).toHaveCount(0)
+  await page.getByRole('button', { name: '选择脚本' }).click()
+
+  await expect.poll(async () => (await scriptRequests(page)).length).toBe(1)
+  expect((await scriptRequests(page))[0]).toMatchObject({ localPaths: paths, timeoutS: 120 })
+  expect((await scriptRequests(page))[0]).not.toHaveProperty('localPath')
+  await expect(page.locator('.script-file-info strong')).toContainText('e-wagon-0.5.3')
+  await expect(page.locator('.script-file-info strong')).toContainText('e-wagon-lidar-1.3.2')
+  await expect(page.locator('.script-card .cal-phase')).toHaveText('执行成功')
 })

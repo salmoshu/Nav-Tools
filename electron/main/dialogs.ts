@@ -11,9 +11,54 @@ import fs from 'node:fs'
 
 /**
  * 文件对话框目录的「按模块记忆」:每个 scope(如 camera-script/data-access-file/
- * terminal-upload)各自记住上次选择所在目录,互不影响。
+ * terminal-upload)各自记住上次选择所在目录,互不影响,并在应用重启后保留。
  */
 const dirMemory = new Map<string, string>()
+const DIRECTORY_FILE_NAME = 'file-dialog-directories.json'
+const PERSISTED_SCOPE = /^[a-z0-9][a-z0-9._:-]{0,63}$/
+let persistentFile = ''
+
+export function configureDialogDirectoryMemory(userDataDir: string): void {
+  persistentFile = path.join(userDataDir, DIRECTORY_FILE_NAME)
+  dirMemory.clear()
+  try {
+    const parsed = JSON.parse(fs.readFileSync(persistentFile, 'utf8')) as {
+      version?: unknown
+      directories?: unknown
+    }
+    if (parsed.version !== 1 || !parsed.directories || typeof parsed.directories !== 'object') return
+    for (const [scope, directory] of Object.entries(parsed.directories)) {
+      if (
+        PERSISTED_SCOPE.test(scope) &&
+        typeof directory === 'string' &&
+        path.isAbsolute(directory)
+      ) {
+        dirMemory.set(scope, directory)
+      }
+    }
+  } catch {
+    /* 首次启动或存储损坏时使用空记忆 */
+  }
+}
+
+function persistDirectoryMemory(): void {
+  if (!persistentFile) return
+  try {
+    const directories = Object.fromEntries(
+      [...dirMemory].filter(
+        ([scope, directory]) => PERSISTED_SCOPE.test(scope) && path.isAbsolute(directory),
+      ),
+    )
+    fs.mkdirSync(path.dirname(persistentFile), { recursive: true })
+    fs.writeFileSync(
+      persistentFile,
+      JSON.stringify({ version: 1, directories }, null, 2),
+      'utf8',
+    )
+  } catch {
+    /* 目录记忆写入失败不影响本次文件选择 */
+  }
+}
 
 function seedOptions<T extends { defaultPath?: string }>(
   scope: string | undefined,
@@ -21,7 +66,8 @@ function seedOptions<T extends { defaultPath?: string }>(
   asFile: boolean,
 ): T {
   const dir = scope ? dirMemory.get(scope) : undefined
-  if (!dir || options.defaultPath) return options
+  if (!dir) return options
+  if (options.defaultPath && (!asFile || path.isAbsolute(options.defaultPath))) return options
   if (!asFile) return { ...options, defaultPath: dir }
   const name = path.basename(options.defaultPath ?? '')
   return { ...options, defaultPath: name ? path.join(dir, name) : dir }
@@ -36,6 +82,7 @@ function remember(scope: string | undefined, picked: string | undefined, asFile:
     /* 文件可能已被移走: 仍按目录记忆 */
   }
   dirMemory.set(scope, dir)
+  persistDirectoryMemory()
 }
 
 export function showScopedOpenDialog(

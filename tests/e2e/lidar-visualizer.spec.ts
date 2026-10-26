@@ -437,8 +437,11 @@ test('switching from LiDAR MCAP to GNSS NMEA keeps only one toolbar timeline', a
   await loadFixture(page)
 
   await page.locator('.application-button').click()
-  await page.locator('[data-application-id="gnss-e2e"]').click()
-  await expect(page.locator('.layout-component')).toHaveCount(GNSS_APP.windowIds.length)
+  await page.locator('[data-application-id="gnss-e2e"] h2').click()
+  await expect(page.locator('.context-app-name')).toHaveText('GNSS', { timeout: 20_000 })
+  await expect(page.locator('.layout-component')).toHaveCount(GNSS_APP.windowIds.length, {
+    timeout: 20_000,
+  })
   await expect(page.locator('.lidar-timeline')).toHaveCount(0)
 
   await page

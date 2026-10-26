@@ -177,7 +177,7 @@ export default {
     editApp: 'Edit Application',
     deleteApp: 'Delete Application',
     resetConfirm:
-      'This will delete all custom applications and edits, keeping only the default Serial, GNSS, Flow and Camera applications. This cannot be undone. Continue?',
+      'This will delete all custom applications and edits, keeping only the built-in default applications. This cannot be undone. Continue?',
     resetConfirmTitle: 'Reset Applications',
     resetConfirmButton: 'Reset Applications',
     deleteConfirm: 'This cannot be undone. Delete the application "{v}"?',

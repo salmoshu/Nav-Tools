@@ -39,10 +39,9 @@ describe('Terminal SSH connection dialog', () => {
       'src/components/windows/common/TerminalConnectionDialog.vue',
       'utf8',
     )
-    const connectHandler = source.slice(
-      source.indexOf('function connect(): void'),
-      source.indexOf('function cloneProfile'),
-    )
+    const connectHandler = source
+      .slice(source.indexOf('function connect(): void'), source.indexOf('function cloneProfile'))
+      .replaceAll('\r\n', '\n')
 
     expect(source).toContain(':loading="connecting"')
     expect(source).toContain('v-else-if="connecting" class="connection-progress"')

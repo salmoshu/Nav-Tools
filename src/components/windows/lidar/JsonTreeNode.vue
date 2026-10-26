@@ -117,6 +117,7 @@ async function copy(): Promise<void> {
     await navigator.clipboard.writeText(text)
   } catch {
     // 剪贴板不可用时静默
+    return
   }
 }
 </script>

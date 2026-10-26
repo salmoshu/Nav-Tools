@@ -40,6 +40,7 @@ import { TerminalService } from './services/TerminalService'
 import { createNodeTerminalServiceHost } from './services/TerminalServiceHost'
 import { TerminalCredentialService } from './services/TerminalCredentialService'
 import { registerTerminalIpc } from './terminalIpc'
+import { configureDialogDirectoryMemory, showScopedSaveDialog } from './dialogs'
 import { createDesktopShortcut, parseOpenComponentArg, sanitizeShortcutName } from './shortcuts'
 import { decideCardWindowClose, isCloseConfirmPending } from './cardWindowClose'
 import { getPanelById } from '../../src/core/panels/registry'
@@ -109,6 +110,7 @@ const terminalCredentialService = new TerminalCredentialService(
   app.getPath('userData'),
   safeStorage,
 )
+configureDialogDirectoryMemory(app.getPath('userData'))
 registerTerminalIpc(terminalService, terminalCredentialService)
 const cameraMeasurementStore = new CameraMeasurementAccessStore(app.getPath('userData'))
 registerCameraCalibrationIpc(cameraCalibrationService, cameraMeasurementStore)
@@ -342,9 +344,7 @@ ipcMain.handle('log-recording-start', async (event) => {
       { name: '所有文件', extensions: ['*'] },
     ],
   }
-  const result = targetWindow
-    ? await dialog.showSaveDialog(targetWindow, options)
-    : await dialog.showSaveDialog(options)
+  const result = await showScopedSaveDialog(targetWindow, 'data-access-log-recording', options)
   if (result.canceled || !result.filePath) return { started: false }
 
   if (!logRecordingOwners.has(event.sender.id)) {
