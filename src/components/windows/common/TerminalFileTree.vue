@@ -817,8 +817,11 @@ type ElTreeLoad = LoadFunction
 type ElTreeData = Parameters<Parameters<ElTreeLoad>[1]>[0]
 
 const treeProps = { label: 'name', children: 'children', isLeaf: 'isLeaf' }
-/** el-tree 实例(结构类型):仅需 remove 做删除后的局部摘节点 */
-const treeRef = ref<{ remove: (key: string) => void } | null>(null)
+/** el-tree 实例(结构类型):remove 局部摘节点;getNode 用于 reveal 的逐级展开 */
+const treeRef = ref<{
+  remove: (key: string) => void
+  getNode: (key: string) => { expanded: boolean; expand: (callback?: () => void) => void } | null
+} | null>(null)
 const treeKey = ref(0)
 const truncatedEntryCount = ref<number | null>(null)
 let pendingLoads = 0
@@ -881,13 +884,49 @@ async function listDirectory(path: string, root: boolean): Promise<TerminalSessi
   }
 }
 
+/** 根目录解析后的绝对路径:reveal 的前缀判定以它为准(props.rootPath 可能是 '.' 等相对形式) */
+let resolvedRootPath = ''
+
 const loadNode: ElTreeLoad = async (node, resolve) => {
   const root = node.level === 0
   const path = root ? props.rootPath : (node.data as FileTreeNode | undefined)?.path
   const dir = path ? await listDirectory(path, root) : null
-  if (root && dir) emit('root-resolved', dir.resolvedPath)
+  if (root && dir) {
+    resolvedRootPath = dir.resolvedPath
+    emit('root-resolved', dir.resolvedPath)
+  }
   resolve(toNodes(dir?.entries ?? []) as ElTreeData)
 }
+
+/**
+ * 预览揭示:在当前树内逐级展开到目标目录,不重定根目录。
+ * 懒加载节点 expand(callback) 会先拉子级再展开,完成回调正好串起逐级展开;
+ * expandedSet 手动同步(程序化展开不触发 node-expand 事件)。
+ * 返回 false = 目标不在当前根下或链路节点缺失,由面板回退为导航。
+ */
+async function revealDirectory(dirPath: string): Promise<boolean> {
+  const root = resolvedRootPath
+  if (!root || !dirPath) return false
+  if (dirPath === root) return true
+  const separator = root.includes('\\') ? '\\' : '/'
+  const prefix = root.endsWith(separator) ? root : root + separator
+  if (!dirPath.startsWith(prefix)) return false
+  const segments = dirPath.slice(prefix.length).split(separator).filter(Boolean)
+  let current = root
+  for (const segment of segments) {
+    const childPath = joinFileTreePath(current, segment)
+    const node = treeRef.value?.getNode(childPath)
+    if (!node) return false
+    if (!node.expanded) {
+      expandedSet.add(childPath)
+      await new Promise<void>((resolve) => node.expand(resolve))
+    }
+    current = childPath
+  }
+  return true
+}
+
+defineExpose({ revealDirectory })
 
 function toNodes(entries: SftpEntry[]): FileTreeNode[] {
   return entries.map((entry) => ({ ...entry, isLeaf: !entry.directory }))

@@ -26,6 +26,7 @@
 
     <TerminalFileTree
       :key="treeKey"
+      ref="fileTreeRef"
       class="file-tree"
       :session-id="sessionId"
       :root-path="rootPath"
@@ -39,22 +40,6 @@
 
     <footer class="file-tree-status" :class="`file-tree-status--${aggregate.phase}`" role="status">
       <div class="file-tree-status__line">
-        <svg
-          v-if="aggregate.phase !== 'idle'"
-          class="file-tree-status__ring"
-          :class="{ 'file-tree-status__ring--indeterminate': ringIndeterminate }"
-          viewBox="0 0 16 16"
-          aria-hidden="true"
-        >
-          <circle class="file-tree-status__ring-track" cx="8" cy="8" :r="FILE_TREE_RING_RADIUS" />
-          <circle
-            class="file-tree-status__ring-arc"
-            cx="8"
-            cy="8"
-            :r="FILE_TREE_RING_RADIUS"
-            :stroke-dasharray="ringDasharray"
-          />
-        </svg>
         <span class="file-tree-status__text" :title="aggregate.error || aggregate.name || undefined">{{
           statusText
         }}</span>
@@ -116,11 +101,8 @@ import type {
 } from '@/core/terminal/TerminalTypes'
 import {
   EMPTY_FILE_TREE_DOWNLOAD_QUEUE,
-  FILE_TREE_RING_RADIUS,
   aggregateFileTreeDownloads,
   fileTreeQueuePercent,
-  fileTreeRingDasharray,
-  fileTreeRingIndeterminateDasharray,
   formatRemainingSeconds,
   formatTransferBytes,
   formatTransferPair,
@@ -229,7 +211,6 @@ function resizeWithKeyboard(event: KeyboardEvent): void {
 /** 下载队列:并发任务各占一条;状态栏只渲染聚合视图,单任务终态不再切换整条栏 */
 const download = ref<FileTreeDownloadQueue>(EMPTY_FILE_TREE_DOWNLOAD_QUEUE)
 const aggregate = computed(() => aggregateFileTreeDownloads(download.value))
-const downloadPercent = computed(() => fileTreeQueuePercent(aggregate.value))
 const totalDownloadPercent = computed(() => {
   const agg = aggregate.value
   if (agg.phase !== 'running' || agg.hasUnknownTotal) return null
@@ -239,25 +220,6 @@ const progressFillStyle = computed(() =>
   totalDownloadPercent.value === null
     ? {}
     : { transform: `scaleX(${totalDownloadPercent.value / 100})` },
-)
-/** running 期间进度环只进不退:新任务加入撑大分母时环不回跳;idle/会话切换时复位 */
-const ringPeak = ref(0)
-watch(downloadPercent, (percent) => {
-  if (percent === null || aggregate.value.phase !== 'running') return
-  if (percent > ringPeak.value) ringPeak.value = percent
-})
-/** 进度环弧长:success 恒为满环;running/error 冻结在到达过的最高百分比 */
-const ringArcPercent = computed(() =>
-  aggregate.value.phase === 'success' ? 100 : ringPeak.value,
-)
-/** 任一 running 任务总量未知时,整批进度环与进度条都按不定态展示 */
-const ringIndeterminate = computed(
-  () => aggregate.value.phase === 'running' && totalDownloadPercent.value === null,
-)
-const ringDasharray = computed(() =>
-  ringIndeterminate.value
-    ? fileTreeRingIndeterminateDasharray()
-    : (fileTreeRingDasharray(ringArcPercent.value) ?? fileTreeRingIndeterminateDasharray()),
 )
 /** 滑动窗口(>=1s)估算的速率(字节/秒);无 running 任务或队列复位时归零 */
 const transferRate = ref<number | null>(null)
@@ -285,12 +247,10 @@ watch(
         download.value = EMPTY_FILE_TREE_DOWNLOAD_QUEUE
         transferSamples = []
         transferRate.value = null
-        ringPeak.value = 0
       }, TERMINAL_STATUS_LINGER_MS)
       return
     }
     clearLingerTimer()
-    if (phase === 'idle') ringPeak.value = 0
   },
 )
 
@@ -420,6 +380,9 @@ function reload(): void {
   treeKey.value += 1
 }
 
+/** 树实例:reveal 时调用 revealDirectory 在当前树内展开,避免重定根 */
+const fileTreeRef = ref<{ revealDirectory: (path: string) => Promise<boolean> } | null>(null)
+
 /** 导航到指定根目录并重挂载树(懒加载树的根节点只在挂载时拉一次) */
 function navigateToRoot(path: string): void {
   rootPath.value = path
@@ -438,13 +401,22 @@ watch(
       clearLingerTimer()
       transferSamples = []
       transferRate.value = null
-      ringPeak.value = 0
       download.value = EMPTY_FILE_TREE_DOWNLOAD_QUEUE
       navigateToRoot(reveal || '.')
       return
     }
-    // 同会话内激活/打开预览:跟随到文件所在目录;已在该目录则不动,避免重挂载打断浏览
-    if (reveal && reveal !== prevReveal && reveal !== rootPath.value) navigateToRoot(reveal)
+    // 同会话内激活/打开预览:优先在当前树内逐级展开到文件所在目录(不再重定根);
+    // 目标不在当前根下时才回退为导航
+    if (reveal && reveal !== prevReveal) {
+      const tree = fileTreeRef.value
+      if (!tree) {
+        if (reveal !== rootPath.value) navigateToRoot(reveal)
+      } else {
+        void tree.revealDirectory(reveal).then((handled) => {
+          if (!handled && reveal !== rootPath.value) navigateToRoot(reveal)
+        })
+      }
+    }
     // reveal 变回 undefined(切回普通 tab):保持当前位置,不打扰
   },
   { immediate: true },
@@ -537,43 +509,6 @@ function errorMessage(error: unknown): string {
   min-height: 14px;
   gap: 6px;
 }
-.file-tree-status__ring {
-  width: 14px;
-  height: 14px;
-  flex: none;
-}
-.file-tree-status__ring circle {
-  fill: none;
-  stroke-width: 2;
-}
-.file-tree-status__ring-track {
-  stroke: color-mix(in srgb, var(--app-text-muted) 28%, transparent);
-}
-.file-tree-status__ring-arc {
-  stroke: var(--el-color-primary);
-  stroke-linecap: round;
-  transform: rotate(-90deg);
-  transform-origin: center;
-  transition: stroke-dasharray 0.2s ease;
-}
-/* 终态环形配色跟随相位:成功绿/失败红 */
-.file-tree-status--success .file-tree-status__ring-arc {
-  stroke: var(--el-color-success);
-}
-.file-tree-status--error .file-tree-status__ring-arc {
-  stroke: var(--el-color-error);
-}
-.file-tree-status__ring--indeterminate {
-  animation: file-tree-ring-spin 0.9s linear infinite;
-}
-.file-tree-status__ring--indeterminate .file-tree-status__ring-arc {
-  transition: none;
-}
-@keyframes file-tree-ring-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
 .file-tree-status__text {
   overflow: hidden;
   flex: 1;
@@ -647,7 +582,6 @@ function errorMessage(error: unknown): string {
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .file-tree-status__ring--indeterminate,
   .file-tree-status__progress-fill,
   .file-tree-status__progress-fill::after {
     animation: none;

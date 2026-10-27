@@ -25,7 +25,14 @@ export const SPEED_OPTIONS = [0.25, 0.5, 1, 2, 4, 8] as const
 
 const status = ref<McapPlayerStatus>('idle')
 const errorText = ref('')
-const fileInfo = ref<{ name: string; path?: string; sizeBytes: number; partCount: number } | null>(null)
+const fileInfo = ref<{
+  name: string
+  path?: string
+  /** 多分片时的全部切片路径(信息弹层逐条展示) */
+  paths?: string[]
+  sizeBytes: number
+  partCount: number
+} | null>(null)
 const docRef = shallowRef<McapDocument | null>(null)
 const clockRef = shallowRef<PlayerClock | null>(null)
 const playheadNs = ref(0)
@@ -171,7 +178,13 @@ export function useMcapPlayer() {
           ? parts[0].name
           : (paths.length === parts.length ? mcapCommonDirName(paths) : undefined) ?? parts[0].name
       const totalBytes = parts.reduce((sum, part) => sum + part.sizeBytes, 0)
-      fileInfo.value = { name: sessionName, path: paths[0], sizeBytes: totalBytes, partCount: parts.length }
+      fileInfo.value = {
+        name: sessionName,
+        path: paths[0],
+        paths: paths.length > 1 ? paths : undefined,
+        sizeBytes: totalBytes,
+        partCount: parts.length,
+      }
       rebuildFrame()
       status.value = 'ready'
       if (paths.length > 0) {

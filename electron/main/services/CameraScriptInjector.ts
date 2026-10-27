@@ -1,7 +1,10 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { Client, type ClientChannel } from 'ssh2'
-import { matchCameraPackagePair } from '../../../src/core/camera/CameraPackageSelection'
+import {
+  analyzeCameraPackages,
+  matchCameraPackagePair,
+} from '../../../src/core/camera/CameraPackageSelection'
 import { CameraPackageDeployer } from './CameraPackageDeployer'
 
 export interface CameraScriptRequest {
@@ -64,8 +67,14 @@ export class CameraScriptInjector {
         throw new Error('请先选择脚本文件')
       }
       const packages = matchCameraPackagePair(localPaths)
-      if (!packages && localPaths.some((localPath) => !localPath.toLowerCase().endsWith('.sh'))) {
-        throw new Error('当前仅支持 .sh 脚本')
+      if (!packages) {
+        const { hostPath, lidarPath } = analyzeCameraPackages(localPaths)
+        if (hostPath || lidarPath) {
+          throw new Error('部署需要同时导入 host 与 lidar 两个功能包')
+        }
+        if (localPaths.some((localPath) => !localPath.toLowerCase().endsWith('.sh'))) {
+          throw new Error('当前仅支持 .sh 脚本')
+        }
       }
       for (const localPath of localPaths) {
         const stat = await fs.promises.stat(localPath).catch(() => undefined)
@@ -74,6 +83,15 @@ export class CameraScriptInjector {
 
       if (packages) {
         this.deploying = true
+        const ignored = localPaths.filter(
+          (localPath) => localPath !== packages.hostPath && localPath !== packages.lidarPath,
+        )
+        if (ignored.length > 0) {
+          emit({
+            type: 'output',
+            text: `[提示] 仅部署 host/lidar 两个功能包，其余 ${ignored.length} 个文件已忽略\n`,
+          })
+        }
         emit({
           type: 'state',
           state: 'uploading',

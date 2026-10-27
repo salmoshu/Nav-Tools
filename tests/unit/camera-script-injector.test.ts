@@ -199,4 +199,72 @@ describe('CameraScriptInjector 多文件生命周期', () => {
     expect(events).toContainEqual({ type: 'output', text: 'deployment output\n' })
     expect(events.at(-1)).toMatchObject({ type: 'state', state: 'success' })
   })
+
+  it('预发布版本号的成对包同样进入部署器', async () => {
+    const paths = await createFiles([
+      'e-wagon-0.5.4-preview-aarch64-20261026_2248.tar.gz',
+      'e-wagon-lidar-1.3.2-aarch64-20261026_2249.tar.gz',
+    ])
+    const ssh = new FakeSsh()
+    const deployer = {
+      run: vi.fn(async (_request: unknown, _packages: unknown, onOutput: (text: string) => void) =>
+        onOutput('deployment output\n'),
+      ),
+      stop: vi.fn(),
+    }
+    const injector = new CameraScriptInjector(() => ssh.client, deployer)
+
+    await injector.run(request(paths), () => undefined)
+
+    expect(deployer.run).toHaveBeenCalledWith(
+      expect.objectContaining({ host: '192.0.2.14' }),
+      { hostPath: paths[0], lidarPath: paths[1] },
+      expect.any(Function),
+    )
+    expect(ssh.connect).not.toHaveBeenCalled()
+  })
+
+  it('只导入一个功能包时报明确错误,不落回 .sh 校验', async () => {
+    const paths = await createFiles(['e-wagon-0.5.3-aarch64-20261026_0845.tar.gz'])
+    const ssh = new FakeSsh()
+    const deployer = { run: vi.fn(), stop: vi.fn() }
+    const injector = new CameraScriptInjector(() => ssh.client, deployer)
+    const events: CameraScriptEvent[] = []
+
+    await expect(injector.run(request(paths), (event) => events.push(event))).rejects.toThrow(
+      '部署需要同时导入 host 与 lidar 两个功能包',
+    )
+    expect(deployer.run).not.toHaveBeenCalled()
+    expect(ssh.connect).not.toHaveBeenCalled()
+  })
+
+  it('成对包之外的多余文件忽略并在输出中说明', async () => {
+    const paths = await createFiles([
+      'e-wagon-0.5.3-aarch64-20261026_0845.tar.gz',
+      'e-wagon-lidar-1.3.2-aarch64-20261026_0846.tar.gz',
+      'extra.sh',
+    ])
+    const ssh = new FakeSsh()
+    const deployer = {
+      run: vi.fn(async (_request: unknown, _packages: unknown, onOutput: (text: string) => void) =>
+        onOutput('deployment output\n'),
+      ),
+      stop: vi.fn(),
+    }
+    const injector = new CameraScriptInjector(() => ssh.client, deployer)
+    const events: CameraScriptEvent[] = []
+
+    await injector.run(request(paths), (event) => events.push(event))
+
+    expect(events).toContainEqual({
+      type: 'output',
+      text: '[提示] 仅部署 host/lidar 两个功能包，其余 1 个文件已忽略\n',
+    })
+    expect(deployer.run).toHaveBeenCalledWith(
+      expect.objectContaining({ host: '192.0.2.14' }),
+      { hostPath: paths[0], lidarPath: paths[1] },
+      expect.any(Function),
+    )
+    expect(events.at(-1)).toMatchObject({ type: 'state', state: 'success' })
+  })
 })

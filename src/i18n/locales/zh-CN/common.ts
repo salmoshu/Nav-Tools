@@ -172,6 +172,7 @@ export default {
       desc: '把本地 shell 脚本上传到相机板 /tmp 并限时执行（复用测量源的 SSH 配置）；多个脚本按选择顺序执行，结束后自动删除远端脚本。',
       scriptFile: '本地脚本',
       choose: '选择脚本',
+      clear: '清空',
       noFile: '未选择脚本文件',
       timeout: '运行时限 (s)',
       run: '注入并执行',

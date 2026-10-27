@@ -774,13 +774,10 @@ describe('文件树侧边栏接线(源码扫描)', () => {
     expect(panelSource).toContain("t('common.terminal.fileTreeStatusIdle')")
   })
 
-  it('状态栏保留 SVG 进度环,并显示总百分比、总进度条与动画', () => {
-    expect(panelSource).toContain('file-tree-status__ring')
-    expect(panelSource).toContain('fileTreeRingDasharray')
-    expect(panelSource).toContain('fileTreeRingIndeterminateDasharray')
-    expect(panelSource).toContain('stroke-linecap: round')
-    expect(panelSource).toContain('.file-tree-status--success .file-tree-status__ring-arc')
-    expect(panelSource).toContain('.file-tree-status--error .file-tree-status__ring-arc')
+  it('状态栏显示总百分比与总进度条(左侧圆环已由进度条取代)', () => {
+    expect(panelSource).not.toContain('file-tree-status__ring')
+    expect(panelSource).not.toContain('fileTreeRingDasharray')
+    expect(panelSource).not.toContain('fileTreeRingIndeterminateDasharray')
     expect(panelSource).toContain('file-tree-status__percent')
     expect(panelSource).toContain('role="progressbar"')
     expect(panelSource).toContain('file-tree-status__progress--indeterminate')
@@ -838,10 +835,14 @@ describe('文件树侧边栏接线(源码扫描)', () => {
     expect(panelSource.match(/transferSamples = \[\]/g)?.length).toBeGreaterThanOrEqual(2)
   })
 
-  it('预览 tab 跟随:面板接收 revealPath 并导航到文件所在目录', () => {
+  it('预览 tab 跟随:在当前树内逐级展开到文件所在目录,不重定根', () => {
     expect(panelSource).toContain('revealPath?: string')
     expect(panelSource).toContain('() => props.revealPath')
-    expect(panelSource).toContain('navigateToRoot(reveal')
+    expect(panelSource).toContain('tree.revealDirectory(reveal)')
+    // 目标不在当前根下时才回退为导航
+    expect(panelSource).toContain('if (!handled && reveal !== rootPath.value) navigateToRoot(reveal)')
+    expect(treeSource).toContain('async function revealDirectory')
+    expect(treeSource).toContain('defineExpose({ revealDirectory })')
   })
 
   it('zh-CN / en-US 状态栏与拖拽文案同步', () => {

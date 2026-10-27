@@ -786,6 +786,14 @@
                   <el-icon><FolderOpened /></el-icon>
                   {{ t('common.camera.script.choose') }}
                 </el-button>
+                <el-button
+                  v-if="scriptPaths.length > 0"
+                  text
+                  :disabled="scriptRunning"
+                  @click="scriptPaths = []"
+                >
+                  {{ t('common.camera.script.clear') }}
+                </el-button>
               </div>
               <div class="script-controls">
                 <label class="script-timeout">
@@ -1459,8 +1467,13 @@ async function pickScriptFile() {
       multi: true,
     })
     if (!paths || paths.length === 0) return
-    scriptPaths.value = paths
-    if (matchCameraPackagePair(paths)) await runScript()
+    // 多次导入累加去重:先选 host 再选 lidar 也能凑齐部署对(此前每次导入覆盖选择,永远凑不齐)
+    const merged = [...scriptPaths.value]
+    for (const localPath of paths) {
+      if (!merged.includes(localPath)) merged.push(localPath)
+    }
+    scriptPaths.value = merged
+    if (matchCameraPackagePair(merged)) await runScript()
   } catch (error) {
     reportCalibrationError(error)
   }

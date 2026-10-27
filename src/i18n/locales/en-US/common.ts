@@ -175,6 +175,7 @@ export default {
       desc: 'Upload local shell scripts to the camera board /tmp and run them with a time limit (uses the same SSH settings as the measurement source). Multiple scripts run in selection order and are removed afterwards.',
       scriptFile: 'Local script',
       choose: 'Choose script',
+      clear: 'Clear',
       noFile: 'No script file selected',
       timeout: 'Time limit (s)',
       run: 'Inject & Run',

@@ -6,7 +6,8 @@ import {
   CameraPackageDeployer,
   type CameraPackageDeploymentHost,
 } from '../../electron/main/services/CameraPackageDeployer'
-import { matchCameraPackagePair } from '../../src/core/camera/CameraPackageSelection'
+import { analyzeCameraPackages,
+  matchCameraPackagePair } from '../../src/core/camera/CameraPackageSelection'
 
 const HOST_PATH = String.raw`C:\Users\Salmos\Desktop\E-Wagon固件\0.5.3\e-wagon-0.5.3-aarch64-20261026_0845.tar.gz`
 const LIDAR_PATH = String.raw`C:\Users\Salmos\Desktop\E-Wagon固件\0.5.3\e-wagon-lidar-1.3.2-aarch64-20261026_0846.tar.gz`
@@ -62,10 +63,15 @@ describe('相机发布包选择', () => {
     ).toBeDefined()
   })
 
-  it('拒绝单包、重复类型、混合文件和近似文件名', () => {
+  it('拒绝单包、重复类型和近似文件名;多余文件进 others 不阻塞凑对', () => {
     expect(matchCameraPackagePair([HOST_PATH])).toBeUndefined()
     expect(matchCameraPackagePair([HOST_PATH, HOST_PATH])).toBeUndefined()
-    expect(matchCameraPackagePair([HOST_PATH, LIDAR_PATH, 'check.sh'])).toBeUndefined()
+    // 混有脚本等其他文件时仍凑对部署,多余文件由分析接口归入 others(注入器忽略并提示)
+    expect(matchCameraPackagePair([HOST_PATH, LIDAR_PATH, 'check.sh'])).toEqual({
+      hostPath: HOST_PATH,
+      lidarPath: LIDAR_PATH,
+    })
+    expect(analyzeCameraPackages([HOST_PATH, LIDAR_PATH, 'check.sh']).others).toEqual(['check.sh'])
     expect(matchCameraPackagePair([HOST_PATH, 'check.sh'])).toBeUndefined()
     expect(matchCameraPackagePair([`${HOST_PATH}.sh`, LIDAR_PATH])).toBeUndefined()
     expect(

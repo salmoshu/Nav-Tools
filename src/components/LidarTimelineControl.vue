@@ -10,6 +10,7 @@ import {
   ArrowRight,
   Clock,
   Close,
+  Document,
   InfoFilled,
   RefreshRight,
   VideoPause,
@@ -32,6 +33,13 @@ const props = withDefaults(
 const player = useMcapPlayer()
 const ready = computed(() => player.status.value === 'ready')
 const fileInfo = player.fileInfo
+/** 当前录像的全部磁盘路径(单分片一条);tooltip 逐行、信息弹层逐条展示 */
+const filePaths = computed(() => {
+  const info = fileInfo.value
+  if (!info) return []
+  return info.paths && info.paths.length > 0 ? info.paths : info.path ? [info.path] : []
+})
+const fileInfoTooltip = computed(() => filePaths.value.join('\n') || fileInfo.value?.name || '')
 
 const isVertical = computed(() => props.position === 'right' || props.position === 'left')
 const popoverOpen = ref(false)
@@ -249,6 +257,15 @@ watch(ready, (visible) => {
     <template v-if="!isVertical">
       <div class="timeline-panel timeline-panel--horizontal">
         <button
+          v-if="fileInfo"
+          class="timeline-file"
+          :title="fileInfoTooltip"
+          @click.stop="toggleInfo($event)"
+        >
+          <el-icon><Document /></el-icon>
+          <span class="timeline-file__name">{{ fileInfo.name }}</span>
+        </button>
+        <button
           class="timeline-button"
           :title="player.playing.value ? t('data.timelinePause') : t('data.timelinePlay')"
           @click.stop="player.toggle()"
@@ -341,6 +358,15 @@ watch(ready, (visible) => {
         class="timeline-panel timeline-popover"
         :style="popoverStyle"
       >
+        <button
+          v-if="fileInfo"
+          class="timeline-file"
+          :title="fileInfoTooltip"
+          @click.stop="toggleInfo($event)"
+        >
+          <el-icon><Document /></el-icon>
+          <span class="timeline-file__name">{{ fileInfo.name }}</span>
+        </button>
         <div class="timeline-actions">
           <button
             class="timeline-button"
@@ -426,6 +452,9 @@ watch(ready, (visible) => {
         <button class="timeline-button info-close" :title="t('data.timelineClose')" @click.stop="infoOpen = false">
           <el-icon><Close /></el-icon>
         </button>
+      </div>
+      <div v-if="filePaths.length > 0" class="info-paths">
+        <div v-for="path in filePaths" :key="path" class="info-path" :title="path">{{ path }}</div>
       </div>
       <el-tabs v-model="infoTab" class="info-tabs">
         <el-tab-pane :label="t('lidar.playback.tabTopics')" name="topics">
@@ -782,5 +811,41 @@ watch(ready, (visible) => {
   font-size: 12px;
   color: var(--app-text-secondary);
   padding: 1px 0;
+}
+/* 当前播放文件:名称内联展示(点击开信息弹层),完整路径在 tooltip 与信息弹层逐条列出 */
+.timeline-file {
+  display: inline-flex;
+  max-width: 180px;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  border: none;
+  border-radius: 6px;
+  color: var(--app-text-muted);
+  background: transparent;
+  font-size: 11px;
+  cursor: pointer;
+}
+.timeline-file:hover {
+  color: var(--el-color-primary);
+  background: var(--app-hover);
+}
+.timeline-file .el-icon {
+  flex: none;
+}
+.timeline-file__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.info-paths {
+  padding: 4px 12px 0;
+  color: var(--app-text-muted);
+  font-size: 11px;
+}
+.info-path {
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+  user-select: text;
 }
 </style>
