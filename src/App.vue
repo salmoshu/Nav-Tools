@@ -11,6 +11,7 @@ import SettingsPage from './components/SettingsPage.vue'
 import UpdateDialog from './components/UpdateDialog.vue'
 import emitter from '@/hooks/useMitt'
 import { useApplicationSelector } from '@/composables/useApplicationSelector'
+import { useMcapPlayer } from '@/composables/useMcapPlayer'
 import { useLocale } from '@/composables/useLocale'
 import { getWindowsByIds } from '@/settings/config'
 import {
@@ -50,6 +51,7 @@ const fullscreenPanel = ref<FullscreenPanelContext>()
 const settingsOpen = ref(false)
 const isCardWindow = computed(() => window.location.hash.startsWith('#card/'))
 const { currentApplication } = useApplicationSelector()
+const mcapPlayer = useMcapPlayer()
 
 const applicationId = computed(() => {
   const match = window.location.hash.match(/^#app\/([^/?]+)/)
@@ -69,6 +71,16 @@ const contextTitle = computed(() => {
   if (settingsOpen.value) return t('app.settings')
 
   return currentApplication.value?.name
+})
+
+/** LiDAR 应用激活时,当前播放文件名显示在应用 header(时间轴进度区不再承担) */
+const contextFileName = computed(() =>
+  currentApplication.value?.id === 'lidar' ? mcapPlayer.fileInfo.value?.name : undefined,
+)
+const contextFileTitle = computed(() => {
+  const info = mcapPlayer.fileInfo.value
+  if (!info) return ''
+  return info.paths?.join('\n') ?? info.path ?? info.name
 })
 
 const panelTitleFallback = computed(() => t('app.panel'))
@@ -147,6 +159,8 @@ onUnmounted(() => {
         :brand-title="isCardWindow ? contextTitle : 'Nav-Tools'"
         :brand-icon-url="isCardWindow ? cardWindowIconUrl : undefined"
         :context-title="isCardWindow ? undefined : contextTitle"
+        :context-file-name="isCardWindow ? undefined : contextFileName"
+        :context-file-title="contextFileTitle"
         :context-panel-title="fullscreenPanel?.title"
         :context-icon-action="fullscreenPanel?.action"
         :show-application-selector="!isCardWindow"

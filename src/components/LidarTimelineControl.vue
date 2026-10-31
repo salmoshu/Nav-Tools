@@ -10,7 +10,6 @@ import {
   ArrowRight,
   Clock,
   Close,
-  Document,
   InfoFilled,
   RefreshRight,
   VideoPause,
@@ -19,6 +18,7 @@ import {
 import { ElIcon } from 'element-plus'
 import { useMcapPlayer, SPEED_OPTIONS } from '@/composables/useMcapPlayer'
 import { formatByteSize, formatRelativeNs } from '@/core/lidar/timeFormat'
+import { PLAYBACK_STEP_MODES, isPlaybackStepMode } from '@/core/lidar/PlaybackTimeline'
 import { t } from '@/i18n'
 
 const props = withDefaults(
@@ -39,7 +39,6 @@ const filePaths = computed(() => {
   if (!info) return []
   return info.paths && info.paths.length > 0 ? info.paths : info.path ? [info.path] : []
 })
-const fileInfoTooltip = computed(() => filePaths.value.join('\n') || fileInfo.value?.name || '')
 
 const isVertical = computed(() => props.position === 'right' || props.position === 'left')
 const popoverOpen = ref(false)
@@ -114,21 +113,24 @@ const elapsedLabel = computed(
 
 const durationLabel = computed(() => formatRelativeNs(endNs.value, startNs.value))
 
-/** 播放头所在的全局帧序号（跨话题合并去重后的消息时间点）。 */
-const frameIndex = computed(() => {
-  const times = player.document.value?.allTimesNs
-  if (!times || times.length === 0) return 0
-  let lo = 0
-  let hi = times.length
-  while (lo < hi) {
-    const mid = (lo + hi) >>> 1
-    if (times[mid] <= player.playheadNs.value) lo = mid + 1
-    else hi = mid
-  }
-  return lo
+const stepCountLabel = computed(() => t('lidar.timeline.stepCount', {
+  kind: t(`lidar.timeline.countKinds.${player.stepMode.value}`),
+  current: player.stepPosition.value,
+  total: player.stepTotal.value,
+}))
+
+// 录制可以从规划编号11开始或中间缺帧，不能把消息序号冒充日志里的frame。
+const recordedPlannerNumber = computed(() => {
+  const frame = player.currentPlannerState.value?.frame
+  return player.stepMode.value === 'planner' && player.stepPosition.value > 0 &&
+    frame !== undefined && frame !== player.stepPosition.value
+    ? t('lidar.timeline.plannerNumber', { frame }) : ''
 })
 
-const frameTotal = computed(() => player.document.value?.allTimesNs.length ?? 0)
+/** 帧计数 tooltip:完整的帧定义(Planner frame 等)与日志帧号在此保留,计数区只留数字 */
+const epochTooltip = computed(() =>
+  [stepCountLabel.value, recordedPlannerNumber.value].filter(Boolean).join(' · '),
+)
 
 // —— 诊断信息（话题表 / 会话指纹 / 加载提示），原回放控制面板内容 ——
 
@@ -183,6 +185,11 @@ function endDrag(): void {
 function onSpeedChange(event: Event): void {
   const value = Number((event.target as HTMLSelectElement).value)
   if (Number.isFinite(value)) player.setSpeed(value)
+}
+
+function onStepModeChange(event: Event): void {
+  const mode = (event.target as HTMLSelectElement).value
+  if (isPlaybackStepMode(mode)) player.setStepMode(mode)
 }
 
 function togglePopover(event?: MouseEvent): void {
@@ -257,15 +264,6 @@ watch(ready, (visible) => {
     <template v-if="!isVertical">
       <div class="timeline-panel timeline-panel--horizontal">
         <button
-          v-if="fileInfo"
-          class="timeline-file"
-          :title="fileInfoTooltip"
-          @click.stop="toggleInfo($event)"
-        >
-          <el-icon><Document /></el-icon>
-          <span class="timeline-file__name">{{ fileInfo.name }}</span>
-        </button>
-        <button
           class="timeline-button"
           :title="player.playing.value ? t('data.timelinePause') : t('data.timelinePlay')"
           @click.stop="player.toggle()"
@@ -275,7 +273,7 @@ watch(ready, (visible) => {
         <button
           class="timeline-button"
           :title="t('lidar.timeline.prevFrame')"
-          :disabled="frameIndex <= 0"
+          :disabled="!player.canStepBackward.value"
           @click.stop="player.stepFrames(-1)"
         >
           <el-icon><ArrowLeft /></el-icon>
@@ -283,11 +281,25 @@ watch(ready, (visible) => {
         <button
           class="timeline-button"
           :title="t('lidar.timeline.nextFrame')"
-          :disabled="frameIndex >= frameTotal - 1"
+          :disabled="!player.canStepForward.value"
           @click.stop="player.stepFrames(1)"
         >
           <el-icon><ArrowRight /></el-icon>
         </button>
+        <select
+          class="timeline-step-mode"
+          :title="t('lidar.timeline.stepBasis')"
+          :aria-label="t('lidar.timeline.stepBasis')"
+          :value="player.stepMode.value"
+          @change.stop="onStepModeChange"
+        >
+          <option
+            v-for="mode in PLAYBACK_STEP_MODES"
+            :key="mode"
+            :value="mode"
+            :disabled="!player.stepModes.value.includes(mode)"
+          >{{ t(`lidar.timeline.stepModes.${mode}`) }}</option>
+        </select>
         <input
           class="timeline-slider"
           type="range"
@@ -305,7 +317,9 @@ watch(ready, (visible) => {
           @change.stop="endDrag"
         />
         <span class="timeline-time" :title="elapsedLabel">{{ elapsedLabel.split(' / ')[0] }}</span>
-        <span class="timeline-epoch">{{ frameIndex + 1 }} / {{ frameTotal }}</span>
+        <span class="timeline-epoch" :title="epochTooltip"
+          >{{ player.stepPosition.value }}/{{ player.stepTotal.value }}</span
+        >
         <select
           class="timeline-speed"
           :title="t('lidar.timeline.speed')"
@@ -358,15 +372,6 @@ watch(ready, (visible) => {
         class="timeline-panel timeline-popover"
         :style="popoverStyle"
       >
-        <button
-          v-if="fileInfo"
-          class="timeline-file"
-          :title="fileInfoTooltip"
-          @click.stop="toggleInfo($event)"
-        >
-          <el-icon><Document /></el-icon>
-          <span class="timeline-file__name">{{ fileInfo.name }}</span>
-        </button>
         <div class="timeline-actions">
           <button
             class="timeline-button"
@@ -378,7 +383,7 @@ watch(ready, (visible) => {
           <button
             class="timeline-button"
             :title="t('lidar.timeline.prevFrame')"
-            :disabled="frameIndex <= 0"
+            :disabled="!player.canStepBackward.value"
             @click.stop="player.stepFrames(-1)"
           >
             <el-icon><ArrowLeft /></el-icon>
@@ -386,7 +391,7 @@ watch(ready, (visible) => {
           <button
             class="timeline-button"
             :title="t('lidar.timeline.nextFrame')"
-            :disabled="frameIndex >= frameTotal - 1"
+            :disabled="!player.canStepForward.value"
             @click.stop="player.stepFrames(1)"
           >
             <el-icon><ArrowRight /></el-icon>
@@ -407,6 +412,20 @@ watch(ready, (visible) => {
             <el-icon><Close /></el-icon>
           </button>
         </div>
+        <select
+          class="timeline-step-mode timeline-step-mode--popover"
+          :title="t('lidar.timeline.stepBasis')"
+          :aria-label="t('lidar.timeline.stepBasis')"
+          :value="player.stepMode.value"
+          @change.stop="onStepModeChange"
+        >
+          <option
+            v-for="mode in PLAYBACK_STEP_MODES"
+            :key="mode"
+            :value="mode"
+            :disabled="!player.stepModes.value.includes(mode)"
+          >{{ t(`lidar.timeline.stepModes.${mode}`) }}</option>
+        </select>
         <input
           class="timeline-slider timeline-slider--popover"
           type="range"
@@ -425,7 +444,9 @@ watch(ready, (visible) => {
         />
         <div class="timeline-details">
           <span class="timeline-time" :title="elapsedLabel">{{ elapsedLabel }}</span>
-          <span class="timeline-epoch">{{ frameIndex + 1 }} / {{ frameTotal }}</span>
+          <span class="timeline-epoch" :title="epochTooltip"
+            >{{ player.stepPosition.value }}/{{ player.stepTotal.value }}</span
+          >
         </div>
         <select
           class="timeline-speed timeline-speed--popover"
@@ -535,6 +556,7 @@ watch(ready, (visible) => {
 }
 
 .timeline-panel--horizontal {
+  min-width: 0;
   gap: 6px;
   padding: 4px 7px;
   border: 1px solid color-mix(in srgb, #06b6d4 24%, var(--app-border));
@@ -591,6 +613,7 @@ watch(ready, (visible) => {
   appearance: none;
   -webkit-appearance: none;
   width: clamp(120px, 24vw, 360px);
+  min-width: 72px;
   height: 24px;
   margin: 0 2px;
   padding: 0;
@@ -675,7 +698,7 @@ watch(ready, (visible) => {
 }
 
 .timeline-time {
-  min-width: 82px;
+  min-width: 0;
 }
 
 .timeline-epoch {
@@ -684,7 +707,8 @@ watch(ready, (visible) => {
   text-align: center;
 }
 
-.timeline-speed {
+.timeline-speed,
+.timeline-step-mode {
   height: 24px;
   padding: 0 2px;
   flex: none;
@@ -699,6 +723,19 @@ watch(ready, (visible) => {
 
 .timeline-speed--popover {
   align-self: stretch;
+}
+
+.timeline-step-mode {
+  max-width: 140px;
+}
+
+.timeline-step-mode--popover {
+  max-width: none;
+  align-self: stretch;
+}
+
+.timeline-planner-number {
+  margin-left: 6px;
 }
 
 .timeline-trigger {
@@ -734,6 +771,7 @@ watch(ready, (visible) => {
 
 .timeline-details {
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 8px;
 }
 
@@ -811,32 +849,6 @@ watch(ready, (visible) => {
   font-size: 12px;
   color: var(--app-text-secondary);
   padding: 1px 0;
-}
-/* 当前播放文件:名称内联展示(点击开信息弹层),完整路径在 tooltip 与信息弹层逐条列出 */
-.timeline-file {
-  display: inline-flex;
-  max-width: 180px;
-  align-items: center;
-  gap: 4px;
-  padding: 2px 6px;
-  border: none;
-  border-radius: 6px;
-  color: var(--app-text-muted);
-  background: transparent;
-  font-size: 11px;
-  cursor: pointer;
-}
-.timeline-file:hover {
-  color: var(--el-color-primary);
-  background: var(--app-hover);
-}
-.timeline-file .el-icon {
-  flex: none;
-}
-.timeline-file__name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 .info-paths {
   padding: 4px 12px 0;

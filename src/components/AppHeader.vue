@@ -21,6 +21,9 @@
       </button>
       <span v-if="contextTitle || contextPanelTitle" class="context-title">
         <span v-if="contextTitle" class="context-app-name">{{ contextTitle }}</span>
+        <span v-if="contextFileName" class="context-file-name" :title="contextFileTitle">
+          {{ contextFileName }}
+        </span>
         <span v-if="contextPanelTitle" class="context-panel">
           <el-icon class="context-hierarchy-icon" :size="12"><ArrowRight /></el-icon>
           <el-icon class="context-title-icon" :size="15">
@@ -172,6 +175,9 @@ defineProps<{
   brandIconUrl?: string
   contextTitle?: string
   contextPanelTitle?: string
+  /** 当前应用的内容名片(LiDAR 为正在播放的录像文件名),完整路径经 contextFileTitle 悬浮 */
+  contextFileName?: string
+  contextFileTitle?: string
   contextIconAction?: string
   showApplicationSelector?: boolean
   showDetachedControls?: boolean
@@ -414,5 +420,13 @@ onUnmounted(() => {
   .application-button {
     width: 36px;
   }
+}
+.context-file-name {
+  max-width: 260px;
+  overflow: hidden;
+  color: var(--app-text-muted);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 </style>

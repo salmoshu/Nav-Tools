@@ -76,6 +76,16 @@ describe('LiDAR 面板注册', () => {
     expect(timeline).toContain('lidar-info-popover')
     expect(timeline).toContain('lidar.playback.tabTopics')
     expect(timeline).toContain('player.setTopicVisible')
+    // 文件名挪到应用 header;时间轴计数区只留数字,帧定义进 tooltip
+    const app = read('src/App.vue')
+    expect(app).toContain("currentApplication.value?.id === 'lidar'")
+    expect(app).toContain(':context-file-name="isCardWindow ? undefined : contextFileName"')
+    const header = read('src/components/AppHeader.vue')
+    expect(header).toContain('contextFileName')
+    expect(header).toContain('context-file-name')
+    expect(timeline).toContain('epochTooltip')
+    expect(timeline).not.toContain('timeline-file__name')
+    expect(timeline).not.toContain('{{ stepCountLabel }}')
     // 双语时间轴词条
     for (const locale of ['zh-CN', 'en-US']) {
       const lidar = read(`src/i18n/locales/${locale}/lidar.ts`)

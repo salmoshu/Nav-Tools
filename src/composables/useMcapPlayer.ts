@@ -3,6 +3,12 @@
 import { computed, onUnmounted, ref, shallowRef, watch } from 'vue'
 import { McapDocument } from '@/core/lidar/McapDocument'
 import { PlayerClock } from '@/core/lidar/PlayerClock'
+import {
+  PlaybackTimeline,
+  availableStepModes,
+  isPlaybackStepMode,
+  type PlaybackStepMode,
+} from '@/core/lidar/PlaybackTimeline'
 import { buildPlotSeries } from '@/core/lidar/LidarSeries'
 import { currentFrameScores, parsePlannerState } from '@/core/lidar/PlannerState'
 import {
@@ -43,16 +49,31 @@ const currentFrame = shallowRef<CurrentFrame | null>(null)
 const series = shallowRef<LidarPlotSeries | null>(null)
 const followRobot = ref(true)
 const topicVisibility = ref<Record<string, boolean>>({})
+const preferredStepMode = ref<PlaybackStepMode>('planner')
+const stepTimeline = computed(() =>
+  docRef.value ? new PlaybackTimeline(docRef.value, preferredStepMode.value) : null,
+)
+const stepMode = computed(() => stepTimeline.value?.mode ?? preferredStepMode.value)
+const stepModes = computed(() => (docRef.value ? availableStepModes(docRef.value) : []))
+const stepTotal = computed(() => stepTimeline.value?.total ?? 0)
+const stepPosition = computed(() => stepTimeline.value?.positionAt(playheadNs.value) ?? 0)
+const canStepBackward = computed(
+  () => stepTimeline.value?.timeForStep(playheadNs.value, -1) !== undefined,
+)
+const canStepForward = computed(
+  () => stepTimeline.value?.timeForStep(playheadNs.value, 1) !== undefined,
+)
 
 const recentStore = new RecentInputFiles(new JsonStorage(localStorage))
 const prefsStorage = new JsonStorage(localStorage)
 
-// —— 偏好持久化（速度/循环/跟随/话题可见性） ——
+// —— 偏好持久化（速度/循环/跟随/话题可见性/步进依据） ——
 interface PlaybackPrefs {
   speed: number
   loop: boolean
   followRobot: boolean
   topicVisibility: Record<string, boolean>
+  stepMode?: PlaybackStepMode
 }
 
 function isPlaybackPrefs(value: unknown): value is PlaybackPrefs {
@@ -65,6 +86,7 @@ function loadPrefs(): void {
   if (typeof prefs.speed === 'number') speed.value = prefs.speed
   if (typeof prefs.loop === 'boolean') loop.value = prefs.loop
   if (typeof prefs.followRobot === 'boolean') followRobot.value = prefs.followRobot
+  if (isPlaybackStepMode(prefs.stepMode)) preferredStepMode.value = prefs.stepMode
   if (typeof prefs.topicVisibility === 'object' && prefs.topicVisibility !== null) {
     topicVisibility.value = { ...prefs.topicVisibility }
   }
@@ -79,12 +101,15 @@ function savePrefsDebounced(): void {
       loop: loop.value,
       followRobot: followRobot.value,
       topicVisibility: topicVisibility.value,
+      stepMode: preferredStepMode.value,
     })
   }, 250)
 }
 
 loadPrefs()
-watch([speed, loop, followRobot, topicVisibility], savePrefsDebounced, { deep: true })
+watch([speed, loop, followRobot, topicVisibility, preferredStepMode], savePrefsDebounced, {
+  deep: true,
+})
 
 // —— LiDAR 面板消费者计数：仅用于全局快捷键的作用域门控（没有任何 LiDAR 面板
 // 挂载时快捷键不响应）。播放本身不随面板/应用切换暂停——切走再切回时动画继续。
@@ -154,7 +179,9 @@ export function useMcapPlayer() {
   /** Scores from an older successful frame must never replace a current hold/failure. */
   const currentScores = computed<DwaScores | undefined>(() => {
     const frame = currentFrame.value
-    return frame ? currentFrameScores(frame, docRef.value?.topicInfo(LIDAR_TOPICS.plannerState) !== undefined) : undefined
+    return frame
+      ? currentFrameScores(frame, docRef.value?.topicInfo(LIDAR_TOPICS.plannerState) !== undefined)
+      : undefined
   })
 
   /** 加载一个或多个分片（板上 part_N.mcap 轮转产物），按 logTime 归并为单一文档。 */
@@ -163,7 +190,9 @@ export function useMcapPlayer() {
     status.value = 'loading'
     errorText.value = ''
     try {
-      const doc = await McapDocument.load(parts.length === 1 ? parts[0].bytes : parts.map((part) => part.bytes))
+      const doc = await McapDocument.load(
+        parts.length === 1 ? parts[0].bytes : parts.map((part) => part.bytes),
+      )
       docRef.value = doc
       series.value = buildPlotSeries(doc)
       const clock = new PlayerClock(doc.startNs ?? 0, doc.endNs ?? 0)
@@ -176,7 +205,8 @@ export function useMcapPlayer() {
       const sessionName =
         parts.length === 1
           ? parts[0].name
-          : (paths.length === parts.length ? mcapCommonDirName(paths) : undefined) ?? parts[0].name
+          : ((paths.length === parts.length ? mcapCommonDirName(paths) : undefined) ??
+            parts[0].name)
       const totalBytes = parts.reduce((sum, part) => sum + part.sizeBytes, 0)
       fileInfo.value = {
         name: sessionName,
@@ -257,6 +287,10 @@ export function useMcapPlayer() {
   function pause(): void {
     clockRef.value?.pause()
     playing.value = false
+    if (rafId !== 0) {
+      cancelAnimationFrame(rafId)
+      rafId = 0
+    }
   }
 
   function toggle(): void {
@@ -272,18 +306,18 @@ export function useMcapPlayer() {
     rebuildFrame()
   }
 
-  /** 逐帧步进：沿全局消息时间点前进/后退 delta 步。 */
+  /** 按选定的数据流步进；连续播放和时间轴仍使用真实时间。 */
   function stepFrames(delta: number): void {
-    const doc = docRef.value
     const clock = clockRef.value
-    if (!doc || !clock) return
-    const times = doc.allTimesNs
-    if (times.length === 0) return
-    // 当前 playhead 在全局时间点中的位置
-    let index = upperBound(times, clock.playheadNs) - 1
-    if (delta > 0) index = Math.min(times.length - 1, index + delta)
-    else index = Math.max(0, index + delta)
-    seek(times[index])
+    if (!clock) return
+    const time = stepTimeline.value?.timeForStep(clock.playheadNs, delta)
+    pause()
+    if (time === undefined) return
+    seek(time)
+  }
+
+  function setStepMode(mode: PlaybackStepMode): void {
+    if (isPlaybackStepMode(mode)) preferredStepMode.value = mode
   }
 
   function setSpeed(value: number): void {
@@ -320,6 +354,12 @@ export function useMcapPlayer() {
     series,
     followRobot,
     topicVisibility,
+    stepMode,
+    stepModes,
+    stepPosition,
+    stepTotal,
+    canStepBackward,
+    canStepForward,
     // 动作
     loadFromFiles,
     loadFromPath,
@@ -329,6 +369,7 @@ export function useMcapPlayer() {
     toggle,
     seek,
     stepFrames,
+    setStepMode,
     setSpeed,
     setLoop,
     setTopicVisible,
@@ -387,17 +428,4 @@ if (typeof window !== 'undefined') {
     },
     { capture: true },
   )
-}
-
-// —— 二分查找（与 McapDocument 内部一致） ——
-
-function upperBound(times: ArrayLike<number>, value: number): number {
-  let lo = 0
-  let hi = times.length
-  while (lo < hi) {
-    const mid = (lo + hi) >>> 1
-    if (times[mid] <= value) lo = mid + 1
-    else hi = mid
-  }
-  return lo
 }

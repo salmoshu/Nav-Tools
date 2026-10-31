@@ -789,6 +789,20 @@ describe('文件树侧边栏接线(源码扫描)', () => {
     expect(panelSource).not.toContain('${pair.transferred} / ${pair.total}')
   })
 
+  it('下载结果 700ms 去抖汇总,多文件只弹一次消息', () => {
+    expect(treeSource).toContain('function recordDownloadResult')
+    expect(treeSource).toContain('function flushDownloadSummary')
+    expect(treeSource).toContain('setTimeout(flushDownloadSummary, 700)')
+    // 单文件与批量路径都不再逐条 ElMessage
+    const single = treeSource.match(/async function downloadEntry[\s\S]*?\n\}/)?.[0] ?? ''
+    expect(single).not.toContain('ElMessage.')
+    const batch = treeSource.match(/async function downloadEntries[\s\S]*?\n\}/)?.[0] ?? ''
+    expect(batch).not.toContain('ElMessage.')
+    // 汇总复用状态栏计数文案
+    expect(treeSource).toContain("t('common.terminal.fileTreeStatusDoneMany'")
+    expect(treeSource).toContain("t('common.terminal.fileTreeStatusPartial'")
+  })
+
   it('文件树在下载前后抛出 begin/settle 事件', () => {
     expect(treeSource).toContain("'download-start': [name: string]")
     expect(treeSource).toContain("'download-settle': [ok: boolean, error?: string]")

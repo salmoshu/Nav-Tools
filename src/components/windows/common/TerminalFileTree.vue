@@ -250,6 +250,47 @@ function siblingPath(fullPath: string, name: string): string {
   return `${directory}${directory.endsWith(separator) ? '' : separator}${name}`
 }
 
+/** 下载结果汇总提示:多选批量或短时间连续下载只弹一次汇总消息(700ms 去抖)。
+ * 单文件行为不变(仍显示文件名与失败详情);多文件复用状态栏的计数文案 */
+let downloadSummary = { success: 0, failed: 0, name: '', message: '' }
+let downloadSummaryTimer: ReturnType<typeof setTimeout> | undefined
+
+function recordDownloadResult(ok: boolean, name: string, error?: string): void {
+  if (ok) downloadSummary.success += 1
+  else {
+    downloadSummary.failed += 1
+    downloadSummary.message = error ?? ''
+  }
+  downloadSummary.name = name
+  if (downloadSummaryTimer) clearTimeout(downloadSummaryTimer)
+  downloadSummaryTimer = setTimeout(flushDownloadSummary, 700)
+}
+
+function flushDownloadSummary(): void {
+  downloadSummaryTimer = undefined
+  const { success, failed, name, message } = downloadSummary
+  downloadSummary = { success: 0, failed: 0, name: '', message: '' }
+  const total = success + failed
+  if (total === 0) return
+  if (failed === 0) {
+    ElMessage.success(
+      total === 1
+        ? t('common.terminal.fileTreeDownloadDone', { name })
+        : t('common.terminal.fileTreeStatusDoneMany', { count: success }),
+    )
+    return
+  }
+  if (success === 0) {
+    if (total === 1) {
+      ElMessage.error(t('common.terminal.fileTreeDownloadFailed', { name, message }))
+    } else {
+      ElMessage.error(t('common.terminal.fileTreeStatusFailedMany', { count: failed }))
+    }
+    return
+  }
+  ElMessage.warning(t('common.terminal.fileTreeStatusPartial', { done: success, failed }))
+}
+
 async function downloadEntry(entry: SftpEntry): Promise<void> {
   const localPath = (await window.ipcRenderer.invoke('terminal-sftp-choose-download', {
     name: entry.name,
@@ -264,15 +305,10 @@ async function downloadEntry(entry: SftpEntry): Promise<void> {
       localPath,
     })
     emit('download-settle', true)
-    ElMessage.success(t('common.terminal.fileTreeDownloadDone', { name: entry.name }))
+    recordDownloadResult(true, entry.name)
   } catch (error) {
     emit('download-settle', false, errorMessage(error))
-    ElMessage.error(
-      t('common.terminal.fileTreeDownloadFailed', {
-        name: entry.name,
-        message: errorMessage(error),
-      }),
-    )
+    recordDownloadResult(false, entry.name, errorMessage(error))
   }
 }
 
@@ -302,12 +338,7 @@ async function downloadEntries(entries: SftpEntry[]): Promise<void> {
         emit('download-settle', true)
       } catch (error) {
         emit('download-settle', false, errorMessage(error))
-        ElMessage.error(
-          t('common.terminal.fileTreeDownloadFailed', {
-            name: entry.name,
-            message: errorMessage(error),
-          }),
-        )
+        recordDownloadResult(false, entry.name, errorMessage(error))
       }
     }),
   )
@@ -808,6 +839,7 @@ onBeforeUnmount(() => {
   cancelGesture()
   disarmDragOut()
   syncDragOverlay(null)
+  if (downloadSummaryTimer) clearTimeout(downloadSummaryTimer)
 })
 
 type FileTreeNode = SftpEntry & { isLeaf: boolean }

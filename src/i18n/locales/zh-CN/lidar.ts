@@ -1,8 +1,21 @@
 // LiDAR（MCAP 回放）界面文案
 export default {
   timeline: {
-    prevFrame: '上一帧',
-    nextFrame: '下一帧',
+    prevFrame: '上一步',
+    nextFrame: '下一步',
+    stepBasis: '步进依据',
+    stepModes: {
+      planner: '规划状态',
+      scan: '原始雷达扫描',
+      events: '全部事件',
+    },
+    countKinds: {
+      planner: '规划帧',
+      scan: '雷达帧',
+      events: '事件时间点',
+    },
+    stepCount: '{kind} {current} / {total}',
+    plannerNumber: '规划编号 {frame}',
     speed: '回放倍速',
     loop: '循环回放',
   },
@@ -106,8 +119,8 @@ export default {
     duration: '时长',
     problems: '加载提示',
     loadFailed: '打开失败',
-    stepShortcut: '逐帧步进 ±1',
-    step10Shortcut: '逐帧步进 ±10',
+    stepShortcut: '按所选依据步进 ±1',
+    step10Shortcut: '按所选依据步进 ±10',
     jumpShortcut: '跳到开头/结尾',
   },
 }

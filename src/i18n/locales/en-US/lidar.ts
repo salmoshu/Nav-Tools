@@ -1,8 +1,21 @@
 // LiDAR (MCAP replay) UI strings
 export default {
   timeline: {
-    prevFrame: 'Previous frame',
-    nextFrame: 'Next frame',
+    prevFrame: 'Previous step',
+    nextFrame: 'Next step',
+    stepBasis: 'Step by',
+    stepModes: {
+      planner: 'Planner state',
+      scan: 'Raw scan',
+      events: 'All events',
+    },
+    countKinds: {
+      planner: 'Planner frame',
+      scan: 'Scan frame',
+      events: 'Event point',
+    },
+    stepCount: '{kind} {current} / {total}',
+    plannerNumber: 'Planner ID {frame}',
     speed: 'Playback speed',
     loop: 'Loop playback',
   },
@@ -109,8 +122,8 @@ export default {
     duration: 'Duration',
     problems: 'Problems',
     loadFailed: 'Failed to open',
-    stepShortcut: 'Step ±1 frame',
-    step10Shortcut: 'Step ±10 frames',
+    stepShortcut: 'Step ±1 on selected source',
+    step10Shortcut: 'Step ±10 on selected source',
     jumpShortcut: 'Jump to start/end',
   },
 }
