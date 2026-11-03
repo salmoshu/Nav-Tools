@@ -33,11 +33,11 @@ describe('panel and application persistence', () => {
 
     expect(applications.map((application) => application.name)).toEqual([
       'Serial',
-      'GNSS',
       'Flow',
+      'GNSS',
+      'GNSS-Raw',
       'Camera',
       'LiDAR',
-      'GNSS-Raw',
     ])
     expect(applications[0]).toMatchObject({
       id: 'serial',
@@ -45,26 +45,16 @@ describe('panel and application persistence', () => {
       windowIds: ['plot', 'raw-messages', 'motor-parameters'],
     })
     expect(applications[1]).toMatchObject({
-      id: 'gnss',
-      icon: 'position',
-      windowIds: ['gnss-map', 'gnss-deviation', 'gnss-signals', 'sky-plot', 'raw-messages'],
-    })
-    expect(applications[2]).toMatchObject({
       id: 'motor',
       icon: 'motor',
       windowIds: ['plot', 'raw-messages', 'flow-deviation', 'motor-parameters'],
     })
+    expect(applications[2]).toMatchObject({
+      id: 'gnss',
+      icon: 'position',
+      windowIds: ['gnss-map', 'gnss-deviation', 'gnss-signals', 'sky-plot', 'raw-messages'],
+    })
     expect(applications[3]).toMatchObject({
-      id: 'camera',
-      icon: 'camera',
-      windowIds: ['camera-video', 'camera-parameters', 'terminal'],
-    })
-    expect(applications[4]).toMatchObject({
-      id: 'lidar',
-      icon: 'radar',
-      windowIds: ['lidar-scene', 'lidar-scores', 'lidar-plot', 'lidar-inspector'],
-    })
-    expect(applications[5]).toMatchObject({
       id: 'gnssraw',
       icon: 'satellite',
       windowIds: [
@@ -75,6 +65,16 @@ describe('panel and application persistence', () => {
         'gnssraw-snr',
         'gnssraw-eph',
       ],
+    })
+    expect(applications[4]).toMatchObject({
+      id: 'camera',
+      icon: 'camera',
+      windowIds: ['camera-video', 'camera-parameters', 'terminal'],
+    })
+    expect(applications[5]).toMatchObject({
+      id: 'lidar',
+      icon: 'radar',
+      windowIds: ['lidar-scene', 'lidar-scores', 'lidar-plot', 'lidar-inspector'],
     })
     expect(memory.getItem('nav-tools:custom-applications')).not.toBeNull()
   })
@@ -104,11 +104,11 @@ describe('panel and application persistence', () => {
     const storage = new ApplicationStorage(new JsonStorage(memory))
 
     expect(storage.loadApplications().map(({ id }) => id)).toEqual([
-      'custom',
-      'camera',
       'serial',
-      'lidar',
       'gnssraw',
+      'camera',
+      'lidar',
+      'custom',
     ])
     storage.saveApplications(
       storage
@@ -135,14 +135,12 @@ describe('panel and application persistence', () => {
       ]),
     )
     const storage = new ApplicationStorage(new JsonStorage(memory))
+    const cameraApp = () =>
+      storage.loadApplications().find((application) => application.id === 'camera')!
 
-    expect(storage.loadApplications()[0].windowIds).toEqual([
-      'camera-video',
-      'camera-parameters',
-      'terminal',
-    ])
-    storage.saveApplications([{ ...storage.loadApplications()[0], windowIds: ['camera-video'] }])
-    expect(storage.loadApplications()[0].windowIds).toEqual(['camera-video'])
+    expect(cameraApp().windowIds).toEqual(['camera-video', 'camera-parameters', 'terminal'])
+    storage.saveApplications([{ ...cameraApp(), windowIds: ['camera-video'] }])
+    expect(cameraApp().windowIds).toEqual(['camera-video'])
   })
 
   it('adds Terminal once to an existing Camera application', () => {
@@ -163,16 +161,14 @@ describe('panel and application persistence', () => {
       ]),
     )
     const storage = new ApplicationStorage(new JsonStorage(memory))
+    const cameraApp = () =>
+      storage.loadApplications().find((application) => application.id === 'camera')!
 
-    expect(storage.loadApplications()[0].windowIds).toEqual([
-      'camera-video',
-      'camera-parameters',
-      'terminal',
-    ])
+    expect(cameraApp().windowIds).toEqual(['camera-video', 'camera-parameters', 'terminal'])
     storage.saveApplications([
-      { ...storage.loadApplications()[0], windowIds: ['camera-video', 'camera-parameters'] },
+      { ...cameraApp(), windowIds: ['camera-video', 'camera-parameters'] },
     ])
-    expect(storage.loadApplications()[0].windowIds).toEqual(['camera-video', 'camera-parameters'])
+    expect(cameraApp().windowIds).toEqual(['camera-video', 'camera-parameters'])
   })
 
   it('adds Serial once when upgrading an existing application list without Serial', () => {
@@ -195,10 +191,10 @@ describe('panel and application persistence', () => {
     const storage = new ApplicationStorage(new JsonStorage(memory))
 
     expect(storage.loadApplications().map(({ id }) => id)).toEqual([
-      'gnss',
       'serial',
-      'lidar',
+      'gnss',
       'gnssraw',
+      'lidar',
     ])
     storage.saveApplications(
       storage.loadApplications().filter(({ id }) => !['serial', 'lidar', 'gnssraw'].includes(id)),
@@ -251,7 +247,7 @@ describe('panel and application persistence', () => {
     expect(motorAgain.windowIds).toEqual(['plot'])
   })
 
-  it('resets saved applications back to Serial, GNSS, Flow, and Camera defaults', () => {
+  it('resets saved applications back to Serial, Flow, GNSS, GNSS-Raw, Camera, and LiDAR defaults', () => {
     const memory = new MemoryStorage()
     const storage = new ApplicationStorage(new JsonStorage(memory))
     storage.saveApplications([
@@ -269,19 +265,19 @@ describe('panel and application persistence', () => {
 
     expect(applications.map((application) => application.id)).toEqual([
       'serial',
-      'gnss',
       'motor',
+      'gnss',
+      'gnssraw',
       'camera',
       'lidar',
-      'gnssraw',
     ])
     expect(storage.loadApplications().map((application) => application.id)).toEqual([
       'serial',
-      'gnss',
       'motor',
+      'gnss',
+      'gnssraw',
       'camera',
       'lidar',
-      'gnssraw',
     ])
   })
 
@@ -292,13 +288,70 @@ describe('panel and application persistence', () => {
 
     const reordered = storage.reorderApplications(initial, 3, 0)
 
-    expect(reordered.map(({ id }) => id)).toEqual(['camera', 'serial', 'gnss', 'motor', 'lidar', 'gnssraw'])
+    expect(reordered.map(({ id }) => id)).toEqual(['gnssraw', 'serial', 'motor', 'gnss', 'camera', 'lidar'])
     expect(
       new ApplicationStorage(new JsonStorage(memory)).loadApplications().map(({ id }) => id),
-    ).toEqual(['camera', 'serial', 'gnss', 'motor', 'lidar', 'gnssraw'])
+    ).toEqual(['gnssraw', 'serial', 'motor', 'gnss', 'camera', 'lidar'])
 
     const partial = storage.reorderApplications(reordered, 0, 2)
-    expect(partial.map(({ id }) => id)).toEqual(['serial', 'gnss', 'camera', 'motor', 'lidar', 'gnssraw'])
+    expect(partial.map(({ id }) => id)).toEqual(['serial', 'motor', 'gnssraw', 'gnss', 'camera', 'lidar'])
+  })
+
+  it('reorders stored applications into the new default order once', () => {
+    const memory = new MemoryStorage()
+    // 预置各默认应用补齐迁移键：本用例只考察顺序迁移本身
+    for (const key of [
+      'nav-tools:migration:camera-default-v1',
+      'nav-tools:migration:camera-parameters-v1',
+      'nav-tools:migration:camera-terminal-v1',
+      'nav-tools:migration:serial-default-v1',
+      'nav-tools:migration:lidar-default-v1',
+      'nav-tools:migration:gnssraw-default-v1',
+    ]) {
+      memory.setItem(key, '1')
+    }
+    memory.setItem(
+      'nav-tools:custom-applications',
+      JSON.stringify([
+        {
+          id: 'lidar',
+          name: 'LiDAR',
+          description: '',
+          icon: 'radar',
+          accent: '#06b6d4',
+          windowIds: ['lidar-scene'],
+        },
+        {
+          id: 'custom',
+          name: 'Custom',
+          description: '',
+          icon: 'grid',
+          accent: '#1677ff',
+          windowIds: ['plot'],
+        },
+        {
+          id: 'gnss',
+          name: 'GNSS',
+          description: '',
+          icon: 'position',
+          accent: '#0ea5e9',
+          windowIds: ['gnss-map'],
+        },
+      ]),
+    )
+    const storage = new ApplicationStorage(new JsonStorage(memory))
+
+    // 迁移一次：默认应用按默认序排列，自定义应用沉底且相对顺序稳定
+    expect(storage.loadApplications().map(({ id }) => id)).toEqual([
+      'gnss',
+      'lidar',
+      'custom',
+    ])
+
+    // 迁移之后用户手动打乱顺序，不再被覆盖
+    const shuffled = storage.loadApplications()
+    storage.saveApplications([shuffled[2], shuffled[1], shuffled[0]])
+    expect(storage.loadApplications().map(({ id }) => id)).toEqual(['custom', 'lidar', 'gnss'])
   })
 
   it('migrates legacy panel ids and filters unknown panels', () => {
@@ -317,9 +370,11 @@ describe('panel and application persistence', () => {
         },
       ]),
     )
-    expect(new ApplicationStorage(new JsonStorage(memory)).loadApplications()[0].windowIds).toEqual(
-      ['plot'],
-    )
+    expect(
+      new ApplicationStorage(new JsonStorage(memory))
+        .loadApplications()
+        .find((application) => application.id === 'app-1')!.windowIds,
+    ).toEqual(['plot'])
   })
 })
 
