@@ -39,6 +39,11 @@ import {
   zoomSatelliteCountViewport,
   type SatelliteCountViewport,
 } from '@/core/gnss/SatelliteCountViewport'
+import {
+  broadcastMetricViewport,
+  subscribeMetricViewport,
+  type MetricViewportBroadcast,
+} from './metricViewportSync'
 import { splitSeriesByQuality } from '@/core/gnss/QualitySeries'
 import { createSatelliteTimeSeriesRenderer } from '@/core/render/createSatelliteTimeSeriesRenderer'
 import type {
@@ -55,19 +60,11 @@ import {
 type MetricField = 'E' | 'N' | 'U' | 'SPEED'
 
 /**
- * 同一数据源（position/speed store）的多个图表间同步 x 视口：
- * 左键平移与右键 x 伸缩广播给同源实例——位置视图下 E/N/U 三轴联动。
+ * x 视口跨图表联动：左键平移与右键 x 伸缩经模块级广播通道（metricViewportSync）
+ * 同步给同源实例——位置视图下 E/N/U 三轴同时移动/伸缩。
+ * 通道必须放在独立模块里：写在 <script setup> 顶层的 Set 每个实例各有一份，
+ * 广播只会到达自己，联动失效（曾有此 bug，见 metricViewportSync 注释）。
  */
-interface MetricViewportBroadcast {
-  start: number
-  end: number
-  store: unknown
-}
-const viewportSyncListeners = new Set<(payload: MetricViewportBroadcast) => void>()
-
-function broadcastViewport(start: number, end: number, store: unknown): void {
-  for (const listener of viewportSyncListeners) listener({ start, end, store })
-}
 
 /** 点线图形态：线用中性灰（细），点用系列色（粗，保留质量分色） */
 const POINT_LINE_LINE_COLOR: [number, number, number, number] = [0.54, 0.54, 0.54, 0.9]
@@ -136,6 +133,8 @@ let isXZoomDragging = false
 let xZoomAnchor = 0
 /** 跟踪模式下用户拖拽产生的中心偏移（索引单位）：视口跟随目标但保持偏移不回中 */
 let trackOffset = 0
+/** 模块级广播通道的取消订阅句柄 */
+let unsubscribeViewportSync: () => void = () => undefined
 
 function pointDiameterForSize(size: number): number {
   if (!Number.isFinite(size)) return POINT_LINE_POINT_DIAMETER_PX
@@ -502,7 +501,7 @@ function applyViewport(next: SatelliteCountViewport): void {
   if (props.tracking) {
     trackOffset = (next.start + next.end) / 2 - (trackingTargetIndex() + 0.5)
   }
-  broadcastViewport(next.start, next.end, sourceStore.value)
+  broadcastMetricViewport(next.start, next.end, sourceStore.value)
   scheduleRender()
 }
 
@@ -654,7 +653,7 @@ onMounted(() => {
   if (containerRef.value) resizeObserver.observe(containerRef.value)
   window.addEventListener('mousemove', handleWindowMouseMove)
   window.addEventListener('mouseup', handleWindowMouseUp)
-  viewportSyncListeners.add(handleViewportSync)
+  unsubscribeViewportSync = subscribeMetricViewport(handleViewportSync)
   resizeLayers()
 })
 
@@ -662,7 +661,7 @@ onUnmounted(() => {
   if (renderFrame !== null) cancelAnimationFrame(renderFrame)
   if (renderTimer !== null) clearTimeout(renderTimer)
   resizeObserver?.disconnect()
-  viewportSyncListeners.delete(handleViewportSync)
+  unsubscribeViewportSync()
   window.removeEventListener('mousemove', handleWindowMouseMove)
   window.removeEventListener('mouseup', handleWindowMouseUp)
   renderer?.dispose()
