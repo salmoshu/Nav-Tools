@@ -60,7 +60,14 @@ const WEBGL1_FRAGMENT_SHADER = `
 precision mediump float;
 varying vec4 v_color;
 uniform highp float u_pointSize;
+uniform float u_lineMode;
+uniform vec4 u_lineColor;
 void main() {
+  // 线模式：统一灰细线（连接相邻轨迹点）；点模式：圆点 + 质量分色
+  if (u_lineMode > 0.5) {
+    gl_FragColor = u_lineColor;
+    return;
+  }
   float dist = length(gl_PointCoord - vec2(0.5));
   if (dist > 0.5) discard;
   float edge = 1.0 / u_pointSize;
@@ -87,8 +94,14 @@ const WEBGL2_FRAGMENT_SHADER = `#version 300 es
 precision mediump float;
 in vec4 v_color;
 uniform highp float u_pointSize;
+uniform float u_lineMode;
+uniform vec4 u_lineColor;
 out vec4 fragColor;
 void main() {
+  if (u_lineMode > 0.5) {
+    fragColor = u_lineColor;
+    return;
+  }
   float dist = length(gl_PointCoord - vec2(0.5));
   if (dist > 0.5) discard;
   float edge = 1.0 / u_pointSize;
@@ -106,6 +119,9 @@ const INITIAL_CAPACITY = 1024
 /** Loose index bounds avoid rebuilding the entire tree for each small range expansion. */
 const QUAD_TREE_MIN_HALF_SPAN = 1
 const QUAD_TREE_BOUNDS_PADDING = 4
+/** 轨迹连线：中性灰细线（与位置/速度图的点线形态一致），点保持质量分色 */
+const TRACK_LINE_COLOR: [number, number, number, number] = [0.54, 0.54, 0.54, 0.9]
+const TRACK_LINE_WIDTH_PX = 1
 
 /**
  * WebGL-based trajectory renderer.
@@ -129,6 +145,8 @@ export class WebGLTrajectoryRenderer implements TrajectoryRenderer {
   private colorLoc = -1
   private transformLoc: WebGLUniformLocation | null = null
   private pointSizeLoc: WebGLUniformLocation | null = null
+  private lineModeLoc: WebGLUniformLocation | null = null
+  private lineColorLoc: WebGLUniformLocation | null = null
 
   private vertexData: Float32Array = new Float32Array(0)
   private capacity = 0
@@ -193,6 +211,8 @@ export class WebGLTrajectoryRenderer implements TrajectoryRenderer {
     this.colorLoc = gl.getAttribLocation(program, 'a_color')
     this.transformLoc = gl.getUniformLocation(program, 'u_transform')
     this.pointSizeLoc = gl.getUniformLocation(program, 'u_pointSize')
+    this.lineModeLoc = gl.getUniformLocation(program, 'u_lineMode')
+    this.lineColorLoc = gl.getUniformLocation(program, 'u_lineColor')
 
     this.buffer = gl.createBuffer()
     this.ensureCapacity(INITIAL_CAPACITY)
@@ -536,6 +556,15 @@ export class WebGLTrajectoryRenderer implements TrajectoryRenderer {
     if (this.transformLoc) gl.uniformMatrix3fv(this.transformLoc, false, this.transform)
     if (this.pointSizeLoc) gl.uniform1f(this.pointSizeLoc, this.pointSize * this.dpr)
 
+    // 先画轨迹连线：细灰 LINE_STRIP 按点序连接（线模式下片元忽略顶点色，
+    // 避免圆点 alpha 逻辑 discard 线段）；再画质量分色圆点覆盖其上
+    if (this.pointCount >= 2) {
+      if (this.lineModeLoc) gl.uniform1f(this.lineModeLoc, 1)
+      if (this.lineColorLoc) gl.uniform4fv(this.lineColorLoc, TRACK_LINE_COLOR)
+      gl.lineWidth(TRACK_LINE_WIDTH_PX * this.dpr)
+      gl.drawArrays(gl.LINE_STRIP, 0, this.pointCount)
+    }
+    if (this.lineModeLoc) gl.uniform1f(this.lineModeLoc, 0)
     gl.drawArrays(gl.POINTS, 0, this.pointCount)
   }
 }

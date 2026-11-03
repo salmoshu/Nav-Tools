@@ -1,5 +1,9 @@
 import { TrajectoryRenderer } from './TrajectoryRenderer'
 
+/** 轨迹连线：中性灰细线（与 WebGL 路径及位置/速度图的点线形态一致） */
+const TRACK_LINE_COLOR_CSS = 'rgba(138, 138, 138, 0.9)'
+const TRACK_LINE_WIDTH_PX = 1
+
 interface Bounds {
   minX: number
   maxX: number
@@ -303,6 +307,22 @@ export class CanvasTrajectoryRenderer implements TrajectoryRenderer {
     this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0)
     this.ctx.clearRect(0, 0, this.cssWidth, this.cssHeight)
     this.applyTransform()
+    // 细灰连线：先画线，质量分色圆点覆盖其上（与 WebGL 路径一致的点线形态）。
+    // 当前处于数据坐标 transform，线宽需按 x 向缩放换算回像素（等比例视口下 sx==sy）
+    if (this.points.length >= 2) {
+      const scaleX =
+        (this.cssWidth / (this.viewport.maxX - this.viewport.minX)) * this.dpr
+      this.ctx.strokeStyle = TRACK_LINE_COLOR_CSS
+      this.ctx.lineWidth = Math.max(0.1, (TRACK_LINE_WIDTH_PX * this.dpr) / Math.abs(scaleX))
+      this.ctx.lineJoin = 'round'
+      this.ctx.lineCap = 'round'
+      this.ctx.beginPath()
+      this.ctx.moveTo(this.points[0][0], this.points[0][1])
+      for (let i = 1; i < this.points.length; i++) {
+        this.ctx.lineTo(this.points[i][0], this.points[i][1])
+      }
+      this.ctx.stroke()
+    }
     for (const [x, y, q] of this.points) {
       this.drawPoint(x, y, q)
     }

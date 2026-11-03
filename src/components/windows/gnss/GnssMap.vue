@@ -96,6 +96,9 @@ const fileTimeline = useFileTimeline()
 const MIN_TRACK_PIXELS = 1.5
 const TRACK_SEGMENT_POINTS = 200
 const DEFAULT_ZOOM = 16
+// 轨迹连线：中性灰细线（与偏差图/位置图的点线形态一致），解质量色保留在定位点标记上
+const TRACK_LINE_COLOR = '#8a8a8a'
+const TRACK_LINE_WEIGHT = 1.5
 // Electron 下走自定义协议（本地离线瓦片优先，缺失回退在线），浏览器环境直接用在线 OSM
 const ELECTRON_TILE_URL = 'nav-tiles://tiles/{z}/{x}/{y}.png'
 const WEB_TILE_URL = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
@@ -216,13 +219,14 @@ function updatePointSize(): void {
 
 function createTrackSegment(point: RenderedPoint, previousPoint?: RenderedPoint): TrackSegment | null {
   if (!map) return null
-  // 新分段以上一个点为起点，保证轨迹连续不断开
+  // 新分段以上一个点为起点，保证轨迹连续不断开。
+  // 轨迹连线用中性灰细线（与偏差图/位置图的点线形态一致），解质量色保留在当前定位点标记上
   const startLatLngs = previousPoint ? [previousPoint.latlng, point.latlng] : [point.latlng]
   const line = L.polyline(startLatLngs, {
     renderer: trackRenderer ?? undefined,
-    color: fixStatusColor(point.quality),
-    weight: 3,
-    opacity: 0.8,
+    color: TRACK_LINE_COLOR,
+    weight: TRACK_LINE_WEIGHT,
+    opacity: 0.9,
     smoothFactor: 0,
   }).addTo(map)
   const segment: TrackSegment = {

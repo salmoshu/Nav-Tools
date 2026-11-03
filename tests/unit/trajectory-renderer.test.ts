@@ -13,6 +13,7 @@ function createMockWebGLContext() {
     VERTEX_SHADER: 35633,
     FRAGMENT_SHADER: 35632,
     POINTS: 0,
+    LINE_STRIP: 3,
     FLOAT: 5126,
     COMPILE_STATUS: 35713,
     LINK_STATUS: 35714,
@@ -45,6 +46,8 @@ function createMockWebGLContext() {
 
     uniformMatrix3fv: vi.fn(),
     uniform1f: vi.fn(),
+    uniform4fv: vi.fn(),
+    lineWidth: vi.fn(),
 
     viewport: vi.fn(),
     clearColor: vi.fn(),
@@ -77,6 +80,9 @@ function createMockCanvasWebGL(gl: ReturnType<typeof createMockWebGLContext>) {
 function createMockCanvas2DContext() {
   return {
     beginPath: vi.fn(),
+    moveTo: vi.fn(),
+    lineTo: vi.fn(),
+    stroke: vi.fn(),
     arc: vi.fn(),
     fill: vi.fn(),
     clearRect: vi.fn(),
@@ -85,6 +91,10 @@ function createMockCanvas2DContext() {
     restore: vi.fn(),
     scale: vi.fn(),
     fillStyle: '',
+    strokeStyle: '',
+    lineWidth: 1,
+    lineJoin: '',
+    lineCap: '',
     canvas: { width: 300, height: 150 },
   }
 }
@@ -133,8 +143,10 @@ describe('WebGLTrajectoryRenderer', () => {
     expect(gl.drawArrays).not.toHaveBeenCalled()
 
     renderer.fitToData()
-    expect(gl.drawArrays).toHaveBeenCalledTimes(1)
-    expect(gl.drawArrays).toHaveBeenLastCalledWith(gl.POINTS, 0, 100_000)
+    // 一帧两次绘制：细灰连线（LINE_STRIP）+ 质量分色圆点（POINTS）
+    expect(gl.drawArrays).toHaveBeenCalledTimes(2)
+    expect(gl.drawArrays).toHaveBeenNthCalledWith(1, gl.LINE_STRIP, 0, 100_000)
+    expect(gl.drawArrays).toHaveBeenNthCalledWith(2, gl.POINTS, 0, 100_000)
   })
 
   it('uses incremental bufferSubData for single-point adds', () => {
@@ -236,7 +248,8 @@ describe('WebGLTrajectoryRenderer', () => {
 
     gl.drawArrays.mockClear()
     renderer.render()
-    expect(gl.drawArrays).toHaveBeenCalledTimes(1)
+    // 连线 + 圆点各一次绘制
+    expect(gl.drawArrays).toHaveBeenCalledTimes(2)
   })
 })
 
