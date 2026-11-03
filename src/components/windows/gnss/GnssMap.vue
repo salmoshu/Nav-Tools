@@ -96,8 +96,8 @@ const fileTimeline = useFileTimeline()
 const MIN_TRACK_PIXELS = 1.5
 const TRACK_SEGMENT_POINTS = 200
 const DEFAULT_ZOOM = 16
-// 轨迹连线：中性灰细线（与偏差图/位置图的点线形态一致），解质量色保留在定位点标记上
-const TRACK_LINE_COLOR = '#8a8a8a'
+// 轨迹连线：rtkplot 同款银灰 #c0c0c0（不透明）；瓦片底图上略加粗到 1.5px 保可见性
+const TRACK_LINE_COLOR = '#c0c0c0'
 const TRACK_LINE_WEIGHT = 1.5
 // Electron 下走自定义协议（本地离线瓦片优先，缺失回退在线），浏览器环境直接用在线 OSM
 const ELECTRON_TILE_URL = 'nav-tiles://tiles/{z}/{x}/{y}.png'
@@ -226,7 +226,7 @@ function createTrackSegment(point: RenderedPoint, previousPoint?: RenderedPoint)
     renderer: trackRenderer ?? undefined,
     color: TRACK_LINE_COLOR,
     weight: TRACK_LINE_WEIGHT,
-    opacity: 0.9,
+    opacity: 1,
     smoothFactor: 0,
   }).addTo(map)
   const segment: TrackSegment = {

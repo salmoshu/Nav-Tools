@@ -1,7 +1,7 @@
 import { TrajectoryRenderer } from './TrajectoryRenderer'
 
-/** 轨迹连线：中性灰细线（与 WebGL 路径及位置/速度图的点线形态一致） */
-const TRACK_LINE_COLOR_CSS = 'rgba(138, 138, 138, 0.9)'
+/** 轨迹连线：rtkplot 同款银灰 #c0c0c0，不透明（与 WebGL 路径一致） */
+const TRACK_LINE_COLOR_CSS = 'rgb(192, 192, 192)'
 const TRACK_LINE_WIDTH_PX = 1
 
 interface Bounds {

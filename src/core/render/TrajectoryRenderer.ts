@@ -119,8 +119,8 @@ const INITIAL_CAPACITY = 1024
 /** Loose index bounds avoid rebuilding the entire tree for each small range expansion. */
 const QUAD_TREE_MIN_HALF_SPAN = 1
 const QUAD_TREE_BOUNDS_PADDING = 4
-/** 轨迹连线：中性灰细线（与位置/速度图的点线形态一致），点保持质量分色 */
-const TRACK_LINE_COLOR: [number, number, number, number] = [0.54, 0.54, 0.54, 0.9]
+/** 轨迹连线：rtkplot 同款银灰 #c0c0c0（QColor(0xc0,0xc0,0xc0)），不透明，1px 实线 */
+const TRACK_LINE_COLOR: [number, number, number, number] = [192 / 255, 192 / 255, 192 / 255, 1]
 const TRACK_LINE_WIDTH_PX = 1
 
 /**

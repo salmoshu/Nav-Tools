@@ -24,10 +24,10 @@ describe('GNSS solution status colors', () => {
     const deviation = readFileSync('src/components/windows/gnss/GnssDeviation.vue', 'utf8')
     const map = readFileSync('src/components/windows/gnss/GnssMap.vue', 'utf8')
 
-    // 质量分色统一承载在点/定位标记上；轨迹连线为中性灰细线（点线形态）
+    // 质量分色统一承载在点/定位标记上；轨迹连线为 rtkplot 同款银灰（不透明）
     expect(deviation).toContain('fixStatusColorRgb01(quality)')
     expect(map).toContain('fillColor: fixStatusColor(quality)')
     expect(map).toContain('color: TRACK_LINE_COLOR')
-    expect(map).toContain("const TRACK_LINE_COLOR = '#8a8a8a'")
+    expect(map).toContain("const TRACK_LINE_COLOR = '#c0c0c0'")
   })
 })
