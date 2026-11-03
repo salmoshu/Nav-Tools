@@ -7,37 +7,36 @@
           <el-option :label="t('gnss.deviation.positionView')" value="position" />
           <el-option :label="t('gnss.deviation.speedView')" value="speed" />
         </el-select>
-        <template v-if="currentView === 'deviation'">
-          <el-switch
-            v-model="isTracking"
-            inline-prompt
-            :active-text="t('gnss.deviation.tracking')"
-            :inactive-text="t('gnss.deviation.tracking')"
-            :aria-label="t('gnss.deviation.tracking')"
-            :title="t('gnss.deviation.tracking')"
-            @change="toggleTracking"
-            class="tracking-switch"
+        <!-- track/尺寸/reset/清除 三个视图共用：偏差图作用于轨迹渲染，
+             位置/速度图作用于点直径与 x 视口跟随 -->
+        <el-switch
+          v-model="isTracking"
+          inline-prompt
+          :active-text="t('gnss.deviation.tracking')"
+          :inactive-text="t('gnss.deviation.tracking')"
+          :aria-label="t('gnss.deviation.tracking')"
+          :title="t('gnss.deviation.tracking')"
+          @change="toggleTracking"
+          class="tracking-switch"
+        />
+        <div class="point-size-control">
+          <span class="size-label">{{ t('gnss.deviation.size') }}:</span>
+          <el-slider
+            v-model="pointSize"
+            :min="5"
+            :max="20"
+            :step="1"
+            class="point-slider"
+            @change="updatePointSize"
           />
-          <div class="point-size-control">
-            <span class="size-label">{{ t('gnss.deviation.size') }}:</span>
-            <el-slider
-              v-model="pointSize"
-              :min="5"
-              :max="20"
-              :step="1"
-              class="point-slider"
-              @change="updatePointSize"
-            />
-            <span class="size-value">{{ pointSize }}</span>
-          </div>
-        </template>
+          <span class="size-value">{{ pointSize }}</span>
+        </div>
 
         <div class="right-buttons">
           <el-button
-            v-show="currentView === 'deviation'"
             type="primary"
             size="small"
-            @click="resetZoom"
+            @click="resetLayout"
             class="control-btn zoom-btn"
             ><el-icon><RefreshLeft /></el-icon>&nbsp;{{
               t('gnss.deviation.resetLayout')
@@ -58,30 +57,42 @@
     </div>
     <div v-show="currentView === 'position'" class="position-chart-grid">
       <GnssMetricTimeSeries
+        ref="eSeriesRef"
         field="E"
         :label="t('gnss.deviation.axisE')"
         unit="m"
         :active="currentView === 'position'"
+        :tracking="isTracking"
+        :point-size="pointSize"
       />
       <GnssMetricTimeSeries
+        ref="nSeriesRef"
         field="N"
         :label="t('gnss.deviation.axisN')"
         unit="m"
         :active="currentView === 'position'"
+        :tracking="isTracking"
+        :point-size="pointSize"
       />
       <GnssMetricTimeSeries
+        ref="uSeriesRef"
         field="U"
         :label="t('gnss.deviation.axisU')"
         unit="m"
         :active="currentView === 'position'"
+        :tracking="isTracking"
+        :point-size="pointSize"
       />
     </div>
     <div v-show="currentView === 'speed'" class="speed-chart-container">
       <GnssMetricTimeSeries
+        ref="speedSeriesRef"
         field="SPEED"
         :label="t('gnss.deviation.speed')"
         unit="km/h"
         :active="currentView === 'speed'"
+        :tracking="isTracking"
+        :point-size="pointSize"
       />
     </div>
   </div>
@@ -165,6 +176,24 @@ let stopTimelineWatch: (() => void) | null = null
 type DeviationView = 'deviation' | 'position' | 'speed'
 
 const currentView = ref<DeviationView>('deviation')
+
+// 位置/速度图实例：工具栏 reset/clear 在这些视图下转发给它们
+const eSeriesRef = ref<InstanceType<typeof GnssMetricTimeSeries> | null>(null)
+const nSeriesRef = ref<InstanceType<typeof GnssMetricTimeSeries> | null>(null)
+const uSeriesRef = ref<InstanceType<typeof GnssMetricTimeSeries> | null>(null)
+const speedSeriesRef = ref<InstanceType<typeof GnssMetricTimeSeries> | null>(null)
+
+/** 工具栏「重置布局」：偏差图重置轨迹视口；位置/速度图重置各轴（fit/居中/清手动范围） */
+function resetLayout(): void {
+  if (currentView.value === 'deviation') {
+    resetZoom()
+    return
+  }
+  eSeriesRef.value?.resetLayout()
+  nSeriesRef.value?.resetLayout()
+  uSeriesRef.value?.resetLayout()
+  speedSeriesRef.value?.resetLayout()
+}
 
 watch(currentView, (view) => {
   if (view !== 'deviation') {
@@ -354,7 +383,11 @@ function drawStatsOverlay(): void {
     })
   }
 
-  if (stats) {
+  // 窗口较小时空白有限：只保留当前解一行，避免统计块挤满视图；过小时整层隐藏
+  const compact = axisCssWidth < 380 || axisCssHeight < 280
+  const hidden = axisCssWidth < 200 || axisCssHeight < 160
+
+  if (stats && !compact) {
     lines.push({ text: `N = ${stats.count.toLocaleString()}` })
     for (const [quality, count] of [...stats.qualityCounts.entries()].sort((a, b) => a[0] - b[0])) {
       const ratio = ((count / stats.count) * 100).toFixed(1)
@@ -371,7 +404,7 @@ function drawStatsOverlay(): void {
     })
   }
 
-  if (lines.length === 0) return
+  if (lines.length === 0 || hidden) return
 
   ctx.save()
   ctx.setTransform(axisDpr, 0, 0, axisDpr, 0, 0)

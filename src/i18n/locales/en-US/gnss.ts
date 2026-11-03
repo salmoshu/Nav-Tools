@@ -57,12 +57,6 @@ export default {
     statsCurrent: 'Current',
   },
   map: {
-    follow: 'Follow',
-    slidingWindow: 'Window',
-    all: 'All',
-    trackRetentionMode: 'Track retention mode',
-    windowTitle: 'Sliding window: keep latest 2000 points; All: keep all subsequent points',
-    clear: 'Clear',
     offlineTitle: 'Offline Maps',
     offlineDesc1: 'This app uses online maps by default. You can also prepare a local raster tile set in advance so the map prioritizes them when offline or on a weak network; areas not covered will automatically fall back to online maps.',
     offlineStepsTitle: 'Steps:',

@@ -32,6 +32,7 @@ import { useNmea } from '@/composables/gnss/useNmea'
 import { useFileTimeline } from '@/composables/useFileTimeline'
 import { useTheme } from '@/composables/useTheme'
 import {
+  clampSatelliteCountViewport,
   fitSatelliteCountViewport,
   panSatelliteCountViewport,
   updateSatelliteCountViewportOnData,
@@ -71,14 +72,23 @@ function broadcastViewport(start: number, end: number, store: unknown): void {
 /** 点线图形态：线用中性灰（细），点用系列色（粗，保留质量分色） */
 const POINT_LINE_LINE_COLOR: [number, number, number, number] = [0.54, 0.54, 0.54, 0.9]
 const POINT_LINE_LINE_WIDTH_PX = 1
-const POINT_LINE_POINT_DIAMETER_PX = 5
+/** 尺寸滑杆（与偏差图一致的 5~20）映射到点直径 */
+const POINT_LINE_POINT_DIAMETER_PX = 6
+const TRACKING_LIVE_WINDOW_EPOCHS = 40
 
-const props = defineProps<{
-  field: MetricField
-  label: string
-  unit: string
-  active: boolean
-}>()
+const props = withDefaults(
+  defineProps<{
+    field: MetricField
+    label: string
+    unit: string
+    active: boolean
+    /** 跟踪：x 视口跟随回放光标/最新历元（与偏差图 track 同语义，拖拽偏移保持） */
+    tracking?: boolean
+    /** 尺寸（5~20，偏差图同款滑杆）：映射为点直径 */
+    pointSize?: number
+  }>(),
+  { tracking: false, pointSize: 10 },
+)
 
 const { positionEpochHistory, speedEpochHistory } = useNmea()
 const fileTimeline = useFileTimeline()
@@ -124,6 +134,42 @@ let dragStartViewport: SatelliteCountViewport = { start: 0, end: 0 }
 /** 右键水平拖拽 = x 轴伸缩（同源图表联动） */
 let isXZoomDragging = false
 let xZoomAnchor = 0
+/** 跟踪模式下用户拖拽产生的中心偏移（索引单位）：视口跟随目标但保持偏移不回中 */
+let trackOffset = 0
+
+function pointDiameterForSize(size: number): number {
+  if (!Number.isFinite(size)) return POINT_LINE_POINT_DIAMETER_PX
+  return Math.max(2, Math.min(14, size / 2 + 1))
+}
+
+/** 跟随目标索引：回放时为时间线光标处，实时流为最新历元 */
+function trackingTargetIndex(): number {
+  const store = sourceStore.value
+  if (store.length === 0) return -1
+  if (fileTimeline.active.value) {
+    const index = store.findNearestElapsedTime(fileTimeline.elapsedMilliseconds.value)
+    if (index >= 0) return index
+  }
+  return store.length - 1
+}
+
+/** 跟踪视口：中心 = 目标历元 + 用户偏移，跨度沿用当前跨度（首次用 live 窗口） */
+function applyTrackingViewport(): void {
+  const store = sourceStore.value
+  const target = trackingTargetIndex()
+  if (target < 0) return
+  const span =
+    viewport.value.end > viewport.value.start
+      ? viewport.value.end - viewport.value.start
+      : Math.min(store.length, TRACKING_LIVE_WINDOW_EPOCHS)
+  const center = target + 0.5 + trackOffset
+  applyViewport(
+    clampSatelliteCountViewport(
+      { start: center - span / 2, end: center + span / 2 },
+      store.length,
+    ),
+  )
+}
 
 function hexToRgba(hex: string): SatelliteSeriesColor {
   const value = hex.replace('#', '')
@@ -391,6 +437,24 @@ function fitAll(): void {
   scheduleRender()
 }
 
+/**
+ * 工具栏「重置布局」（偏差图同款）：清除手动 y 范围与跟踪偏移；
+ * 跟踪开启时保持跨度并居中到目标（同偏差图 resetZoom 语义），
+ * 未跟踪时回到全览。
+ */
+function resetLayout(): void {
+  trackOffset = 0
+  yRangeOverride = null
+  if (props.tracking) {
+    applyTrackingViewport()
+    scheduleRender()
+    return
+  }
+  fitAll()
+}
+
+defineExpose({ resetLayout })
+
 /** 滚轮：本图 y 轴伸缩，锚定光标处的数值（不做跨图联动） */
 function handleWheel(event: WheelEvent): void {
   const store = sourceStore.value
@@ -432,9 +496,12 @@ function handleMouseDown(event: MouseEvent): void {
   dragStartViewport = { ...viewport.value }
 }
 
-/** 应用新 x 视口并广播给同源图表（E/N/U 联动） */
+/** 应用新 x 视口并广播给同源图表（E/N/U 联动）；跟踪模式下记录用户拖拽偏移 */
 function applyViewport(next: SatelliteCountViewport): void {
   viewport.value = next
+  if (props.tracking) {
+    trackOffset = (next.start + next.end) / 2 - (trackingTargetIndex() + 0.5)
+  }
   broadcastViewport(next.start, next.end, sourceStore.value)
   scheduleRender()
 }
@@ -464,11 +531,15 @@ function handleWindowMouseUp(): void {
   isXZoomDragging = false
 }
 
-/** 同源图表广播：E/N/U 之间同步 x 视口（平移/伸缩联动） */
+/** 同源图表广播：E/N/U 之间同步 x 视口（平移/伸缩联动，跟踪偏移一并同步） */
 function handleViewportSync(payload: MetricViewportBroadcast): void {
   if (payload.store !== sourceStore.value) return
   if (payload.start === viewport.value.start && payload.end === viewport.value.end) return
   viewport.value = { start: payload.start, end: payload.end }
+  // 同源 target 相同：按广播视口同步跟踪偏移，避免各实例跟随帧互相打架
+  if (props.tracking) {
+    trackOffset = (payload.start + payload.end) / 2 - (trackingTargetIndex() + 0.5)
+  }
   scheduleRender()
 }
 
@@ -508,6 +579,12 @@ function clearHover(): void {
 
 watch([positionEpochHistory, speedEpochHistory], () => {
   const nextLength = sourceStore.value.length
+  if (props.tracking && nextLength > 0) {
+    previousLength = nextLength
+    applyTrackingViewport()
+    scheduleRender(false)
+    return
+  }
   const wasFull =
     previousLength > 0 && viewport.value.start <= 0.5 && viewport.value.end >= previousLength - 0.5
   viewport.value = wasFull
@@ -516,6 +593,25 @@ watch([positionEpochHistory, speedEpochHistory], () => {
   previousLength = nextLength
   scheduleRender(false)
 })
+
+// 跟踪开关：开启时清除拖拽偏移并立即居中到目标（同偏差图 toggleTracking 语义）
+watch(
+  () => props.tracking,
+  (tracking) => {
+    if (!tracking) return
+    trackOffset = 0
+    applyTrackingViewport()
+  },
+)
+
+// 尺寸滑杆 → 点直径
+watch(
+  () => props.pointSize,
+  (size) => {
+    renderer?.setPointDiameter(pointDiameterForSize(size))
+    scheduleRender()
+  },
+)
 
 watch(
   () => props.active,
@@ -533,7 +629,10 @@ watch(resolvedTheme, () => scheduleRender())
 watch(
   [fileTimeline.active, fileTimeline.mode, fileTimeline.elapsedMilliseconds],
   () => {
-    if (props.active) scheduleRender()
+    if (!props.active) return
+    // 跟踪：回放光标/实时最新历元移动后重新居中
+    if (props.tracking) applyTrackingViewport()
+    else scheduleRender()
   },
 )
 
@@ -546,10 +645,10 @@ onMounted(() => {
     for (const quality of FIX_STATUS_QUALITIES) {
       renderer.addSeries(qualitySeriesId(quality), hexToRgba(fixStatusColor(quality)))
     }
-    // 点线图：细灰线勾连续性，粗点按质量分色承载信息
+    // 点线图：细灰线勾连续性，粗点按质量分色承载信息（尺寸滑杆可调）
     renderer.setLineWidth(POINT_LINE_LINE_WIDTH_PX)
     renderer.setLineOverrideColor(POINT_LINE_LINE_COLOR)
-    renderer.setPointDiameter(POINT_LINE_POINT_DIAMETER_PX)
+    renderer.setPointDiameter(pointDiameterForSize(props.pointSize))
   }
   resizeObserver = new ResizeObserver(resizeLayers)
   if (containerRef.value) resizeObserver.observe(containerRef.value)

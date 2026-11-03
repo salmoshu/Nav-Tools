@@ -57,12 +57,6 @@ export default {
     statsCurrent: '当前解',
   },
   map: {
-    follow: '跟踪',
-    slidingWindow: '滑窗',
-    all: '全部',
-    trackRetentionMode: '轨迹保留模式',
-    windowTitle: '滑窗：保留最近 2000 点；全部：持续保留后续所有点',
-    clear: '清除',
     offlineTitle: '离线地图',
     offlineDesc1: '本应用默认使用在线地图。你也可以事先准备一份本地栅格瓦片，让地图在离线或弱网时优先使用它们，未能覆盖到的区域会自动回退到在线地图。',
     offlineStepsTitle: '使用步骤：',
