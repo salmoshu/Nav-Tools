@@ -54,6 +54,7 @@ export default {
     axisU: 'Up (U)',
     historyTrack: 'History Track',
     currentPosition: 'Current Position',
+    statsCurrent: 'Current',
   },
   map: {
     follow: 'Follow',

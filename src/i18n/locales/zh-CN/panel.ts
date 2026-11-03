@@ -28,7 +28,7 @@ export default {
     desc: '在地图上查看当前位置与历史轨迹',
   },
   'gnss-deviation': {
-    title: 'GNSS 偏差图',
+    title: 'GNSS 偏差',
     desc: '分析 GNSS 定位偏差（WebGL 渲染）',
   },
   'gnss-signals': {

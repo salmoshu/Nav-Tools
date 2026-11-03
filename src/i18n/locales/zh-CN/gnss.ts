@@ -54,6 +54,7 @@ export default {
     axisU: '天向 U',
     historyTrack: '历史轨迹',
     currentPosition: '当前位置',
+    statsCurrent: '当前解',
   },
   map: {
     follow: '跟踪',

@@ -36,6 +36,10 @@ export interface SatelliteTimeSeriesRenderer {
   setViewport(xMin: number, xMax: number, yMin: number, yMax: number): void
   fitToData(): void
   setLineWidth(px: number): void
+  /** 点直径（CSS 像素，0 = 不画点）。点用系列色绘制，与线色覆盖互相独立。 */
+  setPointDiameter(px: number): void
+  /** 非空时所有线段改用该颜色（如中性灰），点仍用系列色——点线图形态。 */
+  setLineOverrideColor(color: SatelliteSeriesColor | null): void
   resize(width: number, height: number): void
   /** Compatibility alias for the other renderers in this directory. */
   onResize(width: number, height: number): void
@@ -75,16 +79,20 @@ const DEFAULT_COLOR: SatelliteSeriesColor = [1, 1, 1, 1]
 const WEBGL1_VERTEX_SHADER = `
 attribute vec2 a_position;
 uniform mat3 u_transform;
+uniform float u_pointSize;
 void main() {
   vec3 position = u_transform * vec3(a_position, 1.0);
   gl_Position = vec4(position.xy, 0.0, 1.0);
+  gl_PointSize = u_pointSize;
 }
 `
 
 const WEBGL1_FRAGMENT_SHADER = `
 precision mediump float;
 uniform vec4 u_color;
+uniform float u_points;
 void main() {
+  if (u_points > 0.5 && length(gl_PointCoord - vec2(0.5)) > 0.5) discard;
   gl_FragColor = u_color;
 }
 `
@@ -92,17 +100,21 @@ void main() {
 const WEBGL2_VERTEX_SHADER = `#version 300 es
 in vec2 a_position;
 uniform mat3 u_transform;
+uniform float u_pointSize;
 void main() {
   vec3 position = u_transform * vec3(a_position, 1.0);
   gl_Position = vec4(position.xy, 0.0, 1.0);
+  gl_PointSize = u_pointSize;
 }
 `
 
 const WEBGL2_FRAGMENT_SHADER = `#version 300 es
 precision mediump float;
 uniform vec4 u_color;
+uniform float u_points;
 out vec4 fragColor;
 void main() {
+  if (u_points > 0.5 && length(gl_PointCoord - vec2(0.5)) > 0.5) discard;
   fragColor = u_color;
 }
 `
@@ -255,6 +267,8 @@ abstract class SatelliteRendererBase {
   protected viewport: Bounds = { minX: 0, maxX: 1, minY: 0, maxY: 1 }
   protected transform = new Float32Array([2, 0, 0, 0, 2, 0, -1, -1, 1])
   protected lineWidth = 1
+  protected pointDiameter = 0
+  protected lineOverrideColor: [number, number, number, number] | null = null
   protected dpr = 1
   protected cssWidth = 0
   protected cssHeight = 0
@@ -279,6 +293,14 @@ abstract class SatelliteRendererBase {
     if (Number.isFinite(px)) this.lineWidth = Math.max(0.1, px)
   }
 
+  setPointDiameter(px: number): void {
+    this.pointDiameter = Number.isFinite(px) && px > 0 ? px : 0
+  }
+
+  setLineOverrideColor(color: SatelliteSeriesColor | null): void {
+    this.lineOverrideColor = color ? copyColor(color) : null
+  }
+
   abstract fitToData(): void
 }
 
@@ -298,6 +320,8 @@ export class WebGLSatelliteTimeSeriesRenderer
   private positionLoc = -1
   private transformLoc: WebGLUniformLocation | null = null
   private colorLoc: WebGLUniformLocation | null = null
+  private pointSizeLoc: WebGLUniformLocation | null = null
+  private pointsFlagLoc: WebGLUniformLocation | null = null
   private series = new Map<string, WebGLSeriesState>()
   private seriesOrder: string[] = []
   private backendKind: 'webgl2' | 'webgl1' = 'webgl1'
@@ -355,6 +379,8 @@ export class WebGLSatelliteTimeSeriesRenderer
     this.positionLoc = gl.getAttribLocation(program, 'a_position')
     this.transformLoc = gl.getUniformLocation(program, 'u_transform')
     this.colorLoc = gl.getUniformLocation(program, 'u_color')
+    this.pointSizeLoc = gl.getUniformLocation(program, 'u_pointSize')
+    this.pointsFlagLoc = gl.getUniformLocation(program, 'u_points')
     gl.enable(gl.BLEND)
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
     this.resize(canvas.width || 300, canvas.height || 150)
@@ -483,9 +509,20 @@ export class WebGLSatelliteTimeSeriesRenderer
         gl.enableVertexAttribArray(this.positionLoc)
         gl.vertexAttribPointer(this.positionLoc, FLOATS_PER_VERTEX, gl.FLOAT, false, 0, 0)
       }
-      if (this.colorLoc) gl.uniform4fv(this.colorLoc, state.color)
+      // 先画线：线色可被整体覆盖为中性灰（点线图形态），否则用系列色
+      if (this.pointsFlagLoc) gl.uniform1f(this.pointsFlagLoc, 0)
+      if (this.colorLoc) {
+        gl.uniform4fv(this.colorLoc, this.lineOverrideColor ?? state.color)
+      }
       for (const segment of state.segments) {
         if (segment.count >= 2) gl.drawArrays(gl.LINE_STRIP, segment.start, segment.count)
+      }
+      // 再画点：始终用系列色（如质量分色），与线的覆盖色互相独立
+      if (this.pointDiameter > 0) {
+        if (this.pointsFlagLoc) gl.uniform1f(this.pointsFlagLoc, 1)
+        if (this.pointSizeLoc) gl.uniform1f(this.pointSizeLoc, this.pointDiameter * this.dpr)
+        if (this.colorLoc) gl.uniform4fv(this.colorLoc, state.color)
+        gl.drawArrays(gl.POINTS, 0, state.vertexCount)
       }
     }
   }
@@ -711,13 +748,19 @@ export class CanvasSatelliteTimeSeriesRenderer
     const ySpan = this.viewport.maxY - this.viewport.minY
     if (xSpan === 0 || ySpan === 0) return
 
+    const override = this.lineOverrideColor
+    const overrideStyle = override
+      ? `rgba(${Math.round(override[0] * 255)}, ${Math.round(override[1] * 255)}, ${Math.round(
+          override[2] * 255,
+        )}, ${override[3]})`
+      : null
+
     for (const id of this.seriesOrder) {
       const state = this.series.get(id)
       if (!state || !state.visible) continue
       const [r, g, b, a] = state.color
-      ctx.strokeStyle = `rgba(${Math.round(r * 255)}, ${Math.round(g * 255)}, ${Math.round(
-        b * 255,
-      )}, ${a})`
+      // 线色可整体覆盖为中性灰（点线图形态），点保持系列色
+      ctx.strokeStyle = overrideStyle ?? `rgba(${Math.round(r * 255)}, ${Math.round(g * 255)}, ${Math.round(b * 255)}, ${a})`
       for (const segment of state.segments) {
         if (segment.count < 2) continue
         ctx.beginPath()
@@ -731,6 +774,20 @@ export class CanvasSatelliteTimeSeriesRenderer
           else ctx.lineTo(x, y)
         }
         ctx.stroke()
+      }
+      if (this.pointDiameter > 0) {
+        ctx.fillStyle = `rgba(${Math.round(r * 255)}, ${Math.round(g * 255)}, ${Math.round(b * 255)}, ${a})`
+        const radius = this.pointDiameter / 2
+        for (let i = 0; i < state.vertexCount; i++) {
+          const offset = i * FLOATS_PER_VERTEX
+          const x = ((state.vertexData[offset] - this.viewport.minX) / xSpan) * this.cssWidth
+          const y =
+            this.cssHeight -
+            ((state.vertexData[offset + 1] - this.viewport.minY) / ySpan) * this.cssHeight
+          ctx.beginPath()
+          ctx.arc(x, y, radius, 0, Math.PI * 2)
+          ctx.fill()
+        }
       }
     }
   }

@@ -28,7 +28,7 @@ export default {
     desc: 'View current position and history track on the map',
   },
   'gnss-deviation': {
-    title: 'GNSS Deviation Chart',
+    title: 'GNSS Deviation',
     desc: 'Analyze GNSS positioning deviation (WebGL rendering)',
   },
   'gnss-signals': {

@@ -51,6 +51,7 @@ function createMockWebGLContext() {
 
     uniformMatrix3fv: vi.fn(),
     uniform4fv: vi.fn(),
+    uniform1f: vi.fn(),
 
     viewport: vi.fn(),
     clearColor: vi.fn(),
@@ -89,6 +90,7 @@ function createMockCanvas2DContext() {
     beginPath: vi.fn(),
     moveTo: vi.fn(),
     lineTo: vi.fn(),
+    arc: vi.fn(),
     stroke: vi.fn(),
     clearRect: vi.fn(),
     setTransform: vi.fn(),
@@ -227,6 +229,39 @@ describe('WebGLSatelliteTimeSeriesRenderer', () => {
 
     // one LINE_STRIP per series (each a single segment) => 2 draw calls
     expect(gl.drawArrays).toHaveBeenCalledTimes(2)
+    expect(gl.drawArrays).toHaveBeenCalledWith(gl.LINE_STRIP, 0, 3)
+  })
+
+  it('point-line mode draws grey lines then series-colored POINTS', () => {
+    const gl = createMockWebGLContext()
+    const canvas = createMockCanvasWebGL(gl)
+    const renderer = new WebGLSatelliteTimeSeriesRenderer()
+    renderer.init(canvas)
+    renderer.onResize(300, 150)
+    renderer.setLineWidth(1)
+    renderer.setLineOverrideColor([0.5, 0.5, 0.5, 0.9])
+    renderer.setPointDiameter(5)
+    renderer.addSeries('s1', [1, 0, 0, 0.8])
+    renderer.setSeriesData('s1', new Float32Array([0, 0, 1, 1, 2, 2]))
+    renderer.setViewport(0, 3, 0, 3)
+
+    gl.drawArrays.mockClear()
+    gl.uniform4fv.mockClear()
+    renderer.render()
+
+    // 每系列两次 draw：LINE_STRIP（线）+ POINTS（全部有效顶点）
+    expect(gl.drawArrays).toHaveBeenCalledTimes(2)
+    expect(gl.drawArrays).toHaveBeenNthCalledWith(1, gl.LINE_STRIP, 0, 3)
+    expect(gl.drawArrays).toHaveBeenNthCalledWith(2, gl.POINTS, 0, 3)
+    // 第一次着色（线）用覆盖灰，第二次（点）用系列色
+    expect(gl.uniform4fv).toHaveBeenNthCalledWith(1, expect.anything(), [0.5, 0.5, 0.5, 0.9])
+    expect(gl.uniform4fv).toHaveBeenNthCalledWith(2, expect.anything(), [1, 0, 0, 0.8])
+
+    // 关闭点径后恢复纯线模式：只剩 LINE_STRIP
+    renderer.setPointDiameter(0)
+    gl.drawArrays.mockClear()
+    renderer.render()
+    expect(gl.drawArrays).toHaveBeenCalledTimes(1)
     expect(gl.drawArrays).toHaveBeenCalledWith(gl.LINE_STRIP, 0, 3)
   })
 
@@ -418,6 +453,30 @@ describe('CanvasSatelliteTimeSeriesRenderer', () => {
     renderer.setViewport(0, 2, 0, 2)
     renderer.render()
     expect(ctx.strokeStyle).toContain('128') // 0.5*255 ~ 128
+  })
+
+  it('point-line mode strokes grey lines and fills series-colored dots', () => {
+    renderer.setLineOverrideColor([0.5, 0.5, 0.5, 0.9])
+    renderer.setPointDiameter(5)
+    renderer.addSeries('s1', [1, 0, 0, 1])
+    renderer.setSeriesData('s1', new Float32Array([0, 0, 1, 1, 2, 2]))
+    renderer.setViewport(0, 3, 0, 3)
+
+    renderer.render()
+
+    // 线用覆盖灰（128 ≈ 0.5×255），点用系列色填充，每个有效顶点一个圆
+    expect(ctx.strokeStyle).toContain('128')
+    expect(ctx.fillStyle).toBe('rgba(255, 0, 0, 1)')
+    expect(ctx.arc).toHaveBeenCalledTimes(3)
+    expect(ctx.fill).toHaveBeenCalledTimes(3)
+
+    // 关闭点径后不再画点
+    renderer.setPointDiameter(0)
+    ctx.arc.mockClear()
+    ctx.fill.mockClear()
+    renderer.render()
+    expect(ctx.arc).not.toHaveBeenCalled()
+    expect(ctx.fill).not.toHaveBeenCalled()
   })
 })
 

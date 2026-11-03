@@ -7,6 +7,7 @@
     @mousemove="handleMouseMove"
     @mouseleave="clearHover"
     @mousedown="handleMouseDown"
+    @contextmenu.prevent
     @dblclick="fitAll"
   >
     <canvas ref="plotCanvasRef" class="metric-plot"></canvas>
@@ -52,6 +53,26 @@ import {
 
 type MetricField = 'E' | 'N' | 'U' | 'SPEED'
 
+/**
+ * 同一数据源（position/speed store）的多个图表间同步 x 视口：
+ * 左键平移与右键 x 伸缩广播给同源实例——位置视图下 E/N/U 三轴联动。
+ */
+interface MetricViewportBroadcast {
+  start: number
+  end: number
+  store: unknown
+}
+const viewportSyncListeners = new Set<(payload: MetricViewportBroadcast) => void>()
+
+function broadcastViewport(start: number, end: number, store: unknown): void {
+  for (const listener of viewportSyncListeners) listener({ start, end, store })
+}
+
+/** 点线图形态：线用中性灰（细），点用系列色（粗，保留质量分色） */
+const POINT_LINE_LINE_COLOR: [number, number, number, number] = [0.54, 0.54, 0.54, 0.9]
+const POINT_LINE_LINE_WIDTH_PX = 1
+const POINT_LINE_POINT_DIAMETER_PX = 5
+
 const props = defineProps<{
   field: MetricField
   label: string
@@ -95,9 +116,14 @@ let renderTimer: ReturnType<typeof setTimeout> | null = null
 let lastRenderAt = 0
 let previousLength = 0
 let renderedRange = { min: -1, max: 1 }
+/** 用户滚轮产生的 y 轴手动范围（锚定光标值伸缩）；dblclick 重置回自动范围 */
+let yRangeOverride: { min: number; max: number } | null = null
 let isDragging = false
 let dragStartX = 0
 let dragStartViewport: SatelliteCountViewport = { start: 0, end: 0 }
+/** 右键水平拖拽 = x 轴伸缩（同源图表联动） */
+let isXZoomDragging = false
+let xZoomAnchor = 0
 
 function hexToRgba(hex: string): SatelliteSeriesColor {
   const value = hex.replace('#', '')
@@ -183,6 +209,7 @@ function renderChart(): void {
     renderer.clear()
     renderer.render()
     renderedRange = { min: -1, max: 1 }
+    yRangeOverride = null
     headingColor.value = fixStatusColor(0)
     drawAxes()
     return
@@ -222,7 +249,8 @@ function renderChart(): void {
       new Uint32Array(geometry?.segments ?? []),
     )
   }
-  renderedRange = paddedRange(store.getRange(props.field, start, end))
+  // 手动 y 范围为绝对值（滚轮设置，dblclick 重置）；未设置时用可见窗口数据自动适配
+  renderedRange = yRangeOverride ?? paddedRange(store.getRange(props.field, start, end))
   renderer.setViewport(
     viewport.value.start - 0.5,
     Math.max(viewport.value.start + 0.5, viewport.value.end - 0.5),
@@ -358,47 +386,90 @@ function drawAxes(): void {
 
 function fitAll(): void {
   viewport.value = fitSatelliteCountViewport(sourceStore.value.length)
+  yRangeOverride = null
   clearHover()
   scheduleRender()
 }
 
+/** 滚轮：本图 y 轴伸缩，锚定光标处的数值（不做跨图联动） */
 function handleWheel(event: WheelEvent): void {
   const store = sourceStore.value
-  if (store.length < 2) return
   const container = containerRef.value
-  if (!container) return
+  if (!container || store.length === 0) return
   const rect = container.getBoundingClientRect()
-  const localX = event.clientX - rect.left - layout.left
-  const ratio = Math.max(0, Math.min(1, localX / plotSize().width))
-  const anchor = viewport.value.start + ratio * (viewport.value.end - viewport.value.start)
-  viewport.value = zoomSatelliteCountViewport(
-    viewport.value,
-    anchor,
-    event.deltaY > 0 ? 1.25 : 0.8,
-    store.length,
-  )
+  const localY = event.clientY - rect.top - layout.top
+  const { height } = plotSize()
+  const ratio = Math.max(0, Math.min(1, 1 - localY / Math.max(1, height)))
+  const span = renderedRange.max - renderedRange.min
+  const anchorValue = renderedRange.min + ratio * span
+  const factor = event.deltaY > 0 ? 1.25 : 0.8
+  yRangeOverride = {
+    min: anchorValue - (anchorValue - renderedRange.min) * factor,
+    max: anchorValue + (renderedRange.max - anchorValue) * factor,
+  }
   clearHover()
   scheduleRender()
 }
 
+/** 左键平移 / 右键 x 伸缩按下：记录起点，右键额外记录锚点索引 */
 function handleMouseDown(event: MouseEvent): void {
+  if (event.button === 2) {
+    const store = sourceStore.value
+    const container = containerRef.value
+    if (!container || store.length < 2) return
+    const rect = container.getBoundingClientRect()
+    const localX = event.clientX - rect.left - layout.left
+    const ratio = Math.max(0, Math.min(1, localX / plotSize().width))
+    isXZoomDragging = true
+    dragStartX = event.clientX
+    dragStartViewport = { ...viewport.value }
+    xZoomAnchor = dragStartViewport.start + ratio * (dragStartViewport.end - dragStartViewport.start)
+    return
+  }
   if (event.button !== 0) return
   isDragging = true
   dragStartX = event.clientX
   dragStartViewport = { ...viewport.value }
 }
 
+/** 应用新 x 视口并广播给同源图表（E/N/U 联动） */
+function applyViewport(next: SatelliteCountViewport): void {
+  viewport.value = next
+  broadcastViewport(next.start, next.end, sourceStore.value)
+  scheduleRender()
+}
+
 function handleWindowMouseMove(event: MouseEvent): void {
+  if (isXZoomDragging) {
+    const store = sourceStore.value
+    if (store.length < 2) return
+    // 向右拖放大（时间窗变窄），向左拖缩小；以按下点为锚
+    const dx = event.clientX - dragStartX
+    const factor = Math.pow(2, -dx / 160)
+    applyViewport(
+      zoomSatelliteCountViewport(dragStartViewport, xZoomAnchor, factor, store.length),
+    )
+    clearHover()
+    return
+  }
   if (!isDragging) return
   const span = dragStartViewport.end - dragStartViewport.start
   const delta = -((event.clientX - dragStartX) / plotSize().width) * span
-  viewport.value = panSatelliteCountViewport(dragStartViewport, delta, sourceStore.value.length)
+  applyViewport(panSatelliteCountViewport(dragStartViewport, delta, sourceStore.value.length))
   clearHover()
-  scheduleRender()
 }
 
 function handleWindowMouseUp(): void {
   isDragging = false
+  isXZoomDragging = false
+}
+
+/** 同源图表广播：E/N/U 之间同步 x 视口（平移/伸缩联动） */
+function handleViewportSync(payload: MetricViewportBroadcast): void {
+  if (payload.store !== sourceStore.value) return
+  if (payload.start === viewport.value.start && payload.end === viewport.value.end) return
+  viewport.value = { start: payload.start, end: payload.end }
+  scheduleRender()
 }
 
 function handleMouseMove(event: MouseEvent): void {
@@ -475,12 +546,16 @@ onMounted(() => {
     for (const quality of FIX_STATUS_QUALITIES) {
       renderer.addSeries(qualitySeriesId(quality), hexToRgba(fixStatusColor(quality)))
     }
-    renderer.setLineWidth(1.5)
+    // 点线图：细灰线勾连续性，粗点按质量分色承载信息
+    renderer.setLineWidth(POINT_LINE_LINE_WIDTH_PX)
+    renderer.setLineOverrideColor(POINT_LINE_LINE_COLOR)
+    renderer.setPointDiameter(POINT_LINE_POINT_DIAMETER_PX)
   }
   resizeObserver = new ResizeObserver(resizeLayers)
   if (containerRef.value) resizeObserver.observe(containerRef.value)
   window.addEventListener('mousemove', handleWindowMouseMove)
   window.addEventListener('mouseup', handleWindowMouseUp)
+  viewportSyncListeners.add(handleViewportSync)
   resizeLayers()
 })
 
@@ -488,6 +563,7 @@ onUnmounted(() => {
   if (renderFrame !== null) cancelAnimationFrame(renderFrame)
   if (renderTimer !== null) clearTimeout(renderTimer)
   resizeObserver?.disconnect()
+  viewportSyncListeners.delete(handleViewportSync)
   window.removeEventListener('mousemove', handleWindowMouseMove)
   window.removeEventListener('mouseup', handleWindowMouseUp)
   renderer?.dispose()

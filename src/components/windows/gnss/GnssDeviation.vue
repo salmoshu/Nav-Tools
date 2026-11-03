@@ -99,10 +99,13 @@ import type { TrajectoryRenderer } from '@/core/render/TrajectoryRenderer'
 import GnssMetricTimeSeries from './GnssMetricTimeSeries.vue'
 import {
   clampVisibleSpan,
+  clampViewportCenter,
+  equalizeViewportScale,
   fitDeviationPoints,
   fitDeviationPointsAroundCenter,
   GNSS_MIN_VISIBLE_SPAN_METERS,
 } from '@/core/deviation/DeviationViewport'
+import { computeDeviationStats, type DeviationStats } from '@/core/deviation/DeviationStats'
 
 const { deviationPoints: plotData, positionEpochHistory, clearData } = useNmea()
 const fileTimeline = useFileTimeline()
@@ -219,9 +222,8 @@ function dataToScreenY(y: number): number {
   return axisCssHeight - ((y - yMin) / (yMax - yMin)) * axisCssHeight
 }
 
-function niceTickStep(span: number): number {
+function niceTickStep(span: number, targetTicks = 12): number {
   if (!Number.isFinite(span) || span <= 0) return 1
-  const targetTicks = 6
   const rough = span / targetTicks
   const exp = Math.floor(Math.log10(rough))
   const fraction = rough / Math.pow(10, exp)
@@ -244,8 +246,10 @@ function drawAxisLayer(): void {
   ctx.clearRect(0, 0, width, height)
 
   const { xMin, xMax, yMin, yMax } = viewport.value
-  const xStep = niceTickStep(xMax - xMin)
-  const yStep = niceTickStep(yMax - yMin)
+  // 两轴共用同一步长：等比例视口下网格为正方形，且比稀疏的 6 格线密一倍
+  const step = niceTickStep(Math.min(xMax - xMin, yMax - yMin))
+  const xStep = step
+  const yStep = step
 
   const xStart = Math.ceil(xMin / xStep) * xStep
   const xEnd = Math.floor(xMax / xStep) * xStep
@@ -302,6 +306,105 @@ function drawAxisLayer(): void {
   }
 
   ctx.restore()
+  drawStatsOverlay()
+}
+
+/** 统计缓存：仅当数据量或首点引用变化时重算（跟踪模式每帧重绘轴层） */
+let statsCache: DeviationStats | null = null
+let statsCacheLength = -1
+let statsCacheFirst: readonly number[] | undefined
+
+function deviationStats(): DeviationStats | null {
+  const points = plotData.value
+  if (statsCacheLength === points.length && statsCacheFirst === points[0]) return statsCache
+  statsCache = computeDeviationStats(points)
+  statsCacheLength = points.length
+  statsCacheFirst = points[0]
+  return statsCache
+}
+
+function formatStatMeters(value: number): string {
+  const abs = Math.abs(value)
+  if (abs >= 100) return `${value.toFixed(1)} m`
+  if (abs >= 1) return `${value.toFixed(3)} m`
+  return `${value.toFixed(4)} m`
+}
+
+/**
+ * rtkplot 风格统计信息层：画在轴层右上角空白处。
+ * 内容对齐 rtkplot drawTrackStatistics / updateInfoSolution：
+ * 当前解状态（时间线光标或最新点）、点数 N、解质量分布、AVE/STD/RMS(E/N) 与 2D RMS。
+ */
+function drawStatsOverlay(): void {
+  if (!axisCtx || !axisCanvasRef.value) return
+  const colors = chartTheme.value
+  const stats = deviationStats()
+  const ctx = axisCtx
+  const width = axisCssWidth
+
+  const currentPoint = getTimelinePositionPoint() ?? getLatestRenderedPoint()
+  const lines: Array<{ text: string; color?: string; strong?: boolean }> = []
+
+  if (currentPoint) {
+    const [r, g, b] = qualityToRgb(currentPoint[2])
+    lines.push({
+      text: `${t('gnss.deviation.statsCurrent')}: ${numberToQuality(currentPoint[2])}`,
+      color: `rgba(${Math.round(r * 255)}, ${Math.round(g * 255)}, ${Math.round(b * 255)}, 1)`,
+      strong: true,
+    })
+  }
+
+  if (stats) {
+    lines.push({ text: `N = ${stats.count.toLocaleString()}` })
+    for (const [quality, count] of [...stats.qualityCounts.entries()].sort((a, b) => a[0] - b[0])) {
+      const ratio = ((count / stats.count) * 100).toFixed(1)
+      lines.push({ text: `${numberToQuality(quality)} ${count} (${ratio}%)` })
+    }
+    lines.push({
+      text: `AVE = E: ${formatStatMeters(stats.aveE)}, N: ${formatStatMeters(stats.aveN)}`,
+    })
+    lines.push({
+      text: `STD = E: ${formatStatMeters(stats.stdE)}, N: ${formatStatMeters(stats.stdN)}`,
+    })
+    lines.push({
+      text: `RMS = E: ${formatStatMeters(stats.rmsE)}, N: ${formatStatMeters(stats.rmsN)}, 2D: ${formatStatMeters(stats.rms2dDoubled)}`,
+    })
+  }
+
+  if (lines.length === 0) return
+
+  ctx.save()
+  ctx.setTransform(axisDpr, 0, 0, axisDpr, 0, 0)
+  ctx.font = '11px sans-serif'
+  ctx.textAlign = 'right'
+  ctx.textBaseline = 'top'
+
+  const lineHeight = 15
+  const paddingX = 10
+  const paddingY = 8
+  let maxLineWidth = 0
+  for (const line of lines) {
+    maxLineWidth = Math.max(maxLineWidth, ctx.measureText(line.text).width)
+  }
+  const boxWidth = maxLineWidth + paddingX * 2
+  const boxHeight = lines.length * lineHeight + paddingY * 2
+  const boxX = Math.max(8, width - boxWidth - 10)
+  const boxY = 10
+
+  ctx.fillStyle = colors.surface
+  ctx.strokeStyle = colors.border
+  ctx.lineWidth = 1
+  ctx.beginPath()
+  if (typeof ctx.roundRect === 'function') ctx.roundRect(boxX, boxY, boxWidth, boxHeight, 6)
+  else ctx.rect(boxX, boxY, boxWidth, boxHeight)
+  ctx.fill()
+  ctx.stroke()
+
+  lines.forEach((line, index) => {
+    ctx.fillStyle = line.color ?? colors.text
+    ctx.fillText(line.text, boxX + boxWidth - paddingX, boxY + paddingY + index * lineHeight)
+  })
+  ctx.restore()
 }
 
 function drawCurrentPosition(): void {
@@ -340,11 +443,50 @@ function getTimelinePositionPoint(): [number, number, number] | undefined {
   return [east, north, history.getValue('QUALITY', index) ?? 0]
 }
 
+/**
+ * 跟踪模式的中心点：文件回放时取时间线光标处的定位点（当前定位点始终居中），
+ * 实时流取最新渲染点。
+ */
+function getTrackingCenterPoint(): [number, number, number] | undefined {
+  return getTimelinePositionPoint() ?? getLatestRenderedPoint()
+}
+
+/** 跟踪视口：中心 = 跟踪点 + 用户拖拽偏移，跨度沿用跟踪半跨度 */
+function applyTrackingViewport(): void {
+  const center = getTrackingCenterPoint()
+  if (!center) {
+    drawAxisLayer()
+    drawCurrentPosition()
+    return
+  }
+  const centerX = center[0] + panOffsetX
+  const centerY = center[1] + panOffsetY
+  updateViewport(
+    centerX - trackingXHalfSpan,
+    centerX + trackingXHalfSpan,
+    centerY - trackingYHalfSpan,
+    centerY + trackingYHalfSpan,
+  )
+}
+
 function updateViewport(xMin: number, xMax: number, yMin: number, yMax: number): void {
-  viewport.value = { xMin, xMax, yMin, yMax }
-  renderer?.setViewport(xMin, xMax, yMin, yMax)
+  // 统一入口：先按容器宽高比做等比例修正（x/y 每像素米数一致，轨迹形状真实），
+  // 再把整体钳制在 ±LIMIT 内（只动中心不动跨度，比例不被破坏）
+  const equalized = equalizeViewportScale(
+    { xMin, xMax, yMin, yMax },
+    axisCssHeight > 0 ? axisCssWidth / axisCssHeight : 1,
+  )
+  const next = clampViewportCenter(equalized, LIMIT_METERS)
+  viewport.value = next
+  renderer?.setViewport(next.xMin, next.xMax, next.yMin, next.yMax)
   drawAxisLayer()
   drawCurrentPosition()
+}
+
+/** 从当前（已等比例的）视口同步跟踪半跨度，跟踪循环沿用同一比例 */
+function syncTrackingSpans(): void {
+  trackingXHalfSpan = (viewport.value.xMax - viewport.value.xMin) / 2
+  trackingYHalfSpan = (viewport.value.yMax - viewport.value.yMin) / 2
 }
 
 function getLatestRenderedPoint(): [number, number, number] | undefined {
@@ -403,7 +545,7 @@ function handleNmeaUpdate(): boolean {
     plotData.value.length !== renderedPointCount ||
     (plotData.value.length > 0 && plotData.value[0] !== firstRenderedPoint)
   const hasMorePoints = syncRendererData()
-  const latestTrackPoint = getLatestRenderedPoint()
+  const latestTrackPoint = getTrackingCenterPoint()
   if (!latestTrackPoint) {
     drawAxisLayer()
     return hasMorePoints
@@ -425,9 +567,8 @@ function handleNmeaUpdate(): boolean {
     if (fitted) {
       panOffsetX = 0
       panOffsetY = 0
-      trackingXHalfSpan = (fitted.xMax - fitted.xMin) / 2
-      trackingYHalfSpan = (fitted.yMax - fitted.yMin) / 2
       updateViewport(fitted.xMin, fitted.xMax, fitted.yMin, fitted.yMax)
+      syncTrackingSpans()
       return false
     }
   }
@@ -441,15 +582,8 @@ function handleNmeaUpdate(): boolean {
   }
 
   if (isTracking.value) {
-    // 视口中心 = 最新点 + 用户拖拽偏移，保持当前跨度
-    const centerX = latestTrackPoint[0] + panOffsetX
-    const centerY = latestTrackPoint[1] + panOffsetY
-    updateViewport(
-      centerX - trackingXHalfSpan,
-      centerX + trackingXHalfSpan,
-      centerY - trackingYHalfSpan,
-      centerY + trackingYHalfSpan,
-    )
+    // 视口中心 = 跟踪点（回放时为时间线光标点）+ 用户拖拽偏移，保持当前跨度
+    applyTrackingViewport()
   } else {
     renderer.render()
     drawAxisLayer()
@@ -486,11 +620,11 @@ function handleDocumentVisibilityChange(): void {
 
 function toggleTracking(): void {
   if (!renderer) return
-  const latestPoint = getLatestRenderedPoint()
+  const latestPoint = getTrackingCenterPoint()
   if (!latestPoint) return
 
   if (isTracking.value) {
-    // 开启跟踪：重置用户拖拽偏移，视口以最新点为中心
+    // 开启跟踪：重置用户拖拽偏移，视口以跟踪点（回放时为时间线光标点）为中心
     panOffsetX = 0
     panOffsetY = 0
     const xSpan = viewport.value.xMax - viewport.value.xMin
@@ -517,13 +651,14 @@ function resetZoom(): void {
   const width = chartContainerRef.value.clientWidth
   const height = chartContainerRef.value.clientHeight
   const aspectRatio = width / height
+  const trackCenter = getTrackingCenterPoint()
 
   const newViewport =
-    isTracking.value && points.length > 0
+    isTracking.value && points.length > 0 && trackCenter
       ? fitDeviationPointsAroundCenter(
           points,
-          points[points.length - 1][0],
-          points[points.length - 1][1],
+          trackCenter[0],
+          trackCenter[1],
           aspectRatio,
           GNSS_MIN_VISIBLE_SPAN_METERS,
         )
@@ -533,12 +668,12 @@ function resetZoom(): void {
     trackingXHalfSpan = 10
     trackingYHalfSpan = 10
     updateViewport(-10, 10, -10, 10)
+    syncTrackingSpans()
     return
   }
 
-  trackingXHalfSpan = (newViewport.xMax - newViewport.xMin) / 2
-  trackingYHalfSpan = (newViewport.yMax - newViewport.yMin) / 2
   updateViewport(newViewport.xMin, newViewport.xMax, newViewport.yMin, newViewport.yMax)
+  syncTrackingSpans()
 }
 
 function clearTrack(): void {
@@ -548,6 +683,9 @@ function clearTrack(): void {
   firstRenderedPoint = undefined
   panOffsetX = 0
   panOffsetY = 0
+  statsCache = null
+  statsCacheLength = -1
+  statsCacheFirst = undefined
   updateViewport(-10, 10, -10, 10)
   clearData()
 }
@@ -568,27 +706,28 @@ function handleWheel(e: WheelEvent): void {
   const xRange = xMax - xMin
   const yRange = yMax - yMin
 
-  // 与 canvas(ECharts) 版一致的 RTKLIB 缩放：以视图中心为锚点
+  // 与 canvas(ECharts) 版一致的 RTKLIB 缩放：以视图中心为锚点。
+  // x/y 用同一因子，min 钳制后由 updateViewport 的等比例修正统一兜底，
+  // 保证两轴每像素米数始终一致。
   const zoomRatio = Math.pow(2.0, e.deltaY / 1200.0)
   const xSpan = clampVisibleSpan(xRange * zoomRatio, GNSS_MIN_VISIBLE_SPAN_METERS, LIMIT_METERS * 2)
   const ySpan = clampVisibleSpan(yRange * zoomRatio, GNSS_MIN_VISIBLE_SPAN_METERS, LIMIT_METERS * 2)
 
   const xCenter = (xMin + xMax) / 2
   const yCenter = (yMin + yMax) / 2
-  const newXMin = Math.max(-LIMIT_METERS, xCenter - xSpan / 2)
-  const newXMax = Math.min(LIMIT_METERS, xCenter + xSpan / 2)
-  const newYMin = Math.max(-LIMIT_METERS, yCenter - ySpan / 2)
-  const newYMax = Math.min(LIMIT_METERS, yCenter + ySpan / 2)
+  updateViewport(
+    xCenter - xSpan / 2,
+    xCenter + xSpan / 2,
+    yCenter - ySpan / 2,
+    yCenter + ySpan / 2,
+  )
+  syncTrackingSpans()
 
-  trackingXHalfSpan = (newXMax - newXMin) / 2
-  trackingYHalfSpan = (newYMax - newYMin) / 2
-  updateViewport(newXMin, newXMax, newYMin, newYMax)
-
-  // 拖拽后更新偏移：新视口中心相对于最新数据点的偏移
-  const latestPoint = getLatestRenderedPoint()
+  // 缩放后更新偏移：新视口中心相对于跟踪点（回放时为时间线光标点）的偏移
+  const latestPoint = getTrackingCenterPoint()
   if (latestPoint) {
-    panOffsetX = (newXMin + newXMax) / 2 - latestPoint[0]
-    panOffsetY = (newYMin + newYMax) / 2 - latestPoint[1]
+    panOffsetX = (viewport.value.xMin + viewport.value.xMax) / 2 - latestPoint[0]
+    panOffsetY = (viewport.value.yMin + viewport.value.yMax) / 2 - latestPoint[1]
   }
 }
 
@@ -649,37 +788,28 @@ function handleWindowMouseMove(e: MouseEvent): void {
   const xRange = xMax - xMin
   const yRange = yMax - yMin
 
-  // 内容跟随鼠标：屏幕 Y 向下而数据 Y 向上，X 取反、Y 取正
+  // 内容跟随鼠标：屏幕 Y 向下而数据 Y 向上，X 取反、Y 取正。
+  // 只移动中心、跨度不变（±LIMIT 钳制由 updateViewport 统一处理），
+  // 等比例视口在拖拽全程保持。
   const dataDx = -(dx / rect.width) * xRange
   const dataDy = (dy / rect.height) * yRange
+  const centerX = (xMin + xMax) / 2 + dataDx
+  const centerY = (yMin + yMax) / 2 + dataDy
 
-  let newXMin = xMin + dataDx
-  let newXMax = xMax + dataDx
-  let newYMin = yMin + dataDy
-  let newYMax = yMax + dataDy
+  updateViewport(
+    centerX - xRange / 2,
+    centerX + xRange / 2,
+    centerY - yRange / 2,
+    centerY + yRange / 2,
+  )
 
-  const xSpan = newXMax - newXMin
-  const ySpan = newYMax - newYMin
-
-  if (newXMin < -LIMIT_METERS) {
-    newXMin = -LIMIT_METERS
-    newXMax = -LIMIT_METERS + xSpan
-  } else if (newXMax > LIMIT_METERS) {
-    newXMax = LIMIT_METERS
-    newXMin = LIMIT_METERS - xSpan
+  // 拖拽后更新偏移：视口中心相对于跟踪点（回放时为时间线光标点）的偏移，
+  // 跟踪模式在拖拽结束后保持该偏移而不回中
+  const latestPoint = getTrackingCenterPoint()
+  if (latestPoint) {
+    panOffsetX = (viewport.value.xMin + viewport.value.xMax) / 2 - latestPoint[0]
+    panOffsetY = (viewport.value.yMin + viewport.value.yMax) / 2 - latestPoint[1]
   }
-
-  if (newYMin < -LIMIT_METERS) {
-    newYMin = -LIMIT_METERS
-    newYMax = -LIMIT_METERS + ySpan
-  } else if (newYMax > LIMIT_METERS) {
-    newYMax = LIMIT_METERS
-    newYMin = LIMIT_METERS - ySpan
-  }
-
-  trackingXHalfSpan = (newXMax - newXMin) / 2
-  trackingYHalfSpan = (newYMax - newYMin) / 2
-  updateViewport(newXMin, newXMax, newYMin, newYMax)
 }
 
 function handleWindowMouseUp(): void {
@@ -712,7 +842,11 @@ function setupResizeObserver(): void {
       const height = chartContainerRef.value.clientHeight
       renderer?.onResize(width, height)
       resizeAxisCanvas(width, height)
-      drawAxisLayer()
+      // 容器宽高比变了：按新比例重新等比例当前视口，再重绘画层
+      const current = viewport.value
+      updateViewport(current.xMin, current.xMax, current.yMin, current.yMax)
+      syncTrackingSpans()
+      renderer?.render()
       drawCurrentPosition()
     })
   })
@@ -769,8 +903,13 @@ onMounted(() => {
       [fileTimeline.active, fileTimeline.elapsedMilliseconds],
       () => {
         if (currentView.value !== 'deviation') return
-        drawAxisLayer()
-        drawCurrentPosition()
+        // 跟踪模式：回放光标移动后当前定位点重新居中（track 预期行为）；
+        // 非跟踪只刷新光标点与轴层（含统计信息）
+        if (isTracking.value) applyTrackingViewport()
+        else {
+          drawAxisLayer()
+          drawCurrentPosition()
+        }
       },
     )
   })
