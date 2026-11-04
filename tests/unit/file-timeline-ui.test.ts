@@ -28,4 +28,15 @@ describe('file timeline presentation', () => {
     expect(messages).toContain('scrollToTimelineMessage()')
     expect(messages).toContain('scrollerRef.value.scrollToItem(targetIndex)')
   })
+
+  it('exposes a replay speed select shared with the data input dialog', () => {
+    expect(timeline).toContain('class="timeline-speed"')
+    expect(timeline).toContain("emit('update:speed', value)")
+
+    // 进度条速度下拉与数据接入弹框共用 replaySpeedSelection（含 ×0 关闭时间标签回放）
+    const toolbar = readFileSync('src/components/ToolBar.vue', 'utf8')
+    expect(toolbar).toContain(':speed="replaySpeedSelection"')
+    expect(toolbar).toContain(':speed-options="replaySpeedSelectionOptions"')
+    expect(toolbar).toContain('function applyTimelineSpeed(')
+  })
 })

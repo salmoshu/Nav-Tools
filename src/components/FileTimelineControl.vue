@@ -8,11 +8,17 @@ import { t } from '@/i18n'
 const props = withDefaults(
   defineProps<{
     position?: 'top' | 'right' | 'bottom' | 'left'
+    /** 回放倍速(0 = 不按时间标签回放);不传则不渲染速度下拉 */
+    speed?: number
+    speedOptions?: number[]
   }>(),
   {
     position: 'bottom',
+    speedOptions: () => [],
   },
 )
+
+const emit = defineEmits<{ 'update:speed': [value: number] }>()
 
 const {
   active,
@@ -97,6 +103,11 @@ async function togglePopover(event?: MouseEvent): Promise<void> {
 
 function previewSlider(event: Event): void {
   previewElapsedTime(Number((event.target as HTMLInputElement).value))
+}
+
+function onSpeedChange(event: Event): void {
+  const value = Number((event.target as HTMLSelectElement).value)
+  if (Number.isFinite(value)) emit('update:speed', value)
 }
 
 function closeOnOutsidePointer(event: MouseEvent): void {
@@ -194,6 +205,15 @@ watch(active, (visible) => {
         />
         <span class="timeline-time" :title="elapsedLabel">{{ cursorTime }}</span>
         <span class="timeline-epoch">{{ cursorIndex + 1 }} / {{ totalEpochs }}</span>
+        <select
+          v-if="speed !== undefined"
+          class="timeline-speed"
+          :title="t('app.toolbar.replaySpeed')"
+          :value="speed"
+          @change.stop="onSpeedChange"
+        >
+          <option v-for="option in speedOptions" :key="option" :value="option">×{{ option }}</option>
+        </select>
       </div>
     </template>
 
@@ -263,6 +283,17 @@ watch(active, (visible) => {
         <div class="timeline-details">
           <span class="timeline-time" :title="elapsedLabel">{{ cursorTime }}</span>
           <span class="timeline-epoch">{{ cursorIndex + 1 }} / {{ totalEpochs }}</span>
+          <select
+            v-if="speed !== undefined"
+            class="timeline-speed"
+            :title="t('app.toolbar.replaySpeed')"
+            :value="speed"
+            @change.stop="onSpeedChange"
+          >
+            <option v-for="option in speedOptions" :key="option" :value="option">
+              ×{{ option }}
+            </option>
+          </select>
         </div>
       </div>
       </Teleport>
@@ -412,6 +443,20 @@ watch(active, (visible) => {
   color: var(--app-text-secondary);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+}
+
+/* 回放倍速下拉:形态对齐 LiDAR 时间轴的 timeline-speed */
+.timeline-speed {
+  height: 24px;
+  padding: 0 2px;
+  flex: none;
+  color: var(--app-text);
+  font-size: 11px;
+  background: var(--app-surface-muted);
+  border: 1px solid var(--app-border);
+  border-radius: 5px;
+  cursor: pointer;
+  outline: none;
 }
 
 .timeline-time {

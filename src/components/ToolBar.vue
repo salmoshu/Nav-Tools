@@ -134,7 +134,13 @@
       </button>
 
       <span v-if="fileTimelineActive" class="divider timeline-divider" aria-hidden="true"></span>
-      <FileTimelineControl v-if="fileTimelineActive" :position="position" />
+      <FileTimelineControl
+        v-if="fileTimelineActive"
+        :position="position"
+        :speed="replaySpeedSelection"
+        :speed-options="replaySpeedSelectionOptions"
+        @update:speed="applyTimelineSpeed"
+      />
       <span v-if="lidarTimelineActive" class="divider timeline-divider" aria-hidden="true"></span>
       <LidarTimelineControl v-if="lidarTimelineActive" :position="position" />
       <span v-if="gnssRawLoading" class="divider timeline-divider" aria-hidden="true"></span>
@@ -789,6 +795,11 @@ const replaySpeedSelection = computed<number>({
     }
   },
 })
+
+/** 时间轴控制条的速度下拉与数据接入弹框共用 replaySpeedSelection 状态 */
+function applyTimelineSpeed(value: number): void {
+  replaySpeedSelection.value = value
+}
 
 const activeParserDescription = computed(
   () =>
