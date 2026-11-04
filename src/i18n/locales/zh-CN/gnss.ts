@@ -87,6 +87,7 @@ export default {
     satSize: '卫星大小',
     elevLimit: '仰角限制',
     constellationLegend: '星座图例',
+    legendToggle: '点击显示 / 隐藏该星座',
     colorSizeSnr: '颜色 / 大小 = SNR (0–60 dB)',
     colorElev: '颜色 = 仰角 (0–90°)',
     low: '低',

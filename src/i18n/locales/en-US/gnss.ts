@@ -87,6 +87,7 @@ export default {
     satSize: 'Satellite size',
     elevLimit: 'Elevation limit',
     constellationLegend: 'Constellation legend',
+    legendToggle: 'Click to show / hide this constellation',
     colorSizeSnr: 'Color / Size = SNR (0–60 dB)',
     colorElev: 'Color = Elevation (0–90°)',
     low: 'Low',

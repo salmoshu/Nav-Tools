@@ -26,4 +26,14 @@ describe('GNSS sky plot label stacking', () => {
     expect(source).toContain('watch(resolvedTheme, scheduleThemeRefresh)')
     expect(source.match(/themeRefreshRaf = requestAnimationFrame/g)).toHaveLength(2)
   })
+
+  it('toggles constellation visibility by clicking legend items', () => {
+    const source = readFileSync('src/components/windows/gnss/GnssSky.vue', 'utf8')
+
+    expect(source).toContain('const hiddenConstellations = ref(new Set())')
+    expect(source).toContain('@click="toggleConstellation(name)"')
+    expect(source).toContain('!hiddenConstellations.value.has(sat.constellation)')
+    // 下拉选具体星座时清空隐藏集合，避免两套过滤语义打架
+    expect(source).toContain('function onConstellationFilterChange(value)')
+  })
 })

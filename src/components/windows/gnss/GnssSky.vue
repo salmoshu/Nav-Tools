@@ -38,7 +38,7 @@
 
         <div class="control-group">
           <span class="control-label">{{ t('gnss.sky.constellationFilter') }}</span>
-          <el-select v-model="constellationFilter" @change="updateChartData" size="default" class="constellation-select">
+          <el-select v-model="constellationFilter" @change="onConstellationFilterChange" size="default" class="constellation-select">
             <el-option :label="t('gnss.sky.allConstellations')" value="all" />
             <el-option label="GPS" value="GPS" />
             <el-option label="GLONASS" value="GLONASS" />
@@ -73,7 +73,18 @@
         <div v-if="viewMode === 'constellation'" class="constellation-legend">
           <span class="control-label">{{ t('gnss.sky.constellationLegend') }}</span>
           <div class="legend-items">
-            <div v-for="(color, name) in constellationColors" :key="name" class="legend-item">
+            <div
+              v-for="(color, name) in constellationColors"
+              :key="name"
+              class="legend-item"
+              :class="{ 'legend-item--hidden': hiddenConstellations.has(name) }"
+              role="button"
+              tabindex="0"
+              :title="t('gnss.sky.legendToggle')"
+              :aria-pressed="hiddenConstellations.has(name)"
+              @click="toggleConstellation(name)"
+              @keydown.enter.prevent="toggleConstellation(name)"
+            >
               <span class="legend-dot" :style="{ backgroundColor: color }"></span>
               <span class="legend-name">{{ name }}</span>
             </div>
@@ -151,6 +162,8 @@ const chartRef = ref(null)
 const chartInstance = shallowRef(null)
 const viewMode = ref('constellation')
 const constellationFilter = ref('all')
+// 图例点击隐藏的星座集合（叠加在星座下拉筛选之上，下拉选具体星座时清空）
+const hiddenConstellations = ref(new Set())
 const satelliteSize = ref(25)
 const minSizeForLabel = 20
 // 添加仰角限制状态，默认15°
@@ -543,6 +556,13 @@ function updateChartData() {
     )
   }
 
+  // 图例点击隐藏的星座
+  if (hiddenConstellations.value.size > 0) {
+    filteredData = filteredData.filter(sat =>
+      !hiddenConstellations.value.has(sat.constellation)
+    )
+  }
+
   // 按仰角过滤
   filteredData = filteredData.filter(sat =>
     sat.elevation >= elevationLimit.value
@@ -585,6 +605,26 @@ function scheduleDataUpdate() {
     dataUpdateTimer = null
     updateChartData()
   }, DATA_UPDATE_INTERVAL_MS)
+}
+
+// 图例项点击:切换对应星座的显示/隐藏(整体替换 Set 保证响应式触发)
+function toggleConstellation(name) {
+  const next = new Set(hiddenConstellations.value)
+  if (next.has(name)) {
+    next.delete(name)
+  } else {
+    next.add(name)
+  }
+  hiddenConstellations.value = next
+  updateChartData()
+}
+
+// 下拉选具体星座时清空图例隐藏集合(单星座视图下隐藏集合无意义)
+function onConstellationFilterChange(value) {
+  if (value !== 'all') {
+    hiddenConstellations.value = new Set()
+  }
+  updateChartData()
 }
 
 // 监听卫星大小变化
@@ -883,6 +923,16 @@ onUnmounted(() => {
   gap: 6px;
   font-size: 12px;
   color: var(--app-text);
+  cursor: pointer;
+  user-select: none;
+}
+
+.legend-item:hover .legend-name {
+  color: var(--el-color-primary);
+}
+
+.legend-item--hidden {
+  opacity: 0.4;
 }
 
 .legend-dot {
