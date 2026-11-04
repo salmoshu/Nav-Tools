@@ -180,7 +180,12 @@ function handleIgnore(): void {
 
 .update-dialog-actions {
   display: flex;
-  justify-content: flex-start;
   gap: 8px;
+}
+
+/* 两按钮等宽铺满整行,左右对称(间距走容器 gap,清掉 EP 相邻按钮默认边距) */
+.update-dialog-actions .el-button {
+  flex: 1;
+  margin-left: 0;
 }
 </style>
