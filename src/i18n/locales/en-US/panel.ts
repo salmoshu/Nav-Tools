@@ -83,4 +83,8 @@ export default {
     title: 'Ephemeris Status',
     desc: 'Ephemeris update events, iode flapping, decode failures and expiry',
   },
+  'gnssraw-rtkpost': {
+    title: 'RTKPOST',
+    desc: 'Run GNSS post-processing with Robo-GNSS rnx2rtkp and export solutions',
+  },
 }

@@ -18,6 +18,7 @@ export default defineConfig({
   // chunk with a correct __esm init order (avoids the RefImpl TDZ that
   // appears once vue-i18n/vue-demi add a second entry into `vue`).
   optimizeDeps: {
+    entries: ['index.html'],
     include: [
       'vue',
       '@vue/shared',

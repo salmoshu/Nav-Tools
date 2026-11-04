@@ -298,6 +298,18 @@ export const panelRegistry: readonly PanelDefinition[] = [
     componentName: 'GnssRawEph',
     componentPath: '@/components/windows/gnssraw/GnssRawEph.vue',
   },
+  {
+    id: 'gnssraw-rtkpost',
+    moduleId: 'gnssraw',
+    appMode: 'workspace',
+    funcMode: 'general',
+    catalogGroup: 'gnssraw',
+    action: 'gnssraw-rtkpost',
+    title: 'panel.gnssraw-rtkpost.title',
+    description: 'panel.gnssraw-rtkpost.desc',
+    componentName: 'RtkPost',
+    componentPath: '@/components/windows/gnssraw/RtkPost.vue',
+  },
 ]
 
 const legacyPanelIds: Readonly<Record<string, string>> = {

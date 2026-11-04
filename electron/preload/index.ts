@@ -59,6 +59,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   lidarMcapListFamily: (path: string) =>
     ipcRenderer.invoke('lidar-mcap-list-family', path) as Promise<string[]>,
   gnssRawReadFile: (path: string) => ipcRenderer.invoke('gnssraw-read-file', path),
+  rtkPostRun: (request: import('../../src/core/gnssraw/RtkPost').RtkPostRunRequest) =>
+    ipcRenderer.invoke('rtkpost-run', request),
+  rtkPostCancel: (runId: string) => ipcRenderer.invoke('rtkpost-cancel', runId),
+  rtkPostChooseOutput: (request: { defaultPath?: string; outputFormat?: string }) =>
+    ipcRenderer.invoke('rtkpost-choose-output', request),
 })
 const listenerMap = new Map<string, Map<Function, (...args: unknown[]) => void>>()
 

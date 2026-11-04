@@ -87,6 +87,14 @@ interface Window {
     lidarMcapReadFile: (path: string) => Promise<{ data: ArrayBuffer; size: number }>
     lidarMcapListFamily: (path: string) => Promise<string[]>
     gnssRawReadFile: (path: string) => Promise<{ data: ArrayBuffer; size: number }>
+    rtkPostRun: (
+      request: import('./core/gnssraw/RtkPost').RtkPostRunRequest,
+    ) => Promise<import('./core/gnssraw/RtkPost').RtkPostRunResult>
+    rtkPostCancel: (runId: string) => Promise<boolean>
+    rtkPostChooseOutput: (request: {
+      defaultPath?: string
+      outputFormat?: string
+    }) => Promise<string | null>
   }
   ipcRenderer: import('electron').IpcRenderer
 }

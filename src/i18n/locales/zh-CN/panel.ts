@@ -83,4 +83,8 @@ export default {
     title: '星历状态',
     desc: '星历更新事件、iode 翻动、译码失败与过期分析',
   },
+  'gnssraw-rtkpost': {
+    title: 'RTKPOST',
+    desc: '调用 Robo-GNSS rnx2rtkp 进行 GNSS 后处理并输出解决方案',
+  },
 }

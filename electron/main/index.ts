@@ -28,6 +28,7 @@ import { registerCameraCalibrationIpc } from './cameraCalibrationIpc'
 import { registerCameraScriptIpc } from './cameraScriptIpc'
 import { registerLidarIpc } from './lidarIpc'
 import { registerGnssRawIpc } from './gnssRawIpc'
+import { registerRtkPostIpc } from './rtkPostIpc'
 import { CameraMeasurementAccessStore } from './services/CameraMeasurementAccessStore'
 import { CameraScriptInjector } from './services/CameraScriptInjector'
 import { CameraStreamService } from './services/CameraStreamService'
@@ -117,6 +118,7 @@ registerCameraCalibrationIpc(cameraCalibrationService, cameraMeasurementStore)
 registerCameraScriptIpc(new CameraScriptInjector(), cameraMeasurementStore)
 registerLidarIpc()
 registerGnssRawIpc()
+registerRtkPostIpc()
 // 自定义瓦片协议必须在 app ready 之前注册为 privileged scheme
 offlineTileService.registerPrivilegedScheme()
 const cameraStreamOwners = new Set<number>()

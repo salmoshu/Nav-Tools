@@ -64,6 +64,7 @@ describe('panel and application persistence', () => {
         'gnssraw-prnoise',
         'gnssraw-snr',
         'gnssraw-eph',
+        'gnssraw-rtkpost',
       ],
     })
     expect(applications[4]).toMatchObject({
