@@ -13,6 +13,8 @@ import emitter from '@/hooks/useMitt'
 import { useApplicationSelector } from '@/composables/useApplicationSelector'
 import { useMcapPlayer } from '@/composables/useMcapPlayer'
 import { useLocale } from '@/composables/useLocale'
+import { useDevice } from '@/hooks/useDevice'
+import { mcapBasename } from '@/core/lidar/McapFileAccess'
 import { getWindowsByIds } from '@/settings/config'
 import {
   buildComponentIconDataUrl,
@@ -73,14 +75,31 @@ const contextTitle = computed(() => {
   return currentApplication.value?.name
 })
 
-/** LiDAR 应用激活时,当前播放文件名显示在应用 header(时间轴进度区不再承担) */
-const contextFileName = computed(() =>
-  currentApplication.value?.id === 'lidar' ? mcapPlayer.fileInfo.value?.name : undefined,
-)
+/**
+ * 应用内容名片:LiDAR 为正在播放的录像文件名,GNSS 为当前载入的回放文件名。
+ * 组件全屏时由 AppHeader 把文件名排到组件名右侧。
+ */
+const { globalDevice } = useDevice()
+
+const contextFileName = computed(() => {
+  if (currentApplication.value?.id === 'lidar') return mcapPlayer.fileInfo.value?.name
+  if (currentApplication.value?.id === 'gnss') {
+    const device = globalDevice.value
+    return device.type === 'file' && device.path ? mcapBasename(device.path) : undefined
+  }
+  return undefined
+})
 const contextFileTitle = computed(() => {
-  const info = mcapPlayer.fileInfo.value
-  if (!info) return ''
-  return info.paths?.join('\n') ?? info.path ?? info.name
+  if (currentApplication.value?.id === 'lidar') {
+    const info = mcapPlayer.fileInfo.value
+    if (!info) return ''
+    return info.paths?.join('\n') ?? info.path ?? info.name
+  }
+  if (currentApplication.value?.id === 'gnss') {
+    const device = globalDevice.value
+    return device.type === 'file' ? (device.path ?? '') : ''
+  }
+  return ''
 })
 
 const panelTitleFallback = computed(() => t('app.panel'))

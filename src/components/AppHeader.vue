@@ -21,7 +21,12 @@
       </button>
       <span v-if="contextTitle || contextPanelTitle" class="context-title">
         <span v-if="contextTitle" class="context-app-name">{{ contextTitle }}</span>
-        <span v-if="contextFileName" class="context-file-name" :title="contextFileTitle">
+        <!-- 常规态:文件名在应用名右侧;组件全屏时排到组件名右侧 -->
+        <span
+          v-if="contextFileName && !contextPanelTitle"
+          class="context-file-name"
+          :title="contextFileTitle"
+        >
           {{ contextFileName }}
         </span>
         <span v-if="contextPanelTitle" class="context-panel">
@@ -30,6 +35,13 @@
             <component :is="getPanelIconComponent(contextIconAction)" />
           </el-icon>
           <span class="context-panel-title">{{ contextPanelTitle }}</span>
+        </span>
+        <span
+          v-if="contextFileName && contextPanelTitle"
+          class="context-file-name"
+          :title="contextFileTitle"
+        >
+          {{ contextFileName }}
         </span>
       </span>
     </div>
