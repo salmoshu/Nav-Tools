@@ -1175,6 +1175,15 @@ export function useNmea() {
         ...parsedData,
       }
 
+      // ENU 原点必须取首个带有效坐标的历元。设备未定位阶段会输出空 GGA
+      // （字段全为逗号，如 "$GNGGA,,,,,,,,,,,,,,*48"），若让空句占用原点，
+      // firstLLh 被钉成 null 后再也不会重新初始化，下面的空值检查会把
+      // 之后的所有有效历元整批丢弃——偏差图/地图轨迹全空
+      // （rs-2.txt 样本实测复现：开头 8 条空句 + 678 条有效历元全军覆没）
+      if (!newData.latitude || !newData.longitude) {
+        return NmeaType.UNKNOWN;
+      }
+
       if (firstLLh === null) {
         firstLLh = [newData.latitude, newData.longitude, newData.altitude];
       }

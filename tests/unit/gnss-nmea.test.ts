@@ -316,3 +316,34 @@ describe('NMEA GNSS status extraction', () => {
     expect(streamed).toEqual(batched)
   })
 })
+
+describe('NMEA stream with leading empty sentences', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    useNmea().clearData()
+  })
+
+  it('keeps the ENU origin free when the stream starts with empty GGA sentences', () => {
+    // rs-2.txt 实测形态：设备未定位阶段先输出字段全逗号的空句，
+    // 修复前空句把 ENU 原点 firstLLh 钉成 null 且永不重建，
+    // 其后所有有效历元被空值检查整批丢弃——偏差图/地图轨迹全空
+    const { processRawData, deviationPoints } = useNmea()
+    const emptyRmc = '$GNRMC,,,,,,,,,,,,,*79'
+    const emptyGga = '$GNGGA,,,,,,,,,,,,,,*48'
+    const gga1 = '$GNGGA,094909.00,3110.8988045,N,12124.2665330,E,1,12,1.0,32.301,M,10.836,M,1.0,0000*6D'
+    const gga2 = '$GNGGA,094910.00,3110.8909802,N,12124.2633877,E,5,17,1.0,30.045,M,10.836,M,1.0,0000*6C'
+
+    processRawData(`${emptyRmc}\n${emptyGga}\n${emptyRmc}\n${emptyGga}\n${gga1}\n${gga2}\n`)
+
+    // 两条有效历元全部入库，原点 = 首个有效历元（gga1 偏差为 0,0）
+    expect(deviationPoints.value.length).toBe(2)
+    expect(deviationPoints.value[0][0]).toBe(0)
+    expect(deviationPoints.value[0][1]).toBe(0)
+    expect(deviationPoints.value[0][2]).toBe(1)
+    // gga2 相对原点的 ENU 偏移为非零有限值
+    const [east, north, quality] = deviationPoints.value[1]
+    expect(quality).toBe(5)
+    expect(Number.isFinite(east) && Number.isFinite(north)).toBe(true)
+    expect(east !== 0 || north !== 0).toBe(true)
+  })
+})
