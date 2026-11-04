@@ -44,6 +44,10 @@ describe('GNSS signal SNR bar chart view', () => {
     expect(source).toContain('watch(resolvedTheme, scheduleThemeRefresh)')
     expect(source.match(/themeRefreshRaf = requestAnimationFrame/g)).toHaveLength(2)
   })
+
+  it('does not freeze the status column so narrow windows can scroll past it', () => {
+    expect(source).not.toContain('fixed="right"')
+  })
 })
 
 describe('GNSS signal satellite-count view', () => {

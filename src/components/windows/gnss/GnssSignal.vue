@@ -170,12 +170,8 @@
             </template>
           </el-table-column>
 
-          <el-table-column
-            prop="status"
-            :label="t('gnss.signal.colStatus')"
-            min-width="100"
-            fixed="right"
-          >
+          <!-- 不冻结:窄窗横向滚动时随内容一起滚动即可,避免状态列常驻遮挡 -->
+          <el-table-column prop="status" :label="t('gnss.signal.colStatus')" min-width="100">
             <template #default="{ row }">
               <el-tag :type="getStatusTagType(row.snr)" size="small">
                 {{ getStatusText(row.snr) }}
