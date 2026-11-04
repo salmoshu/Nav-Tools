@@ -107,6 +107,18 @@ const PATH_EXTENSIONS = new Set([
   '7z',
 ])
 
+const UNSUPPORTED_PREVIEW_EXTENSIONS = new Set([
+  // 归档与安装包
+  'zip', 'tar', 'gz', 'tgz', 'bz2', 'xz', '7z', 'rar', 'jar', 'war', 'iso',
+  // 可执行文件、固件与其他二进制产物
+  'exe', 'dll', 'com', 'msi', 'so', 'dylib', 'a', 'lib', 'o', 'obj', 'elf',
+  'bin', 'fw', 'img', 'dtb', 'class', 'pyc', 'pyd',
+  // 富内容渲染器不支持的二进制文档、数据库、记录与媒体
+  'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'db', 'sqlite', 'sqlite3',
+  'mcap', 'bag', 'pcap', 'mp3', 'wav', 'mp4', 'avi', 'mkv', 'mov',
+  'woff', 'woff2', 'ttf', 'otf',
+])
+
 /** 取文件名的小写扩展名;无扩展名或隐藏文件返回空串 */
 export function fileExtension(name: string): string {
   const base = name.split(/[\\/]/).pop() ?? ''
@@ -123,4 +135,9 @@ export function mimeFromPath(path: string): string {
 /** 该扩展名是否可作为「路径候选」参与检测(用于压掉版本号之类的误判) */
 export function isPathExtension(extension: string): boolean {
   return PATH_EXTENSIONS.has(extension.toLowerCase())
+}
+
+/** 已知无法由当前富内容渲染器展示的类型在读取前拒绝；未知类型仍按纯文本尝试。 */
+export function isTerminalPreviewSupported(path: string): boolean {
+  return !UNSUPPORTED_PREVIEW_EXTENSIONS.has(fileExtension(path))
 }

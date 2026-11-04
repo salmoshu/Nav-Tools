@@ -11,6 +11,7 @@ import data from './data'
 import update from './update'
 import lidar from './lidar'
 import gnssRaw from './gnssRaw'
+import gnssLib from './gnssLib'
 
 export default {
   app,
@@ -26,4 +27,5 @@ export default {
   update,
   lidar,
   gnssRaw,
+  gnssLib,
 }

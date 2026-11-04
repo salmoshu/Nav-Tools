@@ -917,14 +917,15 @@ onUnmounted(() => {
   color: var(--el-color-success);
 }
 
-/* 调整 resizer 位置 */
+/* 调整 resizer 位置：可见线段与卡片右下角使用同一圆角，命中区仍保持矩形 */
 :deep(.vgl-item__resizer) {
+  --vgl-resizer-border-color: var(--app-text-muted);
   position: absolute;
   right: 0;
   bottom: 0;
   width: 15px; /* 增大锚点尺寸，便于点击 */
   height: 15px;
-  border-radius: 50%; /* 圆形锚点 */
+  border-radius: 0 0 var(--radius-card) 0;
   cursor: se-resize;
   z-index: 20; /* 确保锚点在卡片上层 */
   box-sizing: border-box;
@@ -936,6 +937,15 @@ onUnmounted(() => {
 :deep(.vgl-item__resizer::before) {
   right: 0;
   bottom: 0;
+  border-bottom-right-radius: var(--radius-card);
+  pointer-events: none;
+}
+
+:deep(.vgl-item__resizer::after) {
+  position: absolute;
+  inset: 0;
+  content: '';
+  pointer-events: auto;
 }
 
 /* 确保 grid-item 无内边距或边框干扰 */

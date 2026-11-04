@@ -5,7 +5,7 @@ import {
   defaultRtkPostOutputPath,
   RtkPostSolutionParser,
   type RtkPostSettings,
-} from '@/core/gnssraw/RtkPost'
+} from '@/core/gnsslib/RtkPost'
 
 function settings(): RtkPostSettings {
   const value = createDefaultRtkPostSettings()

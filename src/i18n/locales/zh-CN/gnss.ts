@@ -72,6 +72,9 @@ export default {
     offlineCopyDir: '复制目录路径',
     offlineBrowserNote: '当前为浏览器环境，离线瓦片仅在桌面版（Electron）中可用，现使用在线 OSM 瓦片。',
     copyDirTitle: '点击复制离线目录路径',
+    historyPoint: '历史点 #{index}',
+    longitude: '经度',
+    latitude: '纬度',
   },
   sky: {
     controlPanel: '控制面板',

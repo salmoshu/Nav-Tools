@@ -72,6 +72,9 @@ export default {
     offlineCopyDir: 'Copy directory path',
     offlineBrowserNote: 'You are currently in a browser environment. Offline tiles are only available in the desktop (Electron) build; online OSM tiles are used here.',
     copyDirTitle: 'Click to copy offline directory path',
+    historyPoint: 'History point #{index}',
+    longitude: 'Longitude',
+    latitude: 'Latitude',
   },
   sky: {
     controlPanel: 'Control Panel',

@@ -1,34 +1,36 @@
 <template>
   <div class="settings-page">
-    <header class="settings-header">
-      <button
-        class="back-button"
-        type="button"
-        :title="t('app.settingsBack')"
-        :aria-label="t('app.settingsBack')"
-        @click="$emit('close')"
-      >
-        <ArrowLeft :size="15" :stroke-width="1.8" aria-hidden="true" />
-        <span>{{ t('app.settingsBack') }}</span>
-      </button>
-      <h1 class="settings-title">{{ t('app.settings') }}</h1>
-    </header>
-
     <div class="settings-body">
-      <nav class="settings-nav" :aria-label="t('app.settings')">
-        <button
-          v-for="section in sections"
-          :key="section.key"
-          class="nav-item"
-          :class="{ active: activeSection === section.key }"
-          type="button"
-          :aria-pressed="activeSection === section.key"
-          @click="activeSection = section.key"
-        >
-          <component :is="section.icon" class="nav-item-icon" aria-hidden="true" />
-          <span>{{ t(section.labelKey) }}</span>
-        </button>
-      </nav>
+      <aside class="settings-sidebar">
+        <header class="settings-header">
+          <button
+            class="back-button"
+            type="button"
+            :title="t('app.settingsBack')"
+            :aria-label="t('app.settingsBack')"
+            @click="$emit('close')"
+          >
+            <ArrowLeft :size="15" :stroke-width="1.8" aria-hidden="true" />
+            <span>{{ t('app.settingsBack') }}</span>
+          </button>
+          <h1 class="settings-title">{{ t('app.settings') }}</h1>
+        </header>
+
+        <nav class="settings-nav" :aria-label="t('app.settings')">
+          <button
+            v-for="section in sections"
+            :key="section.key"
+            class="nav-item"
+            :class="{ active: activeSection === section.key }"
+            type="button"
+            :aria-pressed="activeSection === section.key"
+            @click="activeSection = section.key"
+          >
+            <component :is="section.icon" class="nav-item-icon" aria-hidden="true" />
+            <span>{{ t(section.labelKey) }}</span>
+          </button>
+        </nav>
+      </aside>
 
       <div class="settings-content">
         <section v-if="activeSection === 'theme'" class="settings-section">
@@ -441,6 +443,15 @@ function handleUpdaterPrefChange(
   outline: none;
 }
 
+.back-button svg {
+  display: block;
+  flex: none;
+}
+
+.back-button span {
+  line-height: 1;
+}
+
 .back-button:hover,
 .back-button:focus-visible {
   color: var(--app-text);
@@ -459,12 +470,21 @@ function handleUpdaterPrefChange(
   min-height: 0;
 }
 
-.settings-nav {
+.settings-sidebar {
   display: flex;
   flex: 0 0 180px;
   flex-direction: column;
-  padding: 12px 8px;
+  min-height: 0;
   border-right: 1px solid var(--app-border);
+  background: var(--app-surface);
+}
+
+.settings-nav {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  padding: 12px 8px;
   background: var(--app-surface);
   gap: 2px;
   overflow-y: auto;

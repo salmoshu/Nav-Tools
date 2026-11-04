@@ -6,7 +6,12 @@ import {
   isListingCommand,
   splitOutputByPaths,
 } from '@/core/terminal/PathDetection'
-import { fileExtension, isPathExtension, mimeFromPath } from '@/core/terminal/FileMime'
+import {
+  fileExtension,
+  isPathExtension,
+  isTerminalPreviewSupported,
+  mimeFromPath,
+} from '@/core/terminal/FileMime'
 
 describe('detectPaths', () => {
   it('detects a path with a directory separator', () => {
@@ -281,5 +286,16 @@ describe('FileMime', () => {
     expect(isPathExtension('hex')).toBe(true)
     expect(isPathExtension('log')).toBe(true)
     expect(isPathExtension('0')).toBe(false)
+  })
+
+  it('blocks known non-previewable archives and binaries before reading them', () => {
+    for (const file of ['archive.ZIP', 'package.tar.gz', 'program.exe', 'trace.mcap', 'doc.pdf']) {
+      expect(isTerminalPreviewSupported(file), file).toBe(false)
+    }
+    for (const file of ['notes.txt', 'app.log', 'data.json', 'image.png', 'script.sh', 'main.c']) {
+      expect(isTerminalPreviewSupported(file), file).toBe(true)
+    }
+    expect(isTerminalPreviewSupported('README')).toBe(true)
+    expect(isTerminalPreviewSupported('.gitignore')).toBe(true)
   })
 })

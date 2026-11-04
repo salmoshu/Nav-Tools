@@ -36,6 +36,7 @@ import { onMounted, ref, watch } from 'vue'
 import { Refresh } from '@element-plus/icons-vue'
 import type { TerminalRichPayload } from '@/core/terminal/CommandBlocks'
 import { formatTransferBytes } from '@/core/terminal/FileTreeDownloadStatus'
+import { isTerminalPreviewSupported } from '@/core/terminal/FileMime'
 import { useTerminalTranslate } from '@/core/terminal/TerminalI18n'
 import TerminalRichContent from './TerminalRichContent.vue'
 
@@ -59,6 +60,13 @@ const size = ref<number | null>(null)
 
 async function load(): Promise<void> {
   if (!props.sessionActive) return
+  if (!isTerminalPreviewSupported(props.path)) {
+    payload.value = null
+    truncated.value = false
+    size.value = null
+    status.value = 'unavailable'
+    return
+  }
   status.value = 'loading'
   try {
     const read = (await window.ipcRenderer.invoke('terminal-path-read', {

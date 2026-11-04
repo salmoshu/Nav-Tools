@@ -27,7 +27,7 @@ class MemoryStorage implements StorageLike {
 }
 
 describe('panel and application persistence', () => {
-  it('seeds editable Serial, GNSS, Flow, Camera, LiDAR, and GNSS-Raw applications on first launch', () => {
+  it('seeds editable Serial, GNSS, Flow, Camera, LiDAR, GNSS-Raw, and GNSS-Lib applications on first launch', () => {
     const memory = new MemoryStorage()
     const applications = new ApplicationStorage(new JsonStorage(memory)).loadApplications()
 
@@ -36,6 +36,7 @@ describe('panel and application persistence', () => {
       'Flow',
       'GNSS',
       'GNSS-Raw',
+      'GNSS-Lib',
       'Camera',
       'LiDAR',
     ])
@@ -64,15 +65,19 @@ describe('panel and application persistence', () => {
         'gnssraw-prnoise',
         'gnssraw-snr',
         'gnssraw-eph',
-        'gnssraw-rtkpost',
       ],
     })
     expect(applications[4]).toMatchObject({
+      id: 'gnsslib',
+      icon: 'satellite',
+      windowIds: ['gnsslib-rtkpost', 'gnsslib-rtknavi'],
+    })
+    expect(applications[5]).toMatchObject({
       id: 'camera',
       icon: 'camera',
       windowIds: ['camera-video', 'camera-parameters', 'terminal'],
     })
-    expect(applications[5]).toMatchObject({
+    expect(applications[6]).toMatchObject({
       id: 'lidar',
       icon: 'radar',
       windowIds: ['lidar-scene', 'lidar-scores', 'lidar-plot', 'lidar-inspector'],
@@ -89,6 +94,7 @@ describe('panel and application persistence', () => {
 
   it('adds Camera and Serial once when upgrading an existing application list', () => {
     const memory = new MemoryStorage()
+    memory.setItem('nav-tools:migration:gnsslib-default-v1', '1')
     memory.setItem(
       'nav-tools:custom-applications',
       JSON.stringify([
@@ -176,6 +182,7 @@ describe('panel and application persistence', () => {
     const memory = new MemoryStorage()
     memory.setItem('nav-tools:migration:camera-default-v1', '1')
     memory.setItem('nav-tools:migration:camera-parameters-v1', '1')
+    memory.setItem('nav-tools:migration:gnsslib-default-v1', '1')
     memory.setItem(
       'nav-tools:custom-applications',
       JSON.stringify([
@@ -248,7 +255,7 @@ describe('panel and application persistence', () => {
     expect(motorAgain.windowIds).toEqual(['plot'])
   })
 
-  it('resets saved applications back to Serial, Flow, GNSS, GNSS-Raw, Camera, and LiDAR defaults', () => {
+  it('resets saved applications back to Serial, Flow, GNSS, GNSS-Raw, GNSS-Lib, Camera, and LiDAR defaults', () => {
     const memory = new MemoryStorage()
     const storage = new ApplicationStorage(new JsonStorage(memory))
     storage.saveApplications([
@@ -269,6 +276,7 @@ describe('panel and application persistence', () => {
       'motor',
       'gnss',
       'gnssraw',
+      'gnsslib',
       'camera',
       'lidar',
     ])
@@ -277,6 +285,7 @@ describe('panel and application persistence', () => {
       'motor',
       'gnss',
       'gnssraw',
+      'gnsslib',
       'camera',
       'lidar',
     ])
@@ -289,13 +298,13 @@ describe('panel and application persistence', () => {
 
     const reordered = storage.reorderApplications(initial, 3, 0)
 
-    expect(reordered.map(({ id }) => id)).toEqual(['gnssraw', 'serial', 'motor', 'gnss', 'camera', 'lidar'])
+    expect(reordered.map(({ id }) => id)).toEqual(['gnssraw', 'serial', 'motor', 'gnss', 'gnsslib', 'camera', 'lidar'])
     expect(
       new ApplicationStorage(new JsonStorage(memory)).loadApplications().map(({ id }) => id),
-    ).toEqual(['gnssraw', 'serial', 'motor', 'gnss', 'camera', 'lidar'])
+    ).toEqual(['gnssraw', 'serial', 'motor', 'gnss', 'gnsslib', 'camera', 'lidar'])
 
     const partial = storage.reorderApplications(reordered, 0, 2)
-    expect(partial.map(({ id }) => id)).toEqual(['serial', 'motor', 'gnssraw', 'gnss', 'camera', 'lidar'])
+    expect(partial.map(({ id }) => id)).toEqual(['serial', 'motor', 'gnssraw', 'gnss', 'gnsslib', 'camera', 'lidar'])
   })
 
   it('reorders stored applications into the new default order once', () => {
@@ -308,6 +317,7 @@ describe('panel and application persistence', () => {
       'nav-tools:migration:serial-default-v1',
       'nav-tools:migration:lidar-default-v1',
       'nav-tools:migration:gnssraw-default-v1',
+      'nav-tools:migration:gnsslib-default-v1',
     ]) {
       memory.setItem(key, '1')
     }

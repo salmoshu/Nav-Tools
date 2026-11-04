@@ -17,7 +17,7 @@
         </el-button>
       </el-tooltip>
       <el-tooltip :content="t('common.terminal.fileTreeOpenInTerminal')" placement="bottom">
-        <el-button text size="small" :disabled="!openTarget" @click="openInTerminal">
+        <el-button text size="small" :disabled="!openTarget" @click="openInTerminal()">
           <el-icon><Position /></el-icon>
         </el-button>
       </el-tooltip>
@@ -34,6 +34,7 @@
       @root-resolved="resolvedRoot = $event"
       @load-error="handleTreeLoadError"
       @node-click="handleNodeClick"
+      @enter-directory="openInTerminal"
       @download-start="handleDownloadStart"
       @download-settle="handleDownloadSettle"
     />
@@ -349,8 +350,8 @@ function handleTreeLoadError(_path: string, _root: boolean, error?: unknown): vo
  * 把目录写进会话输入。路径来自文件系统(可能含空格/引号),必须按 shell 家族
  * 转义——`buildShellCdCommand` 负责这一步,这里只负责拼回车。
  */
-async function openInTerminal(): Promise<void> {
-  const target = openTarget.value
+async function openInTerminal(path?: string): Promise<void> {
+  const target = path ?? openTarget.value
   if (!target) return
   const command = buildShellCdCommand(
     target,

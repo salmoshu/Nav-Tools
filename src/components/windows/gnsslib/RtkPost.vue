@@ -1,16 +1,21 @@
 <template>
   <div class="rtkpost">
     <div class="run-toolbar">
-      <el-button type="primary" :loading="store.running.value" @click="execute">
-        {{ t('gnssRaw.rtkpost.execute') }}
-      </el-button>
-      <el-button v-if="store.running.value" type="danger" plain @click="cancel">
-        {{ t('gnssRaw.rtkpost.cancel') }}
-      </el-button>
-      <el-button @click="optionsVisible = !optionsVisible">
-        {{ t('gnssRaw.rtkpost.options') }}
-      </el-button>
-      <span class="engine-name">Robo-GNSS · rnx2rtkp</span>
+      <div class="gl-title">
+        <strong>RTKPOST</strong>
+        <small class="engine-name">Robo-GNSS · rnx2rtkp</small>
+      </div>
+      <div class="gl-actions">
+        <el-button type="primary" :loading="store.running.value" @click="execute">
+          {{ t('gnssRaw.rtkpost.execute') }}
+        </el-button>
+        <el-button v-if="store.running.value" type="danger" plain @click="cancel">
+          {{ t('gnssRaw.rtkpost.cancel') }}
+        </el-button>
+        <el-button plain @click="optionsVisible = !optionsVisible">
+          {{ t('gnssRaw.rtkpost.options') }}
+        </el-button>
+      </div>
     </div>
 
     <el-alert
@@ -31,7 +36,9 @@
           :placeholder="t('gnssRaw.rtkpost.executablePlaceholder')"
           clearable
         />
-        <el-button :disabled="store.running.value" @click="chooseExecutable">…</el-button>
+        <el-button :disabled="store.running.value" @click="chooseExecutable"
+          ><el-icon><FolderOpened /></el-icon
+        ></el-button>
       </div>
 
       <div class="section-title">{{ t('gnssRaw.rtkpost.inputs') }}</div>
@@ -43,7 +50,9 @@
           placeholder="RINEX OBS"
           @change="store.suggestOutput"
         />
-        <el-button :disabled="store.running.value" @click="chooseRover">…</el-button>
+        <el-button :disabled="store.running.value" @click="chooseRover"
+          ><el-icon><FolderOpened /></el-icon
+        ></el-button>
       </div>
       <div class="file-row">
         <label>
@@ -57,7 +66,9 @@
             relativeMode ? t('gnssRaw.rtkpost.baseRequired') : t('gnssRaw.rtkpost.baseOptional')
           "
         />
-        <el-button :disabled="store.running.value" @click="chooseBase">…</el-button>
+        <el-button :disabled="store.running.value" @click="chooseBase"
+          ><el-icon><FolderOpened /></el-icon
+        ></el-button>
       </div>
       <div v-for="(_, index) in store.settings.navPaths" :key="index" class="file-row">
         <label>
@@ -69,7 +80,9 @@
           :disabled="store.running.value"
           placeholder="NAV / CLK / SP3 / FCB / IONEX / SBAS"
         />
-        <el-button :disabled="store.running.value" @click="chooseNav(index)">…</el-button>
+        <el-button :disabled="store.running.value" @click="chooseNav(index)"
+          ><el-icon><FolderOpened /></el-icon
+        ></el-button>
         <el-button
           v-if="store.settings.navPaths.length > 1"
           class="remove-nav"
@@ -98,7 +111,9 @@
           :disabled="store.running.value"
           placeholder=".pos"
         />
-        <el-button :disabled="store.running.value" @click="chooseOutput">…</el-button>
+        <el-button :disabled="store.running.value" @click="chooseOutput"
+          ><el-icon><FolderOpened /></el-icon
+        ></el-button>
       </div>
     </section>
 
@@ -281,7 +296,9 @@
           :placeholder="t('gnssRaw.rtkpost.configOptional')"
           clearable
         />
-        <el-button :disabled="store.running.value" @click="chooseConfig">…</el-button>
+        <el-button :disabled="store.running.value" @click="chooseConfig"
+          ><el-icon><FolderOpened /></el-icon
+        ></el-button>
       </div>
       <div class="field-hint">{{ t('gnssRaw.rtkpost.configHint') }}</div>
     </section>
@@ -328,6 +345,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
+import { FolderOpened } from '@element-plus/icons-vue'
 import { t } from '@/i18n'
 import { useRtkPost } from '@/composables/useRtkPost'
 
@@ -708,3 +726,4 @@ function formatBytes(bytes: number): string {
   }
 }
 </style>
+<style scoped src="./gnssLib.css"></style>

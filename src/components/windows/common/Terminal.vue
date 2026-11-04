@@ -302,6 +302,7 @@ import {
   type TerminalShortcutCommandId,
 } from '@/core/terminal/TerminalShortcuts'
 import { fuzzySearch } from '@/core/terminal/FuzzyMatch'
+import { isTerminalPreviewSupported } from '@/core/terminal/FileMime'
 import {
   planTerminalRecovery,
   TerminalWorkspaceStorage,
@@ -789,6 +790,9 @@ function toggleActiveTabFileTree(): void {
   }
 }
 
+let unsupportedPreviewNotice: { path: string; at: number } | undefined
+const UNSUPPORTED_PREVIEW_NOTICE_DEBOUNCE_MS = 800
+
 /** 文件树点击文件:同会话同路径复用已有预览 tab,否则新建并激活 */
 function openPreviewTab(sessionId: string, entry: { path: string; name: string }): void {
   const existing = tabs.value.find(
@@ -806,6 +810,17 @@ function openPreviewTab(sessionId: string, entry: { path: string; name: string }
 function handleFileTreeOpenFile(entry: SftpEntry): void {
   const sessionId = activeFileTreeSessionId.value
   if (!sessionId) return
+  if (!isTerminalPreviewSupported(entry.path)) {
+    const now = Date.now()
+    const repeated =
+      unsupportedPreviewNotice?.path === entry.path &&
+      now - unsupportedPreviewNotice.at < UNSUPPORTED_PREVIEW_NOTICE_DEBOUNCE_MS
+    if (!repeated) {
+      ElMessage.info(t('common.terminal.filePreviewUnsupported', { name: entry.name }))
+    }
+    unsupportedPreviewNotice = { path: entry.path, at: now }
+    return
+  }
   openPreviewTab(sessionId, entry)
 }
 

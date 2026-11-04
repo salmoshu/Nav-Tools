@@ -32,7 +32,8 @@ export const panelIconComponents: Readonly<Record<string, Component>> = {
   'gnssraw-prnoise': Aim,
   'gnssraw-snr': Histogram,
   'gnssraw-eph': Document,
-  'gnssraw-rtkpost': MapLocation,
+  'gnsslib-rtkpost': MapLocation,
+  'gnsslib-rtknavi': Compass,
 }
 
 export function getPanelIconComponent(action?: string): Component {

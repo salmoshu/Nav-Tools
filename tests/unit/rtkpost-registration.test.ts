@@ -16,16 +16,22 @@ class MemoryStorage implements StorageLike {
   }
 }
 
-describe('RTKPOST registration', () => {
-  it('registers the panel in the GNSS-Raw component family', () => {
-    expect(panelRegistry.find((panel) => panel.id === 'gnssraw-rtkpost')).toMatchObject({
-      catalogGroup: 'gnssraw',
+describe('GNSS-Lib registration', () => {
+  it('registers RTKPOST and RTKNAVI in the GNSS-Lib component family', () => {
+    expect(panelRegistry.find((panel) => panel.id === 'gnsslib-rtkpost')).toMatchObject({
+      catalogGroup: 'gnsslib',
       componentName: 'RtkPost',
-      componentPath: '@/components/windows/gnssraw/RtkPost.vue',
+      componentPath: '@/components/windows/gnsslib/RtkPost.vue',
     })
+    expect(panelRegistry.find((panel) => panel.id === 'gnsslib-rtknavi')).toMatchObject({
+      catalogGroup: 'gnsslib',
+      componentName: 'RtkNavi',
+      componentPath: '@/components/windows/gnsslib/RtkNavi.vue',
+    })
+    expect(panelRegistry.some((panel) => panel.id === 'gnssraw-rtkpost')).toBe(false)
   })
 
-  it('adds RTKPOST once to an existing GNSS-Raw application', () => {
+  it('moves RTKPOST out of GNSS-Raw and creates GNSS-Lib once', () => {
     const memory = new MemoryStorage()
     for (const key of [
       'camera-default-v1',
@@ -36,6 +42,7 @@ describe('RTKPOST registration', () => {
       'flow-default-v1',
       'lidar-default-v1',
       'gnssraw-default-v1',
+      'gnssraw-rtkpost-v1',
       'application-order-v1',
     ]) {
       memory.setItem(`nav-tools:migration:${key}`, '1')
@@ -49,13 +56,20 @@ describe('RTKPOST registration', () => {
           description: '',
           icon: 'satellite',
           accent: '#6366f1',
-          windowIds: ['gnssraw-frames'],
+          windowIds: ['gnssraw-frames', 'gnssraw-rtkpost'],
         },
       ]),
     )
 
     const storage = new ApplicationStorage(new JsonStorage(memory))
-    expect(storage.loadApplications()[0].windowIds).toEqual(['gnssraw-frames', 'gnssraw-rtkpost'])
-    expect(storage.loadApplications()[0].windowIds).toEqual(['gnssraw-frames', 'gnssraw-rtkpost'])
+    const applications = storage.loadApplications()
+    expect(applications).toHaveLength(2)
+    expect(applications[0].windowIds).toEqual(['gnssraw-frames'])
+    expect(applications[1]).toMatchObject({
+      id: 'gnsslib',
+      name: 'GNSS-Lib',
+      windowIds: ['gnsslib-rtkpost', 'gnsslib-rtknavi'],
+    })
+    expect(storage.loadApplications()).toEqual(applications)
   })
 })

@@ -50,6 +50,14 @@
         :style="{ left: `${contextMenu.x}px`, top: `${contextMenu.y}px` }"
         @contextmenu.prevent
       >
+        <button
+          v-if="contextMenu.count === 1 && contextMenu.targets[0]?.directory"
+          type="button"
+          class="file-tree-context-menu__item file-tree-context-menu__item--enter-directory"
+          @click="onMenuCommand('enter-directory')"
+        >
+          {{ t('common.terminal.fileTreeEnterDirectory') }}
+        </button>
         <button type="button" class="file-tree-context-menu__item" @click="onMenuCommand('download')">
           {{
             contextMenu.count > 1
@@ -148,6 +156,7 @@ const emit = defineEmits<{
   loading: [loading: boolean]
   'root-resolved': [path: string]
   'load-error': [path: string, root: boolean, error?: unknown]
+  'enter-directory': [path: string]
   'download-start': [name: string]
   'download-settle': [ok: boolean, error?: string]
 }>()
@@ -224,7 +233,9 @@ function onMenuCommand(command: string): void {
   const targets = contextMenu.targets.slice()
   closeContextMenu()
   if (!targets.length) return
-  if (command === 'download') void downloadEntries(targets)
+  if (command === 'enter-directory') {
+    if (targets.length === 1 && targets[0].directory) emit('enter-directory', targets[0].path)
+  } else if (command === 'download') void downloadEntries(targets)
   else if (command === 'copy-path') void copyPaths(targets)
   else if (command === 'rename' && targets.length === 1) void renameEntry(targets[0])
   else if (command === 'delete') void deleteEntries(targets)

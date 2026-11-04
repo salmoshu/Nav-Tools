@@ -496,11 +496,15 @@ test('aligns each card resize handle with the card bottom-right corner', async (
     )
     await expect(resizer).toHaveCSS('right', '0px')
     await expect(resizer).toHaveCSS('bottom', '0px')
-    const pseudoOffset = await resizer.evaluate((element) => {
+    const pseudoStyle = await resizer.evaluate((element) => {
       const style = getComputedStyle(element, '::before')
-      return { right: style.right, bottom: style.bottom }
+      return {
+        right: style.right,
+        bottom: style.bottom,
+        bottomRightRadius: style.borderBottomRightRadius,
+      }
     })
-    expect(pseudoOffset).toEqual({ right: '0px', bottom: '0px' })
+    expect(pseudoStyle).toEqual({ right: '0px', bottom: '0px', bottomRightRadius: '16px' })
   }
 })
 

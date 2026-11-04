@@ -79,7 +79,7 @@ import { InfoFilled, RefreshLeft, Delete } from '@element-plus/icons-vue'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { useGnssStore } from '@/stores/gnss'
-import { useNmea } from '@/composables/gnss/useNmea'
+import { numberToQuality, useNmea } from '@/composables/gnss/useNmea'
 import { useFileTimeline } from '@/composables/useFileTimeline'
 import { fixStatusColor } from '@/components/windows/gnss/fixStatusColors'
 import { createTrackSimplifier } from '@/core/gnss/TrackSimplification'
@@ -132,6 +132,7 @@ let trackRenderer: L.Canvas | null = null
 let positionMarker: L.CircleMarker | null = null
 const renderedPoints: RenderedPoint[] = []
 const trackSegments: TrackSegment[] = []
+const historyPointMarkers: L.CircleMarker[] = []
 let simplifier: ReturnType<typeof createTrackSimplifier> | null = null
 let hasCentered = false
 let resizeObserver: ResizeObserver | null = null
@@ -213,8 +214,45 @@ function markerRadiusForSize(size: number): number {
   return Math.max(2, Math.min(10, size / 2))
 }
 
+function historyRadiusForSize(size: number): number {
+  return Math.max(1.5, markerRadiusForSize(size) * 0.4)
+}
+
 function updatePointSize(): void {
   positionMarker?.setStyle({ radius: markerRadiusForSize(pointSize.value) })
+  for (const marker of historyPointMarkers) {
+    marker.setRadius(historyRadiusForSize(pointSize.value))
+  }
+}
+
+function historyPointTooltip(point: RenderedPoint, sequence: number): string {
+  const [latitude, longitude] = point.latlng
+  return [
+    `<strong>${t('gnss.map.historyPoint', { index: sequence })}</strong>`,
+    `${t('gnss.map.longitude')}: ${longitude.toFixed(7)}°`,
+    `${t('gnss.map.latitude')}: ${latitude.toFixed(7)}°`,
+    `${t('gnss.deviation.tooltipQuality')}: ${numberToQuality(point.quality)} (${point.quality})`,
+  ].join('<br>')
+}
+
+// 历史圆点只覆盖已经通过像素密度抽稀的渲染点，不额外遍历完整源数据。
+function addHistoryPoint(point: RenderedPoint): void {
+  if (!map) return
+  const marker = L.circleMarker(point.latlng, {
+    renderer: trackRenderer ?? undefined,
+    radius: historyRadiusForSize(pointSize.value),
+    color: '#ffffff',
+    weight: 1,
+    opacity: 0.85,
+    fillColor: fixStatusColor(point.quality),
+    fillOpacity: 0.95,
+  }).addTo(map)
+  marker.bindTooltip(historyPointTooltip(point, historyPointMarkers.length + 1), {
+    direction: 'top',
+    offset: [0, -4],
+    className: 'gnss-map-history-tooltip',
+  })
+  historyPointMarkers.push(marker)
 }
 
 function createTrackSegment(point: RenderedPoint, previousPoint?: RenderedPoint): TrackSegment | null {
@@ -268,6 +306,7 @@ function appendTrackPosition(longitude: number, latitude: number, quality: numbe
   }
   const previousPoint = renderedPoints[renderedPoints.length - 1]
   renderedPoints.push(point)
+  addHistoryPoint(point)
   appendRenderedPoint(point, previousPoint)
   return true
 }
@@ -310,6 +349,15 @@ function replaceLatestTrackPoint(
     lastSegment.line.setLatLngs(lastSegment.latlngs)
   }
   lastRendered.latlng = replacementLatLng
+  lastRendered.quality = replacement[2]
+  const historyMarker = historyPointMarkers[historyPointMarkers.length - 1]
+  if (historyMarker) {
+    historyMarker.setLatLng(replacementLatLng)
+    historyMarker.setStyle({ fillColor: fixStatusColor(lastRendered.quality) })
+    historyMarker.setTooltipContent(
+      historyPointTooltip(lastRendered, historyPointMarkers.length),
+    )
+  }
   simplifier?.replace(
     { lat: previousLatLng[0], lng: previousLatLng[1] },
     { lat: replacementLatLng[0], lng: replacementLatLng[1] },
@@ -333,6 +381,7 @@ function appendTrackRange(start: number, end: number): SourceTrackPoint | undefi
     }
     const previousPoint = renderedPoints[renderedPoints.length - 1]
     renderedPoints.push(point)
+    addHistoryPoint(point)
 
     const lastSegment = trackSegments[trackSegments.length - 1]
     if (
@@ -472,7 +521,9 @@ function cancelTrackRender() {
 
 function clearRenderedTrack() {
   for (const segment of trackSegments) segment.line.remove()
+  for (const marker of historyPointMarkers) marker.remove()
   trackSegments.length = 0
+  historyPointMarkers.length = 0
   renderedPoints.length = 0
   simplifier?.reset()
 }
@@ -585,6 +636,7 @@ onUnmounted(() => {
   trackRenderer = null
   positionMarker = null
   trackSegments.length = 0
+  historyPointMarkers.length = 0
   renderedPoints.length = 0
   simplifier = null
 })
@@ -703,6 +755,18 @@ onUnmounted(() => {
   min-height: 0;
   width: 100%;
   z-index: 0;
+}
+
+:deep(.gnss-map-history-tooltip) {
+  padding: 7px 10px;
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  color: var(--app-text);
+  background: var(--app-surface);
+  box-shadow: var(--app-shadow, 0 4px 16px rgb(0 0 0 / 12%));
+  font-size: 11px;
+  line-height: 1.6;
+  white-space: nowrap;
 }
 
 .offline-help h4 {

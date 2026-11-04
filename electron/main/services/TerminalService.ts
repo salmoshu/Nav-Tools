@@ -29,7 +29,10 @@ import {
   shellFamilyFor,
   type ShellFamily,
 } from '../../../src/core/terminal/ShellQuote'
-import { mimeFromPath } from '../../../src/core/terminal/FileMime'
+import {
+  isTerminalPreviewSupported,
+  mimeFromPath,
+} from '../../../src/core/terminal/FileMime'
 import type { TerminalPortForwarder, TerminalServiceHost } from './TerminalServiceHost'
 
 const MAX_SCROLLBACK_CHARS = 1_000_000
@@ -502,7 +505,7 @@ export class TerminalService {
     const session = this.sessions.get(sessionId)
     if (!session) return null
     const target = this.resolveSessionPath(session, rawPath)
-    if (!target) return null
+    if (!target || !isTerminalPreviewSupported(target.path)) return null
 
     try {
       let buffer: Buffer

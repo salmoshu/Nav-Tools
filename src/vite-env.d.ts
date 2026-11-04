@@ -88,13 +88,19 @@ interface Window {
     lidarMcapListFamily: (path: string) => Promise<string[]>
     gnssRawReadFile: (path: string) => Promise<{ data: ArrayBuffer; size: number }>
     rtkPostRun: (
-      request: import('./core/gnssraw/RtkPost').RtkPostRunRequest,
-    ) => Promise<import('./core/gnssraw/RtkPost').RtkPostRunResult>
+      request: import('./core/gnsslib/RtkPost').RtkPostRunRequest,
+    ) => Promise<import('./core/gnsslib/RtkPost').RtkPostRunResult>
     rtkPostCancel: (runId: string) => Promise<boolean>
     rtkPostChooseOutput: (request: {
       defaultPath?: string
       outputFormat?: string
     }) => Promise<string | null>
+    rtkNaviStart: (
+      request: import('./core/gnsslib/RtkNavi').RtkNaviStartRequest,
+    ) => Promise<import('./core/gnsslib/RtkNavi').RtkNaviStatus>
+    rtkNaviStop: (runId: string) => Promise<import('./core/gnsslib/RtkNavi').RtkNaviStatus>
+    rtkNaviStatus: () => Promise<import('./core/gnsslib/RtkNavi').RtkNaviStatus>
+    rtkNaviChooseOutput: (defaultPath?: string) => Promise<string | null>
   }
   ipcRenderer: import('electron').IpcRenderer
 }

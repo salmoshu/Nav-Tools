@@ -73,4 +73,20 @@ describe('GNSS map track rendering', () => {
       /function resetTrackHistory\(\)[\s\S]*positionMarker\?\.remove\(\)[\s\S]*positionMarker = null/,
     )
   })
+
+  it('renders simplified historical points with quality colors and detail tooltips', () => {
+    expect(source).toContain('const historyPointMarkers: L.CircleMarker[] = []')
+    expect(source).toContain('function addHistoryPoint(point: RenderedPoint)')
+    expect(source).toContain('L.circleMarker(point.latlng')
+    expect(source).toContain('fillColor: fixStatusColor(point.quality)')
+    expect(source).toContain('marker.bindTooltip(historyPointTooltip(point')
+    expect(source).toContain('numberToQuality(point.quality)')
+    expect(source).toContain("t('gnss.map.historyPoint'")
+    expect(source).toContain("t('gnss.map.longitude')")
+    expect(source).toContain("t('gnss.map.latitude')")
+    expect(source).toContain('historyMarker.setLatLng(replacementLatLng)')
+    expect(source).toContain('historyMarker.setTooltipContent(')
+    expect(source).toContain('for (const marker of historyPointMarkers) marker.remove()')
+    expect(source).toContain('historyPointMarkers.length = 0')
+  })
 })

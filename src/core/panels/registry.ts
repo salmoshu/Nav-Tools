@@ -21,7 +21,7 @@ export type ApplicationIcon =
   | 'chart'
   | 'radar'
 export type PanelDataMode = 'general' | 'flow' | 'gnss' | 'motor'
-export type PanelCatalogGroup = 'general' | 'flow' | 'gnss' | 'camera' | 'lidar' | 'gnssraw'
+export type PanelCatalogGroup = 'general' | 'flow' | 'gnss' | 'camera' | 'lidar' | 'gnssraw' | 'gnsslib'
 
 export interface UserApplication {
   id: string
@@ -299,16 +299,28 @@ export const panelRegistry: readonly PanelDefinition[] = [
     componentPath: '@/components/windows/gnssraw/GnssRawEph.vue',
   },
   {
-    id: 'gnssraw-rtkpost',
-    moduleId: 'gnssraw',
+    id: 'gnsslib-rtkpost',
+    moduleId: 'gnsslib',
     appMode: 'workspace',
     funcMode: 'general',
-    catalogGroup: 'gnssraw',
-    action: 'gnssraw-rtkpost',
-    title: 'panel.gnssraw-rtkpost.title',
-    description: 'panel.gnssraw-rtkpost.desc',
+    catalogGroup: 'gnsslib',
+    action: 'gnsslib-rtkpost',
+    title: 'panel.gnsslib-rtkpost.title',
+    description: 'panel.gnsslib-rtkpost.desc',
     componentName: 'RtkPost',
-    componentPath: '@/components/windows/gnssraw/RtkPost.vue',
+    componentPath: '@/components/windows/gnsslib/RtkPost.vue',
+  },
+  {
+    id: 'gnsslib-rtknavi',
+    moduleId: 'gnsslib',
+    appMode: 'workspace',
+    funcMode: 'general',
+    catalogGroup: 'gnsslib',
+    action: 'gnsslib-rtknavi',
+    title: 'panel.gnsslib-rtknavi.title',
+    description: 'panel.gnsslib-rtknavi.desc',
+    componentName: 'RtkNavi',
+    componentPath: '@/components/windows/gnsslib/RtkNavi.vue',
   },
 ]
 
@@ -324,6 +336,7 @@ const legacyPanelIds: Readonly<Record<string, string>> = {
   'gnss.sky': 'sky-plot',
   'gnss.map': 'gnss-map',
   'motor.config': 'motor-parameters',
+  'gnssraw-rtkpost': 'gnsslib-rtkpost',
 }
 
 export function normalizePanelId(id: string): string {

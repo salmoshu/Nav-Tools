@@ -1,5 +1,5 @@
 import { BrowserWindow, ipcMain } from 'electron'
-import type { RtkPostRunRequest } from '../../src/core/gnssraw/RtkPost'
+import type { RtkPostRunRequest } from '../../src/core/gnsslib/RtkPost'
 import { showScopedSaveDialog } from './dialogs'
 import { RtkPostService } from './services/RtkPostService'
 

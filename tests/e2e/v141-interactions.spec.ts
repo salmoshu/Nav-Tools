@@ -7,24 +7,26 @@ test('reorders applications with neighboring-card movement and persists the orde
 }) => {
   await page.goto('/')
   const cards = page.locator('.application-card')
-  await expect(cards).toHaveCount(6)
+  await expect(cards).toHaveCount(7)
   await expect(cards.locator('h2')).toHaveText([
     'Serial',
-    'GNSS',
     'Flow',
+    'GNSS',
+    'GNSS-Raw',
+    'GNSS-Lib',
     'Camera',
     'LiDAR',
-    'GNSS-Raw',
   ])
 
-  await cards.nth(3).dragTo(cards.nth(0))
+  await cards.filter({ hasText: 'Camera' }).dragTo(cards.nth(0))
   await expect(cards.locator('h2')).toHaveText([
     'Camera',
     'Serial',
-    'GNSS',
     'Flow',
-    'LiDAR',
+    'GNSS',
     'GNSS-Raw',
+    'GNSS-Lib',
+    'LiDAR',
   ])
   await expect
     .poll(() =>
@@ -33,16 +35,17 @@ test('reorders applications with neighboring-card movement and persists the orde
         return raw ? JSON.parse(raw).map((entry: { id: string }) => entry.id) : []
       }),
     )
-    .toEqual(['camera', 'serial', 'gnss', 'motor', 'lidar', 'gnssraw'])
+    .toEqual(['camera', 'serial', 'motor', 'gnss', 'gnssraw', 'gnsslib', 'lidar'])
 
   await page.reload()
   await expect(page.locator('.application-card h2')).toHaveText([
     'Camera',
     'Serial',
-    'GNSS',
     'Flow',
-    'LiDAR',
+    'GNSS',
     'GNSS-Raw',
+    'GNSS-Lib',
+    'LiDAR',
   ])
 })
 

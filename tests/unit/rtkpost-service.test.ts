@@ -13,7 +13,7 @@ import { RtkPostService } from '../../electron/main/services/RtkPostService'
 import {
   createDefaultRtkPostSettings,
   type RtkPostRunRequest,
-} from '../../src/core/gnssraw/RtkPost'
+} from '../../src/core/gnsslib/RtkPost'
 
 const directories: string[] = []
 

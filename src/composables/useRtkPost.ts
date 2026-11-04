@@ -6,7 +6,7 @@ import {
   type RtkPostLogEvent,
   type RtkPostRunResult,
   type RtkPostSettings,
-} from '@/core/gnssraw/RtkPost'
+} from '@/core/gnsslib/RtkPost'
 import { JsonStorage } from '@/core/storage/JsonStorage'
 
 export type RtkPostStatus = 'idle' | 'running' | 'success' | 'error' | 'cancelled'

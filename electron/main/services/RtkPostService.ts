@@ -10,7 +10,7 @@ import {
   type RtkPostRunRequest,
   type RtkPostRunResult,
   type RtkPostSolutionSummary,
-} from '../../../src/core/gnssraw/RtkPost'
+} from '../../../src/core/gnsslib/RtkPost'
 
 const MAX_LOG_CHARS = 200_000
 
