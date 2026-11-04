@@ -230,6 +230,20 @@ function formatDistance(value: number): string {
   return `${numericValue.toFixed(2)} m`
 }
 
+/** 轴刻度纯数字（rtkplot numText 口径：小数位由刻度步长决定，单位集中到右下角标尺） */
+function formatTickNumber(value: number, step: number): string {
+  const decimals = Math.min(4, Math.max(0, Math.floor(0.9 - Math.log10(step))))
+  return value.toFixed(decimals)
+}
+
+/** rtkplot 口径刻度单位：mm/cm/m/km 择一 */
+function formatScaleLabel(meters: number): string {
+  if (meters < 0.0099) return `${(meters * 1000).toFixed(0)} mm`
+  if (meters < 0.999) return `${(meters * 100).toFixed(0)} cm`
+  if (meters < 999) return `${meters.toFixed(0)} m`
+  return `${(meters / 1000).toFixed(0)} km`
+}
+
 function qualityToRgb(quality: number): [number, number, number] {
   return fixStatusColorRgb01(quality)
 }
@@ -289,7 +303,8 @@ function drawAxisLayer(): void {
   ctx.lineWidth = 1
   ctx.setLineDash([4, 4])
   ctx.font = '12px sans-serif'
-  ctx.fillStyle = colors.textMuted
+  // 轴数值用主文字色：textMuted 在浅色主题下偏灰难以辨认
+  ctx.fillStyle = colors.text
 
   // Vertical grid lines and x-axis labels at the bottom edge.
   ctx.textAlign = 'center'
@@ -300,7 +315,7 @@ function drawAxisLayer(): void {
     ctx.moveTo(sx, 0)
     ctx.lineTo(sx, height)
     ctx.stroke()
-    ctx.fillText(formatDistance(x), sx, height - 18)
+    ctx.fillText(formatTickNumber(x, xStep), sx, height - 18)
   }
 
   // Horizontal grid lines and y-axis labels at the left edge.
@@ -312,7 +327,7 @@ function drawAxisLayer(): void {
     ctx.moveTo(0, sy)
     ctx.lineTo(width, sy)
     ctx.stroke()
-    ctx.fillText(formatDistance(y), 8, sy)
+    ctx.fillText(formatTickNumber(y, yStep), 8, sy)
   }
 
   // Origin cross lines (solid, slightly thicker).
@@ -332,6 +347,29 @@ function drawAxisLayer(): void {
     ctx.moveTo(0, sy)
     ctx.lineTo(width, sy)
     ctx.stroke()
+  }
+
+  // rtkplot 口径右下角刻度标尺：横线两端各一道 5px 竖刻度，
+  // 长度 = 一个刻度步长的屏幕像素，单位标注在标尺上方居中
+  const barLength = Math.min(dataToScreenX(step) - dataToScreenX(0), width - 40)
+  if (barLength > 0) {
+    const barEnd = width - 12
+    const barStart = barEnd - barLength
+    const barY = height - 38
+    ctx.strokeStyle = colors.text
+    ctx.lineWidth = 1
+    ctx.beginPath()
+    ctx.moveTo(barStart, barY - 5)
+    ctx.lineTo(barStart, barY + 5)
+    ctx.moveTo(barStart, barY)
+    ctx.lineTo(barEnd, barY)
+    ctx.moveTo(barEnd, barY - 5)
+    ctx.lineTo(barEnd, barY + 5)
+    ctx.stroke()
+    ctx.fillStyle = colors.text
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'bottom'
+    ctx.fillText(formatScaleLabel(step), (barStart + barEnd) / 2, barY - 6)
   }
 
   ctx.restore()

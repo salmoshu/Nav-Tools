@@ -85,4 +85,14 @@ describe('GNSS deviation position and speed views', () => {
     expect(metric).toContain('store.findNearestElapsedTime(fileTimeline.elapsedMilliseconds.value)')
     expect(metric).toContain("store.getValue('QUALITY', cursorIndex)")
   })
+
+  it('renders bare axis numbers with an rtkplot-style bottom-right scale bar', () => {
+    // 轴刻度只画数字，单位集中到右下角标尺；轴文字用主文字色不再偏灰
+    expect(source).toContain('formatTickNumber(x, xStep)')
+    expect(source).toContain('formatTickNumber(y, yStep)')
+    expect(source).toContain('formatScaleLabel(step)')
+    expect(source).toContain('ctx.fillStyle = colors.text')
+    expect(source).not.toContain('fillText(formatDistance(x)')
+    expect(source).not.toContain('fillText(formatDistance(y)')
+  })
 })
