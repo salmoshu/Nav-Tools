@@ -636,6 +636,9 @@ onUnmounted(() => {
   position: relative;
   z-index: 1;
   outline: none;
+  /* 容器查询锚点：组件在卡片窗口内，viewport 媒体查询感知不到实际宽度 */
+  container-name: console-input;
+  container-type: inline-size;
 }
 
 .flow-console-virtual:focus {
@@ -879,6 +882,22 @@ onUnmounted(() => {
 
 .input-container :deep(.el-button + .el-button) {
   margin-left: 0;
+}
+
+/* 窄窗时输入栏按钮仅保留图标：隐藏文字避免按钮区换行（悬浮 title 保留语义）。
+   EP 会把插槽内容包进一层 span，文字 span 在第二层，图标不能一并隐藏 */
+@container console-input (max-width: 520px) {
+  .input-container :deep(.el-button) {
+    padding-inline: 9px;
+  }
+
+  .input-container :deep(.el-button > span > span) {
+    display: none;
+  }
+
+  .newline-icon {
+    margin-right: 0;
+  }
 }
 
 .newline-icon {
