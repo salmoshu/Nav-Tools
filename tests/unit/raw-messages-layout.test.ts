@@ -60,7 +60,7 @@ describe('RawMessages bottom composer layout', () => {
     // 浮动卡片窗口宽度与 viewport 无关：容器查询判定窄窗，
     // 隐藏按钮文字仅留图标（EP 插槽内容包一层 span，文字 span 在第二层）
     expect(source).toContain('container-name: console-input')
-    expect(source).toContain('@container console-input (max-width: 520px)')
+    expect(source).toContain('@container console-input (max-width: 720px)')
     expect(source).toContain('.input-container :deep(.el-button > span > span)')
   })
 })

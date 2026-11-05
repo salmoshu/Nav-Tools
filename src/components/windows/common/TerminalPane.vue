@@ -64,7 +64,9 @@
           <el-tooltip
             v-if="paneCount > 1"
             :content="
-              expanded ? t('common.terminal.restorePane') : t('common.terminal.maximizePaneShortcut')
+              expanded
+                ? t('common.terminal.restorePane')
+                : t('common.terminal.maximizePaneShortcut')
             "
             placement="bottom"
             :show-after="400"
@@ -319,21 +321,35 @@
 
     <el-dialog
       v-model="wslDialogVisible"
-      :title="t('common.terminal.selectWsl')"
+      :title="
+        pane.sessionId ? t('common.terminal.configureTerminal') : t('common.terminal.selectWsl')
+      "
       class="app-dialog"
       width="420px"
       append-to-body
       align-center
       :z-index="8000"
     >
-      <el-select v-model="selectedWsl" style="width: 100%" popper-class="app-dialog-select-popper">
-        <el-option
-          v-for="distro in capabilities.wslDistros"
-          :key="distro"
-          :label="distro"
-          :value="distro"
+      <div class="session-config-fields">
+        <el-select
+          v-model="selectedWsl"
+          style="width: 100%"
+          popper-class="app-dialog-select-popper"
+          :disabled="connecting"
+        >
+          <el-option
+            v-for="distro in capabilities.wslDistros"
+            :key="distro"
+            :label="distro"
+            :value="distro"
+          />
+        </el-select>
+        <el-input
+          v-model="cwd"
+          :disabled="connecting"
+          :placeholder="t('common.terminal.initialDirectoryOptional')"
         />
-      </el-select>
+      </div>
       <template #footer>
         <el-button @click="wslDialogVisible = false">{{ t('common.terminal.cancel') }}</el-button>
         <el-button
@@ -341,7 +357,50 @@
           :loading="connecting"
           :disabled="!selectedWsl"
           @click="launchWsl"
-          >{{ t('common.terminal.start') }}</el-button
+          >{{
+            pane.sessionId ? t('common.terminal.reconnect') : t('common.terminal.start')
+          }}</el-button
+        >
+      </template>
+    </el-dialog>
+
+    <el-dialog
+      v-model="localDialogVisible"
+      :title="t('common.terminal.configureTerminal')"
+      class="app-dialog"
+      width="420px"
+      append-to-body
+      align-center
+      :z-index="8000"
+    >
+      <div class="session-config-fields">
+        <el-select
+          v-model="selectedLocalShell"
+          style="width: 100%"
+          popper-class="app-dialog-select-popper"
+          :disabled="connecting"
+        >
+          <el-option
+            v-for="shell in capabilities.localShells"
+            :key="shell.kind"
+            :label="shell.label"
+            :value="shell.kind"
+          />
+        </el-select>
+        <el-input
+          v-model="cwd"
+          :disabled="connecting"
+          :placeholder="t('common.terminal.initialDirectoryOptional')"
+        />
+      </div>
+      <template #footer>
+        <el-button @click="localDialogVisible = false">{{ t('common.terminal.cancel') }}</el-button>
+        <el-button
+          type="primary"
+          :loading="connecting"
+          :disabled="!selectedLocalShell"
+          @click="launchConfiguredLocal"
+          >{{ t('common.terminal.reconnect') }}</el-button
         >
       </template>
     </el-dialog>
@@ -395,6 +454,7 @@ import {
   type GripPress,
 } from '@/core/terminal/PaneActionsGrip'
 import { createTerminalHistoryScope } from '@/core/terminal/TerminalHistoryStorage'
+import { TerminalScreenMode } from '@/core/terminal/TerminalScreenMode'
 import type { TerminalPaneNode, TerminalSplitDirection } from '@/core/terminal/TerminalLayout'
 import {
   TERMINAL_SSH_RECOVERED_EVENT,
@@ -404,6 +464,7 @@ import {
   type SshConnectionProfile,
   type SshConnectionSecrets,
   type TerminalCapabilities,
+  type TerminalConfigurationRequest,
   type TerminalLaunchSpec,
   type TerminalSessionInfo,
   type TerminalSshRecoveredEvent,
@@ -427,6 +488,7 @@ const props = defineProps<{
   profiles: SshConnectionProfile[]
   sessionInfo?: TerminalSessionInfo
   autoOpenSsh?: boolean
+  configurationRequest?: TerminalConfigurationRequest
 }>()
 const emit = defineEmits<{
   session: [paneId: string, session: TerminalSessionInfo, launch: TerminalLaunchSpec]
@@ -443,7 +505,9 @@ const emit = defineEmits<{
 const terminalElement = ref<HTMLDivElement | null>(null)
 const sshDialogVisible = ref(false)
 const wslDialogVisible = ref(false)
+const localDialogVisible = ref(false)
 const selectedWsl = ref('')
+const selectedLocalShell = ref<LocalShellKind>('system')
 const cwd = ref('')
 const connecting = ref(false)
 const connectingTarget = ref('')
@@ -482,9 +546,11 @@ const launchDescription = computed(() => {
 /** OSC 133 命令块装配:实时输出与恢复回放都经过它,与 xterm 渲染互不干扰 */
 const commandBlockAssembler = new CommandBlockAssembler()
 const commandBlocks = shallowRef<TerminalCommandBlock[]>([])
+const terminalScreenMode = new TerminalScreenMode()
+const alternateScreenActive = ref(false)
 /** 会话最近上报的工作目录(OSC 7 / 9;9),随数据帧更新,GUI 输入行展示用 */
 const guiCwd = shallowRef('')
-const isGui = computed(() => props.pane.presentation === 'gui')
+const isGui = computed(() => props.pane.presentation === 'gui' && !alternateScreenActive.value)
 /**
  * SSH 远端 shell(v1.4.4 起不注入标记)与 cmd 不产生 OSC 133 事件,
  * GUI 视图对这类会话降级为终端渲染并给出切回提示。
@@ -528,6 +594,7 @@ const shellFamily = computed<ShellFamily>(() => {
 })
 
 function feedCommandBlocks(data: string): void {
+  alternateScreenActive.value = terminalScreenMode.feed(data)
   commandBlockAssembler.feed(data)
   commandBlocks.value = [...commandBlockAssembler.getBlocks()]
   guiCwd.value = commandBlockAssembler.currentCwd
@@ -675,6 +742,7 @@ async function createSession(
   target: string,
   launch: TerminalLaunchSpec,
 ): Promise<boolean> {
+  const previousSessionId = props.pane.sessionId
   const requestId = createTerminalId('terminal-create')
   activeCreateRequestId = requestId
   connecting.value = true
@@ -699,6 +767,11 @@ async function createSession(
       return false
     }
     emit('session', props.pane.id, session, launch)
+    if (previousSessionId && previousSessionId !== session.id) {
+      await window.ipcRenderer
+        .invoke('terminal-session-close', previousSessionId)
+        .catch(() => undefined)
+    }
     return true
   } catch (error) {
     if (activeCreateRequestId !== requestId) return false
@@ -731,6 +804,21 @@ function launchLocal(kind: LocalShellKind, label: string): void {
     label,
   }
   void createSession(launch, label, launch)
+}
+
+async function launchConfiguredLocal(): Promise<void> {
+  const shell = props.capabilities.localShells.find(
+    (entry) => entry.kind === selectedLocalShell.value,
+  )
+  if (!shell) return
+  const launch: TerminalLaunchSpec = {
+    kind: 'local',
+    localShell: shell.kind,
+    cwd: cwd.value || undefined,
+    label: shell.label,
+  }
+  const connected = await createSession(launch, shell.label, launch)
+  if (connected) localDialogVisible.value = false
 }
 
 async function launchWsl(): Promise<void> {
@@ -800,6 +888,35 @@ function inferredLaunch(): TerminalLaunchSpec | undefined {
     ? { kind: 'local', localShell: preferredShell.kind, label: preferredShell.label }
     : undefined
 }
+
+function openConfiguration(): void {
+  const launch = inferredLaunch()
+  if (!launch) {
+    launchError.value = t('common.terminal.reconnectTypeUnavailable')
+    return
+  }
+  if (launch.kind === 'ssh') {
+    openSshDialog()
+    return
+  }
+  cwd.value = launch.cwd || ''
+  if (launch.kind === 'wsl') {
+    selectedWsl.value = launch.wslDistro
+    wslDialogVisible.value = true
+    return
+  }
+  selectedLocalShell.value = launch.localShell
+  localDialogVisible.value = true
+}
+
+watch(
+  () => props.configurationRequest?.requestId,
+  (requestId) => {
+    if (!requestId || props.configurationRequest?.paneId !== props.pane.id) return
+    openConfiguration()
+  },
+  { immediate: true },
+)
 
 async function reconnectSession(): Promise<void> {
   if (connecting.value) return
@@ -897,12 +1014,7 @@ const gripLabel = computed(() =>
 
 function startActionsDrag(event: PointerEvent): void {
   const grip = event.currentTarget as HTMLElement
-  gripPress = beginGripPress(
-    event.pointerId,
-    event.clientX,
-    event.clientY,
-    actionsDragOffset.value,
-  )
+  gripPress = beginGripPress(event.pointerId, event.clientX, event.clientY, actionsDragOffset.value)
   gripTimer = setTimeout(() => {
     gripTimer = null
     if (!gripPress) return
@@ -959,6 +1071,8 @@ async function attachSession(sessionId: string | undefined): Promise<void> {
   attachedSessionId = sessionId
   terminalInputEnabled = false
   terminal.reset()
+  terminalScreenMode.reset()
+  alternateScreenActive.value = false
   commandBlockAssembler.reset()
   commandBlocks.value = []
   guiCwd.value = ''
@@ -1540,6 +1654,11 @@ function withTimeout<T>(
   border-radius: 9px;
   color: var(--app-text-muted);
   background: var(--app-surface-muted);
+}
+.session-config-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 .cwd-input {
   width: 100%;

@@ -38,6 +38,7 @@
               @dblclick="beginRenameTab(tab)"
               @mousedown.middle.prevent
               @auxclick="closeTabWithMiddleClick($event, tab.id)"
+              @contextmenu.prevent="openTabContextMenu($event, tab)"
               @keydown.enter="activateTab(tab.id)"
             >
               <!-- 预览 tab 没有会话,不渲染状态点 -->
@@ -192,6 +193,7 @@
             :profiles="allProfiles"
             :session-infos="sessionInfos"
             :auto-open-ssh-pane-id="autoOpenSshPaneId"
+            :configuration-request="configurationRequest"
             @session="setPaneSession"
             @focus="focusPane"
             @expand="toggleExpandPane"
@@ -261,6 +263,25 @@
         </div>
       </div>
     </div>
+    <Teleport to="body">
+      <div
+        v-if="tabContextMenu"
+        class="terminal-tab-menu-layer"
+        @pointerdown.self="tabContextMenu = null"
+        @contextmenu.prevent.self="tabContextMenu = null"
+      >
+        <div
+          class="terminal-tab-menu"
+          role="menu"
+          :style="{ left: `${tabContextMenu.x}px`, top: `${tabContextMenu.y}px` }"
+        >
+          <button type="button" role="menuitem" @click="configureTabFromContextMenu">
+            <el-icon><Setting /></el-icon>
+            <span>{{ t('common.terminal.configureTerminal') }}</span>
+          </button>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>
 
@@ -277,6 +298,7 @@ import {
   Platform,
   Plus,
   Refresh,
+  Setting,
 } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import draggable from 'vuedraggable'
@@ -317,6 +339,7 @@ import {
   type SftpEntry,
   type SshConnectionProfile,
   type TerminalCapabilities,
+  type TerminalConfigurationRequest,
   type TerminalCwdEvent,
   type TerminalLaunchSpec,
   type TerminalSessionInfo,
@@ -346,6 +369,8 @@ const tabs = ref<TerminalTabLayout[]>(initialWorkspace.tabs)
 const activeTabId = ref(initialWorkspace.activeTabId)
 const workbenchElement = ref<HTMLDivElement | null>(null)
 const autoOpenSshPaneId = ref('')
+const configurationRequest = ref<TerminalConfigurationRequest>({ paneId: '', requestId: 0 })
+const tabContextMenu = ref<{ tabId: string; x: number; y: number } | null>(null)
 const expandedPaneByTabId = ref<Record<string, string | undefined>>({})
 const sftpSessionByTabId = ref<Record<string, string | undefined>>({})
 /** tab → 文件树面板绑定的会话;任意类型的就绪会话都可用,不限于 SSH */
@@ -530,6 +555,31 @@ function launchTitle(launch: TerminalLaunchSpec): string {
 
 function activateTab(tabId: string): void {
   if (tabs.value.some((tab) => tab.id === tabId)) activeTabId.value = tabId
+}
+
+function openTabContextMenu(event: MouseEvent, tab: TerminalTabLayout): void {
+  if (tab.preview) return
+  activateTab(tab.id)
+  tabContextMenu.value = {
+    tabId: tab.id,
+    x: Math.max(8, Math.min(event.clientX, window.innerWidth - 192)),
+    y: Math.max(8, Math.min(event.clientY, window.innerHeight - 56)),
+  }
+}
+
+function configureTabFromContextMenu(): void {
+  const menu = tabContextMenu.value
+  if (!menu) return
+  const tab = tabs.value.find((entry) => entry.id === menu.tabId)
+  const pane = tab
+    ? findTerminalPane(tab.root, tab.focusedPaneId || '') || listTerminalPanes(tab.root)[0]
+    : undefined
+  tabContextMenu.value = null
+  if (!pane) return
+  configurationRequest.value = {
+    paneId: pane.id,
+    requestId: configurationRequest.value.requestId + 1,
+  }
 }
 
 async function closeTab(tabId: string): Promise<void> {
@@ -1020,9 +1070,7 @@ const paletteCommands = computed<PaletteCommand[]>(() => {
       id: command.id,
       label: t(command.labelKey),
       binding: command.bindings
-        .map((binding) =>
-          formatTerminalShortcutBinding(binding, capabilities.value.platform),
-        )
+        .map((binding) => formatTerminalShortcutBinding(binding, capabilities.value.platform))
         .join(' / '),
     }))
   const query = paletteQuery.value.trim()
@@ -1518,6 +1566,36 @@ function withTimeout<T>(
 :global(.terminal-new-session-menu .el-dropdown-menu__item) {
   min-width: 180px;
   gap: 8px;
+}
+:global(.terminal-tab-menu-layer) {
+  position: fixed;
+  z-index: 7500;
+  inset: 0;
+}
+:global(.terminal-tab-menu) {
+  position: absolute;
+  min-width: 176px;
+  padding: 4px;
+  border: 1px solid var(--app-border);
+  border-radius: var(--radius-lg);
+  background: var(--app-surface-raised);
+  box-shadow: 0 8px 28px var(--app-shadow);
+}
+:global(.terminal-tab-menu button) {
+  display: flex;
+  width: 100%;
+  min-height: 36px;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  border: none;
+  border-radius: 10px;
+  color: var(--app-text);
+  background: transparent;
+  cursor: pointer;
+}
+:global(.terminal-tab-menu button:hover) {
+  background: var(--app-hover);
 }
 /* 命令面板:顶部居中浮层,模糊过滤 + 键盘导航 */
 .command-palette {

@@ -9,6 +9,7 @@
     :profiles="profiles"
     :session-info="sessionInfos[node.sessionId || '']"
     :auto-open-ssh="node.id === autoOpenSshPaneId"
+    :configuration-request="configurationRequest"
     @session="(...args) => $emit('session', ...args)"
     @focus="(id) => $emit('focus', id)"
     @expand="(id) => $emit('expand', id)"
@@ -31,6 +32,7 @@
       :profiles="profiles"
       :session-infos="sessionInfos"
       :auto-open-ssh-pane-id="autoOpenSshPaneId"
+      :configuration-request="configurationRequest"
       @session="(...args) => $emit('session', ...args)"
       @focus="(id) => $emit('focus', id)"
       @expand="(id) => $emit('expand', id)"
@@ -72,6 +74,7 @@
       :profiles="profiles"
       :session-infos="sessionInfos"
       :auto-open-ssh-pane-id="autoOpenSshPaneId"
+      :configuration-request="configurationRequest"
       @session="(...args) => $emit('session', ...args)"
       @focus="(id) => $emit('focus', id)"
       @expand="(id) => $emit('expand', id)"
@@ -93,6 +96,7 @@ import type { TerminalLayoutNode, TerminalSplitDirection } from '@/core/terminal
 import type {
   SshConnectionProfile,
   TerminalCapabilities,
+  TerminalConfigurationRequest,
   TerminalLaunchSpec,
   TerminalSessionInfo,
 } from '@/core/terminal/TerminalTypes'
@@ -109,6 +113,7 @@ const props = defineProps<{
   profiles: SshConnectionProfile[]
   sessionInfos: Record<string, TerminalSessionInfo>
   autoOpenSshPaneId?: string
+  configurationRequest?: TerminalConfigurationRequest
 }>()
 const emit = defineEmits<{
   session: [paneId: string, session: TerminalSessionInfo, launch: TerminalLaunchSpec]

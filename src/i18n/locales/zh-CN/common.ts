@@ -497,6 +497,7 @@ export default {
     initialDirectoryOptional: '初始目录（可选）',
     splitInherit: '继承当前会话',
     selectWsl: '选择 WSL 发行版',
+    configureTerminal: '重新配置终端',
     sshConnection: 'SSH 连接',
     sshConnectionDescription: '配置远程主机、认证方式及可选转发',
     savedConnections: '已保存连接 / SSH Config',

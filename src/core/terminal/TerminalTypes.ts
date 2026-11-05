@@ -52,6 +52,11 @@ export type TerminalLaunchSpec =
       label?: string
     }
 
+export interface TerminalConfigurationRequest {
+  paneId: string
+  requestId: number
+}
+
 export interface TerminalCreateRequest {
   requestId?: string
   kind: TerminalSessionKind

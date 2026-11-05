@@ -884,9 +884,9 @@ onUnmounted(() => {
   margin-left: 0;
 }
 
-/* 窄窗时输入栏按钮仅保留图标：隐藏文字避免按钮区换行（悬浮 title 保留语义）。
+/* 默认半栏与窄窗下输入栏按钮仅保留图标，拉宽后恢复文字（悬浮 title 保留语义）。
    EP 会把插槽内容包进一层 span，文字 span 在第二层，图标不能一并隐藏 */
-@container console-input (max-width: 520px) {
+@container console-input (max-width: 720px) {
   .input-container :deep(.el-button) {
     padding-inline: 9px;
   }

@@ -505,6 +505,7 @@ export default {
     initialDirectoryOptional: 'Initial directory (optional)',
     splitInherit: 'Inherit current session',
     selectWsl: 'Select WSL Distribution',
+    configureTerminal: 'Reconfigure Terminal',
     sshConnection: 'SSH Connection',
     sshConnectionDescription: 'Configure the remote host, authentication, and optional forwarding',
     savedConnections: 'Saved Connections / SSH Config',
