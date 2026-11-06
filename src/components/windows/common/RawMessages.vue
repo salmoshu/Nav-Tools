@@ -1,5 +1,10 @@
 <template>
-  <div class="flow-console-virtual" ref="consoleRoot" tabindex="0">
+  <div
+    class="flow-console-virtual"
+    :class="{ 'hide-message-dividers': !showMessageDividers }"
+    ref="consoleRoot"
+    tabindex="0"
+  >
     <!-- 头部控制栏 -->
     <div class="console-header">
       <div class="console-controls">
@@ -227,6 +232,7 @@ import {
 } from '@element-plus/icons-vue'
 import { findTimelineMessageIndex, useConsole } from '@/composables/flow/useConsole'
 import { useFileTimeline } from '@/composables/useFileTimeline'
+import { useMessageSettings } from '@/composables/useMessageSettings'
 import { useDevice } from '@/hooks/useDevice'
 import emitter from '@/hooks/useMitt'
 import { RecycleScroller } from 'vue-virtual-scroller'
@@ -271,6 +277,7 @@ const {
 // 获取设备连接状态
 const { deviceConnected, activeDataParser } = useDevice()
 const fileTimeline = useFileTimeline()
+const { showMessageDividers } = useMessageSettings()
 
 // 点击解析徽标：打开数据接入弹框并短暂高亮数据格式配置
 // 注意：useDevice 状态非单例，必须经 emitter 由 ToolBar 自己的实例打开弹框
@@ -752,6 +759,10 @@ onUnmounted(() => {
   text-align: left;
   border-radius: 0;
   transition: background-color 0.1s ease;
+}
+
+.hide-message-dividers .message-line {
+  border-bottom: none;
 }
 
 .message-line:hover {

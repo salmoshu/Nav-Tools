@@ -1,3 +1,5 @@
+import type { TextDataParser } from './TextRecordParser'
+
 export type DataMode = 'general' | 'flow' | 'gnss' | 'motor' | string
 export type DisplayFormat = 'ascii' | 'hex'
 
@@ -5,6 +7,7 @@ export interface IncomingDataContext {
   activeDataModes: readonly DataMode[]
   activeWindowIds: readonly string[]
   displayFormat: DisplayFormat
+  dataParser: TextDataParser
 }
 
 export interface IncomingDataTargets {
@@ -23,7 +26,7 @@ export class IncomingDataRouter {
     const isHexMotor = modes.has('motor') && context.displayFormat === 'hex'
     const decodedData = isHexMotor ? this.targets.decodeMotorHex(data) : data
 
-    if (modes.has('gnss')) this.targets.appendGnss(data)
+    if (modes.has('gnss') || context.dataParser === 'nmea') this.targets.appendGnss(data)
 
     if (windows.has('raw-messages')) {
       if (isHexMotor) this.targets.appendRaw(`${data}\n${decodedData}`)

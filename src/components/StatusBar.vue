@@ -53,6 +53,9 @@
               </span>
               <span class="status-state-dot" aria-hidden="true"></span>
               <div class="status-value-row">
+                <el-icon class="status-field-icon" :title="formatStatusName(String(element[0]))">
+                  <component :is="getStatusFieldIcon(String(element[0]))" />
+                </el-icon>
                 <!-- 为值添加点击进入编辑模式的功能 -->
                 <span
                   class="status-indicator"
@@ -305,6 +308,7 @@ import {
 import { useFlow } from '@/composables/flow/useFlow'
 import { getNumericDataFieldNames } from '@/core/data/NumericDataFields'
 import { hasStatusData } from '@/core/status/statusValue'
+import { getStatusFieldIcon } from '@/core/status/statusFieldIcons'
 import { useFlowStore } from '@/stores/flow'
 // 4. 导入需要的图标
 import { Plus, Close, Delete, Edit, InfoFilled, DataAnalysis, Rank } from '@element-plus/icons-vue'
@@ -1096,6 +1100,17 @@ onUnmounted(() => {
   grid-column: 1 / -1;
   align-items: flex-start;
   gap: 7px;
+}
+
+.status-field-icon {
+  flex: 0 0 auto;
+  margin-top: 3px;
+  color: var(--app-text-muted);
+  font-size: 15px;
+}
+
+.status-has-data .status-field-icon {
+  color: var(--el-color-primary);
 }
 
 .status-draggable {

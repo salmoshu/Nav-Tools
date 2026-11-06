@@ -57,13 +57,20 @@
         type="primary"
         :icon="VideoPlay"
         :loading="status === 'connecting'"
+        :title="t('common.video.play')"
+        :aria-label="t('common.video.play')"
         @click="startStream"
       >
         {{ t('common.video.play') }}
       </el-button>
-      <el-button v-else :icon="VideoPause" @click="pauseStream">{{
-        t('common.video.pause')
-      }}</el-button>
+      <el-button
+        v-else
+        :icon="VideoPause"
+        :title="t('common.video.pause')"
+        :aria-label="t('common.video.pause')"
+        @click="pauseStream"
+        >{{ t('common.video.pause') }}</el-button
+      >
       <span class="loop-toggle" :title="t('common.video.loopReconnectHint')">
         <span class="loop-toggle-label">{{ t('common.video.loopReconnect') }}</span>
         <el-switch

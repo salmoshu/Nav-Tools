@@ -83,6 +83,61 @@
           </div>
         </section>
 
+        <section v-else-if="activeSection === 'applications'" class="settings-section">
+          <h2 class="section-title">{{ t('app.settingsDefaultApplications') }}</h2>
+          <p class="section-hint">{{ t('app.settingsDefaultApplicationsHint') }}</p>
+          <div
+            class="default-application-grid"
+            role="group"
+            :aria-label="t('app.settingsDefaultApplications')"
+          >
+            <button
+              v-for="application in DEFAULT_APPLICATIONS"
+              :key="application.id"
+              class="default-application-card"
+              :class="{ selected: isDefaultApplicationEnabled(application.id) }"
+              :style="{ '--default-application-accent': application.accent }"
+              type="button"
+              role="checkbox"
+              :aria-label="application.name"
+              :aria-checked="isDefaultApplicationEnabled(application.id)"
+              :data-application-id="application.id"
+              @click="
+                setDefaultApplicationEnabled(
+                  application.id,
+                  !isDefaultApplicationEnabled(application.id),
+                )
+              "
+            >
+              <el-icon class="default-application-icon" :size="22" aria-hidden="true">
+                <component :is="applicationIconComponents[application.icon]" />
+              </el-icon>
+              <span class="default-application-copy">
+                <strong>{{ application.name }}</strong>
+                <span>{{ application.description }}</span>
+              </span>
+              <span class="default-application-check" aria-hidden="true">
+                <Check v-if="isDefaultApplicationEnabled(application.id)" />
+              </span>
+            </button>
+          </div>
+        </section>
+
+        <section v-else-if="activeSection === 'messages'" class="settings-section">
+          <h2 class="section-title">{{ t('app.settingsMessages') }}</h2>
+          <p class="section-hint">{{ t('app.settingsMessagesHint') }}</p>
+          <div class="settings-card">
+            <div class="version-pref-row">
+              <el-switch
+                :model-value="showMessageDividers"
+                :aria-label="t('app.settingsMessageRowDividers')"
+                @change="setShowMessageDividers($event === true)"
+              />
+              <span>{{ t('app.settingsMessageRowDividers') }}</span>
+            </div>
+          </div>
+        </section>
+
         <section v-else-if="activeSection === 'shortcuts'" class="settings-section">
           <h2 class="section-title">{{ t('app.settingsShortcuts') }}</h2>
           <p class="section-hint">{{ t('app.settingsShortcutHint') }}</p>
@@ -201,9 +256,14 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, type Component } from 'vue'
 import { Check, Refresh } from '@element-plus/icons-vue'
-import { ArrowLeft, Keyboard, Languages, Palette } from '@lucide/vue'
+import { ArrowLeft, Keyboard, Languages, LayoutGrid, MessageSquare, Palette } from '@lucide/vue'
 import { useTheme, type ThemeMode } from '@/composables/useTheme'
 import { useLocale } from '@/composables/useLocale'
+import { useMessageSettings } from '@/composables/useMessageSettings'
+import { useApplicationSelector } from '@/composables/useApplicationSelector'
+import { DEFAULT_APPLICATIONS } from '@/core/application/ApplicationStorage'
+import type { SettingsSectionKey } from '@/core/settings/ComponentSettings'
+import { applicationIconComponents } from '@/settings/applicationIcons'
 import {
   formatTerminalShortcutBinding,
   normalizeTerminalShortcutPlatform,
@@ -221,10 +281,10 @@ defineEmits<{
   close: []
 }>()
 
+const props = defineProps<{ initialSection?: SettingsSectionKey }>()
+
 // 设置分类注册表：新增分类时在 sections 中追加一项，
 // 并在内容区添加对应的 <section v-if="activeSection === '...'"> 即可。
-type SettingsSectionKey = 'theme' | 'language' | 'shortcuts' | 'version'
-
 interface SettingsSection {
   key: SettingsSectionKey
   labelKey: string
@@ -234,14 +294,18 @@ interface SettingsSection {
 const sections: SettingsSection[] = [
   { key: 'theme', labelKey: 'app.settingsTheme', icon: Palette },
   { key: 'language', labelKey: 'app.settingsLanguage', icon: Languages },
+  { key: 'applications', labelKey: 'app.settingsDefaultApplications', icon: LayoutGrid },
+  { key: 'messages', labelKey: 'app.settingsMessages', icon: MessageSquare },
   { key: 'shortcuts', labelKey: 'app.settingsShortcuts', icon: Keyboard },
   { key: 'version', labelKey: 'app.settingsVersion', icon: Refresh },
 ]
 
-const activeSection = ref<SettingsSectionKey>('theme')
+const activeSection = ref<SettingsSectionKey>(props.initialSection ?? 'theme')
 
 const { themeMode, setTheme } = useTheme()
 const { locale, setLocale } = useLocale()
+const { showMessageDividers, setShowMessageDividers } = useMessageSettings()
+const { isDefaultApplicationEnabled, setDefaultApplicationEnabled } = useApplicationSelector()
 
 const themeOptions: { mode: ThemeMode; labelKey: string }[] = [
   { mode: 'system', labelKey: 'theme.system' },
@@ -561,6 +625,88 @@ function handleUpdaterPrefChange(
   margin: -4px 0 10px;
   color: var(--app-text-muted);
   font-size: 12px;
+  line-height: 1.6;
+}
+
+.default-application-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+  gap: 12px;
+}
+
+.default-application-card {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) 18px;
+  align-items: start;
+  gap: 12px;
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--app-border);
+  border-radius: 10px;
+  color: var(--app-text);
+  background: var(--app-surface);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.default-application-card:hover,
+.default-application-card:focus-visible,
+.default-application-card.selected {
+  border-color: var(--default-application-accent);
+  background: color-mix(in srgb, var(--default-application-accent) 6%, var(--app-surface));
+}
+
+.default-application-card:focus-visible {
+  outline: 2px solid var(--default-application-accent);
+  outline-offset: 2px;
+}
+
+.default-application-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  color: var(--default-application-accent);
+  background: color-mix(in srgb, var(--default-application-accent) 12%, transparent);
+}
+
+.default-application-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.default-application-copy strong {
+  font-size: 14px;
+}
+
+.default-application-copy > span {
+  color: var(--app-text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.default-application-check {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border: 1px solid var(--app-border);
+  border-radius: 4px;
+}
+
+.default-application-card.selected .default-application-check {
+  border-color: var(--default-application-accent);
+  color: white;
+  background: var(--default-application-accent);
+}
+
+.default-application-check svg {
+  width: 12px;
+  height: 12px;
 }
 
 .shortcut-card {

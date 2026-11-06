@@ -1,6 +1,6 @@
 {
   "name": "nav-tools",
-  "version": "1.8.2",
+  "version": "1.8.4",
   "main": "dist-electron/main/index.js",
   "description": "Nav-Tools is a desktop-grade visualization workbench built with Electron & Vue3, tailored for roboticists.",
   "author": "Winchell.Hu <winchell.hu@outlook.com>",
@@ -33,6 +33,7 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test",
+    "test:desktop:injection": "node tests/desktop/data-injection.mjs",
     "lint": "eslint \"src/core/**/*.ts\" \"electron/main/services/**/*.ts\" \"tests/**/*.ts\" \"*.config.ts\"",
     "lint:all": "eslint \"src/**/*.{ts,vue}\" \"electron/**/*.ts\"",
     "format": "prettier --write \"src/core/**/*.ts\" \"electron/main/services/**/*.ts\" \"tests/**/*.ts\" \"*.config.ts\"",

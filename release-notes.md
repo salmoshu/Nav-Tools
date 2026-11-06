@@ -1,5 +1,33 @@
 # Nav-Tools 更新日志
 
+## v1.8.4
+
+- GNSS Deviation 在窄小窗口中仅显示当前解状态，拉宽后恢复完整统计；更小的窗口也保留当前状态。
+- 数据注入的 NTRIP 配置增加获取挂载点按钮，支持从服务器列表选择、搜索或直接输入；兼容旧版源列表、HTTP 和分块传输。
+- GNSS Signals 柱状图参考 u-center 2 的信号视图重新布局：按星座分组、横向卫星编号、柱内 C/N₀ 和近期峰值标记，窄窗支持横向滚动。
+- 消息组件切换 HEX/ASCII 时转换全部已有消息，保留来源格式以避免后续 HEX 输入被二次编码，并支持 UTF-8 内容的往返切换。
+- 组件卡片的图标和名称、全屏及独立窗口的组件标题均可点击进入设置；Messages 与 Terminal 分别直达消息和快捷键设置。
+- 设置页新增消息行分割线开关，默认显示，修改后即时生效、持久化保存并在独立窗口间同步。
+
+- GNSS Deviation keeps only the current fix status in small windows and restores full statistics when space permits.
+- NTRIP data injection can retrieve caster mountpoints, search and select them, or accept a manually entered name. Legacy, HTTP and chunked source tables are supported.
+- GNSS signal bars now group satellites by constellation, use horizontal labels, display current C/N₀ and recent peaks, and scroll horizontally in narrow windows, inspired by the u-center 2 signal view.
+- Switching Messages between HEX and ASCII now converts every existing message while retaining each message's source format, preventing double-encoded HEX input and supporting UTF-8 round trips.
+- Component icons and titles in cards, fullscreen views and detached windows now open settings; Messages and Terminal navigate directly to their dedicated sections.
+- A persisted Messages setting controls row dividers immediately and synchronizes the preference across detached windows.
+
+## v1.8.3
+
+- GNSS Map 自动缓存实际浏览且与有效轨迹 1 公里走廊相交的在线图片瓦片；独立自动缓存目录使用 HTTP 新鲜度元数据、原子写入和 1 GiB LRU 容量控制，保留手动 `offline-tiles` 数据。
+- 修复连续 GNSS 数据导致缓存轨迹同步被一直推迟，以及并发瓦片请求和离线重启时缓存读取失败的问题。
+- 应用选择器标题栏的默认应用、新应用和重置应用操作改为图标按钮，同时保留悬浮提示和无障碍名称。
+- 组件卡片、独立窗口和全屏组件按自身容器宽度响应式隐藏带图标操作按钮的文字，拉宽后恢复。
+
+- The GNSS Map now automatically caches viewed image tiles that intersect the 1 km corridor around a valid track. Automatic tiles use HTTP freshness metadata, atomic writes and a 1 GiB LRU limit in a separate directory; hand-maintained `offline-tiles` data is preserved.
+- Fixed deferred cache-track updates during continuous GNSS input, shared response bodies in concurrent tile requests and incomplete cache initialization after an offline restart.
+- The application selector header uses icon-only buttons for default applications, new applications and reset, with accessible names and tooltips retained.
+- Dashboard cards, detached windows and full-screen components hide labels on icon actions according to their own container width and restore them when widened.
+
 ## v1.8.2
 
 - 终端识别 47/1047/1049 备用屏幕控制序列：Vim、less、top 等全屏交互程序在 GUI 模式下临时切换为真实终端，Escape、方向键、编辑与退出命令直接写入会话，退出后自动恢复原 GUI 视图；覆盖 SSH、WSL 与本机终端及跨帧控制序列

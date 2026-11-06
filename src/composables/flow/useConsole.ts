@@ -1,6 +1,7 @@
 import { ref, shallowRef, computed } from "vue";
 import type { Ref } from "vue";
 import { activeDataTransport } from '@/core/device/ActiveDataTransport'
+import { formatMessageContent } from '@/core/data/MessageFormat'
 import { useFileTimeline } from '@/composables/useFileTimeline'
 import {
   DEFAULT_KEY_VALUE_REGEX,
@@ -14,6 +15,7 @@ export interface ConsoleMessage {
   dataType: "json" | "nmea" | "regex" | "csv" | "none";
   isValid: boolean;
   key: string;
+  sourceFormat?: 'ascii' | 'hex';
   fileElapsedMilliseconds?: number;
 }
 
@@ -148,12 +150,19 @@ export function useConsole(useGlobal: boolean = true): ConsoleState {
   });
 
   const filteredMessages = computed(() => {
-    if (!dataFilter.value) {
-      return timelineMessages.value;
-    }
-    return timelineMessages.value.filter(
-      (msg) => msg.dataType === dataFormat.value && msg.isValid
-    );
+    const visibleMessages = dataFilter.value
+      ? timelineMessages.value.filter(
+          (msg) => msg.dataType === dataFormat.value && msg.isValid
+        )
+      : timelineMessages.value;
+    return visibleMessages.map((message) => {
+      const raw = formatMessageContent(
+        message.raw,
+        message.sourceFormat ?? 'ascii',
+        displayFormat.value,
+      );
+      return raw === message.raw ? message : { ...message, raw };
+    });
   });
   const validMsgCount = computed(() => {
     if (!hasFileReplayMessages.value) {
@@ -208,7 +217,10 @@ export function useConsole(useGlobal: boolean = true): ConsoleState {
   };
 
   const appendConsoleMessage = (message: ConsoleMessage) => {
-    pendingMessages.push(message);
+    pendingMessages.push({
+      ...message,
+      sourceFormat: message.sourceFormat ?? displayFormat.value,
+    });
     updateValidCount(message, 1);
     scheduleFlush();
   };
@@ -747,6 +759,7 @@ export function useConsole(useGlobal: boolean = true): ConsoleState {
         dataType: 'none',
         isValid: false,
         key: generateKey(timestamp),
+        sourceFormat: format,
       };
       appendConsoleMessage(message);
       

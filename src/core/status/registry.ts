@@ -11,9 +11,9 @@ export interface StatusSourceDefinition {
   /** 多源聚合时的字段前缀，如 'Flow'/'GNSS'；字段名会变成 `${label}.${key}` */
   label: string
   /**
-   * 命中条件：按当前应用包含面板的 moduleId 集合判断
-   * （见 core/panels/registry.ts）。不要按 funcMode 匹配——
-   * 'general' 是共享面板（plot/raw-messages/terminal）的 funcMode，会误伤。
+   * 命中条件：可按当前应用包含面板的 moduleId 集合及数据源格式判断。
+   * 不要只按 funcMode 匹配——'general' 是共享面板
+   * （plot/raw-messages/terminal）的 funcMode，会误伤。
    */
   match: (moduleIds: ReadonlySet<string>) => boolean
   /**

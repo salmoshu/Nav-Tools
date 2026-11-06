@@ -8,8 +8,9 @@ test('opens the user application selector in the renderer', async ({ page }) => 
   await expect(page.getByText('Nav-Tools', { exact: true })).toBeVisible()
   await expect(page.getByText('选择应用', { exact: true })).toBeVisible()
   await expect(page.getByText('GNSS', { exact: true })).toBeVisible()
-  await expect(page.getByText('Flow', { exact: true })).toBeVisible()
-  await expect(page.getByText('Camera', { exact: true })).toBeVisible()
+  await expect(page.getByText('Flow', { exact: true })).toHaveCount(0)
+  await expect(page.getByText('Camera', { exact: true })).toHaveCount(0)
+  await expect(page.locator('.application-card')).toHaveCount(4)
   await page.getByRole('button', { name: '重置应用' }).click()
   await expect(page.locator('.selector-backdrop > .el-overlay.is-message-box')).toBeVisible()
   await expect(page.locator('.selector-backdrop > .el-overlay.is-message-box')).toHaveCSS(
@@ -114,7 +115,13 @@ test('uses native window dragging without turning header controls into drag regi
 })
 
 test('opens the default Camera application and its RTSP player', async ({ page }) => {
-  await page.addInitScript(() => localStorage.setItem('nav-tools:locale', 'zh-CN'))
+  await page.addInitScript(() => {
+    localStorage.setItem('nav-tools:locale', 'zh-CN')
+    localStorage.setItem(
+      'nav-tools:enabled-default-applications',
+      JSON.stringify(['serial', 'gnss', 'gnssraw', 'camera', 'gnsslib']),
+    )
+  })
   await page.goto('/')
   await page.locator('.application-card').filter({ hasText: 'Camera' }).click()
 

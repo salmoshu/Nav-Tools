@@ -23,6 +23,7 @@ import {
   iapUpgradeService,
   cameraCalibrationService,
   setCameraStreamServiceRef,
+  dataInjectionService,
 } from './events'
 import { registerCameraCalibrationIpc } from './cameraCalibrationIpc'
 import { registerCameraScriptIpc } from './cameraScriptIpc'
@@ -452,6 +453,11 @@ app.whenReady().then(() => {
   // app ready 后注册瓦片协议 handler 与离线瓦片目录查询 IPC
   offlineTileService.registerHandler()
   ipcMain.handle('get-offline-tiles-dir', () => offlineTileService.getTilesDir())
+  ipcMain.on('map-tile-track-update', (_event, points: unknown) => {
+    // OfflineTileService performs the coordinate, quality and payload-size
+    // validation before the route is used for any cache decision.
+    offlineTileService.updateTrack(points)
+  })
 
   // 桌面快捷方式冷启动:主窗口隐藏创建(数据路由等渲染侧职责照常),
   // 桌面上只出现快捷方式指向的组件独立窗口
@@ -512,6 +518,7 @@ app.on('window-all-closed', () => {
 })
 
 app.on('before-quit', () => {
+  void dataInjectionService.stop()
   cameraCalibrationService.close()
   iapUpgradeService.cancel()
   void terminalService.closeAll()
@@ -772,6 +779,11 @@ ipcMain.handle('send-data-chunk', eventsMap['send-data-chunk'])
 ipcMain.handle('iap-upgrade-start', eventsMap['iap-upgrade-start'])
 ipcMain.handle('iap-upgrade-cancel', eventsMap['iap-upgrade-cancel'])
 ipcMain.handle('iap-upgrade-snapshot', eventsMap['iap-upgrade-snapshot'])
+ipcMain.handle('data-injection-start', eventsMap['data-injection-start'])
+ipcMain.handle('data-injection-mountpoints', eventsMap['data-injection-mountpoints'])
+ipcMain.handle('data-injection-stop', eventsMap['data-injection-stop'])
+ipcMain.handle('data-injection-status', eventsMap['data-injection-status'])
+ipcMain.handle('data-injection-clear-target', eventsMap['data-injection-clear-target'])
 ipcMain.handle('open-network-connection', eventsMap['open-network-connection'])
 ipcMain.handle('close-network-connection', eventsMap['close-network-connection'])
 ipcMain.handle('network-connect-cancel', eventsMap['network-connect-cancel'])

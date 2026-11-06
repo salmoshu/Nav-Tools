@@ -3,8 +3,8 @@ import { filterDisplayableStatusEntries } from './statusValue'
 import type { StatusSourceDefinition } from './registry'
 
 /**
- * 纯函数聚合：按 moduleId 命中数据源 → 布尔值过滤 →
- * 单源保持裸字段名 / 多源加 `${label}.` 前缀 → 按 order 排序。
+ * 纯函数聚合：按数据源 match 条件命中（可结合 moduleId 与数据格式）→
+ * 布尔值过滤 → 单源保持裸字段名 / 多源加 `${label}.` 前缀 → 按 order 排序。
  * 与既有 Status View 行为逐条对齐（单源与多源都应用用户排序）。
  */
 export function aggregateStatusSources(

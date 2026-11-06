@@ -32,15 +32,31 @@ describe('RecentInputFiles', () => {
     expect(list[0].sizeBytes).toBe(3)
   })
 
-  it('caps the list at 10 entries', () => {
+  it('caps the list at 17 entries', () => {
     const store = new RecentInputFiles(new JsonStorage(new MemoryStorage()))
-    for (let index = 0; index < 12; index += 1) {
+    for (let index = 0; index < 20; index += 1) {
       store.record({ path: `/f${index}.log`, name: `f${index}.log`, sizeBytes: index })
     }
     const list = store.list()
-    expect(list).toHaveLength(10)
-    expect(list[0].path).toBe('/f11.log')
-    expect(list.at(-1)?.path).toBe('/f2.log')
+    expect(list).toHaveLength(17)
+    expect(list[0].path).toBe('/f19.log')
+    expect(list.at(-1)?.path).toBe('/f3.log')
+  })
+
+  it('limits an oversized stored history to 17 entries when reading it', () => {
+    const storage = new JsonStorage(new MemoryStorage())
+    storage.write(
+      RECENT_KEY,
+      Array.from({ length: 20 }, (_, index) => ({
+        path: `/f${index}.log`,
+        name: `f${index}.log`,
+        sizeBytes: index,
+        openedAt: 20 - index,
+      })),
+    )
+    const list = new RecentInputFiles(storage).list()
+    expect(list).toHaveLength(17)
+    expect(list.at(-1)?.path).toBe('/f16.log')
   })
 
   it('remove deletes the matching entry', () => {

@@ -1,10 +1,32 @@
 import { computed, ref } from 'vue'
 import { getWindowsByIds, navMode, windowCatalog, type UserApplication } from '@/settings/config'
-import { ApplicationStorage, sanitizePanelIds } from '@/core/application/ApplicationStorage'
+import {
+  ApplicationStorage,
+  DEFAULT_APPLICATIONS,
+  sanitizePanelIds,
+} from '@/core/application/ApplicationStorage'
 import { JsonStorage } from '@/core/storage/JsonStorage'
 
 const applicationStorage = new ApplicationStorage(new JsonStorage(localStorage))
 const applications = ref<UserApplication[]>(applicationStorage.loadApplications())
+const enabledDefaultApplicationIds = ref(applicationStorage.loadEnabledDefaultApplicationIds())
+const defaultApplicationIds = new Set(DEFAULT_APPLICATIONS.map((application) => application.id))
+const visibleApplications = computed({
+  get: () =>
+    applications.value.filter(
+      (application) =>
+        !defaultApplicationIds.has(application.id) ||
+        enabledDefaultApplicationIds.value.includes(application.id),
+    ),
+  set: (ordered: UserApplication[]) => {
+    const visibleIds = new Set(visibleApplications.value.map((application) => application.id))
+    let index = 0
+    // 拖动可见卡片时保留隐藏应用及其配置，只替换可见应用所在的位置。
+    applications.value = applications.value.map((application) =>
+      visibleIds.has(application.id) ? ordered[index++] : application,
+    )
+  },
+})
 const savedApplicationId = applicationStorage.loadSelectedApplicationId()
 const savedApplication = applications.value.find(
   (application) => application.id === savedApplicationId,
@@ -77,7 +99,36 @@ export function useApplicationSelector() {
     return saved
   }
 
+  const isDefaultApplicationEnabled = (applicationId: string) =>
+    enabledDefaultApplicationIds.value.includes(applicationId) &&
+    applications.value.some((application) => application.id === applicationId)
+
+  const setDefaultApplicationEnabled = (applicationId: string, enabled: boolean) => {
+    const defaultIndex = DEFAULT_APPLICATIONS.findIndex(
+      (application) => application.id === applicationId,
+    )
+    if (defaultIndex === -1) return
+
+    if (enabled && !applications.value.some((application) => application.id === applicationId)) {
+      const defaultApplication = DEFAULT_APPLICATIONS[defaultIndex]
+      const followingIds = new Set(DEFAULT_APPLICATIONS.slice(defaultIndex + 1).map(({ id }) => id))
+      const nextIndex = applications.value.findIndex((application) =>
+        followingIds.has(application.id),
+      )
+      applications.value.splice(nextIndex === -1 ? applications.value.length : nextIndex, 0, {
+        ...defaultApplication,
+        windowIds: sanitizePanelIds(defaultApplication.windowIds),
+      })
+      persistApplications()
+    }
+
+    const ids = enabledDefaultApplicationIds.value.filter((id) => id !== applicationId)
+    if (enabled) ids.push(applicationId)
+    enabledDefaultApplicationIds.value = applicationStorage.saveEnabledDefaultApplicationIds(ids)
+  }
+
   const deleteApplication = (applicationId: string) => {
+    setDefaultApplicationEnabled(applicationId, false)
     applications.value = applications.value.filter(
       (application) => application.id !== applicationId,
     )
@@ -91,14 +142,13 @@ export function useApplicationSelector() {
   }
 
   const reorderApplications = (fromIndex: number, toIndex: number) => {
-    if (fromIndex === toIndex) return applications.value
-
-    applications.value = applicationStorage.reorderApplications(
-      applications.value,
-      fromIndex,
-      toIndex,
-    )
-    return applications.value
+    const ordered = [...visibleApplications.value]
+    if (fromIndex === toIndex || fromIndex < 0 || fromIndex >= ordered.length) return ordered
+    const [application] = ordered.splice(fromIndex, 1)
+    ordered.splice(Math.max(0, Math.min(toIndex, ordered.length)), 0, application)
+    visibleApplications.value = ordered
+    persistApplications()
+    return ordered
   }
 
   const saveApplicationOrder = () => {
@@ -133,6 +183,9 @@ export function useApplicationSelector() {
 
   return {
     applications,
+    visibleApplications,
+    isDefaultApplicationEnabled,
+    setDefaultApplicationEnabled,
     windowCatalog,
     currentApplication,
     currentApplicationId,

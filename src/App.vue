@@ -17,6 +17,10 @@ import { useDevice } from '@/hooks/useDevice'
 import { mcapBasename } from '@/core/lidar/McapFileAccess'
 import { getWindowsByIds } from '@/settings/config'
 import {
+  isSettingsSectionKey,
+  type SettingsSectionKey,
+} from '@/core/settings/ComponentSettings'
+import {
   buildComponentIconDataUrl,
   createComponentDesktopShortcut,
 } from '@/core/panels/componentIcon'
@@ -45,12 +49,14 @@ const epLocale = computed(() => (locale.value === 'en-US' ? en : zhCn))
 interface FullscreenPanelContext {
   title: string
   action?: string
+  windowId: string
 }
 
 const maximized = ref(false)
 const dashboardRef = ref<InstanceType<typeof Dashboard> | null>(null)
 const fullscreenPanel = ref<FullscreenPanelContext>()
 const settingsOpen = ref(false)
+const settingsInitialSection = ref<SettingsSectionKey>('theme')
 const isCardWindow = computed(() => window.location.hash.startsWith('#card/'))
 const { currentApplication } = useApplicationSelector()
 const mcapPlayer = useMcapPlayer()
@@ -58,6 +64,18 @@ const mcapPlayer = useMcapPlayer()
 const applicationId = computed(() => {
   const match = window.location.hash.match(/^#app\/([^/?]+)/)
   return match ? decodeURIComponent(match[1]) : undefined
+})
+
+const cardWindowId = computed(() => {
+  if (!isCardWindow.value) return undefined
+  try {
+    const payload = JSON.parse(
+      decodeURIComponent(window.location.hash.slice('#card/'.length)),
+    ) as { windowId?: unknown }
+    return typeof payload.windowId === 'string' ? payload.windowId : undefined
+  } catch {
+    return undefined
+  }
 })
 
 const contextTitle = computed(() => {
@@ -121,7 +139,8 @@ async function resolveCardWindowIcon(): Promise<void> {
 }
 
 const openApplicationSelector = () => emitter.emit('open-application-selector')
-const openSettings = () => {
+const openSettings = (section?: unknown) => {
+  settingsInitialSection.value = isSettingsSectionKey(section) ? section : 'theme'
   settingsOpen.value = true
 }
 
@@ -182,6 +201,7 @@ onUnmounted(() => {
         :context-file-title="contextFileTitle"
         :context-panel-title="fullscreenPanel?.title"
         :context-icon-action="fullscreenPanel?.action"
+        :context-window-id="isCardWindow ? cardWindowId : fullscreenPanel?.windowId"
         :show-application-selector="!isCardWindow"
         :show-detached-controls="isCardWindow"
         :show-panel-fullscreen-exit="Boolean(fullscreenPanel)"
@@ -191,16 +211,19 @@ onUnmounted(() => {
         @maximized-change="maximized = $event"
       />
       <main class="app-content">
-        <CardWindow v-if="isCardWindow" />
-        <template v-else>
-          <Dashboard
-            v-show="!settingsOpen"
-            ref="dashboardRef"
-            :initial-application-id="applicationId"
-            @fullscreen-panel-change="handleFullscreenPanelChange"
-          />
-          <SettingsPage v-if="settingsOpen" @close="settingsOpen = false" />
-        </template>
+        <CardWindow v-if="isCardWindow" v-show="!settingsOpen" />
+        <Dashboard
+          v-else
+          v-show="!settingsOpen"
+          ref="dashboardRef"
+          :initial-application-id="applicationId"
+          @fullscreen-panel-change="handleFullscreenPanelChange"
+        />
+        <SettingsPage
+          v-if="settingsOpen"
+          :initial-section="settingsInitialSection"
+          @close="settingsOpen = false"
+        />
       </main>
       <UpdateDialog v-if="!isCardWindow" />
     </div>

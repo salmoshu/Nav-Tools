@@ -1,10 +1,6 @@
 <template>
-  <div class="card-window">
-    <component
-      v-if="cardComponent"
-      :is="cardComponent"
-      v-bind="cardProps"
-    />
+  <div class="card-window component-surface">
+    <component v-if="cardComponent" :is="cardComponent" v-bind="cardProps" />
     <div v-else-if="loadError" class="load-error">
       <p class="message">{{ t('app.cardWindow.loadFailed') }}</p>
       <p class="detail">{{ loadError }}</p>
@@ -56,9 +52,7 @@ onMounted(async () => {
     // componentName 为面板类型名，组件实际位于对应的分类目录中。
     const loader =
       modules[`./${componentName}.vue`] ??
-      Object.entries(modules).find(([path]) =>
-        path.endsWith(`/${componentName}.vue`)
-      )?.[1]
+      Object.entries(modules).find(([path]) => path.endsWith(`/${componentName}.vue`))?.[1]
 
     if (!loader) {
       loadError.value = t('app.cardWindow.componentNotFound', { v: componentName })
@@ -76,9 +70,7 @@ onMounted(async () => {
       // 组件独立窗口的任务栏/Alt+Tab 图标换成「组件主体+logo角标」合成图标，
       // 主进程同时缓存 PNG 供下次开窗口（含快捷方式冷启动）直接使用
       void buildComponentIconDataUrl(cardWindowId.value)
-        .then((dataUrl) =>
-          window.ipcRenderer?.invoke('set-component-window-icon', { dataUrl }),
-        )
+        .then((dataUrl) => window.ipcRenderer?.invoke('set-component-window-icon', { dataUrl }))
         .catch(() => {
           /* 图标合成失败时使用默认应用图标 */
         })

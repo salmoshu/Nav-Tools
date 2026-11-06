@@ -5,6 +5,12 @@ test.describe.configure({ timeout: 120_000 })
 test('reorders applications with neighboring-card movement and persists the order', async ({
   page,
 }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem(
+      'nav-tools:enabled-default-applications',
+      JSON.stringify(['serial', 'motor', 'gnss', 'gnssraw', 'camera', 'lidar', 'gnsslib']),
+    )
+  })
   await page.goto('/')
   const cards = page.locator('.application-card')
   await expect(cards).toHaveCount(7)
@@ -13,9 +19,9 @@ test('reorders applications with neighboring-card movement and persists the orde
     'Flow',
     'GNSS',
     'GNSS-Raw',
-    'GNSS-Lib',
     'Camera',
     'LiDAR',
+    'GNSS-Lib',
   ])
 
   await cards.filter({ hasText: 'Camera' }).dragTo(cards.nth(0))
@@ -25,8 +31,8 @@ test('reorders applications with neighboring-card movement and persists the orde
     'Flow',
     'GNSS',
     'GNSS-Raw',
-    'GNSS-Lib',
     'LiDAR',
+    'GNSS-Lib',
   ])
   await expect
     .poll(() =>
@@ -35,7 +41,7 @@ test('reorders applications with neighboring-card movement and persists the orde
         return raw ? JSON.parse(raw).map((entry: { id: string }) => entry.id) : []
       }),
     )
-    .toEqual(['camera', 'serial', 'motor', 'gnss', 'gnssraw', 'gnsslib', 'lidar'])
+    .toEqual(['camera', 'serial', 'motor', 'gnss', 'gnssraw', 'lidar', 'gnsslib'])
 
   await page.reload()
   await expect(page.locator('.application-card h2')).toHaveText([
@@ -44,8 +50,8 @@ test('reorders applications with neighboring-card movement and persists the orde
     'Flow',
     'GNSS',
     'GNSS-Raw',
-    'GNSS-Lib',
     'LiDAR',
+    'GNSS-Lib',
   ])
 })
 
@@ -151,7 +157,7 @@ test('creates a selected terminal type, splits it, and restores the workspace af
   await expect(page.locator('.terminal-tab.active .tab-label')).toHaveText('PowerShell')
   await expect(page.locator('.terminal-pane')).toHaveCount(2)
 
-  await page.getByRole('button', { name: /Settings|设置/ }).click()
+  await page.getByRole('button', { name: /^(Settings|设置)$/ }).click()
   await page.getByText(/Keyboard Shortcuts|快捷键/, { exact: true }).click()
   await expect(page.getByRole('heading', { name: /Keyboard Shortcuts|快捷键/ })).toBeVisible()
   await expect(page.locator('.shortcut-category')).toHaveText(/Terminal|终端/)

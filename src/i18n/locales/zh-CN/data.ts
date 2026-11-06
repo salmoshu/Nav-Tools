@@ -14,7 +14,7 @@ export default {
   qualitySingle: '单点定位解',
   qualityDgnss: '伪距差分',
   qualityFix: '固定解',
-  qualityFloat: '浮动解',
+  qualityFloat: '浮点解',
   qualityUnknown: '未知',
 
   // useNmea.ts — signal / fix status labels

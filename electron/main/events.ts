@@ -1,6 +1,10 @@
 import fs from 'node:fs'
 import { BrowserWindow, type IpcMainEvent, type IpcMainInvokeEvent } from 'electron'
 import { SerialPortService, type SerialPortOptions } from './services/SerialPortService'
+import { DataInjectionService, type InjectionTarget } from './services/DataInjectionService'
+import type { DataInjectionSettings } from '../../src/core/data/DataInjection'
+import { fetchNtripMountpoints } from './services/NtripSourceTableService'
+import type { NtripCasterOptions } from '../../src/core/data/NtripSourceTable'
 import { IapUpgradeService } from './services/IapUpgradeService'
 import type { IapUpgradeRequest } from '../../src/core/iap/IapUpgrade'
 import {
@@ -19,6 +23,56 @@ import { ReadParamsSniffer, type CameraParamSnapshot } from '../../src/core/came
 
 const serialService = new SerialPortService()
 const networkService = new NetworkConnectionService()
+let primaryTransport: 'serial' | 'network' | undefined
+let primaryOwnerId: number | undefined
+let primaryGeneration = 0
+
+function injectionTarget(): InjectionTarget | undefined {
+  if (primaryTransport === 'serial') {
+    const options = serialService.getConnectionInfo()
+    if (options) return {
+      id: `serial:${primaryGeneration}`, label: options.path, serialPath: options.path,
+      write: (data) => serialService.sendBuffer(data),
+    }
+  }
+  if (primaryTransport === 'network') {
+    const options = networkService.getConnectionInfo()
+    if (options) return {
+      id: `network:${primaryGeneration}`, label: `${options.protocol.toUpperCase()} ${options.host}:${options.port}`,
+      write: (data) => networkService.sendBuffer(data),
+    }
+  }
+}
+
+const dataInjectionService = new DataInjectionService(injectionTarget, (status) => {
+  for (const window of BrowserWindow.getAllWindows()) {
+    if (!window.isDestroyed() && !window.webContents.isDestroyed())
+      window.webContents.send('data-injection-status', status)
+  }
+})
+serialService.onRawData((data) => { if (primaryTransport === 'serial') dataInjectionService.receivePrimary(data) })
+networkService.onRawData((data) => { if (primaryTransport === 'network') dataInjectionService.receivePrimary(data) })
+
+async function invalidateInjectionTarget(): Promise<void> {
+  primaryTransport = undefined
+  ++primaryGeneration
+  await dataInjectionService.stop()
+}
+
+const injectionOwners = new Set<number>()
+async function startDataInjection(event: IpcMainInvokeEvent, settings: DataInjectionSettings) {
+  const ownerId = event.sender.id
+  if (primaryOwnerId !== ownerId)
+    throw new Error('Connect Data source A in this window before starting injection')
+  if (!injectionOwners.has(ownerId)) {
+    injectionOwners.add(ownerId)
+    event.sender.once('destroyed', () => {
+      injectionOwners.delete(ownerId)
+      if (primaryOwnerId === ownerId) void invalidateInjectionTarget()
+    })
+  }
+  return dataInjectionService.start(settings)
+}
 const cameraCommandService = new CameraCommandService({
   write: (packet) => networkService.sendTcp(packet),
 })
@@ -108,6 +162,13 @@ export interface SendDataChunkRequest {
 }
 
 const eventsMap = {
+  'data-injection-mountpoints': (_event: IpcMainInvokeEvent, options: NtripCasterOptions) => fetchNtripMountpoints(options),
+  'data-injection-start': startDataInjection,
+  'data-injection-stop': () => dataInjectionService.stop(),
+  'data-injection-status': () => dataInjectionService.getStatus(),
+  'data-injection-clear-target': (event: IpcMainInvokeEvent) => {
+    if (primaryOwnerId === event.sender.id) return invalidateInjectionTarget()
+  },
   'console-to-node': consoleToNode,
   'search-serial-ports': searchSerialPorts,
   'open-serial-port': openSerialPort,
@@ -140,14 +201,22 @@ function searchSerialPorts() {
   return serialService.listPorts()
 }
 
-function openSerialPort(event: IpcMainInvokeEvent, options: SerialPortOptions) {
-  return serialService.open(options, {
+async function openSerialPort(event: IpcMainInvokeEvent, options: SerialPortOptions) {
+  await invalidateInjectionTarget()
+  const attempt = primaryGeneration
+  const result = await serialService.open(options, {
     onData: (data) => event.sender.send('serial-data-to-renderer', data),
-    onDisconnected: (path) => event.sender.send('serial-disconnected', { path }),
+    onDisconnected: (path) => {
+      if (primaryTransport === 'serial') void invalidateInjectionTarget()
+      if (!event.sender.isDestroyed()) event.sender.send('serial-disconnected', { path })
+    },
   })
+  if (attempt === primaryGeneration) { primaryTransport = 'serial'; primaryOwnerId = event.sender.id }
+  return result
 }
 
-function closeSerialPort(_event: IpcMainInvokeEvent, options: SerialPortOptions) {
+async function closeSerialPort(_event: IpcMainInvokeEvent, options: SerialPortOptions) {
+  if (primaryTransport === 'serial') await invalidateInjectionTarget()
   return serialService.close(options)
 }
 
@@ -174,15 +243,24 @@ function changeSerialDataFormat(_event: IpcMainEvent, format: string) {
   networkService.setDataFormat(format)
 }
 
-function openNetworkConnection(event: IpcMainInvokeEvent, options: NetworkConnectionOptions) {
+async function openNetworkConnection(event: IpcMainInvokeEvent, options: NetworkConnectionOptions) {
+  await invalidateInjectionTarget()
+  const attempt = primaryGeneration
   cameraCalibrationService.stopForControlLinkChange('控制连接正在改变，已停止自动标定（观测保持运行）')
   return networkService
     .open(options, {
       onData: (data) => event.sender.send('network-data-to-renderer', data),
       onDisconnected: (connection, reason) => {
+        if (primaryTransport === 'network') void invalidateInjectionTarget()
         cameraCalibrationService.stopForControlLinkChange('控制连接已断开，设备参数需人工核实')
         event.sender.send('network-disconnected', { ...connection, reason })
       },
+    })
+    .then(() => {
+      if (attempt === primaryGeneration && networkService.getConnectionInfo()) {
+        primaryTransport = 'network'
+        primaryOwnerId = event.sender.id
+      }
     })
     .catch((error: unknown) => {
       // 用户取消或被新连接顶掉属预期结局, 不作为 handler 异常刷主进程控制台;
@@ -194,10 +272,12 @@ function openNetworkConnection(event: IpcMainInvokeEvent, options: NetworkConnec
 }
 
 function cancelNetworkConnect() {
+  void invalidateInjectionTarget()
   networkService.cancelPending()
 }
 
-function closeNetworkConnection() {
+async function closeNetworkConnection() {
+  if (primaryTransport === 'network') await invalidateInjectionTarget()
   cameraCalibrationService.stopForControlLinkChange('控制连接已关闭，已停止自动标定（观测保持运行）')
   return networkService.close()
 }
@@ -241,7 +321,8 @@ async function sendDataChunk(
   await serialService.send(data, format)
 }
 
-function startIapUpgrade(event: IpcMainInvokeEvent, request: IapUpgradeRequest) {
+async function startIapUpgrade(event: IpcMainInvokeEvent, request: IapUpgradeRequest) {
+  await dataInjectionService.stop()
   return iapUpgradeService.start(event.sender, request)
 }
 
@@ -277,4 +358,4 @@ async function readFileEvent(event: IpcMainInvokeEvent, filePath: string) {
   }
 }
 
-export { eventsMap, iapUpgradeService, cameraCalibrationService }
+export { eventsMap, iapUpgradeService, cameraCalibrationService, dataInjectionService }

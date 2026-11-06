@@ -17,7 +17,7 @@ test('settings header shares the sidebar width and centers the back label with i
     localStorage.setItem('nav-tools:selected-application', application.id)
   })
   await page.goto('/#app/settings-layout')
-  await page.getByRole('button', { name: /Settings|设置/ }).click()
+  await page.getByRole('button', { name: /^(Settings|设置)$/ }).click()
 
   const header = page.locator('.settings-header')
   const nav = page.locator('.settings-nav')

@@ -3,6 +3,7 @@ import { JsonStorage } from '../storage/JsonStorage'
 
 const APPLICATIONS_KEY = 'nav-tools:custom-applications'
 const SELECTED_APPLICATION_KEY = 'nav-tools:selected-application'
+const ENABLED_DEFAULT_APPLICATIONS_KEY = 'nav-tools:enabled-default-applications'
 const CAMERA_DEFAULT_MIGRATION_KEY = 'nav-tools:migration:camera-default-v1'
 const CAMERA_PARAMETERS_MIGRATION_KEY = 'nav-tools:migration:camera-parameters-v1'
 const SERIAL_DEFAULT_MIGRATION_KEY = 'nav-tools:migration:serial-default-v1'
@@ -12,7 +13,14 @@ const CAMERA_TERMINAL_MIGRATION_KEY = 'nav-tools:migration:camera-terminal-v1'
 const LIDAR_DEFAULT_MIGRATION_KEY = 'nav-tools:migration:lidar-default-v1'
 const GNSSRAW_DEFAULT_MIGRATION_KEY = 'nav-tools:migration:gnssraw-default-v1'
 const GNSSLIB_DEFAULT_MIGRATION_KEY = 'nav-tools:migration:gnsslib-default-v1'
-const APPLICATION_ORDER_MIGRATION_KEY = 'nav-tools:migration:application-order-v1'
+const APPLICATION_ORDER_MIGRATION_KEY = 'nav-tools:migration:application-order-v2'
+
+export const DEFAULT_ENABLED_APPLICATION_IDS: readonly string[] = [
+  'serial',
+  'gnss',
+  'gnssraw',
+  'gnsslib',
+]
 
 export const DEFAULT_APPLICATIONS: readonly UserApplication[] = [
   {
@@ -55,14 +63,6 @@ export const DEFAULT_APPLICATIONS: readonly UserApplication[] = [
     ],
   },
   {
-    id: 'gnsslib',
-    name: 'GNSS-Lib',
-    description: 'Robo-GNSS post-processing and real-time positioning workspace',
-    icon: 'satellite',
-    accent: '#7c3aed',
-    windowIds: ['gnsslib-rtkpost', 'gnsslib-rtknavi'],
-  },
-  {
     id: 'camera',
     name: 'Camera',
     description: 'Camera live video and parameter control workspace',
@@ -77,6 +77,14 @@ export const DEFAULT_APPLICATIONS: readonly UserApplication[] = [
     icon: 'radar',
     accent: '#06b6d4',
     windowIds: ['lidar-scene', 'lidar-scores', 'lidar-plot', 'lidar-inspector'],
+  },
+  {
+    id: 'gnsslib',
+    name: 'GNSS-Lib',
+    description: 'Robo-GNSS post-processing and real-time positioning workspace',
+    icon: 'satellite',
+    accent: '#7c3aed',
+    windowIds: ['gnsslib-rtkpost', 'gnsslib-rtknavi'],
   },
 ]
 
@@ -212,11 +220,13 @@ export class ApplicationStorage {
       }
       this.storage.writeRaw(GNSSLIB_DEFAULT_MIGRATION_KEY, '1')
     }
-    // 默认顺序调整（serial/Flow/GNSS/GNSS-Raw/GNSS-Lib/Camera/LiDAR）：已有存储按默认
+    // 默认顺序调整（Serial/Flow/GNSS/GNSS-Raw/Camera/LiDAR/GNSS-Lib）：已有存储按默认
     // 顺序重排一次；不在默认表中的自定义应用保持在末尾且相对顺序稳定。
     // 迁移只跑一次，此后用户手动拖动的顺序不再被覆盖。
     if (this.storage.readRaw(APPLICATION_ORDER_MIGRATION_KEY) === null) {
-      const orderIndex = new Map(DEFAULT_APPLICATIONS.map((application, index) => [application.id, index]))
+      const orderIndex = new Map(
+        DEFAULT_APPLICATIONS.map((application, index) => [application.id, index]),
+      )
       applications.sort((a, b) => {
         const aIndex = orderIndex.get(a.id)
         const bIndex = orderIndex.get(b.id)
@@ -233,6 +243,24 @@ export class ApplicationStorage {
 
   public saveApplications(applications: UserApplication[]): void {
     this.storage.write(APPLICATIONS_KEY, applications)
+  }
+
+  public loadEnabledDefaultApplicationIds(): string[] {
+    const stored = this.storage.read<string[]>(
+      ENABLED_DEFAULT_APPLICATIONS_KEY,
+      [...DEFAULT_ENABLED_APPLICATION_IDS],
+      (value): value is string[] =>
+        Array.isArray(value) && value.every((id) => typeof id === 'string'),
+    )
+    return this.saveEnabledDefaultApplicationIds(stored)
+  }
+
+  public saveEnabledDefaultApplicationIds(ids: readonly string[]): string[] {
+    const enabled = DEFAULT_APPLICATIONS.filter((application) => ids.includes(application.id)).map(
+      (application) => application.id,
+    )
+    this.storage.write(ENABLED_DEFAULT_APPLICATIONS_KEY, enabled)
+    return enabled
   }
 
   /**

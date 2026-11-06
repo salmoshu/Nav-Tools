@@ -114,10 +114,10 @@ const loadTextIntoActiveWindows = (content: string, sourceName?: string) => {
     initFlowConsole(content)
     handled = true
   }
-  // GNSS 应用激活时，加载的文本文件（如 NMEA）也要进入 GNSS 解析管线，
-  // 否则轨迹图会空白、只有 raw-messages 面板能看到导入内容。
+  // GNSS 应用或选择 NMEA 格式的任意应用，都把加载文本送入 GNSS 解析管线，
+  // 否则轨迹与 Status View 会空白、只有 raw-messages 面板能看到导入内容。
   // 与重播路径保持一致：先清空旧轨迹再解析，保证导入数据干净可见。
-  if (activeDataModes.value.includes('gnss')) {
+  if (activeDataModes.value.includes('gnss') || activeDataParser.value === 'nmea') {
     clearGnssData()
     addGnssData(content)
     handled = true
@@ -212,6 +212,11 @@ const activeRegexPattern = computed(() => {
   if (globalDevice.value.type === 'file') return dataSourceSettings.file.regexPattern
   return dataSourceSettings.file.regexPattern
 })
+
+// 切换到文件输入也会使主进程中的注入目标失效，避免继续向上一次的设备发送差分数据。
+watch([() => globalDevice.value.type, () => dataSourceSettings.activeSource], ([type, source]) => {
+  if (type === 'file' || source === 'file') void ipc.invoke('data-injection-clear-target').catch(() => undefined)
+}, { flush: 'sync' })
 
 watch(
   [activeDataParser, activeRegexPattern],
@@ -358,6 +363,7 @@ function routeIncomingData(data: string): void {
     activeDataModes: activeDataModes.value,
     activeWindowIds: currentWindows.value.map((windowDefinition) => windowDefinition.id),
     displayFormat: flowDisplayFormat.value === 'hex' ? 'hex' : 'ascii',
+    dataParser: activeDataParser.value,
   })
   // 只有持有已配置设备的渲染进程（即主窗口）才把原始数据广播给独立窗口
   if (globalDevice.value.connected !== null) {
@@ -374,6 +380,7 @@ export function routeDataToWindow(data: string, windowId: string): void {
     activeDataModes: [windowDefinition?.funcMode ?? 'general'],
     activeWindowIds: [windowId],
     displayFormat: 'ascii',
+    dataParser: activeDataParser.value,
   })
 }
 
@@ -727,7 +734,7 @@ function isTimeTagMissingError(error: unknown): boolean {
 }
 
 function startTimestampPlayback(path: string): void {
-  if (activeDataModes.value.includes('gnss')) {
+  if (activeDataModes.value.includes('gnss') || activeDataParser.value === 'nmea') {
     const loadTimeline =
       selectedFile.value && selectedFilePath.value === path
         ? loadGnssTimelineFile(selectedFile.value, 'replay')
@@ -1014,7 +1021,7 @@ export function useDevice() {
             }
             saveDataSourceSettings()
 
-            if (activeDataModes.value.includes('gnss')) {
+            if (activeDataModes.value.includes('gnss') || activeDataParser.value === 'nmea') {
               await filePlaybackService.stop()
               await loadGnssTimelineFile(file, 'loaded')
               break
@@ -1046,7 +1053,7 @@ export function useDevice() {
             })
           }
         } catch (error) {
-          if (activeDataModes.value.includes('gnss')) {
+          if (activeDataModes.value.includes('gnss') || activeDataParser.value === 'nmea') {
             fileTimeline.clearTimeline()
             clearGnssData()
           }
@@ -1324,7 +1331,7 @@ export function useDevice() {
 
     void filePlaybackService.stop()
 
-    if (activeDataModes.value.includes('gnss')) {
+    if (activeDataModes.value.includes('gnss') || activeDataParser.value === 'nmea') {
       const loadTimeline =
         selectedFile.value && selectedFilePath.value === fileCmd
           ? loadGnssTimelineFile(selectedFile.value, 'loaded')

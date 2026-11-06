@@ -308,21 +308,30 @@
           </template>
           <div
             v-if="recentInputFiles.length > 0"
-            class="input-group compact-input-group mcap-recent-group"
+            class="input-group compact-input-group"
           >
             <span class="input-label">{{ t('app.toolbar.recentFiles') }}</span>
-            <div class="mcap-recent-list">
-              <button
+            <el-select
+              :model-value="recentInputFiles.some((item) => item.path === filePath) ? filePath : undefined"
+              :placeholder="t('app.toolbar.recentFilesPlaceholder')"
+              :aria-label="t('app.toolbar.recentFiles')"
+              :disabled="fileInputLoading"
+              class="recent-files-select"
+              popper-class="recent-files-dropdown"
+              filterable
+              :teleported="true"
+              @change="selectFilePath"
+            >
+              <el-option
                 v-for="item in recentInputFiles"
                 :key="item.path"
-                type="button"
-                class="mcap-recent-item"
+                :value="item.path"
+                :label="`${item.name} — ${item.path}`"
+                class="recent-file-option"
                 :title="item.paths?.join('\n') ?? item.path"
-                :disabled="fileInputLoading"
-                @click="selectFilePath(item.path)"
               >
-                <span class="mcap-recent-text">
-                  <span class="mcap-recent-name">
+                <span class="recent-file-text">
+                  <span class="recent-file-name">
                     {{ item.name
                     }}<template v-if="(item.paths?.length ?? 0) > 1"
                       >（{{
@@ -330,11 +339,11 @@
                       }}）</template
                     >
                   </span>
-                  <span class="mcap-recent-path">{{ item.path }}</span>
+                  <span class="recent-file-path">{{ item.path }}</span>
                 </span>
-                <span class="mcap-recent-size">{{ formatMcapSize(item.sizeBytes) }}</span>
-              </button>
-            </div>
+                <span class="recent-file-size">{{ formatMcapSize(item.sizeBytes) }}</span>
+              </el-option>
+            </el-select>
           </div>
         </div>
       </el-tab-pane>
@@ -557,6 +566,9 @@
       </el-tab-pane>
         </el-tabs>
       </el-tab-pane>
+      <el-tab-pane :label="t('app.injection.tab')" name="injection">
+        <DataInjectionPanel ref="injectionPanelRef" :tab-position="inputTabPosition" />
+      </el-tab-pane>
       <el-tab-pane :label="t('app.toolbar.appConnections')" name="connections">
         <div
           v-if="appConnectionItems.length > 0"
@@ -592,7 +604,12 @@
     </el-tabs>
     <template #footer>
       <el-button @click="showInputDialog = false">{{ t('app.cancel') }}</el-button>
-      <el-button type="primary" :loading="fileInputLoading" @click="handleInputSubmit">{{
+      <el-button
+        type="primary"
+        :loading="fileInputLoading"
+        :disabled="inputMainTab === 'injection' && !injectionPanelRef?.desktop"
+        @click="submitInputDialog"
+      >{{
         inputSubmitLabel
       }}</el-button>
     </template>
@@ -637,6 +654,7 @@ import { useFileTimeline } from '@/composables/useFileTimeline'
 import FileTimelineControl from '@/components/FileTimelineControl.vue'
 import LidarTimelineControl from '@/components/LidarTimelineControl.vue'
 import GnssRawLoadingControl from '@/components/GnssRawLoadingControl.vue'
+import DataInjectionPanel from '@/components/DataInjectionPanel.vue'
 import { useGnssRaw } from '@/composables/useGnssRaw'
 import { useAppConnections } from '@/composables/useAppConnections'
 import { useMcapPlayer } from '@/composables/useMcapPlayer'
@@ -814,7 +832,9 @@ const regexPatternError = computed(() => {
     return error instanceof Error ? error.message : String(error)
   }
 })
-const inputSubmitLabel = computed(() => t('app.confirm'))
+const inputSubmitLabel = computed(() => inputMainTab.value === 'injection'
+  ? t(injectionPanelRef.value?.active || injectionPanelRef.value?.starting ? 'app.injection.stop' : 'app.injection.start')
+  : t('app.confirm'))
 
 watch(networkProtocol, (protocol) => {
   if (protocol === 'udp' && networkIp.value === '127.0.0.1') networkIp.value = '0.0.0.0'
@@ -836,8 +856,17 @@ const networkPortText = computed({
 })
 
 // ---- 应用连接总览: 按当前应用组件派生数据通道状态（useAppConnections） ----
-// 弹框分两个主 Tab：数据源配置（文件/串口/网络）与应用连接（当前应用的通道总览）
-const inputMainTab = ref<'config' | 'connections'>('config')
+// 数据源 A、数据注入 B、应用连接 C 各自配置；B 的确认按钮不会提交 A 的设置。
+const inputMainTab = ref<'config' | 'injection' | 'connections'>('config')
+const injectionPanelRef = ref<InstanceType<typeof DataInjectionPanel> | null>(null)
+const submitInputDialog = () => {
+  if (inputMainTab.value === 'injection') {
+    const panel = injectionPanelRef.value
+    if (panel?.active || panel?.starting) void panel.stop()
+    else void panel?.start()
+  }
+  else void handleInputSubmit()
+}
 const { items: appConnectionItems, refresh: refreshAppConnections } = useAppConnections({
   gotoTab: (tab) => {
     inputMainTab.value = 'config'
@@ -2390,59 +2419,41 @@ onUnmounted(() => {
 
 /* 文件输入中的最近文件 */
 
-.mcap-recent-group {
-  align-items: flex-start;
-}
-
-.mcap-recent-list {
-  display: flex;
+.recent-files-select {
   min-width: 0;
   flex: 1;
-  flex-direction: column;
-  gap: 4px;
-  max-height: 128px;
-  overflow-y: auto;
-  padding: 6px;
-  background: var(--app-surface-muted);
-  border: 1px solid var(--app-border);
-  border-radius: 8px;
 }
 
-.mcap-recent-item {
+:global(.recent-files-dropdown) {
+  max-width: calc(100vw - 32px);
+  z-index: 9000 !important;
+}
+
+.recent-file-option {
   display: flex;
   align-items: center;
   gap: 8px;
-  width: 100%;
-  padding: 4px 8px;
-  color: var(--app-text);
+  height: auto;
+  min-height: 48px;
+  padding: 6px 20px;
   font-size: 12px;
-  text-align: left;
-  background: transparent;
-  border: 1px solid transparent;
-  border-radius: 6px;
-  cursor: pointer;
+  line-height: 18px;
 }
 
-.mcap-recent-item:enabled:hover {
-  color: var(--el-color-primary);
-  background: color-mix(in srgb, var(--el-color-primary) 8%, var(--app-surface));
-  border-color: color-mix(in srgb, var(--el-color-primary) 30%, var(--app-border));
-}
-
-.mcap-recent-text {
+.recent-file-text {
   display: flex;
   min-width: 0;
   flex: 1;
   flex-direction: column;
 }
 
-.mcap-recent-name {
+.recent-file-name {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.mcap-recent-path {
+.recent-file-path {
   overflow: hidden;
   color: var(--app-text-muted);
   font-size: 11px;
@@ -2450,7 +2461,7 @@ onUnmounted(() => {
   white-space: nowrap;
 }
 
-.mcap-recent-size {
+.recent-file-size {
   flex: none;
   color: var(--app-text-muted);
 }

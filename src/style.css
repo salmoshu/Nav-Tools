@@ -323,3 +323,39 @@ code {
 .dark .search-bar .el-button {
   color: var(--app-text-muted) !important;
 }
+/* Component actions respond to the card/window width, including detached and
+ * full-screen cards. Buttons without an icon intentionally keep their labels. */
+.component-surface {
+  container-name: component-surface;
+  container-type: inline-size;
+}
+
+@container component-surface (max-width: 620px) {
+  .component-surface .el-button:has(.el-icon, > svg, > span > svg, > span > .el-icon) {
+    --component-action-icon-size: 14px;
+    font-size: 0;
+  }
+
+  .component-surface .el-button--small:has(.el-icon, > svg, > span > svg, > span > .el-icon),
+  .component-surface .control-btn:has(.el-icon, > svg, > span > svg, > span > .el-icon),
+  .component-surface .input-container .el-button:has(.el-icon, > svg, > span > svg, > span > .el-icon) {
+    --component-action-icon-size: 12px;
+  }
+
+  .component-surface .el-button:has(.el-icon, > svg, > span > svg, > span > .el-icon) > span > span,
+  .component-surface
+    .el-button:has(.el-icon, > svg, > span > svg, > span > .el-icon)
+    > span:not(.el-icon) {
+    font-size: 0;
+  }
+
+  .component-surface .el-button:has(.el-icon, > svg, > span > svg, > span > .el-icon) .el-icon {
+    font-size: var(--component-action-icon-size);
+  }
+
+  .component-surface .el-button:has(.el-icon, > svg, > span > svg, > span > .el-icon) > svg,
+  .component-surface .el-button:has(.el-icon, > svg, > span > svg, > span > .el-icon) > span > svg {
+    width: var(--component-action-icon-size);
+    height: var(--component-action-icon-size);
+  }
+}

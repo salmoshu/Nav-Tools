@@ -23,10 +23,24 @@
         <span class="size-value">{{ pointSize }}</span>
       </div>
       <div class="toolbar-right">
-        <el-button type="primary" size="small" @click="resetLayout" class="control-btn">
+        <el-button
+          type="primary"
+          size="small"
+          class="control-btn"
+          :title="t('gnss.deviation.resetLayout')"
+          :aria-label="t('gnss.deviation.resetLayout')"
+          @click="resetLayout"
+        >
           <el-icon><RefreshLeft /></el-icon>&nbsp;{{ t('gnss.deviation.resetLayout') }}
         </el-button>
-        <el-button type="primary" size="small" @click="clearTrack" class="control-btn">
+        <el-button
+          type="primary"
+          size="small"
+          class="control-btn"
+          :title="t('gnss.deviation.clear')"
+          :aria-label="t('gnss.deviation.clear')"
+          @click="clearTrack"
+        >
           <el-icon><Delete /></el-icon>&nbsp;{{ t('gnss.deviation.clear') }}
         </el-button>
         <el-popover placement="bottom-start" :width="420" trigger="click">
@@ -39,6 +53,7 @@
             <h4>{{ t('gnss.map.offlineTitle') }}</h4>
             <template v-if="isElectron">
               <p>{{ t('gnss.map.offlineDesc1') }}</p>
+              <p>{{ t('gnss.map.offlineAutoCache') }}</p>
               <p class="help-step-title">{{ t('gnss.map.offlineStepsTitle') }}</p>
               <ol class="help-steps">
                 <li>
@@ -59,7 +74,13 @@
               <p>{{ t('gnss.map.offlineDesc2') }}</p>
               <p>
                 {{ t('gnss.map.offlineDesc3Prefix') }}
-                <el-button size="small" class="copy-dir-btn" :title="t('gnss.map.copyDirTitle')" @click="copyTilesDir">{{ t('gnss.map.offlineCopyDir') }}</el-button>
+                <el-button
+                  size="small"
+                  class="copy-dir-btn"
+                  :title="t('gnss.map.copyDirTitle')"
+                  @click="copyTilesDir"
+                  >{{ t('gnss.map.offlineCopyDir') }}</el-button
+                >
               </p>
             </template>
             <p v-else>
@@ -83,6 +104,7 @@ import { numberToQuality, useNmea } from '@/composables/gnss/useNmea'
 import { useFileTimeline } from '@/composables/useFileTimeline'
 import { fixStatusColor } from '@/components/windows/gnss/fixStatusColors'
 import { createTrackSimplifier } from '@/core/gnss/TrackSimplification'
+import { sanitizeMapTrackPoints } from '@/core/gnss/MapTileCache'
 import { t } from '@/i18n'
 
 const gnssStore = useGnssStore()
@@ -150,6 +172,9 @@ const TRACK_RENDER_BUDGET_MS = 4
 const TRACK_BULK_THRESHOLD = 512
 const TRACK_BULK_POINTS_PER_FRAME = 4096
 const MAP_FOLLOW_INTERVAL_MS = 50
+const MAP_TILE_TRACK_SYNC_DELAY_MS = 250
+let mapTileTrackSyncTimer: ReturnType<typeof setTimeout> | null = null
+let pendingMapTileTrack: readonly SourceTrackPoint[] | null = null
 
 const tileUrl = computed(() => (isElectron ? ELECTRON_TILE_URL : WEB_TILE_URL))
 
@@ -255,7 +280,10 @@ function addHistoryPoint(point: RenderedPoint): void {
   historyPointMarkers.push(marker)
 }
 
-function createTrackSegment(point: RenderedPoint, previousPoint?: RenderedPoint): TrackSegment | null {
+function createTrackSegment(
+  point: RenderedPoint,
+  previousPoint?: RenderedPoint,
+): TrackSegment | null {
   if (!map) return null
   // 新分段以上一个点为起点，保证轨迹连续不断开。
   // 轨迹连线用中性灰细线（与偏差图/位置图的点线形态一致），解质量色保留在当前定位点标记上
@@ -277,7 +305,10 @@ function createTrackSegment(point: RenderedPoint, previousPoint?: RenderedPoint)
 }
 
 // 追加一个已通过抽稀判定的轨迹点：相邻同解状态的点并入当前段，状态切换或分块满时另起一段。
-function appendRenderedPoint(point: RenderedPoint, previousPoint?: RenderedPoint): TrackSegment | null {
+function appendRenderedPoint(
+  point: RenderedPoint,
+  previousPoint?: RenderedPoint,
+): TrackSegment | null {
   if (!map) return null
 
   const lastSegment = trackSegments[trackSegments.length - 1]
@@ -314,10 +345,7 @@ function appendTrackPosition(longitude: number, latitude: number, quality: numbe
 // A matching GGA sample replaces the provisional RMC sample at the source tail.
 // Update only that rendered point so a live 10 Hz stream does not rebuild its
 // Leaflet history every time an epoch is coalesced.
-function replaceLatestTrackPoint(
-  previous: SourceTrackPoint,
-  replacement: SourceTrackPoint,
-): void {
+function replaceLatestTrackPoint(previous: SourceTrackPoint, replacement: SourceTrackPoint): void {
   const pendingIndex = pendingTrackPoints.lastIndexOf(previous)
   if (pendingIndex >= pendingTrackHead) {
     pendingTrackPoints[pendingIndex] = replacement
@@ -354,9 +382,7 @@ function replaceLatestTrackPoint(
   if (historyMarker) {
     historyMarker.setLatLng(replacementLatLng)
     historyMarker.setStyle({ fillColor: fixStatusColor(lastRendered.quality) })
-    historyMarker.setTooltipContent(
-      historyPointTooltip(lastRendered, historyPointMarkers.length),
-    )
+    historyMarker.setTooltipContent(historyPointTooltip(lastRendered, historyPointMarkers.length))
   }
   simplifier?.replace(
     { lat: previousLatLng[0], lng: previousLatLng[1] },
@@ -534,6 +560,7 @@ function clearTrack() {
   firstObservedSourcePoint = mapTrackPoints.value[0]
   lastObservedSourcePoint = mapTrackPoints.value.at(-1)
   clearRenderedTrack()
+  sendMapTileTrack([], true)
 }
 
 function resetTrackHistory() {
@@ -563,9 +590,7 @@ function syncTrackSource() {
   const source = mapTrackPoints.value
   const sourceReset =
     source.length < observedSourceCount ||
-    (source.length > 0 &&
-      observedSourceCount > 0 &&
-      source[0] !== firstObservedSourcePoint)
+    (source.length > 0 && observedSourceCount > 0 && source[0] !== firstObservedSourcePoint)
 
   if (sourceReset) {
     resetTrackHistory()
@@ -575,19 +600,39 @@ function syncTrackSource() {
     lastObservedSourcePoint &&
     source[observedSourceCount - 1] !== lastObservedSourcePoint
   ) {
-    replaceLatestTrackPoint(
-      lastObservedSourcePoint,
-      source[observedSourceCount - 1],
-    )
+    replaceLatestTrackPoint(lastObservedSourcePoint, source[observedSourceCount - 1])
   }
 
   for (let index = observedSourceCount; index < source.length; index++) {
     pendingTrackPoints.push(source[index])
   }
+  const syncCacheImmediately = sourceReset || observedSourceCount === 0 || source.length === 0
   observedSourceCount = source.length
   firstObservedSourcePoint = source[0]
   lastObservedSourcePoint = source.at(-1)
+  sendMapTileTrack(source, syncCacheImmediately)
   scheduleTrackRender()
+}
+
+function sendMapTileTrack(source: readonly SourceTrackPoint[], immediate = false): void {
+  if (!isElectron || !window.ipcRenderer?.send) return
+  pendingMapTileTrack = source
+  if (immediate) {
+    if (mapTileTrackSyncTimer !== null) clearTimeout(mapTileTrackSyncTimer)
+    mapTileTrackSyncTimer = null
+    pendingMapTileTrack = null
+    window.ipcRenderer.send('map-tile-track-update', sanitizeMapTrackPoints(source))
+    return
+  }
+  // Keep the first deadline while streaming; restarting it for every fix would
+  // postpone cache updates indefinitely at common GNSS sampling rates.
+  if (mapTileTrackSyncTimer !== null) return
+  mapTileTrackSyncTimer = setTimeout(() => {
+    mapTileTrackSyncTimer = null
+    const points = pendingMapTileTrack
+    pendingMapTileTrack = null
+    if (points) window.ipcRenderer?.send('map-tile-track-update', sanitizeMapTrackPoints(points))
+  }, MAP_TILE_TRACK_SYNC_DELAY_MS)
 }
 
 function copyTilesDir() {
@@ -597,12 +642,7 @@ function copyTilesDir() {
 watch(mapTrackPoints, syncTrackSource)
 
 watch(
-  () =>
-    [
-      gnssStore.status.longitude,
-      gnssStore.status.latitude,
-      gnssStore.status.quality,
-    ] as const,
+  () => [gnssStore.status.longitude, gnssStore.status.latitude, gnssStore.status.quality] as const,
   ([longitude, latitude, quality]) => updateCurrentPosition(longitude, latitude, quality),
 )
 
@@ -628,6 +668,10 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  if (mapTileTrackSyncTimer !== null) clearTimeout(mapTileTrackSyncTimer)
+  mapTileTrackSyncTimer = null
+  pendingMapTileTrack = null
+  sendMapTileTrack([], true)
   cancelTrackRender()
   resizeObserver?.disconnect()
   resizeObserver = null

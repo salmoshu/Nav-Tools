@@ -2,6 +2,7 @@ import { ref } from "vue"
 import { defineStore } from "pinia"
 import { registerStatusSource } from '@/core/status/registry'
 import { createStatusSource } from '@/core/status/createStatusSource'
+import { useDataSourceManager } from '@/composables/useDataSourceManager'
 
 export interface GnssState {
     fixMode: string
@@ -63,12 +64,15 @@ export const useGnssStore = defineStore('gnss', () => {
     }
 })
 
-// Status View 数据源：就近声明，聚合层（core/status）按当前应用的 moduleId 命中
+// GNSS 面板始终展示；其它应用在主动选择 NMEA 数据格式后也展示同一组状态。
 registerStatusSource(
     createStatusSource({
         id: 'gnss',
         label: 'GNSS',
-        match: moduleIds => moduleIds.has('gnss'),
+        match: moduleIds => {
+            const { settings } = useDataSourceManager()
+            return moduleIds.has('gnss') || settings[settings.activeSource].parser === 'nmea'
+        },
         status: () => useGnssStore().status,
     }),
 )

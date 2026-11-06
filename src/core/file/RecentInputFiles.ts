@@ -5,7 +5,7 @@ import { JsonStorage } from '../storage/JsonStorage'
 
 const RECENT_KEY = 'nav-tools:recent-input-files'
 const LEGACY_MCAP_KEY = 'nav-tools:lidar:recent-mcap-files'
-const MAX_ENTRIES = 10
+const MAX_ENTRIES = 17
 
 export interface RecentInputFile {
   path: string
@@ -23,7 +23,7 @@ export class RecentInputFiles {
 
   public list(): RecentInputFile[] {
     this.migrateLegacy()
-    return this.storage.read<RecentInputFile[]>(RECENT_KEY, [], isRecentFileArray)
+    return this.storage.read<RecentInputFile[]>(RECENT_KEY, [], isRecentFileArray).slice(0, MAX_ENTRIES)
   }
 
   public record(entry: { path: string; name: string; sizeBytes: number; paths?: string[] }): void {

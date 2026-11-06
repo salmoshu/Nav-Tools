@@ -21,6 +21,7 @@
           <el-option label="GLONASS" value="GLONASS" />
           <el-option label="BEIDOU" value="BEIDOU" />
           <el-option label="GALILEO" value="GALILEO" />
+          <el-option label="QZSS" value="QZSS" />
           <el-option label="OTHER" value="OTHER" />
         </el-select>
 
@@ -71,11 +72,7 @@
         </el-button-group>
 
         <div v-show="currentView === 'nsat'" class="nsat-controls">
-          <el-button
-            size="small"
-            class="nsat-clear-btn"
-            @click="clearNsatHistory"
-          >
+          <el-button size="small" class="nsat-clear-btn" @click="clearNsatHistory">
             <el-icon><Delete /></el-icon>&nbsp;{{ t('gnss.signal.clear') }}
           </el-button>
         </div>
@@ -108,23 +105,13 @@
             </template>
           </el-table-column>
 
-          <el-table-column
-            prop="prn"
-            label="PRN"
-            min-width="80"
-            sortable
-          />
+          <el-table-column prop="prn" label="PRN" min-width="80" sortable />
 
-          <el-table-column
-            prop="snr"
-            :label="t('gnss.signal.colSnr')"
-            min-width="150"
-            sortable
-          >
+          <el-table-column prop="snr" :label="t('gnss.signal.colSnr')" min-width="150" sortable>
             <template #default="{ row }">
               <div class="snr-cell">
                 <el-progress
-                  :percentage="Math.min(row.snr, 60) * (100/60)"
+                  :percentage="Math.min(row.snr, 60) * (100 / 60)"
                   :color="getSnrColor(row.snr)"
                   :stroke-width="10"
                   :show-text="false"
@@ -143,9 +130,7 @@
             min-width="100"
             sortable
           >
-            <template #default="{ row }">
-              {{ row.elevation }}°
-            </template>
+            <template #default="{ row }"> {{ row.elevation }}° </template>
           </el-table-column>
 
           <el-table-column
@@ -154,9 +139,7 @@
             min-width="100"
             sortable
           >
-            <template #default="{ row }">
-              {{ row.azimuth }}°
-            </template>
+            <template #default="{ row }"> {{ row.azimuth }}° </template>
           </el-table-column>
 
           <el-table-column
@@ -181,11 +164,29 @@
         </el-table>
       </div>
 
-      <div
-        v-show="currentView === 'chart'"
-        ref="chartRef"
-        class="snr-chart-container"
-      ></div>
+      <div v-show="currentView === 'chart'" class="signal-bar-wrapper">
+        <div class="signal-bar-scroll">
+          <div
+            ref="chartRef"
+            class="snr-chart-container signal-bar-chart"
+            :style="{ minWidth: `${Math.max(260, barLayout.slots.length * 38 + 64)}px` }"
+          ></div>
+        </div>
+        <div v-if="!chartData.length" class="signal-bar-empty">{{ t('gnss.signal.barEmpty') }}</div>
+        <div class="signal-bar-legend">
+          <span
+            v-for="group in barLayout.groups"
+            :key="group.constellation"
+            class="signal-bar-group"
+          >
+            <i :style="{ background: group.color }"></i>{{ group.constellation
+            }}<small>{{ group.count }}</small>
+          </span>
+          <span class="signal-peak-key" :title="t('gnss.signal.recentPeakHint')"
+            ><i></i>{{ t('gnss.signal.recentPeak') }}</span
+          >
+        </div>
+      </div>
 
       <div v-show="currentView === 'persat'" class="persat-chart-wrapper">
         <div ref="perSatChartRef" class="snr-chart-container persat-chart"></div>
@@ -206,22 +207,19 @@
 </template>
 
 <script setup>
-import { computed, ref, onMounted, onUnmounted, watch, nextTick } from 'vue'
+import { computed, ref, shallowRef, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import * as echarts from 'echarts'
 import { Delete, Timer } from '@element-plus/icons-vue'
 import { useNmea } from '@/composables/gnss/useNmea'
 import { snrHistoryKey, formatSnrEpochLabel } from '@/core/gnss/SnrHistoryStore'
 import { assignSnrSeriesColors } from '@/core/gnss/SnrSeriesColors'
+import { buildSignalBarLayout } from '@/core/gnss/SignalBarLayout'
 import { useTheme } from '@/composables/useTheme'
 import { t } from '@/i18n'
 import SatelliteCountChart from './SatelliteCountChart.vue'
 
 // 初始化NMEA解析器与主题
-const {
-  satelliteSnrData,
-  snrHistory,
-  clearSatelliteEpochHistory,
-} = useNmea()
+const { satelliteSnrData, snrHistory, clearSatelliteEpochHistory } = useNmea()
 const { chartTheme, resolvedTheme } = useTheme()
 
 // 视图状态
@@ -230,7 +228,7 @@ const constellationFilter = ref('all')
 
 // 图表相关
 const chartRef = ref(null)
-const chartInstance = ref(null)
+const chartInstance = shallowRef(null)
 let resizeObserver = null
 const DATA_UPDATE_INTERVAL_MS = 200
 let dataUpdateTimer = null
@@ -240,7 +238,7 @@ let themeRefreshRaf = null
 const MAX_PER_SAT_SELECTION = 6
 const selectedSatKeys = ref([])
 const perSatChartRef = ref(null)
-const perSatChartInstance = ref(null)
+const perSatChartInstance = shallowRef(null)
 let perSatResizeObserver = null
 let perSatUpdateTimer = null
 
@@ -253,7 +251,7 @@ const constellationFilters = [
   { text: 'GLONASS', value: 'GLONASS' },
   { text: 'BEIDOU', value: 'BEIDOU' },
   { text: 'GALILEO', value: 'GALILEO' },
-  { text: 'OTHER', value: 'OTHER' }
+  { text: 'OTHER', value: 'OTHER' },
 ]
 
 // 星座颜色映射（用于 tooltip 与图例提示）
@@ -262,7 +260,7 @@ const constellationColors = {
   GLONASS: '#1890ff',
   BEIDOU: '#faad14',
   GALILEO: '#13c2c2',
-  OTHER: '#ff4d4f'
+  OTHER: '#ff4d4f',
 }
 
 // 星座标识映射（用于柱状图 X 轴标签，如 G20、C12）
@@ -273,7 +271,7 @@ const constellationPrefixes = {
   BEIDOU: 'C',
   QZSS: 'J',
   OTHER: 'U',
-  UNKNOWN: 'U'
+  UNKNOWN: 'U',
 }
 
 // 获取卫星数据（useNmea 已按 constellation-prn 去重，这里只做星座+PRN 排序，
@@ -298,9 +296,18 @@ const filteredSatelliteData = computed(() => {
 const chartData = computed(() => {
   let data = getLatestSatelliteData()
   if (constellationFilter.value !== 'all') {
-    data = data.filter(sat => sat.constellation === constellationFilter.value)
+    data = data.filter((sat) => sat.constellation === constellationFilter.value)
   }
   return data
+})
+
+const barLayout = computed(() => {
+  const peaks = new Map()
+  for (const sat of chartData.value) {
+    const key = snrHistoryKey(sat.constellation, sat.prn)
+    peaks.set(key, Math.max(0, ...snrHistory.value.getSeries(key).map((point) => point.snr ?? 0)))
+  }
+  return buildSignalBarLayout(chartData.value, peaks)
 })
 
 // 逐星可选卫星：滚动历史 ∪ 当前快照（刚出现、历史尚未累积的卫星也能预选）
@@ -315,7 +322,7 @@ const perSatOptions = computed(() => {
       return {
         key,
         constellation,
-        label: `${constellationPrefixes[constellation] || 'U'}${prn} · ${constellation}`
+        label: `${constellationPrefixes[constellation] || 'U'}${prn} · ${constellation}`,
       }
     })
     .sort((a, b) => {
@@ -330,18 +337,18 @@ const perSatOptions = computed(() => {
 const perSatColors = computed(() =>
   assignSnrSeriesColors(
     selectedSatKeys.value,
-    (key) => constellationColors[key.split('-')[0]] || '#757575'
-  )
+    (key) => constellationColors[key.split('-')[0]] || '#757575',
+  ),
 )
 
 // 空态：未选卫星或历史尚未累积
 const perSatEmpty = computed(
-  () => selectedSatKeys.value.length === 0 || snrHistory.value.length === 0
+  () => selectedSatKeys.value.length === 0 || snrHistory.value.length === 0,
 )
 const perSatEmptyTitle = computed(() =>
   snrHistory.value.length === 0
     ? t('gnss.signal.perSatNoHistory')
-    : t('gnss.signal.perSatEmptyTitle')
+    : t('gnss.signal.perSatEmptyTitle'),
 )
 
 // 逐星折线图系列名（如 G20、C12）
@@ -353,11 +360,11 @@ function perSatSeriesName(key) {
 // 获取星座标签类型
 function getConstellationTagType(constellation) {
   const typeMap = {
-    'GPS': 'success',
-    'GLONASS': 'primary',
-    'BEIDOU': 'warning',
-    'GALILEO': 'info',
-    'OTHER': 'danger'
+    GPS: 'success',
+    GLONASS: 'primary',
+    BEIDOU: 'warning',
+    GALILEO: 'info',
+    OTHER: 'danger',
   }
   return typeMap[constellation] || 'info'
 }
@@ -396,7 +403,7 @@ function formatTime(timestamp) {
     day: '2-digit',
     hour: '2-digit',
     minute: '2-digit',
-    second: '2-digit'
+    second: '2-digit',
   })
 }
 
@@ -427,6 +434,7 @@ function setupResizeObserver() {
   })
 
   const parentElement = chartRef.value.parentElement
+  resizeObserver.observe(chartRef.value)
   if (parentElement) {
     resizeObserver.observe(parentElement)
   }
@@ -462,178 +470,160 @@ function setupPerSatResizeObserver() {
 // 初始化图表
 function initChart() {
   if (!chartRef.value) return
-
-  if (chartInstance.value) {
-    chartInstance.value.dispose()
-    chartInstance.value = null
-  }
-
+  chartInstance.value?.dispose()
+  chartInstance.value = null
   setupResizeObserver()
-
   nextTick(() => {
+    if (!chartRef.value) return
     chartInstance.value = echarts.init(chartRef.value, null, { renderer: 'canvas' })
-    const colors = chartTheme.value
-
-    const option = {
-      tooltip: {
-        trigger: 'axis',
-        axisPointer: {
-          type: 'shadow'
-        },
-        formatter: function (params) {
-          const param = Array.isArray(params) ? params[0] : params
-          if (!param || !param.data) return ''
-          const data = param.data
-          const constellation = data.constellation || 'OTHER'
-          const color = constellationColors[constellation] || '#757575'
-          return `
-            <div style="background-color: ${colors.surface}; border: 1px solid ${colors.border}; border-radius: 8px; padding: 12px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.24); min-width: 140px; text-align: left; color: ${colors.text};">
-              <div style="font-size: 16px; font-weight: bold; color: ${colors.text}; margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px solid ${colors.border};">
-                <div style="display: flex; align-items: center;">
-                  <div style="width: 10px; height: 10px; border-radius: 50%; background-color: ${color}; margin-right: 8px;"></div>
-                  <span>${constellation}</span>
-                  <span style="color: ${colors.textMuted}; margin-left: 6px;">PRN ${data.prn}</span>
-                </div>
-              </div>
-              <div style="display: flex; margin-bottom: 5px;">
-                <span style="font-weight: 500; width: 68px; color: ${colors.textMuted};">${t('gnss.signal.tooltipElevation')}:</span>
-                <span>${data.elevation}°</span>
-              </div>
-              <div style="display: flex; margin-bottom: 5px;">
-                <span style="font-weight: 500; width: 68px; color: ${colors.textMuted};">${t('gnss.signal.tooltipAzimuth')}:</span>
-                <span>${data.azimuth}°</span>
-              </div>
-              <div style="display: flex;">
-                <span style="font-weight: 500; width: 68px; color: ${colors.textMuted};">${t('gnss.signal.tooltipSnr')}:</span>
-                <span style="font-weight: bold; color: ${getSnrColor(data.value)};">${data.value} dB</span>
-              </div>
-            </div>
-          `
-        },
-        backgroundColor: 'transparent',
-        borderWidth: 0,
-        padding: 0
-      },
-      grid: {
-        left: '3%',
-        right: '4%',
-        bottom: '10%',
-        top: '12%',
-        containLabel: true
-      },
-      xAxis: {
-        type: 'category',
-        data: [],
-        axisLabel: {
-          color: colors.textMuted,
-          fontSize: 12,
-          interval: 0,
-          rotate: 45
-        },
-        axisLine: {
-          lineStyle: {
-            color: colors.border
-          }
-        },
-        axisTick: {
-          alignWithLabel: true,
-          lineStyle: {
-            color: colors.border
-          }
-        },
-        splitLine: {
-          show: false
-        }
-      },
-      yAxis: {
-        type: 'value',
-        min: 0,
-        max: 60,
-        name: 'SNR (dB)',
-        nameTextStyle: {
-          color: colors.text,
-          padding: [0, 0, 0, 40]
-        },
-        axisLabel: {
-          color: colors.textMuted,
-          fontSize: 12
-        },
-        axisLine: {
-          lineStyle: {
-            color: colors.border
-          }
-        },
-        splitLine: {
-          lineStyle: {
-            color: colors.grid
-          }
-        }
-      },
-      series: [{
-        name: 'SNR',
-        type: 'bar',
-        data: [],
-        barMaxWidth: 30,
-        itemStyle: {
-          borderRadius: [4, 4, 0, 0]
-        },
-        emphasis: {
-          focus: 'self',
-          itemStyle: {
-            shadowBlur: 10,
-            shadowColor: 'rgba(0, 0, 0, 0.3)'
-          }
-        },
-        markLine: {
-          symbol: 'none',
-          label: {
-            position: 'end',
-            color: colors.textMuted,
-            fontSize: 11,
-            formatter: '{b}'
-          },
-          lineStyle: {
-            type: 'dashed'
-          },
-          data: [
-            { yAxis: 25, name: t('gnss.signal.markLinePoor'), lineStyle: { color: '#ff4d4f' } },
-            { yAxis: 35, name: t('gnss.signal.markLineFair'), lineStyle: { color: '#faad14' } },
-            { yAxis: 45, name: t('gnss.signal.markLineGood'), lineStyle: { color: '#1890ff' } }
-          ]
-        }
-      }],
-      animation: false
-    }
-
-    chartInstance.value.setOption(option)
     chartInstance.value.on('click', handleBarClick)
     updateChart()
   })
 }
 
-// 更新图表数据
 function updateChart() {
-  if (!chartInstance.value) return
-  if (document.hidden) return
-
-  const data = chartData.value
-  const categoryData = data.map(sat => `${constellationPrefixes[sat.constellation] || 'U'}${sat.prn}`)
-  const seriesData = data.map(sat => ({
-    value: sat.snr,
-    prn: sat.prn,
-    constellation: sat.constellation,
-    elevation: sat.elevation,
-    azimuth: sat.azimuth,
-    itemStyle: {
-      color: getSnrColor(sat.snr)
-    }
-  }))
-
+  if (!chartInstance.value || document.hidden || currentView.value !== 'chart') return
+  const colors = chartTheme.value
+  const layout = barLayout.value
+  const categories = layout.slots.map((slot, index) => slot?.label ?? `gap-${index}`)
+  const dark = resolvedTheme.value === 'dark'
+  if (
+    chartInstance.value.getWidth() !== chartRef.value.clientWidth ||
+    chartInstance.value.getHeight() !== chartRef.value.clientHeight
+  )
+    chartInstance.value.resize()
   chartInstance.value.dispatchAction({ type: 'hideTip' })
-  chartInstance.value.setOption({
-    xAxis: { data: categoryData },
-    series: [{ data: seriesData }]
-  })
+  chartInstance.value.setOption(
+    {
+      backgroundColor: 'transparent',
+      animation: false,
+      tooltip: {
+        trigger: 'axis',
+        confine: true,
+        axisPointer: { type: 'shadow', shadowStyle: { color: dark ? '#ffffff08' : '#00000005' } },
+        backgroundColor: colors.surface,
+        borderColor: colors.border,
+        padding: [9, 12],
+        textStyle: { color: colors.text, fontSize: 12 },
+        formatter(params) {
+          const param = (Array.isArray(params) ? params : [params]).find(
+            (item) => item.seriesId === 'signal-current',
+          )
+          const data = param?.data
+          if (!data || data.prn === undefined) return ''
+          const escape = echarts.format.encodeHTML
+          return `<b>${escape(param.name)}</b> · ${escape(data.constellation)}<br/>C/N₀: <b>${data.value} dB-Hz</b><br/>${t('gnss.signal.recentPeak')}: ${data.peak} dB-Hz<br/>${t('gnss.signal.tooltipElevation')}: ${data.elevation}° · ${t('gnss.signal.tooltipAzimuth')}: ${data.azimuth}°`
+        },
+      },
+      grid: { left: 38, right: 14, top: 34, bottom: 27 },
+      xAxis: {
+        type: 'category',
+        data: categories,
+        axisLabel: {
+          interval: 0,
+          rotate: 0,
+          color: colors.textMuted,
+          fontSize: 10,
+          fontFamily: 'Consolas, monospace',
+          margin: 9,
+          formatter: (value) => (value.startsWith('gap-') ? '' : value),
+        },
+        axisTick: { show: false },
+        axisLine: { lineStyle: { color: colors.border } },
+        splitLine: { show: false },
+      },
+      yAxis: {
+        type: 'value',
+        min: 0,
+        max: Math.max(60, Math.ceil((layout.maximum + 8) / 10) * 10),
+        interval: 10,
+        name: 'C/N₀ (dB-Hz)',
+        nameGap: 16,
+        nameTextStyle: { color: colors.textMuted, fontSize: 10, align: 'left' },
+        axisLabel: { color: colors.textMuted, fontSize: 10 },
+        axisTick: { show: false },
+        axisLine: { show: false },
+        splitLine: { lineStyle: { color: colors.grid, type: 'dashed' } },
+      },
+      series: [
+        {
+          id: 'signal-current',
+          name: 'C/N₀',
+          type: 'bar',
+          barWidth: 24,
+          barMinHeight: 2,
+          showBackground: true,
+          backgroundStyle: { color: dark ? '#ffffff06' : '#00000003', borderRadius: [2, 2, 0, 0] },
+          emphasis: { focus: 'self', itemStyle: { borderWidth: 1, borderColor: colors.textMuted } },
+          label: {
+            show: true,
+            position: 'inside',
+            fontSize: 11,
+            fontWeight: 600,
+            fontFamily: 'Consolas, monospace',
+          },
+          data: layout.slots.map((slot) =>
+            slot
+              ? {
+                  ...slot.sample,
+                  value: slot.value,
+                  peak: slot.peak,
+                  itemStyle: {
+                    color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                      { offset: 0, color: `${slot.color}C0` },
+                      { offset: 1, color: slot.color },
+                    ]),
+                    borderRadius: [2, 2, 0, 0],
+                  },
+                  label: {
+                    position: slot.value < 14 ? 'top' : 'inside',
+                    color: slot.value < 14 ? colors.textMuted : '#ffffff',
+                    formatter: () => (slot.value > 0 ? String(Math.round(slot.value)) : '—'),
+                  },
+                }
+              : { value: null, itemStyle: { color: 'transparent' }, label: { show: false } },
+          ),
+          markArea: {
+            silent: true,
+            label: { position: 'insideTop', fontSize: 10, fontWeight: 500, distance: 4 },
+            data: layout.groups.map((group) => [
+              {
+                name: group.constellation,
+                xAxis: group.first,
+                itemStyle: { color: `${group.color}08` },
+                label: { color: group.color },
+              },
+              { xAxis: group.last },
+            ]),
+          },
+        },
+        {
+          id: 'signal-peak',
+          name: t('gnss.signal.recentPeak'),
+          type: 'scatter',
+          symbol: 'rect',
+          symbolSize: [24, 2],
+          silent: true,
+          tooltip: { show: false },
+          label: {
+            show: true,
+            position: 'top',
+            distance: 4,
+            fontSize: 10,
+            color: colors.textMuted,
+            formatter: (param) => String(Math.round(param.data.value[1])),
+          },
+          data: layout.slots.flatMap((slot, index) =>
+            slot && slot.peak > 0
+              ? [{ value: [index, slot.peak], itemStyle: { color: slot.color } }]
+              : [],
+          ),
+          z: 4,
+        },
+      ],
+    },
+    { replaceMerge: ['series'] },
+  )
 }
 
 function scheduleDataUpdate() {
@@ -680,34 +670,34 @@ function initPerSatChart() {
         backgroundColor: colors.surface,
         borderColor: colors.border,
         textStyle: { color: colors.text },
-        valueFormatter: (value) => (typeof value === 'number' ? `${value} dB` : '—')
+        valueFormatter: (value) => (typeof value === 'number' ? `${value} dB` : '—'),
       },
       legend: {
         top: 2,
-        textStyle: { color: colors.text, fontSize: 11 }
+        textStyle: { color: colors.text, fontSize: 11 },
       },
       grid: {
         left: '3%',
         right: '4%',
         bottom: '8%',
         top: '14%',
-        containLabel: true
+        containLabel: true,
       },
       xAxis: {
         type: 'category',
         data: [],
         axisLabel: {
           color: colors.textMuted,
-          fontSize: 11
+          fontSize: 11,
         },
         axisLine: {
           lineStyle: {
-            color: colors.border
-          }
+            color: colors.border,
+          },
         },
         splitLine: {
-          show: false
-        }
+          show: false,
+        },
       },
       yAxis: {
         type: 'value',
@@ -716,25 +706,25 @@ function initPerSatChart() {
         name: 'SNR (dB)',
         nameTextStyle: {
           color: colors.text,
-          padding: [0, 0, 0, 40]
+          padding: [0, 0, 0, 40],
         },
         axisLabel: {
           color: colors.textMuted,
-          fontSize: 12
+          fontSize: 12,
         },
         axisLine: {
           lineStyle: {
-            color: colors.border
-          }
+            color: colors.border,
+          },
         },
         splitLine: {
           lineStyle: {
-            color: colors.grid
-          }
-        }
+            color: colors.grid,
+          },
+        },
       },
       series: [],
-      animation: false
+      animation: false,
     })
     updatePerSatChart()
   })
@@ -756,13 +746,13 @@ function updatePerSatChart() {
     symbolSize: 4,
     lineStyle: { width: 1.6 },
     connectNulls: false,
-    data: history.getSeries(key).map((point) => point.snr)
+    data: history.getSeries(key).map((point) => point.snr),
   }))
 
   perSatChartInstance.value.dispatchAction({ type: 'hideTip' })
   perSatChartInstance.value.setOption({
     xAxis: { data: labels },
-    series
+    series,
   })
 }
 
@@ -820,6 +810,7 @@ watch(currentView, (view) => {
 
 // 监听逐星历史变化（仅在逐星视图激活时节流刷新）
 watch(snrHistory, () => {
+  scheduleDataUpdate()
   schedulePerSatUpdate()
 })
 
@@ -975,6 +966,74 @@ onUnmounted(() => {
   min-height: 0;
   border-radius: 4px;
   background-color: var(--app-surface);
+}
+
+.signal-bar-wrapper {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  gap: 8px;
+}
+.signal-bar-scroll {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+}
+.signal-bar-chart {
+  flex: 1 0 auto;
+  height: 100%;
+}
+.signal-bar-empty {
+  position: absolute;
+  inset: 0 0 30px;
+  display: grid;
+  place-items: center;
+  color: var(--app-text-muted);
+  font-size: 12px;
+  pointer-events: none;
+}
+.signal-bar-legend {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  min-height: 20px;
+  color: var(--app-text-secondary);
+  font-size: 10px;
+}
+.signal-bar-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-weight: 500;
+}
+.signal-bar-group > i {
+  width: 7px;
+  height: 7px;
+  border-radius: 2px;
+}
+.signal-bar-group small {
+  color: var(--app-text-muted);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+.signal-peak-key {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: auto;
+  color: var(--app-text-muted);
+}
+.signal-peak-key > i {
+  width: 13px;
+  height: 2px;
+  background: currentColor;
 }
 
 .nsat-chart-container {

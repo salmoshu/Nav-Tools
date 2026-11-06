@@ -13,6 +13,8 @@ export interface PersistedLayoutItem {
   minH?: number
   maxW?: number
   maxH?: number
+  collapsed?: boolean
+  expandedH?: number
 }
 
 interface LayoutDocument {
@@ -154,6 +156,8 @@ function isPersistedLayoutItem(value: unknown): value is PersistedLayoutItem {
     typeof item.windowId === 'string' &&
     typeof item.componentName === 'string' &&
     typeof item.i === 'string' &&
-    [item.x, item.y, item.w, item.h].every(Number.isFinite)
+    [item.x, item.y, item.w, item.h].every(Number.isFinite) &&
+    (item.collapsed === undefined || typeof item.collapsed === 'boolean') &&
+    (item.expandedH === undefined || (Number.isFinite(item.expandedH) && item.expandedH > 0))
   )
 }

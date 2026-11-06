@@ -2,6 +2,9 @@ export default {
   signal: {
     tableView: 'Table View',
     chartView: 'Bar Chart View',
+    barEmpty: 'Waiting for satellite signal data',
+    recentPeak: 'Recent peak',
+    recentPeakHint: 'Maximum C/N₀ in the retained per-satellite history',
     satCount: 'Satellite Count',
     selectConstellation: 'Select constellation',
     allConstellations: 'All constellations',
@@ -59,6 +62,7 @@ export default {
   map: {
     offlineTitle: 'Offline Maps',
     offlineDesc1: 'This app uses online maps by default. You can also prepare a local raster tile set in advance so the map prioritizes them when offline or on a weak network; areas not covered will automatically fall back to online maps.',
+    offlineAutoCache: 'The desktop build automatically caches image tiles you view when they intersect the 1 km corridor around a valid GNSS track; without a valid track, tiles are never cached automatically. Server freshness rules are respected and the automatic cache is limited to 1 GiB.',
     offlineStepsTitle: 'Steps:',
     offlineStep1A: 'Create a folder named',
     offlineStep1Strong: 'local data directory',

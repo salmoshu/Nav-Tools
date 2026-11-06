@@ -14,12 +14,32 @@
           <p>{{ t('app.selector.subtitle') }}</p>
         </div>
         <div class="header-actions">
-          <el-button v-if="applications.length > 0" :icon="Plus" @click="openEditor()">
-            {{ t('app.selector.newApp') }}
-          </el-button>
-          <el-button v-if="applications.length > 0" :icon="Refresh" @click="confirmReset">
-            {{ t('app.selector.resetApp') }}
-          </el-button>
+          <el-button
+            text
+            circle
+            :icon="Setting"
+            :title="t('app.settingsDefaultApplications')"
+            :aria-label="t('app.settingsDefaultApplications')"
+            @click="openDefaultApplicationSettings"
+          />
+          <el-button
+            v-if="applications.length > 0"
+            text
+            circle
+            :icon="Plus"
+            :title="t('app.selector.newApp')"
+            :aria-label="t('app.selector.newApp')"
+            @click="openEditor()"
+          />
+          <el-button
+            v-if="applications.length > 0"
+            text
+            circle
+            :icon="Refresh"
+            :title="t('app.selector.resetApp')"
+            :aria-label="t('app.selector.resetApp')"
+            @click="confirmReset"
+          />
           <el-button
             v-if="currentApplicationId"
             text
@@ -155,6 +175,7 @@ import {
   Grid,
   Plus,
   Refresh,
+  Setting,
 } from '@element-plus/icons-vue'
 import type { UserApplication } from '@/settings/config'
 import { useApplicationSelector } from '@/composables/useApplicationSelector'
@@ -162,6 +183,7 @@ import { applicationIconComponents } from '@/settings/applicationIcons'
 import ApplicationEditor from './ApplicationEditor.vue'
 import ApplicationPanelChips from './ApplicationPanelChips.vue'
 import { t } from '@/i18n'
+import emitter from '@/hooks/useMitt'
 
 const props = defineProps<{
   open: boolean
@@ -175,7 +197,7 @@ const emit = defineEmits<{
 }>()
 
 const {
-  applications,
+  visibleApplications: applications,
   windowCatalog,
   currentApplicationId,
   saveApplication,
@@ -189,6 +211,11 @@ const editorOpen = ref(false)
 const editingApplication = ref<UserApplication | undefined>(undefined)
 const draggingApplicationId = ref<string | undefined>(undefined)
 const selectorMessageBoxTarget = '.selector-backdrop'
+
+const openDefaultApplicationSettings = () => {
+  emit('close')
+  emitter.emit('open-settings', 'applications')
+}
 
 const applicationWindows = (application: UserApplication) => {
   const catalogById = new Map(windowCatalog.map((window) => [window.id, window]))

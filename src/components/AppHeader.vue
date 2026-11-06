@@ -2,11 +2,27 @@
   <header class="app-header">
     <div class="brand">
       <!-- 相对路径:打包后走 file:// 协议,绝对路径 /logo.svg 会解析到盘符根导致图裂 -->
-      <img :src="brandIconUrl || './logo.svg'" alt="" class="brand-logo" />
-      <span class="brand-copy">
-        <span class="brand-name">{{ brandTitle || 'Nav-Tools' }}</span>
-        <span v-if="version" class="brand-version">V{{ version }}</span>
-      </span>
+      <button
+        v-if="showDetachedControls"
+        class="brand-settings-entry"
+        type="button"
+        :title="t('app.settings')"
+        :aria-label="`${brandTitle || 'Nav-Tools'} · ${t('app.settings')}`"
+        @click="openComponentSettings"
+      >
+        <img :src="brandIconUrl || './logo.svg'" alt="" class="brand-logo" />
+        <span class="brand-copy">
+          <span class="brand-name">{{ brandTitle || 'Nav-Tools' }}</span>
+          <span v-if="version" class="brand-version">V{{ version }}</span>
+        </span>
+      </button>
+      <template v-else>
+        <img :src="brandIconUrl || './logo.svg'" alt="" class="brand-logo" />
+        <span class="brand-copy">
+          <span class="brand-name">{{ brandTitle || 'Nav-Tools' }}</span>
+          <span v-if="version" class="brand-version">V{{ version }}</span>
+        </span>
+      </template>
       <button
         v-if="showApplicationSelector"
         class="header-button application-button"
@@ -29,13 +45,20 @@
         >
           {{ contextFileName }}
         </span>
-        <span v-if="contextPanelTitle" class="context-panel">
+        <button
+          v-if="contextPanelTitle"
+          class="context-panel"
+          type="button"
+          :title="t('app.settings')"
+          :aria-label="`${contextPanelTitle} · ${t('app.settings')}`"
+          @click="openComponentSettings"
+        >
           <el-icon class="context-hierarchy-icon" :size="12"><ArrowRight /></el-icon>
           <el-icon class="context-title-icon" :size="15">
             <component :is="getPanelIconComponent(contextIconAction)" />
           </el-icon>
           <span class="context-panel-title">{{ contextPanelTitle }}</span>
-        </span>
+        </button>
         <span
           v-if="contextFileName && contextPanelTitle"
           class="context-file-name"
@@ -177,11 +200,12 @@ import {
 import { LayoutGrid, PanelTopOpen, Pin, SquareArrowOutUpRight } from '@lucide/vue'
 import { showStatusBar, showToolBar } from '@/composables/useStatusManager'
 import { getBrowserWindowService } from '@/core/window/browserWindowService'
+import { settingsSectionForComponent } from '@/core/settings/ComponentSettings'
 import { getPanelIconComponent } from '@/settings/panelIcons'
 import emitter from '@/hooks/useMitt'
 import { t } from '@/i18n'
 
-defineProps<{
+const props = defineProps<{
   brandTitle?: string
   /** 品牌位图标 URL:缺省用应用 logo;组件独立窗口传入「组件主体+logo角标」合成图标 */
   brandIconUrl?: string
@@ -191,6 +215,7 @@ defineProps<{
   contextFileName?: string
   contextFileTitle?: string
   contextIconAction?: string
+  contextWindowId?: string
   showApplicationSelector?: boolean
   showDetachedControls?: boolean
   showPanelFullscreenExit?: boolean
@@ -213,6 +238,10 @@ function applyWindowState(state?: { maximized?: boolean; alwaysOnTop?: boolean }
   maximized.value = Boolean(state?.maximized)
   alwaysOnTop.value = Boolean(state?.alwaysOnTop)
   emit('maximized-change', maximized.value)
+}
+
+function openComponentSettings() {
+  emitter.emit('open-settings', settingsSectionForComponent(props.contextWindowId ?? ''))
 }
 
 async function minimize() {
@@ -279,6 +308,23 @@ onUnmounted(() => {
   gap: 7px;
 }
 
+.brand-settings-entry {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+}
+
+.brand-settings-entry:hover .brand-name,
+.brand-settings-entry:focus-visible .brand-name {
+  color: var(--el-color-primary);
+}
+
 .brand-logo {
   width: 20px;
   height: 20px;
@@ -341,8 +387,19 @@ onUnmounted(() => {
   align-items: center;
   gap: 6px;
   min-width: 0;
+  padding: 0;
+  border: 0;
   color: var(--app-text);
+  background: transparent;
+  font: inherit;
   font-weight: 600;
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+}
+
+.context-panel:hover,
+.context-panel:focus-visible {
+  color: var(--el-color-primary);
 }
 
 .context-hierarchy-icon {

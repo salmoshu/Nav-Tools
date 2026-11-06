@@ -76,6 +76,7 @@ describe('IncomingDataRouter', () => {
       activeDataModes: ['motor'],
       activeWindowIds: ['raw-messages', 'plot'],
       displayFormat: 'hex',
+      dataParser: 'raw',
     })
     expect(targets.decodeMotorHex).toHaveBeenCalledOnce()
     expect(targets.appendRaw).toHaveBeenCalledWith('AABB\n{"speed":1}\n')
@@ -95,9 +96,33 @@ describe('IncomingDataRouter', () => {
       activeDataModes: ['flow'],
       activeWindowIds: ['flow-parameters'],
       displayFormat: 'ascii',
+      dataParser: 'regex',
     })
 
     expect(targets.appendPlot).toHaveBeenCalledWith('speed=LOW(3)\n')
+    expect(targets.appendGnss).not.toHaveBeenCalled()
+  })
+
+  it('routes NMEA to status parsing independently of the active application', () => {
+    const targets = {
+      appendGnss: vi.fn(),
+      appendRaw: vi.fn(),
+      appendPlot: vi.fn(),
+      decodeMotorHex: vi.fn((data: string) => data),
+    }
+    const router = new IncomingDataRouter(targets)
+    const sentence = '$GPGGA,123519,4807.038,N,01131.000,E,1,08,0.9,545.4,M,46.9,M,,*47\n'
+
+    router.route(sentence, {
+      activeDataModes: ['general'],
+      activeWindowIds: ['raw-messages'],
+      displayFormat: 'ascii',
+      dataParser: 'nmea',
+    })
+
+    expect(targets.appendGnss).toHaveBeenCalledWith(sentence)
+    expect(targets.appendRaw).toHaveBeenCalledWith(sentence)
+    expect(targets.appendPlot).not.toHaveBeenCalled()
   })
 })
 

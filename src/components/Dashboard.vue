@@ -15,10 +15,7 @@
     <!-- 原有内容 -->
     <ToolBar v-if="toolbarRendered" @positionChange="handleToolbarPositionChange" />
 
-    <StatusBar
-      @positionChange="handleStatusbarPositionChange"
-      v-if="statusbarRendered"
-    />
+    <StatusBar @positionChange="handleStatusbarPositionChange" v-if="statusbarRendered" />
 
     <div class="dashboard-content" :class="contentClasses" :style="contentStyle">
       <!-- Grid Layout Plus 拖拽布局区域 -->
@@ -46,7 +43,8 @@
             :h="item.h"
             :i="item.i"
             :minW="item.minW || 4"
-            :minH="item.minH || 5"
+            :minH="item.collapsed ? COLLAPSED_PANEL_ROWS : item.minH || 5"
+            :is-resizable="!item.collapsed"
             :maxW="item.maxW || 12"
             :maxH="item.maxH || 12"
             @resize="resizeEvent"
@@ -57,24 +55,42 @@
               <el-card
                 class="box-card"
                 shadow="never"
-                :class="{ 'full-screen-card': fullScreenItem === item.i }"
+                :class="{
+                  'full-screen-card': fullScreenItem === item.i,
+                  'collapsed-card': item.collapsed && fullScreenItem !== item.i,
+                }"
               >
                 <template v-if="fullScreenItem !== item.i" #header>
-                  <div class="card-header">
-                    <span class="title">
+                  <div
+                    class="card-header"
+                    :title="
+                      t(item.collapsed ? 'app.dashboard.expandHint' : 'app.dashboard.collapseHint')
+                    "
+                    :aria-expanded="!item.collapsed"
+                    @dblclick.stop="togglePanelCollapse(item)"
+                  >
+                    <button
+                      class="title panel-settings-entry"
+                      type="button"
+                      :title="t('app.settings')"
+                      :aria-label="`${t(item.titleName)} · ${t('app.settings')}`"
+                      @click.stop="openComponentSettings(item)"
+                      @dblclick.stop="handlePanelTitleDoubleClick(item)"
+                    >
                       <el-icon class="panel-title-icon" :size="15">
                         <component
                           :is="getPanelIconComponent(getWindowById(item.windowId)?.action)"
                         />
                       </el-icon>
                       <span>{{ t(item.titleName) }}</span>
-                    </span>
-                    <div class="card-actions">
+                    </button>
+                    <div class="card-actions" @dblclick.stop>
                       <el-button
                         type="text"
                         @click="createItemDesktopShortcut(item)"
                         class="shortcut-btn"
                         :title="t('app.dashboard.createShortcut')"
+                        :aria-label="t('app.dashboard.createShortcut')"
                       >
                         <SquareArrowOutUpRight :size="16" :stroke-width="1.8" />
                       </el-button>
@@ -83,6 +99,7 @@
                         @click="detachItem(item)"
                         class="detach-btn"
                         :title="t('app.dashboard.detach')"
+                        :aria-label="t('app.dashboard.detach')"
                       >
                         <el-icon><Share /></el-icon>
                       </el-button>
@@ -91,6 +108,7 @@
                         @click="toggleCardFullScreen(item.i)"
                         class="fullscreen-btn"
                         :title="t('app.dashboard.fullscreen')"
+                        :aria-label="t('app.dashboard.fullscreen')"
                       >
                         <el-icon><FullScreen /></el-icon>
                       </el-button>
@@ -99,13 +117,14 @@
                         @click="handleRemoveItem(item)"
                         class="remove-btn"
                         :title="t('app.dashboard.removeCard')"
+                        :aria-label="t('app.dashboard.removeCard')"
                       >
                         <el-icon><Close /></el-icon>
                       </el-button>
                     </div>
                   </div>
                 </template>
-                <div class="card-content">
+                <div class="card-content component-surface">
                   <component :is="item.component" />
                 </div>
               </el-card>
@@ -137,6 +156,12 @@ import { SquareArrowOutUpRight } from '@lucide/vue'
 import emitter from '@/hooks/useMitt'
 import { useLayoutManager } from '@/composables/useLayoutManager'
 import {
+  COLLAPSED_PANEL_ROWS,
+  expandPanel,
+  togglePanelCollapsed,
+} from '@/core/layout/PanelCollapse'
+import type { LayoutItem } from '@/composables/useLayoutManager'
+import {
   showStatusBar,
   showToolBar,
   toolbarPosition,
@@ -144,6 +169,7 @@ import {
 } from '@/composables/useStatusManager'
 import { getWindowById, getWindowsByIds, windowCatalog } from '@/settings/config'
 import { createComponentDesktopShortcut } from '@/core/panels/componentIcon'
+import { settingsSectionForComponent } from '@/core/settings/ComponentSettings'
 import { getPanelIconComponent } from '@/settings/panelIcons'
 import { useDevice } from '@/hooks/useDevice'
 import { useApplicationSelector } from '@/composables/useApplicationSelector'
@@ -159,7 +185,7 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  'fullscreen-panel-change': [panel?: { title: string; action?: string }]
+  'fullscreen-panel-change': [panel?: { title: string; action?: string; windowId: string }]
 }>()
 
 const {
@@ -248,6 +274,22 @@ const openApplicationWindow = async (applicationId: string) => {
   }
 }
 
+let panelSettingsTimer: ReturnType<typeof setTimeout> | undefined
+
+const openComponentSettings = (item: LayoutItem) => {
+  if (panelSettingsTimer) clearTimeout(panelSettingsTimer)
+  panelSettingsTimer = setTimeout(() => {
+    panelSettingsTimer = undefined
+    emitter.emit('open-settings', settingsSectionForComponent(item.windowId))
+  }, 220)
+}
+
+const handlePanelTitleDoubleClick = (item: LayoutItem) => {
+  if (panelSettingsTimer) clearTimeout(panelSettingsTimer)
+  panelSettingsTimer = undefined
+  togglePanelCollapse(item)
+}
+
 /**
  * 组件卡片 ↗ 按钮:为该组件创建桌面快捷方式(保存位置自选,双击直达独立窗口,
  * 图标 = 应用主图标 + 组件角标)。用户在保存对话框取消时静默返回。
@@ -293,10 +335,7 @@ const openComponentWindow = async (windowId: string, item?: { i: string }) => {
     height: element ? element.clientHeight : 660,
   }
   try {
-    const opened = await window.ipcRenderer.invoke(
-      'open-card-window',
-      JSON.stringify(cardData),
-    )
+    const opened = await window.ipcRenderer.invoke('open-card-window', JSON.stringify(cardData))
     if (typeof opened !== 'number') {
       ElMessage({
         message: t('app.dashboard.openWindowFailed'),
@@ -323,6 +362,12 @@ const statusbarSize = ref({ width: 200, height: 60 })
 
 // 全屏相关状态
 const fullScreenItem = ref<string | null>(null)
+
+const togglePanelCollapse = (item: LayoutItem) => {
+  if (fullScreenItem.value !== null) return
+  togglePanelCollapsed(item)
+  void nextTick(() => window.dispatchEvent(new Event('resize')))
+}
 const isGridResizing = ref(false)
 const gridLayoutRef = ref<InstanceType<typeof GridLayout> | null>(null)
 
@@ -425,10 +470,12 @@ const toggleCardFullScreen = (itemId: string | null) => {
   const item = layoutDraggableList.value.find((candidate) => candidate.i === itemId)
   if (!item) return
 
+  expandPanel(item)
   fullScreenItem.value = itemId
   emit('fullscreen-panel-change', {
     title: t(item.titleName),
     action: getWindowById(item.windowId)?.action,
+    windowId: item.windowId,
   })
   ElMessage({
     message: t('app.dashboard.exitFullscreenHint'),
@@ -721,6 +768,7 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  if (panelSettingsTimer) clearTimeout(panelSettingsTimer)
   removeSaveListener?.()
   removeRestoreListener?.()
   emitter.all.clear()
@@ -793,6 +841,20 @@ onUnmounted(() => {
   box-shadow: none;
   overflow: hidden;
   transition: all 0.3s ease;
+}
+
+.collapsed-card :deep(.el-card__body) {
+  display: none;
+}
+
+.collapsed-card :deep(.el-card__header) {
+  border-bottom: 0;
+  border-radius: inherit;
+}
+
+.collapsed-card .card-header {
+  border-bottom: 0;
+  border-radius: inherit;
 }
 
 /* 全屏卡片样式增强 */
@@ -880,6 +942,19 @@ onUnmounted(() => {
   font-weight: 600;
   line-height: 20px;
   color: var(--app-text);
+}
+
+.panel-settings-entry {
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.panel-settings-entry:hover,
+.panel-settings-entry:focus-visible {
+  color: var(--el-color-primary);
 }
 
 .panel-title-icon {

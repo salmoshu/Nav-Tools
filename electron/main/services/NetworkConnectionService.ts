@@ -47,7 +47,8 @@ export class NetworkConnectionService {
     try {
       await new Promise<void>((resolve, reject) => {
         this.cancelOpen = (error: Error) => reject(error)
-        if (resolvedOptions.protocol === 'tcp') void this.openTcp(resolvedOptions, callbacks, resolve, reject)
+        if (resolvedOptions.protocol === 'tcp')
+          void this.openTcp(resolvedOptions, callbacks, resolve, reject)
         else void this.openUdp(resolvedOptions, callbacks, resolve, reject)
       })
     } finally {
@@ -105,6 +106,11 @@ export class NetworkConnectionService {
     return { host: this.currentOptions.host, port: this.currentOptions.port }
   }
 
+  public getConnectionInfo(): NetworkConnectionOptions | undefined {
+    if (!this.currentOptions || (!this.udpSocket && this.tcpSocket?.readyState !== 'open')) return
+    return { ...this.currentOptions }
+  }
+
   public async sendTcp(data: Uint8Array): Promise<void> {
     const socket = this.tcpSocket
     if (!socket || socket.destroyed)
@@ -117,6 +123,11 @@ export class NetworkConnectionService {
 
   public async send(data: string, format: NetworkDataFormat): Promise<void> {
     const buffer = Buffer.from(data, format === 'hex' ? 'hex' : 'utf8')
+    await this.sendBuffer(buffer)
+  }
+
+  public async sendBuffer(data: Uint8Array): Promise<void> {
+    const buffer = Buffer.from(data)
     if (this.tcpSocket && !this.tcpSocket.destroyed) {
       await this.sendTcp(buffer)
       return

@@ -41,7 +41,7 @@ const statusOrder = ref<string[]>(
 
 watch(statusOrder, order => statusOrderStorage.write(STATUS_ORDER_KEY, order), { deep: true })
 
-// 数据源的命中、布尔过滤、前缀拼接与排序统一在 core/status/aggregate.ts（纯函数，可单测）；
+// 数据源的模块/格式命中、布尔过滤、前缀拼接与排序统一在 core/status/aggregate.ts；
 // 数据源声明在各组件模块（stores/flow.ts、stores/gnss.ts），经 core/status/sources.ts 加载注册
 function getMonitorStatus() {
   return aggregateStatusSources(

@@ -782,7 +782,7 @@ const latestGgaPosition = computed(() => {
 })
 
 export function numberToQuality (num: number) {
-  // 0：无效解；1：单点定位解；2：伪距差分；4：固定解；5：浮动解。
+  // 0：无效解；1：单点定位解；2：伪距差分；4：固定解；5：浮点解。
   switch (num) {
     case 0:
       return t('data.qualityInvalid')

@@ -33,11 +33,7 @@
         </div>
 
         <div class="right-buttons">
-          <el-button
-            type="primary"
-            size="small"
-            @click="resetLayout"
-            class="control-btn zoom-btn"
+          <el-button type="primary" size="small" @click="resetLayout" class="control-btn zoom-btn"
             ><el-icon><RefreshLeft /></el-icon>&nbsp;{{
               t('gnss.deviation.resetLayout')
             }}</el-button
@@ -405,9 +401,10 @@ function formatStatMeters(value: number): string {
 function drawStatsOverlay(): void {
   if (!axisCtx || !axisCanvasRef.value) return
   const colors = chartTheme.value
-  const stats = deviationStats()
   const ctx = axisCtx
   const width = axisCssWidth
+  const height = axisCssHeight
+  if (width <= 0 || height <= 0) return
 
   const currentPoint = getTimelinePositionPoint() ?? getLatestRenderedPoint()
   const lines: Array<{ text: string; color?: string; strong?: boolean }> = []
@@ -421,9 +418,10 @@ function drawStatsOverlay(): void {
     })
   }
 
-  // 窗口较小时空白有限：只保留当前解一行，避免统计块挤满视图；过小时整层隐藏
-  const compact = axisCssWidth < 380 || axisCssHeight < 280
-  const hidden = axisCssWidth < 200 || axisCssHeight < 160
+  // A normal dashboard card keeps the current fix visible without covering the
+  // track. Full statistics also have to fit the available space after measuring.
+  const compact = width < 620 || height < 340
+  const stats = compact ? null : deviationStats()
 
   if (stats && !compact) {
     lines.push({ text: `N = ${stats.count.toLocaleString()}` })
@@ -442,7 +440,7 @@ function drawStatsOverlay(): void {
     })
   }
 
-  if (lines.length === 0 || hidden) return
+  if (lines.length === 0) return
 
   ctx.save()
   ctx.setTransform(axisDpr, 0, 0, axisDpr, 0, 0)
@@ -453,11 +451,21 @@ function drawStatsOverlay(): void {
   const lineHeight = 15
   const paddingX = 10
   const paddingY = 8
-  let maxLineWidth = 0
-  for (const line of lines) {
-    maxLineWidth = Math.max(maxLineWidth, ctx.measureText(line.text).width)
+  const measuredWidth = () => Math.max(...lines.map((line) => ctx.measureText(line.text).width))
+  let maxLineWidth = measuredWidth()
+  if (
+    lines.length > 1 &&
+    (maxLineWidth + paddingX * 2 > width * 0.6 ||
+      lines.length * lineHeight + paddingY * 2 > height * 0.5)
+  ) {
+    lines.splice(currentPoint ? 1 : 0)
+    if (!lines.length) {
+      ctx.restore()
+      return
+    }
+    maxLineWidth = measuredWidth()
   }
-  const boxWidth = maxLineWidth + paddingX * 2
+  const boxWidth = Math.min(maxLineWidth + paddingX * 2, Math.max(1, width - 16))
   const boxHeight = lines.length * lineHeight + paddingY * 2
   const boxX = Math.max(8, width - boxWidth - 10)
   const boxY = 10
@@ -473,7 +481,12 @@ function drawStatsOverlay(): void {
 
   lines.forEach((line, index) => {
     ctx.fillStyle = line.color ?? colors.text
-    ctx.fillText(line.text, boxX + boxWidth - paddingX, boxY + paddingY + index * lineHeight)
+    ctx.fillText(
+      line.text,
+      boxX + boxWidth - paddingX,
+      boxY + paddingY + index * lineHeight,
+      Math.max(1, boxWidth - paddingX * 2),
+    )
   })
   ctx.restore()
 }
@@ -786,12 +799,7 @@ function handleWheel(e: WheelEvent): void {
 
   const xCenter = (xMin + xMax) / 2
   const yCenter = (yMin + yMax) / 2
-  updateViewport(
-    xCenter - xSpan / 2,
-    xCenter + xSpan / 2,
-    yCenter - ySpan / 2,
-    yCenter + ySpan / 2,
-  )
+  updateViewport(xCenter - xSpan / 2, xCenter + xSpan / 2, yCenter - ySpan / 2, yCenter + ySpan / 2)
   syncTrackingSpans()
 
   // 缩放后更新偏移：新视口中心相对于跟踪点（回放时为时间线光标点）的偏移
@@ -970,19 +978,16 @@ onMounted(() => {
     )
 
     stopThemeWatch = watch(resolvedTheme, scheduleThemeRefresh)
-    stopTimelineWatch = watch(
-      [fileTimeline.active, fileTimeline.elapsedMilliseconds],
-      () => {
-        if (currentView.value !== 'deviation') return
-        // 跟踪模式：回放光标移动后当前定位点重新居中（track 预期行为）；
-        // 非跟踪只刷新光标点与轴层（含统计信息）
-        if (isTracking.value) applyTrackingViewport()
-        else {
-          drawAxisLayer()
-          drawCurrentPosition()
-        }
-      },
-    )
+    stopTimelineWatch = watch([fileTimeline.active, fileTimeline.elapsedMilliseconds], () => {
+      if (currentView.value !== 'deviation') return
+      // 跟踪模式：回放光标移动后当前定位点重新居中（track 预期行为）；
+      // 非跟踪只刷新光标点与轴层（含统计信息）
+      if (isTracking.value) applyTrackingViewport()
+      else {
+        drawAxisLayer()
+        drawCurrentPosition()
+      }
+    })
   })
 })
 

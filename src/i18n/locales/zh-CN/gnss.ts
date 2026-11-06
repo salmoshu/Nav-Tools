@@ -1,5 +1,8 @@
 export default {
   signal: {
+    barEmpty: '等待卫星信号数据',
+    recentPeak: '近期峰值',
+    recentPeakHint: '当前保留的逐星历史中的最大 C/N₀',
     tableView: '表格视图',
     chartView: '柱状图视图',
     satCount: '卫星数目',
@@ -59,6 +62,7 @@ export default {
   map: {
     offlineTitle: '离线地图',
     offlineDesc1: '本应用默认使用在线地图。你也可以事先准备一份本地栅格瓦片，让地图在离线或弱网时优先使用它们，未能覆盖到的区域会自动回退到在线地图。',
+    offlineAutoCache: '桌面版会把你实际浏览过且位于有效 GNSS 轨迹 1 公里走廊内的图片瓦片自动缓存到 map-tile-cache；无有效轨迹时不会自动缓存。缓存遵守服务端新鲜度规则，容量上限为 1 GiB。',
     offlineStepsTitle: '使用步骤：',
     offlineStep1A: '在',
     offlineStep1Strong: '应用的本地数据目录',

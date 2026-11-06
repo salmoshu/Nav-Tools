@@ -103,7 +103,7 @@ test('creates a location-choosing shortcut from the card header button (no stand
   // 进入时选择器自动打开挡住工作台,先关闭再操作卡片
   const backdrop = page.locator('.selector-backdrop')
   if (await backdrop.isVisible().catch(() => false)) {
-    await backdrop.locator('.selector-header .header-actions .el-button.is-circle').click()
+    await backdrop.getByRole('button', { name: 'Close Application Selector', exact: true }).click()
   }
   await expect(backdrop).toHaveCount(0)
   const shortcut = page.locator('.card-actions .shortcut-btn').first()
@@ -113,9 +113,7 @@ test('creates a location-choosing shortcut from the card header button (no stand
   // 主界面按钮只创建快捷方式,不再打开独立窗口
   await expect
     .poll(() =>
-      invokeLog
-        .filter((call) => call.channel === 'create-desktop-shortcut')
-        .map((c) => c.payload),
+      invokeLog.filter((call) => call.channel === 'create-desktop-shortcut').map((c) => c.payload),
     )
     .toHaveLength(1)
   const payload = invokeLog[0].payload as { windowId: string; iconDataUrl: string }

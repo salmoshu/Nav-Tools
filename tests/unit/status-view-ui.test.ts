@@ -25,6 +25,14 @@ describe('Status View presentation', () => {
     expect(source).not.toContain('status-negative')
   })
 
+  it('shows a field-specific icon beside each metric value', () => {
+    const source = readFileSync('src/components/StatusBar.vue', 'utf8')
+
+    expect(source).toContain('status-field-icon')
+    expect(source).toContain('getStatusFieldIcon(String(element[0]))')
+    expect(source).toContain('<component :is=')
+  })
+
   it('keeps space between the property dialog actions', () => {
     const source = readFileSync('src/components/StatusBar.vue', 'utf8')
 

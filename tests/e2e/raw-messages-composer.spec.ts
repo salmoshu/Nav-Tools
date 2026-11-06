@@ -33,3 +33,35 @@ test('collapses composer labels at the default card width and restores them when
   await expect(labels.nth(1)).toBeVisible()
   await expect(labels.nth(2)).toBeVisible()
 })
+
+test('collapses icon action labels by Dashboard card width and restores them when wider', async ({
+  page,
+}) => {
+  const application = {
+    id: 'map-responsive-actions',
+    name: 'Map responsive actions',
+    description: '',
+    icon: 'grid',
+    accent: '#3b82f6',
+    windowIds: ['gnss-map'],
+  }
+  await page.addInitScript((value) => {
+    localStorage.setItem('nav-tools:custom-applications', JSON.stringify([value]))
+    localStorage.setItem('nav-tools:selected-application', value.id)
+  }, application)
+  await page.setViewportSize({ width: 1280, height: 800 })
+  await page.goto('/#app/map-responsive-actions')
+
+  const surface = page.locator('.component-surface').first()
+  const resetButton = surface.locator('.control-btn').first()
+  await expect(resetButton).toBeVisible()
+  await surface.evaluate((element) => {
+    ;(element as HTMLElement).style.width = '500px'
+  })
+  await expect(resetButton).toHaveCSS('font-size', '0px')
+
+  await surface.evaluate((element) => {
+    ;(element as HTMLElement).style.width = '900px'
+  })
+  await expect(resetButton).toHaveCSS('font-size', '12px')
+})

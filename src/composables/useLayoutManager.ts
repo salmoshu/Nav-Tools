@@ -6,6 +6,7 @@ import { useApplicationSelector } from '@/composables/useApplicationSelector'
 import { showStatusBar, showToolBar, toolbarPosition, statusbarPosition } from '@/composables/useStatusManager'
 import { LayoutStorage, type PersistedLayoutItem } from '@/core/layout/LayoutStorage'
 import { arrangeLayoutInBestGrid } from '@/core/layout/arrangeBestGrid'
+import { expandPanel } from '@/core/layout/PanelCollapse'
 import { JsonStorage } from '@/core/storage/JsonStorage'
 import emitter from '@/hooks/useMitt'
 import { t } from '@/i18n'
@@ -24,6 +25,8 @@ export interface LayoutItem {
   minH?: number
   maxW?: number
   maxH?: number
+  collapsed?: boolean
+  expandedH?: number
 }
 
 const componentCache = new Map<string, any>()
@@ -97,6 +100,7 @@ export function useLayoutManager() {
         || item.y !== original.y
         || item.w !== original.w
         || item.h !== original.h
+        || item.collapsed !== original.collapsed
         || item.windowId !== original.windowId
     })
   })
@@ -244,6 +248,7 @@ export function useLayoutManager() {
   }
 
   async function createBestLayout() {
+    layoutDraggableList.value.forEach(expandPanel)
     layoutDraggableList.value = arrangeLayoutInBestGrid(layoutDraggableList.value)
     backupCurrentLayout()
   }

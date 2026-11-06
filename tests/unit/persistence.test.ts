@@ -36,9 +36,9 @@ describe('panel and application persistence', () => {
       'Flow',
       'GNSS',
       'GNSS-Raw',
-      'GNSS-Lib',
       'Camera',
       'LiDAR',
+      'GNSS-Lib',
     ])
     expect(applications[0]).toMatchObject({
       id: 'serial',
@@ -67,17 +67,17 @@ describe('panel and application persistence', () => {
         'gnssraw-eph',
       ],
     })
-    expect(applications[4]).toMatchObject({
+    expect(applications[6]).toMatchObject({
       id: 'gnsslib',
       icon: 'satellite',
       windowIds: ['gnsslib-rtkpost', 'gnsslib-rtknavi'],
     })
-    expect(applications[5]).toMatchObject({
+    expect(applications[4]).toMatchObject({
       id: 'camera',
       icon: 'camera',
       windowIds: ['camera-video', 'camera-parameters', 'terminal'],
     })
-    expect(applications[6]).toMatchObject({
+    expect(applications[5]).toMatchObject({
       id: 'lidar',
       icon: 'radar',
       windowIds: ['lidar-scene', 'lidar-scores', 'lidar-plot', 'lidar-inspector'],
@@ -172,9 +172,7 @@ describe('panel and application persistence', () => {
       storage.loadApplications().find((application) => application.id === 'camera')!
 
     expect(cameraApp().windowIds).toEqual(['camera-video', 'camera-parameters', 'terminal'])
-    storage.saveApplications([
-      { ...cameraApp(), windowIds: ['camera-video', 'camera-parameters'] },
-    ])
+    storage.saveApplications([{ ...cameraApp(), windowIds: ['camera-video', 'camera-parameters'] }])
     expect(cameraApp().windowIds).toEqual(['camera-video', 'camera-parameters'])
   })
 
@@ -276,18 +274,18 @@ describe('panel and application persistence', () => {
       'motor',
       'gnss',
       'gnssraw',
-      'gnsslib',
       'camera',
       'lidar',
+      'gnsslib',
     ])
     expect(storage.loadApplications().map((application) => application.id)).toEqual([
       'serial',
       'motor',
       'gnss',
       'gnssraw',
-      'gnsslib',
       'camera',
       'lidar',
+      'gnsslib',
     ])
   })
 
@@ -298,13 +296,29 @@ describe('panel and application persistence', () => {
 
     const reordered = storage.reorderApplications(initial, 3, 0)
 
-    expect(reordered.map(({ id }) => id)).toEqual(['gnssraw', 'serial', 'motor', 'gnss', 'gnsslib', 'camera', 'lidar'])
+    expect(reordered.map(({ id }) => id)).toEqual([
+      'gnssraw',
+      'serial',
+      'motor',
+      'gnss',
+      'camera',
+      'lidar',
+      'gnsslib',
+    ])
     expect(
       new ApplicationStorage(new JsonStorage(memory)).loadApplications().map(({ id }) => id),
-    ).toEqual(['gnssraw', 'serial', 'motor', 'gnss', 'gnsslib', 'camera', 'lidar'])
+    ).toEqual(['gnssraw', 'serial', 'motor', 'gnss', 'camera', 'lidar', 'gnsslib'])
 
     const partial = storage.reorderApplications(reordered, 0, 2)
-    expect(partial.map(({ id }) => id)).toEqual(['serial', 'motor', 'gnssraw', 'gnss', 'gnsslib', 'camera', 'lidar'])
+    expect(partial.map(({ id }) => id)).toEqual([
+      'serial',
+      'motor',
+      'gnssraw',
+      'gnss',
+      'camera',
+      'lidar',
+      'gnsslib',
+    ])
   })
 
   it('reorders stored applications into the new default order once', () => {
@@ -353,11 +367,7 @@ describe('panel and application persistence', () => {
     const storage = new ApplicationStorage(new JsonStorage(memory))
 
     // 迁移一次：默认应用按默认序排列，自定义应用沉底且相对顺序稳定
-    expect(storage.loadApplications().map(({ id }) => id)).toEqual([
-      'gnss',
-      'lidar',
-      'custom',
-    ])
+    expect(storage.loadApplications().map(({ id }) => id)).toEqual(['gnss', 'lidar', 'custom'])
 
     // 迁移之后用户手动打乱顺序，不再被覆盖
     const shuffled = storage.loadApplications()

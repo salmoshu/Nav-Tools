@@ -15,13 +15,6 @@ describe('GNSS signal SNR bar chart view', () => {
     expect(source).toContain('value="chart"')
   })
 
-  it('adds SNR reference lines at 25/35/45 dB', () => {
-    expect(source).toContain('markLine')
-    expect(source).toContain('yAxis: 25')
-    expect(source).toContain('yAxis: 35')
-    expect(source).toContain('yAxis: 45')
-  })
-
   it('shows satellite details in the SNR tooltip', () => {
     expect(source).toContain('data.prn')
     expect(source).toContain('data.constellation')
