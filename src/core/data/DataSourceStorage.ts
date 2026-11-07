@@ -87,6 +87,7 @@ function parserValue(value: unknown, fallback: TextDataParser): TextDataParser {
   return value === 'raw' ||
     value === 'json' ||
     value === 'nmea' ||
+    value === 'rtklib-pos' ||
     value === 'regex' ||
     value === 'csv'
     ? value

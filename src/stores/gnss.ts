@@ -71,7 +71,9 @@ registerStatusSource(
         label: 'GNSS',
         match: moduleIds => {
             const { settings } = useDataSourceManager()
-            return moduleIds.has('gnss') || settings[settings.activeSource].parser === 'nmea'
+            return moduleIds.has('gnss') ||
+                settings[settings.activeSource].parser === 'nmea' ||
+                settings[settings.activeSource].parser === 'rtklib-pos'
         },
         status: () => useGnssStore().status,
     }),

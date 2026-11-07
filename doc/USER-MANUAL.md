@@ -158,7 +158,8 @@ are persisted, so you configure a connection once.
 |---|---|
 | `Raw` | Undifferentiated byte/text streams |
 | `JSON` | Structured JSON messages |
-| `NMEA` | GNSS NMEA-0183 sentences |
+| `NMEA` | GNSS NMEA-0183 sentences; when selected, file content is parsed as NMEA regardless of whether the file ends in `.log`, `.txt`, `.pos` or another suffix |
+| `RTKLIB POS` | Robo-GNSS/RTKLIB text solutions; reads header-described LLH, ECEF XYZ and ENU layouts, including calendar-time and GPS-week/time-of-week rows |
 
 ---
 

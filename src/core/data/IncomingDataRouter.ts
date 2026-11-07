@@ -26,7 +26,9 @@ export class IncomingDataRouter {
     const isHexMotor = modes.has('motor') && context.displayFormat === 'hex'
     const decodedData = isHexMotor ? this.targets.decodeMotorHex(data) : data
 
-    if (modes.has('gnss') || context.dataParser === 'nmea') this.targets.appendGnss(data)
+    if (modes.has('gnss') || context.dataParser === 'nmea' || context.dataParser === 'rtklib-pos') {
+      this.targets.appendGnss(data)
+    }
 
     if (windows.has('raw-messages')) {
       if (isHexMotor) this.targets.appendRaw(`${data}\n${decodedData}`)

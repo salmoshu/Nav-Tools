@@ -15,6 +15,7 @@ describe('GNSS solution status colors', () => {
       2: '#0000ff',
       4: '#008000',
       5: '#ffa500',
+      6: '#800080',
     })
     expect(fixStatusColor(99)).toBe(DEFAULT_FIX_STATUS_COLOR)
     expect(fixStatusColorRgb01(4)).toEqual([0, 128 / 255, 0])

@@ -11,6 +11,7 @@ import {
   type SatelliteDetailSample,
 } from '@/core/gnss/SatelliteDetailEpochStore'
 import { SnrHistoryStore } from '@/core/gnss/SnrHistoryStore'
+import { RtkSolutionParser, type RtkSolution } from '@/core/gnsslib/RtkSolution'
 import { t } from '@/i18n'
 
 // Keep object-heavy legacy histories bounded; reuse the same count as a roughly
@@ -794,6 +795,8 @@ export function numberToQuality (num: number) {
       return t('data.qualityFix')
     case 5:
       return t('data.qualityFloat')
+    case 6:
+      return t('data.qualityPpp')
     default:
       return t('data.qualityUnknown')
   }
@@ -813,7 +816,23 @@ function rmcModeToQuality(status: RmcData['status'], mode: string): number {
   }
 }
 
+/** Convert RTKLIB solution Q values to the GNSS panel's NMEA-style quality scale. */
+function rtkSolutionQualityToGnssQuality(quality: number): number {
+  switch (quality) {
+    case 1: return 4 // SOLQ_FIX
+    case 2: return 5 // SOLQ_FLOAT
+    case 3: return 2 // SOLQ_FIX_WL / SBAS in older RTKLIB variants
+    case 4: return 2 // SOLQ_DGPS
+    case 5: return 1 // SOLQ_SINGLE
+    case 6: return 6 // SOLQ_PPP
+    case 7: return 1 // SOLQ_DR
+    default: return 0
+  }
+}
+
 const streamParser = new NmeaStreamParser()
+const rtkSolutionParser = new RtkSolutionParser()
+let rtkSolutionBuffer = ''
 
 export function useNmea() {
   // 计算属性：信号质量
@@ -912,6 +931,54 @@ export function useNmea() {
   }
 
   // 解析GSV语句
+  function appendRtkSolution(solution: RtkSolution): void {
+    const gnssStore = useGnssStore()
+    const quality = rtkSolutionQualityToGnssQuality(solution.quality)
+    if (!Number.isFinite(solution.latitude) || !Number.isFinite(solution.longitude) ||
+        !Number.isFinite(solution.height) || Math.abs(solution.latitude) > 90 ||
+        Math.abs(solution.longitude) > 180) return
+
+    if (firstLLh === null) firstLLh = [solution.latitude, solution.longitude, solution.height]
+    const enuEN = llhToEnu(solution.latitude, solution.longitude, firstLLh[0] as number, firstLLh[1] as number)
+    pendingGgaEpochTime = solution.time
+    const data: NmeaData = {
+      time: solution.time,
+      firstLatitude: firstLLh[0],
+      firstLongitude: firstLLh[1],
+      latitude: solution.latitude,
+      longitude: solution.longitude,
+      altitude: solution.height,
+      enuE: enuEN[0],
+      enuN: enuEN[1],
+      speed: null,
+      course: null,
+      satellites: solution.satellites,
+      selectedSatellites: null,
+      pdop: null,
+      hdop: null,
+      vdop: null,
+      status: quality > 0 ? 'A' : 'V',
+      quality,
+      mode: null,
+      date: solution.time.slice(0, 10),
+      raw: solution.raw,
+    }
+    currentData.value = data
+    appendPositionEpoch(data)
+    addNmeaData(data)
+
+    gnssStore.status.utcTime = solution.time
+    gnssStore.status.fixMode = numberToQuality(quality)
+    gnssStore.status.quality = quality
+    gnssStore.status.longitude = Number(solution.longitude.toFixed(6))
+    gnssStore.status.latitude = Number(solution.latitude.toFixed(6))
+    gnssStore.status.altitude = solution.height
+    gnssStore.status.altitudeMsl = solution.height
+    gnssStore.status.satsUsed = String(solution.satellites)
+    appendMapPositionEpoch(solution.time, solution.longitude, solution.latitude, quality)
+    appendStatusEpoch(solution.time)
+  }
+
   function parseGsv(sentence: string): Partial<NmeaData> {
     const gnssStore = useGnssStore()
     const parts = sentence.split(',')
@@ -1287,6 +1354,8 @@ export function useNmea() {
     satelliteDetailEpochHistory.clear()
     utcTime.fill(0)
     streamParser.clear()
+    rtkSolutionParser.reset()
+    rtkSolutionBuffer = ''
     nmeaData.value = []
     ggaData.value = []
     deviationPoints.value = []
@@ -1355,9 +1424,24 @@ export function useNmea() {
     })
   }
 
+  function processRtkLibPosData(rawData: string): void {
+    if (!rawData) return
+    rtkSolutionBuffer += rawData
+    const lines = rtkSolutionBuffer.split(/\r?\n/)
+    rtkSolutionBuffer = lines.pop() ?? ''
+    runInBatch(() => {
+      for (const line of lines) {
+        const solution = rtkSolutionParser.addLine(line)
+        if (solution) appendRtkSolution(solution)
+      }
+    })
+  }
+
   // 添加清除缓冲区的函数
   function clearBuffer(): void {
     streamParser.clear()
+    rtkSolutionParser.reset()
+    rtkSolutionBuffer = ''
   }
   
   // 根据Talker ID判断星座类型
@@ -1424,8 +1508,9 @@ export function useNmea() {
       applyTimelineEpoch,
       prepareTimelineProjection,
       clearSatelliteEpochHistory,
-      processRawData,  // 导出新函数
-      clearBuffer     // 导出新函数
+      processRawData,
+      processRtkLibPosData,
+      clearBuffer
     }
   }
 

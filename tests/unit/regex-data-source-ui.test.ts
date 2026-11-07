@@ -14,6 +14,7 @@ describe('regex data-source UI integration', () => {
   it('offers Regex as a persisted parser option', () => {
     expect(textDataParserOptions.map((option) => option.value)).toContain('regex')
     expect(textDataParserOptions.map((option) => option.value)).toContain('csv')
+    expect(textDataParserOptions.map((option) => option.value)).toContain('rtklib-pos')
     expect(toolbar.match(/v-model="sourceRegexPattern"/g)).toHaveLength(3)
     expect(toolbar).toContain("sourceParser === 'regex'")
     expect(device).toContain('sourceRegexPattern')
@@ -43,9 +44,13 @@ describe('regex data-source UI integration', () => {
   })
 
   it('routes the active regex definition to Flow and Messages', () => {
-    expect(device).toContain('addFlowData(data, activeDataParser.value, activeRegexPattern.value)')
+    expect(device).toContain(
+      "activeDataParser.value === 'rtklib-pos' ? 'raw' : activeDataParser.value",
+    )
     expect(device).toContain('flowRegexPattern.value = regexPattern')
-    expect(messages).toContain("activeDataParser.value === 'raw' ? 'none' : activeDataParser.value")
+    expect(messages).toContain(
+      "activeDataParser.value === 'raw' || activeDataParser.value === 'rtklib-pos'",
+    )
   })
 
   it('renames the raw parser label to 无 and wires the parser-config highlight', () => {

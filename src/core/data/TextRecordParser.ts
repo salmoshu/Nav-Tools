@@ -1,4 +1,4 @@
-export type TextDataParser = 'raw' | 'json' | 'nmea' | 'regex' | 'csv'
+export type TextDataParser = 'raw' | 'json' | 'nmea' | 'rtklib-pos' | 'regex' | 'csv'
 export type ParsedTextValue = string | number | boolean | null
 export type ParsedTextRecord = Record<string, ParsedTextValue>
 

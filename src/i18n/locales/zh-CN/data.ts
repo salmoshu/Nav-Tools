@@ -15,6 +15,7 @@ export default {
   qualityDgnss: '伪距差分',
   qualityFix: '固定解',
   qualityFloat: '浮点解',
+  qualityPpp: 'PPP 解',
   qualityUnknown: '未知',
 
   // useNmea.ts — signal / fix status labels
@@ -68,6 +69,7 @@ export default {
   parserRawDesc: '保留原始数据，不进行结构校验',
   parserJsonDesc: '按行解析并校验 JSON 对象',
   parserNmeaDesc: '按行解析并校验 NMEA 语句',
+  parserRtkLibPosDesc: '解析 Robo-GNSS/RTKLIB 解决方案文件（LLH/XYZ/ENU）',
   parserRegexDesc: '使用正则表达式提取键值字段并转换为曲线数据',
   parserCsvDesc: '按逗号分列，键为列序号（1 起始），值自动推断类型',
   parserGroupStructured: '结构化',

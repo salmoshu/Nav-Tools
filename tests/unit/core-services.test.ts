@@ -124,6 +124,26 @@ describe('IncomingDataRouter', () => {
     expect(targets.appendRaw).toHaveBeenCalledWith(sentence)
     expect(targets.appendPlot).not.toHaveBeenCalled()
   })
+
+  it('routes RTKLIB POS rows to the GNSS solution parser', () => {
+    const targets = {
+      appendGnss: vi.fn(),
+      appendRaw: vi.fn(),
+      appendPlot: vi.fn(),
+      decodeMotorHex: vi.fn((data: string) => data),
+    }
+    const router = new IncomingDataRouter(targets)
+
+    router.route('2024/04/26 03:21:26.000 39.98 116.47 63.7 1 20\n', {
+      activeDataModes: ['general'],
+      activeWindowIds: [],
+      displayFormat: 'ascii',
+      dataParser: 'rtklib-pos',
+    })
+
+    expect(targets.appendGnss).toHaveBeenCalledOnce()
+    expect(targets.appendRaw).not.toHaveBeenCalled()
+  })
 })
 
 describe('NMEA and theme utilities', () => {

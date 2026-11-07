@@ -19,6 +19,7 @@ export const textDataParserOptions: ReadonlyArray<{
   { value: 'json', label: 'JSON', description: t('data.parserJsonDesc'), group: 'structured' },
   { value: 'csv', label: 'CSV', description: t('data.parserCsvDesc'), group: 'structured' },
   { value: 'nmea', label: 'NMEA', description: t('data.parserNmeaDesc'), group: 'protocol' },
+  { value: 'rtklib-pos', label: 'RTKLIB POS', description: t('data.parserRtkLibPosDesc'), group: 'protocol' },
   { value: 'regex', label: t('app.toolbar.regexPattern'), description: t('data.parserRegexDesc'), group: 'custom' },
 ]
 

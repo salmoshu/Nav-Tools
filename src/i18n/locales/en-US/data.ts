@@ -15,6 +15,7 @@ export default {
   qualityDgnss: 'DGNSS',
   qualityFix: 'Fixed',
   qualityFloat: 'Float',
+  qualityPpp: 'PPP',
   qualityUnknown: 'Unknown',
 
   // useNmea.ts — signal / fix status labels
@@ -68,6 +69,7 @@ export default {
   parserRawDesc: 'Keep raw data without structural validation',
   parserJsonDesc: 'Parse and validate JSON objects per line',
   parserNmeaDesc: 'Parse and validate NMEA sentences per line',
+  parserRtkLibPosDesc: 'Parse Robo-GNSS/RTKLIB solution files (LLH/XYZ/ENU)',
   parserRegexDesc: 'Extract key-value fields with a regular expression for charting',
   parserCsvDesc: 'Split by comma; keys are 1-based column indices; values are type-inferred',
   parserGroupStructured: 'Structured',

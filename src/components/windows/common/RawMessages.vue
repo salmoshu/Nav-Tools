@@ -610,7 +610,10 @@ onMounted(() => {
     })
   }
 
-  dataFormat.value = activeDataParser.value === 'raw' ? 'none' : activeDataParser.value;
+  dataFormat.value =
+    activeDataParser.value === 'raw' || activeDataParser.value === 'rtklib-pos'
+      ? 'none'
+      : activeDataParser.value;
   
   // 添加滚动事件监听
   nextTick(() => {

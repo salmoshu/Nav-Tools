@@ -29,6 +29,27 @@ describe('NMEA GNSS status extraction', () => {
     expect(store.status.satsUsed).toBe('08')
   })
 
+  it('imports RTKLIB LLH solution rows into the shared GNSS histories', () => {
+    const { processRtkLibPosData, positionEpochHistory, statusEpochHistory, mapTrackPoints } =
+      useNmea()
+    const store = useGnssStore()
+    const header =
+      '%  GPST                  latitude(deg) longitude(deg)  height(m)   Q  ns   sdn(m)   sde(m)   sdu(m)  sdne(m)  sdeu(m)  sdun(m) age(s)  ratio\n'
+    const rows = [
+      '2024/04/26 03:21:26.000 39.980744192 116.476662780 63.7868 5 37 1.6 1.5 3.9 0.2 -0.1 -1.8 0.00 0.0',
+      '2024/04/26 03:21:27.000 39.980743612 116.476662862 63.8267 1 37 1.6 1.5 3.9 0.2 -0.1 -1.8 0.00 3.5',
+    ]
+
+    processRtkLibPosData(header + rows.join('\n') + '\n')
+
+    expect(positionEpochHistory.value.length).toBe(2)
+    expect(statusEpochHistory.value.length).toBe(2)
+    expect(mapTrackPoints.value).toHaveLength(2)
+    expect(store.status.quality).toBe(4)
+    expect(store.status.satsUsed).toBe('37')
+    expect(store.status.latitude).toBeCloseTo(39.980744, 6)
+  })
+
   it('extracts 2D/3D accuracy from GST', () => {
     const { processRawData } = useNmea()
     const store = useGnssStore()
@@ -330,8 +351,10 @@ describe('NMEA stream with leading empty sentences', () => {
     const { processRawData, deviationPoints } = useNmea()
     const emptyRmc = '$GNRMC,,,,,,,,,,,,,*79'
     const emptyGga = '$GNGGA,,,,,,,,,,,,,,*48'
-    const gga1 = '$GNGGA,094909.00,3110.8988045,N,12124.2665330,E,1,12,1.0,32.301,M,10.836,M,1.0,0000*6D'
-    const gga2 = '$GNGGA,094910.00,3110.8909802,N,12124.2633877,E,5,17,1.0,30.045,M,10.836,M,1.0,0000*6C'
+    const gga1 =
+      '$GNGGA,094909.00,3110.8988045,N,12124.2665330,E,1,12,1.0,32.301,M,10.836,M,1.0,0000*6D'
+    const gga2 =
+      '$GNGGA,094910.00,3110.8909802,N,12124.2633877,E,5,17,1.0,30.045,M,10.836,M,1.0,0000*6C'
 
     processRawData(`${emptyRmc}\n${emptyGga}\n${emptyRmc}\n${emptyGga}\n${gga1}\n${gga2}\n`)
 

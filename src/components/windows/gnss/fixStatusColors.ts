@@ -6,11 +6,12 @@ export const FIX_STATUS_COLORS: Readonly<Record<number, string>> = {
   2: '#0000ff', // DGNSS 伪距差分（blue）
   4: '#008000', // Fix 固定解（green）
   5: '#ffa500', // Float 浮点解（orange）
+  6: '#800080',
 }
 
 export const DEFAULT_FIX_STATUS_COLOR = '#808080'
 
-export const FIX_STATUS_QUALITIES = [0, 1, 2, 4, 5] as const
+export const FIX_STATUS_QUALITIES = [0, 1, 2, 4, 5, 6] as const
 export type FixStatusQuality = (typeof FIX_STATUS_QUALITIES)[number]
 
 export function normalizeFixStatusQuality(quality: number | null): FixStatusQuality {
