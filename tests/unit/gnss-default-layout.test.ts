@@ -19,7 +19,7 @@ describe('GNSS 默认布局（需求 #160）', () => {
   })
 
   it('默认布局即为最佳布局（最优网格排列）', () => {
-    // GNSS 设定 5 个组件：5 > 4 ⇒ 3 列，列宽 = 12 / 3 = 4
+    // 合并地图后的 GNSS 设定包含 4 个组件：4 <= 4，2 列，列宽 = 12 / 2 = 6
     const items = gnss!.windowIds.map((id, index) => ({
       i: `${id}-${index + 1}`,
       windowId: id,
@@ -30,15 +30,14 @@ describe('GNSS 默认布局（需求 #160）', () => {
     }))
     const arranged = arrangeLayoutInBestGrid(items)
 
-    expect(arranged.every((item) => item.w === 4)).toBe(true)
+    expect(arranged.every((item) => item.w === 6)).toBe(true)
     // 从左到右、自上而下填充
     expect(arranged[0].x).toBe(0)
-    expect(arranged[1].x).toBe(4)
-    expect(arranged[2].x).toBe(8)
-    expect(arranged[3].x).toBe(0)
+    expect(arranged[1].x).toBe(6)
+    expect(arranged[2].x).toBe(0)
+    expect(arranged[2].y).toBe(6)
+    expect(arranged[3].x).toBe(6)
     expect(arranged[3].y).toBe(6)
-    expect(arranged[4].x).toBe(4)
-    expect(arranged[4].y).toBe(6)
     // 组件数量与唯一性保持不变：每个组件仅一个
     expect(arranged.length).toBe(gnss!.windowIds.length)
     expect(new Set(arranged.map((item) => item.windowId)).size).toBe(arranged.length)

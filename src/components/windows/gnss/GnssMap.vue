@@ -131,6 +131,9 @@ const fileTimeline = useFileTimeline()
 const MIN_TRACK_PIXELS = 1.5
 const TRACK_SEGMENT_POINTS = 200
 const DEFAULT_ZOOM = 16
+// Keep the Leaflet ceiling aligned with the grid view's sub-millimetre minimum
+// span. Tiles are still fetched at their native zoom and smoothly scaled above it.
+const MAP_MAX_ZOOM = 28
 // 轨迹连线：rtkplot 同款银灰 #c0c0c0（不透明）；瓦片底图上略加粗到 1.5px 保可见性
 const TRACK_LINE_COLOR = '#c0c0c0'
 const TRACK_LINE_WEIGHT = 1.5
@@ -210,13 +213,15 @@ function initMap() {
   map = L.map(mapRef.value, {
     center: [30, 114],
     zoom: 3,
+    maxZoom: MAP_MAX_ZOOM,
     zoomControl: true,
   })
   trackRenderer = L.canvas({ padding: 0.5 })
   simplifier = createTrackSimplifier(MIN_TRACK_PIXELS, projectLatLng)
 
   L.tileLayer(tileUrl.value, {
-    maxZoom: 19,
+    maxNativeZoom: 19,
+    maxZoom: MAP_MAX_ZOOM,
     attribution:
       '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
   }).addTo(map)
@@ -481,7 +486,7 @@ function fitCompleteTrack(): void {
   map.fitBounds(bounds, {
     animate: false,
     padding: [20, 20],
-    maxZoom: DEFAULT_ZOOM,
+    maxZoom: MAP_MAX_ZOOM,
   })
   hasCentered = true
 }

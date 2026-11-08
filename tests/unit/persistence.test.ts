@@ -53,7 +53,7 @@ describe('panel and application persistence', () => {
     expect(applications[2]).toMatchObject({
       id: 'gnss',
       icon: 'position',
-      windowIds: ['gnss-map', 'gnss-deviation', 'gnss-signals', 'sky-plot', 'raw-messages'],
+      windowIds: ['gnss-deviation', 'gnss-signals', 'sky-plot', 'raw-messages'],
     })
     expect(applications[3]).toMatchObject({
       id: 'gnssraw',

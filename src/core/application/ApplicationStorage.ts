@@ -45,7 +45,7 @@ export const DEFAULT_APPLICATIONS: readonly UserApplication[] = [
     description: 'GNSS positioning, satellite, and raw message workspace',
     icon: 'position',
     accent: '#0ea5e9',
-    windowIds: ['gnss-map', 'gnss-deviation', 'gnss-signals', 'sky-plot', 'raw-messages'],
+    windowIds: ['gnss-deviation', 'gnss-signals', 'sky-plot', 'raw-messages'],
   },
   {
     id: 'gnssraw',

@@ -119,18 +119,6 @@ export const panelRegistry: readonly PanelDefinition[] = [
     componentPath: '@/components/windows/common/FlowDeviation.vue',
   },
   {
-    id: 'gnss-map',
-    moduleId: 'gnss',
-    appMode: 'pos',
-    funcMode: 'gnss',
-    catalogGroup: 'gnss',
-    action: 'map',
-    title: 'panel.gnss-map.title',
-    description: 'panel.gnss-map.desc',
-    componentName: 'GnssMap',
-    componentPath: '@/components/windows/gnss/GnssMap.vue',
-  },
-  {
     id: 'gnss-deviation',
     moduleId: 'gnss',
     appMode: 'pos',
@@ -334,7 +322,8 @@ const legacyPanelIds: Readonly<Record<string, string>> = {
   'gnss.deviation': 'gnss-deviation',
   'gnss.signal': 'gnss-signals',
   'gnss.sky': 'sky-plot',
-  'gnss.map': 'gnss-map',
+  'gnss.map': 'gnss-deviation',
+  'gnss-map': 'gnss-deviation',
   'motor.config': 'motor-parameters',
   'gnssraw-rtkpost': 'gnsslib-rtkpost',
 }

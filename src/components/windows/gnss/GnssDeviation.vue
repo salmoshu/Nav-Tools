@@ -81,7 +81,7 @@
             {{ currentStatusLabel }}
           </strong>
           <span class="status-card-chevron" aria-hidden="true">
-            {{ statusCardExpanded ? '^' : 'v' }}
+            {{ statusCardExpanded ? '>' : '<' }}
           </span>
         </button>
 
@@ -1244,7 +1244,7 @@ onUnmounted(() => {
   top: 14px;
   right: 14px;
   z-index: 20;
-  width: min(330px, calc(100% - 28px));
+  width: min(230px, calc(100% - 28px));
   overflow: hidden;
   color: var(--app-text);
   background: color-mix(in srgb, var(--app-surface-raised) 94%, transparent);
@@ -1252,6 +1252,12 @@ onUnmounted(() => {
   border-radius: 12px;
   box-shadow: 0 10px 28px rgb(0 0 0 / 18%);
   backdrop-filter: blur(12px);
+  transform-origin: top right;
+  transition: width 0.2s ease;
+}
+
+.deviation-status-card.is-collapsed {
+  width: 42px;
 }
 
 .status-card-header {
@@ -1300,11 +1306,27 @@ onUnmounted(() => {
 }
 
 .status-card-chevron {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   width: 16px;
+  flex: 0 0 16px;
   color: var(--app-text-muted);
-  font-size: 15px;
+  font-size: 17px;
   line-height: 1;
   text-align: center;
+}
+
+.deviation-status-card.is-collapsed .status-card-header {
+  justify-content: center;
+  gap: 0;
+  padding-right: 8px;
+  padding-left: 8px;
+}
+
+.deviation-status-card.is-collapsed .status-card-heading,
+.deviation-status-card.is-collapsed .status-card-summary {
+  display: none;
 }
 
 .status-card-body {
@@ -1341,7 +1363,7 @@ onUnmounted(() => {
 
 .status-card-stat-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
   gap: 6px;
 }
 
@@ -1386,7 +1408,7 @@ onUnmounted(() => {
 .layer-switcher {
   position: absolute;
   right: 14px;
-  bottom: 14px;
+  bottom: 58px;
   z-index: 25;
   display: inline-flex;
   align-items: center;
