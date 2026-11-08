@@ -33,6 +33,19 @@
         </div>
 
         <div class="right-buttons">
+          <el-button
+            type="primary"
+            size="small"
+            circle
+            class="control-btn status-toggle-btn"
+            :class="{ active: statusCardVisible }"
+            :aria-pressed="statusCardVisible"
+            :aria-label="t('gnss.deviation.toggleStatus')"
+            :title="t('gnss.deviation.toggleStatus')"
+            @click="statusCardVisible = !statusCardVisible"
+          >
+            <el-icon><InfoFilled /></el-icon>
+          </el-button>
           <el-button type="primary" size="small" @click="resetLayout" class="control-btn zoom-btn"
             ><el-icon><RefreshLeft /></el-icon>&nbsp;{{
               t('gnss.deviation.resetLayout')
@@ -44,7 +57,11 @@
         </div>
       </div>
     </div>
-    <div class="deviation-visual-container" v-show="currentView === 'deviation'">
+    <div
+      ref="visualContainerRef"
+      class="deviation-visual-container"
+      v-show="currentView === 'deviation'"
+    >
       <div class="chart-container" ref="chartContainerRef" v-show="layerMode === 'grid'">
         <canvas ref="canvasRef" class="chart"></canvas>
         <canvas ref="axisCanvasRef" class="axis-layer"></canvas>
@@ -57,22 +74,17 @@
           {{ tooltipText }}
         </div>
       </div>
-      <div v-if="layerMode === 'map'" class="map-layer-container">
+      <div v-if="mapLayerReady" v-show="layerMode === 'map'" class="map-layer-container">
         <GnssMap
+          ref="mapLayerRef"
           v-model:tracking="isTracking"
           v-model:point-size="pointSize"
           :show-toolbar="false"
         />
       </div>
 
-      <section class="deviation-status-card" :class="{ 'is-collapsed': !statusCardExpanded }">
-        <button
-          type="button"
-          class="status-card-header"
-          :aria-expanded="statusCardExpanded"
-          :aria-label="t('gnss.deviation.toggleStatus')"
-          @click="statusCardExpanded = !statusCardExpanded"
-        >
+      <section v-if="statusCardVisible" class="deviation-status-card">
+        <div class="status-card-header">
           <span class="status-card-heading">
             <span class="status-card-indicator" :style="{ backgroundColor: currentStatusColor }"></span>
             <span>{{ t('gnss.deviation.positionStatus') }}</span>
@@ -80,12 +92,18 @@
           <strong class="status-card-summary" :style="{ color: currentStatusColor }">
             {{ currentStatusLabel }}
           </strong>
-          <span class="status-card-chevron" aria-hidden="true">
-            {{ statusCardExpanded ? '>' : '<' }}
-          </span>
-        </button>
+          <button
+            type="button"
+            class="status-card-close"
+            :aria-label="t('gnss.deviation.closeStatus')"
+            :title="t('gnss.deviation.closeStatus')"
+            @click="statusCardVisible = false"
+          >
+            <el-icon><Close /></el-icon>
+          </button>
+        </div>
 
-        <div v-show="statusCardExpanded" class="status-card-body">
+        <div v-if="!statusCardCompact" class="status-card-body">
           <div v-if="currentStatusPoint" class="status-card-current-row">
             <span>{{ t('gnss.deviation.statsCurrent') }}</span>
             <strong :style="{ color: currentStatusColor }">{{ currentStatusLabel }}</strong>
@@ -116,7 +134,7 @@
                 <span>E {{ formatStatMeters(currentStats.stdE) }}</span>
                 <span>N {{ formatStatMeters(currentStats.stdN) }}</span>
               </div>
-              <div class="status-card-metric">
+              <div class="status-card-metric status-card-metric-rms">
                 <span>RMS</span>
                 <span>E {{ formatStatMeters(currentStats.rmsE) }}</span>
                 <span>N {{ formatStatMeters(currentStats.rmsN) }}</span>
@@ -130,26 +148,36 @@
         </div>
       </section>
 
-      <div class="layer-switcher" role="group" :aria-label="t('gnss.deviation.layerToggle')">
+      <div class="scale-layer-controls" role="group" :aria-label="t('gnss.deviation.layerToggle')">
+        <div class="scale-readout" :aria-label="scaleLabel">
+          <span
+            class="scale-readout-line"
+            :style="{ width: `${scaleBarDisplayWidth}px` }"
+            aria-hidden="true"
+          ></span>
+          <span class="scale-readout-label">{{ scaleLabel }}</span>
+        </div>
         <button
           type="button"
-          class="layer-button"
+          class="layer-icon-button"
           :class="{ active: layerMode === 'grid' }"
           :aria-pressed="layerMode === 'grid'"
-          @click="layerMode = 'grid'"
+          :aria-label="t('gnss.deviation.gridLayer')"
+          :title="t('gnss.deviation.gridLayer')"
+          @click="selectLayer('grid')"
         >
-          <span class="layer-swatch layer-swatch-grid" aria-hidden="true"></span>
-          {{ t('gnss.deviation.gridLayer') }}
+          <el-icon><Grid /></el-icon>
         </button>
         <button
           type="button"
-          class="layer-button"
+          class="layer-icon-button"
           :class="{ active: layerMode === 'map' }"
           :aria-pressed="layerMode === 'map'"
-          @click="layerMode = 'map'"
+          :aria-label="t('gnss.deviation.mapLayer')"
+          :title="t('gnss.deviation.mapLayer')"
+          @click="selectLayer('map')"
         >
-          <span class="layer-swatch layer-swatch-map" aria-hidden="true"></span>
-          {{ t('gnss.deviation.mapLayer') }}
+          <el-icon><MapLocation /></el-icon>
         </button>
       </div>
     </div>
@@ -198,6 +226,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch, nextTick } from 'vue'
+import { Close, Delete, Grid, InfoFilled, MapLocation, RefreshLeft } from '@element-plus/icons-vue'
 import { useNmea, numberToQuality } from '@/composables/gnss/useNmea'
 import { useFileTimeline } from '@/composables/useFileTimeline'
 import { fixStatusColorRgb01 } from '@/components/windows/gnss/fixStatusColors'
@@ -230,6 +259,7 @@ const BULK_RENDER_THRESHOLD = 512
 const canvasRef = ref<HTMLCanvasElement | null>(null)
 const axisCanvasRef = ref<HTMLCanvasElement | null>(null)
 const chartContainerRef = ref<HTMLDivElement | null>(null)
+const visualContainerRef = ref<HTMLDivElement | null>(null)
 const tooltipRef = ref<HTMLDivElement | null>(null)
 
 let renderer: TrajectoryRenderer | null = null
@@ -267,6 +297,13 @@ let themeRefreshFrame: number | null = null
 
 let resizeObserver: ResizeObserver | null = null
 let resizeFrame: number | null = null
+const statusCardVisible = ref(true)
+const statusCardCompact = ref(false)
+const mapLayerReady = ref(false)
+const mapLayerRef = ref<InstanceType<typeof GnssMap> | null>(null)
+const scaleLabel = ref('—')
+const scaleBarLength = ref(52)
+const scaleBarDisplayWidth = computed(() => Math.min(78, Math.max(28, scaleBarLength.value)))
 
 let stopWatch: (() => void) | null = null
 let stopThemeWatch: (() => void) | null = null
@@ -277,7 +314,6 @@ type DeviationLayer = 'grid' | 'map'
 
 const currentView = ref<DeviationView>('deviation')
 const layerMode = ref<DeviationLayer>('grid')
-const statusCardExpanded = ref(true)
 
 const currentStatusPoint = computed<[number, number, number] | undefined>(() => {
   const timelinePoint = getTimelinePositionPoint()
@@ -307,6 +343,10 @@ const speedSeriesRef = ref<InstanceType<typeof GnssMetricTimeSeries> | null>(nul
 /** 工具栏「重置布局」：偏差图重置轨迹视口；位置/速度图重置各轴（fit/居中/清手动范围） */
 function resetLayout(): void {
   if (currentView.value === 'deviation') {
+    if (layerMode.value === 'map') {
+      mapLayerRef.value?.resetLayout?.()
+      return
+    }
     resetZoom()
     return
   }
@@ -314,6 +354,17 @@ function resetLayout(): void {
   nSeriesRef.value?.resetLayout()
   uSeriesRef.value?.resetLayout()
   speedSeriesRef.value?.resetLayout()
+}
+
+function selectLayer(layer: DeviationLayer): void {
+  if (layer === 'map') mapLayerReady.value = true
+  layerMode.value = layer
+}
+
+function updateStatusCardCompact(): void {
+  const container = visualContainerRef.value
+  if (!container) return
+  statusCardCompact.value = container.clientWidth < 620 || container.clientHeight < 340
 }
 
 watch(currentView, (view) => {
@@ -470,27 +521,12 @@ function drawAxisLayer(): void {
     ctx.stroke()
   }
 
-  // rtkplot 口径右下角刻度标尺：横线两端各一道 5px 竖刻度，
-  // 长度 = 一个刻度步长的屏幕像素，单位标注在标尺上方居中
+  // Keep the scale readout in the DOM so it can share one control group with
+  // the grid/map buttons without covering the trajectory canvas.
   const barLength = Math.min(dataToScreenX(step) - dataToScreenX(0), width - 40)
   if (barLength > 0) {
-    const barEnd = width - 12
-    const barStart = barEnd - barLength
-    const barY = height - 38
-    ctx.strokeStyle = colors.text
-    ctx.lineWidth = 1
-    ctx.beginPath()
-    ctx.moveTo(barStart, barY - 5)
-    ctx.lineTo(barStart, barY + 5)
-    ctx.moveTo(barStart, barY)
-    ctx.lineTo(barEnd, barY)
-    ctx.moveTo(barEnd, barY - 5)
-    ctx.lineTo(barEnd, barY + 5)
-    ctx.stroke()
-    ctx.fillStyle = colors.text
-    ctx.textAlign = 'center'
-    ctx.textBaseline = 'bottom'
-    ctx.fillText(formatScaleLabel(step), (barStart + barEnd) / 2, barY - 6)
+    scaleBarLength.value = barLength
+    scaleLabel.value = formatScaleLabel(step)
   }
 
   ctx.restore()
@@ -1053,9 +1089,11 @@ function setupResizeObserver(): void {
     if (resizeFrame !== null) cancelAnimationFrame(resizeFrame)
     resizeFrame = requestAnimationFrame(() => {
       resizeFrame = null
+      updateStatusCardCompact()
       if (!chartContainerRef.value || !canvasRef.value || !axisCanvasRef.value) return
       const width = chartContainerRef.value.clientWidth
       const height = chartContainerRef.value.clientHeight
+      if (width <= 0 || height <= 0) return
       renderer?.onResize(width, height)
       resizeAxisCanvas(width, height)
       // 容器宽高比变了：按新比例重新等比例当前视口，再重绘画层
@@ -1067,6 +1105,8 @@ function setupResizeObserver(): void {
     })
   })
   resizeObserver.observe(chartContainerRef.value)
+  if (visualContainerRef.value) resizeObserver.observe(visualContainerRef.value)
+  updateStatusCardCompact()
 }
 
 function teardownResizeObserver(): void {
@@ -1244,7 +1284,7 @@ onUnmounted(() => {
   top: 14px;
   right: 14px;
   z-index: 20;
-  width: min(230px, calc(100% - 28px));
+  width: min(250px, calc(100% - 28px));
   overflow: hidden;
   color: var(--app-text);
   background: color-mix(in srgb, var(--app-surface-raised) 94%, transparent);
@@ -1252,12 +1292,6 @@ onUnmounted(() => {
   border-radius: 12px;
   box-shadow: 0 10px 28px rgb(0 0 0 / 18%);
   backdrop-filter: blur(12px);
-  transform-origin: top right;
-  transition: width 0.2s ease;
-}
-
-.deviation-status-card.is-collapsed {
-  width: 42px;
 }
 
 .status-card-header {
@@ -1267,15 +1301,7 @@ onUnmounted(() => {
   width: 100%;
   min-height: 42px;
   padding: 9px 12px;
-  color: inherit;
-  text-align: left;
-  cursor: pointer;
-  background: transparent;
-  border: 0;
-}
-
-.status-card-header:hover {
-  background: color-mix(in srgb, var(--app-primary) 8%, transparent);
+  box-sizing: border-box;
 }
 
 .status-card-heading {
@@ -1305,28 +1331,27 @@ onUnmounted(() => {
   white-space: nowrap;
 }
 
-.status-card-chevron {
+.status-card-close {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 16px;
-  flex: 0 0 16px;
+  width: 22px;
+  height: 22px;
+  flex: 0 0 22px;
+  padding: 0;
   color: var(--app-text-muted);
-  font-size: 17px;
+  font-size: 14px;
   line-height: 1;
   text-align: center;
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
 }
 
-.deviation-status-card.is-collapsed .status-card-header {
-  justify-content: center;
-  gap: 0;
-  padding-right: 8px;
-  padding-left: 8px;
-}
-
-.deviation-status-card.is-collapsed .status-card-heading,
-.deviation-status-card.is-collapsed .status-card-summary {
-  display: none;
+.status-card-close:hover {
+  color: var(--app-text);
+  background: color-mix(in srgb, var(--app-primary) 12%, transparent);
 }
 
 .status-card-body {
@@ -1393,6 +1418,18 @@ onUnmounted(() => {
   line-height: 1.35;
 }
 
+.status-card-metric-rms {
+  flex-wrap: nowrap;
+  gap: 4px;
+  overflow: hidden;
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.status-card-metric-rms > span {
+  flex: 0 0 auto;
+}
+
 .status-card-metric > span:first-child {
   width: 34px;
   color: var(--app-text);
@@ -1405,15 +1442,16 @@ onUnmounted(() => {
   font-size: 11px;
 }
 
-.layer-switcher {
+.scale-layer-controls {
   position: absolute;
   right: 14px;
-  bottom: 58px;
+  bottom: 14px;
   z-index: 25;
   display: inline-flex;
   align-items: center;
-  padding: 3px;
-  gap: 2px;
+  gap: 4px;
+  min-height: 42px;
+  padding: 4px 5px 4px 8px;
   background: color-mix(in srgb, var(--app-surface-raised) 92%, transparent);
   border: 1px solid color-mix(in srgb, var(--app-border) 86%, transparent);
   border-radius: 10px;
@@ -1421,14 +1459,58 @@ onUnmounted(() => {
   backdrop-filter: blur(10px);
 }
 
-.layer-button {
+.scale-readout {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-width: 74px;
+  color: var(--app-text-muted);
+  font-size: 10px;
+  line-height: 1;
+}
+
+.scale-readout-line {
+  position: relative;
+  display: block;
+  height: 1px;
+  min-width: 28px;
+  max-width: 78px;
+  background: var(--app-text);
+}
+
+.scale-readout-line::before,
+.scale-readout-line::after {
+  position: absolute;
+  top: -3px;
+  width: 1px;
+  height: 7px;
+  content: '';
+  background: var(--app-text);
+}
+
+.scale-readout-line::before {
+  left: 0;
+}
+
+.scale-readout-line::after {
+  right: 0;
+}
+
+.scale-readout-label {
+  white-space: nowrap;
+}
+
+.layer-icon-button {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  min-height: 28px;
-  padding: 4px 9px;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
   color: var(--app-text-muted);
-  font-size: 11px;
+  font-size: 15px;
   cursor: pointer;
   background: transparent;
   border: 0;
@@ -1436,32 +1518,14 @@ onUnmounted(() => {
   transition: color 0.15s ease, background-color 0.15s ease;
 }
 
-.layer-button:hover {
+.layer-icon-button:hover {
   color: var(--app-text);
   background: color-mix(in srgb, var(--app-primary) 9%, transparent);
 }
 
-.layer-button.active {
+.layer-icon-button.active {
   color: var(--app-text);
-  font-weight: 600;
   background: color-mix(in srgb, var(--app-primary) 16%, var(--app-surface-raised));
-}
-
-.layer-swatch {
-  width: 8px;
-  height: 8px;
-  flex: 0 0 auto;
-  border-radius: 2px;
-}
-
-.layer-swatch-grid {
-  background: var(--app-primary);
-  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 55%);
-}
-
-.layer-swatch-map {
-  background: #68a85e;
-  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 50%);
 }
 
 .position-chart-grid {
@@ -1593,7 +1657,19 @@ onUnmounted(() => {
 .right-buttons {
   display: flex;
   align-items: center;
+  gap: 6px;
   margin-left: auto;
+}
+
+.status-toggle-btn {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  color: var(--app-text-muted);
+}
+
+.status-toggle-btn.active {
+  color: var(--app-primary);
 }
 
 @container (max-width: 680px) {

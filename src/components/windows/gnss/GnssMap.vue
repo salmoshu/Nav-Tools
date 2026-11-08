@@ -697,6 +697,8 @@ watch(
   () => resetTrackHistory(),
 )
 
+defineExpose({ resetLayout })
+
 onMounted(() => {
   initMap()
   syncTrackSource()
