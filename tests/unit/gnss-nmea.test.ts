@@ -14,6 +14,48 @@ describe('NMEA GNSS status extraction', () => {
     useNmea().clearData()
   })
 
+  it.each(['GGA', 'RMC', 'RTKLIB'] as const)(
+    'preserves precise %s coordinates in current status and replay epochs',
+    (format) => {
+      const nmea = useNmea()
+      const store = useGnssStore()
+      if (format === 'RTKLIB') {
+        nmea.processRtkLibPosData(
+          [
+            '% GPST latitude(deg) longitude(deg) height(m) Q ns sdn(m) sde(m) sdu(m)',
+            '2024/04/26 03:21:26.000 39.980744192 116.476662780 63.7868 1 37 0.01 0.01 0.01',
+            '2024/04/26 03:21:27.000 39.980744292 116.476662880 63.7868 1 37 0.01 0.01 0.01',
+            '',
+          ].join('\n'),
+        )
+      } else {
+        const sentences = [
+          ['123519.00', '4807.038000', '01131.000000'],
+          ['123519.10', '4807.038006', '01131.000006'],
+        ].map(([time, latitude, longitude]) =>
+          withChecksum(
+            format === 'GGA'
+              ? `$GPGGA,${time},${latitude},N,${longitude},E,4,18,0.9,545.4,M,46.9,M,,`
+              : `$GPRMC,${time},A,${latitude},N,${longitude},E,0.0,0.0,230394,,,R`,
+          ),
+        )
+        nmea.processRawData(sentences.join('\r\n') + '\r\n')
+      }
+      const points = nmea.mapTrackPoints.value
+      expect(points).toHaveLength(2)
+      expect(nmea.statusEpochHistory.value.length).toBe(2)
+      expect(store.status.longitude).toBe(points[1][0])
+      expect(store.status.latitude).toBe(points[1][1])
+      expect(nmea.statusEpochHistory.value.getValue('LONGITUDE', 1)).toBe(points[1][0])
+      expect(nmea.statusEpochHistory.value.getValue('LATITUDE', 1)).toBe(points[1][1])
+      for (const index of [0, 1]) {
+        nmea.applyStatusEpoch(index)
+        expect(store.status.longitude).toBe(points[index][0])
+        expect(store.status.latitude).toBe(points[index][1])
+      }
+    },
+  )
+
   it('extracts velocity from RMC and visible satellites from GSV', () => {
     const { processRawData } = useNmea()
     const store = useGnssStore()

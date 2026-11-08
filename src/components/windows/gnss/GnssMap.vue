@@ -17,6 +17,7 @@
           :min="5"
           :max="20"
           :step="1"
+          :show-tooltip="false"
           class="point-slider"
           @change="updatePointSize"
         />
@@ -105,19 +106,42 @@ import { useFileTimeline } from '@/composables/useFileTimeline'
 import { fixStatusColor } from '@/components/windows/gnss/fixStatusColors'
 import { createTrackSimplifier } from '@/core/gnss/TrackSimplification'
 import { sanitizeMapTrackPoints } from '@/core/gnss/MapTileCache'
+import { GNSS_MIN_VISIBLE_SPAN_METERS } from '@/core/deviation/DeviationViewport'
 import { t } from '@/i18n'
+
+export interface GnssMapViewSync {
+  centerE: number
+  centerN: number
+  anchorE: number
+  anchorN: number
+  anchorLongitude: number
+  anchorLatitude: number
+  spanMeters: number
+  widthPixels: number
+}
+
+export interface GnssMapViewChange {
+  spanMeters: number
+  widthPixels: number
+  centerE?: number
+  centerN?: number
+  synchronized: boolean
+}
 
 const props = withDefaults(
   defineProps<{
     showToolbar?: boolean
+    active?: boolean
     tracking?: boolean
     pointSize?: number
+    viewSync?: GnssMapViewSync | null
   }>(),
-  { showToolbar: true, pointSize: undefined },
+  { showToolbar: true, active: true, pointSize: undefined, viewSync: undefined },
 )
 const emit = defineEmits<{
   'update:tracking': [value: boolean]
   'update:pointSize': [value: number]
+  'view-change': [value: GnssMapViewChange]
 }>()
 
 const gnssStore = useGnssStore()
@@ -131,12 +155,14 @@ const fileTimeline = useFileTimeline()
 const MIN_TRACK_PIXELS = 1.5
 const TRACK_SEGMENT_POINTS = 200
 const DEFAULT_ZOOM = 16
-// Keep the Leaflet ceiling aligned with the grid view's sub-millimetre minimum
-// span. Tiles are still fetched at their native zoom and smoothly scaled above it.
-const MAP_MAX_ZOOM = 28
-// 轨迹连线：rtkplot 同款银灰 #c0c0c0（不透明）；瓦片底图上略加粗到 1.5px 保可见性
+// Keep the Leaflet ceiling aligned with the grid view's 5 mm minimum span.
+// Tiles are still fetched at their native zoom and smoothly scaled above it.
+const MAP_MAX_ZOOM = 35
+const EARTH_CIRCUMFERENCE_METERS = 40075016.68557849
+const MAP_ZOOM_SCALE_TOLERANCE_PIXELS = 0.5
+// Match the grid's opaque, one-pixel silver trajectory line.
 const TRACK_LINE_COLOR = '#c0c0c0'
-const TRACK_LINE_WEIGHT = 1.5
+const TRACK_LINE_WEIGHT = 1
 // Electron 下走自定义协议（本地离线瓦片优先，缺失回退在线），浏览器环境直接用在线 OSM
 const ELECTRON_TILE_URL = 'nav-tiles://tiles/{z}/{x}/{y}.png'
 const WEB_TILE_URL = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
@@ -181,6 +207,10 @@ let lastObservedSourcePoint: SourceTrackPoint | undefined
 let lastFollowUpdateAt = 0
 let pendingTrackHead = 0
 const pendingTrackPoints: SourceTrackPoint[] = []
+let viewSyncing = false
+let mapDragging = false
+let mapZooming = false
+let mapResizeFrame: number | null = null
 
 const TRACK_QUEUE_TARGET_FRAMES = 2
 const TRACK_RENDER_MAX_POINTS_PER_FRAME = 128
@@ -206,6 +236,98 @@ function projectLatLng(lat: number, lng: number): { x: number; y: number } {
   return { x: point.x, y: point.y }
 }
 
+function emitViewChange(): void {
+  emitViewChangeWithState(viewSyncing)
+}
+
+function emitViewChangeWithState(synchronized: boolean): void {
+  if (!map || !props.active) return
+  const size = map.getSize()
+  if (size.x <= 0 || size.y <= 0) return
+  const widthPixels = size.x
+  const center = map.getCenter()
+  const metersPerPixel =
+    (EARTH_CIRCUMFERENCE_METERS * Math.max(0.05, Math.cos((center.lat * Math.PI) / 180))) /
+    Math.pow(2, map.getZoom() + 8)
+  const view = props.viewSync
+  const anchorLatitudeRadians = view ? (view.anchorLatitude * Math.PI) / 180 : 0
+  const metersPerLongitude = view ? 111320 * Math.max(0.05, Math.cos(anchorLatitudeRadians)) : 1
+  const centerE = view
+    ? view.anchorE + (center.lng - view.anchorLongitude) * metersPerLongitude
+    : undefined
+  const centerN = view ? view.anchorN + (center.lat - view.anchorLatitude) * 110574 : undefined
+  emit('view-change', {
+    spanMeters: Math.max(GNSS_MIN_VISIBLE_SPAN_METERS, metersPerPixel * widthPixels),
+    widthPixels,
+    synchronized,
+    ...(Number.isFinite(centerE) && Number.isFinite(centerN) ? { centerE, centerN } : {}),
+  })
+}
+
+function syncViewFromDeviation(): void {
+  const view = props.viewSync
+  if (!map || !props.active || !view || mapDragging || mapZooming) return
+  const size = map.getSize()
+  if (size.x <= 0 || size.y <= 0) return
+  if (
+    !Number.isFinite(view.centerE) ||
+    !Number.isFinite(view.centerN) ||
+    !Number.isFinite(view.anchorE) ||
+    !Number.isFinite(view.anchorN) ||
+    !Number.isFinite(view.anchorLongitude) ||
+    !Number.isFinite(view.anchorLatitude) ||
+    !Number.isFinite(view.spanMeters) ||
+    view.spanMeters <= 0
+  ) {
+    return
+  }
+
+  const anchorLatitudeRadians = (view.anchorLatitude * Math.PI) / 180
+  const metersPerLongitude = 111320 * Math.max(0.05, Math.cos(anchorLatitudeRadians))
+  const centerLatitude = view.anchorLatitude + (view.centerN - view.anchorN) / 110574
+  const centerLongitude = view.anchorLongitude + (view.centerE - view.anchorE) / metersPerLongitude
+  const widthPixels = Math.max(1, view.widthPixels || map.getSize().x)
+  const centerLatitudeRadians = (centerLatitude * Math.PI) / 180
+  const metersPerPixel = view.spanMeters / widthPixels
+  const zoom = Math.log2(
+    (EARTH_CIRCUMFERENCE_METERS * Math.max(0.05, Math.cos(centerLatitudeRadians))) /
+      (metersPerPixel * 256),
+  )
+
+  if (!Number.isFinite(zoom)) return
+  const targetZoom = Math.max(0, Math.min(MAP_MAX_ZOOM, zoom))
+  // Latitude changes slightly alter the Mercator scale while following a fix.
+  // Leaflet resets tiles and rebuilds the track for ANY unequal zoom, even a
+  // billionth of a level. Keep the current zoom until the accumulated scale
+  // error is visible, so ordinary epochs use Leaflet's existing pan path.
+  const zoomScaleErrorPixels =
+    Math.abs(Math.pow(2, targetZoom - map.getZoom()) - 1) * Math.max(size.x, size.y)
+  const nextZoom =
+    zoomScaleErrorPixels <= MAP_ZOOM_SCALE_TOLERANCE_PIXELS ? map.getZoom() : targetZoom
+  viewSyncing = true
+  try {
+    map.setView([centerLatitude, centerLongitude], nextZoom, {
+      animate: false,
+    })
+    hasCentered = true
+    emitViewChangeWithState(true)
+  } finally {
+    viewSyncing = false
+  }
+}
+
+function refreshMapSize(): void {
+  if (!map || !props.active || !mapRef.value?.clientWidth || !mapRef.value.clientHeight) return
+  viewSyncing = true
+  try {
+    map.invalidateSize({ animate: false })
+  } finally {
+    viewSyncing = false
+  }
+  syncViewFromDeviation()
+  emitViewChangeWithState(Boolean(props.viewSync))
+}
+
 function initMap() {
   if (!mapRef.value || map) return
 
@@ -214,6 +336,8 @@ function initMap() {
     center: [30, 114],
     zoom: 3,
     maxZoom: MAP_MAX_ZOOM,
+    zoomSnap: 0,
+    zoomDelta: 0.25,
     zoomControl: true,
   })
   trackRenderer = L.canvas({ padding: 0.5 })
@@ -226,39 +350,56 @@ function initMap() {
       '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
   }).addTo(map)
 
-  // 用 circleMarker 代替默认 marker，避免打包后默认图标资源路径失效
-  positionMarker = L.circleMarker([0, 0], {
+  positionMarker = createPositionMarker()
+
+  // 缩放级别变化后按新精度重建轨迹：放大补回此前被抽稀的细节，缩 小收紧密度
+  map.on('zoomend', handleZoomEnd)
+  map.on('moveend', emitViewChange)
+  map.on('zoomstart', () => {
+    if (!viewSyncing) mapZooming = true
+  })
+  map.on('dragstart', () => {
+    mapDragging = true
+  })
+  map.on('dragend', () => {
+    mapDragging = false
+  })
+
+  resizeObserver = new ResizeObserver(() => {
+    if (mapResizeFrame !== null) cancelAnimationFrame(mapResizeFrame)
+    mapResizeFrame = requestAnimationFrame(() => {
+      mapResizeFrame = null
+      refreshMapSize()
+    })
+  })
+  if (containerRef.value) resizeObserver.observe(containerRef.value)
+
+  // 组件挂载前可能已有有效定位（例如从其他面板切换过来），立即显示当前位置。
+  updateCurrentPosition(true)
+  syncViewFromDeviation()
+}
+
+function markerRadiusForSize(size: number): number {
+  if (!Number.isFinite(size)) return 5
+  // The grid's current fix is 20% larger than the historical point diameter.
+  return Math.max(2, Math.min(12, size * 0.6))
+}
+
+function historyRadiusForSize(size: number): number {
+  // Historical points use the configured diameter, without the current fix's outline.
+  return Number.isFinite(size) ? Math.max(0.05, size / 2) : 5
+}
+
+function createPositionMarker(): L.CircleMarker {
+  return L.circleMarker([0, 0], {
+    pane: 'markerPane',
+    interactive: false,
     radius: markerRadiusForSize(mapPointSize.value),
     color: '#ffffff',
     weight: 2,
     fillColor: fixStatusColor(0),
     fillOpacity: 1,
   })
-
-  // 缩放级别变化后按新精度重建轨迹：放大补回此前被抽稀的细节，缩 小收紧密度
-  map.on('zoomend', handleZoomEnd)
-
-  resizeObserver = new ResizeObserver(() => {
-    map?.invalidateSize()
-  })
-  if (containerRef.value) resizeObserver.observe(containerRef.value)
-
-  // 组件挂载前可能已有有效定位（例如从其他面板切换过来），立即显示当前位置。
-  updateCurrentPosition(
-    gnssStore.status.longitude,
-    gnssStore.status.latitude,
-    gnssStore.status.quality,
-    true,
-  )
-}
-
-function markerRadiusForSize(size: number): number {
-  if (!Number.isFinite(size)) return 5
-  return Math.max(2, Math.min(10, size / 2))
-}
-
-function historyRadiusForSize(size: number): number {
-  return Math.max(1.5, markerRadiusForSize(size) * 0.4)
 }
 
 function updatePointSize(): void {
@@ -284,11 +425,9 @@ function addHistoryPoint(point: RenderedPoint): void {
   const marker = L.circleMarker(point.latlng, {
     renderer: trackRenderer ?? undefined,
     radius: historyRadiusForSize(mapPointSize.value),
-    color: '#ffffff',
-    weight: 1,
-    opacity: 0.85,
+    stroke: false,
     fillColor: fixStatusColor(point.quality),
-    fillOpacity: 0.95,
+    fillOpacity: 1,
   }).addTo(map)
   marker.bindTooltip(historyPointTooltip(point, historyPointMarkers.length + 1), {
     direction: 'top',
@@ -313,6 +452,7 @@ function createTrackSegment(
     opacity: 1,
     smoothFactor: 0,
   }).addTo(map)
+  line.bringToBack()
   const segment: TrackSegment = {
     quality: point.quality,
     line,
@@ -343,11 +483,11 @@ function appendRenderedPoint(
   return createTrackSegment(point, previousPoint)
 }
 
-function appendTrackPosition(longitude: number, latitude: number, quality: number): boolean {
-  if (!map || !simplifier || !isValidPosition(longitude, latitude)) return false
+function appendTrackPosition(longitude: number, latitude: number, quality: number): void {
+  if (!map || !simplifier || !isValidPosition(longitude, latitude)) return
 
   // 像素密度抽稀：屏幕上与上一渲染点无区分度的采样点跳过（源数据仍完整保留）
-  if (!simplifier.test(Number(latitude), Number(longitude))) return false
+  if (!simplifier.test(Number(latitude), Number(longitude))) return
 
   const point: RenderedPoint = {
     latlng: [Number(latitude), Number(longitude)],
@@ -357,7 +497,6 @@ function appendTrackPosition(longitude: number, latitude: number, quality: numbe
   renderedPoints.push(point)
   addHistoryPoint(point)
   appendRenderedPoint(point, previousPoint)
-  return true
 }
 
 // A matching GGA sample replaces the provisional RMC sample at the source tail.
@@ -408,14 +547,12 @@ function replaceLatestTrackPoint(previous: SourceTrackPoint, replacement: Source
   )
 }
 
-function appendTrackRange(start: number, end: number): SourceTrackPoint | undefined {
-  if (!map) return undefined
+function appendTrackRange(start: number, end: number): void {
+  if (!map) return
   const touchedSegments = new Set<TrackSegment>()
-  let latestPosition: SourceTrackPoint | undefined
 
   for (let index = start; index < end; index += 1) {
     const sourcePoint = pendingTrackPoints[index]
-    latestPosition = sourcePoint
     if (!simplifier || !isValidPosition(sourcePoint[0], sourcePoint[1])) continue
     if (!simplifier.test(sourcePoint[1], sourcePoint[0])) continue
 
@@ -443,25 +580,23 @@ function appendTrackRange(start: number, end: number): SourceTrackPoint | undefi
 
   // One Leaflet geometry update per segment instead of one per imported point.
   for (const segment of touchedSegments) segment.line.setLatLngs(segment.latlngs)
-  return latestPosition
 }
 
-function updateCurrentPosition(
-  longitude: number | string,
-  latitude: number | string,
-  quality: number,
-  forceFollow = false,
-) {
+function updateCurrentPosition(forceFollow = false): void {
+  // Only the current fix owns this marker. Historical rendering may lag behind
+  // incoming data or cover epochs after the playback cursor.
+  const { longitude, latitude, quality } = gnssStore.status
   if (!map || !positionMarker || !isValidPosition(longitude, latitude)) return
 
   const latlng: L.LatLngExpression = [Number(latitude), Number(longitude)]
   const now = performance.now()
-  if (!hasCentered) {
+  if (!hasCentered && !props.viewSync) {
     hasCentered = true
     lastFollowUpdateAt = now
     map.setView(latlng, DEFAULT_ZOOM)
   } else if (
     isTracking.value &&
+    !props.viewSync &&
     (forceFollow || now - lastFollowUpdateAt >= MAP_FOLLOW_INTERVAL_MS)
   ) {
     lastFollowUpdateAt = now
@@ -511,30 +646,25 @@ function renderPendingTrack() {
   )
   const startedAt = performance.now()
   let processedCount = 0
-  let latestPosition: SourceTrackPoint | undefined
 
   if (remaining >= TRACK_BULK_THRESHOLD) {
     const end = Math.min(pendingTrackPoints.length, pendingTrackHead + TRACK_BULK_POINTS_PER_FRAME)
-    latestPosition = appendTrackRange(pendingTrackHead, end)
+    appendTrackRange(pendingTrackHead, end)
     pendingTrackHead = end
   } else {
     while (pendingTrackHead < pendingTrackPoints.length && processedCount < targetCount) {
       const point = pendingTrackPoints[pendingTrackHead++]
-      if (appendTrackPosition(point[0], point[1], point[2])) latestPosition = point
+      appendTrackPosition(point[0], point[1], point[2])
       processedCount += 1
       if (processedCount >= 2 && performance.now() - startedAt >= TRACK_RENDER_BUDGET_MS) break
     }
   }
 
   const queueEmpty = pendingTrackHead >= pendingTrackPoints.length
-  if (latestPosition && !fileTimeline.active.value) {
-    updateCurrentPosition(latestPosition[0], latestPosition[1], latestPosition[2])
-  }
-
   if (queueEmpty) {
     pendingTrackPoints.length = 0
     pendingTrackHead = 0
-    if (fileTimeline.active.value && !isTracking.value) fitCompleteTrack()
+    if (fileTimeline.active.value && !isTracking.value && !props.viewSync) fitCompleteTrack()
   } else {
     scheduleTrackRender()
   }
@@ -547,6 +677,7 @@ function renderPendingTrack() {
  * 视图 setView 回默认层级，破坏用户刚选定的缩放。
  */
 function handleZoomEnd(): void {
+  mapZooming = false
   if (observedSourceCount === 0) return
   cancelTrackRender()
   clearRenderedTrack()
@@ -594,13 +725,10 @@ function resetTrackHistory() {
   // 数据重置后立即重建空 marker（沿用当前尺寸）：后续定位点直接 setLatLng/addTo，
   // 各调用点不必补偿
   if (map) {
-    positionMarker = L.circleMarker([0, 0], {
-      radius: markerRadiusForSize(mapPointSize.value),
-      color: '#ffffff',
-      weight: 2,
-      fillColor: fixStatusColor(0),
-      fillOpacity: 1,
-    })
+    positionMarker = createPositionMarker()
+    // A backward seek rebuilds the historical source after the status update.
+    // Restore the cursor marker even when the selected fix has not changed.
+    updateCurrentPosition()
   }
 }
 
@@ -659,6 +787,9 @@ function copyTilesDir() {
 
 watch(mapTrackPoints, syncTrackSource)
 
+watch(() => props.active, refreshMapSize, { flush: 'post' })
+watch(() => props.viewSync, syncViewFromDeviation, { flush: 'post' })
+
 watch(
   () => props.tracking,
   (value) => {
@@ -688,7 +819,8 @@ watch(mapPointSize, () => {
 
 watch(
   () => [gnssStore.status.longitude, gnssStore.status.latitude, gnssStore.status.quality] as const,
-  ([longitude, latitude, quality]) => updateCurrentPosition(longitude, latitude, quality),
+  () => updateCurrentPosition(),
+  { flush: 'post' },
 )
 
 // 文件重播开始 / 清空 GNSS 数据时，自动清除地图本地轨迹，避免新旧轨迹叠加
@@ -715,6 +847,9 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  if (mapResizeFrame !== null) cancelAnimationFrame(mapResizeFrame)
+  mapResizeFrame = null
+  viewSyncing = false
   if (mapTileTrackSyncTimer !== null) clearTimeout(mapTileTrackSyncTimer)
   mapTileTrackSyncTimer = null
   pendingMapTileTrack = null

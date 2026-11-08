@@ -1,4 +1,5 @@
-export const GNSS_MIN_VISIBLE_SPAN_METERS = 0.0005
+// Keep the deviation viewport and its scale readout from shrinking below 5 mm.
+export const GNSS_MIN_VISIBLE_SPAN_METERS = 0.005
 
 export interface DeviationViewport {
   xMin: number
@@ -127,10 +128,7 @@ export function equalizeViewportScale(
  * 把视口整体限制在 ±limit 内：只钳制中心、保持跨度不变。
  * 逐端钳制会改变跨度比例，破坏等比例显示。
  */
-export function clampViewportCenter(
-  viewport: DeviationViewport,
-  limit: number,
-): DeviationViewport {
+export function clampViewportCenter(viewport: DeviationViewport, limit: number): DeviationViewport {
   const xSpan = viewport.xMax - viewport.xMin
   const ySpan = viewport.yMax - viewport.yMin
   let centerX = (viewport.xMin + viewport.xMax) / 2

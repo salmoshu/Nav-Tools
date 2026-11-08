@@ -30,21 +30,13 @@ test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
     localStorage.setItem('nav-tools:locale', 'en-US')
     localStorage.setItem('nav-tools:theme', 'light')
-    Reflect.set(window, '__deviationText', [])
     Reflect.set(window, '__signalText', [])
     const fillText = CanvasRenderingContext2D.prototype.fillText
-    const clearRect = CanvasRenderingContext2D.prototype.clearRect
     CanvasRenderingContext2D.prototype.fillText = function (text, x, y, maxWidth) {
-      if (this.canvas.classList.contains('axis-layer'))
-        Reflect.get(window, '__deviationText').push(String(text))
       if (this.canvas.closest('.signal-bar-chart'))
         Reflect.get(window, '__signalText').push(String(text))
       if (maxWidth === undefined) fillText.call(this, text, x, y)
       else fillText.call(this, text, x, y, maxWidth)
-    }
-    CanvasRenderingContext2D.prototype.clearRect = function (x, y, width, height) {
-      if (this.canvas.classList.contains('axis-layer')) Reflect.set(window, '__deviationText', [])
-      clearRect.call(this, x, y, width, height)
     }
   })
 })
@@ -69,23 +61,25 @@ test('deviation keeps only the current Float status in small windows and restore
     },
     signalEpoch(0, 45),
   )
-  const text = () => page.evaluate(() => Reflect.get(window, '__deviationText') as string[])
-  await expect.poll(async () => (await text()).some((line) => line.startsWith('AVE ='))).toBe(true)
+  const card = page.locator('.deviation-status-card')
+  await expect(card.locator('.status-card-summary')).toHaveText('Float')
+  await expect(card.locator('.status-card-metric')).toHaveCount(3)
 
   for (const size of [
     { width: 500, height: 420 },
     { width: 420, height: 280 },
   ]) {
     await page.setViewportSize(size)
-    await expect
-      .poll(async () =>
-        (await text()).filter((line) => /^(Current:|N =|AVE =|STD =|RMS =|Float )/.test(line)),
-      )
-      .toEqual(['Current: Float'])
+    await expect(card.locator('.status-card-body')).toHaveCount(0)
+    await expect(card.getByText('Float', { exact: true })).toHaveCount(1)
   }
   await page.screenshot({ path: 'test-results/gnss-deviation-compact.png' })
   await page.setViewportSize({ width: 1000, height: 720 })
-  await expect.poll(async () => (await text()).some((line) => line.startsWith('RMS ='))).toBe(true)
+  await expect(card.locator('.status-card-metric')).toHaveCount(3)
+  await page.getByRole('button', { name: 'Close position status information' }).click()
+  await expect(card).toHaveCount(0)
+  await page.getByRole('button', { name: 'Show or hide position status' }).click()
+  await expect(card.locator('.status-card-summary')).toHaveText('Float')
 })
 
 test('signal bars show grouped horizontal labels, current and peak values, and keep narrow cards scrollable', async ({

@@ -59,6 +59,7 @@
                 <!-- 为值添加点击进入编辑模式的功能 -->
                 <span
                   class="status-indicator"
+                  :style="{ color: getStatusColor(String(element[0])) }"
                   :title="String(getStatusValue(element[1], String(element[0])))"
                   @click="showComputedStatusDialog(element[0])"
                   >{{ getStatusValue(element[1], String(element[0])) }}</span
@@ -309,6 +310,7 @@ import { useFlow } from '@/composables/flow/useFlow'
 import { getNumericDataFieldNames } from '@/core/data/NumericDataFields'
 import { hasStatusData } from '@/core/status/statusValue'
 import { getStatusFieldIcon } from '@/core/status/statusFieldIcons'
+import { fixStatusColor } from '@/components/windows/gnss/fixStatusColors'
 import { useFlowStore } from '@/stores/flow'
 // 4. 导入需要的图标
 import { Plus, Close, Delete, Edit, InfoFilled, DataAnalysis, Rank } from '@element-plus/icons-vue'
@@ -385,6 +387,13 @@ const getStatusClass = (status: unknown) => ({
   'status-has-data': hasStatusData(status),
   'status-no-data': !hasStatusData(status),
 })
+
+const getStatusColor = (statusName: string) => {
+  const qualityKey =
+    statusName === 'fixMode' ? 'quality' : statusName === 'GNSS.fixMode' ? 'GNSS.quality' : null
+  const quality = qualityKey ? monitorStatus.value[qualityKey] : undefined
+  return typeof quality === 'number' ? fixStatusColor(quality) : undefined
+}
 
 const formatStatusName = (name: string) =>
   name

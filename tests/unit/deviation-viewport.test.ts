@@ -9,9 +9,9 @@ import {
 } from '@/core/deviation/DeviationViewport'
 
 describe('GNSS deviation viewport', () => {
-  it('limits maximum zoom to a 0.05 cm visible span', () => {
-    expect(GNSS_MIN_VISIBLE_SPAN_METERS).toBe(0.0005)
-    expect(clampVisibleSpan(0.00001)).toBe(0.0005)
+  it('limits maximum zoom to a 5 mm visible span', () => {
+    expect(GNSS_MIN_VISIBLE_SPAN_METERS).toBe(0.005)
+    expect(clampVisibleSpan(0.00001)).toBe(0.005)
     expect(clampVisibleSpan(0.2)).toBe(0.2)
   })
 

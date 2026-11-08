@@ -903,8 +903,10 @@ export function useNmea() {
     const ggaQuality = parseInt(data.quality) || 0
     gnssStore.status.fixMode = numberToQuality(ggaQuality)
     gnssStore.status.quality = ggaQuality
-    gnssStore.status.longitude = parseFloat(lonRes.toFixed(6))
-    gnssStore.status.latitude = parseFloat(latRes.toFixed(6))
+    // Keep the current fix and replay snapshots at the track's full precision.
+    // Coordinate formatting belongs to the status view, not the stored position.
+    gnssStore.status.longitude = lonRes
+    gnssStore.status.latitude = latRes
     gnssStore.status.altitude = parseFloat(data.altitude)
     gnssStore.status.altitudeMsl = parseFloat((parseFloat(data.altitude) + parseFloat(data.geoidHeight)).toFixed(2))
     gnssStore.status.HDOP = data.hdop
@@ -970,8 +972,8 @@ export function useNmea() {
     gnssStore.status.utcTime = solution.time
     gnssStore.status.fixMode = numberToQuality(quality)
     gnssStore.status.quality = quality
-    gnssStore.status.longitude = Number(solution.longitude.toFixed(6))
-    gnssStore.status.latitude = Number(solution.latitude.toFixed(6))
+    gnssStore.status.longitude = solution.longitude
+    gnssStore.status.latitude = solution.latitude
     gnssStore.status.altitude = solution.height
     gnssStore.status.altitudeMsl = solution.height
     gnssStore.status.satsUsed = String(solution.satellites)
@@ -1106,8 +1108,8 @@ export function useNmea() {
     if (rmcPosValid) {
       const accepted = upsertMapTrackPoint(rmcLon, rmcLat, rmcQuality, data.time, 'RMC')
       if (accepted) {
-        gnssStore.status.longitude = parseFloat(rmcLon.toFixed(6))
-        gnssStore.status.latitude = parseFloat(rmcLat.toFixed(6))
+        gnssStore.status.longitude = rmcLon
+        gnssStore.status.latitude = rmcLat
         gnssStore.status.quality = rmcQuality
         gnssStore.status.fixMode = numberToQuality(rmcQuality)
         appendMapPositionEpoch(data.time, rmcLon, rmcLat, rmcQuality)

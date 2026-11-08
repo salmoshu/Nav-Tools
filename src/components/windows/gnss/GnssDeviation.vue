@@ -16,8 +16,8 @@
           :inactive-text="t('gnss.deviation.tracking')"
           :aria-label="t('gnss.deviation.tracking')"
           :title="t('gnss.deviation.tracking')"
-          @change="toggleTracking"
           class="tracking-switch"
+          @change="toggleTracking"
         />
         <div class="point-size-control">
           <span class="size-label">{{ t('gnss.deviation.size') }}:</span>
@@ -26,6 +26,7 @@
             :min="5"
             :max="20"
             :step="1"
+            :show-tooltip="false"
             class="point-slider"
             @change="updatePointSize"
           />
@@ -36,7 +37,6 @@
           <el-button
             type="primary"
             size="small"
-            circle
             class="control-btn status-toggle-btn"
             :class="{ active: statusCardVisible }"
             :aria-pressed="statusCardVisible"
@@ -45,31 +45,32 @@
             @click="statusCardVisible = !statusCardVisible"
           >
             <el-icon><InfoFilled /></el-icon>
+            <span class="status-toggle-copy">{{ t('gnss.deviation.positionStatus') }}</span>
           </el-button>
-          <el-button type="primary" size="small" @click="resetLayout" class="control-btn zoom-btn"
+          <el-button type="primary" size="small" class="control-btn zoom-btn" @click="resetLayout"
             ><el-icon><RefreshLeft /></el-icon>&nbsp;{{
               t('gnss.deviation.resetLayout')
             }}</el-button
           >
-          <el-button type="primary" size="small" @click="clearTrack" class="control-btn clear-btn"
+          <el-button type="primary" size="small" class="control-btn clear-btn" @click="clearTrack"
             ><el-icon><Delete /></el-icon>&nbsp;{{ t('gnss.deviation.clear') }}</el-button
           >
         </div>
       </div>
     </div>
     <div
+      v-show="currentView === 'deviation'"
       ref="visualContainerRef"
       class="deviation-visual-container"
-      v-show="currentView === 'deviation'"
     >
-      <div class="chart-container" ref="chartContainerRef" v-show="layerMode === 'grid'">
+      <div v-show="layerMode === 'grid'" ref="chartContainerRef" class="chart-container">
         <canvas ref="canvasRef" class="chart"></canvas>
         <canvas ref="axisCanvasRef" class="axis-layer"></canvas>
         <div
+          v-show="tooltipVisible"
           ref="tooltipRef"
           class="deviation-tooltip"
           :style="tooltipStyle"
-          v-show="tooltipVisible"
         >
           {{ tooltipText }}
         </div>
@@ -79,14 +80,20 @@
           ref="mapLayerRef"
           v-model:tracking="isTracking"
           v-model:point-size="pointSize"
+          :active="currentView === 'deviation' && layerMode === 'map'"
+          :view-sync="mapViewState"
           :show-toolbar="false"
+          @view-change="handleMapViewChange"
         />
       </div>
 
       <section v-if="statusCardVisible" class="deviation-status-card">
         <div class="status-card-header">
           <span class="status-card-heading">
-            <span class="status-card-indicator" :style="{ backgroundColor: currentStatusColor }"></span>
+            <span
+              class="status-card-indicator"
+              :style="{ backgroundColor: currentStatusColor }"
+            ></span>
             <span>{{ t('gnss.deviation.positionStatus') }}</span>
           </span>
           <strong class="status-card-summary" :style="{ color: currentStatusColor }">
@@ -104,10 +111,6 @@
         </div>
 
         <div v-if="!statusCardCompact" class="status-card-body">
-          <div v-if="currentStatusPoint" class="status-card-current-row">
-            <span>{{ t('gnss.deviation.statsCurrent') }}</span>
-            <strong :style="{ color: currentStatusColor }">{{ currentStatusLabel }}</strong>
-          </div>
           <div v-if="currentStats" class="status-card-stats">
             <div class="status-card-stat-grid">
               <div class="status-card-stat">
@@ -148,15 +151,20 @@
         </div>
       </section>
 
-      <div class="scale-layer-controls" role="group" :aria-label="t('gnss.deviation.layerToggle')">
-        <div class="scale-readout" :aria-label="scaleLabel">
-          <span
-            class="scale-readout-line"
-            :style="{ width: `${scaleBarDisplayWidth}px` }"
-            aria-hidden="true"
-          ></span>
-          <span class="scale-readout-label">{{ scaleLabel }}</span>
-        </div>
+      <div class="scale-readout-container" :aria-label="scaleLabel">
+        <span class="scale-readout-label">{{ scaleLabel }}</span>
+        <span
+          class="scale-readout-line"
+          :style="{ width: `${scaleBarDisplayWidth}px` }"
+          aria-hidden="true"
+        ></span>
+      </div>
+      <div
+        class="layer-switcher"
+        :class="{ 'is-map': layerMode === 'map' }"
+        role="group"
+        :aria-label="t('gnss.deviation.layerToggle')"
+      >
         <button
           type="button"
           class="layer-icon-button"
@@ -235,7 +243,7 @@ import { createTrajectoryRenderer } from '@/core/render/createTrajectoryRenderer
 import { t } from '@/i18n'
 import type { TrajectoryRenderer } from '@/core/render/TrajectoryRenderer'
 import GnssMetricTimeSeries from './GnssMetricTimeSeries.vue'
-import GnssMap from './GnssMap.vue'
+import GnssMap, { type GnssMapViewSync, type GnssMapViewChange } from './GnssMap.vue'
 import {
   clampVisibleSpan,
   clampViewportCenter,
@@ -246,7 +254,13 @@ import {
 } from '@/core/deviation/DeviationViewport'
 import { computeDeviationStats, type DeviationStats } from '@/core/deviation/DeviationStats'
 
-const { deviationPoints: plotData, positionEpochHistory, clearData } = useNmea()
+const {
+  deviationPoints: plotData,
+  mapTrackPoints,
+  currentData,
+  positionEpochHistory,
+  clearData,
+} = useNmea()
 const fileTimeline = useFileTimeline()
 const { chartTheme, resolvedTheme } = useTheme()
 
@@ -303,7 +317,7 @@ const mapLayerReady = ref(false)
 const mapLayerRef = ref<InstanceType<typeof GnssMap> | null>(null)
 const scaleLabel = ref('—')
 const scaleBarLength = ref(52)
-const scaleBarDisplayWidth = computed(() => Math.min(78, Math.max(28, scaleBarLength.value)))
+const scaleBarDisplayWidth = computed(() => Math.max(1, scaleBarLength.value))
 
 let stopWatch: (() => void) | null = null
 let stopThemeWatch: (() => void) | null = null
@@ -334,6 +348,32 @@ const currentStatusColor = computed(() => {
   return `rgba(${Math.round(r * 255)}, ${Math.round(g * 255)}, ${Math.round(b * 255)}, 1)`
 })
 
+const mapViewState = computed<GnssMapViewSync | null>(() => {
+  const { firstLongitude, firstLatitude } = currentData.value
+  if (mapTrackPoints.value.length === 0 || firstLongitude === null || firstLatitude === null) {
+    return null
+  }
+  const widthPixels = Math.max(
+    1,
+    axisCssWidth ||
+      chartContainerRef.value?.clientWidth ||
+      visualContainerRef.value?.clientWidth ||
+      1,
+  )
+  return {
+    centerE: (viewport.value.xMin + viewport.value.xMax) / 2,
+    centerN: (viewport.value.yMin + viewport.value.yMax) / 2,
+    // Use the same fixed origin as the ENU parser, including when the file
+    // timeline is positioned before the final map point.
+    anchorE: 0,
+    anchorN: 0,
+    anchorLongitude: firstLongitude,
+    anchorLatitude: firstLatitude,
+    spanMeters: Math.max(GNSS_MIN_VISIBLE_SPAN_METERS, viewport.value.xMax - viewport.value.xMin),
+    widthPixels,
+  }
+})
+
 // 位置/速度图实例：工具栏 reset/clear 在这些视图下转发给它们
 const eSeriesRef = ref<InstanceType<typeof GnssMetricTimeSeries> | null>(null)
 const nSeriesRef = ref<InstanceType<typeof GnssMetricTimeSeries> | null>(null)
@@ -357,8 +397,60 @@ function resetLayout(): void {
 }
 
 function selectLayer(layer: DeviationLayer): void {
+  if (layerMode.value === layer) return
   if (layer === 'map') mapLayerReady.value = true
   layerMode.value = layer
+  if (layer === 'grid') {
+    requestAnimationFrame(() => {
+      if (currentView.value === 'deviation') {
+        drawAxisLayer()
+        drawCurrentPosition()
+      }
+    })
+  }
+}
+
+function handleMapViewChange(view: GnssMapViewChange): void {
+  if (
+    currentView.value !== 'deviation' ||
+    layerMode.value !== 'map' ||
+    !Number.isFinite(view.spanMeters) ||
+    view.spanMeters <= 0 ||
+    !Number.isFinite(view.widthPixels) ||
+    view.widthPixels <= 0
+  ) {
+    return
+  }
+  const height = Math.max(1, visualContainerRef.value?.clientHeight || axisCssHeight)
+  const ySpan = view.spanMeters * (height / view.widthPixels)
+  const step = niceTickStep(Math.min(view.spanMeters, ySpan))
+  scaleLabel.value = formatScaleLabel(step)
+  scaleBarLength.value = (step / view.spanMeters) * view.widthPixels
+
+  const { centerE, centerN } = view
+  if (
+    view.synchronized ||
+    centerE === undefined ||
+    centerN === undefined ||
+    !Number.isFinite(centerE) ||
+    !Number.isFinite(centerN)
+  ) {
+    return
+  }
+  // Map gestures update the shared viewport before the next live epoch can
+  // apply tracking, preserving the user's zoom and offset from the track.
+  updateViewport(
+    centerE - view.spanMeters / 2,
+    centerE + view.spanMeters / 2,
+    centerN - ySpan / 2,
+    centerN + ySpan / 2,
+  )
+  syncTrackingSpans()
+  const trackingPoint = getTrackingCenterPoint()
+  if (trackingPoint) {
+    panOffsetX = (viewport.value.xMin + viewport.value.xMax) / 2 - trackingPoint[0]
+    panOffsetY = (viewport.value.yMin + viewport.value.yMax) / 2 - trackingPoint[1]
+  }
 }
 
 function updateStatusCardCompact(): void {
@@ -410,7 +502,7 @@ function formatTickNumber(value: number, step: number): string {
 
 /** rtkplot 口径刻度单位：mm/cm/m/km 择一 */
 function formatScaleLabel(meters: number): string {
-  if (meters < 0.0099) return `${(meters * 1000).toFixed(0)} mm`
+  if (meters < 0.0099) return `${Number((meters * 1000).toPrecision(3))} mm`
   if (meters < 0.999) return `${(meters * 100).toFixed(0)} cm`
   if (meters < 999) return `${meters.toFixed(0)} m`
   return `${(meters / 1000).toFixed(0)} km`
@@ -445,7 +537,7 @@ function niceTickStep(span: number, targetTicks = 12): number {
   let step = 10
   if (fraction <= 2) step = 2
   else if (fraction <= 5) step = 5
-  return step * Math.pow(10, exp)
+  return Math.max(GNSS_MIN_VISIBLE_SPAN_METERS, step * Math.pow(10, exp))
 }
 
 function drawAxisLayer(): void {
@@ -521,10 +613,9 @@ function drawAxisLayer(): void {
     ctx.stroke()
   }
 
-  // Keep the scale readout in the DOM so it can share one control group with
-  // the grid/map buttons without covering the trajectory canvas.
-  const barLength = Math.min(dataToScreenX(step) - dataToScreenX(0), width - 40)
-  if (barLength > 0) {
+  // The hidden grid must not overwrite the visible map's scale readout.
+  const barLength = dataToScreenX(step) - dataToScreenX(0)
+  if (layerMode.value === 'grid' && barLength > 0) {
     scaleBarLength.value = barLength
     scaleLabel.value = formatScaleLabel(step)
   }
@@ -905,8 +996,8 @@ function resetZoom(): void {
   panOffsetX = 0
   panOffsetY = 0
 
-  const width = chartContainerRef.value.clientWidth
-  const height = chartContainerRef.value.clientHeight
+  const width = visualContainerRef.value?.clientWidth || axisCssWidth
+  const height = visualContainerRef.value?.clientHeight || axisCssHeight
   const aspectRatio = width / height
   const trackCenter = getTrackingCenterPoint()
 
@@ -1091,8 +1182,8 @@ function setupResizeObserver(): void {
       resizeFrame = null
       updateStatusCardCompact()
       if (!chartContainerRef.value || !canvasRef.value || !axisCanvasRef.value) return
-      const width = chartContainerRef.value.clientWidth
-      const height = chartContainerRef.value.clientHeight
+      const width = visualContainerRef.value?.clientWidth || chartContainerRef.value.clientWidth
+      const height = visualContainerRef.value?.clientHeight || chartContainerRef.value.clientHeight
       if (width <= 0 || height <= 0) return
       renderer?.onResize(width, height)
       resizeAxisCanvas(width, height)
@@ -1237,6 +1328,9 @@ onUnmounted(() => {
 }
 
 .control-btn {
+  height: 28px;
+  min-height: 28px;
+  box-sizing: border-box;
   padding: 6px 12px;
   background-color: var(--app-surface-raised);
   color: var(--app-text-secondary);
@@ -1356,28 +1450,17 @@ onUnmounted(() => {
 
 .status-card-body {
   max-height: min(56vh, 420px);
-  padding: 0 12px 12px;
+  padding: 10px 12px 12px;
   overflow: auto;
   border-top: 1px solid color-mix(in srgb, var(--app-border) 70%, transparent);
 }
 
-.status-card-current-row,
 .status-card-stat,
 .status-card-metric {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
   gap: 8px;
-}
-
-.status-card-current-row {
-  padding: 10px 0 8px;
-  color: var(--app-text-muted);
-  font-size: 11px;
-}
-
-.status-card-current-row strong {
-  font-size: 13px;
 }
 
 .status-card-stats {
@@ -1442,41 +1525,66 @@ onUnmounted(() => {
   font-size: 11px;
 }
 
-.scale-layer-controls {
+.scale-readout-container,
+.layer-switcher {
   position: absolute;
-  right: 14px;
-  bottom: 14px;
+  bottom: 24px;
   z-index: 25;
   display: inline-flex;
   align-items: center;
+  min-height: 28px;
+  color: var(--app-text-muted);
+  border-radius: 10px;
+}
+
+.scale-readout-container {
+  left: 54px;
+  flex-direction: column;
+  justify-content: center;
   gap: 4px;
-  min-height: 42px;
-  padding: 4px 5px 4px 8px;
+  min-width: 74px;
+  color: var(--app-text);
+  font-size: 10px;
+  line-height: 1;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+.layer-switcher {
+  right: 14px;
+  gap: 4px;
+  padding: 5px;
+  overflow: hidden;
   background: color-mix(in srgb, var(--app-surface-raised) 92%, transparent);
   border: 1px solid color-mix(in srgb, var(--app-border) 86%, transparent);
-  border-radius: 10px;
   box-shadow: 0 8px 20px rgb(0 0 0 / 16%);
   backdrop-filter: blur(10px);
 }
 
-.scale-readout {
-  display: inline-flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 2px;
-  min-width: 74px;
-  color: var(--app-text-muted);
-  font-size: 10px;
-  line-height: 1;
+.layer-switcher::before {
+  position: absolute;
+  top: 5px;
+  bottom: 5px;
+  left: 5px;
+  width: 28px;
+  content: '';
+  background: var(--app-surface-raised);
+  border-radius: 7px;
+  box-shadow: 0 2px 6px rgb(0 0 0 / 14%);
+  transition: transform 0.2s ease;
+}
+
+.layer-switcher.is-map::before {
+  transform: translateX(32px);
 }
 
 .scale-readout-line {
   position: relative;
   display: block;
   height: 1px;
-  min-width: 28px;
-  max-width: 78px;
   background: var(--app-text);
 }
 
@@ -1503,19 +1611,23 @@ onUnmounted(() => {
 }
 
 .layer-icon-button {
+  position: relative;
+  z-index: 1;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   width: 28px;
   height: 28px;
   padding: 0;
-  color: var(--app-text-muted);
+  color: var(--app-text);
   font-size: 15px;
   cursor: pointer;
   background: transparent;
   border: 0;
   border-radius: 7px;
-  transition: color 0.15s ease, background-color 0.15s ease;
+  transition:
+    color 0.15s ease,
+    background-color 0.15s ease;
 }
 
 .layer-icon-button:hover {
@@ -1524,8 +1636,8 @@ onUnmounted(() => {
 }
 
 .layer-icon-button.active {
-  color: var(--app-text);
-  background: color-mix(in srgb, var(--app-primary) 16%, var(--app-surface-raised));
+  color: var(--app-primary);
+  background: transparent;
 }
 
 .position-chart-grid {
@@ -1662,14 +1774,25 @@ onUnmounted(() => {
 }
 
 .status-toggle-btn {
-  width: 28px;
   height: 28px;
-  padding: 0;
+  min-height: 28px;
+  padding: 0 8px;
   color: var(--app-text-muted);
+  font-size: 12px;
+  font-weight: 400;
+  gap: 4px;
+  box-sizing: border-box;
 }
 
 .status-toggle-btn.active {
   color: var(--app-primary);
+}
+
+.status-toggle-copy {
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1;
+  white-space: nowrap;
 }
 
 @container (max-width: 680px) {
@@ -1679,6 +1802,15 @@ onUnmounted(() => {
 
   .point-size-control {
     margin-left: 4px;
+  }
+
+  .status-toggle-btn {
+    width: 28px;
+    padding: 0;
+  }
+
+  .status-toggle-copy {
+    display: none;
   }
 }
 </style>
