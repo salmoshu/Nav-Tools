@@ -1,5 +1,21 @@
 # Nav-Tools 更新日志
 
+## v1.8.5
+
+- GNSS Deviation 位置图支持独立的 Y 轴手动缩放、任意方向拖动和 X 轴滚动条，X 轴缩放不再自动铺满 Y 轴。
+- Status View 图标与文字垂直居中，GNSS 字段图标跟随当前解状态颜色。
+- GNSS 每次载入文件都按内容重新识别 NMEA 与 RTKLIB POS，兼容 `.nmea`、`.pos` 及后缀与内容不一致的文件。
+- 窄窗口下 GNSS Deviation 状态卡仅保留解状态和圆点；状态信息、重置视图和清空按钮尺寸一致，间距更紧凑。
+- 消息组件跳转数据格式时，使用边框和柔和光晕高亮数据格式下拉框。
+- 数据接入“应用连接”更名为“连接管理”。
+
+- GNSS Deviation position charts now support independent Y-axis scaling, free diagonal panning and an X-axis scrollbar; changing X no longer refits Y automatically.
+- Status View icons and values are vertically aligned, and GNSS field icons follow the current fix color.
+- Each GNSS file load detects NMEA and RTKLIB POS independently by content, including files with misleading or non-standard suffixes.
+- Narrow GNSS Deviation windows retain only the fix label and dot, with equally sized status, reset and clear buttons and tighter spacing.
+- The Messages shortcut highlights the data-format selector with a border and soft glow.
+- “App connections” is renamed to “Connection management”.
+
 ## v1.8.4
 
 - GNSS Deviation 在窄小窗口中仅显示当前解状态，拉宽后恢复完整统计；更小的窗口也保留当前状态。
@@ -127,7 +143,6 @@
 - 修复文件树展开状态串扰：展开并折叠文件夹 A 后再展开 B，A 不再被"复活"展开（el-tree 的 default-expanded-keys 改为仅在重挂载前打快照，不再随展开/折叠实时回写）
 - 修复文件树拖出体验：拖拽手势一激活即后台预下载到临时缓存，指针移出窗口时多半已就绪并同手势移交系统拖放，松手落在哪个文件夹就下载进哪个文件夹（此前出窗才开始下载，未就绪松手只能落到缓存目录）
 - 终端下载状态栏改多任务队列聚合视图：多个文件/文件夹并发下载各占一条任务、按总字节聚合同步显示总带宽与预计剩余；单任务完成不再把状态栏切成"已完成"再切回，首尾相接与并发场景不再闪烁；全部完成后结果显示片刻再收起
-
 
 ## v1.7.18
 

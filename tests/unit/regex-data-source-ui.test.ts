@@ -62,8 +62,8 @@ describe('regex data-source UI integration', () => {
     // useDevice 状态非单例，徽标必须经 input-event 由 ToolBar 实例打开弹框
     expect(messages).toContain("emitter.emit('input-event')")
 
-    expect(toolbar).toContain('parser-flash')
-    expect(toolbar).toContain('parser-flash-pulse')
+    expect(toolbar).toContain('parser-select-flash')
+    expect(toolbar).toContain('parser-select-flash 2.2s ease-out')
     expect(toolbar).toContain("emitter.on('highlight-parser-format'")
   })
 })

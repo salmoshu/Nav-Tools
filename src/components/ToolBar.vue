@@ -271,7 +271,7 @@
                 <span class="input-unit">{{ t('app.toolbar.millisecond') }}</span>
               </div>
             </div>
-            <div class="parser-card" :class="{ 'parser-flash': parserFlash }">
+            <div class="parser-card">
               <div class="parser-copy">
                 <strong>{{ t('app.toolbar.dataSection') }}</strong>
                 <span>{{ activeParserDescription }}</span>
@@ -284,7 +284,7 @@
                   :props="parserCascaderProps"
                   :show-all-levels="false"
                   :aria-label="t('app.toolbar.parseMethod')"
-                  class="parser-select"
+                  :class="['parser-select', { 'parser-select-flash': parserFlash }]"
                   popper-class="parser-select-dropdown"
                 />
               </div>
@@ -442,7 +442,7 @@
             <span class="input-label">{{ t('app.toolbar.advanced') }}</span>
             <el-checkbox v-model="serialAdvanced">{{ t('app.toolbar.showAdvanced') }}</el-checkbox>
           </div>
-          <div class="parser-card" :class="{ 'parser-flash': parserFlash }">
+          <div class="parser-card">
             <div class="parser-copy">
               <strong>{{ t('app.toolbar.dataSection') }}</strong>
               <span>{{ activeParserDescription }}</span>
@@ -455,7 +455,7 @@
                 :props="parserCascaderProps"
                 :show-all-levels="false"
                 :aria-label="t('app.toolbar.parseMethod')"
-                class="parser-select"
+                :class="['parser-select', { 'parser-select-flash': parserFlash }]"
                 popper-class="parser-select-dropdown"
               />
             </div>
@@ -528,7 +528,7 @@
             <span class="input-label">{{ t('app.toolbar.networkLoop') }}</span>
             <el-switch v-model="networkLoop" :aria-label="t('app.toolbar.networkLoop')" />
           </div>
-          <div class="parser-card" :class="{ 'parser-flash': parserFlash }">
+          <div class="parser-card">
             <div class="parser-copy">
               <strong>{{ t('app.toolbar.dataSection') }}</strong>
               <span>{{ activeParserDescription }}</span>
@@ -541,7 +541,7 @@
                 :props="parserCascaderProps"
                 :show-all-levels="false"
                 :aria-label="t('app.toolbar.parseMethod')"
-                class="parser-select"
+                :class="['parser-select', { 'parser-select-flash': parserFlash }]"
                 popper-class="parser-select-dropdown"
               />
             </div>
@@ -2025,30 +2025,22 @@ onUnmounted(() => {
   border-top: 1px solid var(--app-border);
 }
 
-/* 数据格式配置短暂高亮（由消息窗口解析徽标点击触发）：
-   边框高亮；::before 外扩 8~10px，避免边框紧贴文字/输入框 */
-.parser-card.parser-flash::before {
-  content: '';
-  position: absolute;
-  inset: -8px -10px;
-  pointer-events: none;
-  border: 2px solid var(--el-color-primary);
-  border-radius: 8px;
-  animation: parser-flash-pulse 2.2s ease-out;
+/* 消息窗口解析徽标点击后，仅短暂高亮数据格式选择框。 */
+.parser-card :deep(.parser-select-flash .el-input__wrapper) {
+  animation: parser-select-flash 2.2s ease-out;
 }
 
-@keyframes parser-flash-pulse {
-  0% {
-    opacity: 0;
-  }
-  12% {
-    opacity: 1;
-  }
-  75% {
-    opacity: 1;
-  }
+@keyframes parser-select-flash {
+  0%,
   100% {
-    opacity: 0;
+    box-shadow: 0 0 0 1px var(--el-input-border-color, var(--el-border-color)) inset;
+  }
+  12%,
+  75% {
+    box-shadow:
+      0 0 0 1px var(--el-color-primary) inset,
+      0 0 0 4px color-mix(in srgb, var(--el-color-primary) 18%, transparent),
+      0 4px 14px color-mix(in srgb, var(--el-color-primary) 20%, transparent);
   }
 }
 

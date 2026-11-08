@@ -41,7 +41,7 @@ export default {
     exportConfigurationFailed: '配置导出失败',
     connect: '连接设备',
     disconnect: '断开连接',
-    appConnections: '应用连接',
+    appConnections: '连接管理',
     dataSourceConfigTab: '数据源配置',
     appConnEmpty: '当前应用没有需要管理的数据连接',
     appConnControl: '相机控制',

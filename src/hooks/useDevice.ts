@@ -27,11 +27,7 @@ import {
 import emitter from '@/hooks/useMitt'
 import { useMcapPlayer } from '@/composables/useMcapPlayer'
 import { useGnssRaw } from '@/composables/useGnssRaw'
-import {
-  detectGnssRawKind,
-  isRtcmFileName,
-  isRnxFileName,
-} from '@/core/gnssraw/RtcmFileAccess'
+import { detectGnssRawKind, isRtcmFileName, isRnxFileName } from '@/core/gnssraw/RtcmFileAccess'
 import { RecentInputFiles } from '@/core/file/RecentInputFiles'
 import { mcapBasename } from '@/core/lidar/McapFileAccess'
 import { mcapPartIndex } from '@/core/lidar/McapPartFamily'
@@ -39,6 +35,7 @@ import { JsonStorage } from '@/core/storage/JsonStorage'
 import { useDataSourceManager } from '@/composables/useDataSourceManager'
 import type { TextDataParser } from '@/core/data/DataSourceStorage'
 import { createRecordRegex } from '@/core/data/TextRecordParser'
+import { detectGnssTextParser } from '@/core/data/GnssTextFormat'
 import { FilePlaybackService } from '@/core/file/FilePlaybackService'
 import { TextFileStreamService } from '@/core/file/TextFileStreamService'
 import { buildTextTimeline } from '@/core/file/TextEpochStore'
@@ -164,10 +161,12 @@ const selectedFile = computed(() => selectedFiles.value[0] ?? null)
 const selectedFilePath = ref('')
 const isMcapPath = (path: string) => path.trim().toLowerCase().endsWith('.mcap')
 // 文件输入按扩展名自适应分发：.mcap 走 LiDAR 时间轴，以下文本类型走文本解析器
-const TEXT_FILE_EXTENSIONS = ['txt', 'csv', 'dat', 'log', 'nmea']
+const TEXT_FILE_EXTENSIONS = ['txt', 'csv', 'dat', 'log', 'nmea', 'pos']
 const fileIsMcap = computed(() => isMcapPath(filePath.value))
 // 输入路径是板上轮转分片(part_N.mcap)时,确认后自动补齐同目录整族分片
-const fileIsMcapPartSlice = computed(() => mcapPartIndex(mcapBasename(filePath.value)) !== undefined)
+const fileIsMcapPartSlice = computed(
+  () => mcapPartIndex(mcapBasename(filePath.value)) !== undefined,
+)
 const selectedFileCount = computed(() =>
   selectedFilePath.value === filePath.value.trim()
     ? selectedFiles.value.length || selectedPaths.value.length
@@ -220,8 +219,8 @@ function isGnssSolutionParser(parser: TextDataParser): boolean {
   return parser === 'nmea' || parser === 'rtklib-pos'
 }
 
-function appendGnssDataByParser(data: string): void {
-  if (activeDataParser.value === 'rtklib-pos') addRtkLibPosData(data)
+function appendGnssDataByParser(data: string, parser = activeDataParser.value): void {
+  if (parser === 'rtklib-pos') addRtkLibPosData(data)
   else addGnssData(data)
 }
 
@@ -233,9 +232,14 @@ const activeRegexPattern = computed(() => {
 })
 
 // 切换到文件输入也会使主进程中的注入目标失效，避免继续向上一次的设备发送差分数据。
-watch([() => globalDevice.value.type, () => dataSourceSettings.activeSource], ([type, source]) => {
-  if (type === 'file' || source === 'file') void ipc.invoke('data-injection-clear-target').catch(() => undefined)
-}, { flush: 'sync' })
+watch(
+  [() => globalDevice.value.type, () => dataSourceSettings.activeSource],
+  ([type, source]) => {
+    if (type === 'file' || source === 'file')
+      void ipc.invoke('data-injection-clear-target').catch(() => undefined)
+  },
+  { flush: 'sync' },
+)
 
 watch(
   [activeDataParser, activeRegexPattern],
@@ -355,9 +359,7 @@ function openNetworkDevice(): void {
       // 用户主动终止: 不提示、不进入循环重连调度。
       // close() 在连接建立前销毁 socket 也会以「连接已取消」结束 open(), 同样视为有意中断
       const cancelled =
-        networkConnectCancelled ||
-        message.includes('已取消连接') ||
-        message.includes('连接已取消')
+        networkConnectCancelled || message.includes('已取消连接') || message.includes('连接已取消')
       if (cancelled) {
         networkConnectCancelled = false
         return
@@ -546,13 +548,33 @@ async function loadGnssTimelineSource(
   readSource: GnssTimelineReader,
 ): Promise<void> {
   const streamPlot = isWindowActive('plot')
+  const configuredParser = activeDataParser.value
+  // 每个文件都重新识别，避免上次自动保存的格式锁定后续文件。
+  const autoDetectParser = configuredParser === 'raw' || isGnssSolutionParser(configuredParser)
+  const fallbackParser = configuredParser === 'rtklib-pos' ? 'rtklib-pos' : 'nmea'
+  let parserOverride: TextDataParser | undefined = autoDetectParser ? undefined : configuredParser
+  let pendingDetectionText = ''
   const routeAuxiliaryText = (text: string) => {
     if (streamPlot) addFlowData(text)
     addFileReplayData(text)
   }
   const appendChunk = (chunk: string) => {
     if (!chunk) return
-    appendGnssDataByParser(chunk)
+    if (autoDetectParser && !parserOverride) {
+      pendingDetectionText += chunk
+      const detected = detectGnssTextParser(pendingDetectionText)
+      if (!detected && pendingDetectionText.length < 64 * 1024) {
+        routeAuxiliaryText(chunk)
+        return
+      }
+      parserOverride = detected ?? fallbackParser
+      dataSourceSettings.file.parser = parserOverride
+      saveDataSourceSettings()
+      appendGnssDataByParser(pendingDetectionText, parserOverride)
+      pendingDetectionText = ''
+    } else {
+      appendGnssDataByParser(chunk, parserOverride)
+    }
     routeAuxiliaryText(chunk)
   }
 
@@ -567,7 +589,14 @@ async function loadGnssTimelineSource(
 
   try {
     await readSource(appendChunk, fileTimeline.updateIndexingProgress)
-    appendGnssDataByParser('\n')
+    if (pendingDetectionText) {
+      parserOverride = detectGnssTextParser(pendingDetectionText) ?? fallbackParser
+      dataSourceSettings.file.parser = parserOverride
+      saveDataSourceSettings()
+      appendGnssDataByParser(pendingDetectionText, parserOverride)
+      pendingDetectionText = ''
+    }
+    appendGnssDataByParser('\n', parserOverride)
     routeAuxiliaryText('\n')
     if (timelineMode === 'loaded') {
       rebuildMapTrackFromPositionHistory()
@@ -665,12 +694,9 @@ async function loadTextTimelineSource(
 
   try {
     const chunks: string[] = []
-    await readSource(
-      (chunk) => {
-        if (chunk) chunks.push(chunk)
-      },
-      fileTimeline.updateIndexingProgress,
-    )
+    await readSource((chunk) => {
+      if (chunk) chunks.push(chunk)
+    }, fileTimeline.updateIndexingProgress)
     const content = chunks.join('')
 
     const isCsv = /\.csv$/i.test(sourceName.trim())
@@ -1021,12 +1047,14 @@ export function useDevice() {
             throw new Error(gnssRaw.errorText.value)
           }
           if (
+            activeDataModes.value.includes('gnss') ||
             explicitGnssTextParser ||
             file.type.toLowerCase().includes('log') ||
             file.name.toLowerCase().endsWith('.log') ||
             file.type.toLowerCase().includes('text') ||
             file.name.toLowerCase().endsWith('.txt') ||
             file.name.toLowerCase().endsWith('.nmea') ||
+            file.name.toLowerCase().endsWith('.pos') ||
             file.type.toLowerCase().includes('dat') ||
             file.name.toLowerCase().endsWith('.dat')
           ) {
@@ -1035,7 +1063,11 @@ export function useDevice() {
             selectedFiles.value = [file]
             selectedFilePath.value = droppedPath
             filePath.value = droppedPath
-            recentInputFilesStore.record({ path: droppedPath, name: file.name, sizeBytes: file.size })
+            recentInputFilesStore.record({
+              path: droppedPath,
+              name: file.name,
+              sizeBytes: file.size,
+            })
             globalDevice.value = {
               type: 'file',
               path: droppedPath,
@@ -1043,7 +1075,10 @@ export function useDevice() {
             }
             saveDataSourceSettings()
 
-            if (activeDataModes.value.includes('gnss') || isGnssSolutionParser(activeDataParser.value)) {
+            if (
+              activeDataModes.value.includes('gnss') ||
+              isGnssSolutionParser(activeDataParser.value)
+            ) {
               await filePlaybackService.stop()
               await loadGnssTimelineFile(file, 'loaded')
               break
@@ -1075,7 +1110,10 @@ export function useDevice() {
             })
           }
         } catch (error) {
-          if (activeDataModes.value.includes('gnss') || isGnssSolutionParser(activeDataParser.value)) {
+          if (
+            activeDataModes.value.includes('gnss') ||
+            isGnssSolutionParser(activeDataParser.value)
+          ) {
             fileTimeline.clearTimeline()
             clearGnssData()
           }
@@ -1261,13 +1299,14 @@ export function useDevice() {
   // 使用带 scope 记忆的原生对话框: 数据接入的上次目录独立于其它模块记忆。
   const selectTargetFile = async () => {
     const solutionParserSelected = isGnssSolutionParser(dataSourceSettings.file.parser)
+    const acceptGnssText = activeDataModes.value.includes('gnss') || solutionParserSelected
     // Web 构建没有原生对话框：退回隐藏的 input[type=file]，选择语义保持一致。
     if (!window.electronAPI?.openFileDialog) {
       const fileInput = document.createElement('input')
       fileInput.type = 'file'
-      fileInput.accept = solutionParserSelected
+      fileInput.accept = acceptGnssText
         ? ''
-        : '.txt,.csv,.dat,.log,.nmea,.mcap,.rtcm3,.rtcm,.rtc,.rt3,.rnx,.obs,.nav,.glo'
+        : '.txt,.csv,.dat,.log,.nmea,.pos,.mcap,.rtcm3,.rtcm,.rtc,.rt3,.rnx,.obs,.nav,.glo'
       fileInput.multiple = !solutionParserSelected
       fileInput.style.display = 'none'
       document.body.appendChild(fileInput)
@@ -1295,7 +1334,7 @@ export function useDevice() {
     selectedPaths.value = []
     const paths = (await window.electronAPI.openFileDialog({
       scope: 'data-access-file',
-      filters: solutionParserSelected
+      filters: acceptGnssText
         ? [
             { name: 'NMEA / RTKLIB POS / Text', extensions: ['*'] },
             { name: 'All Files', extensions: ['*'] },
@@ -1304,9 +1343,28 @@ export function useDevice() {
             {
               name: 'Log / MCAP / RTCM / RINEX',
               extensions: [
-                'txt', 'csv', 'dat', 'log', 'nmea', 'mcap',
-                'rtcm3', 'rtcm', 'rtc', 'rt3',
-                'rnx', 'obs', 'nav', 'gnav', 'hnav', 'qnav', 'lnav', 'cnav', 'glo', 'gps', 'gal',
+                'txt',
+                'csv',
+                'dat',
+                'log',
+                'nmea',
+                'pos',
+                'mcap',
+                'rtcm3',
+                'rtcm',
+                'rtc',
+                'rt3',
+                'rnx',
+                'obs',
+                'nav',
+                'gnav',
+                'hnav',
+                'qnav',
+                'lnav',
+                'cnav',
+                'glo',
+                'gps',
+                'gal',
               ],
             },
             { name: 'All Files', extensions: ['*'] },
@@ -1620,11 +1678,13 @@ export function useDevice() {
       const path = filePath.value.trim()
       const files = selectedFilePath.value === path ? selectedFiles.value : []
       const pathList = selectedFilePath.value === path ? selectedPaths.value : []
-      const names = files.length > 0 ? files.map((file) => file.name) : pathList.length > 1 ? pathList : [path]
+      const names =
+        files.length > 0 ? files.map((file) => file.name) : pathList.length > 1 ? pathList : [path]
       const extension = /\.([a-z0-9]+)$/i.exec(path)?.[1]?.toLowerCase()
       const explicitGnssTextParser = isGnssSolutionParser(sourceParser.value)
       let isGnssRaw =
-        !explicitGnssTextParser && names.every((name) => isRtcmFileName(name) || isRnxFileName(name))
+        !explicitGnssTextParser &&
+        names.every((name) => isRtcmFileName(name) || isRnxFileName(name))
       if (!isGnssRaw && names.length === 1 && !extension && path) {
         // 无扩展名（如采集文件 RTCM_test）：嗅探帧头再决定路由
         try {
@@ -1634,10 +1694,8 @@ export function useDevice() {
           } else if (window.electronAPI?.gnssRawReadFile) {
             const res = await window.electronAPI.gnssRawReadFile(path)
             isGnssRaw =
-              detectGnssRawKind(
-                names[0],
-                new Uint8Array(res.data, 0, Math.min(res.size, 8192)),
-              ) !== null
+              detectGnssRawKind(names[0], new Uint8Array(res.data, 0, Math.min(res.size, 8192))) !==
+              null
           }
         } catch {
           isGnssRaw = false
@@ -1673,6 +1731,7 @@ export function useDevice() {
       if (
         extension &&
         !TEXT_FILE_EXTENSIONS.includes(extension) &&
+        !activeDataModes.value.includes('gnss') &&
         !isGnssSolutionParser(sourceParser.value)
       ) {
         ElMessage({

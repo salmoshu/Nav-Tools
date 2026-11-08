@@ -72,6 +72,27 @@ test('deviation keeps only the current Float status in small windows and restore
     await page.setViewportSize(size)
     await expect(card.locator('.status-card-body')).toHaveCount(0)
     await expect(card.getByText('Float', { exact: true })).toHaveCount(1)
+    await expect(page.getByRole('button', { name: 'Reset Layout', exact: true })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Clear', exact: true })).toBeVisible()
+    const buttons = page.locator('.right-buttons .control-btn')
+    await expect(buttons).toHaveCount(3)
+    const bounds = await buttons.evaluateAll((elements) =>
+      elements.map((element) => {
+        const { x, width, height } = element.getBoundingClientRect()
+        return { x, width, height }
+      }),
+    )
+    for (const button of bounds) {
+      expect(button.width).toBe(28)
+      expect(button.height).toBe(28)
+    }
+    for (let index = 1; index < bounds.length; index += 1) {
+      expect(bounds[index].x - bounds[index - 1].x - bounds[index - 1].width).toBe(4)
+    }
+    if (size.width <= 420) {
+      await expect(card.locator('.status-card-heading > span:last-child')).toBeHidden()
+      await expect(card.locator('.status-card-indicator')).toBeVisible()
+    }
   }
   await page.screenshot({ path: 'test-results/gnss-deviation-compact.png' })
   await page.setViewportSize({ width: 1000, height: 720 })

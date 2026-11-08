@@ -13,6 +13,25 @@
     <canvas ref="plotCanvasRef" class="metric-plot"></canvas>
     <canvas ref="axisCanvasRef" class="metric-axis"></canvas>
 
+    <div
+      v-if="showXScrollbar"
+      ref="scrollbarRef"
+      class="metric-x-scrollbar"
+      role="scrollbar"
+      aria-orientation="horizontal"
+      :aria-label="`${label} horizontal timeline`"
+      :aria-valuemin="0"
+      :aria-valuemax="Math.max(0, sourceLength - 1)"
+      :aria-valuenow="Math.round(viewport.start)"
+      @mousedown.stop="handleScrollbarTrackMouseDown"
+    >
+      <span
+        class="metric-x-scrollbar-thumb"
+        :style="scrollbarThumbStyle"
+        @mousedown.stop="handleScrollbarThumbMouseDown"
+      ></span>
+    </div>
+
     <div class="metric-heading">
       <i :style="{ backgroundColor: headingColor }"></i>
       <strong>{{ label }}</strong>
@@ -51,11 +70,7 @@ import type {
   SatelliteSeriesColor,
   SatelliteTimeSeriesRenderer,
 } from '@/core/render/SatelliteTimeSeriesRenderer'
-import {
-  FIX_STATUS_QUALITIES,
-  fixStatusColor,
-  normalizeFixStatusQuality,
-} from './fixStatusColors'
+import { FIX_STATUS_QUALITIES, fixStatusColor, normalizeFixStatusQuality } from './fixStatusColors'
 
 type MetricField = 'E' | 'N' | 'U' | 'SPEED'
 
@@ -94,10 +109,15 @@ const { chartTheme, resolvedTheme } = useTheme()
 const sourceStore = computed(() =>
   props.field === 'SPEED' ? speedEpochHistory.value : positionEpochHistory.value,
 )
+// 历史库原地追加并通过 triggerRef 通知，直接读取 ref 才能追踪长度变化。
+const sourceLength = computed(() =>
+  props.field === 'SPEED' ? speedEpochHistory.value.length : positionEpochHistory.value.length,
+)
 
 const containerRef = ref<HTMLDivElement | null>(null)
 const plotCanvasRef = ref<HTMLCanvasElement | null>(null)
 const axisCanvasRef = ref<HTMLCanvasElement | null>(null)
+const scrollbarRef = ref<HTMLDivElement | null>(null)
 const rendererKind = ref<SatelliteRendererKind>('canvas')
 const viewport = ref<SatelliteCountViewport>(fitSatelliteCountViewport(sourceStore.value.length))
 const hoverValue = ref<number | null>(null)
@@ -127,10 +147,16 @@ let renderedRange = { min: -1, max: 1 }
 let yRangeOverride: { min: number; max: number } | null = null
 let isDragging = false
 let dragStartX = 0
+let dragStartY = 0
 let dragStartViewport: SatelliteCountViewport = { start: 0, end: 0 }
+let dragStartRange = { min: -1, max: 1 }
 /** 右键水平拖拽 = x 轴伸缩（同源图表联动） */
 let isXZoomDragging = false
 let xZoomAnchor = 0
+let isScrollbarDragging = false
+let scrollbarStartX = 0
+let scrollbarStartViewport: SatelliteCountViewport = { start: 0, end: 0 }
+let scrollbarEpochsPerPixel = 0
 /** 跟踪模式下用户拖拽产生的中心偏移（索引单位）：视口跟随目标但保持偏移不回中 */
 let trackOffset = 0
 /** 模块级广播通道的取消订阅句柄 */
@@ -163,10 +189,8 @@ function applyTrackingViewport(): void {
       : Math.min(store.length, TRACKING_LIVE_WINDOW_EPOCHS)
   const center = target + 0.5 + trackOffset
   applyViewport(
-    clampSatelliteCountViewport(
-      { start: center - span / 2, end: center + span / 2 },
-      store.length,
-    ),
+    clampSatelliteCountViewport({ start: center - span / 2, end: center + span / 2 }, store.length),
+    false,
   )
 }
 
@@ -199,6 +223,25 @@ function plotSize(): { width: number; height: number } {
     height: Math.max(1, container.clientHeight - layout.top - layout.bottom),
   }
 }
+
+const showXScrollbar = computed(() => {
+  const length = sourceLength.value
+  if (length < 2) return false
+  return viewport.value.start > 0.5 || viewport.value.end < length - 0.5
+})
+
+const scrollbarThumbStyle = computed(() => {
+  const length = Math.max(1, sourceLength.value)
+  const span = Math.max(1, viewport.value.end - viewport.value.start)
+  const width = Math.min(100, Math.max(8, (span / length) * 100))
+  const maxStart = Math.max(1, length - span)
+  const position = Math.max(0, Math.min(1, viewport.value.start / maxStart)) * 100
+  return {
+    left: `${position}%`,
+    width: `${width}%`,
+    transform: `translateX(-${position}%)`,
+  }
+})
 
 function updateLayout(containerHeight: number): void {
   if (containerHeight < 150) {
@@ -280,11 +323,8 @@ function renderChart(): void {
     end,
     Math.max(64, Math.floor(width * 2)),
   )
-  const qualityGeometry = splitSeriesByQuality(
-    extracted.points,
-    extracted.segments,
-    epochIndex =>
-      normalizeFixStatusQuality(store.getValue('QUALITY', epochIndex)),
+  const qualityGeometry = splitSeriesByQuality(extracted.points, extracted.segments, (epochIndex) =>
+    normalizeFixStatusQuality(store.getValue('QUALITY', epochIndex)),
   )
   for (const quality of FIX_STATUS_QUALITIES) {
     const geometry = qualityGeometry.get(quality)
@@ -436,6 +476,17 @@ function fitAll(): void {
   scheduleRender()
 }
 
+function preserveCurrentYAxis(): void {
+  if (
+    !props.active ||
+    sourceStore.value.length === 0 ||
+    yRangeOverride ||
+    renderedRange.max <= renderedRange.min
+  )
+    return
+  yRangeOverride = { ...renderedRange }
+}
+
 /**
  * 工具栏「重置布局」（偏差图同款）：清除手动 y 范围与跟踪偏移；
  * 跟踪开启时保持跨度并居中到目标（同偏差图 resetZoom 语义），
@@ -486,54 +537,106 @@ function handleMouseDown(event: MouseEvent): void {
     isXZoomDragging = true
     dragStartX = event.clientX
     dragStartViewport = { ...viewport.value }
-    xZoomAnchor = dragStartViewport.start + ratio * (dragStartViewport.end - dragStartViewport.start)
+    xZoomAnchor =
+      dragStartViewport.start + ratio * (dragStartViewport.end - dragStartViewport.start)
+    preserveCurrentYAxis()
     return
   }
   if (event.button !== 0) return
   isDragging = true
   dragStartX = event.clientX
+  dragStartY = event.clientY
   dragStartViewport = { ...viewport.value }
+  dragStartRange = { ...renderedRange }
+  preserveCurrentYAxis()
 }
 
 /** 应用新 x 视口并广播给同源图表（E/N/U 联动）；跟踪模式下记录用户拖拽偏移 */
-function applyViewport(next: SatelliteCountViewport): void {
+function applyViewport(next: SatelliteCountViewport, synchronize = true): void {
   viewport.value = next
   if (props.tracking) {
     trackOffset = (next.start + next.end) / 2 - (trackingTargetIndex() + 0.5)
   }
-  broadcastMetricViewport(next.start, next.end, sourceStore.value)
+  // 各图自行跟随相同目标；只广播用户交互，避免自动跟踪锁定其它图的 Y 轴。
+  if (synchronize) broadcastMetricViewport(next.start, next.end, sourceStore.value)
   scheduleRender()
 }
 
 function handleWindowMouseMove(event: MouseEvent): void {
+  if (isScrollbarDragging) {
+    const store = sourceStore.value
+    const delta = (event.clientX - scrollbarStartX) * scrollbarEpochsPerPixel
+    applyViewport(panSatelliteCountViewport(scrollbarStartViewport, delta, store.length))
+    clearHover()
+    return
+  }
   if (isXZoomDragging) {
     const store = sourceStore.value
     if (store.length < 2) return
     // 向右拖放大（时间窗变窄），向左拖缩小；以按下点为锚
     const dx = event.clientX - dragStartX
     const factor = Math.pow(2, -dx / 160)
-    applyViewport(
-      zoomSatelliteCountViewport(dragStartViewport, xZoomAnchor, factor, store.length),
-    )
+    applyViewport(zoomSatelliteCountViewport(dragStartViewport, xZoomAnchor, factor, store.length))
     clearHover()
     return
   }
   if (!isDragging) return
   const span = dragStartViewport.end - dragStartViewport.start
-  const delta = -((event.clientX - dragStartX) / plotSize().width) * span
-  applyViewport(panSatelliteCountViewport(dragStartViewport, delta, sourceStore.value.length))
+  const deltaX = -((event.clientX - dragStartX) / plotSize().width) * span
+  const deltaY =
+    ((event.clientY - dragStartY) / plotSize().height) *
+    Math.max(Number.EPSILON, dragStartRange.max - dragStartRange.min)
+  yRangeOverride = {
+    min: dragStartRange.min + deltaY,
+    max: dragStartRange.max + deltaY,
+  }
+  applyViewport(panSatelliteCountViewport(dragStartViewport, deltaX, sourceStore.value.length))
   clearHover()
 }
 
 function handleWindowMouseUp(): void {
   isDragging = false
   isXZoomDragging = false
+  isScrollbarDragging = false
+}
+
+function handleScrollbarThumbMouseDown(event: MouseEvent): void {
+  const scrollbar = scrollbarRef.value
+  if (event.button !== 0 || sourceStore.value.length < 2 || !scrollbar) return
+  preserveCurrentYAxis()
+  isScrollbarDragging = true
+  scrollbarStartX = event.clientX
+  scrollbarStartViewport = { ...viewport.value }
+  const thumbWidth =
+    event.currentTarget instanceof HTMLElement
+      ? event.currentTarget.getBoundingClientRect().width
+      : 0
+  const travel = Math.max(1, scrollbar.clientWidth - thumbWidth)
+  const span = scrollbarStartViewport.end - scrollbarStartViewport.start
+  scrollbarEpochsPerPixel = Math.max(0, sourceStore.value.length - span) / travel
+}
+
+function handleScrollbarTrackMouseDown(event: MouseEvent): void {
+  if (event.button !== 0 || sourceStore.value.length < 2 || !scrollbarRef.value) return
+  preserveCurrentYAxis()
+  const rect = scrollbarRef.value.getBoundingClientRect()
+  const ratio = Math.max(0, Math.min(1, (event.clientX - rect.left) / Math.max(1, rect.width)))
+  const span = viewport.value.end - viewport.value.start
+  const targetStart = ratio * sourceStore.value.length - span / 2
+  applyViewport(
+    panSatelliteCountViewport(
+      { start: targetStart, end: targetStart + span },
+      0,
+      sourceStore.value.length,
+    ),
+  )
 }
 
 /** 同源图表广播：E/N/U 之间同步 x 视口（平移/伸缩联动，跟踪偏移一并同步） */
 function handleViewportSync(payload: MetricViewportBroadcast): void {
   if (payload.store !== sourceStore.value) return
   if (payload.start === viewport.value.start && payload.end === viewport.value.end) return
+  preserveCurrentYAxis()
   viewport.value = { start: payload.start, end: payload.end }
   // 同源 target 相同：按广播视口同步跟踪偏移，避免各实例跟随帧互相打架
   if (props.tracking) {
@@ -625,15 +728,12 @@ watch(
 
 watch(resolvedTheme, () => scheduleRender())
 
-watch(
-  [fileTimeline.active, fileTimeline.mode, fileTimeline.elapsedMilliseconds],
-  () => {
-    if (!props.active) return
-    // 跟踪：回放光标/实时最新历元移动后重新居中
-    if (props.tracking) applyTrackingViewport()
-    else scheduleRender()
-  },
-)
+watch([fileTimeline.active, fileTimeline.mode, fileTimeline.elapsedMilliseconds], () => {
+  if (!props.active) return
+  // 跟踪：回放光标/实时最新历元移动后重新居中
+  if (props.tracking) applyTrackingViewport()
+  else scheduleRender()
+})
 
 onMounted(() => {
   previousLength = sourceStore.value.length
@@ -680,14 +780,47 @@ onUnmounted(() => {
   border: 1px solid var(--app-border);
   border-radius: 7px;
   background: var(--app-surface);
-  cursor: crosshair;
+  cursor: grab;
   user-select: none;
+}
+
+.metric-chart:active {
+  cursor: grabbing;
 }
 
 .metric-plot,
 .metric-axis {
   position: absolute;
   display: block;
+}
+
+.metric-x-scrollbar {
+  position: absolute;
+  right: var(--metric-heading-right, 14px);
+  bottom: 5px;
+  left: var(--metric-heading-left, 54px);
+  z-index: 5;
+  height: 7px;
+  padding: 1px 0;
+  cursor: pointer;
+  background: color-mix(in srgb, var(--app-border) 42%, transparent);
+  border-radius: 999px;
+}
+
+.metric-x-scrollbar-thumb {
+  position: absolute;
+  top: 1px;
+  bottom: 1px;
+  min-width: 18px;
+  cursor: grab;
+  background: color-mix(in srgb, var(--app-text-muted) 72%, var(--app-surface));
+  border-radius: 999px;
+  transition: background-color 120ms ease;
+}
+
+.metric-x-scrollbar-thumb:hover,
+.metric-x-scrollbar-thumb:active {
+  background: var(--app-primary);
 }
 
 .metric-plot {

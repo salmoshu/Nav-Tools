@@ -56,6 +56,15 @@ describe('GNSS deviation position and speed views', () => {
     expect(metric).toContain('renderer?.dispose()')
   })
 
+  it('keeps the Y range independent while providing free diagonal pan and an X scrollbar', () => {
+    expect(metric).toContain('preserveCurrentYAxis')
+    expect(metric).toContain('dragStartY')
+    expect(metric).toContain('yRangeOverride = {')
+    expect(metric).toContain('metric-x-scrollbar')
+    expect(metric).toContain('handleScrollbarThumbMouseDown')
+    expect(metric).toContain('handleScrollbarTrackMouseDown')
+  })
+
   it('keeps the existing WebGL deviation renderer intact', () => {
     expect(source).toContain('createTrajectoryRenderer')
     expect(source).toContain('renderer?.setViewport')

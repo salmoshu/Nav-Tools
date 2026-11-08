@@ -30,7 +30,9 @@ describe('Status View presentation', () => {
 
     expect(source).toContain('status-field-icon')
     expect(source).toContain('getStatusFieldIcon(String(element[0]))')
+    expect(source).toContain(':style="{ color: getStatusColor(String(element[0])) }"')
     expect(source).toContain('<component :is=')
+    expect(source).toContain('align-items: center')
   })
 
   it('keeps space between the property dialog actions', () => {

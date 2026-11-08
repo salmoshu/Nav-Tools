@@ -53,7 +53,11 @@
               </span>
               <span class="status-state-dot" aria-hidden="true"></span>
               <div class="status-value-row">
-                <el-icon class="status-field-icon" :title="formatStatusName(String(element[0]))">
+                <el-icon
+                  class="status-field-icon"
+                  :style="{ color: getStatusColor(String(element[0])) }"
+                  :title="formatStatusName(String(element[0]))"
+                >
                   <component :is="getStatusFieldIcon(String(element[0]))" />
                 </el-icon>
                 <!-- 为值添加点击进入编辑模式的功能 -->
@@ -388,10 +392,31 @@ const getStatusClass = (status: unknown) => ({
   'status-no-data': !hasStatusData(status),
 })
 
+const GNSS_STATUS_FIELDS = new Set([
+  'fixmode',
+  'quality',
+  'utctime',
+  'ttff',
+  'longitude',
+  'latitude',
+  'altitude',
+  'altitudemsl',
+  'velocity',
+  'threedacc',
+  'twodacc',
+  'pdop',
+  'hdop',
+  'satsused',
+  'satsvisible',
+])
+
 const getStatusColor = (statusName: string) => {
-  const qualityKey =
-    statusName === 'fixMode' ? 'quality' : statusName === 'GNSS.fixMode' ? 'GNSS.quality' : null
-  const quality = qualityKey ? monitorStatus.value[qualityKey] : undefined
+  const fieldName = statusName.split('.').at(-1)?.toLowerCase() ?? ''
+  if (!statusName.startsWith('GNSS.') && !GNSS_STATUS_FIELDS.has(fieldName)) return undefined
+  const quality =
+    monitorStatus.value['GNSS.quality'] ??
+    monitorStatus.value.quality ??
+    monitorStatus.value['GNSS.fixQuality']
   return typeof quality === 'number' ? fixStatusColor(quality) : undefined
 }
 
@@ -1022,7 +1047,7 @@ onUnmounted(() => {
   font-size: 13px;
   letter-spacing: -0.015em;
   line-height: 1.3;
-  padding: 3px 0 0;
+  padding: 0;
   box-sizing: border-box;
   text-align: left;
   flex-grow: 1;
@@ -1107,15 +1132,18 @@ onUnmounted(() => {
   display: flex;
   min-width: 0;
   grid-column: 1 / -1;
-  align-items: flex-start;
+  align-items: center;
   gap: 7px;
 }
 
 .status-field-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   flex: 0 0 auto;
-  margin-top: 3px;
   color: var(--app-text-muted);
   font-size: 15px;
+  line-height: 1;
 }
 
 .status-has-data .status-field-icon {

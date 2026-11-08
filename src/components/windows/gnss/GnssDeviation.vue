@@ -47,13 +47,25 @@
             <el-icon><InfoFilled /></el-icon>
             <span class="status-toggle-copy">{{ t('gnss.deviation.positionStatus') }}</span>
           </el-button>
-          <el-button type="primary" size="small" class="control-btn zoom-btn" @click="resetLayout"
-            ><el-icon><RefreshLeft /></el-icon>&nbsp;{{
-              t('gnss.deviation.resetLayout')
-            }}</el-button
+          <el-button
+            type="primary"
+            size="small"
+            class="control-btn zoom-btn"
+            :aria-label="t('gnss.deviation.resetLayout')"
+            :title="t('gnss.deviation.resetLayout')"
+            @click="resetLayout"
+            ><el-icon><RefreshLeft /></el-icon
+            ><span class="control-btn-label">{{ t('gnss.deviation.resetLayout') }}</span></el-button
           >
-          <el-button type="primary" size="small" class="control-btn clear-btn" @click="clearTrack"
-            ><el-icon><Delete /></el-icon>&nbsp;{{ t('gnss.deviation.clear') }}</el-button
+          <el-button
+            type="primary"
+            size="small"
+            class="control-btn clear-btn"
+            :aria-label="t('gnss.deviation.clear')"
+            :title="t('gnss.deviation.clear')"
+            @click="clearTrack"
+            ><el-icon><Delete /></el-icon
+            ><span class="control-btn-label">{{ t('gnss.deviation.clear') }}</span></el-button
           >
         </div>
       </div>
@@ -1773,6 +1785,10 @@ onUnmounted(() => {
   margin-left: auto;
 }
 
+.right-buttons .control-btn + .control-btn {
+  margin-left: 0;
+}
+
 .status-toggle-btn {
   height: 28px;
   min-height: 28px;
@@ -1811,6 +1827,36 @@ onUnmounted(() => {
 
   .status-toggle-copy {
     display: none;
+  }
+
+  .right-buttons {
+    gap: 4px;
+  }
+
+  .right-buttons .control-btn {
+    width: 28px;
+    padding: 0;
+    justify-content: center;
+  }
+
+  .control-btn-label {
+    display: none;
+  }
+}
+
+@container (max-width: 420px) {
+  .status-card-heading > span:last-child {
+    display: none;
+  }
+
+  .status-card-header {
+    gap: 7px;
+    min-height: 34px;
+    padding: 6px 8px;
+  }
+
+  .status-card-summary {
+    font-size: 11px;
   }
 }
 </style>

@@ -42,7 +42,7 @@ export default {
     exportConfigurationFailed: 'Failed to export configuration',
     connect: 'Connect Device',
     disconnect: 'Disconnect',
-    appConnections: 'App connections',
+    appConnections: 'Connection management',
     dataSourceConfigTab: 'Data source',
     appConnEmpty: 'No data connections to manage for the current application',
     appConnControl: 'Camera control',

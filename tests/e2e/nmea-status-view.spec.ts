@@ -34,6 +34,8 @@ test('Serial application shows routed NMEA fields and icons in Status View', asy
   await expect(latitude.locator('.status-indicator')).toHaveText('48.117300')
   await expect(longitude.locator('.status-field-icon svg')).toBeVisible()
   await expect(latitude.locator('.status-field-icon svg')).toBeVisible()
+  await expect(longitude.locator('.status-field-icon')).toHaveCSS('color', 'rgb(255, 0, 0)')
+  await expect(latitude.locator('.status-field-icon')).toHaveCSS('color', 'rgb(255, 0, 0)')
   const fixMode = page
     .locator('.status-item')
     .filter({
@@ -80,6 +82,19 @@ for (const theme of ['light', 'dark']) {
       )
       await expect(fixMode).toHaveText(label)
       await expect(fixMode).toHaveCSS('color', color)
+      await expect(
+        page
+          .locator('.status-item')
+          .filter({ has: page.locator('.status-label[title="longitude"]') })
+          .locator('.status-field-icon'),
+      ).toHaveCSS('color', color)
+      const row = page
+        .locator('.status-item')
+        .filter({ has: page.locator('.status-label[title="longitude"]') })
+        .locator('.status-value-row')
+      const icon = (await row.locator('.status-field-icon').boundingBox())!
+      const value = (await row.locator('.status-indicator').boundingBox())!
+      expect(Math.abs(icon.y + icon.height / 2 - value.y - value.height / 2)).toBeLessThan(1)
     }
   })
 }
