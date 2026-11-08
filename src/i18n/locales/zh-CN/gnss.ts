@@ -58,6 +58,13 @@ export default {
     historyTrack: '历史轨迹',
     currentPosition: '当前位置',
     statsCurrent: '当前解',
+    positionStatus: '定位状态',
+    toggleStatus: '展开或折叠定位状态',
+    statusUnavailable: '暂无定位数据',
+    sampleCount: '样本数',
+    layerToggle: '图层切换',
+    gridLayer: '栅格图',
+    mapLayer: '地图',
   },
   map: {
     offlineTitle: '离线地图',

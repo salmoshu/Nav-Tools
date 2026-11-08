@@ -44,11 +44,113 @@
         </div>
       </div>
     </div>
-    <div class="chart-container" ref="chartContainerRef" v-show="currentView === 'deviation'">
-      <canvas ref="canvasRef" class="chart"></canvas>
-      <canvas ref="axisCanvasRef" class="axis-layer"></canvas>
-      <div ref="tooltipRef" class="deviation-tooltip" :style="tooltipStyle" v-show="tooltipVisible">
-        {{ tooltipText }}
+    <div class="deviation-visual-container" v-show="currentView === 'deviation'">
+      <div class="chart-container" ref="chartContainerRef" v-show="layerMode === 'grid'">
+        <canvas ref="canvasRef" class="chart"></canvas>
+        <canvas ref="axisCanvasRef" class="axis-layer"></canvas>
+        <div
+          ref="tooltipRef"
+          class="deviation-tooltip"
+          :style="tooltipStyle"
+          v-show="tooltipVisible"
+        >
+          {{ tooltipText }}
+        </div>
+      </div>
+      <div v-if="layerMode === 'map'" class="map-layer-container">
+        <GnssMap
+          v-model:tracking="isTracking"
+          v-model:point-size="pointSize"
+          :show-toolbar="false"
+        />
+      </div>
+
+      <section class="deviation-status-card" :class="{ 'is-collapsed': !statusCardExpanded }">
+        <button
+          type="button"
+          class="status-card-header"
+          :aria-expanded="statusCardExpanded"
+          :aria-label="t('gnss.deviation.toggleStatus')"
+          @click="statusCardExpanded = !statusCardExpanded"
+        >
+          <span class="status-card-heading">
+            <span class="status-card-indicator" :style="{ backgroundColor: currentStatusColor }"></span>
+            <span>{{ t('gnss.deviation.positionStatus') }}</span>
+          </span>
+          <strong class="status-card-summary" :style="{ color: currentStatusColor }">
+            {{ currentStatusLabel }}
+          </strong>
+          <span class="status-card-chevron" aria-hidden="true">
+            {{ statusCardExpanded ? '^' : 'v' }}
+          </span>
+        </button>
+
+        <div v-show="statusCardExpanded" class="status-card-body">
+          <div v-if="currentStatusPoint" class="status-card-current-row">
+            <span>{{ t('gnss.deviation.statsCurrent') }}</span>
+            <strong :style="{ color: currentStatusColor }">{{ currentStatusLabel }}</strong>
+          </div>
+          <div v-if="currentStats" class="status-card-stats">
+            <div class="status-card-stat-grid">
+              <div class="status-card-stat">
+                <span>{{ t('gnss.deviation.sampleCount') }}</span>
+                <strong>{{ currentStats.count.toLocaleString() }}</strong>
+              </div>
+              <div
+                v-for="row in qualityRows"
+                :key="row.quality"
+                class="status-card-stat status-card-quality"
+              >
+                <span>{{ numberToQuality(row.quality) }}</span>
+                <strong>{{ row.count.toLocaleString() }} / {{ row.ratio }}%</strong>
+              </div>
+            </div>
+            <div class="status-card-metrics">
+              <div class="status-card-metric">
+                <span>AVE</span>
+                <span>E {{ formatStatMeters(currentStats.aveE) }}</span>
+                <span>N {{ formatStatMeters(currentStats.aveN) }}</span>
+              </div>
+              <div class="status-card-metric">
+                <span>STD</span>
+                <span>E {{ formatStatMeters(currentStats.stdE) }}</span>
+                <span>N {{ formatStatMeters(currentStats.stdN) }}</span>
+              </div>
+              <div class="status-card-metric">
+                <span>RMS</span>
+                <span>E {{ formatStatMeters(currentStats.rmsE) }}</span>
+                <span>N {{ formatStatMeters(currentStats.rmsN) }}</span>
+                <span>2D {{ formatStatMeters(currentStats.rms2dDoubled) }}</span>
+              </div>
+            </div>
+          </div>
+          <div v-else class="status-card-empty">
+            {{ t('gnss.deviation.statusUnavailable') }}
+          </div>
+        </div>
+      </section>
+
+      <div class="layer-switcher" role="group" :aria-label="t('gnss.deviation.layerToggle')">
+        <button
+          type="button"
+          class="layer-button"
+          :class="{ active: layerMode === 'grid' }"
+          :aria-pressed="layerMode === 'grid'"
+          @click="layerMode = 'grid'"
+        >
+          <span class="layer-swatch layer-swatch-grid" aria-hidden="true"></span>
+          {{ t('gnss.deviation.gridLayer') }}
+        </button>
+        <button
+          type="button"
+          class="layer-button"
+          :class="{ active: layerMode === 'map' }"
+          :aria-pressed="layerMode === 'map'"
+          @click="layerMode = 'map'"
+        >
+          <span class="layer-swatch layer-swatch-map" aria-hidden="true"></span>
+          {{ t('gnss.deviation.mapLayer') }}
+        </button>
       </div>
     </div>
     <div v-show="currentView === 'position'" class="position-chart-grid">
@@ -95,7 +197,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref, watch, nextTick } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch, nextTick } from 'vue'
 import { useNmea, numberToQuality } from '@/composables/gnss/useNmea'
 import { useFileTimeline } from '@/composables/useFileTimeline'
 import { fixStatusColorRgb01 } from '@/components/windows/gnss/fixStatusColors'
@@ -104,6 +206,7 @@ import { createTrajectoryRenderer } from '@/core/render/createTrajectoryRenderer
 import { t } from '@/i18n'
 import type { TrajectoryRenderer } from '@/core/render/TrajectoryRenderer'
 import GnssMetricTimeSeries from './GnssMetricTimeSeries.vue'
+import GnssMap from './GnssMap.vue'
 import {
   clampVisibleSpan,
   clampViewportCenter,
@@ -170,8 +273,30 @@ let stopThemeWatch: (() => void) | null = null
 let stopTimelineWatch: (() => void) | null = null
 
 type DeviationView = 'deviation' | 'position' | 'speed'
+type DeviationLayer = 'grid' | 'map'
 
 const currentView = ref<DeviationView>('deviation')
+const layerMode = ref<DeviationLayer>('grid')
+const statusCardExpanded = ref(true)
+
+const currentStatusPoint = computed<[number, number, number] | undefined>(() => {
+  const timelinePoint = getTimelinePositionPoint()
+  if (timelinePoint) return timelinePoint
+  const points = plotData.value
+  return points.length > 0 ? points[points.length - 1] : undefined
+})
+
+const currentStatusLabel = computed(() => {
+  const point = currentStatusPoint.value
+  return point ? numberToQuality(point[2]) : t('gnss.deviation.statusUnavailable')
+})
+
+const currentStatusColor = computed(() => {
+  const point = currentStatusPoint.value
+  if (!point) return 'var(--app-text-muted)'
+  const [r, g, b] = qualityToRgb(point[2])
+  return `rgba(${Math.round(r * 255)}, ${Math.round(g * 255)}, ${Math.round(b * 255)}, 1)`
+})
 
 // 位置/速度图实例：工具栏 reset/clear 在这些视图下转发给它们
 const eSeriesRef = ref<InstanceType<typeof GnssMetricTimeSeries> | null>(null)
@@ -369,7 +494,6 @@ function drawAxisLayer(): void {
   }
 
   ctx.restore()
-  drawStatsOverlay()
 }
 
 /** 统计缓存：仅当数据量或首点引用变化时重算（跟踪模式每帧重绘轴层） */
@@ -385,6 +509,19 @@ function deviationStats(): DeviationStats | null {
   statsCacheFirst = points[0]
   return statsCache
 }
+
+const currentStats = computed(() => deviationStats())
+const qualityRows = computed(() => {
+  const stats = currentStats.value
+  if (!stats) return []
+  return [...stats.qualityCounts.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([quality, count]) => ({
+      quality,
+      count,
+      ratio: ((count / stats.count) * 100).toFixed(1),
+    }))
+})
 
 function formatStatMeters(value: number): string {
   const abs = Math.abs(value)
@@ -1074,10 +1211,235 @@ onUnmounted(() => {
 }
 
 .chart-container {
-  flex: 1;
-  position: relative;
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
   overflow: hidden;
   min-height: 0;
+}
+
+.deviation-visual-container {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  overflow: hidden;
+  background: var(--app-surface);
+}
+
+.map-layer-container {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background: var(--app-surface);
+}
+
+.map-layer-container :deep(.gnss-map-container) {
+  border-radius: 0;
+}
+
+.deviation-status-card {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: 20;
+  width: min(330px, calc(100% - 28px));
+  overflow: hidden;
+  color: var(--app-text);
+  background: color-mix(in srgb, var(--app-surface-raised) 94%, transparent);
+  border: 1px solid color-mix(in srgb, var(--app-border) 86%, transparent);
+  border-radius: 12px;
+  box-shadow: 0 10px 28px rgb(0 0 0 / 18%);
+  backdrop-filter: blur(12px);
+}
+
+.status-card-header {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  min-height: 42px;
+  padding: 9px 12px;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+}
+
+.status-card-header:hover {
+  background: color-mix(in srgb, var(--app-primary) 8%, transparent);
+}
+
+.status-card-heading {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.status-card-indicator {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  box-shadow: 0 0 0 3px rgb(255 255 255 / 12%);
+}
+
+.status-card-summary {
+  min-width: 0;
+  margin-left: auto;
+  overflow: hidden;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.status-card-chevron {
+  width: 16px;
+  color: var(--app-text-muted);
+  font-size: 15px;
+  line-height: 1;
+  text-align: center;
+}
+
+.status-card-body {
+  max-height: min(56vh, 420px);
+  padding: 0 12px 12px;
+  overflow: auto;
+  border-top: 1px solid color-mix(in srgb, var(--app-border) 70%, transparent);
+}
+
+.status-card-current-row,
+.status-card-stat,
+.status-card-metric {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.status-card-current-row {
+  padding: 10px 0 8px;
+  color: var(--app-text-muted);
+  font-size: 11px;
+}
+
+.status-card-current-row strong {
+  font-size: 13px;
+}
+
+.status-card-stats {
+  display: grid;
+  gap: 10px;
+  font-size: 11px;
+}
+
+.status-card-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.status-card-stat {
+  min-width: 0;
+  padding: 7px 8px;
+  color: var(--app-text-muted);
+  background: color-mix(in srgb, var(--app-surface-muted) 72%, transparent);
+  border-radius: 7px;
+}
+
+.status-card-stat strong {
+  color: var(--app-text);
+  font-size: 11px;
+}
+
+.status-card-metrics {
+  display: grid;
+  gap: 5px;
+  padding-top: 2px;
+}
+
+.status-card-metric {
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  color: var(--app-text-muted);
+  line-height: 1.35;
+}
+
+.status-card-metric > span:first-child {
+  width: 34px;
+  color: var(--app-text);
+  font-weight: 600;
+}
+
+.status-card-empty {
+  padding: 12px 0 2px;
+  color: var(--app-text-muted);
+  font-size: 11px;
+}
+
+.layer-switcher {
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+  z-index: 25;
+  display: inline-flex;
+  align-items: center;
+  padding: 3px;
+  gap: 2px;
+  background: color-mix(in srgb, var(--app-surface-raised) 92%, transparent);
+  border: 1px solid color-mix(in srgb, var(--app-border) 86%, transparent);
+  border-radius: 10px;
+  box-shadow: 0 8px 20px rgb(0 0 0 / 16%);
+  backdrop-filter: blur(10px);
+}
+
+.layer-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  padding: 4px 9px;
+  color: var(--app-text-muted);
+  font-size: 11px;
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+  border-radius: 7px;
+  transition: color 0.15s ease, background-color 0.15s ease;
+}
+
+.layer-button:hover {
+  color: var(--app-text);
+  background: color-mix(in srgb, var(--app-primary) 9%, transparent);
+}
+
+.layer-button.active {
+  color: var(--app-text);
+  font-weight: 600;
+  background: color-mix(in srgb, var(--app-primary) 16%, var(--app-surface-raised));
+}
+
+.layer-swatch {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 auto;
+  border-radius: 2px;
+}
+
+.layer-swatch-grid {
+  background: var(--app-primary);
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 55%);
+}
+
+.layer-swatch-map {
+  background: #68a85e;
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 50%);
 }
 
 .position-chart-grid {

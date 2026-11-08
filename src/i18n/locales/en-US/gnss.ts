@@ -58,6 +58,13 @@ export default {
     historyTrack: 'History Track',
     currentPosition: 'Current Position',
     statsCurrent: 'Current',
+    positionStatus: 'Position status',
+    toggleStatus: 'Expand or collapse position status',
+    statusUnavailable: 'No positioning data',
+    sampleCount: 'Samples',
+    layerToggle: 'Layer switcher',
+    gridLayer: 'Grid',
+    mapLayer: 'Map',
   },
   map: {
     offlineTitle: 'Offline Maps',

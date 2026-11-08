@@ -1,6 +1,6 @@
 <template>
   <div ref="containerRef" class="gnss-map-container">
-    <div class="toolbar">
+    <div v-if="props.showToolbar" class="toolbar">
       <!-- track/尺寸/重置布局/清除：与 GNSS Deviation 组件同款控件与命名 -->
       <el-switch
         v-model="isTracking"
@@ -13,14 +13,14 @@
       <div class="point-size-control">
         <span class="size-label">{{ t('gnss.deviation.size') }}:</span>
         <el-slider
-          v-model="pointSize"
+          v-model="mapPointSize"
           :min="5"
           :max="20"
           :step="1"
           class="point-slider"
           @change="updatePointSize"
         />
-        <span class="size-value">{{ pointSize }}</span>
+        <span class="size-value">{{ mapPointSize }}</span>
       </div>
       <div class="toolbar-right">
         <el-button
@@ -107,6 +107,19 @@ import { createTrackSimplifier } from '@/core/gnss/TrackSimplification'
 import { sanitizeMapTrackPoints } from '@/core/gnss/MapTileCache'
 import { t } from '@/i18n'
 
+const props = withDefaults(
+  defineProps<{
+    showToolbar?: boolean
+    tracking?: boolean
+    pointSize?: number
+  }>(),
+  { showToolbar: true, pointSize: undefined },
+)
+const emit = defineEmits<{
+  'update:tracking': [value: boolean]
+  'update:pointSize': [value: number]
+}>()
+
 const gnssStore = useGnssStore()
 const { mapTrackPoints } = useNmea()
 const fileTimeline = useFileTimeline()
@@ -130,7 +143,7 @@ const isElectron = typeof window !== 'undefined' && !!window.ipcRenderer
 const containerRef = ref<HTMLElement | null>(null)
 const mapRef = ref<HTMLElement | null>(null)
 const isTracking = ref(true)
-const pointSize = ref(10)
+const mapPointSize = ref(10)
 const offlineTilesDir = ref('')
 
 type SourceTrackPoint = [longitude: number, latitude: number, quality: number]
@@ -210,7 +223,7 @@ function initMap() {
 
   // 用 circleMarker 代替默认 marker，避免打包后默认图标资源路径失效
   positionMarker = L.circleMarker([0, 0], {
-    radius: markerRadiusForSize(pointSize.value),
+    radius: markerRadiusForSize(mapPointSize.value),
     color: '#ffffff',
     weight: 2,
     fillColor: fixStatusColor(0),
@@ -244,9 +257,9 @@ function historyRadiusForSize(size: number): number {
 }
 
 function updatePointSize(): void {
-  positionMarker?.setStyle({ radius: markerRadiusForSize(pointSize.value) })
+  positionMarker?.setStyle({ radius: markerRadiusForSize(mapPointSize.value) })
   for (const marker of historyPointMarkers) {
-    marker.setRadius(historyRadiusForSize(pointSize.value))
+    marker.setRadius(historyRadiusForSize(mapPointSize.value))
   }
 }
 
@@ -265,7 +278,7 @@ function addHistoryPoint(point: RenderedPoint): void {
   if (!map) return
   const marker = L.circleMarker(point.latlng, {
     renderer: trackRenderer ?? undefined,
-    radius: historyRadiusForSize(pointSize.value),
+    radius: historyRadiusForSize(mapPointSize.value),
     color: '#ffffff',
     weight: 1,
     opacity: 0.85,
@@ -577,7 +590,7 @@ function resetTrackHistory() {
   // 各调用点不必补偿
   if (map) {
     positionMarker = L.circleMarker([0, 0], {
-      radius: markerRadiusForSize(pointSize.value),
+      radius: markerRadiusForSize(mapPointSize.value),
       color: '#ffffff',
       weight: 2,
       fillColor: fixStatusColor(0),
@@ -640,6 +653,33 @@ function copyTilesDir() {
 }
 
 watch(mapTrackPoints, syncTrackSource)
+
+watch(
+  () => props.tracking,
+  (value) => {
+    if (value !== undefined) isTracking.value = value
+  },
+  { immediate: true },
+)
+
+watch(isTracking, (value) => {
+  if (props.tracking !== undefined && value !== props.tracking) emit('update:tracking', value)
+})
+
+watch(
+  () => props.pointSize,
+  (value) => {
+    if (value !== undefined) mapPointSize.value = value
+  },
+  { immediate: true },
+)
+
+watch(mapPointSize, () => {
+  updatePointSize()
+  if (props.pointSize !== undefined && mapPointSize.value !== props.pointSize) {
+    emit('update:pointSize', mapPointSize.value)
+  }
+})
 
 watch(
   () => [gnssStore.status.longitude, gnssStore.status.latitude, gnssStore.status.quality] as const,

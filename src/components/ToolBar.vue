@@ -2425,14 +2425,27 @@ onUnmounted(() => {
 }
 
 :global(.recent-files-dropdown) {
-  max-width: calc(100vw - 32px);
+  /* Keep long paths inside a predictable popper instead of letting the
+     select grow to the width of the longest recent-file label. */
+  width: min(560px, calc(100vw - 48px)) !important;
+  min-width: 0 !important;
+  max-width: calc(100vw - 48px);
   z-index: 9000 !important;
+}
+
+:global(.recent-files-dropdown .el-select-dropdown__wrap),
+:global(.recent-files-dropdown .el-select-dropdown__list) {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .recent-file-option {
   display: flex;
   align-items: center;
   gap: 8px;
+  width: 100%;
+  box-sizing: border-box;
   height: auto;
   min-height: 48px;
   padding: 6px 20px;
