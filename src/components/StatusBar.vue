@@ -392,27 +392,10 @@ const getStatusClass = (status: unknown) => ({
   'status-no-data': !hasStatusData(status),
 })
 
-const GNSS_STATUS_FIELDS = new Set([
-  'fixmode',
-  'quality',
-  'utctime',
-  'ttff',
-  'longitude',
-  'latitude',
-  'altitude',
-  'altitudemsl',
-  'velocity',
-  'threedacc',
-  'twodacc',
-  'pdop',
-  'hdop',
-  'satsused',
-  'satsvisible',
-])
-
 const getStatusColor = (statusName: string) => {
+  // 仅 fix mode 字段的图标与数值跟随解状态着色，其余字段保持默认配色
   const fieldName = statusName.split('.').at(-1)?.toLowerCase() ?? ''
-  if (!statusName.startsWith('GNSS.') && !GNSS_STATUS_FIELDS.has(fieldName)) return undefined
+  if (fieldName !== 'fixmode') return undefined
   const quality =
     monitorStatus.value['GNSS.quality'] ??
     monitorStatus.value.quality ??

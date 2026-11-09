@@ -35,6 +35,16 @@ describe('Status View presentation', () => {
     expect(source).toContain('align-items: center')
   })
 
+  it('colors only the fix mode field with the solution status color', () => {
+    const source = readFileSync('src/components/StatusBar.vue', 'utf8')
+
+    // 解状态着色仅作用于 fix mode 字段（图标+数值），其余字段走默认配色
+    expect(source).toContain("if (fieldName !== 'fixmode') return undefined")
+    expect(source).not.toContain('GNSS_STATUS_FIELDS')
+    // 有数据/无数据的图标默认色仍由 CSS 承担
+    expect(source).toContain('.status-has-data .status-field-icon')
+  })
+
   it('keeps space between the property dialog actions', () => {
     const source = readFileSync('src/components/StatusBar.vue', 'utf8')
 
