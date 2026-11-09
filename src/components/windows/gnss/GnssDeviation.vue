@@ -99,7 +99,11 @@
         />
       </div>
 
-      <section v-if="statusCardVisible" class="deviation-status-card">
+      <section
+        v-if="statusCardVisible"
+        class="deviation-status-card"
+        :class="{ 'is-compact': statusCardCompact }"
+      >
         <div class="status-card-header">
           <span class="status-card-heading">
             <span
@@ -1400,6 +1404,12 @@ onUnmounted(() => {
   backdrop-filter: blur(12px);
 }
 
+.deviation-status-card.is-compact {
+  width: fit-content;
+  min-width: 0;
+  max-width: calc(100% - 28px);
+}
+
 .status-card-header {
   display: flex;
   align-items: center;
@@ -1408,6 +1418,13 @@ onUnmounted(() => {
   min-height: 42px;
   padding: 9px 12px;
   box-sizing: border-box;
+}
+
+.deviation-status-card.is-compact .status-card-header {
+  width: auto;
+  min-height: 34px;
+  gap: 5px;
+  padding: 6px 8px;
 }
 
 .status-card-heading {
@@ -1435,6 +1452,15 @@ onUnmounted(() => {
   font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.deviation-status-card.is-compact .status-card-heading > span:last-child {
+  display: none;
+}
+
+.deviation-status-card.is-compact .status-card-summary {
+  margin-left: 0;
+  font-size: 11px;
 }
 
 .status-card-close {
@@ -1844,19 +1870,4 @@ onUnmounted(() => {
   }
 }
 
-@container (max-width: 420px) {
-  .status-card-heading > span:last-child {
-    display: none;
-  }
-
-  .status-card-header {
-    gap: 7px;
-    min-height: 34px;
-    padding: 6px 8px;
-  }
-
-  .status-card-summary {
-    font-size: 11px;
-  }
-}
 </style>

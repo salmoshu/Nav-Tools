@@ -89,10 +89,11 @@ test('deviation keeps only the current Float status in small windows and restore
     for (let index = 1; index < bounds.length; index += 1) {
       expect(bounds[index].x - bounds[index - 1].x - bounds[index - 1].width).toBe(4)
     }
-    if (size.width <= 420) {
-      await expect(card.locator('.status-card-heading > span:last-child')).toBeHidden()
-      await expect(card.locator('.status-card-indicator')).toBeVisible()
-    }
+    await expect(card.locator('.status-card-heading > span:last-child')).toBeHidden()
+    await expect(card.locator('.status-card-indicator')).toBeVisible()
+    await expect(card).toHaveClass(/is-compact/)
+    const cardWidth = (await card.boundingBox())?.width ?? Number.POSITIVE_INFINITY
+    expect(cardWidth).toBeLessThan(140)
   }
   await page.screenshot({ path: 'test-results/gnss-deviation-compact.png' })
   await page.setViewportSize({ width: 1000, height: 720 })
