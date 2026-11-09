@@ -209,6 +209,7 @@
       <GnssMetricTimeSeries
         ref="eSeriesRef"
         field="E"
+        :x-scrollbar="false"
         :label="t('gnss.deviation.axisE')"
         unit="m"
         :active="currentView === 'position'"
@@ -218,12 +219,14 @@
       <GnssMetricTimeSeries
         ref="nSeriesRef"
         field="N"
+        :x-scrollbar="false"
         :label="t('gnss.deviation.axisN')"
         unit="m"
         :active="currentView === 'position'"
         :tracking="isTracking"
         :point-size="pointSize"
       />
+      <!-- 最下方的 U 图提供共享时间滚动条，经视口广播同步 E/N/U。 -->
       <GnssMetricTimeSeries
         ref="uSeriesRef"
         field="U"

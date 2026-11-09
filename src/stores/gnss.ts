@@ -26,7 +26,8 @@ function createDefaultGnssState(): GnssState {
     return {
         utcTime: '',
         fixMode: '',
-        quality: 0,
+        // 0 表示实际收到的无效解；尚未收到数据时使用空数值。
+        quality: Number.NaN,
         TTFF: '',
         longitude: '',
         latitude: '',

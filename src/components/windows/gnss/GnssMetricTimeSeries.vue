@@ -23,12 +23,14 @@
       :aria-valuemin="0"
       :aria-valuemax="Math.max(0, sourceLength - 1)"
       :aria-valuenow="Math.round(viewport.start)"
-      @mousedown.stop="handleScrollbarTrackMouseDown"
+      @mousedown.stop.prevent="handleScrollbarTrackMouseDown"
+      @wheel.stop.prevent="handleScrollbarWheel"
+      @dblclick.stop
     >
       <span
         class="metric-x-scrollbar-thumb"
         :style="scrollbarThumbStyle"
-        @mousedown.stop="handleScrollbarThumbMouseDown"
+        @mousedown.stop.prevent="handleScrollbarThumbMouseDown"
       ></span>
     </div>
 
@@ -98,8 +100,10 @@ const props = withDefaults(
     tracking?: boolean
     /** 尺寸（5~20，偏差图同款滑杆）：映射为点直径 */
     pointSize?: number
+    /** 同源图表只在最下方显示共享时间滚动条。 */
+    xScrollbar?: boolean
   }>(),
-  { tracking: false, pointSize: 10 },
+  { tracking: false, pointSize: 10, xScrollbar: true },
 )
 
 const { positionEpochHistory, speedEpochHistory } = useNmea()
@@ -226,7 +230,7 @@ function plotSize(): { width: number; height: number } {
 
 const showXScrollbar = computed(() => {
   const length = sourceLength.value
-  if (length < 2) return false
+  if (!props.xScrollbar || !props.active || length < 2) return false
   return viewport.value.start > 0.5 || viewport.value.end < length - 0.5
 })
 
@@ -251,6 +255,8 @@ function updateLayout(containerHeight: number): void {
   } else {
     layout = { left: 54, right: 14, top: 38, bottom: 34 }
   }
+  // 为时间刻度和滚动条分别留空间，缩放时不改变绘图区高度。
+  if (props.xScrollbar) layout.bottom = Math.max(layout.bottom, 40)
 }
 
 function paddedRange(range: { min: number; max: number } | null): {
@@ -603,6 +609,7 @@ function handleWindowMouseUp(): void {
 function handleScrollbarThumbMouseDown(event: MouseEvent): void {
   const scrollbar = scrollbarRef.value
   if (event.button !== 0 || sourceStore.value.length < 2 || !scrollbar) return
+  clearHover()
   preserveCurrentYAxis()
   isScrollbarDragging = true
   scrollbarStartX = event.clientX
@@ -618,6 +625,7 @@ function handleScrollbarThumbMouseDown(event: MouseEvent): void {
 
 function handleScrollbarTrackMouseDown(event: MouseEvent): void {
   if (event.button !== 0 || sourceStore.value.length < 2 || !scrollbarRef.value) return
+  clearHover()
   preserveCurrentYAxis()
   const rect = scrollbarRef.value.getBoundingClientRect()
   const ratio = Math.max(0, Math.min(1, (event.clientX - rect.left) / Math.max(1, rect.width)))
@@ -630,6 +638,19 @@ function handleScrollbarTrackMouseDown(event: MouseEvent): void {
       sourceStore.value.length,
     ),
   )
+}
+
+/** 滚动条上的滚轮平移时间轴，避免冒泡为图表的 Y 轴缩放。 */
+function handleScrollbarWheel(event: WheelEvent): void {
+  const length = sourceStore.value.length
+  if (length < 2) return
+  const delta = Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY
+  const width = Math.max(1, scrollbarRef.value?.clientWidth ?? plotSize().width)
+  const pixels = delta * (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? width : 1)
+  const span = viewport.value.end - viewport.value.start
+  preserveCurrentYAxis()
+  applyViewport(panSatelliteCountViewport(viewport.value, (pixels / width) * span, length))
+  clearHover()
 }
 
 /** 同源图表广播：E/N/U 之间同步 x 视口（平移/伸缩联动，跟踪偏移一并同步） */
@@ -797,29 +818,54 @@ onUnmounted(() => {
 .metric-x-scrollbar {
   position: absolute;
   right: var(--metric-heading-right, 14px);
-  bottom: 5px;
+  bottom: 2px;
   left: var(--metric-heading-left, 54px);
   z-index: 5;
-  height: 7px;
-  padding: 1px 0;
+  height: 18px;
+  touch-action: none;
   cursor: pointer;
-  background: color-mix(in srgb, var(--app-border) 42%, transparent);
+  border-radius: 999px;
+}
+
+.metric-x-scrollbar::before {
+  position: absolute;
+  inset: 5px 0;
+  content: '';
+  background: color-mix(in srgb, var(--app-border) 32%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--app-border) 45%, transparent);
   border-radius: 999px;
 }
 
 .metric-x-scrollbar-thumb {
   position: absolute;
-  top: 1px;
-  bottom: 1px;
+  top: 5px;
+  bottom: 5px;
   min-width: 18px;
   cursor: grab;
-  background: color-mix(in srgb, var(--app-text-muted) 72%, var(--app-surface));
+  background: color-mix(in srgb, var(--app-text-muted) 58%, var(--app-surface));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--app-text-muted) 20%, transparent);
   border-radius: 999px;
   transition: background-color 120ms ease;
 }
 
-.metric-x-scrollbar-thumb:hover,
-.metric-x-scrollbar-thumb:active {
+.metric-x-scrollbar-thumb::after {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  left: 50%;
+  width: 9px;
+  content: '';
+  background: repeating-linear-gradient(90deg, var(--app-surface) 0 1px, transparent 1px 4px);
+  opacity: 0.65;
+  transform: translateX(-50%);
+}
+
+.metric-x-scrollbar:hover .metric-x-scrollbar-thumb {
+  background: color-mix(in srgb, var(--app-primary) 68%, var(--app-surface));
+}
+
+.metric-x-scrollbar:active .metric-x-scrollbar-thumb {
+  cursor: grabbing;
   background: var(--app-primary);
 }
 

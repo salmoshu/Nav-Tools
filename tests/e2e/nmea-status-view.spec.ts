@@ -47,6 +47,62 @@ test('Serial application shows routed NMEA fields and icons in Status View', asy
 })
 
 for (const theme of ['light', 'dark']) {
+  test(`GNSS Status View keeps Quality empty without data in the ${theme} theme`, async ({
+    page,
+  }) => {
+    await page.addInitScript((theme) => {
+      localStorage.setItem('nav-tools:locale', 'en-US')
+      localStorage.setItem('nav-tools:theme', theme)
+    }, theme)
+    await page.route('https://*.tile.openstreetmap.org/**', (route) => route.abort())
+    await page.goto('/')
+    await page.locator('.application-card[data-application-id="gnss"]').click()
+
+    const quality = page.locator('.status-item').filter({
+      has: page.locator('.status-label[title="quality"]'),
+    })
+    const fixMode = page.locator('.status-item').filter({
+      has: page.locator('.status-label[title="fixMode"]'),
+    })
+    const expectEmptyQuality = async () => {
+      await expect(quality.locator('.status-indicator')).toHaveText('—')
+      await expect(quality).toHaveClass(/status-no-data/)
+      await expect(quality.locator('.status-state-dot')).toHaveCSS(
+        'background-color',
+        await fixMode
+          .locator('.status-state-dot')
+          .evaluate((dot) => getComputedStyle(dot).backgroundColor),
+      )
+      await expect(page.locator('.status-item.status-has-data')).toHaveCount(0)
+      await expect(page.locator('.statusbar-heading-copy small')).toHaveText('Waiting for data')
+      await expect(page.locator('.statusbar-heading-copy small')).not.toHaveClass(/active/)
+    }
+    await expectEmptyQuality()
+
+    for (const value of [4, 0]) {
+      await page.evaluate(
+        async (data) => {
+          const { useNmea } = await import('/src/composables/gnss/useNmea.ts')
+          useNmea().processRawData(data)
+        },
+        nmea(`GPGGA,123519,4807.038,N,01131.000,E,${value},08,0.9,545.4,M,46.9,M,,`),
+      )
+      await expect(quality.locator('.status-indicator')).toHaveText(String(value))
+      await expect(quality).toHaveClass(/status-has-data/)
+      const activeCount = await page.locator('.status-item.status-has-data').count()
+      await expect(page.locator('.statusbar-heading-copy small')).toHaveText(
+        `${activeCount} live metrics`,
+      )
+      await expect(page.locator('.statusbar-heading-copy small')).toHaveClass(/active/)
+    }
+
+    await page.evaluate(async () => {
+      const { useNmea } = await import('/src/composables/gnss/useNmea.ts')
+      useNmea().clearData()
+    })
+    await expectEmptyQuality()
+  })
+
   test(`GNSS Status View uses the shared Fix Mode colors in the ${theme} theme`, async ({
     page,
   }) => {

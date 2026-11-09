@@ -2,6 +2,8 @@
 
 ## v1.8.5
 
+- 修复 GNSS Status View 在未加载或清空数据后将 Quality 显示为 0、状态圆点误亮绿色的问题；无数据时显示破折号和灰点，标题显示等待数据并仅统计有值字段。
+- GNSS Deviation 位置图共用最下方的一条时间滚动条，位置图和速度图支持在滚动条上使用滚轮平移时间轴；优化滚动条外观和鼠标命中区域。
 - GNSS Deviation 位置图支持独立的 Y 轴手动缩放、任意方向拖动和 X 轴滚动条，X 轴缩放不再自动铺满 Y 轴。
 - Status View 图标与文字垂直居中，GNSS 字段图标跟随当前解状态颜色。
 - GNSS 每次载入文件都按内容重新识别 NMEA 与 RTKLIB POS，兼容 `.nmea`、`.pos` 及后缀与内容不一致的文件。
@@ -9,6 +11,8 @@
 - 消息组件跳转数据格式时，使用边框和柔和光晕高亮数据格式下拉框。
 - 数据接入“应用连接”更名为“连接管理”。
 
+- Fixed GNSS Status View showing Quality as 0 with a green dot before loading data or after clearing it; missing data shows a dash and gray dot, and the header waits for data and counts only populated metrics.
+- GNSS Deviation position charts share one bottom timeline scrollbar. Position and speed scrollbars support mouse-wheel panning, with a refined appearance and larger mouse targets.
 - GNSS Deviation position charts now support independent Y-axis scaling, free diagonal panning and an X-axis scrollbar; changing X no longer refits Y automatically.
 - Status View icons and values are vertically aligned, and GNSS field icons follow the current fix color.
 - Each GNSS file load detects NMEA and RTKLIB POS independently by content, including files with misleading or non-standard suffixes.

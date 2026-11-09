@@ -12,9 +12,9 @@
         </span>
         <span class="statusbar-heading-copy">
           <strong class="statusbar-title">Status View</strong>
-          <small :class="{ active: hasMonitorStatus }">
+          <small :class="{ active: statusCount > 0 }">
             <i></i>
-            {{ hasMonitorStatus ? `${statusCount} live metrics` : 'Waiting for data' }}
+            {{ statusCount > 0 ? `${statusCount} live metrics` : 'Waiting for data' }}
           </small>
         </span>
       </div>
@@ -334,7 +334,7 @@ import {
 
 const monitorStatus = computed(() => getMonitorStatus())
 const hasMonitorStatus = computed(() => Object.keys(monitorStatus.value).length > 0)
-const statusCount = computed(() => Object.keys(monitorStatus.value).length)
+const statusCount = computed(() => Object.values(monitorStatus.value).filter(hasStatusData).length)
 
 // 按用户自定义顺序展示状态项
 const orderedEntries = ref<[string, any][]>([])
