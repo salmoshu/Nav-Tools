@@ -1,18 +1,22 @@
-# Nav-Tools Serial 与 GNSS 使用手册
+# Nav-Tools 用户手册
 
-适用版本：Nav-Tools 1.8.4（Windows）
+适用版本：Nav-Tools 1.8.5（Windows）
+
+安装包：[Nav-Tools-Windows-1.8.5-Setup.exe](../../../04-GNSS/中科院北斗所/2.1-测试软件-基础功能测试程序开发/Nav-Tools-Windows-1.8.5-Setup.exe)
 
 本手册侧重两个工作区：
 
 - **Serial**：串口日志查看、协议解析、实时曲线和设备指令调试。
 - **GNSS**：NMEA 定位数据展示、文件回放，以及通过 CORS/NTRIP 注入差分数据实现 RTK。
 
-配套视频（Serial 视频已包含 NMEA 曲线与 Status View 重录段）：
+配套视频（Serial 使用可复现的 GNSS 模拟数据，并包含 NMEA 曲线与 Status View）：
 
-- [Serial 使用教程](../../04-GNSS/中科院北斗所/2.1-测试软件-基础功能测试程序开发/03-日志查看程序/Nav-Tools-Serial-使用教程.mp4)
+- [Serial 使用教程](../../../04-GNSS/中科院北斗所/2.1-测试软件-基础功能测试程序开发/03-日志查看程序/Nav-Tools-Serial-使用教程.mp4)
 - [GNSS 使用教程](../tmp/video/Nav-Tools-GNSS-使用教程.mp4)
 
 模拟设备源码：[serial_device_simulator.py](../tmp/video/serial_device_simulator.py)。视频录制、语音、字幕和终端问题处理经验见[视频制作指南](VIDEO-PRODUCTION-GUIDE.md)。
+
+图文 PDF：[Nav-Tools 使用手册](../../../04-GNSS/中科院北斗所/2.1-测试软件-基础功能测试程序开发/Nav-Tools%20使用手册.pdf)。串口示例和 HEX 帧是教学模拟协议，真实接收机请使用厂商协议。
 
 视频按 CSV、自定义正则、NMEA 文件、HEX 控制排列。每章都先展示“数据接入”中的数据源和解析格式配置，再观察主界面的日志、图表或设备应答。
 
@@ -41,20 +45,20 @@ Serial 默认包含以下区域：
 
 | 区域 | 用途 |
 |---|---|
-| 图表 | 将数值字段显示为实时曲线，可配置最多 4 条曲线 |
+| 图表 | 将数值字段显示为实时曲线，单图最多 4 条；双图每图最多 4 条 |
 | 消息 | 查看原始收发日志、过滤、搜索、暂停、置底和保存 |
 | Status View | 显示解析后的实时指标，也可增加自定义计算指标 |
 | Hex报文 | 配置设备读写指令，普通 HEX 调试也可直接在消息区完成 |
 
 ### 2.1 CSV 逗号数据
 
-CSV 适合 `时间,温度,湿度,压力` 这类普通文本记录。
+CSV 适合 `时间,纬度,经度,高程,卫星数,HDOP` 这类 GNSS 数值记录。
 
 示例：
 
 ```text
-12.50,25.10,48.20,100.40
-12.75,25.18,48.56,100.46
+12.50,31.297800,120.661900,55.20,12,0.90
+12.75,31.297805,120.661915,55.24,13,0.85
 ```
 
 操作步骤：
@@ -62,12 +66,12 @@ CSV 适合 `时间,温度,湿度,压力` 这类普通文本记录。
 1. 在“数据接入 → 数据源配置 → 串口连接”中选择端口和波特率。
 2. 数据格式选择 **结构化（Structured）→ CSV**。
 3. 点击“确定”，消息区会持续显示 CSV 日志。
-4. 打开“图表 → 配置”，将第 2、3、4 列加入曲线。
+4. 打开“图表 → 配置”，将第 2、3、4 列加入曲线；需要观察第 5、6 列时，可替换现有曲线或使用双图布局。
 
 解析规则：
 
-- 每行按逗号拆分，字段键默认为列号 `1、2、3、4`。
-- 示例中第 1 列是时间，第 2 列是温度，第 3 列是湿度，第 4 列是压力。
+- 每行按逗号拆分，字段键默认为列号 `1、2、3、4、5、6`。
+- 示例中第 1 列是时间，第 2 列是纬度，第 3 列是经度，第 4 列是高程，第 5 列是卫星数，第 6 列是 HDOP；经纬度使用十进制度。
 - 数值字段同时出现在 Status View 和图表的可选数据源中。
 - CSV 表头主要用于文件批量导入；实时串口数据建议直接发送数据行。
 
@@ -78,26 +82,28 @@ CSV 适合 `时间,温度,湿度,压力` 这类普通文本记录。
 示例数据：
 
 ```text
-@ENV,12.500,25.10,48.20,100.40
+@GNSS,12.500,31.297800,120.661900,55.20,12,0.90
 ```
 
 示例正则：
 
+长表达式在 PDF 中可能分行显示，粘贴到配置框时应合并成一行；也可直接复制交付目录中的 `serial-gnss-regex.txt`。
+
 ```regex
-@ENV,(?<time>[\d.]+),(?<temperature>[\d.]+),(?<humidity>[\d.]+),(?<pressure>[\d.]+)
+@GNSS,(?<time>[\d.]+),(?<latitude>-?[\d.]+),(?<longitude>-?[\d.]+),(?<altitude>-?[\d.]+),(?<satellites>\d+),(?<hdop>[\d.]+)
 ```
 
 操作步骤：
 
 1. 在数据格式中选择 **自定义（Custom）→ 正则表达式**。
 2. 输入正则表达式，确认各命名捕获组能匹配对应数值。
-3. 在“图表 → 配置”中选择 `temperature`、`humidity` 或 `pressure`。
+3. 在“图表 → 配置”中选择 `latitude`、`longitude`、`altitude`、`satellites` 或 `hdop`。
 4. 观察原始日志、实时指标和曲线。
 
 提示：
 
 - `(?<name>...)` 中的 `name` 就是图表和 Status View 中的字段名。
-- 默认的 key/value 解析也支持 `time=1.2 temperature=25.1` 这类记录。
+- 默认的 key/value 解析也支持 `time=1.2 latitude=31.2978 longitude=120.6619 altitude=55.2 satellites=12 hdop=0.9` 这类记录。
 - 若消息区有数据但图表为空，先检查正则是否真正匹配，再检查显示格式是否误设为 HEX。
 
 ### 2.3 NMEA 文件回放
@@ -169,7 +175,7 @@ GGA,(?<utc>[\d.]+),(?<latitude>[\d.]+),[NS],(?<longitude>[\d.]+),[EW],(?<quality
 - **保存**：将当前日志保存到文件。
 - **清空控制台**：清除当前日志，便于开始下一次测试。
 
-## 3. Serial：HEX 设备控制
+## 3. Serial：HEX GNSS 接收机控制
 
 ### 3.1 打开 HEX 模式
 
@@ -180,7 +186,7 @@ GGA,(?<utc>[\d.]+),(?<latitude>[\d.]+),[NS],(?<longitude>[\d.]+),[EW],(?<quality
 
 发送记录显示为 `HEX ➡️`，设备返回记录显示为 `MSG ⬅️`。
 
-### 3.2 演示协议
+### 3.2 GNSS 接收机演示协议
 
 配套模拟器使用 5 字节帧：
 
@@ -193,23 +199,25 @@ AA 55 CMD VALUE CHECKSUM
 | 操作 | 发送 | 应答示例 | 含义 |
 |---|---|---|---|
 | PING | `AA 55 01 00 FE` | `AA 55 81 01 7F` | 检查设备是否在线 |
-| LED ON | `AA 55 02 01 FC` | `AA 55 82 01 7C` | 打开 LED，并返回状态 1 |
-| LED OFF | `AA 55 02 00 FD` | `AA 55 82 00 7D` | 关闭 LED，并返回状态 0 |
-| 读取温湿度 | `AA 55 03 00 FC` | `AA 55 83 1A 36 50` | 温度 26、湿度 54，校验值随测量值变化 |
+| 开启 NMEA 输出 | `AA 55 02 01 FC` | `AA 55 82 01 7C` | 开启接收机 NMEA 输出，并返回状态 1 |
+| 停止 NMEA 输出 | `AA 55 02 00 FD` | `AA 55 82 00 7D` | 停止接收机 NMEA 输出，并返回状态 0 |
+| 读取 GNSS 状态 | `AA 55 03 00 FC` | `AA 55 83 05 0C 75` | 模拟浮点解（质量 5）、使用卫星数 12，校验值随状态变化 |
 
 模拟器在应答后追加 CRLF，便于消息区按完整行显示。真实设备的帧格式和换行规则以设备协议为准。
 
-本版日志可能连续显示 HEX 字节，例如 `AA550100FE`；这与表格中带空格的 `AA 55 01 00 FE` 等价。应答末尾还会显示 CRLF 对应的 `0D0A`。读取温湿度的应答为 6 字节，其他常规应答为 5 字节。
+本版日志可能连续显示 HEX 字节，例如 `AA550100FE`；这与表格中带空格的 `AA 55 01 00 FE` 等价。应答末尾还会显示 CRLF 对应的 `0D0A`。读取 GNSS 状态的应答为 6 字节，其他常规应答为 5 字节。
+
+`START_NMEA` 会实际开启 GGA/RMC 的每秒播发，`STOP_NMEA` 会停止播发。消息区处于 HEX 显示时，这些 ASCII 语句显示为十六进制，以 `24 47 50`（`$GP`）开头；切换为 ASCII 可读原始 NMEA。模拟的浮点解仅用于教学，不代表接入了真实差分服务。
 
 ### 3.3 使用 Hex 报文组件发送指令
 
 配套示例配置：[serial-hex-demo.json](../tmp/video/serial-hex-demo.json)。
 
-1. 先按上一节运行 HEX 模拟器，并让 Nav-Tools 连接 `COM21`。
+1. 先按第 3.4 节运行 HEX 模拟器，并让 Nav-Tools 连接 `COM21`。
 2. 打开 **Hex报文 → 配置 → 加载配置**，选择上述 JSON 文件。
 3. 检查报文预览：报头为 `AA55`，校验为 **XOR**，从第 0 字节开始计算。
 4. 本例不携带寄存器个数或长度字段。将“地址”字段用作命令码 `CMD`，将“功能码”字段用作 `VALUE`。
-5. 点击“确定”保存，返回 Hex 报文组件。读参数页会出现 **PING、LED_ON、LED_OFF、READ_ENV** 四个按钮。
+5. 点击“确定”保存，返回 Hex 报文组件。读参数页会出现 **PING、START_NMEA、STOP_NMEA、READ_GNSS_STATUS** 四个按钮。
 6. 点击按钮发送指令，在消息区观察对应的 `HEX ➡️` 和 `MSG ⬅️` 记录。
 
 本例是固定短帧，没有独立数据区，因此将四个触发命令集中放在“读参数”页，并将长度设为 0、关闭长度和寄存器字段。长度 0 表示不携带数据，并不表示不发送报文。示例仅检查原始 HEX 应答，不将应答映射为 Status View 指标；真实设备若需要周期读取和数值映射，应按其应答格式配置读取长度、数据类型和字节序。
@@ -219,9 +227,9 @@ AA 55 CMD VALUE CHECKSUM
 | 按钮 | CMD | VALUE | 实际发送 |
 |---|---|---|---|
 | PING | `01` | `00` | `AA 55 01 00 FE` |
-| LED_ON | `02` | `01` | `AA 55 02 01 FC` |
-| LED_OFF | `02` | `00` | `AA 55 02 00 FD` |
-| READ_ENV | `03` | `00` | `AA 55 03 00 FC` |
+| START_NMEA | `02` | `01` | `AA 55 02 01 FC` |
+| STOP_NMEA | `02` | `00` | `AA 55 02 00 FD` |
+| READ_GNSS_STATUS | `03` | `00` | `AA 55 03 00 FC` |
 
 配置保存于应用的 `motor-config` 本地设置中。修改真实设备协议前，建议先导出原有 JSON 备份。无需周期发送时，频率保持为空，不要误启动连续读取。
 
@@ -232,13 +240,13 @@ AA 55 CMD VALUE CHECKSUM
 - Nav-Tools 连接 `COM21`。
 - 模拟器连接 `COM22`。
 
-以下命令四选一运行；切换模式前，先停止旧模拟器，避免同时占用 COM22：
+以下命令在 Nav-Tools 项目根目录运行，四选一。若使用交付目录中的示例，先进入 `03-日志查看程序`，将命令中的 `tmp/video/` 前缀去掉，直接运行 `serial_device_simulator.py`。切换模式前，先停止旧模拟器，避免同时占用 COM22：
 
 ```bash
-# CSV 周期播发
+# GNSS CSV 周期播发
 python tmp/video/serial_device_simulator.py --mode csv --port COM22
 
-# 自定义 @ENV 数据播发
+# 自定义 @GNSS 数据播发
 python tmp/video/serial_device_simulator.py --mode regex --port COM22
 
 # NMEA 定位语句播发
@@ -247,6 +255,8 @@ python tmp/video/serial_device_simulator.py --mode nmea --port COM22
 # HEX 指令应答设备
 python tmp/video/serial_device_simulator.py --mode hex --port COM22
 ```
+
+自动录制时可追加 `--duration 180`，三分钟后自动退出，防止遗留进程长期占用串口。项目源码中的 `python tmp/video/recorder/verify-simulator.py` 可检查虚拟串口对的四种模式和 NMEA 开关行为；该命令在项目根目录运行，检查时两端端口均应空闲。
 
 依赖：Python 3 和 pyserial。若未安装：
 

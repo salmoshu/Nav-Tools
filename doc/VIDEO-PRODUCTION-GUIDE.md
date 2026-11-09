@@ -57,10 +57,10 @@ python tmp/video/serial_device_simulator.py --mode hex --port COM22
 ### 2.3 文本与 HEX 的显示差异
 
 - CSV：选择“结构化 → CSV”，实时串口字段以列号 `1、2、3、4` 注册。
-- 自定义文本：用 `(?<temperature>[\d.]+)` 这样的命名捕获组注册字段。
+- 自定义文本：用 `(?<latitude>-?[\d.]+)` 这样的命名捕获组注册字段；配套模拟器使用 `@GNSS` 前缀。
 - HEX 控制：消息区和输入框的格式要分别设置；输入框为 HEX 不会让收到的二进制自动变成可读 HEX。
 - 二进制帧按固定长度接收时，可能没有换行。示例模拟器在应答后追加 CRLF，使消息区能按行显示；真实设备是否换行必须以其协议为准。
-- 不要仅展示消息输入框。Hex报文组件应导入 `tmp/video/serial-hex-demo.json`，实际点击 PING、LED_ON、LED_OFF、READ_ENV，再检查原始 HEX 日志和模拟器日志。
+- 不要仅展示消息输入框。Hex报文组件应导入 `tmp/video/serial-hex-demo.json`，实际点击 PING、START_NMEA、STOP_NMEA、READ_GNSS_STATUS，再检查原始 HEX 日志和模拟器日志。NMEA 开关应实际影响播发，并通过串口收发检查确认。
 
 ## 3. NMEA 图表与 Status View
 
@@ -87,10 +87,12 @@ D:\Users\Salmos\AppData\Local\Programs\Nav-Tools\Nav-Tools.exe
 自动化参数：
 
 ```text
---remote-debugging-port=9222 --force-renderer-accessibility
+--remote-debugging-port=9222 --force-renderer-accessibility --user-data-dir=<录制专用目录>
 ```
 
 使用 Playwright `chromium.connectOverCDP('http://127.0.0.1:9222')` 连接，而不是为桌面应用另起一套浏览器数据。
+
+本轮使用 `tmp/video/recording-profile` 保存独立录制配置，不改动日常使用的应用配置。首次启动后，在真实 UI 中选择 Serial，并通过“设置 → 语言”选择中文。启动后台进程时使用 PowerShell `Start-Process -WindowStyle Hidden`，同时记录 PID 和日志路径。
 
 ### 4.2 自动化注意事项
 
@@ -147,7 +149,7 @@ python -m pip install --target tmp/video/tts-deps edge-tts
 
 建议成片为 1920×1080、30 fps、H.264 视频与 AAC 音频，画面使用 `yuv420p` 保证播放器兼容性。
 
-新版 Serial 交付文件为 `../../04-GNSS/中科院北斗所/2.1-测试软件-基础功能测试程序开发/03-日志查看程序/Nav-Tools-Serial-使用教程.mp4`。按 CSV、自定义正则、NMEA 文件、HEX 控制排列，每章先展示数据源配置，再展示日志、图表或设备应答。HEX 使用 PING、LED_ON、LED_OFF、READ_ENV，不再使用与配套协议不一致的 SET_LED。本次实测成片为 **72.9 秒，1920×1080、30 fps，H.264 + AAC**。
+新版 Serial 交付文件为 `../../../04-GNSS/中科院北斗所/2.1-测试软件-基础功能测试程序开发/03-日志查看程序/Nav-Tools-Serial-使用教程.mp4`（相对本文所在目录）。按 GNSS CSV、自定义正则、NMEA 文件、HEX 控制排列，每章先展示数据源配置，再展示日志、图表或设备应答。HEX 使用 PING、START_NMEA、STOP_NMEA、READ_GNSS_STATUS，协议和使用手册、模拟器保持一致。输出为 **1920×1080、30 fps，H.264 + AAC**；本轮实际时长、章节偏移及验收结果记录在 `tmp/video/work/delivery-validation.json`。
 
 本次直接流复制拼接的版本在抽帧验收时出现片头缺失，随后改为统一重编码并恢复正确时间轴。不能只凭总时长或解码成功就认定拼接正确，必须对拼接后的成片逐章抽帧。
 
@@ -172,7 +174,7 @@ ffmpeg -v error -i "../../04-GNSS/中科院北斗所/2.1-测试软件-基础功�
 
 长时间录屏、语音生成和 FFmpeg 合成应作为独立后台任务执行，写独立日志，并立即记录任务 ID。没有任务 ID 就不要认为它已成功进入后台。
 
-当前工具接口的 `timeout` 按秒使用；它约束已启动的任务，不是覆盖审批、调度和环境准备的全局看门狗。前台超时默认可能转后台，而不是终止。脚本内仍应有总看门狗和明确退出码，但它们不能替代工具返回。
+此前 Kimi Bash 接口的 `timeout` 按秒使用；它约束已启动的任务，不是覆盖审批、调度和环境准备的全局看门狗。前台超时默认可能转后台，而不是终止。当前 Codex `exec_command` 的 `yield_time_ms` 是返回持续运行会话的等待时间，也不代表终止进程。脚本内仍应有总看门狗和明确退出码，但它们不能替代工具返回。
 
 若工具调用没有返回：
 
@@ -189,19 +191,43 @@ ffmpeg -v error -i "../../04-GNSS/中科院北斗所/2.1-测试软件-基础功�
 
 - `start-navtools.ps1`：启动用于捕获的本地应用实例。
 - `start-simulator.ps1` / `stop-simulator.ps1`：启动或停止指定模式的模拟设备。
+- `record-scene.ps1`：每章启动新的限时模拟器，并在成功或失败后回收，避免模拟器已到期退出而录屏仍继续。
 - `record-real-scene.mjs`：分别录制 `csv`、`regex`、`nmea`、`hex` 四个真实章节。
 - `real-video-lib.mjs` / `ui-lib.mjs`：真实 UI 操作、数据源配置和画面捕获。
 - `compose-real-video.py`：按实际片段时长合成语音、字幕、片头和片尾。
+- `verify-simulator.py`：通过实际 COM21 ↔ COM22 收发验证四种模式、分片帧、校验及 NMEA 开关；每个子进程均限时并在结束时回收。
+- `validate-video.py`：完整解码、音量和黑帧检查，并从成片逐章抽帧，输出 `delivery-validation.json`。
 
 从项目根目录运行，一次只使用一种模拟器模式。例如：
 
-```bash
-node tmp/video/recorder/record-real-scene.mjs csv
+```powershell
+& tmp/video/recorder/start-navtools.ps1
+& tmp/video/recorder/record-scene.ps1 -Mode csv
+& tmp/video/recorder/record-scene.ps1 -Mode regex
+& tmp/video/recorder/record-scene.ps1 -Mode nmea
+& tmp/video/recorder/record-scene.ps1 -Mode hex
 python tmp/video/recorder/compose-real-video.py
+python tmp/video/recorder/validate-video.py
 ```
 
-CSV、正则和 HEX 录制前需要对应的模拟器；NMEA 使用现成文件，不需要模拟器。合成前必须先成功生成四个章节，脚本会检查实际字段和 HEX 收发证据。临时语音依赖按第 5 节安装后使用，交付时可删除。
+包装脚本为 CSV、正则和 HEX 启动对应模拟器；NMEA 使用现成文件，不需要模拟器。录制脚本检查实际字段和 HEX 收发证据，合成脚本要求四章均有成功记录，拒绝带错误或超时的日志。临时语音依赖按第 5 节安装后使用，交付时可删除。
 
 录制脚本生成 `tmp/video/work/real-video/serial-final-candidate.mp4`。必须先完整解码、抽帧和检查音轨，再复制为正式交付文件；不要未经验证覆盖已有成片。脚本中的应用路径、FFmpeg 路径和样本路径是当前 Windows 环境配置，迁移环境时应相应修改。
 
 录制专用启动参数不要留给普通使用。完成后关闭录制实例，直接启动本地 Nav-Tools，恢复正常的图形加速与非调试模式。
+
+## 9. 图文 PDF 与本轮验收
+
+配图从合成后的成片提取。`tmp/pdf/prepare_assets.py` 根据章节清单计算时间，不沿用旧视频的固定秒数；数据源配置、曲线、Status View 和 HEX 配置都应在对应步骤出现。GNSS 截图沿用原实机教程，账号和密码不得出现在新增文案中。
+
+```powershell
+python tmp/pdf/prepare_assets.py
+python tmp/pdf/build_pdf.py
+python tmp/pdf/verify_pdf.py
+```
+
+PDF 先生成到 `tmp/pdf`。检查目录、页码、配图、协议字段、空白页和实际渲染图，再复制到交付目录。串口接入截图不能配成“应用选择器”，有数据的工作台截图不能用尚未连接的空界面代替。
+
+视频和 PDF 都通过验收后，运行 `python tmp/video/recorder/deliver.py`。该脚本检查验收报告是否晚于当前候选文件，备份已有交付物，再复制 MP4、SRT、PDF、Markdown 手册、模拟器和示例配置，并记录 SHA-256。交付目录中的 `交付验收.json` 记录成片时长、章节、编码和文件校验值；旧版保留在 `tmp/video/work/previous-delivery/`。
+
+本轮还修正了模拟器 NMEA 坐标分钟部分多补一位零的问题：纬度为 `ddmm.mmmm`，经度为 `dddmm.mmmm`。串口检查同时核对格式、还原后的坐标范围和 XOR 校验；仅校验和正确不足以证明内容正确。
