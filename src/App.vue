@@ -16,10 +16,7 @@ import { useLocale } from '@/composables/useLocale'
 import { useDevice } from '@/hooks/useDevice'
 import { mcapBasename } from '@/core/lidar/McapFileAccess'
 import { getWindowsByIds } from '@/settings/config'
-import {
-  isSettingsSectionKey,
-  type SettingsSectionKey,
-} from '@/core/settings/ComponentSettings'
+import { isSettingsSectionKey, type SettingsSectionKey } from '@/core/settings/ComponentSettings'
 import {
   buildComponentIconDataUrl,
   createComponentDesktopShortcut,
@@ -69,9 +66,9 @@ const applicationId = computed(() => {
 const cardWindowId = computed(() => {
   if (!isCardWindow.value) return undefined
   try {
-    const payload = JSON.parse(
-      decodeURIComponent(window.location.hash.slice('#card/'.length)),
-    ) as { windowId?: unknown }
+    const payload = JSON.parse(decodeURIComponent(window.location.hash.slice('#card/'.length))) as {
+      windowId?: unknown
+    }
     return typeof payload.windowId === 'string' ? payload.windowId : undefined
   } catch {
     return undefined
@@ -128,9 +125,9 @@ const cardWindowIconUrl = ref<string>()
 async function resolveCardWindowIcon(): Promise<void> {
   if (!isCardWindow.value) return
   try {
-    const payload = JSON.parse(
-      decodeURIComponent(window.location.hash.slice('#card/'.length)),
-    ) as { windowId?: unknown }
+    const payload = JSON.parse(decodeURIComponent(window.location.hash.slice('#card/'.length))) as {
+      windowId?: unknown
+    }
     if (typeof payload.windowId !== 'string' || !payload.windowId) return
     cardWindowIconUrl.value = await buildComponentIconDataUrl(payload.windowId)
   } catch {
@@ -151,9 +148,9 @@ const openSettings = (section?: unknown) => {
 async function createCardWindowShortcut(): Promise<void> {
   if (!isCardWindow.value) return
   try {
-    const payload = JSON.parse(
-      decodeURIComponent(window.location.hash.slice('#card/'.length)),
-    ) as { windowId?: unknown }
+    const payload = JSON.parse(decodeURIComponent(window.location.hash.slice('#card/'.length))) as {
+      windowId?: unknown
+    }
     const windowId = typeof payload.windowId === 'string' ? payload.windowId : ''
     const definition = getWindowsByIds([windowId])[0]
     if (!definition) return
@@ -214,10 +211,11 @@ onUnmounted(() => {
         <CardWindow v-if="isCardWindow" v-show="!settingsOpen" />
         <Dashboard
           v-else
-          v-show="!settingsOpen"
           ref="dashboardRef"
           :initial-application-id="applicationId"
+          :settings-open="settingsOpen"
           @fullscreen-panel-change="handleFullscreenPanelChange"
+          @application-selected="settingsOpen = false"
         />
         <SettingsPage
           v-if="settingsOpen"

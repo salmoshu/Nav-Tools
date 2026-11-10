@@ -1174,6 +1174,15 @@ watch(
     if (active) void nextTick(() => terminal?.focus())
   },
 )
+watch(
+  () => props.autoOpenSsh,
+  (shouldOpen) => {
+    if (!shouldOpen) return
+    openSshDialog()
+    emit('ssh-dialog-opened', props.pane.id)
+  },
+  { immediate: true },
+)
 // 切回终端视图后 xterm 刚从 display:none 恢复,需要重新适配尺寸并夺回焦点
 watch(isGui, async (gui) => {
   if (gui) return
@@ -1255,10 +1264,6 @@ onMounted(() => {
   window.ipcRenderer?.on('terminal-output', handleOutput)
   terminalEventBus.on(TERMINAL_SSH_RECOVERED_EVENT, handleSshRecovered)
   void attachSession(props.pane.sessionId)
-  if (props.autoOpenSsh) {
-    openSshDialog()
-    emit('ssh-dialog-opened', props.pane.id)
-  }
   if (props.focused) void nextTick(() => terminal?.focus())
 })
 

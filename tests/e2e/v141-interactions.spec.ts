@@ -19,9 +19,9 @@ test('reorders applications with neighboring-card movement and persists the orde
     'Flow',
     'GNSS',
     'GNSS-Raw',
+    'GNSS-Lib',
     'Camera',
     'LiDAR',
-    'GNSS-Lib',
   ])
 
   await cards.filter({ hasText: 'Camera' }).dragTo(cards.nth(0))
@@ -31,8 +31,8 @@ test('reorders applications with neighboring-card movement and persists the orde
     'Flow',
     'GNSS',
     'GNSS-Raw',
-    'LiDAR',
     'GNSS-Lib',
+    'LiDAR',
   ])
   await expect
     .poll(() =>
@@ -41,7 +41,7 @@ test('reorders applications with neighboring-card movement and persists the orde
         return raw ? JSON.parse(raw).map((entry: { id: string }) => entry.id) : []
       }),
     )
-    .toEqual(['camera', 'serial', 'motor', 'gnss', 'gnssraw', 'lidar', 'gnsslib'])
+    .toEqual(['camera', 'serial', 'motor', 'gnss', 'gnssraw', 'gnsslib', 'lidar'])
 
   await page.reload()
   await expect(page.locator('.application-card h2')).toHaveText([
@@ -50,8 +50,8 @@ test('reorders applications with neighboring-card movement and persists the orde
     'Flow',
     'GNSS',
     'GNSS-Raw',
-    'LiDAR',
     'GNSS-Lib',
+    'LiDAR',
   ])
 })
 

@@ -19,9 +19,9 @@ describe('default application preferences', () => {
       'motor',
       'gnss',
       'gnssraw',
+      'gnsslib',
       'camera',
       'lidar',
-      'gnsslib',
     ])
     expect(state.visibleApplications.value.map(({ id }) => id)).toEqual([
       'serial',
@@ -73,9 +73,9 @@ describe('default application preferences', () => {
       'motor',
       'serial',
       'gnssraw',
+      'gnsslib',
       'camera',
       'lidar',
-      'gnsslib',
     ])
   })
 

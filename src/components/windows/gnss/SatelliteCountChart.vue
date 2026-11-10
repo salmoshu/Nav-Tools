@@ -13,7 +13,12 @@
     <canvas ref="axisCanvasRef" class="satellite-count-axis"></canvas>
 
     <div class="satellite-count-legend">
-      <span v-for="series in displaySeries" :key="series.id" class="legend-item">
+      <span
+        v-for="series in displaySeries"
+        :key="series.id"
+        class="legend-item"
+        :class="{ 'legend-item--total': series.id === 'TOTAL' }"
+      >
         <i :style="{ backgroundColor: series.color }"></i>{{ series.label }}
       </span>
     </div>
@@ -86,10 +91,10 @@ let dragStartX = 0
 let dragStartViewport: SatelliteCountViewport = { start: 0, end: 0 }
 
 const layout = {
-  left: 54,
-  right: 18,
-  top: 48,
-  bottom: 40,
+  left: 56,
+  right: 20,
+  top: 56,
+  bottom: 42,
 }
 
 const OVERVIEW_RENDER_INTERVAL_MS = 1_000
@@ -283,8 +288,9 @@ function drawAxes(yMax: number): void {
 
   context.setTransform(dpr, 0, 0, dpr, 0, 0)
   context.clearRect(0, 0, width, height)
-  context.font = '12px sans-serif'
+  context.font = '11px sans-serif'
   context.lineWidth = 1
+  context.setLineDash([3, 4])
 
   for (let tick = 0; tick <= 5; tick += 1) {
     const ratio = tick / 5
@@ -300,12 +306,17 @@ function drawAxes(yMax: number): void {
     context.fillText(String(Math.round(yMax * ratio)), layout.left - 8, y)
   }
 
+  context.setLineDash([])
   context.strokeStyle = colors.border
-  context.strokeRect(layout.left, layout.top, plotWidth, plotHeight)
-  context.fillStyle = colors.text
-  context.textAlign = 'left'
+  context.beginPath()
+  context.moveTo(layout.left, layout.top)
+  context.lineTo(layout.left, layout.top + plotHeight)
+  context.lineTo(layout.left + plotWidth, layout.top + plotHeight)
+  context.stroke()
+  context.fillStyle = colors.textMuted
+  context.textAlign = 'right'
   context.textBaseline = 'top'
-  context.fillText(t('gnss.signal.nsatYAxis'), 6, layout.top - 24)
+  context.fillText(t('gnss.signal.nsatYAxis'), layout.left - 8, layout.top - 32)
 
   if (store.length > 0 && viewport.value.end > viewport.value.start) {
     for (let tick = 0; tick <= 4; tick += 1) {
@@ -517,23 +528,20 @@ watch(
 
 watch(resolvedTheme, () => scheduleRender())
 
-watch(
-  [fileTimeline.active, fileTimeline.mode, fileTimeline.elapsedMilliseconds],
-  () => {
-    if (!props.active) return
-    if (props.slidingWindow && fileTimeline.active.value) {
-      const store = satelliteEpochHistory.value
-      const cursorIndex = store.findNearestElapsedTime(fileTimeline.elapsedMilliseconds.value)
-      viewport.value = {
-        start: Math.max(0, cursorIndex - 39),
-        end: Math.max(1, cursorIndex + 1),
-      }
-      scheduleRender()
-    } else {
-      scheduleRender()
+watch([fileTimeline.active, fileTimeline.mode, fileTimeline.elapsedMilliseconds], () => {
+  if (!props.active) return
+  if (props.slidingWindow && fileTimeline.active.value) {
+    const store = satelliteEpochHistory.value
+    const cursorIndex = store.findNearestElapsedTime(fileTimeline.elapsedMilliseconds.value)
+    viewport.value = {
+      start: Math.max(0, cursorIndex - 39),
+      end: Math.max(1, cursorIndex + 1),
     }
-  },
-)
+    scheduleRender()
+  } else {
+    scheduleRender()
+  }
+})
 
 onMounted(() => {
   previousLength = satelliteEpochHistory.value.length
@@ -586,16 +594,16 @@ onUnmounted(() => {
 
 .satellite-count-legend {
   position: absolute;
-  top: 8px;
-  left: 54px;
-  right: 18px;
+  top: 10px;
+  left: 56px;
+  right: 20px;
   z-index: 3;
   display: flex;
-  justify-content: center;
+  justify-content: flex-start;
   flex-wrap: wrap;
-  gap: 4px 14px;
+  gap: 6px;
   color: var(--app-text-muted);
-  font-size: 12px;
+  font-size: 11px;
   pointer-events: none;
 }
 
@@ -606,10 +614,24 @@ onUnmounted(() => {
   gap: 5px;
 }
 
+.legend-item {
+  padding: 3px 7px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: var(--app-surface-muted);
+  line-height: 16px;
+}
+
+.legend-item--total {
+  border-color: var(--app-border);
+  color: var(--app-text);
+  font-weight: 600;
+}
+
 .legend-item i,
 .tooltip-name i {
-  width: 9px;
-  height: 9px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
   flex: 0 0 auto;
 }
@@ -617,13 +639,13 @@ onUnmounted(() => {
 .satellite-count-tooltip {
   position: absolute;
   z-index: 4;
-  width: 176px;
-  padding: 10px 12px;
+  width: 184px;
+  padding: 12px;
   color: var(--app-text);
-  background: var(--app-surface);
+  background: var(--app-surface-raised);
   border: 1px solid var(--app-border);
-  border-radius: 8px;
-  box-shadow: 0 4px 12px var(--app-shadow);
+  border-radius: 12px;
+  box-shadow: 0 12px 32px var(--app-shadow);
   pointer-events: none;
   font-size: 12px;
 }

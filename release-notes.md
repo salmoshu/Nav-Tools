@@ -1,5 +1,19 @@
 # Nav-Tools 更新日志
 
+## v1.8.6
+
+- 修复新建 SSH 会话显示“需要重新连接”且不自动弹出配置的问题：新标签不再标记为旧会话，窗格复用时也会响应自动打开连接设置。
+- 设置页可正常打开应用选择器；取消选择器后停留在设置页，选择并确认应用后退出设置并进入对应主界面。
+- 设置页返回按钮移除文字，改为 32px 圆角图标按钮，保留悬浮提示与无障碍名称。
+- 优化 GNSS 卫星数视图的图例、悬浮框、虚线网格和坐标轴层级；信号表格统一为 13px 字号并使用等宽数字。
+- GNSS-Lib 默认顺序调整到 GNSS-Raw 与 Camera 之间；已有用户手动排序保持不变。
+
+- Fixed new SSH tabs showing a reconnect prompt without opening their connection dialog. Fresh tabs no longer impersonate restored sessions, and reused panes now honor automatic dialog opening.
+- The application selector now works above Settings. Cancelling keeps Settings open, while confirming an application returns directly to its workspace.
+- The Settings back action is now a 32px rounded icon button without a text label, retaining its tooltip and accessible name.
+- Refined the GNSS satellite-count legend, tooltip, dashed grid and axes; signal tables now use consistent 13px text and tabular numerals.
+- GNSS-Lib now appears between GNSS-Raw and Camera by default without overwriting existing custom ordering.
+
 ## v1.8.5
 
 - 修复 GNSS Status View 在未加载或清空数据后将 Quality 显示为 0、状态圆点误亮绿色的问题；无数据时显示破折号和灰点，标题显示等待数据并仅统计有值字段。

@@ -63,6 +63,14 @@ export const DEFAULT_APPLICATIONS: readonly UserApplication[] = [
     ],
   },
   {
+    id: 'gnsslib',
+    name: 'GNSS-Lib',
+    description: 'Robo-GNSS post-processing and real-time positioning workspace',
+    icon: 'satellite',
+    accent: '#7c3aed',
+    windowIds: ['gnsslib-rtkpost', 'gnsslib-rtknavi'],
+  },
+  {
     id: 'camera',
     name: 'Camera',
     description: 'Camera live video and parameter control workspace',
@@ -77,14 +85,6 @@ export const DEFAULT_APPLICATIONS: readonly UserApplication[] = [
     icon: 'radar',
     accent: '#06b6d4',
     windowIds: ['lidar-scene', 'lidar-scores', 'lidar-plot', 'lidar-inspector'],
-  },
-  {
-    id: 'gnsslib',
-    name: 'GNSS-Lib',
-    description: 'Robo-GNSS post-processing and real-time positioning workspace',
-    icon: 'satellite',
-    accent: '#7c3aed',
-    windowIds: ['gnsslib-rtkpost', 'gnsslib-rtknavi'],
   },
 ]
 
@@ -220,7 +220,7 @@ export class ApplicationStorage {
       }
       this.storage.writeRaw(GNSSLIB_DEFAULT_MIGRATION_KEY, '1')
     }
-    // 默认顺序调整（Serial/Flow/GNSS/GNSS-Raw/Camera/LiDAR/GNSS-Lib）：已有存储按默认
+    // 默认顺序调整（Serial/Flow/GNSS/GNSS-Raw/GNSS-Lib/Camera/LiDAR）：已有存储按默认
     // 顺序重排一次；不在默认表中的自定义应用保持在末尾且相对顺序稳定。
     // 迁移只跑一次，此后用户手动拖动的顺序不再被覆盖。
     if (this.storage.readRaw(APPLICATION_ORDER_MIGRATION_KEY) === null) {

@@ -5,7 +5,7 @@ function nmea(body: string): string {
   return `$${body}*${checksum.toString(16).toUpperCase().padStart(2, '0')}\r\n`
 }
 
-test('Serial application shows routed NMEA fields and icons in Status View', async ({ page }) => {
+test('routes NMEA status fields only within the GNSS application', async ({ page }) => {
   await page.addInitScript(() => {
     localStorage.setItem('nav-tools:locale', 'en-US')
     localStorage.setItem(
@@ -23,23 +23,28 @@ test('Serial application shows routed NMEA fields and icons in Status View', asy
     useDevice().globalDevice.value = { type: 'serial', connected: true }
     routeDataToWindow(data, 'raw-messages')
   }, sentence)
+  await expect(page.locator('.status-label[title="GNSS.longitude"]')).toHaveCount(0)
 
+  await page.locator('.application-button').click()
+  await page.locator('.application-card[data-application-id="gnss"]').click()
+  await expect(page.locator('.context-app-name')).toHaveText('GNSS')
+  await page.screenshot({ path: 'test-results/v186-nmea-status.png' })
   const longitude = page.locator('.status-item').filter({
-    has: page.locator('.status-label', { hasText: 'GNSS · Longitude' }),
+    has: page.locator('.status-label[title="longitude"]'),
   })
   const latitude = page.locator('.status-item').filter({
-    has: page.locator('.status-label', { hasText: 'GNSS · Latitude' }),
+    has: page.locator('.status-label[title="latitude"]'),
   })
   await expect(longitude.locator('.status-indicator')).toHaveText('11.516667')
   await expect(latitude.locator('.status-indicator')).toHaveText('48.117300')
   await expect(longitude.locator('.status-field-icon svg')).toBeVisible()
   await expect(latitude.locator('.status-field-icon svg')).toBeVisible()
-  await expect(longitude.locator('.status-field-icon')).toHaveCSS('color', 'rgb(255, 0, 0)')
-  await expect(latitude.locator('.status-field-icon')).toHaveCSS('color', 'rgb(255, 0, 0)')
+  await expect(longitude.locator('.status-field-icon')).toHaveCSS('color', 'rgb(23, 131, 255)')
+  await expect(latitude.locator('.status-field-icon')).toHaveCSS('color', 'rgb(23, 131, 255)')
   const fixMode = page
     .locator('.status-item')
     .filter({
-      has: page.locator('.status-label[title="GNSS.fixMode"]'),
+      has: page.locator('.status-label[title="fixMode"]'),
     })
     .locator('.status-indicator')
   await expect(fixMode).toHaveText('Single Point')
@@ -141,9 +146,15 @@ for (const theme of ['light', 'dark']) {
       await expect(
         page
           .locator('.status-item')
-          .filter({ has: page.locator('.status-label[title="longitude"]') })
+          .filter({ has: page.locator('.status-label[title="fixMode"]') })
           .locator('.status-field-icon'),
       ).toHaveCSS('color', color)
+      await expect(
+        page
+          .locator('.status-item')
+          .filter({ has: page.locator('.status-label[title="longitude"]') })
+          .locator('.status-field-icon'),
+      ).toHaveCSS('color', theme === 'light' ? 'rgb(23, 131, 255)' : 'rgb(26, 136, 255)')
       const row = page
         .locator('.status-item')
         .filter({ has: page.locator('.status-label[title="longitude"]') })

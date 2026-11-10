@@ -36,9 +36,9 @@ describe('panel and application persistence', () => {
       'Flow',
       'GNSS',
       'GNSS-Raw',
+      'GNSS-Lib',
       'Camera',
       'LiDAR',
-      'GNSS-Lib',
     ])
     expect(applications[0]).toMatchObject({
       id: 'serial',
@@ -67,17 +67,17 @@ describe('panel and application persistence', () => {
         'gnssraw-eph',
       ],
     })
-    expect(applications[6]).toMatchObject({
+    expect(applications[4]).toMatchObject({
       id: 'gnsslib',
       icon: 'satellite',
       windowIds: ['gnsslib-rtkpost', 'gnsslib-rtknavi'],
     })
-    expect(applications[4]).toMatchObject({
+    expect(applications[5]).toMatchObject({
       id: 'camera',
       icon: 'camera',
       windowIds: ['camera-video', 'camera-parameters', 'terminal'],
     })
-    expect(applications[5]).toMatchObject({
+    expect(applications[6]).toMatchObject({
       id: 'lidar',
       icon: 'radar',
       windowIds: ['lidar-scene', 'lidar-scores', 'lidar-plot', 'lidar-inspector'],
@@ -274,18 +274,18 @@ describe('panel and application persistence', () => {
       'motor',
       'gnss',
       'gnssraw',
+      'gnsslib',
       'camera',
       'lidar',
-      'gnsslib',
     ])
     expect(storage.loadApplications().map((application) => application.id)).toEqual([
       'serial',
       'motor',
       'gnss',
       'gnssraw',
+      'gnsslib',
       'camera',
       'lidar',
-      'gnsslib',
     ])
   })
 
@@ -301,13 +301,13 @@ describe('panel and application persistence', () => {
       'serial',
       'motor',
       'gnss',
+      'gnsslib',
       'camera',
       'lidar',
-      'gnsslib',
     ])
     expect(
       new ApplicationStorage(new JsonStorage(memory)).loadApplications().map(({ id }) => id),
-    ).toEqual(['gnssraw', 'serial', 'motor', 'gnss', 'camera', 'lidar', 'gnsslib'])
+    ).toEqual(['gnssraw', 'serial', 'motor', 'gnss', 'gnsslib', 'camera', 'lidar'])
 
     const partial = storage.reorderApplications(reordered, 0, 2)
     expect(partial.map(({ id }) => id)).toEqual([
@@ -315,9 +315,9 @@ describe('panel and application persistence', () => {
       'motor',
       'gnssraw',
       'gnss',
+      'gnsslib',
       'camera',
       'lidar',
-      'gnsslib',
     ])
   })
 

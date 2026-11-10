@@ -12,7 +12,7 @@ test('injection is placed between A and C and persists independently without sub
     await dialog
       .locator('.data-source-main-tabs > .el-tabs__header .el-tabs__item')
       .allTextContents(),
-  ).toEqual(['Data source', 'Data injection', 'App connections'])
+  ).toEqual(['Data source', 'Data injection', 'Connection management'])
   const originalSettings = await page.evaluate(() =>
     localStorage.getItem('nav-tools:data-source-settings'),
   )

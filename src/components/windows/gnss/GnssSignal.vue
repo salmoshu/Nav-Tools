@@ -1088,8 +1088,22 @@ onUnmounted(() => {
 }
 
 .snr-value {
-  font-weight: bold;
-  font-size: 14px;
+  font-weight: 600;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.snr-table-container :deep(.el-table) {
+  font-size: 13px;
+}
+
+.snr-table-container :deep(.el-table__cell) {
+  padding: 6px 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.snr-table-container :deep(.el-table__cell .cell) {
+  line-height: 20px;
 }
 
 :deep(.el-table__header-wrapper) {

@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 
-test('settings header shares the sidebar width and centers the back label with its arrow', async ({
+test('settings header shares the sidebar width and uses a centered icon-only back button', async ({
   page,
 }) => {
   await page.addInitScript(() => {
@@ -25,22 +25,29 @@ test('settings header shares the sidebar width and centers the back label with i
   await expect(header).toBeVisible()
   await expect(nav).toBeVisible()
   await expect(back).toBeVisible()
+  await expect(back).toHaveAttribute('aria-label', 'Back')
+  await expect(back.locator('span')).toHaveCount(0)
 
-  const [headerBox, navBox, arrowBox, labelBox] = await Promise.all([
+  const [headerBox, navBox, arrowBox, backBox] = await Promise.all([
     header.boundingBox(),
     nav.boundingBox(),
     back.locator('svg').boundingBox(),
-    back.locator('span').boundingBox(),
+    back.boundingBox(),
   ])
   expect(headerBox).not.toBeNull()
   expect(navBox).not.toBeNull()
   expect(arrowBox).not.toBeNull()
-  expect(labelBox).not.toBeNull()
+  expect(backBox).not.toBeNull()
 
   expect(headerBox!.x).toBeCloseTo(navBox!.x, 1)
   expect(headerBox!.width).toBeCloseTo(navBox!.width, 1)
   expect(headerBox!.y + headerBox!.height).toBeLessThanOrEqual(navBox!.y + 1)
+  expect(backBox!.width).toBe(32)
+  expect(backBox!.height).toBe(32)
   expect(
-    Math.abs(arrowBox!.y + arrowBox!.height / 2 - (labelBox!.y + labelBox!.height / 2)),
+    Math.abs(arrowBox!.x + arrowBox!.width / 2 - (backBox!.x + backBox!.width / 2)),
+  ).toBeLessThanOrEqual(1)
+  expect(
+    Math.abs(arrowBox!.y + arrowBox!.height / 2 - (backBox!.y + backBox!.height / 2)),
   ).toBeLessThanOrEqual(1)
 })

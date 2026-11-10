@@ -20,7 +20,7 @@ test('caps component chips on the application card and lists the rest in the ove
             'camera-video',
             'camera-parameters',
             'flow-deviation',
-            'gnss-map',
+            'gnssraw-frames',
             'gnss-deviation',
             'gnss-signals',
           ],
@@ -37,10 +37,21 @@ test('caps component chips on the application card and lists the rest in the ove
 
   // 徽章按容器宽度动态收纳成两行(ResizeObserver 异步收敛);隐藏徽章仍在 DOM,只数可见的
   const chips = card.locator('.panel-chip:not(.panel-chip--more):visible')
+  const more = card.locator('.panel-chip--more')
   await expect.poll(() => chips.count()).toBeLessThan(9)
+  await expect
+    .poll(() =>
+      card.evaluate((element) => {
+        const visible = Array.from(
+          element.querySelectorAll('.panel-chip:not(.panel-chip--more)'),
+        ).filter((chip) => chip.checkVisibility()).length
+        const overflow = element.querySelector('.panel-chip--more')?.textContent?.trim() ?? ''
+        return visible + (overflow ? Number(overflow.slice(1)) : 0)
+      }),
+    )
+    .toBe(9)
   const visibleCount = await chips.count()
   expect(visibleCount).toBeGreaterThan(0)
-  const more = card.locator('.panel-chip--more')
   await expect(more).toHaveText(`+${9 - visibleCount}`)
   const chipsBox = await card.locator('.panel-list').boundingBox()
   // 两行布局:高度超过单行(~26px)、不超过两行上限(~58px)

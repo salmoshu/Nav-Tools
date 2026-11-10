@@ -21,9 +21,9 @@ test('settings cards control the selector and retain the selection after restart
     expect.stringContaining('Flow'),
     expect.stringContaining('GNSS'),
     expect.stringContaining('GNSS-Raw'),
+    expect.stringContaining('GNSS-Lib'),
     expect.stringContaining('Camera'),
     expect.stringContaining('LiDAR'),
-    expect.stringContaining('GNSS-Lib'),
   ])
   for (const name of ['Serial', 'GNSS', 'GNSS-Raw', 'GNSS-Lib']) {
     await expect(settings.getByRole('checkbox', { name, exact: true })).toBeChecked()
@@ -42,7 +42,7 @@ test('settings cards control the selector and retain the selection after restart
     await cards.evaluateAll((elements) =>
       elements.map((el) => el.getAttribute('data-application-id')),
     ),
-  ).toEqual(['serial', 'motor', 'gnss', 'gnssraw', 'camera', 'lidar', 'gnsslib'])
+  ).toEqual(['serial', 'motor', 'gnss', 'gnssraw', 'gnsslib', 'camera', 'lidar'])
 
   await page.reload()
   await expect(cards).toHaveCount(7)

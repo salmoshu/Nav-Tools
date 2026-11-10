@@ -494,10 +494,11 @@ const allProfiles = computed(() => {
   ]
 })
 
-function addTab(): void {
-  const tab = createTerminalTab(t('common.terminal.terminal'))
+function addTab(title = t('common.terminal.terminal')): string {
+  const tab = createTerminalTab(title)
   tabs.value.push(tab)
   activeTabId.value = tab.id
+  return listTerminalPanes(tab.root)[0].id
 }
 
 function createLaunchedTab(launch: TerminalLaunchSpec): { tab: TerminalTabLayout; paneId: string } {
@@ -516,8 +517,7 @@ async function addTerminalTab(command: string): Promise<void> {
     return
   }
   if (command === 'ssh') {
-    const { paneId } = createLaunchedTab({ kind: 'ssh', label: 'SSH' })
-    autoOpenSshPaneId.value = paneId
+    autoOpenSshPaneId.value = addTab('SSH')
     return
   }
   const [kind, encodedValue] = command.split(':', 2)

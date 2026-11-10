@@ -10,8 +10,7 @@
             :aria-label="t('app.settingsBack')"
             @click="$emit('close')"
           >
-            <ArrowLeft :size="15" :stroke-width="1.8" aria-hidden="true" />
-            <span>{{ t('app.settingsBack') }}</span>
+            <ArrowLeft :size="17" :stroke-width="1.8" aria-hidden="true" />
           </button>
           <h1 class="settings-title">{{ t('app.settings') }}</h1>
         </header>
@@ -493,18 +492,22 @@ function handleUpdaterPrefChange(
 
 .back-button {
   display: inline-flex;
+  width: 32px;
+  height: 32px;
+  flex: none;
   align-items: center;
-  height: 30px;
-  padding: 0 10px;
+  justify-content: center;
+  padding: 0;
   border: 1px solid var(--app-border);
-  border-radius: 4px;
+  border-radius: 10px;
   color: var(--app-text-secondary);
-  background: transparent;
-  font: inherit;
-  font-size: 13px;
-  gap: 6px;
+  background: var(--app-surface-muted);
   cursor: pointer;
   outline: none;
+  transition:
+    color 0.15s ease,
+    border-color 0.15s ease,
+    background 0.15s ease;
 }
 
 .back-button svg {
@@ -512,14 +515,11 @@ function handleUpdaterPrefChange(
   flex: none;
 }
 
-.back-button span {
-  line-height: 1;
-}
-
 .back-button:hover,
 .back-button:focus-visible {
-  color: var(--app-text);
-  background: var(--app-hover);
+  border-color: color-mix(in srgb, var(--el-color-primary) 35%, var(--app-border));
+  color: var(--el-color-primary);
+  background: color-mix(in srgb, var(--el-color-primary) 8%, var(--app-surface));
 }
 
 .settings-title {

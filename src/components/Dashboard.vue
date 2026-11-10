@@ -10,14 +10,27 @@
     @drop="device.handleDrop"
   >
     <!-- 拖拽提示遮罩层 -->
-    <div v-if="device.isDragOver.value" class="drag-overlay"></div>
+    <div v-if="!settingsOpen && device.isDragOver.value" class="drag-overlay"></div>
 
     <!-- 原有内容 -->
-    <ToolBar v-if="toolbarRendered" @positionChange="handleToolbarPositionChange" />
+    <ToolBar
+      v-if="toolbarRendered"
+      v-show="!settingsOpen"
+      @positionChange="handleToolbarPositionChange"
+    />
 
-    <StatusBar @positionChange="handleStatusbarPositionChange" v-if="statusbarRendered" />
+    <StatusBar
+      v-if="statusbarRendered"
+      v-show="!settingsOpen"
+      @positionChange="handleStatusbarPositionChange"
+    />
 
-    <div class="dashboard-content" :class="contentClasses" :style="contentStyle">
+    <div
+      v-show="!settingsOpen"
+      class="dashboard-content"
+      :class="contentClasses"
+      :style="contentStyle"
+    >
       <!-- Grid Layout Plus 拖拽布局区域 -->
       <div class="dashboard-grid">
         <!-- use-css-transforms 需设置为 false，也即禁用 CSS 变换，否则会导致内层字体模糊 -->
@@ -182,10 +195,12 @@ import { t } from '@/i18n'
 
 const props = defineProps<{
   initialApplicationId?: string
+  settingsOpen?: boolean
 }>()
 
 const emit = defineEmits<{
   'fullscreen-panel-change': [panel?: { title: string; action?: string; windowId: string }]
+  'application-selected': []
 }>()
 
 const {
@@ -254,6 +269,7 @@ const handleApplicationSelect = async (applicationId: string) => {
 
   exitFullScreen()
   await handleApplicationChange(application.id, true)
+  emit('application-selected')
 }
 
 const openApplicationWindow = async (applicationId: string) => {
