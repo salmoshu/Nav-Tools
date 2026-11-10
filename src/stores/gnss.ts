@@ -3,6 +3,7 @@ import { defineStore } from "pinia"
 import { registerStatusSource } from '@/core/status/registry'
 import { createStatusSource } from '@/core/status/createStatusSource'
 import { useDataSourceManager } from '@/composables/useDataSourceManager'
+import { useApplicationSelector } from '@/composables/useApplicationSelector'
 
 export interface GnssState {
     fixMode: string
@@ -65,16 +66,21 @@ export const useGnssStore = defineStore('gnss', () => {
     }
 })
 
-// GNSS 面板始终展示；其它应用在主动选择 NMEA 数据格式后也展示同一组状态。
+// GNSS 面板始终展示；含数据面板（plot/消息）的应用在主动选择 NMEA/RTKLIB POS
+// 数据格式后也展示同一组状态。不含数据面板的应用（相机/LiDAR/GNSS-Raw 等）
+// 与数据流无关：即使全局数据源仍在解析 NMEA（如回放中），StatusView 也应为空。
 registerStatusSource(
     createStatusSource({
         id: 'gnss',
         label: 'GNSS',
         match: moduleIds => {
+            if (moduleIds.has('gnss')) return true
             const { settings } = useDataSourceManager()
-            return moduleIds.has('gnss') ||
-                settings[settings.activeSource].parser === 'nmea' ||
-                settings[settings.activeSource].parser === 'rtklib-pos'
+            const parser = settings[settings.activeSource].parser
+            if (parser !== 'nmea' && parser !== 'rtklib-pos') return false
+            const { currentApplication } = useApplicationSelector()
+            const windowIds = currentApplication.value?.windowIds ?? []
+            return windowIds.includes('plot') || windowIds.includes('raw-messages')
         },
         status: () => useGnssStore().status,
     }),
