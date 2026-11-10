@@ -1,5 +1,13 @@
 # Nav-Tools 更新日志
 
+## v1.8.7
+
+- 修复设置页打开后内容不可见的问题：Dashboard 在选择器关闭时不再占据整页高度，设置内容从主内容区顶部正常显示；选择器弹出、取消和确认应用的行为保持不变。
+- 文件输入与播放时，工具栏连接开关固定为关闭并禁用，点击不会触发设备连接；文件播放与数据路由不受影响。
+
+- Fixed Settings rendering out of view because Dashboard retained full-page height. The workspace is hidden while Settings is open unless the selector is active; selector cancel and confirmation behavior is unchanged.
+- File input and playback now keep the toolbar connection switch off and disabled, with clicks ignored. Playback and data routing remain unaffected.
+
 ## v1.8.6
 
 - 修复新建 SSH 会话显示“需要重新连接”且不自动弹出配置的问题：新标签不再标记为旧会话，窗格复用时也会响应自动打开连接设置。

@@ -49,7 +49,10 @@ test('a CSV without a time-tag falls back to sample-clock replay on the toolbar 
     timeout: 20_000,
   })
 
-  await page.getByTitle(/Input|输入/).first().click()
+  await page
+    .getByTitle(/Input|输入/)
+    .first()
+    .click()
   const dialog = page.locator('.data-input-dialog')
   await expect(dialog).toBeVisible({ timeout: 10_000 })
   await page.getByRole('tab', { name: /文件输入|File Input/ }).click()
@@ -80,6 +83,10 @@ test('a CSV without a time-tag falls back to sample-clock replay on the toolbar 
   // 工具栏时间轴出现：4 个历元（表头 + 3 行数据），时长 1s，从 0 自动播放
   await expect(page.locator('.file-timeline')).toBeVisible({ timeout: 10_000 })
   await expect(page.locator('.timeline-epoch')).toContainText('/ 4', { timeout: 15_000 })
+  const connectionToggle = page.locator('.toolbar').locator('.toggle-switch')
+  await expect(connectionToggle).toHaveAttribute('aria-disabled', 'true')
+  await expect(connectionToggle).toHaveClass(/toggle-disabled/)
+  await expect(connectionToggle).not.toHaveClass(/toggle-on/)
 
   // 播放结束后光标停在末尾历元（time 列 1.0→2.0 归一化为 0→1s），全部行可见
   await expect(page.locator('.timeline-time')).toContainText('00:00:01', { timeout: 15_000 })

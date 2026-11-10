@@ -15,14 +15,21 @@
       <div v-show="!deviceToggleHidden" class="toggle-switch-container">
         <div
           class="toggle-switch"
-          :class="{ 'toggle-on': deviceConnected, 'toggle-pending': deviceConnecting }"
-          :aria-busy="deviceConnecting"
+          :class="{
+            'toggle-on': deviceConnected && !fileInputActive,
+            'toggle-pending': deviceConnecting && !fileInputActive,
+            'toggle-disabled': fileInputActive,
+          }"
+          :aria-busy="deviceConnecting && !fileInputActive"
+          :aria-disabled="fileInputActive"
           :title="
-            deviceConnecting
-              ? t('app.toolbar.connectCancel')
-              : deviceConnected
-                ? t('app.toolbar.disconnect')
-                : t('app.toolbar.connect')
+            fileInputActive
+              ? t('app.toolbar.fileConnectionDisabled')
+              : deviceConnecting
+                ? t('app.toolbar.connectCancel')
+                : deviceConnected
+                  ? t('app.toolbar.disconnect')
+                  : t('app.toolbar.connect')
           "
           @click="handleDeviceConnected"
         >
@@ -30,9 +37,9 @@
             <span
               class="slider-icon"
               v-html="
-                deviceConnecting
+                deviceConnecting && !fileInputActive
                   ? toolBarIcon.connecting
-                  : deviceConnected
+                  : deviceConnected && !fileInputActive
                     ? toolBarIcon.connected
                     : toolBarIcon.disconnected
               "
@@ -739,6 +746,7 @@ import { useDevice } from '@/hooks/useDevice'
 const deviceInstance = useDevice()
 const deviceConnected = deviceInstance.deviceConnected
 const deviceConnecting = deviceInstance.deviceConnecting
+const fileInputActive = computed(() => deviceInstance.globalDevice.value.type === 'file')
 
 // 从useDevice获取对话框相关状态和方法
 const {
@@ -875,6 +883,7 @@ const { items: appConnectionItems, refresh: refreshAppConnections } = useAppConn
 })
 
 const handleDeviceConnected = () => {
+  if (fileInputActive.value) return
   if (deviceConnecting.value === true) {
     // 连接中点击开关: 终止当前正在进行的连接尝试
     deviceInstance.cancelNetworkConnect()
@@ -1621,6 +1630,11 @@ onUnmounted(() => {
   border: 1px solid var(--app-border-strong);
   background-color: var(--app-surface-muted);
   transition: background-color 0.3s;
+}
+
+.toggle-switch.toggle-disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
 }
 
 /* 更新滑块样式 */

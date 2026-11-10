@@ -55,7 +55,7 @@ const fullscreenPanel = ref<FullscreenPanelContext>()
 const settingsOpen = ref(false)
 const settingsInitialSection = ref<SettingsSectionKey>('theme')
 const isCardWindow = computed(() => window.location.hash.startsWith('#card/'))
-const { currentApplication } = useApplicationSelector()
+const { currentApplication, isApplicationSelectorOpen } = useApplicationSelector()
 const mcapPlayer = useMcapPlayer()
 
 const applicationId = computed(() => {
@@ -211,6 +211,7 @@ onUnmounted(() => {
         <CardWindow v-if="isCardWindow" v-show="!settingsOpen" />
         <Dashboard
           v-else
+          v-show="!settingsOpen || isApplicationSelectorOpen"
           ref="dashboardRef"
           :initial-application-id="applicationId"
           :settings-open="settingsOpen"

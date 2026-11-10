@@ -27,6 +27,12 @@ test('settings header shares the sidebar width and uses a centered icon-only bac
   await expect(back).toBeVisible()
   await expect(back).toHaveAttribute('aria-label', 'Back')
   await expect(back.locator('span')).toHaveCount(0)
+  const settingsBox = await page.locator('.settings-page').boundingBox()
+  const contentBox = await page.locator('.app-content').boundingBox()
+  expect(settingsBox).not.toBeNull()
+  expect(contentBox).not.toBeNull()
+  expect(settingsBox!.y).toBeCloseTo(contentBox!.y, 1)
+  await expect(page.getByRole('radiogroup', { name: 'Theme', exact: true })).toBeVisible()
 
   const [headerBox, navBox, arrowBox, backBox] = await Promise.all([
     header.boundingBox(),

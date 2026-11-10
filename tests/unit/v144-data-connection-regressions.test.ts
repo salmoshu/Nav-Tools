@@ -40,8 +40,8 @@ describe('v1.4.4 shared data connection regressions', () => {
   })
 
   it('shows an immediate pending state while a failed NETWORK endpoint reconnects', () => {
-    expect(toolbarSource).toContain("'toggle-pending': deviceConnecting")
-    expect(toolbarSource).toContain(':aria-busy="deviceConnecting"')
+    expect(toolbarSource).toContain("'toggle-pending': deviceConnecting && !fileInputActive")
+    expect(toolbarSource).toContain(':aria-busy="deviceConnecting && !fileInputActive"')
     expect(deviceSource).toContain('globalDevice.value.connecting = true')
   })
 

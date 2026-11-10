@@ -55,6 +55,7 @@ export default {
     appConnGnssRaw: 'GNSS 原始数据',
     appConnGotoConfig: '去配置',
     connectCancel: '终止当前连接',
+    fileConnectionDisabled: '文件播放无需连接设备',
     recordLog: '录制日志',
     stopRecord: '停止录制',
     stopRecordPath: '停止录制：{v}',

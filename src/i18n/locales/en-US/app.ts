@@ -56,6 +56,7 @@ export default {
     appConnGnssRaw: 'GNSS raw data',
     appConnGotoConfig: 'Configure',
     connectCancel: 'Abort current connection',
+    fileConnectionDisabled: 'File playback does not use a device connection',
     recordLog: 'Record Log',
     stopRecord: 'Stop Recording',
     stopRecordPath: 'Stop Recording: {v}',
