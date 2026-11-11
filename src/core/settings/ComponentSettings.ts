@@ -2,6 +2,7 @@ export const SETTINGS_SECTION_KEYS = [
   'theme',
   'language',
   'applications',
+  'data-formats',
   'messages',
   'shortcuts',
   'version',

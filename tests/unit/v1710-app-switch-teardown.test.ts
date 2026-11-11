@@ -47,6 +47,6 @@ describe('v1.7.10 app-switch connection teardown regressions', () => {
   it('keeps the late-callback attempt guard in openNetworkDevice', () => {
     const openBody = functionBody(deviceSource, 'function openNetworkDevice', 'function routeIncomingData')
     expect(openBody).toContain('const attempt = ++networkOpenAttempt')
-    expect(openBody.match(/if \(attempt !== networkOpenAttempt\) return/g)?.length).toBe(2)
+    expect(openBody.match(/if \(attempt !== networkOpenAttempt(?: \|\| [^)]+)?\) return/g)?.length).toBe(2)
   })
 })

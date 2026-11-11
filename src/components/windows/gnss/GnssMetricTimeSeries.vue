@@ -48,7 +48,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, inject, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { gnssDisplayContext } from '@/composables/gnss/GnssDisplayContext'
 import { useNmea } from '@/composables/gnss/useNmea'
 import { useFileTimeline } from '@/composables/useFileTimeline'
 import { useTheme } from '@/composables/useTheme'
@@ -106,8 +107,9 @@ const props = withDefaults(
   { tracking: false, pointSize: 10, xScrollbar: true },
 )
 
-const { positionEpochHistory, speedEpochHistory } = useNmea()
-const fileTimeline = useFileTimeline()
+const scopedDisplay = inject(gnssDisplayContext, null)
+const { positionEpochHistory, speedEpochHistory } = scopedDisplay?.data ?? useNmea()
+const fileTimeline = scopedDisplay?.timeline ?? useFileTimeline()
 const { chartTheme, resolvedTheme } = useTheme()
 
 const sourceStore = computed(() =>

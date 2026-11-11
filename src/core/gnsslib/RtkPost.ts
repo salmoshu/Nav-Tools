@@ -1,3 +1,6 @@
+import { validateNmeaChecksum } from '../data/NmeaStreamParser'
+import { RtkSolutionParser, nmeaQualityToRtkQuality } from './RtkSolution'
+
 export type RtkPostConstellation = 'G' | 'R' | 'E' | 'J' | 'C' | 'I'
 export type RtkPostOutputFormat = 'llh' | 'xyz' | 'enu' | 'nmea'
 export type RtkPostTimeFormat = 'tow' | 'hms'
@@ -55,7 +58,20 @@ export interface RtkPostRunResult {
   outputPath: string
   log: string
   error?: string
+  warnings?: string[]
   solution?: RtkPostSolutionSummary
+  progress?: RtkPostProgress
+}
+
+export interface RtkPostProgress {
+  phase: 'preparing' | 'processing' | 'validating'
+  percentage: number | null
+  processingTime?: string
+  processingMessage?: string
+}
+
+export interface RtkPostProgressEvent extends RtkPostProgress {
+  runId: string
 }
 
 export interface RtkPostLogEvent {
@@ -140,6 +156,7 @@ export function buildRtkPostArgs(request: RtkPostRunRequest | RtkPostSettings): 
   const base = relative ? requiredPath(request.baseObsPath, '基站 RINEX OBS') : ''
   if (!Array.isArray(request.navPaths)) throw new Error('导航文件列表无效')
   const nav = request.navPaths.filter((path) => path.trim()).map((path) => path.trim())
+  if (nav.length === 0) throw new Error('请至少选择一个导航文件（RINEX NAV/GNAV/HNAV）')
   const inputPaths = [rover, ...(base ? [base] : []), ...nav]
   if (inputPaths.length > 16) throw new Error('rnx2rtkp 最多支持 16 个输入文件')
 
@@ -177,6 +194,7 @@ export function buildRtkPostArgs(request: RtkPostRunRequest | RtkPostSettings): 
 }
 
 export class RtkPostSolutionParser {
+  private readonly coordinateParser: RtkSolutionParser
   private readonly headerLines: string[] = []
   private readonly solutionLines: string[] = []
   private readonly summary: RtkPostSolutionSummary = {
@@ -192,16 +210,19 @@ export class RtkPostSolutionParser {
     preview: '',
   }
 
-  public constructor(
-    private readonly outputFormat: RtkPostOutputFormat,
-    private readonly timeFormat: RtkPostTimeFormat,
-  ) {}
+  public constructor(outputFormat: RtkPostOutputFormat, timeFormat: RtkPostTimeFormat) {
+    this.coordinateParser = new RtkSolutionParser({
+      format: outputFormat === 'nmea' ? 'llh' : outputFormat,
+      timeFormat,
+    })
+  }
 
   public addLine(line: string): void {
     const text = line.trimEnd()
     const trimmed = text.trim()
     if (!trimmed) return
     if (trimmed.startsWith('%')) {
+      this.coordinateParser.addLine(trimmed)
       if (this.headerLines.length < 8) this.headerLines.push(text)
       return
     }
@@ -227,14 +248,15 @@ export class RtkPostSolutionParser {
   }
 
   private readQuality(line: string): number | null {
-    if (this.outputFormat === 'nmea') {
-      if (!/^\$[A-Z]{2}GGA,/.test(line)) return null
-      return validQuality(line.split(',')[6])
+    // A -k config can select NMEA even when the UI's default is LLH.
+    if (line.startsWith('$')) {
+      if (!/^\$[A-Z]{2}GGA,/.test(line) || !validateNmeaChecksum(line)) return null
+      const fields = line.split(',')
+      if (!fields[1] || !fields[2] || !fields[4]) return null
+      const quality = validQuality(fields[6])
+      return quality === null ? null : nmeaQualityToRtkQuality(quality)
     }
-    const fields = line.split(/\s+/)
-    const qualityIndex = (this.timeFormat === 'hms' ? 2 : 1) + 3
-    if (!/^\d/.test(fields[0])) return null
-    return validQuality(fields[qualityIndex])
+    return this.coordinateParser.addLine(line)?.quality ?? null
   }
 }
 

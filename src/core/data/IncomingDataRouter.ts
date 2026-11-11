@@ -8,6 +8,7 @@ export interface IncomingDataContext {
   activeWindowIds: readonly string[]
   displayFormat: DisplayFormat
   dataParser: TextDataParser
+  gnssData?: string
 }
 
 export interface IncomingDataTargets {
@@ -27,7 +28,7 @@ export class IncomingDataRouter {
     const decodedData = isHexMotor ? this.targets.decodeMotorHex(data) : data
 
     if (modes.has('gnss') || context.dataParser === 'nmea' || context.dataParser === 'rtklib-pos') {
-      this.targets.appendGnss(data)
+      this.targets.appendGnss(context.gnssData ?? data)
     }
 
     if (windows.has('raw-messages')) {

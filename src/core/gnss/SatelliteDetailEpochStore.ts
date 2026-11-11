@@ -94,6 +94,10 @@ export class SatelliteDetailEpochStore {
     return this.epochs.getElapsedTime(index)
   }
 
+  public getTimestamp(index: number): number {
+    return this.epochs.getTimestamp(index)
+  }
+
   public findNearestElapsedTime(elapsedMilliseconds: number): number {
     return this.epochs.findNearestElapsedTime(elapsedMilliseconds)
   }

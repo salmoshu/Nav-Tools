@@ -71,6 +71,7 @@ export interface RtkNaviSolution {
 }
 
 export interface RtkNaviSolutionEvent {
+  records?: string[]
   runId: string
   epochs: number
   qualityCounts: Record<number, number>

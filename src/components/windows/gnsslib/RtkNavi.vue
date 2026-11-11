@@ -1,12 +1,25 @@
 <template>
   <div ref="rootElement" class="rtknavi">
-    <div class="run-toolbar">
-      <div class="gl-title">
-        <strong>RTKNAVI</strong>
-        <small class="engine-name">Robo-GNSS · rtkrcv</small>
+    <div v-if="!props.embedded" class="run-toolbar">
+      <div class="view-tabs" role="tablist" aria-label="RTKNAVI">
+        <button
+          v-for="tab in tabs"
+          :id="`${viewId}-${tab.name}-tab`"
+          :key="tab.name"
+          class="view-tab"
+          type="button"
+          role="tab"
+          :aria-selected="activeTab === tab.name"
+          :aria-controls="`${viewId}-${tab.name}-panel`"
+          :tabindex="activeTab === tab.name ? 0 : -1"
+          @click="activeTab = tab.name"
+          @keydown="switchTabWithKeyboard"
+        >
+          {{ tab.label }}
+        </button>
       </div>
+      <span class="run-state" :class="store.status.value.state">{{ statusText }}</span>
       <div class="gl-actions">
-        <span class="run-state" :class="store.status.value.state">{{ statusText }}</span>
         <el-button v-if="!store.running.value" type="primary" @click="start">
           {{ t('gnssLib.rtknavi.start') }}
         </el-button>
@@ -23,22 +36,27 @@
     </div>
 
     <el-alert
-      v-if="!desktopAvailable"
+      v-if="!props.embedded && !desktopAvailable"
       class="desktop-alert"
       type="info"
       :closable="false"
       :title="t('gnssLib.rtknavi.desktopOnly')"
     />
     <el-alert
-      v-if="store.errorText.value"
+      v-if="!props.embedded && store.errorText.value"
       class="error-alert"
       type="error"
       :closable="false"
       :title="store.errorText.value"
     />
 
-    <el-tabs v-model="activeTab" class="navi-tabs">
-      <el-tab-pane :label="t('gnssLib.rtknavi.monitor')" name="monitor">
+    <div class="navi-panels">
+      <section
+        v-show="activeTab === 'monitor'"
+        :id="`${viewId}-monitor-panel`"
+        role="tabpanel"
+        :aria-labelledby="`${viewId}-monitor-tab`"
+      >
         <div class="monitor-heading">
           <span class="output-path" :title="currentOutputPath">{{ currentOutputPath }}</span>
           <el-button text size="small" @click="store.clearMonitor">
@@ -116,10 +134,15 @@
           </div>
         </template>
         <div v-else class="empty-monitor">{{ t('gnssLib.rtknavi.noSolution') }}</div>
-      </el-tab-pane>
+      </section>
 
-      <el-tab-pane :label="t('gnssLib.rtknavi.configuration')" name="configuration">
-        <section class="config-section">
+      <section
+        v-show="activeTab === 'configuration'"
+        :id="`${viewId}-configuration-panel`"
+        role="tabpanel"
+        :aria-labelledby="`${viewId}-configuration-tab`"
+      >
+        <section v-show="!props.embedded || props.view !== 'options'" class="config-section">
           <div class="section-title">{{ t('gnssLib.rtknavi.engine') }}</div>
           <div class="file-row">
             <label>rtkrcv</label>
@@ -144,9 +167,12 @@
           <div class="field-hint">{{ t('gnssLib.rtknavi.outputHint') }}</div>
         </section>
 
-        <div class="section-title spaced">{{ t('gnssLib.rtknavi.inputs') }}</div>
+        <div v-show="!props.embedded || props.view !== 'options'" class="section-title spaced">
+          {{ t('gnssLib.rtknavi.inputs') }}
+        </div>
         <section
           v-for="(stream, index) in store.settings.inputs"
+          v-show="!props.embedded || props.view !== 'options'"
           :key="index"
           class="config-section stream-section"
         >
@@ -220,7 +246,7 @@
           <div v-else class="field-hint">{{ streamHint(stream.type) }}</div>
         </section>
 
-        <section class="config-section">
+        <section v-show="!props.embedded || props.view === 'options'" class="config-section">
           <div class="section-title">{{ t('gnssLib.rtknavi.processingOptions') }}</div>
           <div class="option-grid">
             <label class="option-field wide">
@@ -340,18 +366,23 @@
           </div>
           <div class="field-hint">{{ t('gnssLib.rtknavi.baseConfigHint') }}</div>
         </section>
-      </el-tab-pane>
+      </section>
 
-      <el-tab-pane :label="t('gnssLib.rtknavi.log')" name="log">
+      <section
+        v-show="activeTab === 'log'"
+        :id="`${viewId}-log-panel`"
+        role="tabpanel"
+        :aria-labelledby="`${viewId}-log-tab`"
+      >
         <pre v-if="store.logText.value" class="run-log">{{ store.logText.value }}</pre>
         <div v-else class="empty-monitor">{{ t('gnssLib.rtknavi.emptyLog') }}</div>
-      </el-tab-pane>
-    </el-tabs>
+      </section>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, useId, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { FolderOpened } from '@element-plus/icons-vue'
 import { t } from '@/i18n'
@@ -359,7 +390,20 @@ import { useRtkNavi } from '@/composables/useRtkNavi'
 import type { RtkNaviStreamType } from '@/core/gnsslib/RtkNavi'
 
 const store = useRtkNavi()
-const activeTab = ref('monitor')
+const props = defineProps<{ embedded?: boolean; view?: string }>()
+const localTab = ref('monitor')
+const activeTab = computed({
+  get: () => (props.embedded ? 'configuration' : localTab.value),
+  set: (value) => {
+    localTab.value = value
+  },
+})
+const viewId = `rtknavi-${useId()}`
+const tabs = computed(() => [
+  { name: 'monitor', label: t('gnssLib.rtknavi.monitor') },
+  { name: 'configuration', label: t('gnssLib.rtknavi.configuration') },
+  { name: 'log', label: t('gnssLib.rtknavi.log') },
+])
 const desktopAvailable = Boolean(window.electronAPI?.rtkNaviStart)
 const rootElement = ref<HTMLElement>()
 watch(activeTab, () => {
@@ -443,6 +487,23 @@ onMounted(() => {
 
 function qualityCount(quality: number): string {
   return (store.qualityCounts.value[quality] ?? 0).toLocaleString()
+}
+
+function switchTabWithKeyboard(event: KeyboardEvent): void {
+  const index = tabs.value.findIndex((tab) => tab.name === activeTab.value)
+  const count = tabs.value.length
+  let next: number
+  if (event.key === 'ArrowRight') next = (index + 1) % count
+  else if (event.key === 'ArrowLeft') next = (index + count - 1) % count
+  else if (event.key === 'Home') next = 0
+  else if (event.key === 'End') next = count - 1
+  else return
+  event.preventDefault()
+  activeTab.value = tabs.value[next].name
+  const buttons = (
+    event.currentTarget as HTMLElement
+  ).parentElement?.querySelectorAll<HTMLButtonElement>('[role="tab"]')
+  buttons?.[next]?.focus()
 }
 
 function formatOptional(value: number | null, suffix = ''): string {
@@ -537,10 +598,6 @@ async function stop(): Promise<void> {
   gap: 10px;
   margin-bottom: 8px;
 }
-.engine-name {
-  margin-left: auto;
-  color: var(--el-text-color-secondary);
-}
 .run-state {
   font-weight: 600;
 }
@@ -556,13 +613,6 @@ async function stop(): Promise<void> {
 .desktop-alert,
 .error-alert {
   margin-bottom: 8px;
-}
-.navi-tabs :deep(.el-tabs__header) {
-  margin-bottom: 8px;
-}
-.navi-tabs :deep(.el-tabs__item) {
-  height: 32px;
-  font-size: 12px;
 }
 .monitor-heading {
   display: flex;
@@ -787,9 +837,6 @@ async function stop(): Promise<void> {
   white-space: pre;
 }
 @media (max-width: 700px) {
-  .engine-name {
-    display: none;
-  }
   .solution-grid {
     grid-template-columns: repeat(2, minmax(120px, 1fr));
   }
@@ -802,3 +849,10 @@ async function stop(): Promise<void> {
 }
 </style>
 <style scoped src="./gnssLib.css"></style>
+<style scoped>
+@media (max-width: 480px) {
+  .rtknavi .view-tab {
+    padding-inline: 10px;
+  }
+}
+</style>

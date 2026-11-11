@@ -1,9 +1,22 @@
 <template>
   <div class="rtkpost">
-    <div class="run-toolbar">
-      <div class="gl-title">
-        <strong>RTKPOST</strong>
-        <small class="engine-name">Robo-GNSS · rnx2rtkp</small>
+    <div v-if="!props.embedded" class="run-toolbar">
+      <div class="view-tabs" role="tablist" :aria-label="t('gnssRaw.rtkpost.workspace')">
+        <button
+          v-for="tab in views"
+          :id="`${viewId}-${tab.name}-tab`"
+          :key="tab.name"
+          class="view-tab"
+          type="button"
+          role="tab"
+          :aria-selected="activeView === tab.name"
+          :aria-controls="`${viewId}-${tab.name}-panel`"
+          :tabindex="activeView === tab.name ? 0 : -1"
+          @click="activeView = tab.name"
+          @keydown="switchViewWithKeyboard"
+        >
+          {{ tab.label }}
+        </button>
       </div>
       <div class="gl-actions">
         <el-button type="primary" :loading="store.running.value" @click="execute">
@@ -12,304 +25,356 @@
         <el-button v-if="store.running.value" type="danger" plain @click="cancel">
           {{ t('gnssRaw.rtkpost.cancel') }}
         </el-button>
-        <el-button plain @click="optionsVisible = !optionsVisible">
-          {{ t('gnssRaw.rtkpost.options') }}
-        </el-button>
+      </div>
+      <div v-if="store.progress.value" class="processing-progress" aria-live="polite">
+        <div class="progress-caption run-status" :class="store.status.value">
+          <span>{{ progressLabel }}</span>
+          <span v-if="store.errorText.value" class="status-detail">{{
+            store.errorText.value
+          }}</span>
+        </div>
+        <el-progress
+          :percentage="store.progress.value.percentage ?? (store.running.value ? 30 : 0)"
+          :indeterminate="store.running.value && store.progress.value.percentage === null"
+          :show-text="store.progress.value.percentage !== null"
+          :status="progressStatus"
+          :stroke-width="8"
+        />
+        <div
+          v-if="store.progress.value.processingMessage"
+          class="processing-message"
+          :title="store.progress.value.processingMessage"
+        >
+          {{ store.progress.value.processingMessage }}
+        </div>
       </div>
     </div>
 
     <el-alert
-      v-if="!desktopAvailable"
+      v-if="!props.embedded && !desktopAvailable"
       class="desktop-alert"
       type="info"
       :closable="false"
       :title="t('gnssRaw.rtkpost.desktopOnly')"
     />
 
-    <section class="form-section">
-      <div class="section-title">{{ t('gnssRaw.rtkpost.engine') }}</div>
-      <div class="file-row">
-        <label>rnx2rtkp</label>
-        <el-input
-          v-model="store.settings.executablePath"
-          :disabled="store.running.value"
-          :placeholder="t('gnssRaw.rtkpost.executablePlaceholder')"
-          clearable
-        />
-        <el-button :disabled="store.running.value" @click="chooseExecutable"
-          ><el-icon><FolderOpened /></el-icon
-        ></el-button>
-      </div>
-
-      <div class="section-title">{{ t('gnssRaw.rtkpost.inputs') }}</div>
-      <div class="file-row">
-        <label>{{ t('gnssRaw.rtkpost.roverObs') }}</label>
-        <el-input
-          v-model="store.settings.roverObsPath"
-          :disabled="store.running.value"
-          placeholder="RINEX OBS"
-          @change="store.suggestOutput"
-        />
-        <el-button :disabled="store.running.value" @click="chooseRover"
-          ><el-icon><FolderOpened /></el-icon
-        ></el-button>
-      </div>
-      <div class="file-row">
-        <label>
-          {{ t('gnssRaw.rtkpost.baseObs') }}
-          <span v-if="relativeMode" class="required">*</span>
-        </label>
-        <el-input
-          v-model="store.settings.baseObsPath"
-          :disabled="store.running.value"
-          :placeholder="
-            relativeMode ? t('gnssRaw.rtkpost.baseRequired') : t('gnssRaw.rtkpost.baseOptional')
-          "
-        />
-        <el-button :disabled="store.running.value" @click="chooseBase"
-          ><el-icon><FolderOpened /></el-icon
-        ></el-button>
-      </div>
-      <div v-for="(_, index) in store.settings.navPaths" :key="index" class="file-row">
-        <label>
-          {{ t('gnssRaw.rtkpost.navFile') }}
-          {{ store.settings.navPaths.length > 1 ? index + 1 : '' }}
-        </label>
-        <el-input
-          v-model="store.settings.navPaths[index]"
-          :disabled="store.running.value"
-          placeholder="NAV / CLK / SP3 / FCB / IONEX / SBAS"
-        />
-        <el-button :disabled="store.running.value" @click="chooseNav(index)"
-          ><el-icon><FolderOpened /></el-icon
-        ></el-button>
-        <el-button
-          v-if="store.settings.navPaths.length > 1"
-          class="remove-nav"
-          text
-          :disabled="store.running.value"
-          @click="store.settings.navPaths.splice(index, 1)"
-        >
-          ×
-        </el-button>
-      </div>
-      <el-button
-        class="add-nav"
-        text
-        type="primary"
-        :disabled="store.running.value || store.settings.navPaths.length >= 14"
-        @click="store.settings.navPaths.push('')"
+    <div class="workspace-content">
+      <div
+        v-show="activeView === 'processing'"
+        :id="`${viewId}-processing-panel`"
+        class="workspace-page processing-view"
+        role="tabpanel"
+        :aria-labelledby="`${viewId}-processing-tab`"
       >
-        + {{ t('gnssRaw.rtkpost.addNav') }}
-      </el-button>
-
-      <div class="section-title">{{ t('gnssRaw.rtkpost.output') }}</div>
-      <div class="file-row">
-        <label>{{ t('gnssRaw.rtkpost.solutionFile') }}</label>
-        <el-input
-          v-model="store.settings.outputPath"
-          :disabled="store.running.value"
-          placeholder=".pos"
-        />
-        <el-button :disabled="store.running.value" @click="chooseOutput"
-          ><el-icon><FolderOpened /></el-icon
-        ></el-button>
-      </div>
-    </section>
-
-    <section v-show="optionsVisible" class="options-section">
-      <div class="section-title">{{ t('gnssRaw.rtkpost.processingOptions') }}</div>
-      <div class="option-grid">
-        <label class="option-field wide">
-          <span>{{ t('gnssRaw.rtkpost.positioningMode') }}</span>
-          <el-select v-model="store.settings.options.mode" :disabled="store.running.value">
-            <el-option
-              v-for="mode in positioningModes"
-              :key="mode.value"
-              :label="mode.label"
-              :value="mode.value"
+        <section class="form-section">
+          <div class="section-title">{{ t('gnssRaw.rtkpost.engine') }}</div>
+          <div class="file-row">
+            <label>rnx2rtkp</label>
+            <el-input
+              v-model="store.settings.executablePath"
+              :disabled="store.running.value"
+              :placeholder="t('gnssRaw.rtkpost.executablePlaceholder')"
+              clearable
             />
-          </el-select>
-        </label>
-        <label class="option-field">
-          <span>{{ t('gnssRaw.rtkpost.frequency') }}</span>
-          <el-select v-model="store.settings.options.frequency" :disabled="store.running.value">
-            <el-option label="L1" :value="1" />
-            <el-option label="L1 + L2" :value="2" />
-            <el-option label="L1 + L2 + L5" :value="3" />
-          </el-select>
-        </label>
-        <label class="option-field">
-          <span>{{ t('gnssRaw.rtkpost.solutionType') }}</span>
-          <el-select v-model="store.settings.options.solutionType" :disabled="store.running.value">
-            <el-option :label="t('gnssRaw.rtkpost.forward')" :value="0" />
-            <el-option :label="t('gnssRaw.rtkpost.backward')" :value="1" />
-            <el-option :label="t('gnssRaw.rtkpost.combined')" :value="2" />
-          </el-select>
-        </label>
-        <label class="option-field">
-          <span>{{ t('gnssRaw.rtkpost.ambiguityResolution') }}</span>
-          <el-select
-            v-model="store.settings.options.ambiguityResolution"
+            <el-button :disabled="store.running.value" @click="chooseExecutable"
+              ><el-icon><FolderOpened /></el-icon
+            ></el-button>
+          </div>
+
+          <div class="section-title">{{ t('gnssRaw.rtkpost.inputs') }}</div>
+          <div class="file-row">
+            <label>{{ t('gnssRaw.rtkpost.roverObs') }}</label>
+            <el-input
+              v-model="store.settings.roverObsPath"
+              :disabled="store.running.value"
+              placeholder="RINEX OBS"
+              @change="store.suggestOutput()"
+            />
+            <el-button :disabled="store.running.value" @click="chooseRover"
+              ><el-icon><FolderOpened /></el-icon
+            ></el-button>
+          </div>
+          <div class="file-row">
+            <label>
+              {{ t('gnssRaw.rtkpost.baseObs') }}
+              <span v-if="relativeMode" class="required">*</span>
+            </label>
+            <el-input
+              v-model="store.settings.baseObsPath"
+              :disabled="store.running.value"
+              :placeholder="
+                relativeMode ? t('gnssRaw.rtkpost.baseRequired') : t('gnssRaw.rtkpost.baseOptional')
+              "
+            />
+            <el-button :disabled="store.running.value" @click="chooseBase"
+              ><el-icon><FolderOpened /></el-icon
+            ></el-button>
+          </div>
+          <div v-for="(_, index) in store.settings.navPaths" :key="index" class="file-row">
+            <label>
+              {{ t('gnssRaw.rtkpost.navFile') }}
+              {{ store.settings.navPaths.length > 1 ? index + 1 : '' }}
+            </label>
+            <el-input
+              v-model="store.settings.navPaths[index]"
+              :disabled="store.running.value"
+              placeholder="NAV / CLK / SP3 / FCB / IONEX / SBAS"
+            />
+            <el-button :disabled="store.running.value" @click="chooseNav(index)"
+              ><el-icon><FolderOpened /></el-icon
+            ></el-button>
+            <el-button
+              v-if="store.settings.navPaths.length > 1"
+              class="remove-nav"
+              text
+              :disabled="store.running.value"
+              @click="store.settings.navPaths.splice(index, 1)"
+            >
+              ×
+            </el-button>
+          </div>
+          <el-button
+            class="add-nav"
+            text
+            type="primary"
+            :disabled="store.running.value || store.settings.navPaths.length >= 14"
+            @click="store.settings.navPaths.push('')"
+          >
+            + {{ t('gnssRaw.rtkpost.addNav') }}
+          </el-button>
+          <div class="field-hint nav-hint">{{ t('gnssRaw.rtkpost.navHint') }}</div>
+
+          <div class="section-title">{{ t('gnssRaw.rtkpost.output') }}</div>
+          <div class="file-row">
+            <label>{{ t('gnssRaw.rtkpost.solutionFile') }}</label>
+            <el-input
+              v-model="store.settings.outputPath"
+              :disabled="store.running.value"
+              placeholder=".pos"
+            />
+            <el-button :disabled="store.running.value" @click="chooseOutput"
+              ><el-icon><FolderOpened /></el-icon
+            ></el-button>
+          </div>
+        </section>
+      </div>
+
+      <section
+        v-show="activeView === 'options'"
+        :id="`${viewId}-options-panel`"
+        class="workspace-page options-section"
+        role="tabpanel"
+        :aria-labelledby="`${viewId}-options-tab`"
+      >
+        <div class="section-title">{{ t('gnssRaw.rtkpost.processingOptions') }}</div>
+        <div class="option-grid">
+          <label class="option-field wide">
+            <span>{{ t('gnssRaw.rtkpost.positioningMode') }}</span>
+            <el-select v-model="store.settings.options.mode" :disabled="store.running.value">
+              <el-option
+                v-for="mode in positioningModes"
+                :key="mode.value"
+                :label="mode.label"
+                :value="mode.value"
+              />
+            </el-select>
+          </label>
+          <label class="option-field">
+            <span>{{ t('gnssRaw.rtkpost.frequency') }}</span>
+            <el-select v-model="store.settings.options.frequency" :disabled="store.running.value">
+              <el-option label="L1" :value="1" />
+              <el-option label="L1 + L2" :value="2" />
+              <el-option label="L1 + L2 + L5" :value="3" />
+            </el-select>
+          </label>
+          <label class="option-field">
+            <span>{{ t('gnssRaw.rtkpost.solutionType') }}</span>
+            <el-select
+              v-model="store.settings.options.solutionType"
+              :disabled="store.running.value"
+            >
+              <el-option :label="t('gnssRaw.rtkpost.forward')" :value="0" />
+              <el-option :label="t('gnssRaw.rtkpost.backward')" :value="1" />
+              <el-option :label="t('gnssRaw.rtkpost.combined')" :value="2" />
+            </el-select>
+          </label>
+          <label class="option-field">
+            <span>{{ t('gnssRaw.rtkpost.ambiguityResolution') }}</span>
+            <el-select
+              v-model="store.settings.options.ambiguityResolution"
+              :disabled="store.running.value"
+            >
+              <el-option :label="t('gnssRaw.rtkpost.continuous')" value="continuous" />
+              <el-option :label="t('gnssRaw.rtkpost.instantaneous')" value="instantaneous" />
+              <el-option :label="t('gnssRaw.rtkpost.fixAndHold')" value="fix-and-hold" />
+            </el-select>
+          </label>
+          <label class="option-field">
+            <span>{{ t('gnssRaw.rtkpost.elevationMask') }}</span>
+            <el-input-number
+              v-model="store.settings.options.elevationMaskDeg"
+              :disabled="store.running.value"
+              :min="0"
+              :max="90"
+              :precision="1"
+              controls-position="right"
+            />
+          </label>
+          <label class="option-field">
+            <span>{{ t('gnssRaw.rtkpost.ratioThreshold') }}</span>
+            <el-input-number
+              v-model="store.settings.options.ratioThreshold"
+              :disabled="store.running.value"
+              :min="0"
+              :max="999"
+              :precision="1"
+              controls-position="right"
+            />
+          </label>
+          <label class="option-field">
+            <span>{{ t('gnssRaw.rtkpost.interval') }}</span>
+            <el-input-number
+              :model-value="store.settings.options.intervalS"
+              :disabled="store.running.value"
+              :min="0.000001"
+              :max="86400"
+              :precision="3"
+              :placeholder="t('gnssRaw.rtkpost.allEpochs')"
+              controls-position="right"
+              @update:model-value="store.settings.options.intervalS = $event ?? null"
+            />
+          </label>
+        </div>
+
+        <div class="constellation-field">
+          <span>{{ t('gnssRaw.rtkpost.constellations') }}</span>
+          <el-checkbox-group
+            v-model="store.settings.options.constellations"
             :disabled="store.running.value"
           >
-            <el-option :label="t('gnssRaw.rtkpost.continuous')" value="continuous" />
-            <el-option :label="t('gnssRaw.rtkpost.instantaneous')" value="instantaneous" />
-            <el-option :label="t('gnssRaw.rtkpost.fixAndHold')" value="fix-and-hold" />
-          </el-select>
-        </label>
-        <label class="option-field">
-          <span>{{ t('gnssRaw.rtkpost.elevationMask') }}</span>
-          <el-input-number
-            v-model="store.settings.options.elevationMaskDeg"
-            :disabled="store.running.value"
-            :min="0"
-            :max="90"
-            :precision="1"
-            controls-position="right"
-          />
-        </label>
-        <label class="option-field">
-          <span>{{ t('gnssRaw.rtkpost.ratioThreshold') }}</span>
-          <el-input-number
-            v-model="store.settings.options.ratioThreshold"
-            :disabled="store.running.value"
-            :min="0"
-            :max="999"
-            :precision="1"
-            controls-position="right"
-          />
-        </label>
-        <label class="option-field">
-          <span>{{ t('gnssRaw.rtkpost.interval') }}</span>
-          <el-input-number
-            :model-value="store.settings.options.intervalS"
-            :disabled="store.running.value"
-            :min="0.000001"
-            :max="86400"
-            :precision="3"
-            :placeholder="t('gnssRaw.rtkpost.allEpochs')"
-            controls-position="right"
-            @update:model-value="store.settings.options.intervalS = $event ?? null"
-          />
-        </label>
-      </div>
+            <el-checkbox value="G">GPS</el-checkbox>
+            <el-checkbox value="R">GLONASS</el-checkbox>
+            <el-checkbox value="E">Galileo</el-checkbox>
+            <el-checkbox value="C">BDS</el-checkbox>
+            <el-checkbox value="J">QZSS</el-checkbox>
+            <el-checkbox value="I">NavIC</el-checkbox>
+          </el-checkbox-group>
+        </div>
 
-      <div class="constellation-field">
-        <span>{{ t('gnssRaw.rtkpost.constellations') }}</span>
-        <el-checkbox-group
-          v-model="store.settings.options.constellations"
-          :disabled="store.running.value"
-        >
-          <el-checkbox value="G">GPS</el-checkbox>
-          <el-checkbox value="R">GLONASS</el-checkbox>
-          <el-checkbox value="E">Galileo</el-checkbox>
-          <el-checkbox value="C">BDS</el-checkbox>
-          <el-checkbox value="J">QZSS</el-checkbox>
-          <el-checkbox value="I">NavIC</el-checkbox>
-        </el-checkbox-group>
-      </div>
+        <div class="option-grid time-grid">
+          <label class="option-field wide">
+            <span>{{ t('gnssRaw.rtkpost.startTime') }}</span>
+            <el-input
+              v-model="store.settings.options.startTime"
+              :disabled="store.running.value"
+              placeholder="2024-07-30T00:00:00"
+            />
+          </label>
+          <label class="option-field wide">
+            <span>{{ t('gnssRaw.rtkpost.endTime') }}</span>
+            <el-input
+              v-model="store.settings.options.endTime"
+              :disabled="store.running.value"
+              placeholder="2024-07-30T23:59:59"
+            />
+          </label>
+        </div>
+        <div class="field-hint">{{ t('gnssRaw.rtkpost.timeHint') }}</div>
 
-      <div class="option-grid time-grid">
-        <label class="option-field wide">
-          <span>{{ t('gnssRaw.rtkpost.startTime') }}</span>
+        <div class="section-title">{{ t('gnssRaw.rtkpost.outputOptions') }}</div>
+        <div class="option-grid">
+          <label class="option-field">
+            <span>{{ t('gnssRaw.rtkpost.outputFormat') }}</span>
+            <el-select
+              v-model="store.settings.options.outputFormat"
+              :disabled="store.running.value"
+            >
+              <el-option label="Lat / Lon / Height" value="llh" />
+              <el-option label="X / Y / Z (ECEF)" value="xyz" />
+              <el-option label="E / N / U" value="enu" />
+              <el-option label="NMEA-0183 GGA" value="nmea" />
+            </el-select>
+          </label>
+          <label class="option-field">
+            <span>{{ t('gnssRaw.rtkpost.timeSystem') }}</span>
+            <el-select v-model="store.settings.options.timeSystem" :disabled="store.running.value">
+              <el-option label="GPST" value="gpst" />
+              <el-option label="UTC" value="utc" />
+            </el-select>
+          </label>
+          <label class="option-field">
+            <span>{{ t('gnssRaw.rtkpost.timeFormat') }}</span>
+            <el-select v-model="store.settings.options.timeFormat" :disabled="store.running.value">
+              <el-option :label="t('gnssRaw.rtkpost.calendarTime')" value="hms" />
+              <el-option :label="t('gnssRaw.rtkpost.timeOfWeek')" value="tow" />
+            </el-select>
+          </label>
+          <label class="option-field">
+            <span>{{ t('gnssRaw.rtkpost.timeDecimals') }}</span>
+            <el-input-number
+              v-model="store.settings.options.timeDecimals"
+              :disabled="store.running.value"
+              :min="0"
+              :max="9"
+              :step="1"
+              step-strictly
+              controls-position="right"
+            />
+          </label>
+          <label class="option-field">
+            <span>{{ t('gnssRaw.rtkpost.outputStatus') }}</span>
+            <el-select
+              v-model="store.settings.options.outputStatus"
+              :disabled="store.running.value"
+            >
+              <el-option :label="t('gnssRaw.rtkpost.off')" :value="0" />
+              <el-option :label="t('gnssRaw.rtkpost.states')" :value="1" />
+              <el-option :label="t('gnssRaw.rtkpost.residuals')" :value="2" />
+            </el-select>
+          </label>
+          <label class="option-field">
+            <span>{{ t('gnssRaw.rtkpost.traceLevel') }}</span>
+            <el-input-number
+              v-model="store.settings.options.traceLevel"
+              :disabled="store.running.value"
+              :min="0"
+              :max="5"
+              :step="1"
+              step-strictly
+              controls-position="right"
+            />
+          </label>
+        </div>
+        <div class="file-row config-row">
+          <label>{{ t('gnssRaw.rtkpost.configFile') }}</label>
           <el-input
-            v-model="store.settings.options.startTime"
+            v-model="store.settings.configPath"
             :disabled="store.running.value"
-            placeholder="2024-07-30T00:00:00"
+            :placeholder="t('gnssRaw.rtkpost.configOptional')"
+            clearable
           />
-        </label>
-        <label class="option-field wide">
-          <span>{{ t('gnssRaw.rtkpost.endTime') }}</span>
-          <el-input
-            v-model="store.settings.options.endTime"
-            :disabled="store.running.value"
-            placeholder="2024-07-30T23:59:59"
-          />
-        </label>
-      </div>
-      <div class="field-hint">{{ t('gnssRaw.rtkpost.timeHint') }}</div>
+          <el-button :disabled="store.running.value" @click="chooseConfig"
+            ><el-icon><FolderOpened /></el-icon
+          ></el-button>
+        </div>
+        <div class="field-hint">{{ t('gnssRaw.rtkpost.configHint') }}</div>
+      </section>
 
-      <div class="section-title">{{ t('gnssRaw.rtkpost.outputOptions') }}</div>
-      <div class="option-grid">
-        <label class="option-field">
-          <span>{{ t('gnssRaw.rtkpost.outputFormat') }}</span>
-          <el-select v-model="store.settings.options.outputFormat" :disabled="store.running.value">
-            <el-option label="Lat / Lon / Height" value="llh" />
-            <el-option label="X / Y / Z (ECEF)" value="xyz" />
-            <el-option label="E / N / U" value="enu" />
-            <el-option label="NMEA-0183 GGA" value="nmea" />
-          </el-select>
-        </label>
-        <label class="option-field">
-          <span>{{ t('gnssRaw.rtkpost.timeSystem') }}</span>
-          <el-select v-model="store.settings.options.timeSystem" :disabled="store.running.value">
-            <el-option label="GPST" value="gpst" />
-            <el-option label="UTC" value="utc" />
-          </el-select>
-        </label>
-        <label class="option-field">
-          <span>{{ t('gnssRaw.rtkpost.timeFormat') }}</span>
-          <el-select v-model="store.settings.options.timeFormat" :disabled="store.running.value">
-            <el-option :label="t('gnssRaw.rtkpost.calendarTime')" value="hms" />
-            <el-option :label="t('gnssRaw.rtkpost.timeOfWeek')" value="tow" />
-          </el-select>
-        </label>
-        <label class="option-field">
-          <span>{{ t('gnssRaw.rtkpost.timeDecimals') }}</span>
-          <el-input-number
-            v-model="store.settings.options.timeDecimals"
-            :disabled="store.running.value"
-            :min="0"
-            :max="9"
-            :step="1"
-            step-strictly
-            controls-position="right"
-          />
-        </label>
-        <label class="option-field">
-          <span>{{ t('gnssRaw.rtkpost.outputStatus') }}</span>
-          <el-select v-model="store.settings.options.outputStatus" :disabled="store.running.value">
-            <el-option :label="t('gnssRaw.rtkpost.off')" :value="0" />
-            <el-option :label="t('gnssRaw.rtkpost.states')" :value="1" />
-            <el-option :label="t('gnssRaw.rtkpost.residuals')" :value="2" />
-          </el-select>
-        </label>
-        <label class="option-field">
-          <span>{{ t('gnssRaw.rtkpost.traceLevel') }}</span>
-          <el-input-number
-            v-model="store.settings.options.traceLevel"
-            :disabled="store.running.value"
-            :min="0"
-            :max="5"
-            :step="1"
-            step-strictly
-            controls-position="right"
-          />
-        </label>
-      </div>
-      <div class="file-row config-row">
-        <label>{{ t('gnssRaw.rtkpost.configFile') }}</label>
-        <el-input
-          v-model="store.settings.configPath"
-          :disabled="store.running.value"
-          :placeholder="t('gnssRaw.rtkpost.configOptional')"
-          clearable
+      <section
+        v-show="activeView === 'result'"
+        :id="`${viewId}-result-panel`"
+        class="workspace-page result-view"
+        role="tabpanel"
+        :aria-labelledby="`${viewId}-result-tab`"
+      >
+        <el-alert
+          v-if="store.result.value?.ok && store.result.value.warnings?.length"
+          class="engine-warnings"
+          type="warning"
+          :closable="false"
+          :title="t('gnssRaw.rtkpost.engineWarnings')"
+          :description="store.result.value.warnings.join('\n')"
         />
-        <el-button :disabled="store.running.value" @click="chooseConfig"
-          ><el-icon><FolderOpened /></el-icon
-        ></el-button>
-      </div>
-      <div class="field-hint">{{ t('gnssRaw.rtkpost.configHint') }}</div>
-    </section>
-
-    <div v-if="store.status.value !== 'idle'" class="run-status" :class="store.status.value">
-      <span>{{ statusLabel }}</span>
-      <span v-if="store.errorText.value" class="status-detail">{{ store.errorText.value }}</span>
-    </div>
-
-    <el-tabs v-model="activeTab" class="output-tabs">
-      <el-tab-pane :label="t('gnssRaw.rtkpost.result')" name="result">
         <template v-if="solution">
           <div class="result-path" :title="store.result.value?.outputPath">
             {{ store.result.value?.outputPath }}
@@ -328,8 +393,15 @@
           <div v-else class="empty-output">{{ t('gnssRaw.rtkpost.noSolutionRows') }}</div>
         </template>
         <div v-else class="empty-output">{{ t('gnssRaw.rtkpost.emptyResult') }}</div>
-      </el-tab-pane>
-      <el-tab-pane :label="t('gnssRaw.rtkpost.log')" name="log">
+      </section>
+
+      <section
+        v-show="activeView === 'log'"
+        :id="`${viewId}-log-panel`"
+        class="workspace-page log-view"
+        role="tabpanel"
+        :aria-labelledby="`${viewId}-log-tab`"
+      >
         <div class="log-actions">
           <el-button text size="small" :disabled="!store.logText.value" @click="store.clearResult">
             {{ t('gnssRaw.rtkpost.clear') }}
@@ -337,21 +409,34 @@
         </div>
         <pre v-if="store.logText.value" class="run-log">{{ store.logText.value }}</pre>
         <div v-else class="empty-output">{{ t('gnssRaw.rtkpost.emptyLog') }}</div>
-      </el-tab-pane>
-    </el-tabs>
+      </section>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, ref, useId, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { FolderOpened } from '@element-plus/icons-vue'
 import { t } from '@/i18n'
 import { useRtkPost } from '@/composables/useRtkPost'
 
 const store = useRtkPost()
-const optionsVisible = ref(false)
-const activeTab = ref('result')
+const props = defineProps<{ embedded?: boolean; view?: string }>()
+const viewId = `rtkpost-${useId()}`
+const localView = ref('processing')
+const activeView = computed({
+  get: () => (props.embedded ? (props.view ?? 'processing') : localView.value),
+  set: (value) => {
+    localView.value = value
+  },
+})
+const views = computed(() => [
+  { name: 'processing', label: t('gnssRaw.rtkpost.processing') },
+  { name: 'options', label: t('gnssRaw.rtkpost.options') },
+  { name: 'result', label: t('gnssRaw.rtkpost.result') },
+  { name: 'log', label: t('gnssRaw.rtkpost.log') },
+])
 const desktopAvailable = Boolean(window.electronAPI?.rtkPostRun)
 
 const positioningModes = computed(() => [
@@ -390,11 +475,39 @@ const statusLabel = computed(() => {
   if (store.status.value === 'cancelled') return t('gnssRaw.rtkpost.cancelled')
   return t('gnssRaw.rtkpost.failed')
 })
+const progressLabel = computed(() => {
+  if (!store.running.value) return statusLabel.value
+  const phase = store.progress.value?.phase ?? 'preparing'
+  return t(`gnssRaw.rtkpost.progress${phase[0].toUpperCase()}${phase.slice(1)}`)
+})
+const progressStatus = computed(() => {
+  if (store.status.value === 'success') return 'success'
+  if (store.status.value === 'error') return 'exception'
+  if (store.status.value === 'cancelled') return 'warning'
+  return undefined
+})
 
 watch(
   () => store.settings.options.outputFormat,
   () => store.suggestOutput(),
 )
+
+function switchViewWithKeyboard(event: KeyboardEvent): void {
+  const index = views.value.findIndex((view) => view.name === activeView.value)
+  const count = views.value.length
+  let next: number
+  if (event.key === 'ArrowRight') next = (index + 1) % count
+  else if (event.key === 'ArrowLeft') next = (index + count - 1) % count
+  else if (event.key === 'Home') next = 0
+  else if (event.key === 'End') next = views.value.length - 1
+  else return
+  event.preventDefault()
+  activeView.value = views.value[next].name
+  const tabs = (
+    event.currentTarget as HTMLElement
+  ).parentElement?.querySelectorAll<HTMLButtonElement>('[role="tab"]')
+  tabs?.[next]?.focus()
+}
 
 async function chooseRover(): Promise<void> {
   const path = await chooseFile('rover-obs', obsFilters())
@@ -464,16 +577,17 @@ async function chooseFile(
 }
 
 async function execute(): Promise<void> {
-  activeTab.value = 'log'
   try {
     await store.execute()
     if (store.status.value === 'success') {
-      activeTab.value = 'result'
+      activeView.value = 'result'
       ElMessage.success(t('gnssRaw.rtkpost.success'))
     } else if (store.status.value === 'error') {
+      activeView.value = 'log'
       ElMessage.error(store.errorText.value || t('gnssRaw.rtkpost.failed'))
     }
   } catch (error) {
+    activeView.value = 'log'
     ElMessage.error(error instanceof Error ? error.message : String(error))
   }
 }
@@ -502,8 +616,12 @@ function formatBytes(bytes: number): string {
 
 <style scoped>
 .rtkpost {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
   height: 100%;
-  overflow: auto;
+  min-height: 0;
+  overflow: hidden;
   padding: 8px;
   color: var(--el-text-color-primary);
   font-size: 12px;
@@ -517,12 +635,54 @@ function formatBytes(bytes: number): string {
 .run-toolbar .el-button + .el-button {
   margin-left: 0;
 }
-.engine-name {
-  margin-left: auto;
-  color: var(--el-text-color-secondary);
-  white-space: nowrap;
+.rtkpost .run-toolbar {
+  position: relative;
+  top: auto;
+  flex: none;
+}
+.workspace-content {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+.workspace-page {
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--app-border-strong) transparent;
+}
+.rtkpost .options-section {
+  margin-top: 0;
+}
+.result-view,
+.log-view {
+  display: flex;
+  flex-direction: column;
+}
+.result-view > *,
+.log-view > * {
+  flex-shrink: 0;
+}
+.rtkpost .solution-preview,
+.rtkpost .run-log {
+  flex: 1;
+  min-height: 48px;
+  max-height: none;
+  text-align: left;
+}
+.result-view .empty-output,
+.log-view .empty-output {
+  display: grid;
+  flex: 1;
+  place-items: center;
 }
 .desktop-alert {
+  flex: none;
   margin-bottom: 8px;
 }
 .form-section,
@@ -616,8 +776,9 @@ function formatBytes(bytes: number): string {
 }
 .run-status {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
-  margin-top: 8px;
+  margin-bottom: 10px;
   padding: 6px 10px;
   border-radius: 6px;
   background: var(--el-fill-color-light);
@@ -639,16 +800,47 @@ function formatBytes(bytes: number): string {
 .status-detail {
   min-width: 0;
   overflow-wrap: anywhere;
+  white-space: pre-line;
 }
-.output-tabs {
-  margin-top: 8px;
+.processing-progress {
+  box-sizing: border-box;
+  flex: 0 0 100%;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--app-border);
+  border-radius: 7px;
+  background: var(--app-surface);
 }
-.output-tabs :deep(.el-tabs__header) {
-  margin-bottom: 6px;
+.progress-caption {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 4px 12px;
+  margin-bottom: 8px;
+  color: var(--app-text);
+  font-size: 11px;
 }
-.output-tabs :deep(.el-tabs__item) {
-  height: 32px;
-  font-size: 12px;
+.processing-progress .run-status {
+  margin: 0 0 8px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.processing-message {
+  overflow: hidden;
+  margin-top: 6px;
+  color: var(--app-text-secondary);
+  font:
+    11px/1.4 Consolas,
+    'Courier New',
+    monospace;
+  font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.engine-warnings {
+  margin-bottom: 10px;
+  white-space: pre-line;
 }
 .result-path {
   overflow: hidden;
@@ -721,8 +913,10 @@ function formatBytes(bytes: number): string {
   .add-nav {
     margin-left: 116px;
   }
-  .engine-name {
-    display: none;
+}
+@media (max-width: 480px) {
+  .rtkpost .view-tab {
+    padding-inline: 10px;
   }
 }
 </style>

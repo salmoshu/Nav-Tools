@@ -70,7 +70,7 @@ describe('panel and application persistence', () => {
     expect(applications[4]).toMatchObject({
       id: 'gnsslib',
       icon: 'satellite',
-      windowIds: ['gnsslib-rtkpost', 'gnsslib-rtknavi'],
+      windowIds: ['gnsslib-solver', 'raw-messages', 'gnss-deviation'],
     })
     expect(applications[5]).toMatchObject({
       id: 'camera',

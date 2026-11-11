@@ -352,6 +352,23 @@ describe('NMEA GNSS status extraction', () => {
     expect(nmea.satelliteSnrData.value.map((item) => item.prn)).toEqual(['7'])
   })
 
+  it('aligns satellite snapshots when the first GGA follows midnight and the first RMC precedes it', () => {
+    const nmea = useNmea()
+    nmea.processRawData(
+      [
+        withChecksum('$GPRMC,235959.00,A,3100.0000,N,12100.0000,E,0,0,300724,,,A'),
+        withChecksum('$GPGSV,1,1,01,07,30,180,38'),
+        withChecksum('$GPGGA,000000.00,3100.0000,N,12100.0000,E,5,01,1.0,10.0,M,20.0,M,,'),
+        withChecksum('$GPGSV,1,1,01,12,40,083,46'),
+        withChecksum('$GPGGA,000001.00,3100.0001,N,12100.0001,E,4,01,1.0,10.0,M,20.0,M,,'),
+      ].join('\n') + '\n',
+    )
+    nmea.applyTimelineEpoch(1)
+    expect(nmea.satelliteSnrData.value.map((item) => item.prn)).toEqual(['7'])
+    nmea.applyTimelineEpoch(2)
+    expect(nmea.satelliteSnrData.value.map((item) => item.prn)).toEqual(['12'])
+  })
+
   it('creates the same epoch history regardless of input chunking', () => {
     const nmea = useNmea()
     const lines = [

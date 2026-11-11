@@ -143,10 +143,12 @@
       <span v-if="fileTimelineActive" class="divider timeline-divider" aria-hidden="true"></span>
       <FileTimelineControl
         v-if="fileTimelineActive"
+        :key="isSolverWorkspace ? 'solver' : 'device'"
+        :timeline="workspaceTimeline"
         :position="position"
-        :speed="replaySpeedSelection"
-        :speed-options="replaySpeedSelectionOptions"
-        @update:speed="applyTimelineSpeed"
+        :speed="isSolverWorkspace ? solverSession.playbackSpeed.value : replaySpeedSelection"
+        :speed-options="isSolverWorkspace ? replaySpeedOptions : replaySpeedSelectionOptions"
+        @update:speed="applyWorkspaceTimelineSpeed"
       />
       <span v-if="lidarTimelineActive" class="divider timeline-divider" aria-hidden="true"></span>
       <LidarTimelineControl v-if="lidarTimelineActive" :position="position" />
@@ -231,7 +233,8 @@
               t('app.toolbar.mcapPartFamilyHint')
             }}</span>
           </div>
-          <template v-else>
+          <template v-if="true">
+            <template v-if="!fileIsMcap">
             <div class="input-group compact-input-group">
               <span class="input-label">{{ t('app.toolbar.replaySpeed') }}</span>
               <el-select
@@ -278,6 +281,7 @@
                 <span class="input-unit">{{ t('app.toolbar.millisecond') }}</span>
               </div>
             </div>
+            </template>
             <div class="parser-card">
               <div class="parser-copy">
                 <strong>{{ t('app.toolbar.dataSection') }}</strong>
@@ -286,8 +290,8 @@
               <div class="input-group">
                 <span class="input-label">{{ t('app.toolbar.parseMethod') }}</span>
                 <el-cascader
-                  v-model="sourceParser"
-                  :options="textDataParserCascaderOptions"
+                  v-model="sourceFormat"
+                  :options="formatOptions"
                   :props="parserCascaderProps"
                   :show-all-levels="false"
                   :aria-label="t('app.toolbar.parseMethod')"
@@ -295,7 +299,8 @@
                   popper-class="parser-select-dropdown"
                 />
               </div>
-              <div v-if="sourceParser === 'regex'" class="regex-parser-config">
+              <small v-if="sourceFormat === 'auto'" class="format-detected">{{ formatDetectionLabel }}</small>
+              <div v-if="sourceFormat === 'regex'" class="regex-parser-config">
                 <div class="input-group">
                   <span class="input-label">{{ t('app.toolbar.regexPattern') }}</span>
                   <el-input
@@ -457,8 +462,8 @@
             <div class="input-group">
               <span class="input-label">{{ t('app.toolbar.parseMethod') }}</span>
               <el-cascader
-                v-model="sourceParser"
-                :options="textDataParserCascaderOptions"
+                v-model="sourceFormat"
+                :options="formatOptions"
                 :props="parserCascaderProps"
                 :show-all-levels="false"
                 :aria-label="t('app.toolbar.parseMethod')"
@@ -466,7 +471,8 @@
                 popper-class="parser-select-dropdown"
               />
             </div>
-            <div v-if="sourceParser === 'regex'" class="regex-parser-config">
+            <small v-if="sourceFormat === 'auto'" class="format-detected">{{ formatDetectionLabel }}</small>
+            <div v-if="sourceFormat === 'regex'" class="regex-parser-config">
               <div class="input-group">
                 <span class="input-label">{{ t('app.toolbar.regexPattern') }}</span>
                 <el-input
@@ -543,8 +549,8 @@
             <div class="input-group">
               <span class="input-label">{{ t('app.toolbar.parseMethod') }}</span>
               <el-cascader
-                v-model="sourceParser"
-                :options="textDataParserCascaderOptions"
+                v-model="sourceFormat"
+                :options="formatOptions"
                 :props="parserCascaderProps"
                 :show-all-levels="false"
                 :aria-label="t('app.toolbar.parseMethod')"
@@ -552,7 +558,8 @@
                 popper-class="parser-select-dropdown"
               />
             </div>
-            <div v-if="sourceParser === 'regex'" class="regex-parser-config">
+            <small v-if="sourceFormat === 'auto'" class="format-detected">{{ formatDetectionLabel }}</small>
+            <div v-if="sourceFormat === 'regex'" class="regex-parser-config">
               <div class="input-group">
                 <span class="input-label">{{ t('app.toolbar.regexPattern') }}</span>
                 <el-input
@@ -655,9 +662,11 @@ import { useApplicationSelector } from '@/composables/useApplicationSelector'
 import { getPanelIconComponent } from '@/settings/panelIcons'
 import {
   textDataParserOptions,
-  textDataParserCascaderOptions,
+  dataFormatOptions,
 } from '@/composables/useDataSourceManager'
+import { FORMAT_LABELS } from '@/core/data/DataFormat'
 import { useFileTimeline } from '@/composables/useFileTimeline'
+import { useGnssSolverSession } from '@/composables/useGnssSolverSession'
 import FileTimelineControl from '@/components/FileTimelineControl.vue'
 import LidarTimelineControl from '@/components/LidarTimelineControl.vue'
 import GnssRawLoadingControl from '@/components/GnssRawLoadingControl.vue'
@@ -676,18 +685,21 @@ const ipcRenderer = window.ipcRenderer
 // 并由布局持久化层跨重启恢复。
 const position = toolbarPosition
 const { currentApplication, currentApplicationId, currentWindows } = useApplicationSelector()
-const { active: fileTimelineLoaded } = useFileTimeline()
+const deviceTimeline = useFileTimeline()
+const solverSession = useGnssSolverSession()
+const isSolverWorkspace = computed(() => currentApplication.value?.id === 'gnsslib' || (currentApplication.value?.windowIds.includes('gnsslib-solver') ?? false))
+const workspaceTimeline = computed(() => isSolverWorkspace.value ? solverSession.display.timeline : deviceTimeline)
 // 时间轴控件可见性：GNSS 时间轴之外，文本样本时钟回放（flow/motor/plot/raw-messages）也用同一条时间轴
 const TIMELINE_FUNC_MODES = new Set(['gnss', 'flow', 'motor'])
 const TIMELINE_WINDOW_IDS = new Set(['plot', 'raw-messages'])
 const fileTimelineActive = computed(
   () =>
-    fileTimelineLoaded.value &&
-    currentWindows.value.some(
+    workspaceTimeline.value.active.value &&
+    (isSolverWorkspace.value || currentWindows.value.some(
       (windowDefinition) =>
         TIMELINE_FUNC_MODES.has(windowDefinition.funcMode) ||
         TIMELINE_WINDOW_IDS.has(windowDefinition.id),
-    ),
+    )),
 )
 
 // 文件输入中的 MCAP 回放与最近文件（覆盖所有支持的输入类型）。
@@ -774,7 +786,9 @@ const {
   networkPort,
   networkProtocol,
   networkLoop,
-  sourceParser,
+  sourceFormat,
+  sourceDetectedFormat,
+  sourceFormatAttempted,
   sourceRegexPattern,
   serialPorts,
   baudRates,
@@ -827,12 +841,20 @@ function applyTimelineSpeed(value: number): void {
   replaySpeedSelection.value = value
 }
 
-const activeParserDescription = computed(
-  () =>
-    textDataParserOptions.find((option) => option.value === sourceParser.value)?.description ?? '',
-)
+function applyWorkspaceTimelineSpeed(value: number): void {
+  if (isSolverWorkspace.value) solverSession.setPlaybackSpeed(value)
+  else applyTimelineSpeed(value)
+}
+
+const formatOptions = computed(() => dataFormatOptions(activeTab.value))
+const formatDetectionLabel = computed(() => sourceDetectedFormat.value
+  ? t(sourceDetectedFormat.value.disabled ? 'data.formatDisabled' : sourceDetectedFormat.value.candidate ? 'data.formatCandidate' : 'data.formatDetected', { format: FORMAT_LABELS[sourceDetectedFormat.value.format] })
+  : t(sourceFormatAttempted.value ? 'data.formatUnknown' : 'data.formatPending'))
+const activeParserDescription = computed(() => sourceFormat.value === 'auto'
+  ? t('data.formatAutoDesc')
+  : textDataParserOptions.find((option) => option.value === sourceFormat.value)?.description ?? FORMAT_LABELS[sourceFormat.value])
 const regexPatternError = computed(() => {
-  if (sourceParser.value !== 'regex') return ''
+  if (sourceFormat.value !== 'regex') return ''
   try {
     createRecordRegex(sourceRegexPattern.value)
     return ''
@@ -1935,6 +1957,7 @@ onUnmounted(() => {
   font-size: 12px;
   line-height: 1.45;
 }
+.format-detected { color: var(--app-text-secondary); font-size: 12px; margin-left: 106px; }
 
 .source-tab-label {
   display: flex;

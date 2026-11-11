@@ -1,5 +1,5 @@
 /**
- * Parser for the text solution formats emitted by Robo-GNSS/RTKLIB.
+ * Parser for the text solution formats emitted by Open-GNSS/RTKLIB.
  *
  * RTKLIB uses the .pos suffix for several text layouts.  The header emitted
  * by solution.c is the format contract, so rows are decoded from the header
@@ -41,6 +41,11 @@ export interface RtkSolutionParserOptions {
   timeSystem?: RtkSolutionTimeSystem
   dms?: boolean
   reference?: RtkSolutionReference
+}
+
+/** Convert the GGA quality indicator to the quality codes used in RTKLIB .pos files. */
+export function nmeaQualityToRtkQuality(quality: number): number {
+  return [0, 5, 4, 6, 1, 2, 7, 0, 0, 0][quality] ?? 0
 }
 
 interface RtkSolutionParserState {

@@ -138,7 +138,8 @@
                   </div>
                 </template>
                 <div class="card-content component-surface">
-                  <component :is="item.component" />
+                  <GnssSolverScope v-if="isSolverWorkspace"><component :is="item.component" /></GnssSolverScope>
+                  <component v-else :is="item.component" />
                 </div>
               </el-card>
             </div>
@@ -159,6 +160,7 @@
 
 <script setup lang="ts">
 import ToolBar from './ToolBar.vue'
+import GnssSolverScope from './windows/gnsslib/GnssSolverScope.vue'
 import StatusBar from './StatusBar.vue'
 import ApplicationSelector from './ApplicationSelector.vue'
 import { ref, computed, nextTick, onMounted, onUnmounted, provide, watch } from 'vue'
@@ -212,6 +214,7 @@ const {
   openApplicationSelector,
   closeApplicationSelector,
 } = useApplicationSelector()
+const isSolverWorkspace = computed(() => currentApplication.value?.id === 'gnsslib' || (currentApplication.value?.windowIds.includes('gnsslib-solver') ?? false))
 const ipc = createBrowserIpcTransport()
 let removeSaveListener: (() => void) | undefined
 let removeRestoreListener: (() => void) | undefined

@@ -1,5 +1,9 @@
 export default {
-  'plot': {
+  'gnsslib-solver': {
+    title: 'GNSS Solver',
+    desc: 'Post-processing and live positioning with shared messages and deviation analysis',
+  },
+  plot: {
     title: 'Plot',
     desc: 'Plot numeric data over time',
   },
@@ -7,7 +11,7 @@ export default {
     title: 'Messages',
     desc: 'View, filter, and send messages',
   },
-  'terminal': {
+  terminal: {
     title: 'Terminal',
     desc: 'SSH, SFTP, WSL, and local shell terminal',
   },
@@ -81,10 +85,10 @@ export default {
   },
   'gnsslib-rtkpost': {
     title: 'RTKPOST',
-    desc: 'Run GNSS post-processing with Robo-GNSS rnx2rtkp and export solutions',
+    desc: 'Run GNSS post-processing with Open-GNSS rnx2rtkp and export solutions',
   },
   'gnsslib-rtknavi': {
     title: 'RTKNAVI',
-    desc: 'Configure real-time positioning with Robo-GNSS rtkrcv and monitor solutions',
+    desc: 'Configure real-time positioning with Open-GNSS rtkrcv and monitor solutions',
   },
 }

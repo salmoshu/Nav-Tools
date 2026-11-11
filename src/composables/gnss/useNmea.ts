@@ -6,6 +6,7 @@ import {
 } from '@/core/gnss/SatelliteEpochAssembler'
 import { SatelliteEpochStore } from '@/core/gnss/SatelliteEpochStore'
 import { NumericEpochStore } from '@/core/gnss/NumericEpochStore'
+import { recordingClockDifference } from '@/core/gnss/EpochSelection'
 import {
   SatelliteDetailEpochStore,
   type SatelliteDetailSample,
@@ -479,12 +480,18 @@ function appendTimelineMapThrough(targetIndex: number): void {
   mapTrackPointsDirty = true
 }
 
+function relativeTimelineElapsed(history: { length: number; getTimestamp(index: number): number }, elapsed: number): number {
+  return history.length
+    ? elapsed - recordingClockDifference(history.getTimestamp(0), statusEpochHistory.value.getTimestamp(0))
+    : elapsed
+}
+
 function syncTimelineProjection(elapsedMilliseconds: number): void {
   if (!timelineProjectionActive) return
 
   runInBatch(() => {
     const deviationTarget =
-      positionEpochHistory.value.findNearestElapsedTime(elapsedMilliseconds)
+      positionEpochHistory.value.findNearestElapsedTime(relativeTimelineElapsed(positionEpochHistory.value, elapsedMilliseconds))
     if (
       deviationTarget < timelineDeviationIndex ||
       deviationTarget - timelineDeviationIndex > TIMELINE_INCREMENTAL_POINT_LIMIT
@@ -494,7 +501,7 @@ function syncTimelineProjection(elapsedMilliseconds: number): void {
       appendTimelineDeviationThrough(deviationTarget)
     }
 
-    const mapTarget = mapPositionEpochHistory.findNearestElapsedTime(elapsedMilliseconds)
+    const mapTarget = mapPositionEpochHistory.findNearestElapsedTime(relativeTimelineElapsed(mapPositionEpochHistory, elapsedMilliseconds))
     if (
       mapTarget < timelineMapIndex ||
       mapTarget - timelineMapIndex > TIMELINE_INCREMENTAL_POINT_LIMIT
@@ -533,7 +540,7 @@ function applyTimelineEpoch(index: number): void {
   syncTimelineProjection(elapsedMilliseconds)
   if (satelliteDetailEpochHistory.length === 0) return
   const satelliteIndex = satelliteDetailEpochHistory.findNearestElapsedTime(
-    elapsedMilliseconds,
+    relativeTimelineElapsed(satelliteDetailEpochHistory, elapsedMilliseconds),
   )
   if (satelliteIndex >= 0) {
     satelliteSnrData.value = satelliteDetailEpochHistory.getSnapshot(satelliteIndex)
@@ -1440,9 +1447,9 @@ export function useNmea() {
   }
 
   // 添加清除缓冲区的函数
-  function clearBuffer(): void {
+  function clearBuffer(resetParser = true): void {
     streamParser.clear()
-    rtkSolutionParser.reset()
+    if (resetParser) rtkSolutionParser.reset()
     rtkSolutionBuffer = ''
   }
   
@@ -1483,6 +1490,7 @@ export function useNmea() {
       nmeaData,
       deviationPoints,
       mapTrackPoints,
+      mapPositionEpochHistory,
       currentData,
       currentGgaData,
       latestPosition,

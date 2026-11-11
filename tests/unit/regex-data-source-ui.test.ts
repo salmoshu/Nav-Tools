@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   textDataParserCascaderOptions,
   textDataParserOptions,
+  dataFormatOptions,
 } from '@/composables/useDataSourceManager'
 import { t } from '@/i18n'
 
@@ -16,13 +17,15 @@ describe('regex data-source UI integration', () => {
     expect(textDataParserOptions.map((option) => option.value)).toContain('csv')
     expect(textDataParserOptions.map((option) => option.value)).toContain('rtklib-pos')
     expect(toolbar.match(/v-model="sourceRegexPattern"/g)).toHaveLength(3)
-    expect(toolbar).toContain("sourceParser === 'regex'")
+    expect(toolbar).toContain("sourceFormat === 'regex'")
     expect(device).toContain('sourceRegexPattern')
   })
 
   it('renders parser options as cascader submenus with three parser-selects', () => {
     expect((toolbar.match(/el-cascader/g) ?? []).length).toBeGreaterThanOrEqual(3)
-    expect(toolbar).toContain('textDataParserCascaderOptions')
+    expect(toolbar).toContain('dataFormatOptions')
+    const custom = dataFormatOptions('file').find((option) => option.value === 'custom')
+    expect(custom?.children?.map((option) => option.value)).toContain('regex')
   })
 
   it('keeps 无 as a first-level leaf and groups the rest into submenus', () => {

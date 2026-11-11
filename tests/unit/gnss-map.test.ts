@@ -39,7 +39,7 @@ describe('GNSS map track rendering', () => {
   })
 
   it('queues every precise GGA point and drains the queue across animation frames', () => {
-    expect(source).toContain('const { mapTrackPoints } = useNmea()')
+    expect(source).toContain('const { mapTrackPoints, mapPositionEpochHistory } = scopedDisplay?.data ?? useNmea()')
     expect(source).toContain('pendingTrackPoints.push(source[index])')
     expect(source).toContain('requestAnimationFrame(renderPendingTrack)')
     expect(source).toContain('TRACK_RENDER_BUDGET_MS = 4')

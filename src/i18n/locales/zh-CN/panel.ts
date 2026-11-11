@@ -1,5 +1,6 @@
 export default {
-  'plot': {
+  'gnsslib-solver': { title: 'GNSS 解算', desc: '统一管理后处理与实时解算，联动消息和偏差分析' },
+  plot: {
     title: '图表',
     desc: '绘制数值数据随时间的变化',
   },
@@ -7,7 +8,7 @@ export default {
     title: '消息',
     desc: '查看、筛选并发送消息',
   },
-  'terminal': {
+  terminal: {
     title: '终端',
     desc: 'SSH、SFTP、WSL 与本地 Shell 终端',
   },
@@ -81,10 +82,10 @@ export default {
   },
   'gnsslib-rtkpost': {
     title: 'RTKPOST',
-    desc: '调用 Robo-GNSS rnx2rtkp 进行 GNSS 后处理并输出解决方案',
+    desc: '调用 Open-GNSS rnx2rtkp 进行 GNSS 后处理并输出解决方案',
   },
   'gnsslib-rtknavi': {
     title: 'RTKNAVI',
-    desc: '调用 Robo-GNSS rtkrcv 配置实时解算链路并监控定位结果',
+    desc: '调用 Open-GNSS rtkrcv 配置实时解算链路并监控定位结果',
   },
 }

@@ -52,6 +52,7 @@ export default {
     enableWindow: '启用滑窗',
     tooltipPositionPrefix: '位置',
     tooltipQuality: '质量',
+    seekEpochHint: '双击查看对应历元',
     axisE: '东向 E',
     axisN: '北向 N',
     axisU: '天向 U',

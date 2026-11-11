@@ -252,7 +252,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch, nextTick } from 'vue'
+import { computed, inject, onMounted, onUnmounted, ref, watch, nextTick } from 'vue'
+import { gnssDisplayContext } from '@/composables/gnss/GnssDisplayContext'
 import { Close, Delete, Grid, InfoFilled, MapLocation, RefreshLeft } from '@element-plus/icons-vue'
 import { useNmea, numberToQuality } from '@/composables/gnss/useNmea'
 import { useFileTimeline } from '@/composables/useFileTimeline'
@@ -272,15 +273,17 @@ import {
   GNSS_MIN_VISIBLE_SPAN_METERS,
 } from '@/core/deviation/DeviationViewport'
 import { computeDeviationStats, type DeviationStats } from '@/core/deviation/DeviationStats'
+import { findPositionEpoch } from '@/core/gnss/EpochSelection'
 
+const scopedDisplay = inject(gnssDisplayContext, null)
 const {
   deviationPoints: plotData,
   mapTrackPoints,
   currentData,
   positionEpochHistory,
   clearData,
-} = useNmea()
-const fileTimeline = useFileTimeline()
+} = scopedDisplay?.data ?? useNmea()
+const fileTimeline = scopedDisplay?.timeline ?? useFileTimeline()
 const { chartTheme, resolvedTheme } = useTheme()
 
 const LIMIT_METERS = 10000
@@ -802,7 +805,7 @@ function getTimelinePositionPoint(): [number, number, number] | undefined {
   if (!fileTimeline.active.value) return undefined
   const history = positionEpochHistory.value
   if (history.length === 0) return undefined
-  const index = history.findNearestElapsedTime(fileTimeline.elapsedMilliseconds.value)
+  const index = history.findNearestElapsedTime(fileTimeline.elapsedFor(history))
   if (index < 0) return undefined
   const east = history.getValue('E', index)
   const north = history.getValue('N', index)
@@ -1055,6 +1058,7 @@ function clearTrack(): void {
   statsCacheFirst = undefined
   updateViewport(-10, 10, -10, 10)
   clearData()
+  fileTimeline.clearTimeline()
 }
 
 function updatePointSize(): void {
@@ -1106,6 +1110,7 @@ function handleMouseMove(e: MouseEvent): void {
   if (picked) {
     tooltipVisible.value = true
     tooltipText.value = `${t('gnss.deviation.tooltipPositionPrefix')}: (${formatDistance(picked.x)}, ${formatDistance(picked.y)})\n${t('gnss.deviation.tooltipQuality')}: ${numberToQuality(picked.quality)}`
+    if (fileTimeline.active.value) tooltipText.value += `\n${t('gnss.deviation.seekEpochHint')}`
     tooltipStyle.value = {
       left: `${x + 12}px`,
       top: `${y + 12}px`,
@@ -1117,6 +1122,21 @@ function handleMouseMove(e: MouseEvent): void {
 
 function hideTooltip(): void {
   tooltipVisible.value = false
+}
+
+function handleDoubleClick(event: MouseEvent): void {
+  if (!fileTimeline.active.value || fileTimeline.indexing.value || !canvasRef.value) return
+  const bounds = canvasRef.value.getBoundingClientRect()
+  const point = renderer?.pickPoint(event.clientX - bounds.left, event.clientY - bounds.top)
+  if (!point) return
+  event.preventDefault()
+  event.stopPropagation()
+  const history = positionEpochHistory.value
+  const end = fileTimeline.mode.value === 'replay'
+    ? history.findNearestElapsedTime(fileTimeline.elapsedFor(history))
+    : history.length - 1
+  const index = findPositionEpoch(history, ['E', 'N'], point.x, point.y, fileTimeline.elapsedFor(history), end)
+  if (index >= 0) fileTimeline.seekEpoch(history, index)
 }
 
 function handleMouseDown(e: MouseEvent): void {
@@ -1248,6 +1268,7 @@ function initRenderer(): void {
   canvasRef.value.addEventListener('mousemove', handleMouseMove)
   canvasRef.value.addEventListener('mouseleave', hideTooltip)
   canvasRef.value.addEventListener('mousedown', handleMouseDown)
+  canvasRef.value.addEventListener('dblclick', handleDoubleClick)
 }
 
 onMounted(() => {
@@ -1294,6 +1315,7 @@ onUnmounted(() => {
     canvasRef.value.removeEventListener('mousemove', handleMouseMove)
     canvasRef.value.removeEventListener('mouseleave', hideTooltip)
     canvasRef.value.removeEventListener('mousedown', handleMouseDown)
+    canvasRef.value.removeEventListener('dblclick', handleDoubleClick)
   }
   window.removeEventListener('mousemove', handleWindowMouseMove)
   window.removeEventListener('mouseup', handleWindowMouseUp)

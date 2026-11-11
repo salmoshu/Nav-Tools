@@ -180,7 +180,7 @@ export function useLayoutManager() {
 
     const restored = config.flatMap((item: any) => {
       const windowDefinition = allowedById.get(normalizeWindowId(item.windowId ?? ''))
-        ?? allowedByComponent.get(item.componentName)
+        ?? allowedByComponent.get(item.componentName === 'RtkPost' || item.componentName === 'RtkNavi' ? 'GnssSolver' : item.componentName)
       if (!windowDefinition || restoredWindowIds.has(windowDefinition.id)) return []
 
       restoredWindowIds.add(windowDefinition.id)
@@ -229,7 +229,7 @@ export function useLayoutManager() {
     showToolBar.value = savedLayout?.showToolBar ?? true
     toolbarPosition.value = savedLayout?.toolbarPosition ?? 'bottom'
     statusbarPosition.value = savedLayout?.statusbarPosition ?? 'right'
-    savedLayout?.removedWindowIds?.forEach(id => removedWindowIds.add(id))
+    savedLayout?.removedWindowIds?.forEach(id => removedWindowIds.add(normalizeWindowId(id)))
 
     // 恢复完成，此后停靠位置变化才静默持久化
     layoutPersistenceReady = true

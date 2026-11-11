@@ -107,7 +107,7 @@ export function sniffRtcm(bytes: Uint8Array, probeBytes = 8192, minFrames = 2): 
     }
     const len = ((bytes[i + 1] & 0x03) << 8) | bytes[i + 2]
     const frameEnd = i + 3 + len + 3
-    if (frameEnd > limit) break // 截断，无法验证 CRC；保守否决
+    if (frameEnd > limit) { i++; continue } // 噪声中的伪帧头可能出现在有效帧之前
     const crc = crc24q(bytes, i, 3 + len)
     const expected = (bytes[frameEnd - 3] << 16) | (bytes[frameEnd - 2] << 8) | bytes[frameEnd - 1]
     if (crc === expected) {

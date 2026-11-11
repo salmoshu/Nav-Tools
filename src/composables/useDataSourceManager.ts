@@ -6,6 +6,7 @@ import {
 } from '@/core/data/DataSourceStorage'
 import { JsonStorage, type StorageLike } from '@/core/storage/JsonStorage'
 import { t } from '@/i18n'
+import { FORMAT_LABELS, type DataFormat } from '@/core/data/DataFormat'
 
 export type TextDataParserGroup = 'general' | 'structured' | 'protocol' | 'custom'
 
@@ -46,6 +47,20 @@ export const textDataParserCascaderOptions: TextDataParserCascaderOption[] = [
       .map((option) => ({ value: option.value, label: option.label })),
   })),
 ]
+
+export function dataFormatOptions(source: 'file' | 'serial' | 'network') {
+  const item = (value: DataFormat, label = FORMAT_LABELS[value]) => ({ value, label })
+  return [
+    item('auto', t('data.formatAuto')),
+    item('raw', t('data.formatRaw')),
+    { value: 'protocol', label: t('data.parserGroupProtocol'), children: [
+      item('rtcm3'), ...(source === 'file' ? [item('rinex')] : []), item('nmea'), item('rtklib-pos'),
+    ] },
+    { value: 'structured', label: t('data.parserGroupStructured'), children: [item('json'), item('csv')] },
+    { value: 'custom', label: t('data.parserGroupCustom'), children: [item('regex', t('app.toolbar.regexPattern'))] },
+    ...(source === 'file' ? [item('mcap')] : []),
+  ]
+}
 
 const memoryValues = new Map<string, string>()
 const fallbackStorage: StorageLike = {

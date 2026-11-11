@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { calculateNmeaChecksum } from '@/core/data/NmeaStreamParser'
 import {
   buildRtkPostArgs,
   createDefaultRtkPostSettings,
@@ -125,6 +126,12 @@ describe('RTKPOST command line', () => {
     expect(() => buildRtkPostArgs(value)).toThrow('16')
   })
 
+  it('requires a navigation input, including when all navigation rows are blank', () => {
+    for (const navPaths of [[], ['', '  ']]) {
+      expect(() => buildRtkPostArgs({ ...settings(), navPaths })).toThrow('导航文件')
+    }
+  })
+
   it('derives .pos and .nmea output names from rover observations', () => {
     expect(defaultRtkPostOutputPath('C:\\data\\rover.obs', 'llh')).toBe('C:\\data\\rover.pos')
     expect(defaultRtkPostOutputPath('/data/rover.obs.gz', 'nmea')).toBe('/data/rover.nmea')
@@ -157,18 +164,35 @@ describe('RTKPOST solution parsing', () => {
 
   it('parses time-of-week solutions', () => {
     const parser = new RtkPostSolutionParser('xyz', 'tow')
-    parser.addLine('123456.000 -2700000 4200000 3300000 1 10')
+    parser.addLine('2325 123456.000 -2700000 4200000 3300000 1 10')
     expect(parser.finish(50).fixed).toBe(1)
   })
 
-  it('parses NMEA GGA quality and skips other sentences', () => {
-    const parser = new RtkPostSolutionParser('nmea', 'hms')
-    parser.addLine('$GNGGA,000000.00,3100.0,N,12100.0,E,1,12,1.0,10.0,M,,,,*00')
-    parser.addLine('$GPGGA,000001.00,3100.0,N,12100.0,E,5,09,1.0,10.0,M,,,,*00')
-    parser.addLine('$GNZDA,000000.00,30,07,2024,00,00*00')
-    const result = parser.finish(100)
-    expect(result.epochs).toBe(2)
-    expect(result.fixed).toBe(1)
-    expect(result.single).toBe(1)
-  })
+  it.each(['llh', 'nmea'] as const)(
+    'detects NMEA when %s was selected and maps GGA qualities to RTKLIB correctly',
+    (format) => {
+      const parser = new RtkPostSolutionParser(format, 'hms')
+      const sentence = (body: string) => `$${body}*${calculateNmeaChecksum(`$${body}`)}`
+      for (const quality of [1, 2, 3, 4, 5, 6]) {
+        parser.addLine(
+          sentence(
+            `GPGGA,094859.00,3110.8936997,N,12124.2616607,E,${quality},10,1.0,11.500,M,10.835,M,0.0,0000`,
+          ),
+        )
+      }
+      parser.addLine(sentence('GNZDA,000000.00,30,07,2024,00,00'))
+      parser.addLine(
+        '$GPGGA,094859.00,3110.8936997,N,12124.2616607,E,4,10,1.0,11.500,M,10.835,M,0.0,0000*00',
+      )
+      expect(parser.finish(100)).toMatchObject({
+        epochs: 6,
+        fixed: 1,
+        float: 1,
+        single: 1,
+        dgps: 1,
+        ppp: 1,
+        other: 1,
+      })
+    },
+  )
 })

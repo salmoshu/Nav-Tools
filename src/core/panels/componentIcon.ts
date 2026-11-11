@@ -21,6 +21,7 @@ const ACTION_BADGE_FALLBACK: Record<string, string> = {
   'gnssraw-eph': 'compass',
   'gnsslib-rtkpost': 'map',
   'gnsslib-rtknavi': 'position',
+  'gnsslib-solver': 'map',
 }
 
 /** 组件图形与角标描边配色按组件所属应用分组（registry 的 catalogGroup），桌面上一眼区分应用家族 */

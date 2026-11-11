@@ -33,6 +33,7 @@ export const panelIconComponents: Readonly<Record<string, Component>> = {
   'gnssraw-snr': Histogram,
   'gnssraw-eph': Document,
   'gnsslib-rtkpost': MapLocation,
+  'gnsslib-solver': MapLocation,
   'gnsslib-rtknavi': Compass,
 }
 

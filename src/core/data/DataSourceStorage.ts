@@ -1,6 +1,7 @@
 import { JsonStorage } from '@/core/storage/JsonStorage'
 import { DEFAULT_KEY_VALUE_REGEX, type TextDataParser } from '@/core/data/TextRecordParser'
 import { CameraVideoStorage } from '@/core/camera/CameraVideoStorage'
+import { isDataFormat, type DataFormat } from '@/core/data/DataFormat'
 
 export type { TextDataParser } from '@/core/data/TextRecordParser'
 
@@ -17,11 +18,13 @@ export interface DataSourceSettings {
     parity: string
     advanced: boolean
     parser: TextDataParser
+    format: DataFormat
     regexPattern: string
   }
   file: {
     path: string
     parser: TextDataParser
+    format: DataFormat
     regexPattern: string
     timeTag: boolean
     replaySpeed: number
@@ -36,6 +39,7 @@ export interface DataSourceSettings {
     port?: number
     loop: boolean
     parser: TextDataParser
+    format: DataFormat
     regexPattern: string
   }
 }
@@ -52,11 +56,13 @@ export function createDefaultDataSourceSettings(): DataSourceSettings {
       parity: 'none',
       advanced: false,
       parser: 'raw',
+      format: 'auto',
       regexPattern: DEFAULT_KEY_VALUE_REGEX,
     },
     file: {
       path: '',
       parser: 'raw',
+      format: 'auto',
       regexPattern: DEFAULT_KEY_VALUE_REGEX,
       timeTag: false,
       replaySpeed: 1,
@@ -70,6 +76,7 @@ export function createDefaultDataSourceSettings(): DataSourceSettings {
       port: undefined,
       loop: false,
       parser: 'raw',
+      format: 'auto',
       regexPattern: DEFAULT_KEY_VALUE_REGEX,
     },
   }
@@ -92,6 +99,14 @@ function parserValue(value: unknown, fallback: TextDataParser): TextDataParser {
     value === 'csv'
     ? value
     : fallback
+}
+
+function formatValue(value: unknown, parser: unknown, source: 'file' | 'stream'): DataFormat {
+  if (isDataFormat(value)) return value
+  // Old GNSS file parsers were also written by automatic detection, so re-detect each file.
+  if (source === 'file' && (parser === 'raw' || parser === 'nmea' || parser === 'rtklib-pos' || parser === undefined)) return 'auto'
+  if (isDataFormat(parser)) return parser
+  return source === 'file' ? 'auto' : 'raw'
 }
 
 function activeSourceValue(
@@ -133,11 +148,13 @@ function normalizeSettings(value: unknown): DataSourceSettings {
       parity: stringValue(serial.parity, defaults.serial.parity),
       advanced: typeof serial.advanced === 'boolean' ? serial.advanced : defaults.serial.advanced,
       parser: parserValue(serial.parser, defaults.serial.parser),
+      format: formatValue(serial.format, serial.parser, 'stream'),
       regexPattern: stringValue(serial.regexPattern, defaults.serial.regexPattern),
     },
     file: {
       path: stringValue(file.path, defaults.file.path),
       parser: parserValue(file.parser, defaults.file.parser),
+      format: formatValue(file.format, file.parser, 'file'),
       regexPattern: stringValue(file.regexPattern, defaults.file.regexPattern),
       timeTag: typeof file.timeTag === 'boolean' ? file.timeTag : defaults.file.timeTag,
       replaySpeed: positiveNumber(file.replaySpeed, defaults.file.replaySpeed),
@@ -151,6 +168,7 @@ function normalizeSettings(value: unknown): DataSourceSettings {
       port: portValue(network.port),
       loop: typeof network.loop === 'boolean' ? network.loop : defaults.network.loop,
       parser: parserValue(network.parser, defaults.network.parser),
+      format: formatValue(network.format, network.parser, 'stream'),
       regexPattern: stringValue(network.regexPattern, defaults.network.regexPattern),
     },
   }

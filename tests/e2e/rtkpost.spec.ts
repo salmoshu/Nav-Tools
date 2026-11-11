@@ -1,70 +1,44 @@
 import { expect, test } from '@playwright/test'
+import { openSolver } from './support/gnssSolver'
 
-test('opens RTKPOST and persists processing inputs and output options', async ({ page }) => {
+test('preserves both engine configurations when switching modes and reloading the unified workspace', async ({
+  page,
+}) => {
   const pageErrors: string[] = []
   page.on('pageerror', (error) => pageErrors.push(error.message))
-  const application = {
-    id: 'rtkpost-e2e',
-    name: 'RTKPOST E2E',
-    description: 'GNSS post-processing UI regression',
-    icon: 'satellite',
-    accent: '#6366f1',
-    windowIds: ['gnsslib-rtkpost'],
-  }
-  await page.addInitScript((value) => {
-    localStorage.setItem('nav-tools:locale', 'zh-CN')
-    localStorage.setItem('nav-tools:custom-applications', JSON.stringify([value]))
-    localStorage.setItem('nav-tools:selected-application', value.id)
-  }, application)
-  await page.goto('/#app/rtkpost-e2e')
-
-  const panel = page.locator('.rtkpost')
-  await expect(panel).toBeVisible({ timeout: 20_000 })
-  await expect(panel.locator('.engine-name')).toHaveText('Robo-GNSS · rnx2rtkp')
-  await expect(panel.locator('.desktop-alert')).toBeVisible()
-
-  await panel.getByRole('button', { name: '处理选项', exact: true }).click()
-  await expect(panel.locator('.options-section')).toBeVisible()
-  const roverInput = panel
-    .locator('.file-row')
-    .filter({ hasText: 'RINEX OBS：流动站' })
-    .locator('input')
-  await roverInput.fill('/tmp/rover.obs')
-  await roverInput.press('Tab')
-  const outputInput = panel
-    .locator('.file-row')
-    .filter({ hasText: '解决方案文件' })
-    .locator('input')
-  await expect(outputInput).toHaveValue('/tmp/rover.pos')
-
+  const panel = await openSolver(page, 'post', false)
+  await expect(panel.locator('.solver-alert')).toBeVisible()
+  await expect(panel.locator('.rtkpost .run-toolbar')).toHaveCount(0)
+  const rover = panel.locator('.file-row').filter({ hasText: 'RINEX OBS: Rover' }).locator('input')
+  const output = panel.locator('.file-row').filter({ hasText: 'Solution file' }).locator('input')
+  await rover.fill('/data/my-rover.obs')
+  await rover.press('Tab')
+  await expect(output).toHaveValue('/data/rover.pos')
+  await output.fill('/data/my-solution.pos')
   await panel.locator('.add-nav').click()
+  await panel.getByRole('tab', { name: 'Options', exact: true }).click()
+  const format = panel.locator('.option-field').filter({ hasText: 'Coordinate / protocol format' })
+  await format.locator('.el-select').click()
+  await page.getByRole('option', { name: 'NMEA-0183 GGA', exact: true }).click()
+  await panel.locator('.el-radio-button').filter({ hasText: 'Real-time' }).click()
+  await panel.getByRole('tab', { name: 'Inputs', exact: true }).click()
+  const liveInput = panel.locator('.stream-section').first().locator('.stream-path input')
+  await liveInput.fill('/data/my-stream.rtcm3')
+  await panel.locator('.el-radio-button').filter({ hasText: 'Post-processing' }).click()
+  await expect(rover).toHaveValue('/data/my-rover.obs')
+  await expect(output).toHaveValue('/data/my-solution.pos')
   await expect(
     panel.locator('input[placeholder="NAV / CLK / SP3 / FCB / IONEX / SBAS"]'),
   ).toHaveCount(2)
-
-  const outputFormat = panel.locator('.option-field').filter({ hasText: '坐标 / 协议格式' })
-  await outputFormat.locator('.el-select').click()
-  await page.getByRole('option', { name: 'NMEA-0183 GGA', exact: true }).click()
-  await expect(outputInput).toHaveValue('/tmp/rover.nmea')
-  await panel.evaluate((element) => {
-    element.scrollTop = 0
-  })
-  await page.screenshot({ path: 'test-results/rtkpost-options.png', fullPage: true })
-  await page.emulateMedia({ colorScheme: 'dark' })
-  await page.setViewportSize({ width: 390, height: 844 })
-  await panel.evaluate((element) => {
-    element.style.width = '390px'
-    element.style.maxWidth = '390px'
-    element.scrollTop = 0
-  })
-  await expect(page.locator('html')).toHaveClass(/dark/)
-  expect(await panel.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(
-    true,
-  )
-
   await page.reload()
   await expect(panel).toBeVisible({ timeout: 20_000 })
-  await expect(roverInput).toHaveValue('/tmp/rover.obs')
-  await expect(outputInput).toHaveValue('/tmp/rover.nmea')
+  await expect(rover).toHaveValue('/data/my-rover.obs')
+  await panel.getByRole('tab', { name: 'Options', exact: true }).click()
+  await expect(
+    panel.locator('.option-field').filter({ hasText: 'Coordinate / protocol format' }),
+  ).toContainText('NMEA-0183 GGA')
+  await panel.locator('.el-radio-button').filter({ hasText: 'Real-time' }).click()
+  await panel.getByRole('tab', { name: 'Inputs', exact: true }).click()
+  await expect(liveInput).toHaveValue('/data/my-stream.rtcm3')
   expect(pageErrors).toEqual([])
 })

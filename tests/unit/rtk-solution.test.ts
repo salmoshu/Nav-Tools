@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { RtkSolutionParser } from '@/core/gnsslib/RtkSolution'
 
-describe('Robo-GNSS/RTKLIB solution parser', () => {
+describe('Open-GNSS/RTKLIB solution parser', () => {
   it('parses the calendar-time LLH format emitted by rnx2rtkp', () => {
     const parser = new RtkSolutionParser()
     parser.addLine(
@@ -33,7 +33,7 @@ describe('Robo-GNSS/RTKLIB solution parser', () => {
     })
   })
 
-  it('uses Robo-GNSS headers to parse XYZ and converts it to LLH', () => {
+  it('uses Open-GNSS headers to parse XYZ and converts it to LLH', () => {
     const parser = new RtkSolutionParser()
     parser.addLine('%  GPST                  x-ecef(m)        y-ecef(m)        z-ecef(m)   Q  ns')
     const solution = parser.addLine(

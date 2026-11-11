@@ -13,6 +13,8 @@ const CAMERA_TERMINAL_MIGRATION_KEY = 'nav-tools:migration:camera-terminal-v1'
 const LIDAR_DEFAULT_MIGRATION_KEY = 'nav-tools:migration:lidar-default-v1'
 const GNSSRAW_DEFAULT_MIGRATION_KEY = 'nav-tools:migration:gnssraw-default-v1'
 const GNSSLIB_DEFAULT_MIGRATION_KEY = 'nav-tools:migration:gnsslib-default-v1'
+const GNSSLIB_ENGINE_NAME_MIGRATION_KEY = 'nav-tools:migration:gnsslib-engine-name-v1'
+const GNSSLIB_SOLVER_MIGRATION_KEY = 'nav-tools:migration:gnsslib-solver-v1'
 const APPLICATION_ORDER_MIGRATION_KEY = 'nav-tools:migration:application-order-v2'
 
 export const DEFAULT_ENABLED_APPLICATION_IDS: readonly string[] = [
@@ -65,10 +67,10 @@ export const DEFAULT_APPLICATIONS: readonly UserApplication[] = [
   {
     id: 'gnsslib',
     name: 'GNSS-Lib',
-    description: 'Robo-GNSS post-processing and real-time positioning workspace',
+    description: 'Open-GNSS post-processing and real-time positioning workspace',
     icon: 'satellite',
     accent: '#7c3aed',
-    windowIds: ['gnsslib-rtkpost', 'gnsslib-rtknavi'],
+    windowIds: ['gnsslib-solver', 'raw-messages', 'gnss-deviation'],
   },
   {
     id: 'camera',
@@ -101,11 +103,25 @@ export class ApplicationStorage {
       this.storage.writeRaw(FLOW_DEFAULT_MIGRATION_KEY, '1')
       this.storage.writeRaw(CAMERA_TERMINAL_MIGRATION_KEY, '1')
       this.storage.writeRaw(GNSSLIB_DEFAULT_MIGRATION_KEY, '1')
+      this.storage.writeRaw(GNSSLIB_ENGINE_NAME_MIGRATION_KEY, '1')
+      this.storage.writeRaw(GNSSLIB_SOLVER_MIGRATION_KEY, '1')
       this.storage.writeRaw(APPLICATION_ORDER_MIGRATION_KEY, '1')
       return defaults
     }
 
     const stored = this.storage.read<unknown[]>(APPLICATIONS_KEY, [], Array.isArray)
+    if (this.storage.readRaw('nav-tools:gnsslib-solver-mode') === null) {
+      const selected = this.loadSelectedApplicationId()
+      const legacy = stored
+        .filter(isUserApplication)
+        .find((application) => application.id === selected)
+      if (
+        legacy?.windowIds.includes('gnsslib-rtknavi') &&
+        !legacy.windowIds.includes('gnsslib-rtkpost')
+      ) {
+        this.storage.writeRaw('nav-tools:gnsslib-solver-mode', 'realtime')
+      }
+    }
     const applications = stored.filter(isUserApplication).map((application) => ({
       ...application,
       windowIds: sanitizePanelIds(application.windowIds),
@@ -202,7 +218,7 @@ export class ApplicationStorage {
       const gnssrawApplication = applications.find((application) => application.id === 'gnssraw')
       if (gnssrawApplication) {
         gnssrawApplication.windowIds = gnssrawApplication.windowIds.filter(
-          (id) => id !== 'gnssraw-rtkpost' && id !== 'gnsslib-rtkpost',
+          (id) => id !== 'gnssraw-rtkpost' && id !== 'gnsslib-rtkpost' && id !== 'gnsslib-solver',
         )
       }
       const gnsslibDefault = DEFAULT_APPLICATIONS.find(
@@ -219,6 +235,31 @@ export class ApplicationStorage {
         }
       }
       this.storage.writeRaw(GNSSLIB_DEFAULT_MIGRATION_KEY, '1')
+    }
+    if (this.storage.readRaw(GNSSLIB_ENGINE_NAME_MIGRATION_KEY) === null) {
+      const application = applications.find(({ id }) => id === 'gnsslib')
+      const defaultApplication = DEFAULT_APPLICATIONS.find(({ id }) => id === 'gnsslib')
+      if (
+        application &&
+        defaultApplication &&
+        application.description === 'Robo-GNSS post-processing and real-time positioning workspace'
+      ) {
+        application.description = defaultApplication.description
+      }
+      this.storage.writeRaw(GNSSLIB_ENGINE_NAME_MIGRATION_KEY, '1')
+    }
+    if (this.storage.readRaw(GNSSLIB_SOLVER_MIGRATION_KEY) === null) {
+      const application = applications.find(({ id }) => id === 'gnsslib')
+      if (application)
+        application.windowIds = [
+          ...new Set([
+            ...application.windowIds,
+            'gnsslib-solver',
+            'raw-messages',
+            'gnss-deviation',
+          ]),
+        ]
+      this.storage.writeRaw(GNSSLIB_SOLVER_MIGRATION_KEY, '1')
     }
     // 默认顺序调整（Serial/Flow/GNSS/GNSS-Raw/GNSS-Lib/Camera/LiDAR）：已有存储按默认
     // 顺序重排一次；不在默认表中的自定义应用保持在末尾且相对顺序稳定。
@@ -300,6 +341,8 @@ export class ApplicationStorage {
     this.storage.writeRaw(LIDAR_DEFAULT_MIGRATION_KEY, '1')
     this.storage.writeRaw(GNSSRAW_DEFAULT_MIGRATION_KEY, '1')
     this.storage.writeRaw(GNSSLIB_DEFAULT_MIGRATION_KEY, '1')
+    this.storage.writeRaw(GNSSLIB_ENGINE_NAME_MIGRATION_KEY, '1')
+    this.storage.writeRaw(GNSSLIB_SOLVER_MIGRATION_KEY, '1')
     this.storage.writeRaw(APPLICATION_ORDER_MIGRATION_KEY, '1')
     return defaults
   }

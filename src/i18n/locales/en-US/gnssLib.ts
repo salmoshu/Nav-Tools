@@ -1,15 +1,41 @@
 export default {
+  solver: {
+    mode: 'Solver mode',
+    post: 'Post-processing',
+    realtime: 'Real-time',
+    workspace: 'GNSS solver workspace',
+    status: 'Solver status',
+    inputs: 'Inputs',
+    summary: 'Summary',
+    messageChannel: 'Message channel',
+    solutionMessages: 'Solution records',
+    logMessages: 'Engine log',
+    desktopOnly:
+      'GNSS solving requires the Electron desktop app and local rnx2rtkp / rtkrcv engines.',
+    noViewData:
+      'The output file was generated but contains no drawable positioning epochs. Check the output format and reference coordinates.',
+    resultHint:
+      'Use Messages for solution records and engine logs, and Deviation for tracks and ENU changes.',
+    stateIdle: 'Idle',
+    stateRunning: 'Solving',
+    stateLoading: 'Loading solution records…',
+    stateStopping: 'Stopping',
+    stateSuccess: 'Solution generated',
+    stateStopped: 'Stopped',
+    stateCancelled: 'Cancelled',
+    stateError: 'Failed',
+  },
   rtknavi: {
     start: 'Start',
     stop: 'Stop',
     monitor: 'Monitor',
     configuration: 'Inputs & Options',
     log: 'Log',
-    engine: 'Robo-GNSS real-time positioning engine',
+    engine: 'Open-GNSS real-time positioning engine',
     executablePlaceholder: 'Select the rtkrcv executable, or leave empty to search PATH',
     output: 'Solution output',
     outputHint:
-      'Leave empty to use the application data directory; the file is recreated on every start.',
+      'Leave empty to keep a separate file for each run in the application data directory; an explicit output path is rewritten on start.',
     desktopOnly:
       'RTKNAVI runs a local rtkrcv process and is available only in the Electron desktop app',
     inputs: 'Input streams',

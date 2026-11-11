@@ -37,4 +37,9 @@ describe('Electron 类型检查配置', () => {
     expect(scripts.typecheck).toContain(scripts['typecheck:electron'])
     expect(scripts['build:dir']).toContain(scripts['typecheck:electron'])
   })
+
+  it('限制开发依赖扫描只使用应用根入口', () => {
+    const config = fs.readFileSync(path.resolve(process.cwd(), 'vite.config.ts'), 'utf8')
+    expect(config).toMatch(/optimizeDeps:\s*\{[\s\S]*?entries:\s*\['index\.html'\]/)
+  })
 })

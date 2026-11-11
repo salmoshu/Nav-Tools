@@ -1,5 +1,5 @@
 import fs from 'node:fs'
-import { BrowserWindow, type IpcMainEvent, type IpcMainInvokeEvent } from 'electron'
+import { BrowserWindow, webContents, type IpcMainEvent, type IpcMainInvokeEvent } from 'electron'
 import { SerialPortService, type SerialPortOptions } from './services/SerialPortService'
 import { DataInjectionService, type InjectionTarget } from './services/DataInjectionService'
 import type { DataInjectionSettings } from '../../src/core/data/DataInjection'
@@ -50,8 +50,14 @@ const dataInjectionService = new DataInjectionService(injectionTarget, (status) 
       window.webContents.send('data-injection-status', status)
   }
 })
-serialService.onRawData((data) => { if (primaryTransport === 'serial') dataInjectionService.receivePrimary(data) })
-networkService.onRawData((data) => { if (primaryTransport === 'network') dataInjectionService.receivePrimary(data) })
+function forwardPrimaryBytes(source: 'serial' | 'network', data: Uint8Array): void {
+  if (primaryTransport !== source) return
+  dataInjectionService.receivePrimary(data)
+  const target = primaryOwnerId === undefined ? undefined : webContents.fromId(primaryOwnerId)
+  if (target && !target.isDestroyed()) target.send('source-data-bytes', source, data)
+}
+serialService.onRawData((data) => forwardPrimaryBytes('serial', data))
+networkService.onRawData((data) => forwardPrimaryBytes('network', data))
 
 async function invalidateInjectionTarget(): Promise<void> {
   primaryTransport = undefined

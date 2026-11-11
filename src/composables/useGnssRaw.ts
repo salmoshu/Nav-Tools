@@ -23,7 +23,7 @@ export interface RnxOutputFile {
 const status = ref<GnssRawStatus>('idle')
 const errorText = ref('')
 const kind = ref<GnssRawKind | null>(null)
-const fileInfo = ref<{ name: string; path?: string; sizeBytes: number; count: number } | null>(null)
+const fileInfo = ref<{ name: string; path?: string; sizeBytes: number; count: number; stream?: boolean } | null>(null)
 const progress = ref<{ done: number; total: number } | null>(null)
 const liveStats = shallowRef<GnssStreamStats | null>(null)
 const dataset = shallowRef<GnssRawDataset | null>(null)
@@ -120,8 +120,8 @@ async function startLoad(loadKind: GnssRawKind, items: LoadedRtcmBytes[]): Promi
   })
 }
 
-async function loadItems(items: LoadedRtcmBytes[]): Promise<boolean> {
-  const kinds = items.map((item) => detectGnssRawKind(item.name, item.bytes.subarray(0, 8192)))
+async function loadItems(items: LoadedRtcmBytes[], forcedKind?: GnssRawKind): Promise<boolean> {
+  const kinds = items.map((item) => forcedKind ?? detectGnssRawKind(item.name, item.bytes.subarray(0, 8192)))
   const first = kinds[0]
   const fail = (text: string): boolean => {
     errorText.value = text
@@ -139,10 +139,48 @@ async function loadItems(items: LoadedRtcmBytes[]): Promise<boolean> {
 }
 
 export function useGnssRaw() {
+  function startStream(name: string): void {
+    const seq = ++loadSeq
+    teardownWorker()
+    status.value = 'loading'
+    errorText.value = ''
+    kind.value = 'rtcm'
+    fileInfo.value = { name, sizeBytes: 0, count: 1, stream: true }
+    progress.value = null
+    liveStats.value = null
+    dataset.value = null
+    sourceBytes = null
+    const w = ensureWorker()
+    w.onmessage = (event: MessageEvent) => {
+      if (seq !== loadSeq) return
+      const message = event.data
+      if (message?.type === 'stream-started') status.value = 'ready'
+      else if (message?.type === 'stream-update' || message?.type === 'done') {
+        dataset.value = message.dataset as GnssRawDataset
+        status.value = 'ready'
+      } else if (message?.type === 'error') {
+        status.value = 'error'
+        errorText.value = String(message.message ?? 'decode failed')
+      }
+    }
+    w.onerror = (event) => { if (seq === loadSeq) { status.value = 'error'; errorText.value = event.message || 'decoder failed' } }
+    w.postMessage({ type: 'stream-start', buffers: [] })
+  }
+
+  function appendStream(bytes: Uint8Array): void {
+    if (!worker || !fileInfo.value?.stream || status.value === 'error') return
+    fileInfo.value = { ...fileInfo.value, sizeBytes: fileInfo.value.sizeBytes + bytes.byteLength }
+    const buffer = bytes.slice().buffer as ArrayBuffer
+    worker.postMessage({ type: 'stream-push', buffers: [buffer] }, [buffer])
+  }
+
+  function stopStream(): void {
+    if (worker && fileInfo.value?.stream) worker.postMessage({ type: 'stream-stop', buffers: [] })
+  }
   /** 浏览器 File 对象（拖拽 / input[type=file]）；RINEX 可多选（obs+nav）。 */
-  async function loadFromFiles(files: File[]): Promise<boolean> {
+  async function loadFromFiles(files: File[], forcedKind?: GnssRawKind): Promise<boolean> {
     const items = await Promise.all(files.map((file) => readRtcmFromFile(file)))
-    return loadItems(items)
+    return loadItems(items, forcedKind)
   }
 
   /** 单 File 兼容入口。 */
@@ -151,10 +189,10 @@ export function useGnssRaw() {
   }
 
   /** 本地路径（Electron 对话框 / 最近文件）；RINEX 可多个（obs+nav）。 */
-  async function loadFromPaths(paths: string[]): Promise<boolean> {
+  async function loadFromPaths(paths: string[], forcedKind?: GnssRawKind): Promise<boolean> {
     try {
       const items = await Promise.all(paths.map((path) => readRtcmFromPath(path)))
-      return await loadItems(items)
+      return await loadItems(items, forcedKind)
     } catch (error) {
       errorText.value = error instanceof Error ? error.message : String(error)
       status.value = 'error'
@@ -230,6 +268,9 @@ export function useGnssRaw() {
     liveStats,
     dataset,
     loadFromFile,
+    startStream,
+    appendStream,
+    stopStream,
     loadFromFiles,
     loadFromPath,
     loadFromPaths,

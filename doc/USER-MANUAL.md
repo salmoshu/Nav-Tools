@@ -159,7 +159,7 @@ are persisted, so you configure a connection once.
 | `Raw` | Undifferentiated byte/text streams |
 | `JSON` | Structured JSON messages |
 | `NMEA` | GNSS NMEA-0183 sentences; when selected, file content is parsed as NMEA regardless of whether the file ends in `.log`, `.txt`, `.pos` or another suffix |
-| `RTKLIB POS` | Robo-GNSS/RTKLIB text solutions; reads header-described LLH, ECEF XYZ and ENU layouts, including calendar-time and GPS-week/time-of-week rows |
+| `RTKLIB POS` | Open-GNSS/RTKLIB text solutions; reads header-described LLH, ECEF XYZ and ENU layouts, including calendar-time and GPS-week/time-of-week rows |
 
 ---
 
@@ -213,7 +213,7 @@ Reads, edits and writes motor parameters to the connected device.
 ### 5.9 GNSS-Raw (Raw Data Analysis)
 
 The GNSS-Raw application decodes RTCM3 captures (mixed RTCM3 + NMEA streams are
-supported) and RINEX observation/navigation files with the Robo-GNSS decoder
+supported) and RINEX observation/navigation files with the Open-GNSS decoder
 compiled to WebAssembly, and builds a columnar dataset for offline raw-data
 analysis. It is aimed at GNSS R&D workflows: observation quality and
 ephemeris-update anomaly investigation.
@@ -234,7 +234,7 @@ ephemeris-update anomaly investigation.
   failures), per-message-type counts (MSM, ephemeris, proprietary) and station
   (antenna position) events. For RTCM sources the header also offers
   **Export RINEX**, which converts the capture to RINEX 3.04 files (obs + nav,
-  one per constellation) via the Robo-GNSS convrnx engine and downloads them in
+  one per constellation) via the Open-GNSS convrnx engine and downloads them in
   the browser.
 - **Visibility** — stacked per-constellation satellite counts over time,
   sampling interval/completeness, and a per-satellite visibility table.

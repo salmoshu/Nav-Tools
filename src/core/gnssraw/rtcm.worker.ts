@@ -1,7 +1,7 @@
 // RTCM/RINEX 解码 Worker：WASM 解码 + 列式数据集构建都在 Worker 线程，
 // 主线程只收进度与最终数据集（结构化克隆）。
 // 另支持一次性 RTCM→RINEX 转换（convert），与解码互不干扰。
-import { RtcmDecoder, rtcm2rnx } from 'robo-gnss-wasm'
+import { RtcmDecoder, rtcm2rnx } from 'open-gnss-wasm'
 import { GnssRawDatasetBuilder } from './dataset'
 import type { GnssEvent, GnssRawKind } from './types'
 
@@ -9,7 +9,7 @@ const CHUNK_BYTES = 256 * 1024
 const PROGRESS_EVERY_BYTES = 1024 * 1024
 
 export interface RtcmWorkerRequest {
-  type: 'decode' | 'convert'
+  type: 'decode' | 'convert' | 'stream-start' | 'stream-push' | 'stream-stop'
   /** 数据种类（decode 必填） */
   kind?: GnssRawKind
   /** 文件字节（转移所有权）；RINEX 支持多文件（obs+nav 合并） */
@@ -19,10 +19,51 @@ export interface RtcmWorkerRequest {
 }
 
 let busy = false
+let streamDecoder: Awaited<ReturnType<typeof RtcmDecoder.create>> | undefined
+let streamBuilder: GnssRawDatasetBuilder | undefined
+let lastStreamUpdate = 0
+let queue = Promise.resolve()
 
-self.onmessage = async (event: MessageEvent<RtcmWorkerRequest>) => {
+self.onmessage = (event: MessageEvent<RtcmWorkerRequest>) => {
   const message = event.data
   if (!message) return
+  queue = queue.then(() => processMessage(message)).catch((error: unknown) => {
+    streamDecoder?.destroy()
+    streamDecoder = undefined
+    streamBuilder = undefined
+    self.postMessage({ type: 'error', message: error instanceof Error ? error.message : String(error) })
+  })
+}
+
+async function processMessage(message: RtcmWorkerRequest): Promise<void> {
+  if (message.type === 'stream-start') {
+    streamDecoder?.destroy()
+    streamDecoder = await RtcmDecoder.create()
+    const decoder = streamDecoder
+    streamBuilder = new GnssRawDatasetBuilder((sys, code, fcn) => decoder.codeFreq(sys, code, fcn))
+    lastStreamUpdate = 0
+    self.postMessage({ type: 'stream-started' })
+    return
+  }
+  if (message.type === 'stream-push' || message.type === 'stream-stop') {
+    if (!streamDecoder || !streamBuilder) return
+    if (message.type === 'stream-push') {
+      streamBuilder.push(streamDecoder.push(new Uint8Array(message.buffers[0])) as unknown as GnssEvent[])
+    } else {
+      streamBuilder.push(streamDecoder.flush() as unknown as GnssEvent[])
+    }
+    if (message.type === 'stream-stop' || Date.now() - lastStreamUpdate >= 1000) {
+      lastStreamUpdate = Date.now()
+      streamBuilder.setStats(streamDecoder.stats())
+      self.postMessage({ type: message.type === 'stream-stop' ? 'done' : 'stream-update', dataset: streamBuilder.result() })
+    }
+    if (message.type === 'stream-stop') {
+      streamDecoder.destroy()
+      streamDecoder = undefined
+      streamBuilder = undefined
+    }
+    return
+  }
   if (busy) {
     self.postMessage({ type: 'error', message: 'decoder busy' })
     return
@@ -75,7 +116,9 @@ async function decode(message: RtcmWorkerRequest): Promise<void> {
       }
       builder.push(decoder.flush() as unknown as GnssEvent[])
     }
-    builder.setStats(decoder.stats())
+    const stats = decoder.stats()
+    if (message.kind !== 'rnx' && stats.framesOk === 0) throw new Error('No valid RTCM3 frames were found; check the file format and CRC')
+    builder.setStats(stats)
     self.postMessage({ type: 'done', dataset: builder.result() })
   } finally {
     decoder.destroy()

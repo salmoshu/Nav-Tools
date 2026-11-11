@@ -87,10 +87,12 @@ interface Window {
     lidarMcapReadFile: (path: string) => Promise<{ data: ArrayBuffer; size: number }>
     lidarMcapListFamily: (path: string) => Promise<string[]>
     gnssRawReadFile: (path: string) => Promise<{ data: ArrayBuffer; size: number }>
+    dataFormatReadHead: (path: string) => Promise<ArrayBuffer>
     rtkPostRun: (
       request: import('./core/gnsslib/RtkPost').RtkPostRunRequest,
     ) => Promise<import('./core/gnsslib/RtkPost').RtkPostRunResult>
     rtkPostCancel: (runId: string) => Promise<boolean>
+    gnssSolverStatus: () => Promise<{ mode: 'post' | 'realtime'; runId: string } | null>
     rtkPostChooseOutput: (request: {
       defaultPath?: string
       outputFormat?: string

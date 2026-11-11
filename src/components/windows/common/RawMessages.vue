@@ -1,7 +1,7 @@
 <template>
   <div
     class="flow-console-virtual"
-    :class="{ 'hide-message-dividers': !showMessageDividers }"
+    :class="{ 'hide-message-dividers': !showMessageDividers, 'solver-console': !!solverSession }"
     ref="consoleRoot"
     tabindex="0"
   >
@@ -10,12 +10,16 @@
       <div class="console-controls">
         <!-- 左侧按钮组 -->
         <div class="left-controls">
-          <div class="data-parser-badge" :title="t('common.rawMessages.parserBadgeTitle')" @click="openParserConfig">
+          <el-select v-if="solverSession" v-model="solverSession.channel.value" class="solver-message-channel" size="small" :aria-label="t('gnssLib.solver.messageChannel')">
+            <el-option :label="t('gnssLib.solver.solutionMessages')" value="solution" />
+            <el-option :label="t('gnssLib.solver.logMessages')" value="log" />
+          </el-select>
+          <div v-else class="data-parser-badge" :title="t('common.rawMessages.parserBadgeTitle')" @click="openParserConfig">
             <el-icon><DataAnalysis /></el-icon>
             <strong>{{ parserLabel(activeDataParser) }}</strong>
           </div>
           
-          <el-button @click="toggleFilter" :type="dataFilter ? 'success' : 'default'" size="small" :title="dataFilter ? t('common.rawMessages.filterOff') : t('common.rawMessages.filterOn')" :disabled="dataFormat === 'none'">
+          <el-button v-if="!solverSession" @click="toggleFilter" :type="dataFilter ? 'success' : 'default'" size="small" :title="dataFilter ? t('common.rawMessages.filterOff') : t('common.rawMessages.filterOn')" :disabled="dataFormat === 'none'">
             <el-icon><Filter /></el-icon>
             &nbsp;{{ t('common.rawMessages.filter') }}
           </el-button>
@@ -116,7 +120,7 @@
     </div>
 
     <!-- 消息输入框 -->
-    <div class="console-input-bar">
+    <div v-if="!solverSession" class="console-input-bar">
       <div class="input-container">
         <div class="message-entry">
           <el-select
@@ -212,7 +216,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
+import { ref, computed, inject, watch, nextTick, onMounted, onUnmounted } from 'vue'
+import { gnssSolverSessionKey } from '@/composables/useGnssSolverSession'
 import { 
   Filter, 
   Clock, 
@@ -252,7 +257,8 @@ const currentResultIndex = ref(-1)
 const searchResults = ref<any[]>([])
 const isSearching = ref(false)
 
-// 使用虚拟滚动控制台组合式函数（使用全局实例）
+const solverSession = inject(gnssSolverSessionKey, null)
+// Solver messages are isolated from receiver/serial messages.
 const {
   validMsgCount,
   dataFormat,
@@ -272,11 +278,23 @@ const {
   togglePause,
   saveToFile,
   sendMessage,
-} = useConsole(true) // 使用全局实例
+} = solverSession?.displayConsole ?? useConsole(true)
 
 // 获取设备连接状态
 const { deviceConnected, activeDataParser } = useDevice()
-const fileTimeline = useFileTimeline()
+const fileTimeline = solverSession?.display.timeline ?? useFileTimeline()
+const timelineMessageIndex = computed(() => {
+  if (!fileTimeline.active.value || fileTimeline.indexing.value || solverSession?.channel.value === 'log') return -1
+  const source = filteredMessages.value
+  const index = findTimelineMessageIndex(source, fileTimeline.elapsedMilliseconds.value)
+  const elapsed = source[index]?.fileElapsedMilliseconds
+  // Untimed GSV fragments may follow a timed fix. Keep the selected row on the fix itself.
+  for (let candidate = index; candidate >= 0 && source[candidate].fileElapsedMilliseconds === elapsed; candidate--) {
+    if (/^\s*(?:\$..(?:GGA|RMC),|\d{4}[/-]\d{2}[/-]\d{2}\s|\d{1,4}\s+\d)/.test(source[candidate].raw)) return candidate
+  }
+  return index
+})
+const timelineMessageKey = computed(() => filteredMessages.value[timelineMessageIndex.value]?.key ?? '')
 const { showMessageDividers } = useMessageSettings()
 
 // 点击解析徽标：打开数据接入弹框并短暂高亮数据格式配置
@@ -416,6 +434,7 @@ const getMessageClasses = (item: any, index?: number) => {
   const classes: any = {
     'valid-message': item.isValid,
     'invalid-message': !item.isValid,
+    'timeline-current': item.key === timelineMessageKey.value,
     'search-match': searchQuery.value && item.raw.toLowerCase().includes(searchQuery.value.toLowerCase())
   }
   
@@ -562,10 +581,8 @@ const handleScrollToBottom = () => {
 const scrollToTimelineMessage = () => {
   if (!scrollerRef.value || filteredMessages.value.length === 0) return;
 
-  const targetIndex = findTimelineMessageIndex(
-    filteredMessages.value,
-    fileTimeline.elapsedMilliseconds.value,
-  );
+  const targetIndex = timelineMessageIndex.value;
+  if (targetIndex < 0) return;
   scrollerRef.value.scrollToItem(targetIndex);
 };
 
@@ -588,10 +605,12 @@ watch(
     fileTimeline.elapsedMilliseconds.value,
     fileTimeline.dragging.value,
     fileTimeline.active.value,
+    fileTimeline.seekRevision.value,
   ] as const,
-  () => {
+  (current, previous) => {
     if (!fileTimeline.active.value || fileTimeline.indexing.value) return;
-    if (!dataAutoScroll.value && !fileTimeline.dragging.value) return;
+    if (solverSession?.channel.value === 'log') return;
+    if (!dataAutoScroll.value && !fileTimeline.dragging.value && current[3] === previous?.[3]) return;
     nextTick(() => {
       scrollToTimelineMessage()
     })
@@ -600,7 +619,7 @@ watch(
 
 // 生命周期钩子
 onMounted(() => {
-  if (!fileTimeline.active.value && !fileTimeline.indexing.value) {
+  if (!solverSession && !fileTimeline.active.value && !fileTimeline.indexing.value) {
     clearConsole();
   }
   
@@ -610,7 +629,7 @@ onMounted(() => {
     })
   }
 
-  dataFormat.value =
+  dataFormat.value = solverSession ? 'none' :
     activeDataParser.value === 'raw' || activeDataParser.value === 'rtklib-pos'
       ? 'none'
       : activeDataParser.value;
@@ -671,12 +690,23 @@ onUnmounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 10px;
   width: 100%;
 }
 
 .left-controls, .right-controls {
   display: flex;
   align-items: center;
+  gap: 10px;
+}
+
+.console-controls :deep(.el-button + .el-button) {
+  margin-left: 0;
+}
+
+.solver-message-channel {
+  flex: 0 0 140px;
+  width: 140px;
 }
 
 /* 解析方式由 Input 数据源统一配置。 */
@@ -685,7 +715,6 @@ onUnmounted(() => {
   flex: none;
   align-items: center;
   gap: 5px;
-  margin-right: 10px;
   padding: 5px 8px;
   border: 1px solid var(--app-border);
   border-radius: 5px;
@@ -787,6 +816,11 @@ onUnmounted(() => {
   border-left-color: #dc3545;
 }
 
+.solver-console .invalid-message {
+  color: var(--app-text);
+  border-left-color: var(--app-border);
+}
+
 .message-line.search-match {
   background: color-mix(in srgb, #faad14 14%, var(--app-surface));
   border-left-color: #faad14;
@@ -796,6 +830,11 @@ onUnmounted(() => {
   background-color: color-mix(in srgb, #409eff 14%, var(--app-surface)) !important;
   border-left-color: #096dd9;
   font-weight: bold;
+}
+
+.message-line.timeline-current {
+  border-left-color: var(--el-color-primary);
+  background: color-mix(in srgb, var(--el-color-primary) 12%, var(--app-surface));
 }
 
 .timestamp {

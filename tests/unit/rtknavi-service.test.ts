@@ -3,7 +3,7 @@
 import { EventEmitter } from 'node:events'
 import type { ChildProcessWithoutNullStreams } from 'node:child_process'
 import { spawn } from 'node:child_process'
-import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
+import { appendFile, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { PassThrough } from 'node:stream'
@@ -24,6 +24,20 @@ afterEach(async () => {
 })
 
 describe('RtkNaviService', () => {
+  it('waits for startup cancellation and preserves the previous solution file', async () => {
+    const fixture = await createFixture()
+    const oldResult = 'previous solution remains available\n'
+    await writeFile(fixture.request.outputPath, oldResult)
+    const spawnMock = vi.fn()
+    const sender = fakeSender()
+    const service = new RtkNaviService(fixture.workspace, spawnMock as unknown as typeof spawn)
+    const starting = service.start(sender, fixture.request)
+    const stopping = service.stop(sender.id, fixture.request.runId)
+    expect(await starting).toMatchObject({ state: 'stopped' })
+    expect(await stopping).toMatchObject({ state: 'stopped' })
+    expect(spawnMock).not.toHaveBeenCalled()
+    expect(await readFile(fixture.request.outputPath, 'utf8')).toBe(oldResult)
+  })
   it('starts rtkrcv, streams solutions, stops gracefully and restarts', async () => {
     const fixture = await createFixture()
     const firstChild = fakeChild()
@@ -61,7 +75,26 @@ describe('RtkNaviService', () => {
         { timeout: 3000 },
       )
 
+      const remaining = Array.from({ length: 513 }, (_, index) => {
+        const date = new Date(Date.UTC(2005, 3, 2, 0, 0, 31) + index * 1000)
+        const time = date.toISOString().replaceAll('-', '/').replace('T', ' ').replace('Z', '')
+        return `${time} 35.160874837 139.613834647 69.2997 2 8`
+      })
+      // Stop before the next poll and omit the last newline: exit must still drain it.
+      await appendFile(fixture.request.outputPath, remaining.join('\n'))
       const stopped = await service.stop(sender.id, fixture.request.runId)
+      const records = vi
+        .mocked(sender.send)
+        .mock.calls.filter(([channel]) => channel === 'rtknavi-solution')
+        .flatMap(([, event]) => event.records)
+      expect(records).toHaveLength(514)
+      expect(records.at(-1)).toBe(remaining.at(-1))
+      expect(
+        vi
+          .mocked(sender.send)
+          .mock.calls.filter(([channel]) => channel === 'rtknavi-solution')
+          .every(([, event]) => event.records.length <= 256),
+      ).toBe(true)
       expect(stopped.state).toBe('stopped')
       expect(firstChild.kill).toHaveBeenCalled()
       await expect(stat(args[2])).rejects.toThrow()

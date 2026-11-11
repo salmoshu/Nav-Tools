@@ -71,7 +71,7 @@ registerStatusSource(
     createStatusSource({
         id: 'gnss',
         label: 'GNSS',
-        match: moduleIds => moduleIds.has('gnss'),
+        match: moduleIds => moduleIds.has('gnss') && !moduleIds.has('gnsslib'),
         status: () => useGnssStore().status,
     }),
 )

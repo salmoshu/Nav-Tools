@@ -96,13 +96,15 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, inject, onMounted, onUnmounted, ref, watch } from 'vue'
+import { gnssDisplayContext } from '@/composables/gnss/GnssDisplayContext'
 import { InfoFilled, RefreshLeft, Delete } from '@element-plus/icons-vue'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { useGnssStore } from '@/stores/gnss'
 import { numberToQuality, useNmea } from '@/composables/gnss/useNmea'
 import { useFileTimeline } from '@/composables/useFileTimeline'
+import { findPositionEpoch } from '@/core/gnss/EpochSelection'
 import { fixStatusColor } from '@/components/windows/gnss/fixStatusColors'
 import { createTrackSimplifier } from '@/core/gnss/TrackSimplification'
 import { sanitizeMapTrackPoints } from '@/core/gnss/MapTileCache'
@@ -144,9 +146,10 @@ const emit = defineEmits<{
   'view-change': [value: GnssMapViewChange]
 }>()
 
-const gnssStore = useGnssStore()
-const { mapTrackPoints } = useNmea()
-const fileTimeline = useFileTimeline()
+const scopedDisplay = inject(gnssDisplayContext, null)
+const gnssStore = scopedDisplay?.mapState ?? useGnssStore()
+const { mapTrackPoints, mapPositionEpochHistory } = scopedDisplay?.data ?? useNmea()
+const fileTimeline = scopedDisplay?.timeline ?? useFileTimeline()
 
 // 轨迹渲染：逻辑轨迹完整保留在数据源里，渲染层做像素密度抽稀——与上一
 // 渲染点屏幕距离不足 MIN_TRACK_PIXELS 的采样点跳过，渲染点数受屏幕密度
@@ -416,6 +419,7 @@ function historyPointTooltip(point: RenderedPoint, sequence: number): string {
     `${t('gnss.map.longitude')}: ${longitude.toFixed(7)}°`,
     `${t('gnss.map.latitude')}: ${latitude.toFixed(7)}°`,
     `${t('gnss.deviation.tooltipQuality')}: ${numberToQuality(point.quality)} (${point.quality})`,
+    ...(fileTimeline.active.value ? [t('gnss.deviation.seekEpochHint')] : []),
   ].join('<br>')
 }
 
@@ -428,7 +432,18 @@ function addHistoryPoint(point: RenderedPoint): void {
     stroke: false,
     fillColor: fixStatusColor(point.quality),
     fillOpacity: 1,
+    bubblingMouseEvents: false,
   }).addTo(map)
+  marker.on('dblclick', (event: L.LeafletMouseEvent) => {
+    if (!fileTimeline.active.value || fileTimeline.indexing.value) return
+    L.DomEvent.stop(event.originalEvent)
+    const history = mapPositionEpochHistory
+    const end = fileTimeline.mode.value === 'replay'
+      ? history.findNearestElapsedTime(fileTimeline.elapsedFor(history))
+      : history.length - 1
+    const index = findPositionEpoch(history, ['LONGITUDE', 'LATITUDE'], point.latlng[1], point.latlng[0], fileTimeline.elapsedFor(history), end)
+    if (index >= 0) fileTimeline.seekEpoch(history, index)
+  })
   marker.bindTooltip(historyPointTooltip(point, historyPointMarkers.length + 1), {
     direction: 'top',
     offset: [0, -4],

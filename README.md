@@ -6,6 +6,7 @@ Nav-Tools 是一个基于 Electron + Vue 3 的机器人开发调试工作台。�
 
 - 应用下载：https://github.com/salmoshu/Nav-Tools/releases
 - 在线文档：https://salmoshu.github.io/robot/Nav-Tools/01-overview.html
+- GNSS-Lib 与 GNSS-Raw 的引擎接入：[Open-GNSS 接入与同步](doc/OPEN-GNSS-INTEGRATION.md)
 
 ---
 

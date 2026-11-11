@@ -16,7 +16,7 @@
           {{ t('gnssRaw.frames.sourceFiles', { count: store.fileInfo.value.count }) }}
         </span>
         <el-button
-          v-if="store.kind.value === 'rtcm'"
+          v-if="store.kind.value === 'rtcm' && !store.fileInfo.value.stream"
           class="export-btn"
           size="small"
           :loading="exporting"

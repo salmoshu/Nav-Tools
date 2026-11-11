@@ -68,7 +68,7 @@ export default defineConfig(({ command }) => {
       }),
       monacoEditorPlugin({}),
     ],
-    // RTCM 解码 Worker 走 ES module（robo-gnss-wasm 为 ESM，iife 无法代码分割）
+    // RTCM 解码 Worker 走 ES module（open-gnss-wasm 为 ESM，iife 无法代码分割）
     worker: {
       format: 'es',
     },
@@ -85,6 +85,7 @@ export default defineConfig(({ command }) => {
     // chunk with a correct __esm init order (avoids the RefImpl TDZ that
     // appears once vue-i18n/vue-demi add a second entry into `vue`).
     optimizeDeps: {
+      entries: ['index.html'],
       include: [
         'vue',
         '@vue/shared',
@@ -95,11 +96,11 @@ export default defineConfig(({ command }) => {
         '@element-plus/icons-vue',
         'vue-i18n',
       ],
-      // robo-gnss-wasm 不预打包：解码 Worker 以独立模块图引用它，预打包的
+      // open-gnss-wasm 不预打包：解码 Worker 以独立模块图引用它，预打包的
       // ?v=hash 失效（重装依赖/双 dev server 共享 .vite 缓存/运行时重优化）
       // 会让 Worker 加载 404 且 onerror 拿不到详情。该包为纯 ESM 单文件 wasm，
       // 直接走 node_modules 稳定路径即可。
-      exclude: ['robo-gnss-wasm'],
+      exclude: ['open-gnss-wasm'],
     },
     server: {
       ...(process.env.VSCODE_DEBUG &&

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { ApplicationStorage } from '@/core/application/ApplicationStorage'
-import { panelRegistry } from '@/core/panels/registry'
+import { normalizePanelIds, panelRegistry } from '@/core/panels/registry'
 import { JsonStorage, type StorageLike } from '@/core/storage/JsonStorage'
 
 class MemoryStorage implements StorageLike {
@@ -17,17 +17,16 @@ class MemoryStorage implements StorageLike {
 }
 
 describe('GNSS-Lib registration', () => {
-  it('registers RTKPOST and RTKNAVI in the GNSS-Lib component family', () => {
-    expect(panelRegistry.find((panel) => panel.id === 'gnsslib-rtkpost')).toMatchObject({
+  it('registers one solver and normalizes both legacy engines to that entry', () => {
+    expect(panelRegistry.find((panel) => panel.id === 'gnsslib-solver')).toMatchObject({
       catalogGroup: 'gnsslib',
-      componentName: 'RtkPost',
-      componentPath: '@/components/windows/gnsslib/RtkPost.vue',
+      componentName: 'GnssSolver',
+      componentPath: '@/components/windows/gnsslib/GnssSolver.vue',
     })
-    expect(panelRegistry.find((panel) => panel.id === 'gnsslib-rtknavi')).toMatchObject({
-      catalogGroup: 'gnsslib',
-      componentName: 'RtkNavi',
-      componentPath: '@/components/windows/gnsslib/RtkNavi.vue',
-    })
+    expect(panelRegistry.filter((panel) => panel.moduleId === 'gnsslib')).toHaveLength(1)
+    expect(normalizePanelIds(['gnsslib-rtkpost', 'gnsslib-rtknavi', 'gnssraw-rtkpost'])).toEqual([
+      'gnsslib-solver',
+    ])
     expect(panelRegistry.some((panel) => panel.id === 'gnssraw-rtkpost')).toBe(false)
   })
 
@@ -68,8 +67,74 @@ describe('GNSS-Lib registration', () => {
     expect(applications[1]).toMatchObject({
       id: 'gnsslib',
       name: 'GNSS-Lib',
-      windowIds: ['gnsslib-rtkpost', 'gnsslib-rtknavi'],
+      description: 'Open-GNSS post-processing and real-time positioning workspace',
+      windowIds: ['gnsslib-solver', 'raw-messages', 'gnss-deviation'],
     })
     expect(storage.loadApplications()).toEqual(applications)
+  })
+
+  it.each([
+    [
+      'Robo-GNSS post-processing and real-time positioning workspace',
+      'Open-GNSS post-processing and real-time positioning workspace',
+    ],
+    ['My receiver workflow', 'My receiver workflow'],
+  ])('migrates the saved engine description once: %s', (description, expected) => {
+    const memory = new MemoryStorage()
+    const storage = new ApplicationStorage(new JsonStorage(memory))
+    const applications = storage.loadApplications()
+    const application = applications.find(({ id }) => id === 'gnsslib')!
+    Object.assign(application, {
+      name: 'My positioning tools',
+      description,
+      accent: '#123456',
+      windowIds: ['gnsslib-rtknavi'],
+    })
+    storage.saveApplications(applications)
+    memory.removeItem('nav-tools:migration:gnsslib-engine-name-v1')
+
+    const migrated = storage.loadApplications()
+    expect(migrated.find(({ id }) => id === 'gnsslib')).toEqual({
+      ...application,
+      windowIds: ['gnsslib-solver'],
+      description: expected,
+    })
+    expect(JSON.parse(memory.getItem('nav-tools:custom-applications')!)).toEqual(migrated)
+
+    const saved = migrated.find(({ id }) => id === 'gnsslib')!
+    saved.description = 'My updated workflow'
+    storage.saveApplications(migrated)
+    expect(storage.loadApplications().find(({ id }) => id === 'gnsslib')).toEqual(saved)
+  })
+
+  it('migrates the old workspace once without changing engine settings or user metadata', () => {
+    const memory = new MemoryStorage()
+    const storage = new ApplicationStorage(new JsonStorage(memory))
+    storage.loadApplications()
+    const application = {
+      id: 'gnsslib',
+      name: 'My GNSS workspace',
+      description: 'custom',
+      icon: 'satellite',
+      accent: '#123456',
+      windowIds: ['gnsslib-rtknavi', 'gnsslib-rtkpost', 'plot'],
+    }
+    memory.setItem('nav-tools:custom-applications', JSON.stringify([application]))
+    memory.setItem(
+      'nav-tools:gnssraw-rtkpost-v1',
+      JSON.stringify({ executablePath: 'post.exe', roverObsPath: 'rover.obs' }),
+    )
+    memory.setItem('nav-tools:gnsslib-rtknavi-v1', JSON.stringify({ executablePath: 'live.exe' }))
+    memory.removeItem('nav-tools:migration:gnsslib-solver-v1')
+    const migrated = storage.loadApplications()
+    expect(migrated[0]).toEqual({
+      ...application,
+      windowIds: ['gnsslib-solver', 'plot', 'raw-messages', 'gnss-deviation'],
+    })
+    expect(memory.getItem('nav-tools:gnssraw-rtkpost-v1')).toContain('rover.obs')
+    expect(memory.getItem('nav-tools:gnsslib-rtknavi-v1')).toContain('live.exe')
+    migrated[0].windowIds = ['gnsslib-solver']
+    storage.saveApplications(migrated)
+    expect(storage.loadApplications()[0].windowIds).toEqual(['gnsslib-solver'])
   })
 })

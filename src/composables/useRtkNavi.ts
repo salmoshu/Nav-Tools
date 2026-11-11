@@ -46,12 +46,12 @@ window.ipcRenderer?.on('rtknavi-log', (_event, payload: RtkNaviLogEvent) => {
 })
 
 export function useRtkNavi() {
-  async function start(): Promise<void> {
+  async function start(requestRunId?: string): Promise<void> {
     if (running.value) return
     buildRtkNaviConfig(settings, settings.outputPath || 'rtknavi-current.pos')
     const api = window.electronAPI?.rtkNaviStart
     if (!api) throw new Error('RTKNAVI 仅可在 Electron 桌面端运行')
-    const runId = crypto.randomUUID()
+    const runId = requestRunId ?? crypto.randomUUID()
     activeRunId = runId
     latestSolution.value = null
     solutions.value = []

@@ -270,6 +270,12 @@ export class NumericEpochStore {
     return formatWallTime(chunk.wallTimes[this.localAt(index)])
   }
 
+  /** Monotonic timestamp, shared by stores using the same recording clock. */
+  public getTimestamp(index: number): number {
+    this.assertIndex(index)
+    return this.timeAt(index)
+  }
+
   /** Milliseconds elapsed from the first stored epoch. */
   public getElapsedTime(index: number): number {
     this.assertIndex(index)

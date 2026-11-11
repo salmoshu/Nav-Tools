@@ -122,6 +122,25 @@
           </div>
         </section>
 
+        <section v-else-if="activeSection === 'data-formats'" class="settings-section">
+          <h2 class="section-title">{{ t('data.formatSettings') }}</h2>
+          <p class="section-hint">{{ t('data.formatSettingsHint') }}</p>
+          <div v-for="application in applications" :key="application.id" class="settings-card format-settings-card" :data-application-id="application.id">
+            <div class="format-settings-heading">
+              <strong>{{ application.name }}</strong>
+              <el-button size="small" @click="resetFormats(application.id)">{{ t('data.formatReset') }}</el-button>
+            </div>
+            <div class="format-settings-options">
+              <el-checkbox
+                v-for="format in DETECTABLE_FORMATS"
+                :key="format"
+                :model-value="formatsFor(application.id, application.windowIds).includes(format)"
+                @change="setApplicationFormat(application.id, application.windowIds, format, $event === true)"
+              >{{ FORMAT_LABELS[format] }}</el-checkbox>
+            </div>
+          </div>
+        </section>
+
         <section v-else-if="activeSection === 'messages'" class="settings-section">
           <h2 class="section-title">{{ t('app.settingsMessages') }}</h2>
           <p class="section-hint">{{ t('app.settingsMessagesHint') }}</p>
@@ -255,11 +274,13 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, type Component } from 'vue'
 import { Check, Refresh } from '@element-plus/icons-vue'
-import { ArrowLeft, Keyboard, Languages, LayoutGrid, MessageSquare, Palette } from '@lucide/vue'
+import { ArrowLeft, Database, Keyboard, Languages, LayoutGrid, MessageSquare, Palette } from '@lucide/vue'
 import { useTheme, type ThemeMode } from '@/composables/useTheme'
 import { useLocale } from '@/composables/useLocale'
 import { useMessageSettings } from '@/composables/useMessageSettings'
 import { useApplicationSelector } from '@/composables/useApplicationSelector'
+import { useAutoFormatSettings } from '@/composables/useAutoFormatSettings'
+import { DETECTABLE_FORMATS, FORMAT_LABELS, type DetectableFormat } from '@/core/data/DataFormat'
 import { DEFAULT_APPLICATIONS } from '@/core/application/ApplicationStorage'
 import type { SettingsSectionKey } from '@/core/settings/ComponentSettings'
 import { applicationIconComponents } from '@/settings/applicationIcons'
@@ -294,6 +315,7 @@ const sections: SettingsSection[] = [
   { key: 'theme', labelKey: 'app.settingsTheme', icon: Palette },
   { key: 'language', labelKey: 'app.settingsLanguage', icon: Languages },
   { key: 'applications', labelKey: 'app.settingsDefaultApplications', icon: LayoutGrid },
+  { key: 'data-formats', labelKey: 'data.formatSettings', icon: Database },
   { key: 'messages', labelKey: 'app.settingsMessages', icon: MessageSquare },
   { key: 'shortcuts', labelKey: 'app.settingsShortcuts', icon: Keyboard },
   { key: 'version', labelKey: 'app.settingsVersion', icon: Refresh },
@@ -304,7 +326,12 @@ const activeSection = ref<SettingsSectionKey>(props.initialSection ?? 'theme')
 const { themeMode, setTheme } = useTheme()
 const { locale, setLocale } = useLocale()
 const { showMessageDividers, setShowMessageDividers } = useMessageSettings()
-const { isDefaultApplicationEnabled, setDefaultApplicationEnabled } = useApplicationSelector()
+const { applications, isDefaultApplicationEnabled, setDefaultApplicationEnabled } = useApplicationSelector()
+const { formatsFor, setFormats, resetFormats } = useAutoFormatSettings()
+function setApplicationFormat(id: string, windowIds: readonly string[], format: DetectableFormat, enabled: boolean) {
+  const current = formatsFor(id, windowIds)
+  setFormats(id, enabled ? [...current, format] : current.filter((item) => item !== format))
+}
 
 const themeOptions: { mode: ThemeMode; labelKey: string }[] = [
   { mode: 'system', labelKey: 'theme.system' },
@@ -627,6 +654,11 @@ function handleUpdaterPrefChange(
   font-size: 12px;
   line-height: 1.6;
 }
+
+.format-settings-card { margin-bottom: 10px; padding: 12px; }
+.format-settings-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.format-settings-options { display: flex; flex-wrap: wrap; gap: 0 18px; margin-top: 6px; }
+.format-settings-options :deep(.el-checkbox) { margin-right: 0; }
 
 .default-application-grid {
   display: grid;

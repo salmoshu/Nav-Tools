@@ -8,6 +8,15 @@ import * as path from 'node:path'
 const MAX_RTCM_BYTES = 2 * 1024 * 1024 * 1024
 
 export function registerGnssRawIpc(): void {
+  ipcMain.handle('data-format-read-head', async (_event, rawPath: unknown) => {
+    if (typeof rawPath !== 'string' || !rawPath.trim()) throw new Error('文件路径无效')
+    const file = await fsPromises.open(path.resolve(rawPath), 'r')
+    try {
+      const buffer = Buffer.alloc(64 * 1024)
+      const { bytesRead } = await file.read(buffer, 0, buffer.length, 0)
+      return buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + bytesRead)
+    } finally { await file.close() }
+  })
   ipcMain.handle('gnssraw-read-file', async (_event, rawPath: unknown) => {
     if (typeof rawPath !== 'string' || !rawPath.trim()) throw new Error('文件路径无效')
     const filePath = path.resolve(rawPath)

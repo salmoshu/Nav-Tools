@@ -11,6 +11,7 @@ import {
   type RtkNaviStartRequest,
   type RtkNaviStatus,
 } from '../../../src/core/gnsslib/RtkNavi'
+import { gnssSolverTasks } from './GnssSolverTasks'
 
 interface RtkNaviJob {
   runId: string
@@ -27,6 +28,9 @@ interface RtkNaviJob {
   killTimer?: ReturnType<typeof setTimeout>
   stopPromise?: Promise<RtkNaviStatus>
   resolveStop?: (status: RtkNaviStatus) => void
+  release: () => void
+  previousOutput?: import('node:fs').Stats
+  drain?: () => Promise<void>
 }
 
 export class RtkNaviService {
@@ -38,6 +42,22 @@ export class RtkNaviService {
   ) {}
 
   public async start(sender: WebContents, rawRequest: RtkNaviStartRequest): Promise<RtkNaviStatus> {
+    const release = gnssSolverTasks.acquire('realtime', sender.id, rawRequest?.runId)
+    try {
+      const status = await this.startTask(sender, rawRequest, release)
+      if (status.state === 'stopped') release()
+      return status
+    } catch (error) {
+      release()
+      throw error
+    }
+  }
+
+  private async startTask(
+    sender: WebContents,
+    rawRequest: RtkNaviStartRequest,
+    release: () => void,
+  ): Promise<RtkNaviStatus> {
     if (this.jobs.has(sender.id)) throw new Error('当前窗口已有 RTKNAVI 任务正在运行')
     if (!rawRequest || typeof rawRequest !== 'object') throw new Error('RTKNAVI 请求无效')
     if (typeof rawRequest.runId !== 'string' || !/^[\w-]{1,80}$/.test(rawRequest.runId)) {
@@ -48,9 +68,14 @@ export class RtkNaviService {
     }
 
     const request = this.normalizePaths(rawRequest)
-    const outputPath = request.outputPath || path.join(this.workspace, 'rtknavi-current.pos')
+    const outputPath =
+      request.outputPath || path.join(this.workspace, 'results', `${request.runId}.pos`)
+    if (!request.outputPath) await fs.mkdir(path.dirname(outputPath), { recursive: true })
     buildRtkNaviConfig(request, outputPath)
     await this.validateFiles(request, outputPath)
+    const cancelled = () =>
+      sender.isDestroyed() || gnssSolverTasks.isCancelled('realtime', sender.id, request.runId)
+    if (cancelled()) return { runId: request.runId, state: 'stopped', outputPath }
     await fs.mkdir(this.workspace, { recursive: true })
     const runDirectory = await fs.mkdtemp(path.join(this.workspace, 'run-'))
     const configPath = path.join(runDirectory, 'rtkrcv.conf')
@@ -65,7 +90,14 @@ export class RtkNaviService {
         `${baseConfig.trimEnd()}${baseConfig ? '\n' : ''}${generatedConfig}`,
         'utf8',
       )
-      await fs.rm(outputPath, { force: true })
+      const previousOutput = await fs.stat(outputPath).catch((error: { code?: string }) => {
+        if (error.code !== 'ENOENT') throw error
+        return undefined
+      })
+      if (cancelled()) {
+        await fs.rm(runDirectory, { recursive: true, force: true })
+        return { runId: request.runId, state: 'stopped', outputPath }
+      }
       const executable =
         request.executablePath || (process.platform === 'win32' ? 'rtkrcv.exe' : 'rtkrcv')
       const child = this.spawnProcess(executable, ['-nc', '-o', configPath], {
@@ -83,6 +115,8 @@ export class RtkNaviService {
         stopping: false,
         epochs: 0,
         qualityCounts: {},
+        release,
+        previousOutput,
       }
       this.jobs.set(sender.id, job)
       const onDestroyed = (): void => {
@@ -119,7 +153,7 @@ export class RtkNaviService {
       })
       watchSolution(sender, job, appendLog)
       const status = statusOf(job)
-      sender.send('rtknavi-status', status)
+      if (!sender.isDestroyed()) sender.send('rtknavi-status', status)
       return status
     } catch (error) {
       this.jobs.delete(sender.id)
@@ -129,8 +163,15 @@ export class RtkNaviService {
   }
 
   public async stop(senderId: number, runId?: string): Promise<RtkNaviStatus> {
+    const pending = gnssSolverTasks.cancel('realtime', senderId, runId)
     const job = this.jobs.get(senderId)
-    if (!job || (runId && job.runId !== runId)) return idleStatus()
+    if (!job || (runId && job.runId !== runId)) {
+      if (pending) {
+        await pending
+        return { runId: runId ?? '', state: 'stopped', outputPath: '' }
+      }
+      return idleStatus()
+    }
     if (job.stopPromise) return job.stopPromise
     job.stopping = true
     job.state = 'stopping'
@@ -213,8 +254,10 @@ async function finish(
   job.finished = true
   if (job.killTimer) clearTimeout(job.killTimer)
   job.unwatch?.()
+  await job.drain?.().catch(() => undefined)
   removeDestroyedListener()
   onFinished()
+  job.release()
   job.state = error ? 'error' : 'stopped'
   const status = statusOf(job, error)
   if (!sender.isDestroyed()) sender.send('rtknavi-status', status)
@@ -229,22 +272,48 @@ function watchSolution(
 ): void {
   let offset = 0
   let remainder = ''
-  let reading = false
-  const read = async (): Promise<void> => {
-    if (reading || job.finished) return
-    reading = true
+  let pending = Promise.resolve()
+  const readAvailable = async (final = false): Promise<void> => {
+    if (job.finished && !final) return
     try {
       const stat = await fs.stat(job.outputPath)
+      if (job.previousOutput) {
+        const old = job.previousOutput
+        if (
+          stat.size === old.size &&
+          stat.mtimeMs === old.mtimeMs &&
+          stat.ctimeMs === old.ctimeMs &&
+          stat.ino === old.ino
+        )
+          return
+        job.previousOutput = undefined
+      }
       if (stat.size < offset) {
         offset = 0
         remainder = ''
       }
-      if (stat.size === offset) return
-      const text = await readRange(job.outputPath, offset, stat.size)
+      if (stat.size === offset && !(final && remainder)) return
+      const text = stat.size > offset ? await readRange(job.outputPath, offset, stat.size) : ''
       offset = stat.size
       const parts = (remainder + text).split(/\r\n|\n|\r/)
       remainder = parts.pop() ?? ''
+      if (final && remainder.trim()) {
+        parts.push(remainder)
+        remainder = ''
+      }
       let latest: RtkNaviSolution | undefined
+      let records: string[] = []
+      const publish = (): void => {
+        if (!records.length || !latest || sender.isDestroyed()) return
+        sender.send('rtknavi-solution', {
+          runId: job.runId,
+          epochs: job.epochs,
+          qualityCounts: { ...job.qualityCounts },
+          solution: latest,
+          records,
+        })
+        records = []
+      }
       for (const line of parts) {
         const solution = parseRtkNaviSolutionLine(line)
         if (!solution) continue
@@ -252,27 +321,24 @@ function watchSolution(
         job.latestSolution = solution
         job.epochs++
         job.qualityCounts[solution.quality] = (job.qualityCounts[solution.quality] ?? 0) + 1
+        records.push(line)
+        if (records.length >= 256) publish()
       }
-      if (latest && !job.finished && !sender.isDestroyed()) {
-        sender.send('rtknavi-solution', {
-          runId: job.runId,
-          epochs: job.epochs,
-          qualityCounts: { ...job.qualityCounts },
-          solution: latest,
-        })
-      }
+      publish()
     } catch (error) {
       if ((error as { code?: string }).code === 'ENOENT') return
       if (!job.finished) {
         appendLog(`\n解决方案读取失败: ${error instanceof Error ? error.message : String(error)}\n`)
       }
-    } finally {
-      reading = false
     }
+  }
+  const read = (): void => {
+    pending = pending.then(() => readAvailable())
   }
   watchFile(job.outputPath, { interval: 400 }, read)
   job.unwatch = () => unwatchFile(job.outputPath, read)
-  void read()
+  job.drain = () => pending.then(() => readAvailable(true))
+  read()
 }
 
 async function readRange(filePath: string, start: number, end: number): Promise<string> {

@@ -2,8 +2,10 @@ import { BrowserWindow, ipcMain } from 'electron'
 import type { RtkPostRunRequest } from '../../src/core/gnsslib/RtkPost'
 import { showScopedSaveDialog } from './dialogs'
 import { RtkPostService } from './services/RtkPostService'
+import { gnssSolverTasks } from './services/GnssSolverTasks'
 
 export function registerRtkPostIpc(service = new RtkPostService()): void {
+  ipcMain.handle('gnss-solver-status', (event) => gnssSolverTasks.status(event.sender.id))
   ipcMain.handle('rtkpost-run', async (event, request: RtkPostRunRequest) => {
     return service.run(event.sender, request)
   })

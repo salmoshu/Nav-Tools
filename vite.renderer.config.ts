@@ -5,6 +5,9 @@ import monacoEditorPlugin from 'vite-plugin-monaco-editor-esm'
 
 export default defineConfig({
   plugins: [vue(), monacoEditorPlugin({})],
+  worker: {
+    format: 'es',
+  },
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
@@ -29,6 +32,8 @@ export default defineConfig({
       '@element-plus/icons-vue',
       'vue-i18n',
     ],
+    // Keep the WASM worker on a stable module URL, without dependency re-optimization.
+    exclude: ['open-gnss-wasm'],
   },
   server: {
     host: '127.0.0.1',

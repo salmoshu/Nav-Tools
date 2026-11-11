@@ -94,7 +94,7 @@ let globalConsolexInstance: ConsoleState | null = null;
  * 提供高性能的消息处理和状态管理
  * @param useGlobal 是否使用全局单例实例，默认为true
  */
-export function useConsole(useGlobal: boolean = true): ConsoleState {
+export function useConsole(useGlobal: boolean = true, timeline = useFileTimeline()): ConsoleState {
   // 如果使用全局实例且已存在，则返回现有实例
   if (useGlobal && globalConsolexInstance) {
     return globalConsolexInstance;
@@ -113,7 +113,7 @@ export function useConsole(useGlobal: boolean = true): ConsoleState {
   const validJsonCount = ref(0);
   const validRegexCount = ref(0);
   const validCsvCount = ref(0);
-  const fileTimeline = useFileTimeline();
+  const fileTimeline = timeline;
   const hasFileReplayMessages = ref(false);
   let fileReplayBuffer = '';
   let fileReplayFirstClock: number | null = null;
@@ -638,7 +638,7 @@ export function useConsole(useGlobal: boolean = true): ConsoleState {
 
   const toggleDisplayFormat = () => {
     displayFormat.value = displayFormat.value === 'ascii' ? 'hex' : 'ascii';
-    window.ipcRenderer.send('serial-data-format', displayFormat.value);
+    if (useGlobal) window.ipcRenderer?.send('serial-data-format', displayFormat.value);
   };
 
   const toggleTimestamp = () => {

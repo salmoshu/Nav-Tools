@@ -23,7 +23,9 @@ describe('file timeline presentation', () => {
   })
 
   it('keeps file messages on mount and follows the timeline cursor', () => {
-    expect(messages).toContain('if (!fileTimeline.active.value && !fileTimeline.indexing.value)')
+    expect(messages).toContain(
+      'if (!solverSession && !fileTimeline.active.value && !fileTimeline.indexing.value)',
+    )
     expect(messages).toContain('fileTimeline.elapsedMilliseconds.value')
     expect(messages).toContain('scrollToTimelineMessage()')
     expect(messages).toContain('scrollerRef.value.scrollToItem(targetIndex)')
@@ -35,8 +37,12 @@ describe('file timeline presentation', () => {
 
     // 进度条速度下拉与数据接入弹框共用 replaySpeedSelection（含 ×0 关闭时间标签回放）
     const toolbar = readFileSync('src/components/ToolBar.vue', 'utf8')
-    expect(toolbar).toContain(':speed="replaySpeedSelection"')
-    expect(toolbar).toContain(':speed-options="replaySpeedSelectionOptions"')
+    expect(toolbar).toContain(
+      'isSolverWorkspace ? solverSession.playbackSpeed.value : replaySpeedSelection',
+    )
+    expect(toolbar).toContain(
+      'isSolverWorkspace ? replaySpeedOptions : replaySpeedSelectionOptions',
+    )
     expect(toolbar).toContain('function applyTimelineSpeed(')
   })
 })

@@ -1,132 +1,107 @@
 import { expect, test } from '@playwright/test'
+import { openSolver, solverSnapshot } from './support/gnssSolver'
 
-test('starts RTKNAVI, displays a live solution and stops again', async ({ page }) => {
-  const pageErrors: string[] = []
-  page.on('pageerror', (error) => pageErrors.push(error.message))
-  const application = {
-    id: 'rtknavi-e2e',
-    name: 'RTKNAVI E2E',
-    description: '',
-    icon: 'satellite',
-    accent: '#7c3aed',
-    windowIds: ['gnsslib-rtknavi'],
-  }
-  await page.addInitScript((value) => {
-    localStorage.setItem('nav-tools:locale', 'zh-CN')
-    localStorage.setItem('nav-tools:custom-applications', JSON.stringify([value]))
-    localStorage.setItem('nav-tools:selected-application', value.id)
-    const listeners = new Map<string, Set<(...args: unknown[]) => void>>()
-    const emit = (channel: string, payload: unknown) => {
-      for (const listener of listeners.get(channel) ?? []) listener({}, payload)
-    }
-    Object.assign(window, {
-      __rtkNaviEmit: emit,
-      __rtkNaviRequest: undefined,
-    })
-    Object.defineProperty(window, 'ipcRenderer', {
-      configurable: true,
-      value: {
-        on(channel: string, listener: (...args: unknown[]) => void) {
-          const entries = listeners.get(channel) ?? new Set()
-          entries.add(listener)
-          listeners.set(channel, entries)
-        },
-        off(channel: string, listener: (...args: unknown[]) => void) {
-          listeners.get(channel)?.delete(listener)
-        },
-        invoke: async () => undefined,
-        send: () => undefined,
-      },
-    })
-    const api: Record<string, (...args: never[]) => unknown> = {
-      getAppVersion: async () => '1.8.0',
-      getWindowState: async () => ({ maximized: false, alwaysOnTop: false }),
-      rtkNaviStatus: async () => ({ runId: '', state: 'idle', outputPath: '' }),
-      rtkNaviStart: async (request: { runId: string }) => {
-        Reflect.set(window, '__rtkNaviRequest', request)
-        queueMicrotask(() => {
-          emit('rtknavi-solution', {
-            runId: request.runId,
-            epochs: 1,
-            qualityCounts: { 1: 1 },
-            solution: {
-              time: '2005/04/02 00:00:30.000',
-              latitude: 35.160874837,
-              longitude: 139.613834647,
-              height: 69.2997,
-              quality: 1,
-              satellites: 7,
-              age: 1.5,
-              ratio: 2.8,
-            },
-          })
-        })
-        return {
-          runId: request.runId,
-          state: 'running',
-          outputPath: '/tmp/solution.pos',
-          pid: 1234,
-        }
-      },
-      rtkNaviStop: async (runId: string) => ({
-        runId,
-        state: 'stopped',
-        outputPath: '/tmp/solution.pos',
-      }),
-    }
-    Object.defineProperty(window, 'electronAPI', {
-      configurable: true,
-      value: new Proxy(api, {
-        get(target, property: string) {
-          return target[property] ?? (() => Promise.resolve(undefined))
-        },
-      }),
-    })
-  }, application)
-  await page.goto('/#app/rtknavi-e2e')
-
-  const panel = page.locator('.rtknavi')
-  await expect(panel).toBeVisible({ timeout: 20_000 })
-  await panel.getByRole('tab', { name: '输入与选项' }).click()
-  const modeField = panel.locator('.option-field').filter({ hasText: '定位模式' })
-  await modeField.locator('.el-select').click()
-  await page.getByRole('option', { name: '单点定位 (Single)', exact: true }).click()
-  const roverInput = panel.locator('.stream-section').first().locator('.stream-path input')
-  await roverInput.fill('/tmp/rover.rtcm3')
-
-  await panel.getByRole('button', { name: '启动', exact: true }).click()
-  await expect(panel.getByRole('tab', { name: '实时监控' })).toHaveAttribute(
-    'aria-selected',
-    'true',
-  )
-  await expect(panel.locator('.summary-card').first()).toContainText('1')
-  await expect(panel.locator('.solution-grid')).toContainText('35.160874837°')
-  await expect(panel.locator('.solution-grid')).toContainText('固定解')
-  await expect(panel.locator('.run-state')).toHaveText('实时解算中')
-  await panel.evaluate((element) => {
-    element.scrollTop = 0
+test('publishes all live epochs to messages and Deviation and waits for final data before unlocking mode selection', async ({
+  page,
+}) => {
+  const errors: string[] = []
+  page.on('pageerror', (error) => errors.push(error.message))
+  const panel = await openSolver(page, 'realtime')
+  await panel.getByRole('button', { name: 'Start', exact: true }).click()
+  await expect(panel.locator('.solver-state.running')).toBeVisible()
+  await expect(panel.getByRole('radio', { name: 'Post-processing', exact: true })).toBeDisabled()
+  await expect(panel.getByRole('progressbar')).toHaveCount(0)
+  await page.evaluate(() => {
+    Reflect.get(window, '__solverEmitLive')(0, 600)
+    Reflect.get(window, '__solverEmitLiveLog')('live engine diagnostic\n')
   })
-  await page.screenshot({ path: 'test-results/rtknavi-monitor.png', fullPage: true })
-  await panel.getByRole('tab', { name: '输入与选项' }).click()
-  await expect(roverInput).toBeDisabled()
-  await panel.getByRole('button', { name: '停止', exact: true }).click()
-  await expect(roverInput).toBeEnabled()
-
-  await page.emulateMedia({ colorScheme: 'dark' })
-  await page.setViewportSize({ width: 390, height: 844 })
-  await panel.evaluate((element) => {
-    element.style.width = '390px'
-    element.style.maxWidth = '390px'
-    element.scrollTop = 0
+  await expect.poll(async () => (await solverSnapshot(page)).positions).toBe(600)
+  await expect(panel.locator('.summary-value').first()).toHaveText('600')
+  await expect(page.locator('.deviation-status-card')).toContainText('Float')
+  const messages = page.locator('.flow-console-virtual')
+  await expect(messages.locator('.console-input-bar')).toHaveCount(0)
+  await messages.locator('.solver-message-channel').click()
+  await page.getByRole('option', { name: 'Engine log', exact: true }).click()
+  await expect(messages).toContainText('live engine diagnostic')
+  await panel.getByRole('button', { name: 'Stop', exact: true }).click()
+  await expect(panel.locator('.solver-state.stopping')).toBeVisible()
+  await expect(panel.getByRole('radio', { name: 'Post-processing', exact: true })).toBeDisabled()
+  await page.evaluate(() => {
+    Reflect.get(window, '__solverEmitLive')(600, 3)
+    Reflect.get(window, '__solverFinishLiveStop')()
   })
-  await expect(page.locator('html')).toHaveClass(/dark/)
-  expect(await panel.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(
-    true,
-  )
+  await expect(panel.locator('.solver-state.stopped')).toBeVisible()
+  await expect.poll(async () => (await solverSnapshot(page)).epochs).toBe(603)
+  await expect(panel.getByRole('radio', { name: 'Post-processing', exact: true })).toBeEnabled()
+  await page.evaluate(() => Reflect.get(window, '__solverEmitLive')(1000, 1))
+  expect((await solverSnapshot(page)).epochs).toBe(603)
+  await page.screenshot({ path: 'test-results/gnss-solver-live.png', fullPage: true })
+  await panel.getByRole('button', { name: 'Start', exact: true }).click()
+  await expect.poll(async () => (await solverSnapshot(page)).epochs).toBe(0)
+  await page.evaluate(() => Reflect.get(window, '__solverEmitLive')(100, 2))
+  await expect.poll(async () => (await solverSnapshot(page)).epochs).toBe(2)
+  expect((await solverSnapshot(page)).origin).toEqual([0, 0, 4])
+  await panel.getByRole('button', { name: 'Stop', exact: true }).click()
+  await page.evaluate(() => Reflect.get(window, '__solverFinishLiveStop')())
+  await expect(panel.locator('.solver-state.stopped')).toBeVisible()
+  expect(errors).toEqual([])
+})
 
+test('recovers the live file after reload without duplicating overlapping event batches', async ({
+  page,
+}) => {
+  const errors: string[] = []
+  page.on('pageerror', (error) => errors.push(error.message))
+  const panel = await openSolver(page, 'realtime')
+  await panel.getByRole('button', { name: 'Start', exact: true }).click()
+  await expect(panel.locator('.solver-state.running')).toBeVisible()
+  await page.evaluate(() => Reflect.get(window, '__solverEmitLive')(0, 600))
+  await expect.poll(async () => (await solverSnapshot(page)).epochs).toBe(600)
+  const runId = (await solverSnapshot(page)).runId
+  await page.addInitScript(() => {
+    Reflect.set(window, '__solverOnRead', () => {
+      Reflect.deleteProperty(window, '__solverOnRead')
+      Reflect.get(window, '__solverEmitLive')(590, 20)
+    })
+  })
   await page.reload()
-  await expect(panel).toBeVisible({ timeout: 20_000 })
-  await panel.getByRole('tab', { name: '输入与选项' }).click()
-  await expect(roverInput).toHaveValue('/tmp/rover.rtcm3')
-  expect(pageErrors).toEqual([])
+  await expect(panel.locator('.solver-state.running')).toBeVisible()
+  expect((await solverSnapshot(page)).runId).toBe(runId)
+  await expect.poll(async () => (await solverSnapshot(page)).positions).toBe(610)
+  await expect(page.locator('.deviation-status-card')).toContainText('Float')
+  await expect(panel.getByRole('radio', { name: 'Post-processing', exact: true })).toBeDisabled()
+  await page.evaluate(() => Reflect.get(window, '__solverEmitLive')(610, 3))
+  await expect.poll(async () => (await solverSnapshot(page)).epochs).toBe(613)
+  await panel.getByRole('button', { name: 'Stop', exact: true }).click()
+  await page.evaluate(() => Reflect.get(window, '__solverFinishLiveStop')())
+  await expect(panel.locator('.solver-state.stopped')).toBeVisible()
+  expect(errors).toEqual([])
+})
+
+test('keeps a stopped NTRIP solver run available on the toolbar timeline', async ({ page }) => {
+  const panel = await openSolver(page, 'realtime')
+  await page.evaluate(async () => {
+    const path = '/src/composables/useRtkNavi.ts'
+    const { useRtkNavi } = await import(/* @vite-ignore */ path)
+    const settings = useRtkNavi().settings
+    settings.inputs[0].type = 'ntripcli'
+    settings.inputs[0].path = 'demo:demo@localhost:2101/test'
+  })
+  await panel.getByRole('button', { name: 'Start', exact: true }).click()
+  await expect(panel.locator('.solver-state.running')).toBeVisible()
+  await page.evaluate(() => Reflect.get(window, '__solverEmitLive')(0, 6))
+  await panel.getByRole('button', { name: 'Stop', exact: true }).click()
+  await page.evaluate(() => Reflect.get(window, '__solverFinishLiveStop')())
+  await expect(panel.locator('.solver-state.stopped')).toBeVisible()
+  await expect(page.locator('.timeline-epoch')).toHaveText('6 / 6')
+  await page.locator('.timeline-slider').focus()
+  await page.locator('.timeline-slider').press('Home')
+  await expect(page.locator('.timeline-epoch')).toHaveText('1 / 6')
+  await expect(page.locator('.flow-console-virtual .timeline-current')).toContainText(
+    '2024/07/30 00:00:00.000',
+  )
+  await expect(panel.locator('.solver-latest')).toContainText('2024/07/30 00:00:00.000')
+  expect(await page.evaluate(() => Reflect.get(window, '__solverLiveRequest').inputs[0].type)).toBe(
+    'ntripcli',
+  )
 })

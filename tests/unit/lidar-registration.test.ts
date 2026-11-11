@@ -66,7 +66,8 @@ describe('LiDAR 面板注册', () => {
     expect(toolbar).toContain('handleInputSubmit')
     // 全窗口拖放 .mcap 走 mcapPlayer（多分片合并加载）
     const device = read('src/hooks/useDevice.ts')
-    expect(device).toContain("endsWith('.mcap')")
+    expect(device).toContain("item.format === 'mcap'")
+    expect(read('src/core/data/DataFormat.ts')).toContain("lower.endsWith('.mcap')")
     expect(device).toContain('mcapPlayer.loadFromFiles(mcapFiles)')
     // 时间轴控件接入播放器单例
     const timeline = read('src/components/LidarTimelineControl.vue')

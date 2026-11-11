@@ -290,6 +290,12 @@ python -m pip install pyserial
 
 常见解状态包括：无效解、单点定位解、伪距差分、**浮点解**和固定解。浮点解表示 RTK 已生效，能否进入固定解还取决于卫星、遮挡、链路和接收机状态。
 
+### 4.3 停止接收后的历元回看
+
+串口或网络 NMEA/POS 输入停止、异常断开后，工具栏会显示本次接收数据的历史时间轴。拖动时间轴或双击 Deviation 的散点、地图轨迹点，可定位到对应历元，联动消息高亮、Sky Plot、Signals 和 Status View。卫星视图使用数据中实际包含的逐星信息。
+
+接收期间暂停消息显示不会漏掉历史记录。相同数据源重连后恢复最新状态并接续历史；切换数据源或解析类型时开始新的数据集。历史回放不会重新打开设备，也不会改变真实连接状态；需要长期保留的数据可通过消息导出或日志记录保存。
+
 ## 5. CORS/NTRIP 差分注入
 
 ### 5.1 配置步骤
@@ -349,5 +355,6 @@ python -m pip install pyserial
 ## 7. 相关应用补充
 
 - **GNSS-Raw**：用于 RTCM3 和 RINEX 原始观测数据分析，不等同于实时 NMEA 面板。
-- **GNSS-Lib**：包含 RTKPOST 后处理和 RTKNAVI 实时解算组件，使用 Robo-GNSS 内核。
+- **GNSS-Lib**：通过统一的 GNSS 解算组件切换后处理（RTKPOST）与实时解算（RTKNAVI），使用 Open-GNSS 内核，并共享消息与 Deviation 组件展示解算记录、运行日志和定位轨迹。
+- 内核构建产物、WASM 包名和同步方法见 [Open-GNSS 接入与同步](OPEN-GNSS-INTEGRATION.md)。
 - 如果只需要快速查看设备日志和定位结果，优先使用 Serial 与 GNSS；需要原始观测质量分析或后处理时，再使用 GNSS-Raw 与 GNSS-Lib。

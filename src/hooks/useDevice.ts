@@ -1,7 +1,9 @@
-import { computed, ref, toRef, watch } from 'vue'
+import { computed, reactive, ref, toRef, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useApplicationSelector } from '@/composables/useApplicationSelector'
 import { useNmea } from '@/composables/gnss/useNmea'
+import { createGnssLiveHistory } from '@/composables/gnss/useGnssLiveHistory'
+import { useGnssStore } from '@/stores/gnss'
 import { useFileTimeline, type FileTimelineMode } from '@/composables/useFileTimeline'
 import { useFlow } from '@/composables/flow/useFlow'
 import { useConsole } from '@/composables/flow/useConsole'
@@ -27,7 +29,6 @@ import {
 import emitter from '@/hooks/useMitt'
 import { useMcapPlayer } from '@/composables/useMcapPlayer'
 import { useGnssRaw } from '@/composables/useGnssRaw'
-import { detectGnssRawKind, isRtcmFileName, isRnxFileName } from '@/core/gnssraw/RtcmFileAccess'
 import { RecentInputFiles } from '@/core/file/RecentInputFiles'
 import { mcapBasename } from '@/core/lidar/McapFileAccess'
 import { mcapPartIndex } from '@/core/lidar/McapPartFamily'
@@ -36,6 +37,8 @@ import { useDataSourceManager } from '@/composables/useDataSourceManager'
 import type { TextDataParser } from '@/core/data/DataSourceStorage'
 import { createRecordRegex } from '@/core/data/TextRecordParser'
 import { detectGnssTextParser } from '@/core/data/GnssTextFormat'
+import { detectDataFormat, DETECTABLE_FORMATS, FORMAT_LABELS, isTextFormat, type DataFormat, type DetectableFormat, type FormatDetection } from '@/core/data/DataFormat'
+import { useAutoFormatSettings } from '@/composables/useAutoFormatSettings'
 import { FilePlaybackService } from '@/core/file/FilePlaybackService'
 import { TextFileStreamService } from '@/core/file/TextFileStreamService'
 import { buildTextTimeline } from '@/core/file/TextEpochStore'
@@ -75,13 +78,40 @@ const {
   displayFormat: flowDisplayFormat,
 } = useConsole(true) // 使用全局实例
 const { convertByteArrayToJson } = useMotorCmd()
-const { activeDataModes, currentWindows } = useApplicationSelector()
+const { activeDataModes, currentWindows, currentApplication } = useApplicationSelector()
+const autoFormatSettings = useAutoFormatSettings()
+const detectedFormats = reactive<Record<'file' | 'serial' | 'network', FormatDetection | undefined>>({
+  file: undefined, serial: undefined, network: undefined,
+})
+const formatAttempted = reactive({ file: false, serial: false, network: false })
+function allowedFormats(): DetectableFormat[] {
+  return autoFormatSettings.formatsFor(currentApplication.value?.id, currentApplication.value?.windowIds)
+}
+function inspectFormat(bytes: Uint8Array, name: string, mode: DataFormat): FormatDetection | undefined {
+  if (mode !== 'auto') return detectDataFormat(bytes, name, DETECTABLE_FORMATS)
+  const allowed = allowedFormats()
+  const matched = detectDataFormat(bytes, name, allowed)
+  if (matched) return matched
+  const disabled = detectDataFormat(bytes, name, DETECTABLE_FORMATS)
+  return disabled && !allowed.includes(disabled.format) ? { ...disabled, disabled: true } : undefined
+}
+function effectiveFormat(source: 'file' | 'serial' | 'network'): DataFormat {
+  const mode = dataSourceSettings[source].format
+  const result = detectedFormats[source]
+  return mode === 'auto' ? (result?.candidate || (result && !allowedFormats().includes(result.format)) ? 'raw' : result?.format ?? 'raw') : mode
+}
 const ipc = createBrowserIpcTransport()
 const serialService = new SerialService(ipc)
 const networkService = new NetworkService(ipc)
 const filePlaybackService = new FilePlaybackService(ipc)
 const textFileStreamService = new TextFileStreamService(ipc)
 const fileTimeline = useFileTimeline()
+const gnssLiveHistory = createGnssLiveHistory({
+  data: useNmea(),
+  messages: useConsole(true),
+  timeline: fileTimeline,
+  generation: () => useGnssStore().trackResetToken,
+})
 const logRecordingService = new LogRecordingService(ipc)
 const dataRouter = new IncomingDataRouter({
   appendGnss: appendGnssDataByParser,
@@ -100,7 +130,7 @@ const { settings: dataSourceSettings, saveSettings: saveDataSourceSettings } =
 const isWindowActive = (windowId: string) =>
   currentWindows.value.some((windowDefinition) => windowDefinition.id === windowId)
 
-const loadTextIntoActiveWindows = (content: string, sourceName?: string) => {
+const loadTextIntoActiveWindows = (content: string) => {
   let handled = false
   if (
     isWindowActive('plot') ||
@@ -108,12 +138,7 @@ const loadTextIntoActiveWindows = (content: string, sourceName?: string) => {
     activeDataModes.value.includes('motor')
   ) {
     // .csv 文件按 CSV 表头解析（首行表头作为字段 key），与解析器下拉选择解耦
-    const parser =
-      sourceName && /\.csv$/i.test(sourceName.trim())
-        ? 'csv'
-        : activeDataParser.value === 'rtklib-pos'
-          ? 'raw'
-          : activeDataParser.value
+    const parser = activeDataParser.value === 'rtklib-pos' ? 'raw' : activeDataParser.value
     initFlowData(content, parser, activeRegexPattern.value)
     handled = true
   }
@@ -124,7 +149,7 @@ const loadTextIntoActiveWindows = (content: string, sourceName?: string) => {
   // GNSS 应用或选择 NMEA 格式的任意应用，都把加载文本送入 GNSS 解析管线，
   // 否则轨迹与 Status View 会空白、只有 raw-messages 面板能看到导入内容。
   // 与重播路径保持一致：先清空旧轨迹再解析，保证导入数据干净可见。
-  if (activeDataModes.value.includes('gnss') || isGnssSolutionParser(activeDataParser.value)) {
+  if (isGnssSolutionParser(activeDataParser.value)) {
     clearGnssData()
     appendGnssDataByParser(content)
     handled = true
@@ -159,10 +184,8 @@ const selectedFiles = ref<File[]>([])
 const selectedPaths = ref<string[]>([])
 const selectedFile = computed(() => selectedFiles.value[0] ?? null)
 const selectedFilePath = ref('')
-const isMcapPath = (path: string) => path.trim().toLowerCase().endsWith('.mcap')
 // 文件输入按扩展名自适应分发：.mcap 走 LiDAR 时间轴，以下文本类型走文本解析器
-const TEXT_FILE_EXTENSIONS = ['txt', 'csv', 'dat', 'log', 'nmea', 'pos']
-const fileIsMcap = computed(() => isMcapPath(filePath.value))
+const fileIsMcap = computed(() => effectiveFormat('file') === 'mcap')
 // 输入路径是板上轮转分片(part_N.mcap)时,确认后自动补齐同目录整族分片
 const fileIsMcapPartSlice = computed(
   () => mcapPartIndex(mcapBasename(filePath.value)) !== undefined,
@@ -192,6 +215,12 @@ const globalDevice = ref<{
   connected: null | boolean
 }>({ connected: null })
 
+watch(
+  () => globalDevice.value.type,
+  (type) => { if (type === 'file') gnssLiveHistory.discard() },
+  { flush: 'sync' },
+)
+
 watch(fileReplaySpeed, (speed) => fileTimeline.setPlaybackSpeed(speed))
 watch(fileTimeline.playing, (playing) => {
   if (globalDevice.value.type === 'file' && fileTimeline.active.value) {
@@ -209,9 +238,11 @@ const deviceConnecting = computed(() => {
 })
 
 const activeDataParser = computed<TextDataParser>(() => {
-  if (globalDevice.value.type === 'serial') return dataSourceSettings.serial.parser
-  if (globalDevice.value.type === 'network') return dataSourceSettings.network.parser
-  if (globalDevice.value.type === 'file') return dataSourceSettings.file.parser
+  const type = globalDevice.value.type
+  if (type === 'serial' || type === 'network' || type === 'file') {
+    const format = effectiveFormat(type)
+    return isTextFormat(format) ? format : 'raw'
+  }
   return 'raw'
 })
 
@@ -223,6 +254,168 @@ function appendGnssDataByParser(data: string, parser = activeDataParser.value): 
   if (parser === 'rtklib-pos') addRtkLibPosData(data)
   else addGnssData(data)
 }
+
+function liveGnssContext(): { key: string; parser: 'nmea' | 'rtklib-pos' } | undefined {
+  const device = globalDevice.value
+  if (device.type !== 'serial' && device.type !== 'network') return undefined
+  const configured = activeDataParser.value
+  if (!isGnssSolutionParser(configured)) return undefined
+  const parser = configured === 'rtklib-pos' ? 'rtklib-pos' : 'nmea'
+  const key = JSON.stringify([
+    device.type, device.path, device.baudRate, device.dataBits, device.stopBits,
+    device.parity, device.protocol, device.host, device.port, parser,
+  ])
+  return { key, parser }
+}
+
+function beginLiveGnssHistory(): void {
+  const type = globalDevice.value.type
+  if ((type === 'serial' || type === 'network') && dataSourceSettings[type].format === 'auto' && !detectedFormats[type]) return
+  const context = liveGnssContext()
+  if (context) gnssLiveHistory.start(context.key, context.parser)
+  else gnssLiveHistory.discard()
+}
+
+function stopLiveGnssHistory(): void {
+  void gnssLiveHistory.stop().catch((error) => {
+    ElMessage({
+      message: t('data.dataLoadFailed', {
+        error: error instanceof Error ? error.message : String(error),
+      }),
+      type: 'error',
+      placement: 'bottom-right',
+      offset: 50,
+    })
+  })
+}
+
+let streamProbe: Uint8Array[] = []
+let streamProbeLength = 0
+let streamPendingText: Array<{ display: string; decoded: string }> = []
+let streamDecodedQueue: string[] = []
+let streamDecoder = new TextDecoder()
+let streamRawSeen = false
+let streamProbeFinished = false
+let streamRtcm = false
+let streamProbeTimer: ReturnType<typeof setTimeout> | undefined
+function clearStreamProbeTimer(): void {
+  if (streamProbeTimer !== undefined) clearTimeout(streamProbeTimer)
+  streamProbeTimer = undefined
+}
+function beginStreamDetection(source: 'serial' | 'network'): void {
+  const previous = detectedFormats[source]
+  let resumed = false
+  clearStreamProbeTimer()
+  streamProbe = []
+  streamProbeLength = 0
+  streamPendingText = []
+  streamDecodedQueue = []
+  streamDecoder = new TextDecoder()
+  streamRawSeen = false
+  streamProbeFinished = false
+  streamRtcm = false
+  if (dataSourceSettings[source].format === 'auto' && previous && (previous.format === 'nmea' || previous.format === 'rtklib-pos')) {
+    const context = liveGnssContext()
+    if (context && gnssLiveHistory.matches(context.key)) {
+      beginLiveGnssHistory()
+      resumed = true
+    }
+  }
+  if (!resumed && dataSourceSettings[source].format === 'auto') {
+    gnssLiveHistory.discard()
+    fileTimeline.clearTimeline()
+    clearGnssData()
+  }
+  detectedFormats[source] = undefined
+  formatAttempted[source] = false
+  if (dataSourceSettings[source].format === 'rtcm3') {
+    useGnssRaw().startStream(globalDevice.value.path ?? source)
+    streamRtcm = true
+    streamProbeFinished = true
+    formatAttempted[source] = true
+  }
+}
+function finishStreamDetection(): void {
+  clearStreamProbeTimer()
+  if (streamRtcm) useGnssRaw().stopStream()
+  else for (const pending of streamPendingText) routeIncomingData(pending.display, pending.decoded)
+  streamProbe = []
+  streamPendingText = []
+  streamRtcm = false
+  streamProbeFinished = true
+}
+function inspectStreamBytes(source: 'serial' | 'network', bytes: Uint8Array): void {
+  if (globalDevice.value.type !== source || globalDevice.value.connected !== true) return
+  if (streamRtcm) { useGnssRaw().appendStream(bytes); return }
+  if (streamProbeFinished || dataSourceSettings[source].format !== 'auto') return
+  if (streamProbeTimer === undefined) streamProbeTimer = setTimeout(() => {
+    streamProbeTimer = undefined
+    if (streamProbeFinished || globalDevice.value.type !== source) return
+    streamProbeFinished = true
+    formatAttempted[source] = true
+    for (const pending of streamPendingText) routeIncomingData(pending.display, pending.decoded)
+    streamPendingText = []
+    streamProbe = []
+  }, 5000)
+  streamProbe.push(bytes.slice())
+  streamProbeLength += bytes.length
+  const sample = new Uint8Array(streamProbeLength)
+  let offset = 0
+  for (const part of streamProbe) { sample.set(part, offset); offset += part.length }
+  const result = inspectFormat(sample, '', 'auto')
+  if (result?.disabled && streamProbeLength < 64 * 1024) {
+    detectedFormats[source] = result
+    formatAttempted[source] = true
+    return
+  }
+  if (!result && streamProbeLength < 64 * 1024) return
+  detectedFormats[source] = result
+  formatAttempted[source] = true
+  streamProbeFinished = true
+  clearStreamProbeTimer()
+  if (result?.format === 'rtcm3' && !result.disabled) {
+    streamRtcm = true
+    useGnssRaw().startStream(globalDevice.value.path ?? source)
+    for (const part of streamProbe) useGnssRaw().appendStream(part)
+    streamPendingText = []
+  } else {
+    beginLiveGnssHistory()
+    for (const pending of streamPendingText) routeIncomingData(pending.display, pending.decoded)
+    streamPendingText = []
+  }
+  streamProbe = []
+}
+function receiveStreamText(source: 'serial' | 'network', data: string): void {
+  if (globalDevice.value.type !== source || globalDevice.value.connected !== true) return
+  const decoded = streamDecodedQueue.shift() ?? data
+  if (streamRtcm) return
+  if (dataSourceSettings[source].format === 'auto' && !streamProbeFinished) {
+    streamPendingText.push({ display: data, decoded })
+    // Browser/test transports can supply text without the native byte channel.
+    if (!streamRawSeen) inspectStreamBytes(source, new TextEncoder().encode(data))
+    return
+  }
+  routeIncomingData(data, decoded)
+}
+ipc.on('source-data-bytes', (_event, source, data) => {
+  if ((source !== 'serial' && source !== 'network') || !(data instanceof Uint8Array)) return
+  if (globalDevice.value.type !== source || globalDevice.value.connected !== true) return
+  streamRawSeen = true
+  streamDecodedQueue.push(streamDecoder.decode(data, { stream: true }))
+  inspectStreamBytes(source, data)
+})
+watch(
+  () => `${currentApplication.value?.id ?? ''}:${allowedFormats().join(',')}`,
+  () => {
+    const source = globalDevice.value.type
+    if ((source !== 'serial' && source !== 'network') || globalDevice.value.connected !== true || dataSourceSettings[source].format !== 'auto') return
+    const result = detectedFormats[source]
+    if (result && !result.candidate && !result.disabled && allowedFormats().includes(result.format)) return
+    if (!streamProbeFinished) return
+    finishStreamDetection()
+    beginStreamDetection(source)
+  },
+)
 
 const activeRegexPattern = computed(() => {
   if (globalDevice.value.type === 'serial') return dataSourceSettings.serial.regexPattern
@@ -329,6 +522,7 @@ function cancelNetworkConnect(): void {
 function openNetworkDevice(): void {
   const options = currentNetworkOptions()
   if (!options) return
+  const device = globalDevice.value
   const attempt = ++networkOpenAttempt
   // 上一次取消的静默标记只属于那一次尝试, 新尝试开始即作废
   networkConnectCancelled = false
@@ -338,7 +532,9 @@ function openNetworkDevice(): void {
   networkService
     .open(options)
     .then(() => {
-      if (attempt !== networkOpenAttempt) return
+      if (attempt !== networkOpenAttempt || globalDevice.value !== device) return
+      beginStreamDetection('network')
+      beginLiveGnssHistory()
       globalDevice.value.connecting = false
       globalDevice.value.connected = true
       activeDataTransport.activate('network')
@@ -377,14 +573,25 @@ function openNetworkDevice(): void {
     })
 }
 
-function routeIncomingData(data: string): void {
+function routeIncomingData(data: string, decodedData = data): void {
   if (globalDevice.value.connected !== true) return
+  if (globalDevice.value.type === 'serial' || globalDevice.value.type === 'network') {
+    const context = liveGnssContext()
+    if (context) {
+      if (!gnssLiveHistory.receiving || !gnssLiveHistory.matches(context.key))
+        gnssLiveHistory.start(context.key, context.parser)
+      gnssLiveHistory.append(decodedData)
+    } else if (gnssLiveHistory.receiving) gnssLiveHistory.discard()
+  }
   logRecordingService.write(data)
   dataRouter.route(data, {
-    activeDataModes: activeDataModes.value,
+    activeDataModes: gnssLiveHistory.receiving
+      ? [...activeDataModes.value, 'gnss']
+      : activeDataModes.value.filter((mode) => mode !== 'gnss'),
     activeWindowIds: currentWindows.value.map((windowDefinition) => windowDefinition.id),
     displayFormat: flowDisplayFormat.value === 'hex' ? 'hex' : 'ascii',
     dataParser: activeDataParser.value,
+    gnssData: decodedData,
   })
   // 只有持有已配置设备的渲染进程（即主窗口）才把原始数据广播给独立窗口
   if (globalDevice.value.connected !== null) {
@@ -405,14 +612,22 @@ export function routeDataToWindow(data: string, windowId: string): void {
   })
 }
 
-serialService.onData(routeIncomingData)
-networkService.onData(routeIncomingData)
-filePlaybackService.onData(routeIncomingData)
+serialService.onData((data) => {
+  receiveStreamText('serial', data)
+})
+networkService.onData((data) => {
+  receiveStreamText('network', data)
+})
+filePlaybackService.onData((data) => {
+  if (globalDevice.value.type === 'file') routeIncomingData(data)
+})
 
 serialService.onDisconnected((data) => {
-  if (globalDevice.value.path !== data.path) return
+  if (globalDevice.value.type !== 'serial' || globalDevice.value.path !== data.path) return
+  finishStreamDetection()
   globalDevice.value.connected = false
   activeDataTransport.clear('serial')
+  stopLiveGnssHistory()
   void serialService.listPorts().then((ports) => {
     serialPorts.value = ports
   })
@@ -434,8 +649,10 @@ networkService.onDisconnected((connection) => {
   )
     return
 
+  finishStreamDetection()
   globalDevice.value.connected = false
   activeDataTransport.clear('network')
+  stopLiveGnssHistory()
   // 循环重连模式下断线属预期, 静默重试
   if (!networkLoop.value) {
     ElMessage({
@@ -547,10 +764,11 @@ async function loadGnssTimelineSource(
   timelineMode: FileTimelineMode,
   readSource: GnssTimelineReader,
 ): Promise<void> {
+  gnssLiveHistory.discard()
   const streamPlot = isWindowActive('plot')
   const configuredParser = activeDataParser.value
   // 每个文件都重新识别，避免上次自动保存的格式锁定后续文件。
-  const autoDetectParser = configuredParser === 'raw' || isGnssSolutionParser(configuredParser)
+  const autoDetectParser = dataSourceSettings.file.format === 'auto'
   const fallbackParser = configuredParser === 'rtklib-pos' ? 'rtklib-pos' : 'nmea'
   let parserOverride: TextDataParser | undefined = autoDetectParser ? undefined : configuredParser
   let pendingDetectionText = ''
@@ -683,7 +901,6 @@ async function loadGnssTimelinePath(path: string, timelineMode: FileTimelineMode
  * 图表按历元增量投影，加载完成后从起始偏移自动播放。
  */
 async function loadTextTimelineSource(
-  sourceName: string,
   readSource: GnssTimelineReader,
 ): Promise<void> {
   fileTimeline.beginIndexing()
@@ -699,7 +916,7 @@ async function loadTextTimelineSource(
     }, fileTimeline.updateIndexingProgress)
     const content = chunks.join('')
 
-    const isCsv = /\.csv$/i.test(sourceName.trim())
+    const isCsv = activeDataParser.value === 'csv'
     const { store, records } = buildTextTimeline(content, {
       parser: isCsv ? 'csv' : activeDataParser.value,
       regexPattern: activeRegexPattern.value,
@@ -769,7 +986,7 @@ function loadTextTimeline(path: string): Promise<void> | null {
         ? (onChunk, onProgress) => textFileStreamService.read(path, { onChunk, onProgress })
         : null
   if (!readSource) return null
-  return loadTextTimelineSource(path, readSource)
+  return loadTextTimelineSource(readSource)
 }
 
 /** time-tag 缺失/无效（纯文本文件没有伴生 .tag）时回落到样本时钟回放。 */
@@ -779,7 +996,7 @@ function isTimeTagMissingError(error: unknown): boolean {
 }
 
 function startTimestampPlayback(path: string): void {
-  if (activeDataModes.value.includes('gnss') || isGnssSolutionParser(activeDataParser.value)) {
+  if (isGnssSolutionParser(activeDataParser.value)) {
     const loadTimeline =
       selectedFile.value && selectedFilePath.value === path
         ? loadGnssTimelineFile(selectedFile.value, 'replay')
@@ -926,6 +1143,51 @@ export function useDevice() {
     },
   })
 
+  const sourceFormat = computed<DataFormat>({
+    get: () => dataSourceSettings[activeTab.value].format,
+    set: (format) => {
+      dataSourceSettings[activeTab.value].format = format
+      if (isTextFormat(format)) sourceParser.value = format
+    },
+  })
+  const sourceDetectedFormat = computed(() => {
+    const result = detectedFormats[activeTab.value]
+    return result && sourceFormat.value === 'auto' ? { ...result, disabled: !allowedFormats().includes(result.format) } : result
+  })
+  const sourceFormatAttempted = computed(() => formatAttempted[activeTab.value])
+  let fileDetectionRevision = 0
+  let fileProbeBytes = new Uint8Array()
+  const detectSelectedFile = async (file?: File, path = filePath.value): Promise<FormatDetection | undefined> => {
+    const revision = ++fileDetectionRevision
+    try {
+      const bytes = file ? new Uint8Array(await file.slice(0, 64 * 1024).arrayBuffer())
+        : window.electronAPI?.dataFormatReadHead ? new Uint8Array(await window.electronAPI.dataFormatReadHead(path)) : new Uint8Array()
+      const result = inspectFormat(bytes, file?.name ?? path, dataSourceSettings.file.format)
+      if (revision === fileDetectionRevision) { detectedFormats.file = result; formatAttempted.file = true; fileProbeBytes = bytes }
+      return result
+    } catch {
+      if (revision === fileDetectionRevision) { detectedFormats.file = undefined; formatAttempted.file = true; fileProbeBytes = new Uint8Array() }
+      return undefined
+    }
+  }
+  const detectSelectionKinds = async (files: File[], paths: string[]): Promise<DataFormat[]> => {
+    const mode = dataSourceSettings.file.format
+    if (mode !== 'auto') return (files.length ? files : paths).map(() => mode)
+    if (files.length) return Promise.all(files.map(async (file) => {
+      const bytes = new Uint8Array(await file.slice(0, 64 * 1024).arrayBuffer())
+      const result = inspectFormat(bytes, file.name, mode)
+      return result?.disabled ? 'raw' : result?.format ?? 'raw'
+    }))
+    return Promise.all(paths.map(async (path) => {
+      let bytes = new Uint8Array()
+      try {
+        if (window.electronAPI?.dataFormatReadHead) bytes = new Uint8Array(await window.electronAPI.dataFormatReadHead(path))
+      } catch { /* The loader reports unreadable paths. */ }
+      const result = inspectFormat(bytes, path, mode)
+      return result?.disabled ? 'raw' : result?.format ?? 'raw'
+    }))
+  }
+
   const sourceRegexPattern = computed({
     get: () => {
       if (activeTab.value === 'serial') return dataSourceSettings.serial.regexPattern
@@ -992,18 +1254,31 @@ export function useDevice() {
 
     if (event.dataTransfer && event.dataTransfer.files && event.dataTransfer.files.length > 0) {
       const files = Array.from(event.dataTransfer.files)
-      const explicitGnssTextParser = isGnssSolutionParser(dataSourceSettings.file.parser)
+      const mode = dataSourceSettings.file.format
+      const inspected = await Promise.all(files.map(async (file) => {
+        const bytes = new Uint8Array(await file.slice(0, 64 * 1024).arrayBuffer())
+        const detected = inspectFormat(bytes, file.name, mode)
+        return { file, bytes, detected, format: mode === 'auto' ? (detected?.candidate || detected?.disabled ? 'raw' : detected?.format ?? 'raw') : mode }
+      }))
       // LiDAR MCAP 录像优先分发（避免被文本分支误吞）；一次拖入多个分片时合并为单会话加载
-      const mcapFiles = files.filter((file) => isMcapPath(file.name))
+      const mcapFiles = inspected.filter((item) => item.format === 'mcap').map((item) => item.file)
       // GNSS-Raw 文件（RTCM 单文件 / RINEX obs+nav 组合）按名字识别，合并一次加载
-      const gnssRawFiles = files.filter(
-        (file) => isRtcmFileName(file.name) || isRnxFileName(file.name),
-      )
+      const gnssRawFiles = inspected.filter((item) => item.format === 'rtcm3' || item.format === 'rinex').map((item) => item.file)
+      if (new Set(inspected.filter((item) => item.format === 'rtcm3' || item.format === 'rinex').map((item) => item.format)).size > 1) {
+        ElMessage.warning(t('app.toolbar.fileSelectionMixed'))
+        return
+      }
 
-      for (const file of files) {
+      for (const item of inspected) {
+        const { file, bytes, detected, format } = item
         try {
+          detectedFormats.file = detected
+          formatAttempted.file = true
+          if (mode !== 'auto' && detected && detected.format !== mode && mode !== 'raw' && mode !== 'regex') {
+            ElMessage.warning(t('data.formatMismatch', { selected: FORMAT_LABELS[mode], detected: FORMAT_LABELS[detected.format] }))
+          }
           // 根据文件类型进行不同处理
-          if (isMcapPath(file.name)) {
+          if (format === 'mcap') {
             // 分片随首个 .mcap 一起批量加载，其余分片跳过
             if (file !== mcapFiles[0]) continue
             const ok = await mcapPlayer.loadFromFiles(mcapFiles)
@@ -1026,14 +1301,21 @@ export function useDevice() {
             }
             continue
           }
-          if (!explicitGnssTextParser && (isRtcmFileName(file.name) || isRnxFileName(file.name))) {
+          if (format === 'rtcm3' || format === 'rinex') {
+            // 原始观测格式优先；切换应用后残留的 NMEA/POS 设置不能把它们当作定位文本。
             // 同批 GNSS-Raw 文件随首个一起加载（RTCM 单文件 / RINEX obs+nav）
             if (file !== gnssRawFiles[0]) continue
-            const ok = await gnssRaw.loadFromFiles(gnssRawFiles)
+            const droppedPath = window.electronAPI?.getPathForFile(file) || file.name
+            selectedFiles.value = gnssRawFiles
+            selectedFilePath.value = droppedPath
+            filePath.value = droppedPath
+            dataSourceSettings.activeSource = 'file'
+            saveDataSourceSettings()
+            const ok = await gnssRaw.loadFromFiles(gnssRawFiles, format === 'rtcm3' ? 'rtcm' : 'rnx')
             if (ok) {
               ElMessage({
                 message: t(
-                  isRtcmFileName(file.name) && gnssRawFiles.length === 1
+                  format === 'rtcm3' && gnssRawFiles.length === 1
                     ? 'app.toolbar.rtcmLoaded'
                     : 'app.toolbar.rnxLoaded',
                   { name: file.name, count: gnssRawFiles.length },
@@ -1046,18 +1328,7 @@ export function useDevice() {
             }
             throw new Error(gnssRaw.errorText.value)
           }
-          if (
-            activeDataModes.value.includes('gnss') ||
-            explicitGnssTextParser ||
-            file.type.toLowerCase().includes('log') ||
-            file.name.toLowerCase().endsWith('.log') ||
-            file.type.toLowerCase().includes('text') ||
-            file.name.toLowerCase().endsWith('.txt') ||
-            file.name.toLowerCase().endsWith('.nmea') ||
-            file.name.toLowerCase().endsWith('.pos') ||
-            file.type.toLowerCase().includes('dat') ||
-            file.name.toLowerCase().endsWith('.dat')
-          ) {
+          if (format !== 'raw' || !bytes.some((byte) => byte === 0 || byte < 9 || (byte > 13 && byte < 32))) {
             // 处理文本文件
             const droppedPath = window.electronAPI?.getPathForFile(file) || file.name
             selectedFiles.value = [file]
@@ -1073,10 +1344,10 @@ export function useDevice() {
               path: droppedPath,
               connected: false,
             }
+            dataSourceSettings.activeSource = 'file'
             saveDataSourceSettings()
 
             if (
-              activeDataModes.value.includes('gnss') ||
               isGnssSolutionParser(activeDataParser.value)
             ) {
               await filePlaybackService.stop()
@@ -1086,28 +1357,8 @@ export function useDevice() {
 
             await handleTextFile(file)
           } else {
-            // 其他文件类型：按内容嗅探 GNSS-Raw 数据（RTCM3 帧同步+CRC / RINEX 头部），
-            // 识别成功则载入 GNSS-Raw 分析，否则按不支持处理
-            const head = new Uint8Array(await file.slice(0, 8192).arrayBuffer())
-            if (detectGnssRawKind(file.name, head)) {
-              const ok = await gnssRaw.loadFromFiles([file])
-              if (ok) {
-                ElMessage({
-                  message: t('app.toolbar.rtcmLoaded', { name: file.name }),
-                  type: 'success',
-                  placement: 'bottom-right',
-                  offset: 50,
-                })
-                continue
-              }
-              throw new Error(gnssRaw.errorText.value)
-            }
-            ElMessage({
-              message: t('data.fileTypeUnsupported', { name: file.name }),
-              type: 'warning',
-              placement: 'bottom-right',
-              offset: 50,
-            })
+            initFlowConsole(Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0').toUpperCase()).join(' '))
+            ElMessage.warning(detected?.disabled ? t('data.formatDisabled', { format: FORMAT_LABELS[detected.format] }) : t('data.formatBinaryPreview'))
           }
         } catch (error) {
           if (
@@ -1137,7 +1388,7 @@ export function useDevice() {
         try {
           const content = e.target?.result as string
 
-          if (loadTextIntoActiveWindows(content, file.name)) {
+          if (loadTextIntoActiveWindows(content)) {
             ElMessage({
               message: t('data.fileImportSuccess', { name: file.name }),
               type: 'success',
@@ -1293,12 +1544,15 @@ export function useDevice() {
     selectedPaths.value = []
     selectedFilePath.value = ''
     filePath.value = path
+    detectedFormats.file = undefined
+    formatAttempted.file = false
+    if (path) void detectSelectedFile(undefined, path)
   }
 
   // 文件输入统一选择文本文件或同一会话的 MCAP 分片，确认时按扩展名分发。
   // 使用带 scope 记忆的原生对话框: 数据接入的上次目录独立于其它模块记忆。
   const selectTargetFile = async () => {
-    const solutionParserSelected = isGnssSolutionParser(dataSourceSettings.file.parser)
+    const solutionParserSelected = dataSourceSettings.file.format !== 'auto' && isGnssSolutionParser(dataSourceSettings.file.parser)
     const acceptGnssText = activeDataModes.value.includes('gnss') || solutionParserSelected
     // Web 构建没有原生对话框：退回隐藏的 input[type=file]，选择语义保持一致。
     if (!window.electronAPI?.openFileDialog) {
@@ -1310,12 +1564,13 @@ export function useDevice() {
       fileInput.multiple = !solutionParserSelected
       fileInput.style.display = 'none'
       document.body.appendChild(fileInput)
-      fileInput.onchange = () => {
+      fileInput.onchange = async () => {
         const files = Array.from(fileInput.files ?? [])
         fileInput.remove()
         if (files.length === 0) return
-        const allMcap = files.every((item) => isMcapPath(item.name))
-        const allRnx = files.every((item) => isRnxFileName(item.name))
+        const kinds = await detectSelectionKinds(files, [])
+        const allMcap = kinds.every((kind) => kind === 'mcap')
+        const allRnx = kinds.every((kind) => kind === 'rinex')
         if (files.length > 1 && !allMcap && !allRnx) {
           ElMessage.warning(t('app.toolbar.fileSelectionMixed'))
           return
@@ -1325,6 +1580,7 @@ export function useDevice() {
         selectedFilePath.value = filePath.value
         selectedFiles.value = files
         selectedPaths.value = []
+        void detectSelectedFile(file, filePath.value)
       }
       fileInput.oncancel = () => fileInput.remove()
       fileInput.click()
@@ -1372,8 +1628,9 @@ export function useDevice() {
       multi: !solutionParserSelected,
     })) as string[] | null
     if (!paths || paths.length === 0) return
-    const allMcap = paths.every((item) => isMcapPath(item))
-    const allRnx = paths.every((item) => isRnxFileName(item))
+    const kinds = await detectSelectionKinds([], paths)
+    const allMcap = kinds.every((kind) => kind === 'mcap')
+    const allRnx = kinds.every((kind) => kind === 'rinex')
     if (paths.length > 1 && !allMcap && !allRnx) {
       ElMessage.warning(t('app.toolbar.fileSelectionMixed'))
       return
@@ -1381,6 +1638,7 @@ export function useDevice() {
     filePath.value = paths[0]
     selectedFilePath.value = paths[0]
     selectedPaths.value = paths
+    void detectSelectedFile(undefined, paths[0])
   }
 
   // 添加一个响应式变量来存储选择的文件对象
@@ -1419,7 +1677,7 @@ export function useDevice() {
 
     void filePlaybackService.stop()
 
-    if (activeDataModes.value.includes('gnss') || isGnssSolutionParser(activeDataParser.value)) {
+    if (isGnssSolutionParser(activeDataParser.value)) {
       const loadTimeline =
         selectedFile.value && selectedFilePath.value === fileCmd
           ? loadGnssTimelineFile(selectedFile.value, 'loaded')
@@ -1459,7 +1717,7 @@ export function useDevice() {
       reader.onload = (e) => {
         const content = e.target?.result as string
         try {
-          if (loadTextIntoActiveWindows(content, fileCmd)) {
+          if (loadTextIntoActiveWindows(content)) {
             ElMessage({
               message: t('data.dataLoadSuccess'),
               type: 'success',
@@ -1499,7 +1757,7 @@ export function useDevice() {
         })
         .then(() => {
           try {
-            if (loadTextIntoActiveWindows(chunks.join(''), fileCmd)) {
+            if (loadTextIntoActiveWindows(chunks.join(''))) {
               ElMessage({
                 message: t('data.dataLoadSuccess'),
                 type: 'success',
@@ -1543,12 +1801,16 @@ export function useDevice() {
     if (globalDevice.value.connected === false) {
       if (globalDevice.value.connecting === true) return
       if (globalDevice.value.type === 'serial') {
+        const device = globalDevice.value
         const options = currentSerialOptions()
         if (!options) return
         globalDevice.value.connecting = true
         serialService
           .open(options)
           .then(() => {
+            if (globalDevice.value !== device) return
+            beginStreamDetection('serial')
+            beginLiveGnssHistory()
             globalDevice.value.connecting = false
             globalDevice.value.connected = true
             activeDataTransport.activate('serial')
@@ -1561,6 +1823,7 @@ export function useDevice() {
             })
           })
           .catch((error) => {
+            if (globalDevice.value !== device) return
             globalDevice.value.connecting = false
             ElMessage({
               message: `${error.message}`,
@@ -1581,19 +1844,27 @@ export function useDevice() {
   const removeCurrDevice = () => {
     if (globalDevice.value.connected !== null) {
       if (globalDevice.value.type === 'serial') {
+        const device = globalDevice.value
         const options = currentSerialOptions()
         if (!options) return
         serialService.close(options).then(() => {
+          if (globalDevice.value !== device) return
+          finishStreamDetection()
           activeDataTransport.clear('serial')
+          stopLiveGnssHistory()
           globalDevice.value = { connected: null }
         })
       } else if (globalDevice.value.type === 'network') {
+        const device = globalDevice.value
         cancelNetworkReconnect()
         // 移除设备时一并作废在途的连接尝试: 否则循环重连的迟到 open() 一旦成功,
         // 会在 socket 已被销毁后把 connected 重新置为 true(假「已连接」)
         networkOpenAttempt++
         networkService.close().then(() => {
+          if (globalDevice.value !== device) return
+          finishStreamDetection()
           activeDataTransport.clear('network')
+          stopLiveGnssHistory()
           globalDevice.value = { connected: null }
         })
       } else if (globalDevice.value.type === 'file') {
@@ -1608,20 +1879,28 @@ export function useDevice() {
   const closeCurrDevice = () => {
     if (globalDevice.value.connected !== null) {
       if (globalDevice.value.type === 'serial') {
+        const device = globalDevice.value
         const options = currentSerialOptions()
         if (!options) return
         serialService.close(options).then(() => {
+          if (globalDevice.value !== device) return
+          finishStreamDetection()
           activeDataTransport.clear('serial')
+          stopLiveGnssHistory()
           if (globalDevice.value.type) {
             globalDevice.value.connected = false
           }
         })
       } else if (globalDevice.value.type === 'network') {
+        const device = globalDevice.value
         cancelNetworkReconnect()
         // 手动断开同样作废在途尝试, 避免迟到 open() 成功后状态复活为「已连接」
         networkOpenAttempt++
         networkService.close().then(() => {
+          if (globalDevice.value !== device) return
+          finishStreamDetection()
           activeDataTransport.clear('network')
+          stopLiveGnssHistory()
           if (globalDevice.value.type === 'network') globalDevice.value.connected = false
         })
       } else if (globalDevice.value.type === 'file') {
@@ -1639,6 +1918,14 @@ export function useDevice() {
    */
   const handleInputSubmit = async () => {
     if (fileInputLoading.value) return
+    if (activeTab.value === 'file' && filePath.value.trim()) {
+      const path = filePath.value.trim()
+      const file = selectedFilePath.value === path ? selectedFile.value ?? undefined : undefined
+      const detected = await detectSelectedFile(file, path)
+      const chosen = dataSourceSettings.file.format
+      if (chosen !== 'auto' && chosen !== 'raw' && chosen !== 'regex' && detected && detected.format !== chosen)
+        ElMessage.warning(t('data.formatMismatch', { selected: FORMAT_LABELS[chosen], detected: FORMAT_LABELS[detected.format] }))
+    }
     // MCAP 自带结构与时间索引，不经过文本解析器、时间标签回放或设备连接。
     if (activeTab.value === 'file' && fileIsMcap.value) {
       const path = filePath.value.trim()
@@ -1678,29 +1965,8 @@ export function useDevice() {
       const path = filePath.value.trim()
       const files = selectedFilePath.value === path ? selectedFiles.value : []
       const pathList = selectedFilePath.value === path ? selectedPaths.value : []
-      const names =
-        files.length > 0 ? files.map((file) => file.name) : pathList.length > 1 ? pathList : [path]
-      const extension = /\.([a-z0-9]+)$/i.exec(path)?.[1]?.toLowerCase()
-      const explicitGnssTextParser = isGnssSolutionParser(sourceParser.value)
-      let isGnssRaw =
-        !explicitGnssTextParser &&
-        names.every((name) => isRtcmFileName(name) || isRnxFileName(name))
-      if (!isGnssRaw && names.length === 1 && !extension && path) {
-        // 无扩展名（如采集文件 RTCM_test）：嗅探帧头再决定路由
-        try {
-          if (files[0]) {
-            const head = new Uint8Array(await files[0].slice(0, 8192).arrayBuffer())
-            isGnssRaw = detectGnssRawKind(names[0], head) !== null
-          } else if (window.electronAPI?.gnssRawReadFile) {
-            const res = await window.electronAPI.gnssRawReadFile(path)
-            isGnssRaw =
-              detectGnssRawKind(names[0], new Uint8Array(res.data, 0, Math.min(res.size, 8192))) !==
-              null
-          }
-        } catch {
-          isGnssRaw = false
-        }
-      }
+      const format = effectiveFormat('file')
+      const isGnssRaw = format === 'rtcm3' || format === 'rinex'
       if (isGnssRaw) {
         // 立即关闭弹框、后台解码：加载进度由各 GNSS-Raw 面板的进度条展示，
         // 失败时弹错误提示（面板内同时显示错误状态）。
@@ -1712,8 +1978,8 @@ export function useDevice() {
           try {
             const ok =
               files.length > 0
-                ? await gnssRaw.loadFromFiles(files)
-                : await gnssRaw.loadFromPaths(pathList.length > 1 ? pathList : [path])
+                ? await gnssRaw.loadFromFiles(files, format === 'rtcm3' ? 'rtcm' : 'rnx')
+                : await gnssRaw.loadFromPaths(pathList.length > 1 ? pathList : [path], format === 'rtcm3' ? 'rtcm' : 'rnx')
             if (!ok) throw new Error(gnssRaw.errorText.value)
           } catch (error) {
             ElMessage.error(
@@ -1724,26 +1990,16 @@ export function useDevice() {
         return
       }
     }
-    // 文件页签的自适应分发门控：带扩展名且不属于文本类型的文件不应进入文本解析流程
-    if (activeTab.value === 'file') {
-      const path = filePath.value.trim()
-      const extension = /\.([a-z0-9]+)$/i.exec(path)?.[1]?.toLowerCase()
-      if (
-        extension &&
-        !TEXT_FILE_EXTENSIONS.includes(extension) &&
-        !activeDataModes.value.includes('gnss') &&
-        !isGnssSolutionParser(sourceParser.value)
-      ) {
-        ElMessage({
-          message: t('data.fileTypeUnsupported', { name: mcapBasename(path) }),
-          type: 'warning',
-          placement: 'bottom-right',
-          offset: 50,
-        })
-        return
-      }
+    if (activeTab.value === 'file' && effectiveFormat('file') === 'raw' && fileProbeBytes.some((byte) => byte === 0 || byte < 9 || (byte > 13 && byte < 32))) {
+      initFlowConsole(Array.from(fileProbeBytes, (byte) => byte.toString(16).padStart(2, '0').toUpperCase()).join(' '))
+      ElMessage.warning(t('data.formatBinaryPreview'))
+      dataSourceChangesCommitted = true
+      dataSourceSettings.activeSource = 'file'
+      saveDataSourceSettings()
+      showInputDialog.value = false
+      return
     }
-    if (sourceParser.value === 'regex') {
+    if (sourceFormat.value === 'regex') {
       try {
         createRecordRegex(sourceRegexPattern.value)
       } catch (error) {
@@ -1816,6 +2072,9 @@ export function useDevice() {
     networkProtocol,
     networkLoop,
     sourceParser,
+    sourceFormat,
+    sourceDetectedFormat,
+    sourceFormatAttempted,
     sourceRegexPattern,
     activeDataParser,
     serialPorts,

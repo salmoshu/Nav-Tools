@@ -88,7 +88,7 @@ describe('GNSS deviation position and speed views', () => {
   it('moves deviation and metric cursors with the shared file timeline', () => {
     expect(source).toContain('getTimelinePositionPoint')
     expect(source).toContain(
-      'history.findNearestElapsedTime(fileTimeline.elapsedMilliseconds.value)',
+      'history.findNearestElapsedTime(fileTimeline.elapsedFor(history))',
     )
     expect(metric).toContain('useFileTimeline')
     expect(metric).toContain('store.findNearestElapsedTime(fileTimeline.elapsedMilliseconds.value)')

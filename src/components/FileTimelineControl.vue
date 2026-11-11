@@ -2,18 +2,21 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { ArrowLeft, ArrowRight, Clock, Close, VideoPause, VideoPlay } from '@element-plus/icons-vue'
 import { ElIcon } from 'element-plus'
-import { useFileTimeline } from '@/composables/useFileTimeline'
+import { useFileTimeline, type FileTimeline } from '@/composables/useFileTimeline'
 import { t } from '@/i18n'
 
 const props = withDefaults(
   defineProps<{
     position?: 'top' | 'right' | 'bottom' | 'left'
+    timeline?: FileTimeline
     /** 回放倍速(0 = 不按时间标签回放);不传则不渲染速度下拉 */
     speed?: number
     speedOptions?: number[]
   }>(),
   {
     position: 'bottom',
+    timeline: undefined,
+    speed: undefined,
     speedOptions: () => [],
   },
 )
@@ -36,7 +39,7 @@ const {
   beginDrag,
   previewElapsedTime,
   endDrag,
-} = useFileTimeline()
+} = props.timeline ?? useFileTimeline()
 
 const isVertical = computed(() => props.position === 'right' || props.position === 'left')
 const popoverOpen = ref(false)
@@ -46,7 +49,10 @@ const popoverElement = ref<HTMLElement | null>(null)
 const popoverStyle = ref<Record<string, string>>({})
 
 /** 按工具栏停靠边的反方向放置弹层,并钳制在视口内(8px 边距) */
-function placePopover(anchor: DOMRect, size: { width: number; height: number }): Record<string, string> {
+function placePopover(
+  anchor: DOMRect,
+  size: { width: number; height: number },
+): Record<string, string> {
   const gap = 7
   const margin = 8
   let x = 0
@@ -98,7 +104,10 @@ async function togglePopover(event?: MouseEvent): Promise<void> {
   await nextTick()
   const element = popoverElement.value
   if (!element) return
-  popoverStyle.value = placePopover(anchor, { width: element.offsetWidth, height: element.offsetHeight })
+  popoverStyle.value = placePopover(anchor, {
+    width: element.offsetWidth,
+    height: element.offsetHeight,
+  })
 }
 
 function previewSlider(event: Event): void {
@@ -212,7 +221,9 @@ watch(active, (visible) => {
           :value="speed"
           @change.stop="onSpeedChange"
         >
-          <option v-for="option in speedOptions" :key="option" :value="option">×{{ option }}</option>
+          <option v-for="option in speedOptions" :key="option" :value="option">
+            ×{{ option }}
+          </option>
         </select>
       </div>
     </template>
@@ -226,76 +237,76 @@ watch(active, (visible) => {
         <el-icon><Clock /></el-icon>
       </button>
       <Teleport to="body">
-      <div
-        v-if="popoverOpen"
-        ref="popoverElement"
-        class="timeline-panel timeline-popover"
-        :style="popoverStyle"
-      >
-        <div class="timeline-actions">
-          <button
-            class="timeline-button"
-            :title="playing ? t('data.timelinePause') : t('data.timelinePlay')"
-            @click.stop="togglePlayback"
-          >
-            <el-icon><VideoPause v-if="playing" /><VideoPlay v-else /></el-icon>
-          </button>
-          <button
-            class="timeline-button"
-            :title="t('data.timelinePrevious')"
-            :disabled="cursorIndex <= 0"
-            @click.stop="stepEpoch(-1)"
-          >
-            <el-icon><ArrowLeft /></el-icon>
-          </button>
-          <button
-            class="timeline-button"
-            :title="t('data.timelineNext')"
-            :disabled="cursorIndex >= totalEpochs - 1"
-            @click.stop="stepEpoch(1)"
-          >
-            <el-icon><ArrowRight /></el-icon>
-          </button>
-          <button
-            class="timeline-button timeline-close"
-            :title="t('data.timelineClose')"
-            @click.stop="popoverOpen = false"
-          >
-            <el-icon><Close /></el-icon>
-          </button>
+        <div
+          v-if="popoverOpen"
+          ref="popoverElement"
+          class="timeline-panel timeline-popover"
+          :style="popoverStyle"
+        >
+          <div class="timeline-actions">
+            <button
+              class="timeline-button"
+              :title="playing ? t('data.timelinePause') : t('data.timelinePlay')"
+              @click.stop="togglePlayback"
+            >
+              <el-icon><VideoPause v-if="playing" /><VideoPlay v-else /></el-icon>
+            </button>
+            <button
+              class="timeline-button"
+              :title="t('data.timelinePrevious')"
+              :disabled="cursorIndex <= 0"
+              @click.stop="stepEpoch(-1)"
+            >
+              <el-icon><ArrowLeft /></el-icon>
+            </button>
+            <button
+              class="timeline-button"
+              :title="t('data.timelineNext')"
+              :disabled="cursorIndex >= totalEpochs - 1"
+              @click.stop="stepEpoch(1)"
+            >
+              <el-icon><ArrowRight /></el-icon>
+            </button>
+            <button
+              class="timeline-button timeline-close"
+              :title="t('data.timelineClose')"
+              @click.stop="popoverOpen = false"
+            >
+              <el-icon><Close /></el-icon>
+            </button>
+          </div>
+          <input
+            class="timeline-slider timeline-slider--popover"
+            type="range"
+            min="0"
+            :max="durationMilliseconds"
+            step="1"
+            :value="elapsedMilliseconds"
+            :disabled="durationMilliseconds <= 0"
+            :title="elapsedLabel"
+            :aria-label="elapsedLabel"
+            :style="{ '--timeline-progress': `${progress}%` }"
+            @mousedown.stop="beginDrag"
+            @touchstart.stop="beginDrag"
+            @input.stop="previewSlider"
+            @change.stop="endDrag"
+          />
+          <div class="timeline-details">
+            <span class="timeline-time" :title="elapsedLabel">{{ cursorTime }}</span>
+            <span class="timeline-epoch">{{ cursorIndex + 1 }} / {{ totalEpochs }}</span>
+            <select
+              v-if="speed !== undefined"
+              class="timeline-speed"
+              :title="t('app.toolbar.replaySpeed')"
+              :value="speed"
+              @change.stop="onSpeedChange"
+            >
+              <option v-for="option in speedOptions" :key="option" :value="option">
+                ×{{ option }}
+              </option>
+            </select>
+          </div>
         </div>
-        <input
-          class="timeline-slider timeline-slider--popover"
-          type="range"
-          min="0"
-          :max="durationMilliseconds"
-          step="1"
-          :value="elapsedMilliseconds"
-          :disabled="durationMilliseconds <= 0"
-          :title="elapsedLabel"
-          :aria-label="elapsedLabel"
-          :style="{ '--timeline-progress': `${progress}%` }"
-          @mousedown.stop="beginDrag"
-          @touchstart.stop="beginDrag"
-          @input.stop="previewSlider"
-          @change.stop="endDrag"
-        />
-        <div class="timeline-details">
-          <span class="timeline-time" :title="elapsedLabel">{{ cursorTime }}</span>
-          <span class="timeline-epoch">{{ cursorIndex + 1 }} / {{ totalEpochs }}</span>
-          <select
-            v-if="speed !== undefined"
-            class="timeline-speed"
-            :title="t('app.toolbar.replaySpeed')"
-            :value="speed"
-            @change.stop="onSpeedChange"
-          >
-            <option v-for="option in speedOptions" :key="option" :value="option">
-              ×{{ option }}
-            </option>
-          </select>
-        </div>
-      </div>
       </Teleport>
     </template>
   </div>

@@ -52,6 +52,7 @@ export default {
     enableWindow: 'Enable Sliding Window',
     tooltipPositionPrefix: 'Position',
     tooltipQuality: 'Quality',
+    seekEpochHint: 'Double-click to inspect this epoch',
     axisE: 'East (E)',
     axisN: 'North (N)',
     axisU: 'Up (U)',

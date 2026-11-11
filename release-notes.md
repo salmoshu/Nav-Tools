@@ -1,5 +1,17 @@
 # Nav-Tools 更新日志
 
+## v1.8.8
+
+- 数据接入增加自动识别和手动选择：按文件内容识别 RTCM3、RINEX、NMEA、RTKLIB POS、JSON、CSV 和 MCAP；识别结果显示在数据格式下方，通用扩展名和无扩展名也可识别。
+- 设置页可为每个应用分别勾选自动识别格式；GNSS 默认识别 NMEA/POS，GNSS-Raw 默认识别 RTCM3/RINEX。串口与 TCP/UDP 支持流式识别，RTCM3 使用原始字节增量解码。
+- GNSS-Lib 统一后处理和实时解算组件，复用消息与轨迹视图，增加错误、处理进度及 NMEA/POS 结果识别；Open-GNSS WASM 依赖同步更名。
+- 文件、后处理结果及停止的串口/网络定位历史支持时间轴查看，双击轨迹点联动消息和历元视图。
+
+- Data input now detects RTCM3, RINEX, NMEA, RTKLIB POS, JSON, CSV and MCAP by content, displays the detected format and supports manual selection.
+- Automatic detection formats can be configured per application. Serial and TCP/UDP input support incremental detection and byte-preserving RTCM3 decoding.
+- GNSS-Lib unifies post-processing and real-time solving with shared messages and trajectory views, processing status and NMEA/POS results. The Open-GNSS WASM dependency has been renamed.
+- File, post-processing and stopped live-position histories support timeline navigation and linked trajectory selection.
+
 ## v1.8.7
 
 - 修复设置页打开后内容不可见的问题：Dashboard 在选择器关闭时不再占据整页高度，设置内容从主内容区顶部正常显示；选择器弹出、取消和确认应用的行为保持不变。
@@ -85,8 +97,8 @@
 
 ## v1.8.0
 
-- 新增 GNSS-Lib 应用，统一收纳 Robo-GNSS 工具；RTKPOST 从 GNSS-Raw 迁入 GNSS-Lib，旧面板 ID 与存量应用配置自动迁移，GNSS-Raw 继续专注原始观测数据分析
-- GNSS-Lib 新增 RTKNAVI 实时解算组件：直接调用 Robo-GNSS rtkrcv，支持流动站/基站/改正数三路输入，覆盖文件、串口、TCP 与 NTRIP 链路；可设置数据格式、文件 time-tag 与回放倍速、定位模式、频点、星座、模糊度策略、基站坐标和基础 rtkrcv.conf
+- 新增 GNSS-Lib 应用，统一收纳 Open-GNSS 工具；RTKPOST 从 GNSS-Raw 迁入 GNSS-Lib，旧面板 ID 与存量应用配置自动迁移，GNSS-Raw 继续专注原始观测数据分析
+- GNSS-Lib 新增 RTKNAVI 实时解算组件：直接调用 Open-GNSS rtkrcv，支持流动站/基站/改正数三路输入，覆盖文件、串口、TCP 与 NTRIP 链路；可设置数据格式、文件 time-tag 与回放倍速、定位模式、频点、星座、模糊度策略、基站坐标和基础 rtkrcv.conf
 - RTKNAVI 提供实时监控视图：增量读取 rtkrcv 输出的 .pos 文件，展示历元数与 fixed/float/single 等质量统计、最新经纬度/高程/卫星数/Age/Ratio，并以相对平面轨迹呈现定位变化；配置本地持久化，切换面板不中断后台解算
 - RTKNAVI 使用 rtkrcv 后台模式运行，启动前清理旧输出避免覆盖确认阻塞，停止时通过信号触发正常退出并清理运行配置；已使用真实 RTCM 实录完成解算与退出验证
 - 设置页标题栏改为仅铺满左侧导航栏，不再横向贯穿整个应用；返回箭头与 Back 文字垂直居中对齐
@@ -266,7 +278,7 @@
 - GNSS-Raw 大数据文件加载体验：解码进度条并入底部工具栏（文件名 + 百分比 + 细轨道条，形态对齐时间轴控件，竖排工具栏仅显示百分比）；数据接入弹框点「确定」后立即关闭、后台解码，不再挡住进度显示；六个分析面板恢复纯文字加载态
 - 修复 GNSS-Raw 各分析面板在数据先于面板加载时图表空白的问题；卫星可见性新增逐星时间线甘特图
 - 卫星可见性面板视觉升级：分星座卫星数由堆叠柱改为折线（每星座细线 + 总数粗线，与 GNSS 信号组件 NSat 视图形态一致，消除系列间遮挡）；逐星时间线对齐观测质量报告风格——星座分组彩色标题行、浅色填充 + 深色描边圆角横条、行末可见率百分比标注、底部观测历元刻度带（连续段粗条、孤立历元 tick）
-- robo-gnss-wasm 升级 0.1.1：MAXPRNCMP 46→63，BDS-3 高编号卫星（PRN 47-63）的星历/观测不再被拒，1042 报文译码失败清零
+- open-gnss-wasm 升级 0.1.1：MAXPRNCMP 46→63，BDS-3 高编号卫星（PRN 47-63）的星历/观测不再被拒，1042 报文译码失败清零
 
 ## v1.7.3
 
