@@ -1,5 +1,6 @@
 import { validateNmeaChecksum } from '../data/NmeaStreamParser'
 import { RtkSolutionParser, nmeaQualityToRtkQuality } from './RtkSolution'
+import type { RtkPostTimeSpan } from './RtkPostProgress'
 
 export type RtkPostConstellation = 'G' | 'R' | 'E' | 'J' | 'C' | 'I'
 export type RtkPostOutputFormat = 'llh' | 'xyz' | 'enu' | 'nmea'
@@ -9,10 +10,56 @@ export interface RtkPostOptions {
   mode: number
   frequency: number
   solutionType: 0 | 1 | 2
-  ambiguityResolution: 'continuous' | 'instantaneous' | 'fix-and-hold'
+  ambiguityResolution: 'off' | 'continuous' | 'instantaneous' | 'fix-and-hold'
+  gloArMode: 'off' | 'on' | 'autocal' | 'fix-and-hold'
+  bdsArEnabled: boolean
+  arFilterEnabled: boolean
+  basePositionMode: 'llh' | 'xyz' | 'single' | 'posfile' | 'rinexhead' | 'rtcm' | 'raw'
   constellations: RtkPostConstellation[]
   elevationMaskDeg: number
   ratioThreshold: number
+  ratioMin: number
+  ratioMax: number
+  maxPosVar: number
+  gloHwBiasM: number
+  minLockCount: number
+  arElevationMaskDeg: number
+  minFixCount: number
+  holdElevationMaskDeg: number
+  dopplerSlipThresholdHz: number
+  gfSlipThresholdM: number
+  maxAgeS: number
+  arResetOutageEpochs: number
+  codeOutlierM: number
+  phaseOutlierM: number
+  filterIterations: number
+  syncSolutionEnabled: boolean
+  baselineLengthM: number
+  baselineSigmaM: number
+  minFixSats: number
+  minHoldSats: number
+  minDropSats: number
+  holdAmbVar: number
+  holdAmbGain: number
+  errorRatioL1: number
+  errorRatioL2: number
+  errorRatioL5: number
+  phaseErrorM: number
+  phaseElevationErrorM: number
+  phaseBaselineErrorM: number
+  phaseSnrErrorM: number
+  snrMaxDbHz: number
+  receiverErrorM: number
+  dopplerErrorHz: number
+  initialBiasStdM: number
+  initialIonoStdM: number
+  initialTropStdM: number
+  receiverAccelHorizontalMps2: number
+  receiverAccelVerticalMps2: number
+  processBiasM: number
+  processIonoM: number
+  processTropM: number
+  clockStabilitySps: number
   startTime: string
   endTime: string
   intervalS: number | null
@@ -36,6 +83,12 @@ export interface RtkPostSettings {
 
 export interface RtkPostRunRequest extends RtkPostSettings {
   runId: string
+  configContent?: string
+}
+
+export interface RtkPostObservationSpans {
+  rover: RtkPostTimeSpan | null
+  base: RtkPostTimeSpan | null
 }
 
 export interface RtkPostSolutionSummary {
@@ -84,9 +137,55 @@ export const DEFAULT_RTKPOST_OPTIONS: Readonly<RtkPostOptions> = Object.freeze({
   frequency: 2,
   solutionType: 0,
   ambiguityResolution: 'continuous',
+  gloArMode: 'off',
+  bdsArEnabled: true,
+  arFilterEnabled: true,
+  basePositionMode: 'single',
   constellations: ['G', 'R'],
   elevationMaskDeg: 15,
   ratioThreshold: 3,
+  ratioMin: 1,
+  ratioMax: 3,
+  maxPosVar: 1,
+  gloHwBiasM: 0,
+  minLockCount: 0,
+  arElevationMaskDeg: 25,
+  minFixCount: 4,
+  holdElevationMaskDeg: 25,
+  dopplerSlipThresholdHz: 0,
+  gfSlipThresholdM: 0.05,
+  maxAgeS: 15,
+  arResetOutageEpochs: 20,
+  codeOutlierM: 100,
+  phaseOutlierM: 1,
+  filterIterations: 1,
+  syncSolutionEnabled: false,
+  baselineLengthM: 0,
+  baselineSigmaM: 0,
+  minFixSats: 4,
+  minHoldSats: 5,
+  minDropSats: 10,
+  holdAmbVar: 0.1,
+  holdAmbGain: 0.01,
+  errorRatioL1: 300,
+  errorRatioL2: 300,
+  errorRatioL5: 300,
+  phaseErrorM: 0.005,
+  phaseElevationErrorM: 0.005,
+  phaseBaselineErrorM: 0,
+  phaseSnrErrorM: 0.005,
+  snrMaxDbHz: 50,
+  receiverErrorM: 0,
+  dopplerErrorHz: 1,
+  initialBiasStdM: 30,
+  initialIonoStdM: 0.03,
+  initialTropStdM: 0.3,
+  receiverAccelHorizontalMps2: 3,
+  receiverAccelVerticalMps2: 1,
+  processBiasM: 0.0001,
+  processIonoM: 0.001,
+  processTropM: 0.0001,
+  clockStabilitySps: 5e-12,
   startTime: '',
   endTime: '',
   intervalS: null,
@@ -132,7 +231,7 @@ export function buildRtkPostArgs(request: RtkPostRunRequest | RtkPostSettings): 
   if (!options || !Number.isInteger(options.mode) || options.mode < 0 || options.mode > 9) {
     throw new Error('定位模式无效')
   }
-  if (![1, 2, 3].includes(options.frequency)) throw new Error('频点数无效')
+  if (![1, 2, 3, 4].includes(options.frequency)) throw new Error('频点数无效')
   if (![0, 1, 2].includes(options.solutionType)) throw new Error('解算方向无效')
   if (!['llh', 'xyz', 'enu', 'nmea'].includes(options.outputFormat)) {
     throw new Error('输出格式无效')
@@ -170,7 +269,9 @@ export function buildRtkPostArgs(request: RtkPostRunRequest | RtkPostSettings): 
   if (options.solutionType === 2) args.push('-c')
   if (options.ambiguityResolution === 'instantaneous') args.push('-i')
   else if (options.ambiguityResolution === 'fix-and-hold') args.push('-h')
-  else if (options.ambiguityResolution !== 'continuous') throw new Error('模糊度固定模式无效')
+  else if (!['off', 'continuous'].includes(options.ambiguityResolution)) {
+    throw new Error('模糊度固定模式无效')
+  }
 
   if (options.outputFormat === 'xyz') args.push('-e')
   else if (options.outputFormat === 'enu') args.push('-a')

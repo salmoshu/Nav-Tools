@@ -90,12 +90,50 @@ export function rinexObservationSpan(head: string, tail: string): RtkPostTimeSpa
   const headerEnd = head.indexOf('END OF HEADER')
   const firstEpochs = observationEpochs(headerEnd < 0 ? head : head.slice(headerEnd + 13))
   const lastEpochs = observationEpochs(tail)
-  const start =
+  let start =
     firstEpochs[0] ?? (first ? parseEpochFields(first.slice(0, 43).trim().split(/\s+/)) : undefined)
-  const end =
+  let end =
     lastEpochs.at(-1) ??
     (last ? parseEpochFields(last.slice(0, 43).trim().split(/\s+/)) : undefined)
+  // Match the Open-GNSS RINEX reader: GLO observation epochs are UTC and
+  // rnx2rtkp's -ts/-te arguments are GPST. Other supported systems are left
+  // in the same representation used by the engine's observation reader.
+  const versionLine = header.split(/\r?\n/).find((line) => line.includes('RINEX VERSION / TYPE'))
+  const firstSystem = first?.slice(48, 51).trim().toUpperCase()
+  const recognized = ['GPS', 'GLO', 'GAL', 'QZS', 'BDT', 'IRN']
+  const usesUtc =
+    firstSystem === 'GLO' || (!recognized.includes(firstSystem ?? '') && versionLine?.[40] === 'R')
+  if (usesUtc) {
+    if (start !== undefined) start += utcToGpsOffset(start)
+    if (end !== undefined) end += utcToGpsOffset(end)
+  }
   return start !== undefined && end !== undefined && end > start ? { start, end } : undefined
+}
+
+// Same leap-second table used by Open-GNSS src/rtkcmn.c.
+function utcToGpsOffset(time: number): number {
+  const dates = [
+    [2017, 1],
+    [2015, 7],
+    [2012, 7],
+    [2009, 1],
+    [2006, 1],
+    [1999, 1],
+    [1997, 7],
+    [1996, 1],
+    [1994, 7],
+    [1993, 7],
+    [1992, 7],
+    [1991, 1],
+    [1990, 1],
+    [1988, 1],
+    [1985, 7],
+    [1983, 7],
+    [1982, 7],
+    [1981, 7],
+  ]
+  const index = dates.findIndex(([year, month]) => time >= Date.UTC(year, month - 1, 1))
+  return index < 0 ? 0 : (18 - index) * 1000
 }
 
 function observationEpochs(text: string): number[] {
@@ -120,11 +158,26 @@ function observationEpochs(text: string): number[] {
   return times
 }
 
-function parseCalendarTime(text: string): number | undefined {
+export function parseCalendarTime(text: string): number | undefined {
   const fields = text
     .trim()
     .match(/^(\d{4})[-/](\d{2})[-/](\d{2})[T\s]+(\d{2}):(\d{2})(?::(\d{2}(?:\.\d+)?))?$/)
   return fields ? parseEpochFields([...fields.slice(1, 6), fields[6] ?? '0']) : undefined
+}
+
+/** GPST calendar fields, deliberately independent of the computer's local time zone. */
+export function formatRtkPostTime(time: number): string {
+  const iso = new Date(Math.round(time)).toISOString().replace('Z', '')
+  return iso.replace(/\.000$/, '')
+}
+
+export function intersectObservationSpans(
+  rover: RtkPostTimeSpan,
+  base?: RtkPostTimeSpan | null,
+): RtkPostTimeSpan | undefined {
+  const start = Math.max(rover.start, base?.start ?? rover.start)
+  const end = Math.min(rover.end, base?.end ?? rover.end)
+  return end > start ? { start, end } : undefined
 }
 
 function parseEpochFields(fields: string[]): number | undefined {

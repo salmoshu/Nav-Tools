@@ -147,6 +147,7 @@
           <div class="file-row">
             <label>rtkrcv</label>
             <el-input
+              spellcheck="false"
               v-model="store.settings.executablePath"
               :disabled="store.running.value"
               :placeholder="t('gnssLib.rtknavi.executablePlaceholder')"
@@ -159,7 +160,11 @@
           <div class="section-title spaced">{{ t('gnssLib.rtknavi.output') }}</div>
           <div class="file-row">
             <label>.pos</label>
-            <el-input v-model="store.settings.outputPath" :disabled="store.running.value" />
+            <el-input
+              spellcheck="false"
+              v-model="store.settings.outputPath"
+              :disabled="store.running.value"
+            />
             <el-button :disabled="store.running.value" @click="chooseOutput"
               ><el-icon><FolderOpened /></el-icon
             ></el-button>
@@ -212,6 +217,7 @@
               t(stream.type === 'file' ? 'gnssLib.rtknavi.filePath' : 'gnssLib.rtknavi.path')
             }}</label>
             <el-input
+              spellcheck="false"
               v-model="stream.path"
               :disabled="store.running.value || !stream.enabled"
               :placeholder="streamHint(stream.type)"
@@ -355,6 +361,7 @@
           <div class="file-row base-config-row">
             <label>{{ t('gnssLib.rtknavi.baseConfig') }}</label>
             <el-input
+              spellcheck="false"
               v-model="store.settings.options.baseConfigPath"
               :disabled="store.running.value"
               placeholder="rtkrcv.conf"

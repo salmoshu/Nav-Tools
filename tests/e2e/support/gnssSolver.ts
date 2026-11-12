@@ -240,6 +240,11 @@ export async function openSolver(page: Page, mode: 'post' | 'realtime' = 'post',
             saveEngine()
           }),
         rtkPostCancel: async () => true,
+        rtkPostObservationSpans: async (request: { roverPath: string; basePath?: string }) => {
+          const read = Reflect.get(window, '__solverReadObservationSpans')
+          return typeof read === 'function' ? read(request) : undefined
+        },
+        rtkPostCancelObservationRead: async () => undefined,
         rtkNaviStatus: async () => liveStatus,
         rtkNaviStart: async (request: { runId: string }) => {
           Reflect.set(window, '__solverLiveRequest', request)

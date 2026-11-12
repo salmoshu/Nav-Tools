@@ -15,7 +15,7 @@ describe('camera panels', () => {
     expect(getPanelById('camera-parameters')).toMatchObject({
       title: 'panel.camera-parameters.title',
       componentName: 'CameraParameters',
-      action: 'config',
+      action: 'camera-config',
       catalogGroup: 'camera',
     })
   })

@@ -46,14 +46,18 @@ interface Window {
       contentBytes: number
       dataLength: number
     }>
-    cameraCalibrationSnapshot: () => Promise<import('./core/camera/CameraCalibrationTypes').CameraCalibrationSnapshot>
+    cameraCalibrationSnapshot: () => Promise<
+      import('./core/camera/CameraCalibrationTypes').CameraCalibrationSnapshot
+    >
     cameraCalibrationAccess: () => Promise<{
       host?: string
       port?: number
       username?: string
       hasPassword: boolean
     }>
-    cameraCalibrationReadParams: () => Promise<import('./core/camera/CameraParamReadback').CameraParamSnapshot>
+    cameraCalibrationReadParams: () => Promise<
+      import('./core/camera/CameraParamReadback').CameraParamSnapshot
+    >
     cameraCalibrationObserve: (request: {
       host: string
       port: number
@@ -63,9 +67,15 @@ interface Window {
     cameraCalibrationStart: (
       config: import('./core/camera/CameraCalibrationTypes').CameraCalibrationConfig,
     ) => Promise<import('./core/camera/CameraCalibrationTypes').CameraCalibrationSnapshot>
-    cameraCalibrationStop: () => Promise<import('./core/camera/CameraCalibrationTypes').CameraCalibrationSnapshot>
-    cameraCalibrationRestore: () => Promise<import('./core/camera/CameraCalibrationTypes').CameraCalibrationSnapshot>
-    cameraCalibrationClose: () => Promise<import('./core/camera/CameraCalibrationTypes').CameraCalibrationSnapshot>
+    cameraCalibrationStop: () => Promise<
+      import('./core/camera/CameraCalibrationTypes').CameraCalibrationSnapshot
+    >
+    cameraCalibrationRestore: () => Promise<
+      import('./core/camera/CameraCalibrationTypes').CameraCalibrationSnapshot
+    >
+    cameraCalibrationClose: () => Promise<
+      import('./core/camera/CameraCalibrationTypes').CameraCalibrationSnapshot
+    >
     cameraScriptRun: (request: {
       host: string
       port: number
@@ -92,6 +102,12 @@ interface Window {
       request: import('./core/gnsslib/RtkPost').RtkPostRunRequest,
     ) => Promise<import('./core/gnsslib/RtkPost').RtkPostRunResult>
     rtkPostCancel: (runId: string) => Promise<boolean>
+    rtkPostReadConfig: (path: string) => Promise<string>
+    rtkPostObservationSpans: (request: {
+      roverPath: string
+      basePath?: string
+    }) => Promise<import('./core/gnsslib/RtkPost').RtkPostObservationSpans>
+    rtkPostCancelObservationRead: () => Promise<void>
     gnssSolverStatus: () => Promise<{ mode: 'post' | 'realtime'; runId: string } | null>
     rtkPostChooseOutput: (request: {
       defaultPath?: string

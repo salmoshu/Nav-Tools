@@ -11,22 +11,30 @@
         <el-radio-button value="post">{{ t('gnssLib.solver.post') }}</el-radio-button>
         <el-radio-button value="realtime">{{ t('gnssLib.solver.realtime') }}</el-radio-button>
       </el-radio-group>
-      <el-button v-if="!solver.busy.value" type="primary" size="small" @click="execute">{{
-        t(solver.mode.value === 'post' ? 'gnssRaw.rtkpost.execute' : 'gnssLib.rtknavi.start')
-      }}</el-button>
+      <el-button
+        v-if="!solver.busy.value"
+        class="execute-button"
+        type="primary"
+        size="small"
+        :disabled="solver.mode.value === 'post' && solver.post.timeRangeBlocked.value"
+        @click="execute"
+      >
+        {{ t(solver.mode.value === 'post' ? 'gnssRaw.rtkpost.execute' : 'gnssLib.rtknavi.start') }}
+      </el-button>
       <el-button
         v-else
+        class="execute-button"
         type="danger"
         plain
         size="small"
         :disabled="solver.state.value !== 'running'"
         :loading="solver.state.value === 'stopping'"
         @click="solver.stop"
-        >{{
-          t(solver.mode.value === 'post' ? 'gnssRaw.rtkpost.cancel' : 'gnssLib.rtknavi.stop')
-        }}</el-button
       >
+        {{ t(solver.mode.value === 'post' ? 'gnssRaw.rtkpost.cancel' : 'gnssLib.rtknavi.stop') }}
+      </el-button>
     </div>
+
     <div class="view-tabs solver-tabs" role="tablist" :aria-label="t('gnssLib.solver.workspace')">
       <button
         v-for="tab in tabs"
@@ -44,6 +52,7 @@
         {{ tab.label }}
       </button>
     </div>
+
     <el-alert
       v-if="!desktopAvailable"
       class="solver-alert"
@@ -51,13 +60,21 @@
       :closable="false"
       :title="t('gnssLib.solver.desktopOnly')"
     />
+    <el-alert
+      v-if="solver.post.result.value?.warnings?.length && solver.session.mode.value === 'post'"
+      class="solver-alert"
+      type="warning"
+      :closable="false"
+      :title="t('gnssRaw.rtkpost.engineWarnings')"
+      :description="solver.post.result.value.warnings.join('\n')"
+    />
+
     <div class="solver-body">
       <section
-        v-show="activeView !== 'result'"
-        :id="`${viewId}-${activeView === 'options' ? 'options' : 'inputs'}-panel`"
+        :id="`${viewId}-${activeView}-panel`"
         class="solver-form"
         role="tabpanel"
-        :aria-labelledby="`${viewId}-${activeView === 'options' ? 'options' : 'inputs'}-tab`"
+        :aria-labelledby="`${viewId}-${activeView}-tab`"
       >
         <RtkPost
           v-if="solver.mode.value === 'post'"
@@ -66,46 +83,8 @@
         />
         <RtkNavi v-else embedded :view="activeView" />
       </section>
-      <section
-        v-show="activeView === 'result'"
-        :id="`${viewId}-result-panel`"
-        class="solver-result"
-        role="tabpanel"
-        :aria-labelledby="`${viewId}-result-tab`"
-      >
-        <div v-if="solver.outputPath.value" class="result-path" :title="solver.outputPath.value">
-          {{ solver.outputPath.value }}
-        </div>
-        <div class="summary-cards">
-          <div v-for="card in cards" :key="card.label" class="summary-card">
-            <div class="summary-value">{{ card.value.toLocaleString() }}</div>
-            <div class="summary-label">{{ card.label }}</div>
-          </div>
-        </div>
-        <div v-if="solver.session.currentSolution.value" class="solver-latest">
-          <div>{{ solver.session.currentSolution.value.time }}</div>
-          <div>
-            {{ solver.session.currentSolution.value.latitude.toFixed(9) }}°,
-            {{ solver.session.currentSolution.value.longitude.toFixed(9) }}°
-          </div>
-          <div>
-            {{ solver.session.currentSolution.value.height.toFixed(4) }} m · Q={{
-              solver.session.currentSolution.value.quality
-            }}
-            · {{ solver.session.currentSolution.value.satellites }}
-            {{ t('gnssLib.rtknavi.satellites') }}
-          </div>
-        </div>
-        <el-alert
-          v-if="solver.post.result.value?.warnings?.length && solver.session.mode.value === 'post'"
-          type="warning"
-          :closable="false"
-          :title="t('gnssRaw.rtkpost.engineWarnings')"
-          :description="solver.post.result.value.warnings.join('\n')"
-        />
-        <div class="solver-result-hint">{{ t('gnssLib.solver.resultHint') }}</div>
-      </section>
     </div>
+
     <footer
       class="solver-statusbar"
       role="status"
@@ -114,13 +93,13 @@
     >
       <div class="progress-caption">
         <span class="solver-state" :class="solver.state.value">{{ progressLabel }}</span>
-        <span v-if="solver.session.runId.value" class="solver-run-metrics"
-          >{{ solver.elapsedSeconds.value }} s · {{ solver.session.epochs.value.toLocaleString() }}
-          {{ t('gnssRaw.rtkpost.epochs') }}</span
-        >
-        <span v-else>{{
-          t(solver.mode.value === 'post' ? 'gnssLib.solver.post' : 'gnssLib.solver.realtime')
-        }}</span>
+        <span v-if="solver.session.runId.value" class="solver-run-metrics">
+          {{ solver.elapsedSeconds.value }} s · {{ solver.session.epochs.value.toLocaleString() }}
+          {{ t('gnssRaw.rtkpost.epochs') }}
+        </span>
+        <span v-else>
+          {{ t(solver.mode.value === 'post' ? 'gnssLib.solver.post' : 'gnssLib.solver.realtime') }}
+        </span>
       </div>
       <el-progress
         v-if="solver.session.runId.value && solver.session.mode.value === 'post'"
@@ -166,7 +145,6 @@ const desktopAvailable =
 const tabs = computed(() => [
   { name: 'inputs', label: t('gnssLib.solver.inputs') },
   { name: 'options', label: t('gnssRaw.rtkpost.options') },
-  { name: 'result', label: t('gnssLib.solver.summary') },
 ])
 const stateLabel = computed(() =>
   t(`gnssLib.solver.state${solver.state.value[0].toUpperCase()}${solver.state.value.slice(1)}`),
@@ -194,17 +172,11 @@ const progressStatus = computed(() =>
         ? 'warning'
         : undefined,
 )
-const cards = computed(() => [
-  { label: t('gnssRaw.rtkpost.epochs'), value: solver.session.epochs.value },
-  { label: t('gnssRaw.rtkpost.fixed'), value: solver.session.qualityCounts.value[1] ?? 0 },
-  { label: t('gnssRaw.rtkpost.float'), value: solver.session.qualityCounts.value[2] ?? 0 },
-  { label: t('gnssRaw.rtkpost.single'), value: solver.session.qualityCounts.value[5] ?? 0 },
-])
+
 async function execute(): Promise<void> {
   await solver.start()
-  if (solver.state.value === 'success' || solver.mode.value === 'realtime')
-    activeView.value = 'result'
 }
+
 function switchTab(event: KeyboardEvent): void {
   const index = tabs.value.findIndex((tab) => tab.name === activeView.value)
   const count = tabs.value.length
@@ -236,64 +208,110 @@ function switchTab(event: KeyboardEvent): void {
   height: 100%;
   min-height: 0;
   overflow: hidden;
-  padding: 10px;
+  padding: 12px;
   background: var(--app-surface-muted);
   color: var(--app-text);
   font-size: 12px;
 }
+
 .solver-toolbar {
   display: flex;
   flex: none;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--app-border);
+  border-radius: 9px;
+  background: var(--app-surface);
+  box-shadow: var(--app-shadow-xs);
 }
-.solver-toolbar > .el-button {
+
+.solver-toolbar > .execute-button {
+  min-width: 76px;
   margin-left: auto;
 }
-.solver-state {
-  color: var(--app-text-secondary);
-  font-size: 11px;
-}
-.solver-state.running,
-.solver-state.success {
-  color: var(--el-color-success);
-}
-.solver-state.error,
-.solver-error {
-  color: var(--el-color-danger);
-}
+
 .solver-tabs {
   align-self: flex-start;
   flex: none;
 }
+
+.solver-body {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border-radius: 9px;
+}
+
+.solver-form {
+  height: 100%;
+  overflow: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--app-border-strong) transparent;
+}
+
+.solver-form :deep(.rtkpost),
+.solver-form :deep(.rtknavi) {
+  padding: 0;
+  background: transparent;
+}
+
+.solver-alert {
+  flex: none;
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  white-space: pre-line;
+}
+
 .solver-statusbar {
   display: flex;
   flex: none;
   flex-direction: column;
   gap: 6px;
-  margin: 0 -10px -10px;
-  padding: 8px 10px;
+  margin: 0 -12px -12px;
+  padding: 9px 12px 10px;
   border-top: 1px solid var(--app-border);
   background: var(--app-surface);
   text-align: left;
 }
+
 .progress-caption {
   display: flex;
   flex-wrap: wrap;
   justify-content: space-between;
-  gap: 4px;
+  gap: 4px 12px;
   font-size: 10px;
 }
+
+.solver-state {
+  color: var(--app-text-secondary);
+  font-size: 11px;
+  font-weight: 550;
+}
+
+.solver-state.running,
+.solver-state.success {
+  color: var(--el-color-success);
+}
+
+.solver-state.error,
+.solver-error {
+  color: var(--el-color-danger);
+}
+
 .solver-run-metrics {
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
+
 .solver-statusbar :deep(.el-progress__text) {
   min-width: 42px;
   margin-left: 8px;
   text-align: right;
 }
+
 .solver-percentage {
   color: var(--app-text-secondary);
   font:
@@ -302,10 +320,12 @@ function switchTab(event: KeyboardEvent): void {
     sans-serif;
   font-variant-numeric: tabular-nums;
 }
+
 .solver-percentage > span {
   margin-left: 1px;
   font-size: 10px;
 }
+
 .processing-message {
   overflow: hidden;
   color: var(--app-text-secondary);
@@ -315,6 +335,7 @@ function switchTab(event: KeyboardEvent): void {
   white-space: nowrap;
   text-overflow: ellipsis;
 }
+
 .solver-error {
   max-height: 64px;
   overflow: auto;
@@ -322,42 +343,24 @@ function switchTab(event: KeyboardEvent): void {
   white-space: pre-line;
   overflow-wrap: anywhere;
 }
-.solver-body {
-  flex: 1;
-  min-height: 0;
-  min-width: 0;
-  overflow: hidden;
-}
-.solver-form,
-.solver-result {
-  height: 100%;
-  overflow: auto;
-}
-.solver-form :deep(.rtkpost),
-.solver-form :deep(.rtknavi) {
-  padding: 0;
-  background: transparent;
-}
-.solver-result .summary-cards {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-}
-.solver-latest {
-  margin-top: 10px;
-  padding: 10px;
-  border: 1px solid var(--app-border);
-  border-radius: 8px;
-  background: var(--app-surface);
-  line-height: 1.8;
-  text-align: left;
-  font-variant-numeric: tabular-nums;
-}
-.solver-result-hint {
-  padding: 12px 0;
-  color: var(--app-text-secondary);
-  font-size: 11px;
-}
-.solver-alert {
-  flex: none;
+
+@media (max-width: 480px) {
+  .gnss-solver {
+    padding: 8px;
+  }
+
+  .solver-toolbar {
+    padding: 7px;
+  }
+
+  .solver-toolbar > .execute-button {
+    min-width: 0;
+  }
+
+  .solver-statusbar {
+    margin: 0 -8px -8px;
+    padding-inline: 8px;
+  }
 }
 </style>
 <style scoped src="./gnssLib.css"></style>

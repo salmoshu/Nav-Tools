@@ -10,6 +10,7 @@ import { PassThrough } from 'node:stream'
 import type { WebContents } from 'electron'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { RtkPostService } from '../../electron/main/services/RtkPostService'
+import * as observationSpanReader from '../../electron/main/services/RinexObservationSpan'
 import { RtkNaviService } from '../../electron/main/services/RtkNaviService'
 import { createDefaultRtkNaviSettings } from '../../src/core/gnsslib/RtkNavi'
 import {
@@ -20,12 +21,37 @@ import {
 const directories: string[] = []
 
 afterEach(async () => {
-  await Promise.all(
-    directories.splice(0).map((directory) => rm(directory, { recursive: true, force: true })),
-  )
+  vi.restoreAllMocks()
+  for (const directory of directories.splice(0)) {
+    const target = path.resolve(directory)
+    if (
+      path.dirname(target) !== path.resolve(os.tmpdir()) ||
+      !path.basename(target).startsWith('nav-tools-rtkpost-')
+    )
+      throw new Error('Unexpected temporary test directory')
+    await rm(target, { recursive: true, force: true })
+  }
 })
 
 describe('RtkPostService', () => {
+  it.each([true, false])(
+    'uses supplied bounds without rereading or tolerates an optional span read failure (bounds: %s)',
+    async (hasBounds) => {
+      const fixture = await createFixture()
+      if (hasBounds) {
+        fixture.request.options.startTime = '2024-07-30T00:00:00'
+        fixture.request.options.endTime = '2024-07-30T00:01:00'
+      }
+      const reader = vi
+        .spyOn(observationSpanReader, 'readRinexObservationSpan')
+        .mockRejectedValue(new Error('Cannot read observation times'))
+      const { child, running } = await startFixture(fixture.request)
+      await writeFile(fixture.request.outputPath, validSolution)
+      child.emit('close', 0)
+      expect((await running).ok).toBe(true)
+      expect(reader).toHaveBeenCalledTimes(hasBounds ? 0 : 1)
+    },
+  )
   it('honors a cancel request during asynchronous input preparation without spawning a child', async () => {
     const fixture = await createFixture()
     const spawnMock = vi.fn()
@@ -55,6 +81,34 @@ describe('RtkPostService', () => {
     await running
     await expect(live.start(sender, liveRequest)).rejects.not.toThrow('GNSS 解算任务')
     expect(spawnMock).toHaveBeenCalledOnce()
+  })
+  it('passes a merged effective config to the engine and removes it after completion', async () => {
+    const fixture = await createFixture()
+    fixture.request.configPath = path.join(path.dirname(fixture.request.outputPath), 'source.conf')
+    fixture.request.options.ambiguityResolution = 'fix-and-hold'
+    fixture.request.options.minFixSats = 9
+    await writeFile(
+      fixture.request.configPath,
+      'pos2-armode=continuous\nfile-dcbfile=/data/dcb.txt\n',
+    )
+    const child = fakeChild()
+    const spawnMock = vi.fn().mockReturnValue(child)
+    const service = new RtkPostService(spawnMock as unknown as typeof spawn)
+    const running = service.run(fakeSender(), fixture.request)
+    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledOnce())
+
+    const args = spawnMock.mock.calls[0][1]
+    const configPath = args[args.indexOf('-k') + 1]
+    expect(configPath).not.toBe(fixture.request.configPath)
+    const effective = await readFile(configPath, 'utf8')
+    expect(effective).toContain('pos2-armode=fix-and-hold')
+    expect(effective).toContain('pos2-minfixsats=9')
+    expect(effective).toContain('file-dcbfile=/data/dcb.txt')
+
+    await writeFile(fixture.request.outputPath, validSolution)
+    child.emit('close', 0)
+    expect((await running).ok).toBe(true)
+    await expect(readFile(configPath, 'utf8')).rejects.toThrow()
   })
   it('runs rnx2rtkp without a shell and returns parsed solution output', async () => {
     const fixture = await createFixture()

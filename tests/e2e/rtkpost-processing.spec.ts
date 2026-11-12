@@ -47,7 +47,8 @@ test('merges legacy engine entries and imports complete post-processing results 
   ).toBeLessThanOrEqual(1)
   await page.evaluate(() => Reflect.get(window, '__solverCompletePost')({ count: 1205 }))
   await expect(panel.locator('.solver-state.success')).toBeVisible()
-  await expect(panel.getByRole('tab', { name: 'Summary', exact: true })).toHaveAttribute(
+  await expect(panel.getByRole('tab', { name: 'Summary', exact: true })).toHaveCount(0)
+  await expect(panel.getByRole('tab', { name: 'Options', exact: true })).toHaveAttribute(
     'aria-selected',
     'true',
   )
@@ -55,7 +56,6 @@ test('merges legacy engine entries and imports complete post-processing results 
   await expect.poll(async () => (await solverSnapshot(page)).positions).toBe(1205)
   await expect.poll(async () => (await solverSnapshot(page)).messages).toBe(1206)
   expect((await solverSnapshot(page)).points).toBe(1205)
-  await expect(panel.locator('.summary-value').first()).toHaveText('1,205')
   await expect(page.locator('.deviation-status-card')).toContainText('Fixed')
   await expect(page.locator('.flow-console-virtual')).not.toContainText('receiver-only-record')
   expect(
@@ -98,7 +98,6 @@ test('loads NMEA selected by a config file into messages and Deviation with LLH 
   })
   await expect(panel.locator('.solver-statusbar .solver-state.success')).toBeVisible()
   await expect.poll(async () => (await solverSnapshot(page)).positions).toBe(3)
-  await expect(panel.locator('.solver-result > .summary-cards .summary-value')).toHaveText(['3', '1', '1', '1'])
   await expect(page.locator('.deviation-status-card')).toContainText('Single')
   await expect(page.locator('.flow-console-virtual')).toContainText('$GPGGA')
 })
@@ -160,9 +159,8 @@ test('keeps keyboard navigation, the base marker and controls usable in a narrow
   const options = panel.getByRole('tab', { name: 'Options', exact: true })
   await options.click()
   await options.press('End')
-  const summary = panel.getByRole('tab', { name: 'Summary', exact: true })
-  await expect(summary).toBeFocused()
-  await summary.press('ArrowRight')
+  await expect(options).toBeFocused()
+  await options.press('ArrowRight')
   await expect(panel.getByRole('tab', { name: 'Inputs', exact: true })).toBeFocused()
   const label = panel.locator('.file-row > label').filter({ hasText: 'RINEX OBS: Base station' })
   const star = await label.locator('.required').boundingBox()
@@ -199,4 +197,92 @@ test('reattaches to an active post-processing task after a page reload and impor
   await expect.poll(async () => (await solverSnapshot(page)).positions).toBe(1205)
   await expect(panel.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '100')
   await expect(panel.getByRole('radio', { name: 'Real-time', exact: true })).toBeEnabled()
+})
+
+test('loads a configuration into the visible form and executes the edited values', async ({
+  page,
+}) => {
+  const panel = await openSolver(page)
+  await panel.screenshot({ path: 'test-results/gnss-solver-inputs.png' })
+  await page.evaluate(() => {
+    Reflect.set(window.electronAPI, 'rtkPostReadConfig', async () =>
+      [
+        'pos1-posmode=static',
+        'pos1-frequency=l1+l2+l5',
+        'pos2-arthresmin=1.3',
+        'pos2-minfixsats=8',
+        'stats-eratio1=250',
+        'out-solformat=nmea',
+      ].join('\n'),
+    )
+  })
+  await panel.getByRole('tab', { name: 'Options', exact: true }).click()
+  const configInput = panel.locator('.config-file-panel input')
+  await configInput.fill('/data/rover-es.conf')
+  await configInput.press('Enter')
+  await expect(panel.locator('.config-status')).toContainText('Loaded 6 parameters')
+  await expect(
+    panel
+      .locator('.option-field')
+      .filter({ hasText: 'Positioning mode' })
+      .locator('.el-select__placeholder'),
+  ).toHaveText('Static RTK')
+  await expect(
+    panel.locator('.option-field').filter({ hasText: 'Min satellites to fix' }).locator('input'),
+  ).toHaveValue('8')
+  await expect(
+    panel
+      .locator('.option-field')
+      .filter({ hasText: 'Coordinate / protocol format' })
+      .locator('.el-select__placeholder'),
+  ).toHaveText('NMEA-0183 GGA')
+  await expect(panel.locator('.options-section')).not.toContainText('Start time (GPST)')
+  await expect(panel.locator('.options-section')).not.toContainText('End time (GPST)')
+
+  const ratio = panel.locator('.option-field').filter({ hasText: 'Minimum ratio' }).locator('input')
+  await ratio.fill('2.2')
+  await ratio.press('Enter')
+  await panel.locator('.config-file-panel').scrollIntoViewIfNeeded()
+  await panel.screenshot({ path: 'test-results/gnss-solver-options-top.png' })
+  await panel.locator('.advanced-options').scrollIntoViewIfNeeded()
+  await panel.screenshot({ path: 'test-results/gnss-solver-options-advanced.png' })
+  expect(
+    await panel
+      .locator('.file-row input')
+      .evaluateAll((inputs) =>
+        inputs.every((input) => input.getAttribute('spellcheck') === 'false'),
+      ),
+  ).toBe(true)
+
+  await panel.getByRole('tab', { name: 'Inputs', exact: true }).click()
+  await panel.getByRole('button', { name: 'Execute', exact: true }).click()
+  await expect.poll(() => page.evaluate(() => Reflect.get(window, '__solverPostCalls'))).toBe(1)
+  const request = await page.evaluate(() => Reflect.get(window, '__solverPostRequest'))
+  expect(request.options).toMatchObject({
+    mode: 3,
+    frequency: 3,
+    ratioMin: 2.2,
+    minFixSats: 8,
+    errorRatioL1: 250,
+    outputFormat: 'nmea',
+  })
+  expect(request.configContent).toContain('pos1-posmode=static')
+})
+
+test('keeps the empty Deviation status concise in normal and pure-content modes', async ({
+  page,
+}) => {
+  await openSolver(page)
+  const status = page.locator('.deviation-status-card')
+  await expect(status.locator('.status-card-summary')).toHaveText('No positioning data')
+  await expect(status.locator('.status-card-heading')).toHaveCount(0)
+  await expect(status.locator('.status-card-body')).toHaveCount(0)
+
+  const card = page.locator('.box-card').filter({ hasText: 'GNSS Deviation' }).first()
+  await card.locator('.panel-actions-trigger').click()
+  await page.getByRole('menuitem', { name: 'Pure content', exact: true }).last().click()
+  await expect(card).toHaveClass(/pure-content-card/)
+  await expect(status.locator('.status-card-summary')).toHaveText('No positioning data')
+  await expect(status.locator('.status-card-heading')).toHaveCount(0)
+  await expect(status.locator('.status-card-body')).toHaveCount(0)
 })

@@ -967,7 +967,6 @@ onUnmounted(() => {
 
 .pure-content-card {
   position: relative;
-  border: 0;
 }
 
 .pure-content-card :deep(.el-card__header) {

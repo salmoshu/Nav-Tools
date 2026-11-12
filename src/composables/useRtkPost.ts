@@ -9,8 +9,15 @@ import {
   type RtkPostRunResult,
   type RtkPostSettings,
 } from '@/core/gnsslib/RtkPost'
+import { parseRtkPostConfig } from '@/core/gnsslib/RtkPostConfig'
 import { JsonStorage } from '@/core/storage/JsonStorage'
 import { t } from '@/i18n'
+import {
+  formatRtkPostTime,
+  intersectObservationSpans,
+  parseCalendarTime,
+  type RtkPostTimeSpan,
+} from '@/core/gnsslib/RtkPostProgress'
 
 export type RtkPostStatus = 'idle' | 'running' | 'success' | 'error' | 'cancelled'
 
@@ -25,6 +32,96 @@ const progress = ref<RtkPostProgress | null>(null)
 const running = computed(() => status.value === 'running')
 let activeRunId = ''
 let automaticOutputPath = ''
+const observationSpan = ref<RtkPostTimeSpan | null>(null)
+const roverObservationSpan = ref<RtkPostTimeSpan | null>(null)
+const baseObservationSpan = ref<RtkPostTimeSpan | null>(null)
+const observationStatus = ref<'idle' | 'loading' | 'ready' | 'no-overlap' | 'unavailable'>('idle')
+const observationError = ref('')
+let observationRevision = 0
+let initializedObservationSource = false
+const observationRefresh = ref(0)
+const configStatus = ref<'idle' | 'loading' | 'ready' | 'error'>('idle')
+const configDetail = ref('')
+let configContent: string | undefined
+
+watch(
+  () =>
+    [
+      settings.roverObsPath.trim(),
+      settings.options.mode >= 1 && settings.options.mode <= 6 ? settings.baseObsPath.trim() : '',
+      observationRefresh.value,
+    ] as const,
+  ([roverPath, basePath], previous, onCleanup) => {
+    const revision = ++observationRevision
+    if (
+      initializedObservationSource &&
+      (previous?.[0] !== roverPath || previous?.[1] !== basePath)
+    ) {
+      settings.options.startTime = ''
+      settings.options.endTime = ''
+    }
+    initializedObservationSource = true
+    observationSpan.value = null
+    roverObservationSpan.value = null
+    baseObservationSpan.value = null
+    observationError.value = ''
+    void window.electronAPI?.rtkPostCancelObservationRead?.().catch(() => undefined)
+    if (!roverPath) {
+      observationStatus.value = 'idle'
+      return
+    }
+    const read = window.electronAPI?.rtkPostObservationSpans
+    if (typeof read !== 'function') {
+      observationStatus.value = 'unavailable'
+      return
+    }
+    observationStatus.value = 'loading'
+    const timer = setTimeout(() => {
+      void read({ roverPath, ...(basePath ? { basePath } : {}) })
+        .then((spans) => {
+          if (revision !== observationRevision) return
+          const valid = (span: RtkPostTimeSpan | null | undefined): span is RtkPostTimeSpan =>
+            !!span &&
+            Number.isFinite(span.start) &&
+            Number.isFinite(span.end) &&
+            span.end > span.start
+          if (!valid(spans?.rover) || (basePath && !valid(spans?.base))) {
+            observationStatus.value = 'unavailable'
+            return
+          }
+          roverObservationSpan.value = spans.rover
+          baseObservationSpan.value = valid(spans.base) && basePath ? spans.base : null
+          const common = intersectObservationSpans(spans.rover, baseObservationSpan.value)
+          observationSpan.value = common ?? null
+          observationStatus.value = common ? 'ready' : 'no-overlap'
+        })
+        .catch((error: unknown) => {
+          if (revision !== observationRevision) return
+          observationError.value = error instanceof Error ? error.message : String(error)
+          observationStatus.value = 'unavailable'
+        })
+    }, 250)
+    onCleanup(() => clearTimeout(timer))
+  },
+  { immediate: true, flush: 'sync' },
+)
+
+const timeSelectionError = computed(() => {
+  if (observationStatus.value === 'no-overlap') return t('gnssRaw.rtkpost.timeNoOverlap')
+  const span = observationSpan.value
+  if (!span) return ''
+  const startText = settings.options.startTime.trim()
+  const endText = settings.options.endTime.trim()
+  const start = startText ? parseCalendarTime(startText) : span.start
+  const end = endText ? parseCalendarTime(endText) : span.end
+  if (start === undefined || end === undefined) return t('gnssRaw.rtkpost.timeSelectionInvalid')
+  if (start >= end) return t('gnssRaw.rtkpost.timeSelectionOrder')
+  if (start < span.start - 1 || end > span.end + 1) return t('gnssRaw.rtkpost.timeSelectionOutside')
+  return ''
+})
+const timeRangeBlocked = computed(
+  () => observationStatus.value === 'loading' || !!timeSelectionError.value,
+)
 
 watch(
   settings,
@@ -77,13 +174,26 @@ export function useRtkPost() {
     result.value = null
     progress.value = { phase: 'preparing', percentage: 0 }
     try {
+      if (observationStatus.value === 'loading') throw new Error(t('gnssRaw.rtkpost.timeLoading'))
+      if (timeSelectionError.value) throw new Error(timeSelectionError.value)
       if (!settings.navPaths.some((path) => path.trim())) {
         throw new Error(t('gnssRaw.rtkpost.navRequired'))
       }
-      buildRtkPostArgs(settings)
+      const requestSettings = toPlainSettings(settings)
+      if (observationSpan.value) {
+        if (!requestSettings.options.startTime.trim())
+          requestSettings.options.startTime = formatRtkPostTime(observationSpan.value.start)
+        if (!requestSettings.options.endTime.trim())
+          requestSettings.options.endTime = formatRtkPostTime(observationSpan.value.end)
+      }
+      buildRtkPostArgs(requestSettings)
       const api = window.electronAPI?.rtkPostRun
       if (!api) throw new Error(t('gnssRaw.rtkpost.desktopOnly'))
-      const runResult = await api({ ...toPlainSettings(settings), runId })
+      const runResult = await api({
+        ...requestSettings,
+        runId,
+        ...(configContent !== undefined ? { configContent } : {}),
+      })
       if (activeRunId !== runId) return
       result.value = runResult
       logText.value = runResult.log
@@ -127,6 +237,48 @@ export function useRtkPost() {
     }
   }
 
+  async function loadConfig(path = settings.configPath): Promise<boolean> {
+    const nextPath = path.trim()
+    configContent = undefined
+    if (!nextPath) {
+      settings.configPath = ''
+      configStatus.value = 'idle'
+      configDetail.value = ''
+      return true
+    }
+    const api = window.electronAPI?.rtkPostReadConfig
+    if (typeof api !== 'function') {
+      configStatus.value = 'error'
+      configDetail.value = t('gnssRaw.rtkpost.desktopOnly')
+      return false
+    }
+    configStatus.value = 'loading'
+    configDetail.value = ''
+    try {
+      const content = await api(nextPath)
+      const parsed = parseRtkPostConfig(content)
+      if (parsed.recognizedKeys.length === 0) {
+        throw new Error(t('gnssRaw.rtkpost.configEmpty'))
+      }
+      Object.assign(settings.options, parsed.options)
+      settings.configPath = nextPath
+      configContent = content
+      configStatus.value = 'ready'
+      configDetail.value = t('gnssRaw.rtkpost.configLoaded', {
+        count: parsed.recognizedKeys.length,
+      })
+      return true
+    } catch (error) {
+      configStatus.value = 'error'
+      configDetail.value = error instanceof Error ? error.message : String(error)
+      return false
+    }
+  }
+
+  function refreshObservationSpan(): void {
+    observationRefresh.value++
+  }
+
   return {
     settings,
     status,
@@ -135,6 +287,17 @@ export function useRtkPost() {
     logText,
     result,
     progress,
+    configStatus,
+    configDetail,
+    observationSpan,
+    roverObservationSpan,
+    baseObservationSpan,
+    observationStatus,
+    observationError,
+    timeSelectionError,
+    timeRangeBlocked,
+    loadConfig,
+    refreshObservationSpan,
     execute,
     cancel,
     suggestOutput,

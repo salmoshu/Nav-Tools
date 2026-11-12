@@ -186,7 +186,7 @@
 .file-row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 4px;
   min-height: 34px;
   margin: 0;
   padding: 3px 0;
@@ -194,7 +194,7 @@
 
 .file-row > label {
   display: inline-flex;
-  flex: 0 0 166px;
+  flex: 0 0 132px;
   align-items: center;
   gap: 4px;
   color: var(--app-text-secondary);
@@ -299,6 +299,7 @@
   color: var(--app-text-secondary);
   font-size: 10px;
   line-height: 1.3;
+  text-align: left;
 }
 
 .time-grid {
@@ -728,7 +729,7 @@
 
 @media (max-width: 760px) {
   .file-row > label {
-    flex-basis: 166px;
+    flex-basis: 132px;
   }
 
   .add-nav {

@@ -1,6 +1,7 @@
 import { getWindowById } from '@/settings/config'
 import { toolBarIcon } from '@/settings/icons'
 import { applicationIconComponents } from '@/settings/applicationIcons'
+import { panelIconComponents, panelIconSvg } from '@/settings/panelIcons'
 import { getPanelById, type PanelCatalogGroup } from '@/core/panels/registry'
 
 /**
@@ -35,13 +36,16 @@ const GROUP_BADGE_COLORS: Record<PanelCatalogGroup, string> = {
   gnsslib: '#7c3aed',
 }
 
-/** 按图标键查找 SVG 文档字符串：toolBarIcon 内联 SVG → element-plus 图标组件提取 path */
+/** 按图标键查找 SVG：面板专用 SVG/组件优先，再兼容工具栏与应用图标。 */
 function lookupIconSvg(key: string): string | undefined {
+  const custom = panelIconSvg[key]
+  if (custom) return custom
   const raw = toolBarIcon[key as keyof typeof toolBarIcon]
   if (typeof raw === 'string') return raw
 
   const paths = extractElementIconPaths(
-    applicationIconComponents[key as keyof typeof applicationIconComponents],
+    panelIconComponents[key] ??
+      applicationIconComponents[key as keyof typeof applicationIconComponents],
   )
   if (paths.length === 0) return undefined
   return (
@@ -69,9 +73,7 @@ function extractElementIconPaths(component: unknown): string[] {
       render = (comp.setup as (this: unknown, ...args: unknown[]) => unknown).call(comp, {}, {})
     }
     if (typeof render !== 'function') return []
-    const vnode = (render as (this: unknown) => { children?: unknown }).call(
-      component as object,
-    )
+    const vnode = (render as (this: unknown) => { children?: unknown }).call(component as object)
     const children = Array.isArray(vnode?.children) ? (vnode.children as unknown[]) : []
     const paths: string[] = []
     for (const child of children) {
@@ -231,7 +233,10 @@ function loadImage(src: string): Promise<HTMLImageElement> {
  * 图标合成在渲染端(需要 canvas 渲染 SVG),.lnk/ICO 落盘在主进程。
  * 返回 true 表示已创建;用户在保存对话框中取消返回 false,不视为错误。
  */
-export async function createComponentDesktopShortcut(windowId: string, name: string): Promise<boolean> {
+export async function createComponentDesktopShortcut(
+  windowId: string,
+  name: string,
+): Promise<boolean> {
   const iconDataUrl = await buildComponentIconDataUrl(windowId)
   const result = (await window.ipcRenderer.invoke('create-desktop-shortcut', {
     windowId,

@@ -4,6 +4,8 @@ import {
   rinexObservationSpan,
   RtkPostLogDecoder,
   RtkPostProgressTracker,
+  formatRtkPostTime,
+  intersectObservationSpans,
 } from '../../src/core/gnsslib/RtkPostProgress'
 
 const span = { start: Date.UTC(2024, 6, 30), end: Date.UTC(2024, 6, 30, 0, 1) }
@@ -59,6 +61,30 @@ describe('RINEX observation time span', () => {
       rinexObservationSpan('> 2024 07 30 00 00 00.0  0 12', '> 2024 07 30 00 00 00.0  0 12'),
     ).toBeUndefined()
   })
+
+  it('converts GLONASS UTC observations to the GPST expected by rnx2rtkp', () => {
+    const first = '  2023    05    15    09    49   17.0000000     GLO         TIME OF FIRST OBS\n'
+    const start = '> 2023 05 15 09 49 17.0000000  0 12\n'
+    const end = '> 2023 05 15 10 00 47.0000000  0 12\n'
+    expect(rinexObservationSpan(`${first}END OF HEADER\n${start}`, end)).toEqual({
+      start: Date.UTC(2023, 4, 15, 9, 49, 35),
+      end: Date.UTC(2023, 4, 15, 10, 1, 5),
+    })
+  })
+
+  it('intersects observation spans and formats GPST without a local-time conversion', () => {
+    expect(
+      intersectObservationSpans(span, { start: span.start + 10_000, end: span.end - 5000 }),
+    ).toEqual({
+      start: span.start + 10_000,
+      end: span.end - 5000,
+    })
+    expect(
+      intersectObservationSpans(span, { start: span.end, end: span.end + 10_000 }),
+    ).toBeUndefined()
+    expect(intersectObservationSpans(span)).toEqual(span)
+    expect(formatRtkPostTime(span.start + 1234)).toBe('2024-07-30T00:00:01.234')
+  })
 })
 
 describe('measured post-processing progress', () => {
@@ -97,6 +123,15 @@ describe('measured post-processing progress', () => {
       { start: span.start - 60_000, end: span.end + 60_000 },
       { ...options, startTime: '2024-07-30T00:00', endTime: '2024-07-30T00:01' },
     )
+    expect(tracker.update(record(30))?.percentage).toBe(50)
+  })
+
+  it('tracks progress from selected bounds without requiring a second observation read', () => {
+    const tracker = new RtkPostProgressTracker(undefined, {
+      ...options,
+      startTime: '2024-07-30T00:00:00',
+      endTime: '2024-07-30T00:01:00',
+    })
     expect(tracker.update(record(30))?.percentage).toBe(50)
   })
 

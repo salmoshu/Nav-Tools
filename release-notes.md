@@ -1,5 +1,17 @@
 # Nav-Tools 更新日志
 
+## v1.8.10
+
+- 调整 Camera Video、Camera Parameters 与 Hex Message 的组件图标；纯净内容模式恢复与普通组件一致的边框。
+- Deviation 在无定位数据时仅显示简洁的“No positioning data”，不再拼接或重复显示 Position status，普通与纯净模式表现一致。
+- GNSS Solver 移除 Summary 标签，统一 Inputs/Options 与底部状态区；收紧文件输入间距并关闭拼写检查；后处理支持读取流动站/基站观测重叠时段、双滑块选择、刷新及恢复全部时段。
+- 删除 Options 中重复的 GPST 起止时间输入；载入 Open-GNSS 配置文件后立即映射到表单，执行时保留未管理配置行并由当前表单覆盖同名参数；新增 Settings2、测量误差、初始状态及过程噪声等配置项。
+
+- Camera Video, Camera Parameters and Hex Message now use distinct icons, and pure-content cards retain the standard component border.
+- Deviation shows only a concise “No positioning data” message when empty, without a concatenated or duplicated Position status label, in both normal and pure-content modes.
+- GNSS Solver removes the Summary tab and unifies Inputs/Options with the bottom status area. File inputs are tighter and disable spellcheck. Post-processing now reads the rover/base overlap, provides dual-handle time selection, refresh and full-span reset.
+- Removed duplicate GPST bounds from Options. Open-GNSS configuration files now populate the form immediately; runtime preserves unmanaged entries while current form values override matching options. Added Settings2, measurement-error, initial-state and process-noise parameters.
+
 ## v1.8.9
 
 - 相机视频左下角持续显示人员距离和方位角，提供 2 秒窗口平均值、无人员及未连接状态和连接配置入口；人员观测独立于自动标定，重复目标报文按完整字段去重，重连开关更名为重试。

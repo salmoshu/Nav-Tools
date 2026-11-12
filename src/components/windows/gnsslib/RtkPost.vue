@@ -19,7 +19,12 @@
         </button>
       </div>
       <div class="gl-actions">
-        <el-button type="primary" :loading="store.running.value" @click="execute">
+        <el-button
+          type="primary"
+          :loading="store.running.value"
+          :disabled="store.timeRangeBlocked.value"
+          @click="execute"
+        >
           {{ t('gnssRaw.rtkpost.execute') }}
         </el-button>
         <el-button v-if="store.running.value" type="danger" plain @click="cancel">
@@ -71,6 +76,7 @@
           <div class="file-row">
             <label>rnx2rtkp</label>
             <el-input
+              spellcheck="false"
               v-model="store.settings.executablePath"
               :disabled="store.running.value"
               :placeholder="t('gnssRaw.rtkpost.executablePlaceholder')"
@@ -85,6 +91,7 @@
           <div class="file-row">
             <label>{{ t('gnssRaw.rtkpost.roverObs') }}</label>
             <el-input
+              spellcheck="false"
               v-model="store.settings.roverObsPath"
               :disabled="store.running.value"
               placeholder="RINEX OBS"
@@ -100,6 +107,7 @@
               <span v-if="relativeMode" class="required">*</span>
             </label>
             <el-input
+              spellcheck="false"
               v-model="store.settings.baseObsPath"
               :disabled="store.running.value"
               :placeholder="
@@ -116,6 +124,7 @@
               {{ store.settings.navPaths.length > 1 ? index + 1 : '' }}
             </label>
             <el-input
+              spellcheck="false"
               v-model="store.settings.navPaths[index]"
               :disabled="store.running.value"
               placeholder="NAV / CLK / SP3 / FCB / IONEX / SBAS"
@@ -144,10 +153,110 @@
           </el-button>
           <div class="field-hint nav-hint">{{ t('gnssRaw.rtkpost.navHint') }}</div>
 
+          <div class="observation-time-section">
+            <div class="observation-time-heading">
+              <div>
+                <strong>{{ t('gnssRaw.rtkpost.observationTime') }}</strong>
+                <span v-if="store.observationStatus.value === 'ready'">{{ timeRangeSource }}</span>
+              </div>
+              <div class="observation-time-actions">
+                <el-button
+                  v-if="store.settings.roverObsPath.trim()"
+                  text
+                  size="small"
+                  :disabled="store.running.value || store.observationStatus.value === 'loading'"
+                  @click="store.refreshObservationSpan"
+                  >{{ t('gnssRaw.rtkpost.timeRefresh') }}</el-button
+                >
+                <el-button
+                  v-if="store.observationSpan.value"
+                  text
+                  size="small"
+                  :disabled="
+                    store.running.value ||
+                    (!store.settings.options.startTime && !store.settings.options.endTime)
+                  "
+                  @click="resetObservationTime"
+                  >{{ t('gnssRaw.rtkpost.timeReset') }}</el-button
+                >
+              </div>
+            </div>
+            <template v-if="store.observationSpan.value">
+              <el-slider
+                v-model="selectedTimeOffsets"
+                class="observation-time-slider"
+                range
+                :min="0"
+                :max="timeRangeDuration"
+                :step="1"
+                :format-tooltip="timeTooltip"
+                :range-start-label="t('gnssRaw.rtkpost.startTime')"
+                :range-end-label="t('gnssRaw.rtkpost.endTime')"
+                :disabled="store.running.value"
+              />
+              <div class="observation-time-selected">
+                <div>
+                  <span>{{ t('gnssRaw.rtkpost.startTime') }}</span
+                  ><strong>{{ selectedTimeLabel(0) }}</strong>
+                </div>
+                <div>
+                  <span>{{ t('gnssRaw.rtkpost.endTime') }}</span
+                  ><strong>{{ selectedTimeLabel(1) }}</strong>
+                </div>
+              </div>
+              <div class="observation-time-limits">
+                <span>{{ formatTimeLabel(store.observationSpan.value.start) }}</span>
+                <span>{{ formatTimeLabel(store.observationSpan.value.end) }}</span>
+              </div>
+              <div
+                v-if="store.timeSelectionError.value"
+                class="observation-time-error"
+                role="alert"
+              >
+                {{ store.timeSelectionError.value }}
+              </div>
+            </template>
+            <div
+              v-else-if="store.observationStatus.value === 'loading'"
+              class="observation-time-hint"
+              role="status"
+            >
+              {{ t('gnssRaw.rtkpost.timeLoading') }}
+            </div>
+            <div
+              v-else-if="store.observationStatus.value === 'no-overlap'"
+              class="observation-time-error"
+              role="alert"
+            >
+              <div>{{ t('gnssRaw.rtkpost.timeNoOverlap') }}</div>
+              <div v-if="store.roverObservationSpan.value">
+                {{ t('gnssRaw.rtkpost.timeRover') }}:
+                {{ formatTimeLabel(store.roverObservationSpan.value.start) }} –
+                {{ formatTimeLabel(store.roverObservationSpan.value.end) }}
+              </div>
+              <div v-if="store.baseObservationSpan.value">
+                {{ t('gnssRaw.rtkpost.timeBase') }}:
+                {{ formatTimeLabel(store.baseObservationSpan.value.start) }} –
+                {{ formatTimeLabel(store.baseObservationSpan.value.end) }}
+              </div>
+            </div>
+            <div
+              v-else-if="store.observationStatus.value === 'unavailable'"
+              class="observation-time-hint"
+              :title="store.observationError.value"
+            >
+              {{ t('gnssRaw.rtkpost.timeUnavailable') }}
+            </div>
+            <div v-else class="observation-time-hint">
+              {{ t('gnssRaw.rtkpost.timeSelectRover') }}
+            </div>
+          </div>
+
           <div class="section-title">{{ t('gnssRaw.rtkpost.output') }}</div>
           <div class="file-row">
             <label>{{ t('gnssRaw.rtkpost.solutionFile') }}</label>
             <el-input
+              spellcheck="false"
               v-model="store.settings.outputPath"
               :disabled="store.running.value"
               placeholder=".pos"
@@ -166,6 +275,37 @@
         role="tabpanel"
         :aria-labelledby="`${viewId}-options-tab`"
       >
+        <section class="config-file-panel">
+          <div class="file-row config-file-row">
+            <label>{{ t('gnssRaw.rtkpost.configFile') }}</label>
+            <el-input
+              spellcheck="false"
+              v-model="store.settings.configPath"
+              :disabled="store.running.value || store.configStatus.value === 'loading'"
+              :placeholder="t('gnssRaw.rtkpost.configOptional')"
+              clearable
+              @change="loadConfig"
+              @clear="clearConfig"
+            />
+            <el-button
+              :disabled="store.running.value || store.configStatus.value === 'loading'"
+              @click="chooseConfig"
+              ><el-icon><FolderOpened /></el-icon
+            ></el-button>
+          </div>
+          <div
+            class="config-status"
+            :class="`is-${store.configStatus.value}`"
+            role="status"
+            aria-live="polite"
+          >
+            {{
+              store.configStatus.value === 'loading'
+                ? t('gnssRaw.rtkpost.configLoading')
+                : store.configDetail.value || t('gnssRaw.rtkpost.configHint')
+            }}
+          </div>
+        </section>
         <div class="section-title">{{ t('gnssRaw.rtkpost.processingOptions') }}</div>
         <div class="option-grid">
           <label class="option-field wide">
@@ -185,6 +325,7 @@
               <el-option label="L1" :value="1" />
               <el-option label="L1 + L2" :value="2" />
               <el-option label="L1 + L2 + L5" :value="3" />
+              <el-option label="L1 + L5" :value="4" />
             </el-select>
           </label>
           <label class="option-field">
@@ -204,6 +345,7 @@
               v-model="store.settings.options.ambiguityResolution"
               :disabled="store.running.value"
             >
+              <el-option :label="t('gnssRaw.rtkpost.off')" value="off" />
               <el-option :label="t('gnssRaw.rtkpost.continuous')" value="continuous" />
               <el-option :label="t('gnssRaw.rtkpost.instantaneous')" value="instantaneous" />
               <el-option :label="t('gnssRaw.rtkpost.fixAndHold')" value="fix-and-hold" />
@@ -261,25 +403,7 @@
           </el-checkbox-group>
         </div>
 
-        <div class="option-grid time-grid">
-          <label class="option-field wide">
-            <span>{{ t('gnssRaw.rtkpost.startTime') }}</span>
-            <el-input
-              v-model="store.settings.options.startTime"
-              :disabled="store.running.value"
-              placeholder="2024-07-30T00:00:00"
-            />
-          </label>
-          <label class="option-field wide">
-            <span>{{ t('gnssRaw.rtkpost.endTime') }}</span>
-            <el-input
-              v-model="store.settings.options.endTime"
-              :disabled="store.running.value"
-              placeholder="2024-07-30T23:59:59"
-            />
-          </label>
-        </div>
-        <div class="field-hint">{{ t('gnssRaw.rtkpost.timeHint') }}</div>
+        <RtkPostAdvancedOptions />
 
         <div class="section-title">{{ t('gnssRaw.rtkpost.outputOptions') }}</div>
         <div class="option-grid">
@@ -345,19 +469,6 @@
             />
           </label>
         </div>
-        <div class="file-row config-row">
-          <label>{{ t('gnssRaw.rtkpost.configFile') }}</label>
-          <el-input
-            v-model="store.settings.configPath"
-            :disabled="store.running.value"
-            :placeholder="t('gnssRaw.rtkpost.configOptional')"
-            clearable
-          />
-          <el-button :disabled="store.running.value" @click="chooseConfig"
-            ><el-icon><FolderOpened /></el-icon
-          ></el-button>
-        </div>
-        <div class="field-hint">{{ t('gnssRaw.rtkpost.configHint') }}</div>
       </section>
 
       <section
@@ -420,6 +531,8 @@ import { ElMessage } from 'element-plus'
 import { FolderOpened } from '@element-plus/icons-vue'
 import { t } from '@/i18n'
 import { useRtkPost } from '@/composables/useRtkPost'
+import { formatRtkPostTime, parseCalendarTime } from '@/core/gnsslib/RtkPostProgress'
+import RtkPostAdvancedOptions from './RtkPostAdvancedOptions.vue'
 
 const store = useRtkPost()
 const props = defineProps<{ embedded?: boolean; view?: string }>()
@@ -454,6 +567,50 @@ const positioningModes = computed(() => [
 const relativeMode = computed(
   () => store.settings.options.mode >= 1 && store.settings.options.mode <= 6,
 )
+const timeRangeDuration = computed(() => {
+  const span = store.observationSpan.value
+  return span ? Math.max(1, Math.round(span.end - span.start)) : 1
+})
+const timeRangeSource = computed(() =>
+  store.baseObservationSpan.value
+    ? t('gnssRaw.rtkpost.timeOverlap')
+    : relativeMode.value && !store.settings.baseObsPath.trim()
+      ? t('gnssRaw.rtkpost.timeRoverAwaitBase')
+      : t('gnssRaw.rtkpost.timeRover'),
+)
+const selectedTimeOffsets = computed<number[]>({
+  get: () => {
+    const span = store.observationSpan.value
+    if (!span) return [0, 0]
+    const start = parseCalendarTime(store.settings.options.startTime) ?? span.start
+    const end = parseCalendarTime(store.settings.options.endTime) ?? span.end
+    const clamp = (value: number) =>
+      Math.max(0, Math.min(timeRangeDuration.value, Math.round(value - span.start)))
+    return [clamp(start), clamp(end)]
+  },
+  set: (offsets) => {
+    const span = store.observationSpan.value
+    if (!span || offsets.length !== 2) return
+    store.settings.options.startTime = formatRtkPostTime(span.start + offsets[0])
+    store.settings.options.endTime = formatRtkPostTime(span.start + offsets[1])
+  },
+})
+function formatTimeLabel(value: number): string {
+  return formatRtkPostTime(value).replace('T', ' ')
+}
+function selectedTimeLabel(index: number): string {
+  const span = store.observationSpan.value
+  return span ? formatTimeLabel(span.start + selectedTimeOffsets.value[index]) : '—'
+}
+function timeTooltip(offset: number): string {
+  return store.observationSpan.value
+    ? formatTimeLabel(store.observationSpan.value.start + offset)
+    : ''
+}
+function resetObservationTime(): void {
+  store.settings.options.startTime = ''
+  store.settings.options.endTime = ''
+}
 const solution = computed(() => store.result.value?.solution)
 const summaryCards = computed(() => {
   const value = solution.value
@@ -546,7 +703,23 @@ async function chooseConfig(): Promise<void> {
     { name: 'RTKLIB Options', extensions: ['conf'] },
     { name: t('gnssRaw.rtkpost.allFiles'), extensions: ['*'] },
   ])
-  if (path) store.settings.configPath = path
+  if (path) {
+    store.settings.configPath = path
+    await loadConfig()
+  }
+}
+
+async function loadConfig(): Promise<void> {
+  const ok = await store.loadConfig()
+  if (!ok) {
+    ElMessage.error(store.configDetail.value || t('gnssRaw.rtkpost.configEmpty'))
+  } else if (store.settings.configPath) {
+    ElMessage.success(store.configDetail.value)
+  }
+}
+
+function clearConfig(): void {
+  void store.loadConfig('')
 }
 
 async function chooseOutput(): Promise<void> {
@@ -728,6 +901,71 @@ function formatBytes(bytes: number): string {
   margin: -2px 0 2px 148px;
   padding: 0;
 }
+.observation-time-section {
+  margin: 12px 0;
+  padding: 10px 12px;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 8px;
+  background: var(--el-fill-color-light);
+}
+.observation-time-heading,
+.observation-time-heading > div,
+.observation-time-selected,
+.observation-time-limits {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.observation-time-heading > div {
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+.observation-time-actions {
+  flex: none;
+}
+.observation-time-actions :deep(.el-button + .el-button) {
+  margin-left: 0;
+}
+.observation-time-heading span,
+.observation-time-hint,
+.observation-time-limits {
+  color: var(--el-text-color-secondary);
+}
+.observation-time-slider {
+  width: calc(100% - 20px);
+  margin: 0 10px;
+}
+.observation-time-selected {
+  flex-wrap: wrap;
+  font-variant-numeric: tabular-nums;
+}
+.observation-time-selected > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+}
+.observation-time-selected span {
+  color: var(--el-text-color-secondary);
+}
+.observation-time-selected strong {
+  font-weight: 600;
+}
+.observation-time-limits {
+  margin-top: 6px;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.observation-time-hint,
+.observation-time-error {
+  margin-top: 6px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.observation-time-error {
+  color: var(--el-color-danger);
+}
 .option-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(150px, 1fr));
@@ -771,8 +1009,31 @@ function formatBytes(bytes: number): string {
   color: var(--el-text-color-secondary);
   line-height: 1.5;
 }
-.config-row {
-  margin-top: 10px;
+.config-file-panel {
+  margin-bottom: 12px;
+  padding: 8px 10px;
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  background: var(--app-surface-muted);
+}
+.config-file-row {
+  margin: 0;
+}
+.config-status {
+  margin: 4px 0 0 136px;
+  color: var(--app-text-secondary);
+  font-size: 10px;
+  line-height: 1.5;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+.config-status.is-error {
+  color: var(--el-color-danger);
+}
+@media (max-width: 480px) {
+  .config-status {
+    margin-left: 0;
+  }
 }
 .run-status {
   display: flex;
@@ -915,6 +1176,9 @@ function formatBytes(bytes: number): string {
   }
 }
 @media (max-width: 480px) {
+  .observation-time-selected > div {
+    width: 100%;
+  }
   .rtkpost .view-tab {
     padding-inline: 10px;
   }

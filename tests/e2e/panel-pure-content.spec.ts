@@ -52,9 +52,11 @@ test('keeps multiple cards in pure content mode and restores the latest one with
   const messagesCard = page.locator('.box-card').filter({ hasText: '消息' }).first()
   await expect(videoCard).toBeVisible()
   await expect(messagesCard).toBeVisible()
+  const borderBefore = await videoCard.evaluate((element) => getComputedStyle(element).border)
 
   await enterPureContent(page, videoCard)
   await expect(videoCard).toHaveClass(/pure-content-card/)
+  expect(await videoCard.evaluate((element) => getComputedStyle(element).border)).toBe(borderBefore)
   await expect(messagesCard).not.toHaveClass(/pure-content-card/)
 
   await enterPureContent(page, messagesCard)

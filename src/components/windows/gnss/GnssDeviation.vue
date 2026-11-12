@@ -105,7 +105,7 @@
         :class="{ 'is-compact': statusCardCompact }"
       >
         <div class="status-card-header">
-          <span class="status-card-heading">
+          <span v-if="currentStats" class="status-card-heading">
             <span
               class="status-card-indicator"
               :style="{ backgroundColor: currentStatusColor }"
@@ -126,8 +126,8 @@
           </button>
         </div>
 
-        <div v-if="!statusCardCompact" class="status-card-body">
-          <div v-if="currentStats" class="status-card-stats">
+        <div v-if="!statusCardCompact && currentStats" class="status-card-body">
+          <div class="status-card-stats">
             <div class="status-card-stat-grid">
               <div class="status-card-stat">
                 <span>{{ t('gnss.deviation.sampleCount') }}</span>
@@ -160,9 +160,6 @@
                 <span>2D {{ formatStatMeters(currentStats.rms2dDoubled) }}</span>
               </div>
             </div>
-          </div>
-          <div v-else class="status-card-empty">
-            {{ t('gnss.deviation.statusUnavailable') }}
           </div>
         </div>
       </section>
@@ -1132,10 +1129,18 @@ function handleDoubleClick(event: MouseEvent): void {
   event.preventDefault()
   event.stopPropagation()
   const history = positionEpochHistory.value
-  const end = fileTimeline.mode.value === 'replay'
-    ? history.findNearestElapsedTime(fileTimeline.elapsedFor(history))
-    : history.length - 1
-  const index = findPositionEpoch(history, ['E', 'N'], point.x, point.y, fileTimeline.elapsedFor(history), end)
+  const end =
+    fileTimeline.mode.value === 'replay'
+      ? history.findNearestElapsedTime(fileTimeline.elapsedFor(history))
+      : history.length - 1
+  const index = findPositionEpoch(
+    history,
+    ['E', 'N'],
+    point.x,
+    point.y,
+    fileTimeline.elapsedFor(history),
+    end,
+  )
   if (index >= 0) fileTimeline.seekEpoch(history, index)
 }
 
@@ -1894,5 +1899,4 @@ onUnmounted(() => {
     display: none;
   }
 }
-
 </style>

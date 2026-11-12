@@ -1,6 +1,7 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { createReadStream } from 'node:fs'
 import * as fs from 'node:fs/promises'
+import * as os from 'node:os'
 import * as path from 'node:path'
 import * as readline from 'node:readline'
 import type { WebContents } from 'electron'
@@ -12,12 +13,12 @@ import {
   type RtkPostProgress,
   type RtkPostSolutionSummary,
 } from '../../../src/core/gnsslib/RtkPost'
+import { mergeRtkPostConfig } from '../../../src/core/gnsslib/RtkPostConfig'
 import {
-  rinexObservationSpan,
   RtkPostLogDecoder,
   RtkPostProgressTracker,
-  type RtkPostTimeSpan,
 } from '../../../src/core/gnsslib/RtkPostProgress'
+import { readRinexObservationSpan } from './RinexObservationSpan'
 
 import { gnssSolverTasks } from './GnssSolverTasks'
 const MAX_LOG_CHARS = 200_000
@@ -33,14 +34,35 @@ export class RtkPostService {
 
   public constructor(private readonly spawnProcess: typeof spawn = spawn) {}
 
+  public async readConfig(filePath: string): Promise<string> {
+    if (typeof filePath !== 'string' || !filePath.trim()) throw new Error('配置文件路径为空')
+    const absolute = path.resolve(filePath.trim())
+    const stat = await statOrThrow(absolute, '配置文件')
+    if (!stat.isFile()) throw new Error(`配置文件不是文件: ${absolute}`)
+    if (stat.size > 4 * 1024 * 1024) throw new Error('配置文件超过 4 MiB，无法载入')
+    return fs.readFile(absolute, 'utf8')
+  }
+
   public async run(sender: WebContents, rawRequest: RtkPostRunRequest): Promise<RtkPostRunResult> {
     const release = gnssSolverTasks.acquire('post', sender.id, rawRequest?.runId)
     try {
       const result = await this.runTask(sender, rawRequest)
-      if (!sender.isDestroyed()) sender.send('rtkpost-finished', { runId: rawRequest.runId, result })
+      if (!sender.isDestroyed())
+        sender.send('rtkpost-finished', { runId: rawRequest.runId, result })
       return result
     } catch (error) {
-      if (!sender.isDestroyed()) sender.send('rtkpost-finished', { runId: rawRequest?.runId, result: { ok: false, cancelled: false, exitCode: null, outputPath: rawRequest?.outputPath ?? '', log: '', error: error instanceof Error ? error.message : String(error) } })
+      if (!sender.isDestroyed())
+        sender.send('rtkpost-finished', {
+          runId: rawRequest?.runId,
+          result: {
+            ok: false,
+            cancelled: false,
+            exitCode: null,
+            outputPath: rawRequest?.outputPath ?? '',
+            log: '',
+            error: error instanceof Error ? error.message : String(error),
+          },
+        })
       throw error
     } finally {
       release()
@@ -58,136 +80,154 @@ export class RtkPostService {
     }
 
     const request = normalizePaths(rawRequest)
-    const args = buildRtkPostArgs(request)
+    buildRtkPostArgs(request)
     const previousOutput = await this.validateFiles(request)
-    const tracker = new RtkPostProgressTracker(
-      await readObservationSpan(request.roverObsPath),
-      request.options,
-    )
-    const executable =
-      request.executablePath || (process.platform === 'win32' ? 'rnx2rtkp.exe' : 'rnx2rtkp')
-    if (sender.isDestroyed() || gnssSolverTasks.isCancelled('post', sender.id, request.runId)) {
-      return { ok: false, cancelled: true, exitCode: null, outputPath: request.outputPath, log: '' }
-    }
-
-    return new Promise<RtkPostRunResult>((resolve) => {
-      const child = this.spawnProcess(executable, args, {
-        cwd: path.dirname(request.outputPath),
-        windowsHide: true,
-        shell: false,
-      })
-      const job: RtkPostJob = { runId: request.runId, child, cancelled: false }
-      this.jobs.set(sender.id, job)
-      const onDestroyed = (): void => {
-        this.cancel(sender.id, request.runId)
-      }
-      sender.once('destroyed', onDestroyed)
-
-      let log = ''
-      let settled = false
-      const decoder = new RtkPostLogDecoder()
-      const diagnostics: string[] = []
-      const warnings: string[] = []
-      let lastProgressAt = 0
-      let lastPercentage: number | null | undefined
-      let latestProgress: RtkPostProgress | undefined
-      const sendProgress = (progress: RtkPostProgress): void => {
-        if (!sender.isDestroyed()) {
-          sender.send('rtkpost-progress', { runId: request.runId, ...progress })
+    let cleanup = async (): Promise<void> => undefined
+    try {
+      const effectiveConfig = await writeEffectiveRtkPostConfig(request)
+      cleanup = effectiveConfig.cleanup
+      request.configPath = effectiveConfig.path
+      const args = buildRtkPostArgs(request)
+      // The timeline already supplies both bounds; avoid scanning compressed
+      // observations a second time merely to initialize the progress tracker.
+      const observationSpan =
+        request.options.startTime.trim() && request.options.endTime.trim()
+          ? undefined
+          : await readRinexObservationSpan(request.roverObsPath).catch(() => undefined)
+      const tracker = new RtkPostProgressTracker(observationSpan, request.options)
+      const executable =
+        request.executablePath || (process.platform === 'win32' ? 'rnx2rtkp.exe' : 'rnx2rtkp')
+      if (sender.isDestroyed() || gnssSolverTasks.isCancelled('post', sender.id, request.runId)) {
+        return {
+          ok: false,
+          cancelled: true,
+          exitCode: null,
+          outputPath: request.outputPath,
+          log: '',
         }
       }
-      sendProgress({ phase: 'preparing', percentage: 0 })
-      const appendLog = (chunk: string): void => {
-        if (!chunk) return
-        log = (log + chunk).slice(-MAX_LOG_CHARS)
-        if (!sender.isDestroyed()) {
-          sender.send('rtkpost-log', { runId: request.runId, chunk })
+
+      return await new Promise<RtkPostRunResult>((resolve) => {
+        const child = this.spawnProcess(executable, args, {
+          cwd: path.dirname(request.outputPath),
+          windowsHide: true,
+          shell: false,
+        })
+        const job: RtkPostJob = { runId: request.runId, child, cancelled: false }
+        this.jobs.set(sender.id, job)
+        const onDestroyed = (): void => {
+          this.cancel(sender.id, request.runId)
         }
-      }
-      const processLines = (lines: string[]): void => {
-        if (!lines.length) return
-        const logLines: string[] = []
-        for (const line of lines) {
-          if (/\b(?:error|fatal)\s*:/i.test(line)) {
-            // These optional correction files can be absent while a valid solution is produced.
-            const optional =
-              /^error\s*:\s*(?:no erp data|no sat ant pcv|no rec ant pcv|no geoid data)\b/i.test(
-                line,
-              )
-            const messages = optional ? warnings : diagnostics
-            if (!messages.includes(line)) {
-              messages.push(line.slice(0, 2048))
-              if (messages.length > 20) messages.shift()
+        sender.once('destroyed', onDestroyed)
+
+        let log = ''
+        let settled = false
+        const decoder = new RtkPostLogDecoder()
+        const diagnostics: string[] = []
+        const warnings: string[] = []
+        let lastProgressAt = 0
+        let lastPercentage: number | null | undefined
+        let latestProgress: RtkPostProgress | undefined
+        const sendProgress = (progress: RtkPostProgress): void => {
+          if (!sender.isDestroyed()) {
+            sender.send('rtkpost-progress', { runId: request.runId, ...progress })
+          }
+        }
+        sendProgress({ phase: 'preparing', percentage: 0 })
+        const appendLog = (chunk: string): void => {
+          if (!chunk) return
+          log = (log + chunk).slice(-MAX_LOG_CHARS)
+          if (!sender.isDestroyed()) {
+            sender.send('rtkpost-log', { runId: request.runId, chunk })
+          }
+        }
+        const processLines = (lines: string[]): void => {
+          if (!lines.length) return
+          const logLines: string[] = []
+          for (const line of lines) {
+            if (/\b(?:error|fatal)\s*:/i.test(line)) {
+              // These optional correction files can be absent while a valid solution is produced.
+              const optional =
+                /^error\s*:\s*(?:no erp data|no sat ant pcv|no rec ant pcv|no geoid data)\b/i.test(
+                  line,
+                )
+              const messages = optional ? warnings : diagnostics
+              if (!messages.includes(line)) {
+                messages.push(line.slice(0, 2048))
+                if (messages.length > 20) messages.shift()
+              }
+            }
+            const progress = tracker.update(line)
+            if (progress) latestProgress = progress
+            else logLines.push(line)
+            if (
+              progress &&
+              (progress.percentage !== lastPercentage || Date.now() - lastProgressAt >= 200)
+            ) {
+              sendProgress(progress)
+              lastProgressAt = Date.now()
+              lastPercentage = progress.percentage
             }
           }
-          const progress = tracker.update(line)
-          if (progress) latestProgress = progress
-          else logLines.push(line)
-          if (
-            progress &&
-            (progress.percentage !== lastPercentage || Date.now() - lastProgressAt >= 200)
-          ) {
-            sendProgress(progress)
-            lastProgressAt = Date.now()
-            lastPercentage = progress.percentage
+          if (logLines.length) appendLog(`${logLines.join('\n')}\n`)
+        }
+        const finish = async (code: number | null, spawnError?: Error): Promise<void> => {
+          if (settled) return
+          settled = true
+          processLines(decoder.flush())
+          if (latestProgress) sendProgress(latestProgress)
+          let cancelled = job.cancelled
+          let solution: RtkPostSolutionSummary | undefined
+          let error = spawnError ? `无法启动 rnx2rtkp: ${spawnError.message}` : undefined
+          if (!cancelled && !error && diagnostics.length) {
+            error = diagnostics.join('\n')
           }
-        }
-        if (logLines.length) appendLog(`${logLines.join('\n')}\n`)
-      }
-      const finish = async (code: number | null, spawnError?: Error): Promise<void> => {
-        if (settled) return
-        settled = true
-        processLines(decoder.flush())
-        if (latestProgress) sendProgress(latestProgress)
-        let cancelled = job.cancelled
-        let solution: RtkPostSolutionSummary | undefined
-        let error = spawnError ? `无法启动 rnx2rtkp: ${spawnError.message}` : undefined
-        if (!cancelled && !error && diagnostics.length) {
-          error = diagnostics.join('\n')
-        }
-        if (code === 0 && !cancelled && !error) {
-          sendProgress({ ...latestProgress, phase: 'validating', percentage: 99 })
-          try {
-            solution = await inspectSolution(request.outputPath, request, previousOutput)
-          } catch (inspectError) {
-            error = inspectError instanceof Error ? inspectError.message : String(inspectError)
-            if (warnings.length) error += `\n${warnings.join('\n')}`
+          if (code === 0 && !cancelled && !error) {
+            sendProgress({ ...latestProgress, phase: 'validating', percentage: 99 })
+            try {
+              solution = await inspectSolution(request.outputPath, request, previousOutput)
+            } catch (inspectError) {
+              error = inspectError instanceof Error ? inspectError.message : String(inspectError)
+              if (warnings.length) error += `\n${warnings.join('\n')}`
+            }
+          } else if (!cancelled && !error) {
+            error = `rnx2rtkp 执行失败（退出码 ${code ?? '未知'}）`
           }
-        } else if (!cancelled && !error) {
-          error = `rnx2rtkp 执行失败（退出码 ${code ?? '未知'}）`
+          cancelled = job.cancelled
+          if (cancelled) {
+            solution = undefined
+            error = undefined
+          }
+          if (error && !cancelled) appendLog(`\n${error}\n`)
+          this.jobs.delete(sender.id)
+          sender.removeListener('destroyed', onDestroyed)
+          resolve({
+            ok: code === 0 && !cancelled && !error && Boolean(solution),
+            cancelled,
+            exitCode: code,
+            outputPath: request.outputPath,
+            log: log.slice(-MAX_LOG_CHARS),
+            error,
+            solution,
+            progress: latestProgress,
+            warnings: warnings.length ? warnings : undefined,
+          })
         }
-        cancelled = job.cancelled
-        if (cancelled) {
-          solution = undefined
-          error = undefined
-        }
-        if (error && !cancelled) appendLog(`\n${error}\n`)
-        this.jobs.delete(sender.id)
-        sender.removeListener('destroyed', onDestroyed)
-        resolve({
-          ok: code === 0 && !cancelled && !error && Boolean(solution),
-          cancelled,
-          exitCode: code,
-          outputPath: request.outputPath,
-          log: log.slice(-MAX_LOG_CHARS),
-          error,
-          solution,
-          progress: latestProgress,
-          warnings: warnings.length ? warnings : undefined,
-        })
-      }
 
-      child.stdout.setEncoding('utf8')
-      child.stderr.setEncoding('utf8')
-      child.stdout.on('data', (chunk: string) => processLines(decoder.push('stdout', chunk)))
-      child.stderr.on('data', (chunk: string) => processLines(decoder.push('stderr', chunk)))
-      child.on('error', (error) => {
-        void finish(null, error)
+        child.stdout.setEncoding('utf8')
+        child.stderr.setEncoding('utf8')
+        child.stdout.on('data', (chunk: string) => processLines(decoder.push('stdout', chunk)))
+        child.stderr.on('data', (chunk: string) => processLines(decoder.push('stderr', chunk)))
+        child.on('error', (error) => {
+          void finish(null, error)
+        })
+        child.on('close', (code) => {
+          void finish(code)
+        })
       })
-      child.on('close', (code) => {
-        void finish(code)
-      })
-    })
+    } finally {
+      await cleanup()
+    }
   }
 
   public cancel(senderId: number, runId: string): boolean {
@@ -265,21 +305,25 @@ async function inspectSolution(
   return solution
 }
 
-async function readObservationSpan(filePath: string): Promise<RtkPostTimeSpan | undefined> {
-  // Read at most 512 KiB, even when processing many hours of observations.
-  const file = await fs.open(filePath, 'r')
+async function writeEffectiveRtkPostConfig(
+  request: RtkPostRunRequest,
+): Promise<{ path: string; cleanup: () => Promise<void> }> {
+  const source =
+    request.configContent ??
+    (request.configPath ? await fs.readFile(request.configPath, 'utf8') : '')
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'nav-tools-rtkpost-'))
+  const configPath = path.join(directory, 'effective.conf')
   try {
-    const { size } = await file.stat()
-    const length = Math.min(size, 256 * 1024)
-    const head = Buffer.alloc(length)
-    const tail = Buffer.alloc(length)
-    await file.read(head, 0, length, 0)
-    await file.read(tail, 0, length, Math.max(0, size - length))
-    return rinexObservationSpan(head.toString('ascii'), tail.toString('ascii'))
-  } catch {
-    return undefined
-  } finally {
-    await file.close()
+    await fs.writeFile(configPath, mergeRtkPostConfig(source, request.options), 'utf8')
+  } catch (error) {
+    await fs.rm(directory, { recursive: true, force: true }).catch(() => undefined)
+    throw error
+  }
+  return {
+    path: configPath,
+    cleanup: async () => {
+      await fs.rm(directory, { recursive: true, force: true }).catch(() => undefined)
+    },
   }
 }
 

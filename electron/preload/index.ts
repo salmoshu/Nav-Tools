@@ -29,7 +29,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     username: string
     password?: string
   }) => ipcRenderer.invoke('camera-calibration-observe', request),
-  cameraCalibrationStart: (config: unknown) => ipcRenderer.invoke('camera-calibration-start', config),
+  cameraCalibrationStart: (config: unknown) =>
+    ipcRenderer.invoke('camera-calibration-start', config),
   cameraCalibrationStop: () => ipcRenderer.invoke('camera-calibration-stop'),
   cameraCalibrationRestore: () => ipcRenderer.invoke('camera-calibration-restore'),
   cameraCalibrationClose: () => ipcRenderer.invoke('camera-calibration-close'),
@@ -63,6 +64,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   rtkPostRun: (request: import('../../src/core/gnsslib/RtkPost').RtkPostRunRequest) =>
     ipcRenderer.invoke('rtkpost-run', request),
   rtkPostCancel: (runId: string) => ipcRenderer.invoke('rtkpost-cancel', runId),
+  rtkPostReadConfig: (path: string) =>
+    ipcRenderer.invoke('rtkpost-read-config', path) as Promise<string>,
+  rtkPostObservationSpans: (request: { roverPath: string; basePath?: string }) =>
+    ipcRenderer.invoke('rtkpost-observation-spans', request),
+  rtkPostCancelObservationRead: () => ipcRenderer.invoke('rtkpost-cancel-observation-read'),
   gnssSolverStatus: () => ipcRenderer.invoke('gnss-solver-status'),
   rtkPostChooseOutput: (request: { defaultPath?: string; outputFormat?: string }) =>
     ipcRenderer.invoke('rtkpost-choose-output', request),

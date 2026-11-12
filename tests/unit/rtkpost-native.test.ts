@@ -7,6 +7,7 @@ import path from 'node:path'
 import type { WebContents } from 'electron'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { RtkPostService } from '../../electron/main/services/RtkPostService'
+import { parseRtkPostConfig } from '../../src/core/gnsslib/RtkPostConfig'
 import {
   createDefaultRtkPostSettings,
   type RtkPostRunRequest,
@@ -18,18 +19,26 @@ const fixtures = process.env.RNX2RTKP_TEST_FIXTURES
 const directories: string[] = []
 
 afterEach(async () => {
-  await Promise.all(
-    directories.splice(0).map((directory) => rm(directory, { recursive: true, force: true })),
-  )
+  for (const directory of directories.splice(0)) {
+    const target = path.resolve(directory)
+    if (
+      path.dirname(target) !== path.resolve(os.tmpdir()) ||
+      !path.basename(target).startsWith('nav-tools-native-rtkpost-')
+    )
+      throw new Error('Unexpected temporary test directory')
+    await rm(target, { recursive: true, force: true })
+  }
 })
 
 describe.skipIf(!executable || !fixtures)('RTKPOST native engine integration', () => {
-  it('accepts NMEA selected by a config file while the UI format is LLH', async () => {
+  it('uses NMEA after loading the config selection into the form', async () => {
     const request = await createRequest()
     request.configPath = path.join(path.dirname(request.outputPath), 'nmea.conf')
-    await writeFile(request.configPath, 'out-solformat =nmea\n')
+    const configContent = 'out-solformat =nmea\n'
+    await writeFile(request.configPath, configContent)
+    Object.assign(request.options, parseRtkPostConfig(configContent).options)
     const result = await new RtkPostService().run(sender(), request)
-    expect(request.options.outputFormat).toBe('llh')
+    expect(request.options.outputFormat).toBe('nmea')
     expect(result.ok, result.error ?? result.log).toBe(true)
     const text = await readFile(request.outputPath, 'utf8')
     const gga = text.split(/\r?\n/).filter((line) => /^\$..GGA,/.test(line))
@@ -52,6 +61,22 @@ describe.skipIf(!executable || !fixtures)('RTKPOST native engine integration', (
       error: expect.stringContaining('no nav data'),
     })
     expect(result.solution).toBeUndefined()
+  })
+  it('limits native solutions to the selected GPST time range', async () => {
+    const request = await createRequest()
+    request.options.startTime = '2005-04-02T00:00:30'
+    request.options.endTime = '2005-04-02T00:01:00'
+    const result = await new RtkPostService().run(sender(), request)
+    expect(result.ok, result.error ?? result.log).toBe(true)
+    const text = await readFile(request.outputPath, 'utf8')
+    const timestamps = text
+      .split(/\r?\n/)
+      .filter((line) => /^2005\/04\/02\s/.test(line))
+      .map((line) => line.slice(0, 19))
+    expect(timestamps.length).toBeGreaterThan(0)
+    expect(
+      timestamps.every((time) => time >= '2005/04/02 00:00:30' && time <= '2005/04/02 00:01:00'),
+    ).toBe(true)
   })
 
   it.each([0, 1, 2] as const)(
