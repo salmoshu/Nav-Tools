@@ -1,5 +1,19 @@
 # Nav-Tools 更新日志
 
+## v1.8.9
+
+- 相机视频左下角持续显示人员距离和方位角，提供 2 秒窗口平均值、无人员及未连接状态和连接配置入口；人员观测独立于自动标定，重复目标报文按完整字段去重，重连开关更名为重试。
+- 自动标定默认使用 1.2 m 与 2.0 m 双目标及 ±0.02 m 容差，失败原因通过弹窗展示；相机子命令分别记忆输入内容和格式，读取命令无需填写内容。
+- 数据源连接管理合并重复相机 TCP 卡片并集中管理 SSH 配置，移除相机参数中的重复连接页和连接管理底部确定按钮。
+- Camera 应用默认包含消息组件，相机命令与脚本输出统一进入消息区域，消息组件使用独立图标。
+- 组件操作统一收纳到“...”菜单，支持创建快捷方式、分离独立窗口和纯净内容；纯净模式支持多卡片、顶部边框拖动及悬浮还原和关闭按钮，容器卡片最小高度可缩至两行。
+
+- Camera Video keeps person distance and azimuth visible with two-second rolling averages, empty and disconnected states, and a connection configuration shortcut. Person observation is independent of automatic calibration, duplicate reports are removed by full target fields, and the reconnect switch is renamed Retry.
+- Auto Calibration defaults to two targets at 1.2 m and 2.0 m with ±0.02 m tolerance, with failures shown in dialogs. Camera subcommands remember their content and format independently, while read commands require no content.
+- Data Source connection management merges duplicate camera TCP cards, centralizes SSH settings, and removes the duplicated camera connection tab and the management dialog's OK button.
+- Camera now includes Messages by default. Camera command and script output is routed to Messages, which uses a distinct component icon.
+- Component actions are consolidated into a "..." menu for shortcuts, detached windows and pure content. Pure content supports multiple cards, top-border dragging and floating restore/close controls, while container cards can shrink to two rows.
+
 ## v1.8.8
 
 - 数据接入增加自动识别和手动选择：按文件内容识别 RTCM3、RINEX、NMEA、RTKLIB POS、JSON、CSV 和 MCAP；识别结果显示在数据格式下方，通用扩展名和无扩展名也可识别。

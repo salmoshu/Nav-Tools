@@ -100,13 +100,7 @@ test('preserves camera inputs across tabs and displays background task states at
   await expect(page.getByRole('button', { name: '发送命令', exact: true })).toBeDisabled()
   await page.screenshot({ animations: 'disabled', path: 'test-results/camera-command-light.png' })
 
-  await page.getByRole('tab', { name: '连接', exact: true }).click()
-  await page.getByRole('textbox', { name: '相机地址', exact: true }).fill('192.168.3.20')
-  await expect(page.getByRole('textbox', { name: '服务器地址' })).toHaveAttribute('readonly', '')
-  await page.screenshot({
-    animations: 'disabled',
-    path: 'test-results/camera-connection-light.png',
-  })
+  await expect(page.getByRole('tab', { name: '连接', exact: true })).toHaveCount(0)
   await page.getByRole('tab', { name: '手动命令' }).click()
   await expect(content).toHaveValue('0.55,62.292,-21.5')
   await page.getByRole('button', { name: '说明', exact: true }).click()
@@ -118,7 +112,7 @@ test('preserves camera inputs across tabs and displays background task states at
   await page.getByRole('option', { name: '双目标', exact: true }).click()
   await expect(page.locator('.cal-target-group')).toHaveCount(2)
   await page.getByRole('tab', { name: '脚本注入' }).click()
-  await expect(page.locator('.script-connection')).toContainText('192.168.3.20')
+  await expect(page.locator('.script-connection')).toContainText('192.168.3.14')
   await page.getByRole('button', { name: '选择脚本' }).click()
   await expect(page.locator('.script-file-info strong')).toHaveText(
     'camera-diagnostics-with-a-long-file-name.sh',
@@ -132,9 +126,15 @@ test('preserves camera inputs across tabs and displays background task states at
       }),
     ),
   )
-  await page.getByRole('tab', { name: '连接', exact: true }).click()
+  await expect
+    .poll(() =>
+      page.evaluate(async () => {
+        const { useConsole } = await import('/src/composables/flow/useConsole.ts')
+        return useConsole(true).totalCount.value
+      }),
+    )
+    .toBeGreaterThan(0)
   await expect(page.getByRole('tab', { name: '脚本注入' }).locator('.activity-dot')).toBeVisible()
-  await expect(page.getByRole('textbox', { name: '相机地址', exact: true })).toBeDisabled()
 
   await page.evaluate(
     (snapshot) =>
@@ -148,7 +148,7 @@ test('preserves camera inputs across tabs and displays background task states at
 
   for (const width of [380, 1000]) {
     await page.setViewportSize({ width, height: 1000 })
-    for (const name of ['连接', '手动命令', '自动标定', '脚本注入']) {
+    for (const name of ['手动命令', '自动标定', '脚本注入']) {
       await page.getByRole('tab', { name, exact: true }).click()
       const pane = page.getByRole('tabpanel', { name, exact: true })
       await expect(pane).toBeVisible()
@@ -191,7 +191,7 @@ test('keeps the default English interface usable in a narrow panel', async ({ pa
   await page.goto(
     `/#card/${encodeURIComponent(JSON.stringify({ componentName: 'CameraParameters', title: 'Camera Parameters' }))}`,
   )
-  for (const name of ['Connection', 'Commands', 'Auto Calibration', 'Script Injection']) {
+  for (const name of ['Commands', 'Auto Calibration', 'Script Injection']) {
     await page.getByRole('tab', { name, exact: true }).click()
     const pane = page.getByRole('tabpanel', { name, exact: true })
     expect(
@@ -241,4 +241,187 @@ test('automatically runs a matching host and lidar package pair without a deploy
   await expect(page.locator('.script-file-info strong')).toContainText('e-wagon-0.5.3')
   await expect(page.locator('.script-file-info strong')).toContainText('e-wagon-lidar-1.3.2')
   await expect(page.locator('.script-card .cal-phase')).toHaveText('执行成功')
+})
+
+test('acquires and releases its own observation lease when another observer is active', async ({
+  page,
+}) => {
+  await page.addInitScript(
+    (snapshot) => {
+      localStorage.setItem('nav-tools:locale', 'zh-CN')
+      localStorage.setItem(
+        'nav-tools:data-source-settings',
+        JSON.stringify({
+          version: 1,
+          activeSource: 'network',
+          network: {
+            protocol: 'tcp',
+            host: '127.0.0.1',
+            port: 8080,
+            loop: false,
+            parser: 'raw',
+            format: 'auto',
+            regexPattern: '',
+          },
+        }),
+      )
+      Reflect.set(window, '__observeCalls', [])
+      Reflect.set(window, '__closeCalls', [])
+      Object.defineProperty(window, 'ipcRenderer', {
+        value: { on() {}, off() {}, send() {}, invoke: async () => undefined },
+      })
+      Object.defineProperty(window, 'electronAPI', {
+        value: {
+          getAppVersion: async () => '1.8.8',
+          getWindowState: async () => ({ maximized: false, alwaysOnTop: false }),
+          setUpdaterPrefs() {},
+          cameraCalibrationAccess: async () => ({
+            host: '192.168.3.14',
+            port: 22,
+            username: 'root',
+            hasPassword: true,
+          }),
+          cameraCalibrationSnapshot: async () => snapshot,
+          cameraCalibrationReadParams: async () => ({
+            height: 0.55,
+            fov: 1.087,
+            thetaOffset: -21.5,
+          }),
+          cameraCalibrationObserve: async () => {
+            ;(Reflect.get(window, '__observeCalls') as unknown[]).push(true)
+            return snapshot
+          },
+          cameraCalibrationClose: async () => {
+            ;(Reflect.get(window, '__closeCalls') as unknown[]).push(true)
+            return snapshot
+          },
+        },
+      })
+    },
+    { ...createCalibrationSnapshot(), observing: true, phase: 'observing' },
+  )
+  await page.goto(
+    `/#card/${encodeURIComponent(JSON.stringify({ componentName: 'CameraParameters', title: '相机参数' }))}`,
+  )
+  await page.evaluate(async () => {
+    const { useDevice } = await import('/src/hooks/useDevice.ts')
+    const { globalDevice } = useDevice()
+    globalDevice.value = {
+      type: 'network',
+      protocol: 'tcp',
+      host: '127.0.0.1',
+      port: 8080,
+      connected: true,
+    }
+  })
+
+  await expect(page.getByRole('tab', { name: '手动命令' })).toHaveAttribute('aria-selected', 'true')
+  expect(await page.evaluate(() => Reflect.get(window, '__closeCalls').length)).toBe(0)
+  await page.getByRole('tab', { name: '自动标定', exact: true }).click()
+  await expect.poll(() => page.evaluate(() => Reflect.get(window, '__observeCalls').length)).toBe(1)
+  await page.getByRole('tab', { name: '手动命令', exact: true }).click()
+  await expect.poll(() => page.evaluate(() => Reflect.get(window, '__closeCalls').length)).toBe(1)
+})
+
+test('shows calibration start failures in an error dialog', async ({ page }) => {
+  await page.addInitScript(
+    (snapshot) => {
+      localStorage.setItem('nav-tools:locale', 'zh-CN')
+      localStorage.setItem(
+        'nav-tools:data-source-settings',
+        JSON.stringify({
+          version: 1,
+          activeSource: 'network',
+          network: {
+            protocol: 'tcp',
+            host: '127.0.0.1',
+            port: 8080,
+            loop: false,
+            parser: 'raw',
+            format: 'auto',
+            regexPattern: '',
+          },
+        }),
+      )
+      Object.defineProperty(window, 'ipcRenderer', {
+        value: { on() {}, off() {}, send() {}, invoke: async () => undefined },
+      })
+      Object.defineProperty(window, 'electronAPI', {
+        value: {
+          getAppVersion: async () => '1.8.8',
+          getWindowState: async () => ({ maximized: false, alwaysOnTop: false }),
+          setUpdaterPrefs() {},
+          cameraCalibrationAccess: async () => ({
+            host: '192.168.3.14',
+            port: 22,
+            username: 'root',
+            hasPassword: true,
+          }),
+          cameraCalibrationSnapshot: async () => snapshot,
+          cameraCalibrationReadParams: async () => ({
+            height: 0.55,
+            fov: 1.087,
+            thetaOffset: -21.5,
+          }),
+          cameraCalibrationObserve: async () => snapshot,
+          cameraCalibrationStart: async () => {
+            throw new Error('模拟标定启动失败')
+          },
+        },
+      })
+    },
+    { ...createCalibrationSnapshot(), observing: true, phase: 'observing' },
+  )
+  await page.goto(
+    `/#card/${encodeURIComponent(JSON.stringify({ componentName: 'CameraParameters', title: '相机参数' }))}`,
+  )
+  await page.evaluate(async () => {
+    const { useDevice } = await import('/src/hooks/useDevice.ts')
+    const { globalDevice } = useDevice()
+    globalDevice.value = {
+      type: 'network',
+      protocol: 'tcp',
+      host: '127.0.0.1',
+      port: 8080,
+      connected: true,
+    }
+  })
+  await page.getByRole('tab', { name: '自动标定', exact: true }).click()
+  await page.getByRole('button', { name: '开始标定', exact: true }).click()
+  const dialog = page.getByRole('dialog', { name: '标定失败', exact: true })
+  await expect(dialog).toBeVisible()
+  await expect(dialog).toContainText('模拟标定启动失败')
+})
+
+test('remembers independent content for each camera sub-command', async ({ page }) => {
+  await mockScriptSelection(page, [])
+  await page.goto(
+    `/#card/${encodeURIComponent(JSON.stringify({ componentName: 'CameraParameters', title: '相机参数' }))}`,
+  )
+  const selector = page.getByRole('combobox', { name: '子命令类型', exact: true })
+  const content = page.getByRole('textbox', { name: '子命令内容', exact: true })
+
+  async function selectCommand(name: string) {
+    await selector.press('Enter')
+    await page.getByRole('option', { name, exact: true }).click()
+  }
+
+  await content.fill('0.55,62.292,-20')
+  await selectCommand('set_range')
+  await expect(content).toHaveValue('1.000,1.500')
+  await content.fill('2.000,3.000')
+  await selectCommand('set_params')
+  await expect(content).toHaveValue('0.55,62.292,-20')
+  await selectCommand('read_params')
+  await expect(content).toHaveValue('')
+  await selectCommand('set_range')
+  await expect(content).toHaveValue('2.000,3.000')
+
+  await page.reload()
+  await selectCommand('set_range')
+  await expect(content).toHaveValue('2.000,3.000')
+  await selectCommand('set_params')
+  await expect(content).toHaveValue('0.55,62.292,-20')
+  await selectCommand('read_params')
+  await expect(content).toHaveValue('')
 })

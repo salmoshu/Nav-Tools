@@ -193,391 +193,404 @@
           class="data-source-tabs"
           :before-leave="() => !fileInputLoading"
         >
-      <el-tab-pane :label="t('app.toolbar.fileTab')" name="file">
-        <template #label>
-          <span class="source-tab-label">
-            <el-icon><FolderOpened /></el-icon>
-            <span class="source-tab-copy">
-              <strong
-                ><span class="tab-name-full">{{ t('app.toolbar.fileTab') }}</span
-                ><span class="tab-name-compact">{{ t('app.toolbar.fileTabShort') }}</span></strong
-              >
-              <small>File</small>
-            </span>
-          </span>
-        </template>
-        <div class="source-panel-heading">
-          <strong>{{ t('app.toolbar.fileSource') }}</strong>
-          <span>{{ t('app.toolbar.fileSourceDesc') }}</span>
-        </div>
-        <div class="source-config-card">
-          <div class="input-group">
-            <span class="input-label">{{ t('app.toolbar.filePath') }}</span>
-            <el-input
-              v-model="filePath"
-              :placeholder="t('app.toolbar.filePathPlaceholder')"
-              :aria-label="t('app.toolbar.filePath')"
-              :disabled="fileInputLoading"
-              @keyup.enter="handleInputSubmit"
-            />
-            <el-button type="default" :disabled="fileInputLoading" @click="selectTargetFile">{{
-              t('app.toolbar.selectFile')
-            }}</el-button>
-          </div>
-          <div v-if="fileIsMcap" class="mcap-hint">
-            <strong>{{ t('app.toolbar.mcapSource') }}</strong>
-            <span v-if="selectedFileCount > 1">{{
-              t('app.toolbar.mcapSelectedParts', { count: selectedFileCount })
-            }}</span>
-            <span v-else-if="fileIsMcapPartSlice">{{
-              t('app.toolbar.mcapPartFamilyHint')
-            }}</span>
-          </div>
-          <template v-if="true">
-            <template v-if="!fileIsMcap">
-            <div class="input-group compact-input-group">
-              <span class="input-label">{{ t('app.toolbar.replaySpeed') }}</span>
-              <el-select
-                v-model="replaySpeedSelection"
-                :teleported="true"
-                popper-class="replay-speed-dropdown"
-              >
-                <el-option
-                  v-for="speed in replaySpeedSelectionOptions"
-                  :key="speed"
-                  :label="`×${speed}`"
-                  :value="speed"
-                />
-              </el-select>
+          <el-tab-pane :label="t('app.toolbar.fileTab')" name="file">
+            <template #label>
+              <span class="source-tab-label">
+                <el-icon><FolderOpened /></el-icon>
+                <span class="source-tab-copy">
+                  <strong
+                    ><span class="tab-name-full">{{ t('app.toolbar.fileTab') }}</span
+                    ><span class="tab-name-compact">{{
+                      t('app.toolbar.fileTabShort')
+                    }}</span></strong
+                  >
+                  <small>File</small>
+                </span>
+              </span>
+            </template>
+            <div class="source-panel-heading">
+              <strong>{{ t('app.toolbar.fileSource') }}</strong>
+              <span>{{ t('app.toolbar.fileSourceDesc') }}</span>
             </div>
-            <div v-if="fileTimeTag" class="time-tag-options">
-              <div class="input-group compact-input-group">
-                <span class="input-label">{{ t('app.toolbar.startOffset') }}</span>
-                <el-input-number
-                  v-model="fileStartOffset"
-                  :min="0"
-                  :step="1"
-                  :precision="0"
-                  controls-position="right"
+            <div class="source-config-card">
+              <div class="input-group">
+                <span class="input-label">{{ t('app.toolbar.filePath') }}</span>
+                <el-input
+                  v-model="filePath"
+                  :placeholder="t('app.toolbar.filePathPlaceholder')"
+                  :aria-label="t('app.toolbar.filePath')"
+                  :disabled="fileInputLoading"
+                  @keyup.enter="handleInputSubmit"
                 />
-                <span class="input-unit">{{ t('app.toolbar.second') }}</span>
+                <el-button type="default" :disabled="fileInputLoading" @click="selectTargetFile">{{
+                  t('app.toolbar.selectFile')
+                }}</el-button>
               </div>
-              <div class="input-group compact-input-group">
-                <span class="input-label">{{ t('app.toolbar.posFormat') }}</span>
-                <el-select v-model="filePositionBytes" :teleported="false">
-                  <el-option :label="t('app.toolbar.bytes', { v: 4 })" :value="4" />
-                  <el-option :label="t('app.toolbar.bytes', { v: 8 })" :value="8" />
+              <div v-if="fileIsMcap" class="mcap-hint">
+                <strong>{{ t('app.toolbar.mcapSource') }}</strong>
+                <span v-if="selectedFileCount > 1">{{
+                  t('app.toolbar.mcapSelectedParts', { count: selectedFileCount })
+                }}</span>
+                <span v-else-if="fileIsMcapPartSlice">{{
+                  t('app.toolbar.mcapPartFamilyHint')
+                }}</span>
+              </div>
+              <template v-if="true">
+                <template v-if="!fileIsMcap">
+                  <div class="input-group compact-input-group">
+                    <span class="input-label">{{ t('app.toolbar.replaySpeed') }}</span>
+                    <el-select
+                      v-model="replaySpeedSelection"
+                      :teleported="true"
+                      popper-class="replay-speed-dropdown"
+                    >
+                      <el-option
+                        v-for="speed in replaySpeedSelectionOptions"
+                        :key="speed"
+                        :label="`×${speed}`"
+                        :value="speed"
+                      />
+                    </el-select>
+                  </div>
+                  <div v-if="fileTimeTag" class="time-tag-options">
+                    <div class="input-group compact-input-group">
+                      <span class="input-label">{{ t('app.toolbar.startOffset') }}</span>
+                      <el-input-number
+                        v-model="fileStartOffset"
+                        :min="0"
+                        :step="1"
+                        :precision="0"
+                        controls-position="right"
+                      />
+                      <span class="input-unit">{{ t('app.toolbar.second') }}</span>
+                    </div>
+                    <div class="input-group compact-input-group">
+                      <span class="input-label">{{ t('app.toolbar.posFormat') }}</span>
+                      <el-select v-model="filePositionBytes" :teleported="false">
+                        <el-option :label="t('app.toolbar.bytes', { v: 4 })" :value="4" />
+                        <el-option :label="t('app.toolbar.bytes', { v: 8 })" :value="8" />
+                      </el-select>
+                    </div>
+                    <div class="input-group compact-input-group">
+                      <span class="input-label">{{ t('app.toolbar.sampleInterval') }}</span>
+                      <el-input-number
+                        v-model="fileSampleInterval"
+                        :min="1"
+                        :step="10"
+                        :precision="0"
+                        controls-position="right"
+                      />
+                      <span class="input-unit">{{ t('app.toolbar.millisecond') }}</span>
+                    </div>
+                  </div>
+                </template>
+                <div class="parser-card">
+                  <div class="parser-copy">
+                    <strong>{{ t('app.toolbar.dataSection') }}</strong>
+                    <span>{{ activeParserDescription }}</span>
+                  </div>
+                  <div class="input-group">
+                    <span class="input-label">{{ t('app.toolbar.parseMethod') }}</span>
+                    <el-cascader
+                      v-model="sourceFormat"
+                      :options="formatOptions"
+                      :props="parserCascaderProps"
+                      :show-all-levels="false"
+                      :aria-label="t('app.toolbar.parseMethod')"
+                      :class="['parser-select', { 'parser-select-flash': parserFlash }]"
+                      popper-class="parser-select-dropdown"
+                    />
+                  </div>
+                  <small v-if="sourceFormat === 'auto'" class="format-detected">{{
+                    formatDetectionLabel
+                  }}</small>
+                  <div v-if="sourceFormat === 'regex'" class="regex-parser-config">
+                    <div class="input-group">
+                      <span class="input-label">{{ t('app.toolbar.regexPattern') }}</span>
+                      <el-input
+                        v-model="sourceRegexPattern"
+                        type="textarea"
+                        :rows="3"
+                        resize="vertical"
+                        :placeholder="t('app.toolbar.regexPatternPlaceholder')"
+                        :aria-label="t('app.toolbar.regexPattern')"
+                      />
+                    </div>
+                    <small :class="{ invalid: regexPatternError }">
+                      {{ regexPatternError || t('app.toolbar.regexPatternHint') }}
+                    </small>
+                  </div>
+                </div>
+              </template>
+              <div v-if="recentInputFiles.length > 0" class="input-group compact-input-group">
+                <span class="input-label">{{ t('app.toolbar.recentFiles') }}</span>
+                <el-select
+                  :model-value="
+                    recentInputFiles.some((item) => item.path === filePath) ? filePath : undefined
+                  "
+                  :placeholder="t('app.toolbar.recentFilesPlaceholder')"
+                  :aria-label="t('app.toolbar.recentFiles')"
+                  :disabled="fileInputLoading"
+                  class="recent-files-select"
+                  popper-class="recent-files-dropdown"
+                  filterable
+                  :teleported="true"
+                  @change="selectFilePath"
+                >
+                  <el-option
+                    v-for="item in recentInputFiles"
+                    :key="item.path"
+                    :value="item.path"
+                    :label="`${item.name} — ${item.path}`"
+                    class="recent-file-option"
+                    :title="item.paths?.join('\n') ?? item.path"
+                  >
+                    <span class="recent-file-text">
+                      <span class="recent-file-name">
+                        {{ item.name
+                        }}<template v-if="(item.paths?.length ?? 0) > 1"
+                          >（{{
+                            t('lidar.playback.partCount', { count: item.paths!.length })
+                          }}）</template
+                        >
+                      </span>
+                      <span class="recent-file-path">{{ item.path }}</span>
+                    </span>
+                    <span class="recent-file-size">{{ formatMcapSize(item.sizeBytes) }}</span>
+                  </el-option>
+                </el-select>
+              </div>
+            </div>
+          </el-tab-pane>
+
+          <el-tab-pane :label="t('app.toolbar.serialTab')" name="serial">
+            <template #label>
+              <span class="source-tab-label">
+                <el-icon><Connection /></el-icon>
+                <span class="source-tab-copy">
+                  <strong
+                    ><span class="tab-name-full">{{ t('app.toolbar.serialTab') }}</span
+                    ><span class="tab-name-compact">{{
+                      t('app.toolbar.serialTabShort')
+                    }}</span></strong
+                  >
+                  <small>Serial</small>
+                </span>
+              </span>
+            </template>
+            <div class="source-panel-heading">
+              <strong>{{ t('app.toolbar.serialSource') }}</strong>
+              <span>{{ t('app.toolbar.serialSourceDesc') }}</span>
+            </div>
+            <div class="source-config-card">
+              <div class="input-group">
+                <span class="input-label">
+                  {{ t('app.toolbar.port') }}
+                  <el-button
+                    class="icon-only-refresh"
+                    :disabled="serialPortsRefreshing"
+                    @click="refreshSerialPorts"
+                  >
+                    <el-icon :class="{ 'is-refreshing': serialPortsRefreshing }"
+                      ><Refresh
+                    /></el-icon>
+                  </el-button>
+                </span>
+                <el-select
+                  v-model="serialPort"
+                  :placeholder="t('app.toolbar.portPlaceholder')"
+                  style="flex: 1"
+                  :teleported="false"
+                  @click="searchSerialPorts"
+                >
+                  <el-option v-for="port in serialPorts" :key="port" :label="port" :value="port" />
+                </el-select>
+              </div>
+              <div class="input-group">
+                <span class="input-label">{{ t('app.toolbar.baudRate') }}</span>
+                <el-select
+                  v-model="serialBaudRate"
+                  :placeholder="t('app.toolbar.baudRatePlaceholder')"
+                  filterable
+                  allow-create
+                  style="flex: 1"
+                  :teleported="false"
+                >
+                  <el-option v-for="rate in baudRates" :key="rate" :label="rate" :value="rate" />
+                </el-select>
+              </div>
+              <div v-if="serialAdvanced" class="input-group">
+                <span class="input-label">{{ t('app.toolbar.dataBits') }}</span>
+                <el-select
+                  v-model="serialDataBits"
+                  :placeholder="t('app.toolbar.dataBitsPlaceholder')"
+                  style="flex: 1"
+                  :teleported="false"
+                >
+                  <el-option v-for="bit in dataBits" :key="bit" :label="bit" :value="bit" />
+                </el-select>
+              </div>
+              <div v-if="serialAdvanced" class="input-group">
+                <span class="input-label">{{ t('app.toolbar.stopBits') }}</span>
+                <el-select
+                  v-model="serialStopBits"
+                  :placeholder="t('app.toolbar.stopBitsPlaceholder')"
+                  style="flex: 1"
+                  :teleported="false"
+                >
+                  <el-option v-for="bit in stopBits" :key="bit" :label="bit" :value="bit" />
+                </el-select>
+              </div>
+              <div v-if="serialAdvanced" class="input-group">
+                <span class="input-label">{{ t('app.toolbar.parity') }}</span>
+                <el-select
+                  v-model="serialParity"
+                  :placeholder="t('app.toolbar.parityPlaceholder')"
+                  style="flex: 1"
+                  :teleported="false"
+                >
+                  <el-option
+                    v-for="parity in parities"
+                    :key="parity.value"
+                    :label="parity.label"
+                    :value="parity.value"
+                  />
                 </el-select>
               </div>
               <div class="input-group compact-input-group">
-                <span class="input-label">{{ t('app.toolbar.sampleInterval') }}</span>
-                <el-input-number
-                  v-model="fileSampleInterval"
-                  :min="1"
-                  :step="10"
-                  :precision="0"
-                  controls-position="right"
-                />
-                <span class="input-unit">{{ t('app.toolbar.millisecond') }}</span>
+                <span class="input-label">{{ t('app.toolbar.advanced') }}</span>
+                <el-checkbox v-model="serialAdvanced">{{
+                  t('app.toolbar.showAdvanced')
+                }}</el-checkbox>
               </div>
-            </div>
-            </template>
-            <div class="parser-card">
-              <div class="parser-copy">
-                <strong>{{ t('app.toolbar.dataSection') }}</strong>
-                <span>{{ activeParserDescription }}</span>
-              </div>
-              <div class="input-group">
-                <span class="input-label">{{ t('app.toolbar.parseMethod') }}</span>
-                <el-cascader
-                  v-model="sourceFormat"
-                  :options="formatOptions"
-                  :props="parserCascaderProps"
-                  :show-all-levels="false"
-                  :aria-label="t('app.toolbar.parseMethod')"
-                  :class="['parser-select', { 'parser-select-flash': parserFlash }]"
-                  popper-class="parser-select-dropdown"
-                />
-              </div>
-              <small v-if="sourceFormat === 'auto'" class="format-detected">{{ formatDetectionLabel }}</small>
-              <div v-if="sourceFormat === 'regex'" class="regex-parser-config">
+              <div class="parser-card">
+                <div class="parser-copy">
+                  <strong>{{ t('app.toolbar.dataSection') }}</strong>
+                  <span>{{ activeParserDescription }}</span>
+                </div>
                 <div class="input-group">
-                  <span class="input-label">{{ t('app.toolbar.regexPattern') }}</span>
-                  <el-input
-                    v-model="sourceRegexPattern"
-                    type="textarea"
-                    :rows="3"
-                    resize="vertical"
-                    :placeholder="t('app.toolbar.regexPatternPlaceholder')"
-                    :aria-label="t('app.toolbar.regexPattern')"
+                  <span class="input-label">{{ t('app.toolbar.parseMethod') }}</span>
+                  <el-cascader
+                    v-model="sourceFormat"
+                    :options="formatOptions"
+                    :props="parserCascaderProps"
+                    :show-all-levels="false"
+                    :aria-label="t('app.toolbar.parseMethod')"
+                    :class="['parser-select', { 'parser-select-flash': parserFlash }]"
+                    popper-class="parser-select-dropdown"
                   />
                 </div>
-                <small :class="{ invalid: regexPatternError }">
-                  {{ regexPatternError || t('app.toolbar.regexPatternHint') }}
-                </small>
+                <small v-if="sourceFormat === 'auto'" class="format-detected">{{
+                  formatDetectionLabel
+                }}</small>
+                <div v-if="sourceFormat === 'regex'" class="regex-parser-config">
+                  <div class="input-group">
+                    <span class="input-label">{{ t('app.toolbar.regexPattern') }}</span>
+                    <el-input
+                      v-model="sourceRegexPattern"
+                      type="textarea"
+                      :rows="3"
+                      resize="vertical"
+                      :placeholder="t('app.toolbar.regexPatternPlaceholder')"
+                      :aria-label="t('app.toolbar.regexPattern')"
+                    />
+                  </div>
+                  <small :class="{ invalid: regexPatternError }">
+                    {{ regexPatternError || t('app.toolbar.regexPatternHint') }}
+                  </small>
+                </div>
               </div>
             </div>
-          </template>
-          <div
-            v-if="recentInputFiles.length > 0"
-            class="input-group compact-input-group"
-          >
-            <span class="input-label">{{ t('app.toolbar.recentFiles') }}</span>
-            <el-select
-              :model-value="recentInputFiles.some((item) => item.path === filePath) ? filePath : undefined"
-              :placeholder="t('app.toolbar.recentFilesPlaceholder')"
-              :aria-label="t('app.toolbar.recentFiles')"
-              :disabled="fileInputLoading"
-              class="recent-files-select"
-              popper-class="recent-files-dropdown"
-              filterable
-              :teleported="true"
-              @change="selectFilePath"
-            >
-              <el-option
-                v-for="item in recentInputFiles"
-                :key="item.path"
-                :value="item.path"
-                :label="`${item.name} — ${item.path}`"
-                class="recent-file-option"
-                :title="item.paths?.join('\n') ?? item.path"
-              >
-                <span class="recent-file-text">
-                  <span class="recent-file-name">
-                    {{ item.name
-                    }}<template v-if="(item.paths?.length ?? 0) > 1"
-                      >（{{
-                        t('lidar.playback.partCount', { count: item.paths!.length })
-                      }}）</template
-                    >
-                  </span>
-                  <span class="recent-file-path">{{ item.path }}</span>
+          </el-tab-pane>
+
+          <el-tab-pane :label="t('app.toolbar.networkTab')" name="network">
+            <template #label>
+              <span class="source-tab-label">
+                <el-icon><Monitor /></el-icon>
+                <span class="source-tab-copy">
+                  <strong
+                    ><span class="tab-name-full">{{ t('app.toolbar.networkTab') }}</span
+                    ><span class="tab-name-compact">{{
+                      t('app.toolbar.networkTabShort')
+                    }}</span></strong
+                  >
+                  <small>TCP / UDP</small>
                 </span>
-                <span class="recent-file-size">{{ formatMcapSize(item.sizeBytes) }}</span>
-              </el-option>
-            </el-select>
-          </div>
-        </div>
-      </el-tab-pane>
-
-      <el-tab-pane :label="t('app.toolbar.serialTab')" name="serial">
-        <template #label>
-          <span class="source-tab-label">
-            <el-icon><Connection /></el-icon>
-            <span class="source-tab-copy">
-              <strong
-                ><span class="tab-name-full">{{ t('app.toolbar.serialTab') }}</span
-                ><span class="tab-name-compact">{{ t('app.toolbar.serialTabShort') }}</span></strong
-              >
-              <small>Serial</small>
-            </span>
-          </span>
-        </template>
-        <div class="source-panel-heading">
-          <strong>{{ t('app.toolbar.serialSource') }}</strong>
-          <span>{{ t('app.toolbar.serialSourceDesc') }}</span>
-        </div>
-        <div class="source-config-card">
-          <div class="input-group">
-            <span class="input-label">
-              {{ t('app.toolbar.port') }}
-              <el-button
-                class="icon-only-refresh"
-                :disabled="serialPortsRefreshing"
-                @click="refreshSerialPorts"
-              >
-                <el-icon :class="{ 'is-refreshing': serialPortsRefreshing }"><Refresh /></el-icon>
-              </el-button>
-            </span>
-            <el-select
-              v-model="serialPort"
-              :placeholder="t('app.toolbar.portPlaceholder')"
-              style="flex: 1"
-              :teleported="false"
-              @click="searchSerialPorts"
-            >
-              <el-option v-for="port in serialPorts" :key="port" :label="port" :value="port" />
-            </el-select>
-          </div>
-          <div class="input-group">
-            <span class="input-label">{{ t('app.toolbar.baudRate') }}</span>
-            <el-select
-              v-model="serialBaudRate"
-              :placeholder="t('app.toolbar.baudRatePlaceholder')"
-              filterable
-              allow-create
-              style="flex: 1"
-              :teleported="false"
-            >
-              <el-option v-for="rate in baudRates" :key="rate" :label="rate" :value="rate" />
-            </el-select>
-          </div>
-          <div v-if="serialAdvanced" class="input-group">
-            <span class="input-label">{{ t('app.toolbar.dataBits') }}</span>
-            <el-select
-              v-model="serialDataBits"
-              :placeholder="t('app.toolbar.dataBitsPlaceholder')"
-              style="flex: 1"
-              :teleported="false"
-            >
-              <el-option v-for="bit in dataBits" :key="bit" :label="bit" :value="bit" />
-            </el-select>
-          </div>
-          <div v-if="serialAdvanced" class="input-group">
-            <span class="input-label">{{ t('app.toolbar.stopBits') }}</span>
-            <el-select
-              v-model="serialStopBits"
-              :placeholder="t('app.toolbar.stopBitsPlaceholder')"
-              style="flex: 1"
-              :teleported="false"
-            >
-              <el-option v-for="bit in stopBits" :key="bit" :label="bit" :value="bit" />
-            </el-select>
-          </div>
-          <div v-if="serialAdvanced" class="input-group">
-            <span class="input-label">{{ t('app.toolbar.parity') }}</span>
-            <el-select
-              v-model="serialParity"
-              :placeholder="t('app.toolbar.parityPlaceholder')"
-              style="flex: 1"
-              :teleported="false"
-            >
-              <el-option
-                v-for="parity in parities"
-                :key="parity.value"
-                :label="parity.label"
-                :value="parity.value"
-              />
-            </el-select>
-          </div>
-          <div class="input-group compact-input-group">
-            <span class="input-label">{{ t('app.toolbar.advanced') }}</span>
-            <el-checkbox v-model="serialAdvanced">{{ t('app.toolbar.showAdvanced') }}</el-checkbox>
-          </div>
-          <div class="parser-card">
-            <div class="parser-copy">
-              <strong>{{ t('app.toolbar.dataSection') }}</strong>
-              <span>{{ activeParserDescription }}</span>
+              </span>
+            </template>
+            <div class="source-panel-heading">
+              <strong>{{ t('app.toolbar.networkSource') }}</strong>
+              <span>{{ t('app.toolbar.networkSourceDesc') }}</span>
             </div>
-            <div class="input-group">
-              <span class="input-label">{{ t('app.toolbar.parseMethod') }}</span>
-              <el-cascader
-                v-model="sourceFormat"
-                :options="formatOptions"
-                :props="parserCascaderProps"
-                :show-all-levels="false"
-                :aria-label="t('app.toolbar.parseMethod')"
-                :class="['parser-select', { 'parser-select-flash': parserFlash }]"
-                popper-class="parser-select-dropdown"
-              />
-            </div>
-            <small v-if="sourceFormat === 'auto'" class="format-detected">{{ formatDetectionLabel }}</small>
-            <div v-if="sourceFormat === 'regex'" class="regex-parser-config">
+            <div class="source-config-card network-config-card">
               <div class="input-group">
-                <span class="input-label">{{ t('app.toolbar.regexPattern') }}</span>
+                <span class="input-label">{{ t('app.toolbar.networkProtocol') }}</span>
+                <el-select v-model="networkProtocol" :teleported="false">
+                  <el-option label="TCP" value="tcp" />
+                  <el-option label="UDP" value="udp" />
+                </el-select>
+              </div>
+              <div class="input-group">
+                <span class="input-label">{{
+                  t(networkProtocol === 'tcp' ? 'app.toolbar.remoteAddr' : 'app.toolbar.listenAddr')
+                }}</span>
                 <el-input
-                  v-model="sourceRegexPattern"
-                  type="textarea"
-                  :rows="3"
-                  resize="vertical"
-                  :placeholder="t('app.toolbar.regexPatternPlaceholder')"
-                  :aria-label="t('app.toolbar.regexPattern')"
+                  v-model="networkIp"
+                  :placeholder="networkProtocol === 'tcp' ? '127.0.0.1' : '0.0.0.0'"
                 />
               </div>
-              <small :class="{ invalid: regexPatternError }">
-                {{ regexPatternError || t('app.toolbar.regexPatternHint') }}
-              </small>
-            </div>
-          </div>
-        </div>
-      </el-tab-pane>
-
-      <el-tab-pane :label="t('app.toolbar.networkTab')" name="network">
-        <template #label>
-          <span class="source-tab-label">
-            <el-icon><Monitor /></el-icon>
-            <span class="source-tab-copy">
-              <strong
-                ><span class="tab-name-full">{{ t('app.toolbar.networkTab') }}</span
-                ><span class="tab-name-compact">{{
-                  t('app.toolbar.networkTabShort')
-                }}</span></strong
-              >
-              <small>TCP / UDP</small>
-            </span>
-          </span>
-        </template>
-        <div class="source-panel-heading">
-          <strong>{{ t('app.toolbar.networkSource') }}</strong>
-          <span>{{ t('app.toolbar.networkSourceDesc') }}</span>
-        </div>
-        <div class="source-config-card network-config-card">
-          <div class="input-group">
-            <span class="input-label">{{ t('app.toolbar.networkProtocol') }}</span>
-            <el-select v-model="networkProtocol" :teleported="false">
-              <el-option label="TCP" value="tcp" />
-              <el-option label="UDP" value="udp" />
-            </el-select>
-          </div>
-          <div class="input-group">
-            <span class="input-label">{{
-              t(networkProtocol === 'tcp' ? 'app.toolbar.remoteAddr' : 'app.toolbar.listenAddr')
-            }}</span>
-            <el-input
-              v-model="networkIp"
-              :placeholder="networkProtocol === 'tcp' ? '127.0.0.1' : '0.0.0.0'"
-            />
-          </div>
-          <div class="input-group">
-            <span class="input-label">{{ t('app.toolbar.networkPort') }}</span>
-            <el-input
-              v-model="networkPortText"
-              inputmode="numeric"
-              maxlength="5"
-              :placeholder="t('app.toolbar.networkPortPlaceholder')"
-            />
-          </div>
-          <div class="input-group">
-            <span class="input-label">{{ t('app.toolbar.networkLoop') }}</span>
-            <el-switch v-model="networkLoop" :aria-label="t('app.toolbar.networkLoop')" />
-          </div>
-          <div class="parser-card">
-            <div class="parser-copy">
-              <strong>{{ t('app.toolbar.dataSection') }}</strong>
-              <span>{{ activeParserDescription }}</span>
-            </div>
-            <div class="input-group">
-              <span class="input-label">{{ t('app.toolbar.parseMethod') }}</span>
-              <el-cascader
-                v-model="sourceFormat"
-                :options="formatOptions"
-                :props="parserCascaderProps"
-                :show-all-levels="false"
-                :aria-label="t('app.toolbar.parseMethod')"
-                :class="['parser-select', { 'parser-select-flash': parserFlash }]"
-                popper-class="parser-select-dropdown"
-              />
-            </div>
-            <small v-if="sourceFormat === 'auto'" class="format-detected">{{ formatDetectionLabel }}</small>
-            <div v-if="sourceFormat === 'regex'" class="regex-parser-config">
               <div class="input-group">
-                <span class="input-label">{{ t('app.toolbar.regexPattern') }}</span>
+                <span class="input-label">{{ t('app.toolbar.networkPort') }}</span>
                 <el-input
-                  v-model="sourceRegexPattern"
-                  type="textarea"
-                  :rows="3"
-                  resize="vertical"
-                  :placeholder="t('app.toolbar.regexPatternPlaceholder')"
-                  :aria-label="t('app.toolbar.regexPattern')"
+                  v-model="networkPortText"
+                  inputmode="numeric"
+                  maxlength="5"
+                  :placeholder="t('app.toolbar.networkPortPlaceholder')"
                 />
               </div>
-              <small :class="{ invalid: regexPatternError }">
-                {{ regexPatternError || t('app.toolbar.regexPatternHint') }}
-              </small>
+              <div class="input-group">
+                <span class="input-label">{{ t('app.toolbar.networkLoop') }}</span>
+                <el-switch v-model="networkLoop" :aria-label="t('app.toolbar.networkLoop')" />
+              </div>
+              <div class="parser-card">
+                <div class="parser-copy">
+                  <strong>{{ t('app.toolbar.dataSection') }}</strong>
+                  <span>{{ activeParserDescription }}</span>
+                </div>
+                <div class="input-group">
+                  <span class="input-label">{{ t('app.toolbar.parseMethod') }}</span>
+                  <el-cascader
+                    v-model="sourceFormat"
+                    :options="formatOptions"
+                    :props="parserCascaderProps"
+                    :show-all-levels="false"
+                    :aria-label="t('app.toolbar.parseMethod')"
+                    :class="['parser-select', { 'parser-select-flash': parserFlash }]"
+                    popper-class="parser-select-dropdown"
+                  />
+                </div>
+                <small v-if="sourceFormat === 'auto'" class="format-detected">{{
+                  formatDetectionLabel
+                }}</small>
+                <div v-if="sourceFormat === 'regex'" class="regex-parser-config">
+                  <div class="input-group">
+                    <span class="input-label">{{ t('app.toolbar.regexPattern') }}</span>
+                    <el-input
+                      v-model="sourceRegexPattern"
+                      type="textarea"
+                      :rows="3"
+                      resize="vertical"
+                      :placeholder="t('app.toolbar.regexPatternPlaceholder')"
+                      :aria-label="t('app.toolbar.regexPattern')"
+                    />
+                  </div>
+                  <small :class="{ invalid: regexPatternError }">
+                    {{ regexPatternError || t('app.toolbar.regexPatternHint') }}
+                  </small>
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
-      </el-tab-pane>
+          </el-tab-pane>
         </el-tabs>
       </el-tab-pane>
       <el-tab-pane :label="t('app.injection.tab')" name="injection">
@@ -603,6 +616,14 @@
             <div class="app-connection-foot">
               <span v-if="item.note" class="app-connection-note">{{ item.note }}</span>
               <button
+                v-if="item.configAction"
+                type="button"
+                class="app-connection-action"
+                @click="item.configAction()"
+              >
+                {{ item.configActionLabel }}
+              </button>
+              <button
                 v-if="item.action"
                 type="button"
                 class="app-connection-action"
@@ -619,13 +640,76 @@
     <template #footer>
       <el-button @click="showInputDialog = false">{{ t('app.cancel') }}</el-button>
       <el-button
+        v-if="inputMainTab !== 'connections'"
         type="primary"
         :loading="fileInputLoading"
         :disabled="inputMainTab === 'injection' && !injectionPanelRef?.desktop"
         @click="submitInputDialog"
-      >{{
-        inputSubmitLabel
-      }}</el-button>
+        >{{ inputSubmitLabel }}</el-button
+      >
+    </template>
+  </el-dialog>
+  <el-dialog
+    v-if="hasCameraSshConfig"
+    v-model="cameraSshDialogVisible"
+    :title="t('common.camera.sshTitle')"
+    class="app-dialog camera-ssh-dialog"
+    width="min(520px, calc(100vw - 32px))"
+    :close-on-click-modal="true"
+    :close-on-press-escape="true"
+    :append-to-body="true"
+    :z-index="9000"
+    align-center
+  >
+    <div class="camera-ssh-config">
+      <p class="camera-ssh-config-hint">{{ t('app.toolbar.appConnSshConfigHint') }}</p>
+      <div class="camera-ssh-config-grid">
+        <label>
+          <span>{{ t('common.camera.calibration.sshHost') }}</span>
+          <el-input
+            v-model="cameraSshAccess.host"
+            :aria-label="t('common.camera.calibration.sshHost')"
+          />
+        </label>
+        <label>
+          <span>{{ t('common.camera.calibration.sshPort') }}</span>
+          <el-input-number
+            v-model="cameraSshAccess.port"
+            :min="1"
+            :max="65535"
+            :precision="0"
+            controls-position="right"
+            :aria-label="t('common.camera.calibration.sshPort')"
+          />
+        </label>
+        <label>
+          <span>{{ t('common.camera.calibration.sshUsername') }}</span>
+          <el-input
+            v-model="cameraSshAccess.username"
+            :aria-label="t('common.camera.calibration.sshUsername')"
+          />
+        </label>
+        <label>
+          <span>{{ t('common.camera.calibration.sshPassword') }}</span>
+          <el-input
+            v-model="cameraSshAccess.password"
+            type="password"
+            show-password
+            :aria-label="t('common.camera.calibration.sshPassword')"
+            :placeholder="
+              cameraSshAccess.hasPassword
+                ? t('common.camera.calibration.sshPasswordSaved')
+                : t('common.camera.calibration.sshPassword')
+            "
+          />
+        </label>
+      </div>
+    </div>
+    <template #footer>
+      <el-button @click="cameraSshDialogVisible = false">{{ t('app.cancel') }}</el-button>
+      <el-button type="primary" @click="connectCameraSsh">
+        {{ t('app.toolbar.appConnConnect') }}
+      </el-button>
     </template>
   </el-dialog>
 </template>
@@ -660,10 +744,7 @@ import {
 import { Connection, Download, Film, FolderOpened, Monitor, Refresh } from '@element-plus/icons-vue'
 import { useApplicationSelector } from '@/composables/useApplicationSelector'
 import { getPanelIconComponent } from '@/settings/panelIcons'
-import {
-  textDataParserOptions,
-  dataFormatOptions,
-} from '@/composables/useDataSourceManager'
+import { textDataParserOptions, dataFormatOptions } from '@/composables/useDataSourceManager'
 import { FORMAT_LABELS } from '@/core/data/DataFormat'
 import { useFileTimeline } from '@/composables/useFileTimeline'
 import { useGnssSolverSession } from '@/composables/useGnssSolverSession'
@@ -687,19 +768,26 @@ const position = toolbarPosition
 const { currentApplication, currentApplicationId, currentWindows } = useApplicationSelector()
 const deviceTimeline = useFileTimeline()
 const solverSession = useGnssSolverSession()
-const isSolverWorkspace = computed(() => currentApplication.value?.id === 'gnsslib' || (currentApplication.value?.windowIds.includes('gnsslib-solver') ?? false))
-const workspaceTimeline = computed(() => isSolverWorkspace.value ? solverSession.display.timeline : deviceTimeline)
+const isSolverWorkspace = computed(
+  () =>
+    currentApplication.value?.id === 'gnsslib' ||
+    (currentApplication.value?.windowIds.includes('gnsslib-solver') ?? false),
+)
+const workspaceTimeline = computed(() =>
+  isSolverWorkspace.value ? solverSession.display.timeline : deviceTimeline,
+)
 // 时间轴控件可见性：GNSS 时间轴之外，文本样本时钟回放（flow/motor/plot/raw-messages）也用同一条时间轴
 const TIMELINE_FUNC_MODES = new Set(['gnss', 'flow', 'motor'])
 const TIMELINE_WINDOW_IDS = new Set(['plot', 'raw-messages'])
 const fileTimelineActive = computed(
   () =>
     workspaceTimeline.value.active.value &&
-    (isSolverWorkspace.value || currentWindows.value.some(
-      (windowDefinition) =>
-        TIMELINE_FUNC_MODES.has(windowDefinition.funcMode) ||
-        TIMELINE_WINDOW_IDS.has(windowDefinition.id),
-    )),
+    (isSolverWorkspace.value ||
+      currentWindows.value.some(
+        (windowDefinition) =>
+          TIMELINE_FUNC_MODES.has(windowDefinition.funcMode) ||
+          TIMELINE_WINDOW_IDS.has(windowDefinition.id),
+      )),
 )
 
 // 文件输入中的 MCAP 回放与最近文件（覆盖所有支持的输入类型）。
@@ -847,12 +935,24 @@ function applyWorkspaceTimelineSpeed(value: number): void {
 }
 
 const formatOptions = computed(() => dataFormatOptions(activeTab.value))
-const formatDetectionLabel = computed(() => sourceDetectedFormat.value
-  ? t(sourceDetectedFormat.value.disabled ? 'data.formatDisabled' : sourceDetectedFormat.value.candidate ? 'data.formatCandidate' : 'data.formatDetected', { format: FORMAT_LABELS[sourceDetectedFormat.value.format] })
-  : t(sourceFormatAttempted.value ? 'data.formatUnknown' : 'data.formatPending'))
-const activeParserDescription = computed(() => sourceFormat.value === 'auto'
-  ? t('data.formatAutoDesc')
-  : textDataParserOptions.find((option) => option.value === sourceFormat.value)?.description ?? FORMAT_LABELS[sourceFormat.value])
+const formatDetectionLabel = computed(() =>
+  sourceDetectedFormat.value
+    ? t(
+        sourceDetectedFormat.value.disabled
+          ? 'data.formatDisabled'
+          : sourceDetectedFormat.value.candidate
+            ? 'data.formatCandidate'
+            : 'data.formatDetected',
+        { format: FORMAT_LABELS[sourceDetectedFormat.value.format] },
+      )
+    : t(sourceFormatAttempted.value ? 'data.formatUnknown' : 'data.formatPending'),
+)
+const activeParserDescription = computed(() =>
+  sourceFormat.value === 'auto'
+    ? t('data.formatAutoDesc')
+    : (textDataParserOptions.find((option) => option.value === sourceFormat.value)?.description ??
+      FORMAT_LABELS[sourceFormat.value]),
+)
 const regexPatternError = computed(() => {
   if (sourceFormat.value !== 'regex') return ''
   try {
@@ -862,9 +962,15 @@ const regexPatternError = computed(() => {
     return error instanceof Error ? error.message : String(error)
   }
 })
-const inputSubmitLabel = computed(() => inputMainTab.value === 'injection'
-  ? t(injectionPanelRef.value?.active || injectionPanelRef.value?.starting ? 'app.injection.stop' : 'app.injection.start')
-  : t('app.confirm'))
+const inputSubmitLabel = computed(() =>
+  inputMainTab.value === 'injection'
+    ? t(
+        injectionPanelRef.value?.active || injectionPanelRef.value?.starting
+          ? 'app.injection.stop'
+          : 'app.injection.start',
+      )
+    : t('app.confirm'),
+)
 
 watch(networkProtocol, (protocol) => {
   if (protocol === 'udp' && networkIp.value === '127.0.0.1') networkIp.value = '0.0.0.0'
@@ -894,15 +1000,30 @@ const submitInputDialog = () => {
     const panel = injectionPanelRef.value
     if (panel?.active || panel?.starting) void panel.stop()
     else void panel?.start()
-  }
-  else void handleInputSubmit()
+  } else void handleInputSubmit()
 }
-const { items: appConnectionItems, refresh: refreshAppConnections } = useAppConnections({
+const {
+  items: appConnectionItems,
+  cameraAccess: cameraSshAccess,
+  cameraSshConfigVisible: cameraSshDialogVisible,
+  connect: connectCameraSshObservation,
+  refresh: refreshAppConnections,
+} = useAppConnections({
   gotoTab: (tab) => {
     inputMainTab.value = 'config'
     activeTab.value = tab
   },
 })
+const hasCameraSshConfig = computed(() =>
+  appConnectionItems.value.some((item) => item.id === 'camera-ssh-measure'),
+)
+
+async function connectCameraSsh() {
+  const connected = await connectCameraSshObservation(cameraSshAccess.value.host)
+  if (connected) {
+    cameraSshDialogVisible.value = false
+  }
+}
 
 const handleDeviceConnected = () => {
   if (fileInputActive.value) return
@@ -926,7 +1047,7 @@ const handleDeviceConnected = () => {
 
 watch(showInputDialog, (open) => {
   if (open) {
-    inputMainTab.value = 'config'
+    if (inputMainTab.value !== 'connections') inputMainTab.value = 'config'
     void refreshAppConnections()
   }
 })
@@ -1301,9 +1422,19 @@ function handleInputDialogEscape(event: KeyboardEvent) {
   showInputDialog.value = false
 }
 
+function handleInputEvent(request?: unknown) {
+  const openConnections =
+    typeof request === 'object' &&
+    request !== null &&
+    'tab' in request &&
+    (request as { tab?: unknown }).tab === 'connections'
+  inputMainTab.value = openConnections ? 'connections' : 'config'
+  inputDialog(request)
+}
+
 onMounted(() => {
   searchSerialPorts(true)
-  emitter.on('input-event', inputDialog)
+  emitter.on('input-event', handleInputEvent)
   emitter.on('highlight-parser-format', flashParserConfig)
   document.addEventListener('pointerdown', handleDataInputPointer, true)
   document.addEventListener('mousedown', handleDataInputPointer, true)
@@ -1728,6 +1859,47 @@ onUnmounted(() => {
   gap: 10px;
 }
 
+.camera-ssh-config {
+  margin-top: 14px;
+  padding: 12px;
+  border: 1px solid var(--app-border);
+  border-radius: 10px;
+  background: var(--app-surface-muted);
+}
+
+.camera-ssh-config-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+  color: var(--app-text);
+  font-size: 12px;
+}
+
+.camera-ssh-config-heading span {
+  color: var(--app-text-muted);
+  font-size: 11px;
+}
+
+.camera-ssh-config-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 12px;
+}
+
+.camera-ssh-config-grid label {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  color: var(--app-text-secondary);
+  font-size: 11px;
+}
+
+.camera-ssh-config-grid :deep(.el-input-number) {
+  width: 100%;
+}
+
 .app-connection-card {
   display: flex;
   flex-direction: column;
@@ -1849,8 +2021,15 @@ onUnmounted(() => {
 }
 
 @media (max-width: 660px) {
-  .app-connections-grid {
+  .app-connections-grid,
+  .camera-ssh-config-grid {
     grid-template-columns: 1fr;
+  }
+
+  .camera-ssh-config-heading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 4px;
   }
 }
 
@@ -1957,7 +2136,11 @@ onUnmounted(() => {
   font-size: 12px;
   line-height: 1.45;
 }
-.format-detected { color: var(--app-text-secondary); font-size: 12px; margin-left: 106px; }
+.format-detected {
+  color: var(--app-text-secondary);
+  font-size: 12px;
+  margin-left: 106px;
+}
 
 .source-tab-label {
   display: flex;

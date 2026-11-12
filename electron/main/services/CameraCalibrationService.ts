@@ -1,11 +1,16 @@
 import { CameraCalibration } from '../../../src/core/camera/CameraCalibration'
 import { InssegParser } from '../../../src/core/camera/InssegParser'
 import {
-  createCalibrationSnapshot, isCalibrationRunning,
-  type CameraCalibrationConfig, type CameraCalibrationRecovery,
+  createCalibrationSnapshot,
+  isCalibrationRunning,
+  type CameraCalibrationConfig,
+  type CameraCalibrationRecovery,
   type CameraCalibrationSnapshot,
 } from '../../../src/core/camera/CameraCalibrationTypes'
-import type { CameraMeasurementAccess, CameraMeasurementTeardown } from './CameraSshMeasurementChannel'
+import type {
+  CameraMeasurementAccess,
+  CameraMeasurementTeardown,
+} from './CameraSshMeasurementChannel'
 
 type Endpoint = { host: string; port: number }
 
@@ -26,6 +31,8 @@ export class CameraCalibrationService {
   private readonly parser = new InssegParser()
   private engine: CameraCalibration | undefined
   private owner: number | undefined
+  private observationLeases = 0
+  private observationStart: Promise<CameraCalibrationSnapshot> | undefined
   private lastFrameAt = -Infinity
   private rawBuffer = ''
   private writing = false
@@ -42,21 +49,56 @@ export class CameraCalibrationService {
   }
 
   public snapshot(): CameraCalibrationSnapshot {
-    return structuredClone({ ...this.state, ...this.engine?.snapshot(), busy: this.writing || this.manualWrites > 0 })
+    return structuredClone({
+      ...this.state,
+      ...this.engine?.snapshot(),
+      busy: this.writing || this.manualWrites > 0,
+    })
   }
 
   public async manual<T>(action: () => Promise<T>): Promise<T> {
-    if (this.writing || isCalibrationRunning(this.snapshot().phase)) throw new Error('自动标定占用控制通道，请先停止标定')
+    if (this.writing || isCalibrationRunning(this.snapshot().phase))
+      throw new Error('自动标定占用控制通道，请先停止标定')
     this.manualWrites++
     this.emit()
-    try { return await action() } finally { this.manualWrites--; this.emit() }
+    try {
+      return await action()
+    } finally {
+      this.manualWrites--
+      this.emit()
+    }
   }
 
-  /** 开始观测：建立 SSH 测量通道并订阅 INSSEG 流；不动任何相机参数 */
-  public async observe(owner: number, access: CameraMeasurementAccess): Promise<CameraCalibrationSnapshot> {
+  /** 共享一份人物信息观测；全量上报在首次观测时开启，最后一个观测方关闭时恢复 */
+  public async observe(
+    owner: number,
+    access: CameraMeasurementAccess,
+  ): Promise<CameraCalibrationSnapshot> {
     if (this.owner !== undefined && this.owner !== owner) throw new Error('另一窗口正在观测或标定')
-    if (this.writing || this.manualWrites || isCalibrationRunning(this.snapshot().phase)) throw new Error('请先停止标定并等待发送结束')
+    if (this.observationStart) {
+      this.observationLeases++
+      return this.observationStart
+    }
+    if (this.state.observing) {
+      this.observationLeases++
+      return this.emit()
+    }
+    if (this.writing || this.manualWrites || isCalibrationRunning(this.snapshot().phase))
+      throw new Error('请先停止标定并等待发送结束')
     this.owner = owner
+    this.observationLeases = 1
+    const task = this.observeInternal(access)
+    this.observationStart = task
+    try {
+      return await task
+    } finally {
+      if (this.observationStart === task) this.observationStart = undefined
+    }
+  }
+
+  private async observeInternal(
+    access: CameraMeasurementAccess,
+  ): Promise<CameraCalibrationSnapshot> {
     this.engine = undefined
     this.finalized = false
     this.finalizing = false
@@ -64,21 +106,46 @@ export class CameraCalibrationService {
     this.parser.reset()
     this.rawBuffer = ''
     this.lastFrameAt = -Infinity
-    this.state = { ...createCalibrationSnapshot(), observing: true,
-      ssh: { host: access.host, port: access.port, username: access.username,
-        state: 'connecting', detail: '正在建立测量通道' },
-      phase: 'observing', reason: '只旁听 ttyS6 的 INSSEG 报文，不写任何参数' }
+    this.state = {
+      ...createCalibrationSnapshot(),
+      observing: true,
+      ssh: {
+        host: access.host,
+        port: access.port,
+        username: access.username,
+        state: 'connecting',
+        detail: '正在建立测量通道',
+      },
+      phase: 'observing',
+      reason: '全量上报人物信息，不写标定参数',
+    }
     this.emit()
     try {
       // 防陈旧通道:上一轮 close/finalize 未及拆除时先补拆(通道空闲时为瞬时空操作)
       await this.host.stopMeasurement().catch(() => undefined)
+      if (this.host.writeCalibSwitch) {
+        this.ensureControlLink()
+        this.writing = true
+        this.emit()
+        try {
+          await this.sendCalibSwitch(true)
+          this.calibSwitchOn = true
+        } catch (error) {
+          throw new Error(`人物信息全量上报开启失败：${errorMessage(error)}`)
+        } finally {
+          this.writing = false
+          this.emit()
+        }
+      }
       await this.host.startMeasurement(access)
     } catch (error) {
       this.state.observing = false
       this.state.ssh = { ...this.state.ssh!, state: 'error', detail: errorMessage(error) }
       this.owner = undefined
+      this.observationLeases = 0
       this.state.phase = 'stopped'
       this.state.reason = '测量通道建立失败'
+      await this.resetSwitchQuietly()
       this.emit()
       throw error
     }
@@ -89,15 +156,20 @@ export class CameraCalibrationService {
     return this.startInternal(owner, config)
   }
 
-  private async startInternal(owner: number, config: CameraCalibrationConfig): Promise<CameraCalibrationSnapshot> {
+  private async startInternal(
+    owner: number,
+    config: CameraCalibrationConfig,
+  ): Promise<CameraCalibrationSnapshot> {
     this.requireOwner(owner)
-    if (this.writing || this.manualWrites || isCalibrationRunning(this.snapshot().phase)) throw new Error('控制通道忙')
-    if (!this.state.observing || this.host.now() - this.lastFrameAt > 1500) throw new Error('请先取得实时 INSSEG 数据')
-    if (!this.host.tcpTarget()) throw new Error('相机控制连接已断开，请检查工具栏数据接入的 TCP 连接')
+    if (this.writing || this.manualWrites || isCalibrationRunning(this.snapshot().phase))
+      throw new Error('控制通道忙')
+    if (!this.state.observing || this.host.now() - this.lastFrameAt > 1500)
+      throw new Error('请先取得实时 INSSEG 数据')
+    if (!this.host.tcpTarget())
+      throw new Error('相机控制连接已断开，请检查工具栏数据接入的 TCP 连接')
 
-    // 标定开关（2026-10 固件新增）：默认 0 时固件仅上报跟随目标 + ≤1.5 m 非跟随目标，
-    // 开启后全量上报，>1.5 m 的双目标标定才可行。开启失败则拒绝启动，不动任何参数。
-    if (this.host.writeCalibSwitch) {
+    // 观测通常已经开启全量上报；兼容未提供开关写入的旧观测通道。
+    if (this.host.writeCalibSwitch && !this.calibSwitchOn) {
       this.writing = true
       this.emit()
       try {
@@ -111,57 +183,54 @@ export class CameraCalibrationService {
       }
     }
 
-    try {
-      // 等待开关生效后的新一帧再做人数核对（INSSEG 约 47 Hz，正常几十毫秒内到达）
-      if (this.calibSwitchOn) await this.waitForFreshFrame(2000)
+    // 等待开关生效后的新一帧再做人数核对（INSSEG 约 47 Hz，正常几十毫秒内到达）
+    if (this.calibSwitchOn) await this.waitForFreshFrame(2000)
 
-      const last = this.state.lastFrame
-      if (!last || last.targets.length !== config.targets.length ||
-        last.targets.some((t) => t.classId !== config.personClassId)) {
-        const reported = last
-          ? `${last.targets.length} 个目标（${last.targets
-              .map((t) => `${t.distance.toFixed(2)}m`)
-              .join('、')}）`
-          : '尚无有效帧'
-        throw new Error(
-          this.calibSwitchOn
-            ? `串口当前上报 ${reported}，与配置的 ${config.targets.length} 个人形不符。` +
+    const last = this.state.lastFrame
+    if (
+      !last ||
+      last.targets.length !== config.targets.length ||
+      last.targets.some((t) => t.classId !== config.personClassId)
+    ) {
+      const reported = last
+        ? `${last.targets.length} 个目标（${last.targets
+            .map((t) => `${t.distance.toFixed(2)}m`)
+            .join('、')}）`
+        : '尚无有效帧'
+      throw new Error(
+        this.calibSwitchOn
+          ? `串口当前上报 ${reported}，与配置的 ${config.targets.length} 个人形不符。` +
               `标定开关已开启（固件应全量上报），请核对现场人数与目标对应关系`
-            : `串口当前上报 ${reported}，与配置的 ${config.targets.length} 个人形不符。` +
+          : `串口当前上报 ${reported}，与配置的 ${config.targets.length} 个人形不符。` +
               `注意：固件仅上报 1.5 m 内的非跟随目标，RTSP 画面中更远的目标不会出现在串口流里`,
-        )
-      }
-      // 先构造引擎校验配置合法性，再进行任何写入
-      const engine = new CameraCalibration(config, this.host.now())
-      this.state.config = { ...config }
-
-      // 表单即真值：启动时把表单参数整组下发作为搜索基线（不回读核对），
-      // 随后等待 settle 时长，让设备应用参数并重建 INSSEG 流，再开始采样
-      const baseline = `${config.height},${config.fov},${config.initialOffset}`
-      this.ensureControlLink()
-      this.writing = true
-      this.state.originalParams = baseline
-      this.state.lastSentParams = baseline
-      this.emit()
-      try {
-        await this.writeWithTimeout(baseline)
-        await new Promise((resolve) => setTimeout(resolve, Math.max(500, config.settleMs)))
-      } catch (error) {
-        throw new Error(`基线参数下发失败，未启动标定：${errorMessage(error)}`)
-      } finally {
-        this.writing = false
-        this.emit()
-      }
-
-      this.engine = engine
-      this.parser.reset()
-      this.finalized = false
-      this.finalizing = false
-    } catch (error) {
-      // 启动中途失败：开关已开则尽力恢复 0（观测不受影响，设备重启后也默认 0）
-      if (this.calibSwitchOn) await this.resetSwitchQuietly()
-      throw error
+      )
     }
+    // 先构造引擎校验配置合法性，再进行任何写入
+    const engine = new CameraCalibration(config, this.host.now())
+    this.state.config = { ...config }
+
+    // 表单即真值：启动时把表单参数整组下发作为搜索基线（不回读核对），
+    // 随后等待 settle 时长，让设备应用参数并重建 INSSEG 流，再开始采样
+    const baseline = `${config.height},${config.fov},${config.initialOffset}`
+    this.ensureControlLink()
+    this.writing = true
+    this.state.originalParams = baseline
+    this.state.lastSentParams = baseline
+    this.emit()
+    try {
+      await this.writeWithTimeout(baseline)
+      await new Promise((resolve) => setTimeout(resolve, Math.max(500, config.settleMs)))
+    } catch (error) {
+      throw new Error(`基线参数下发失败，未启动标定：${errorMessage(error)}`)
+    } finally {
+      this.writing = false
+      this.emit()
+    }
+
+    this.engine = engine
+    this.parser.reset()
+    this.finalized = false
+    this.finalizing = false
     return this.emit()
   }
 
@@ -170,7 +239,10 @@ export class CameraCalibrationService {
     this.rawBuffer = (this.rawBuffer + data).slice(-32768)
     const lines = this.rawBuffer.split('\n')
     this.rawBuffer = lines.pop() ?? ''
-    this.state.rawLines = [...this.state.rawLines, ...lines.filter((line) => line.startsWith('$ESTAR,INSSEG,'))].slice(-20)
+    this.state.rawLines = [
+      ...this.state.rawLines,
+      ...lines.filter((line) => line.startsWith('$ESTAR,INSSEG,')),
+    ].slice(-20)
     let candidate: number | undefined
     for (const result of this.parser.push(data)) {
       if (result.type === 'error') {
@@ -194,7 +266,11 @@ export class CameraCalibrationService {
 
   public tick(): void {
     if (this.engine && isCalibrationRunning(this.engine.snapshot().phase)) {
-      try { this.ensureControlLink() } catch (error) { this.engine.fail(String(error)) }
+      try {
+        this.ensureControlLink()
+      } catch (error) {
+        this.engine.fail(String(error))
+      }
       this.engine.tick(this.host.now())
       this.emit()
       return
@@ -209,13 +285,34 @@ export class CameraCalibrationService {
     return this.snapshot()
   }
 
-  public close(owner?: number): CameraCalibrationSnapshot {
+  public close(owner?: number, force = false): CameraCalibrationSnapshot {
     if (owner !== undefined && owner !== this.owner) return this.snapshot()
+    if (this.observationStart) {
+      if (!force && this.observationLeases > 1) {
+        this.observationLeases--
+        return this.emit()
+      }
+      this.observationLeases = 0
+      const pending = this.observationStart
+      const cleanup = () => {
+        if (this.observationLeases === 0) this.close(owner, true)
+      }
+      void pending.then(cleanup, cleanup)
+      return this.snapshot()
+    }
+    if (!force && owner !== undefined && this.observationLeases > 1) {
+      this.observationLeases--
+      return this.emit()
+    }
+    this.observationLeases = 0
     this.stop('观测已结束；正在恢复现场')
     this.state.observing = false
     this.owner = undefined
     this.parser.reset()
-    if (!this.engine) { this.state.phase = 'stopped'; this.state.reason = '已结束观测订阅' }
+    if (!this.engine) {
+      this.state.phase = 'stopped'
+      this.state.reason = '已结束观测订阅'
+    }
     this.emit()
     if (this.engine && !this.finalized && !this.finalizing) void this.finalizeThenTeardown()
     else if (!this.finalizing) void this.teardownChannelQuietly()
@@ -228,16 +325,22 @@ export class CameraCalibrationService {
     await this.teardownChannelQuietly()
   }
 
-  /** 无标定引擎可终结时(纯观测/已终结)也要拆除测量通道, 避免陈旧通道阻塞下次观测 */
+  /** 最后一个观测方退出时恢复普通上报，并拆除测量通道 */
   private async teardownChannelQuietly(): Promise<void> {
     try {
+      let calibSwitchRestored: boolean | undefined
+      if (this.calibSwitchOn && this.host.writeCalibSwitch) {
+        calibSwitchRestored = await this.resetSwitchQuietly()
+      }
       const teardown = await this.host.stopMeasurement()
       if (this.state.ssh) {
         this.state.ssh = {
-          ...this.state.ssh, state: 'stopped',
-          detail: teardown.straceCleared && teardown.tracerPidZero
-            ? '通道已拆除'
-            : `通道拆除核查异常: TracerPid=${teardown.tracerPid}`,
+          ...this.state.ssh,
+          state: 'stopped',
+          detail:
+            teardown.straceCleared && teardown.tracerPidZero
+              ? '通道已拆除'
+              : `通道拆除核查异常: TracerPid=${teardown.tracerPid}`,
         }
       }
       const base = this.state.recovery
@@ -253,9 +356,12 @@ export class CameraCalibrationService {
             ? (base?.detail ?? '观测已停止，现场已核查')
             : `观测已停止；设备侧核查异常: TracerPid=${teardown.tracerPid}`,
         pendingChecks: false,
+        ...(calibSwitchRestored === undefined ? {} : { calibSwitchRestored }),
       }
       this.emit()
-    } catch { /* 拆除失败不阻塞, 设备端 timeout 兜底 */ }
+    } catch {
+      /* 拆除失败不阻塞, 设备端 timeout 兜底 */
+    }
   }
 
   /** 控制链路断开/更换时调用：停止标定并尝试恢复参数，观测（SSH 测量通道）保持运行 */
@@ -279,14 +385,20 @@ export class CameraCalibrationService {
     this.state.ssh = { ...this.state.ssh, state: 'error', detail: message }
     this.engine?.fail(`测量通道故障：${message}`)
     this.emit()
-    if (this.engine && !isCalibrationRunning(this.engine.snapshot().phase) && !this.finalized && !this.finalizing) {
+    if (
+      this.engine &&
+      !isCalibrationRunning(this.engine.snapshot().phase) &&
+      !this.finalized &&
+      !this.finalizing
+    ) {
       void this.finalize()
     }
   }
 
   public async restore(owner: number): Promise<CameraCalibrationSnapshot> {
     this.requireOwner(owner)
-    if (this.writing || this.manualWrites || isCalibrationRunning(this.snapshot().phase)) throw new Error('请先停止标定并等待发送结束')
+    if (this.writing || this.manualWrites || isCalibrationRunning(this.snapshot().phase))
+      throw new Error('请先停止标定并等待发送结束')
     if (!this.state.originalParams) throw new Error('没有可恢复的标定前参数')
     await this.restoreOriginalParams()
     this.state.recovery = {
@@ -311,8 +423,13 @@ export class CameraCalibrationService {
     const phase = engine.snapshot().phase
     // 观测持续运行(测量通道不拆除): strace 现场核查延后到「停止观测」时执行
     const recovery: CameraCalibrationRecovery = {
-      straceCleared: true, tracerPidZero: true, paramsVerified: false, restored: false,
-      expected: this.state.originalParams ?? '', readback: '', detail: '',
+      straceCleared: true,
+      tracerPidZero: true,
+      paramsVerified: false,
+      restored: false,
+      expected: this.state.originalParams ?? '',
+      readback: '',
+      detail: '',
       pendingChecks: true,
     }
 
@@ -331,18 +448,6 @@ export class CameraCalibrationService {
       recovery.detail = '标定成功，标定参数已保持'
     }
 
-    // 标定开关归 0：成功/失败/停止都恢复；失败时提示设备重启后也会自动归 0
-    if (this.calibSwitchOn && this.host.writeCalibSwitch) {
-      try {
-        await this.sendCalibSwitch(false)
-        this.calibSwitchOn = false
-        recovery.calibSwitchRestored = true
-      } catch {
-        recovery.calibSwitchRestored = false
-        recovery.detail = `${recovery.detail}；标定开关恢复失败（设备重启后自动归 0）`
-      }
-    }
-
     this.state.recovery = recovery
     this.finalized = true
     this.finalizing = false
@@ -358,13 +463,23 @@ export class CameraCalibrationService {
     this.emit()
     try {
       await this.writeWithTimeout(content)
-    } finally { this.writing = false; this.emit() }
+    } finally {
+      this.writing = false
+      this.emit()
+    }
   }
 
   private async sendCandidate(offset: number): Promise<void> {
     const engine = this.engine
     const config = this.state.config
-    if (!engine || !config || this.writing || this.manualWrites || engine.snapshot().phase !== 'writing') return
+    if (
+      !engine ||
+      !config ||
+      this.writing ||
+      this.manualWrites ||
+      engine.snapshot().phase !== 'writing'
+    )
+      return
     this.writing = true
     const content = `${config.height},${config.fov},${offset}`
     try {
@@ -378,7 +493,10 @@ export class CameraCalibrationService {
       }
     } catch (error) {
       engine.fail(`参数发送失败，停止自动写入：${errorMessage(error)}`)
-    } finally { this.writing = false; this.emit() }
+    } finally {
+      this.writing = false
+      this.emit()
+    }
   }
 
   private async writeWithTimeout(content: string): Promise<void> {
@@ -387,10 +505,15 @@ export class CameraCalibrationService {
       await Promise.race([
         this.host.writeParams(content),
         new Promise<never>((_resolve, reject) => {
-          timer = setTimeout(() => reject(new Error('发送等待超过 5 秒；不能确定设备是否已应用')), 5000)
+          timer = setTimeout(
+            () => reject(new Error('发送等待超过 5 秒；不能确定设备是否已应用')),
+            5000,
+          )
         }),
       ])
-    } finally { if (timer) clearTimeout(timer) }
+    } finally {
+      if (timer) clearTimeout(timer)
+    }
   }
 
   /** 标定开关写入（set_calibParam 1/0），与参数写入同样的 5 秒超时兜底 */
@@ -405,7 +528,9 @@ export class CameraCalibrationService {
           timer = setTimeout(() => reject(new Error('标定开关命令等待超过 5 秒')), 5000)
         }),
       ])
-    } finally { if (timer) clearTimeout(timer) }
+    } finally {
+      if (timer) clearTimeout(timer)
+    }
   }
 
   /** 等待开关生效后的新一帧 INSSEG（47 Hz 流，正常几十毫秒内到达） */
@@ -419,13 +544,16 @@ export class CameraCalibrationService {
     throw new Error('开启标定开关后未取得新的 INSSEG 数据，请检查测量通道')
   }
 
-  /** 尽力恢复标定开关为 0（启动中途失败的路径；失败不阻塞，设备重启后默认 0） */
-  private async resetSwitchQuietly(): Promise<void> {
-    if (!this.host.writeCalibSwitch) return
+  /** 恢复普通上报；设备重启后也会默认归 0，因此清理失败不阻塞通道拆除 */
+  private async resetSwitchQuietly(): Promise<boolean> {
+    if (!this.host.writeCalibSwitch || !this.calibSwitchOn) return true
     try {
       await this.sendCalibSwitch(false)
       this.calibSwitchOn = false
-    } catch { /* 设备重启后默认 0，此处失败不阻塞 */ }
+      return true
+    } catch {
+      return false
+    }
   }
 
   private ensureControlLink(): void {
@@ -442,7 +570,6 @@ export class CameraCalibrationService {
     return state
   }
 }
-
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)

@@ -54,7 +54,13 @@ export function parseInssegLine(line: string): InssegParseResult {
     }
     if (fields[cursor] === '') cursor++
     if (cursor !== fields.length) throw new Error('INSSEG 目标数与字段数量不一致')
-    return { type: 'frame', frame: { timestamp: fields[2], index, pictureIndex, targets } }
+    const uniqueTargets = [
+      ...new Map(targets.map((target) => [JSON.stringify(target), target])).values(),
+    ]
+    return {
+      type: 'frame',
+      frame: { timestamp: fields[2], index, pictureIndex, targets: uniqueTargets },
+    }
   } catch (cause) {
     return error(cause instanceof Error ? cause.message : 'INSSEG 解析失败')
   }

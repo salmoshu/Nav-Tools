@@ -48,7 +48,8 @@
         >
           <grid-item
             v-for="item in layoutDraggableList"
-            :drag-allow-from="'.card-header'"
+            :drag-allow-from="'.card-header, .pure-content-card'"
+            :drag-ignore-from="'.card-content *, .pure-content-actions, .vgl-item__resizer, a, button'"
             :key="item.i"
             :x="item.x"
             :y="item.y"
@@ -56,10 +57,13 @@
             :h="item.h"
             :i="item.i"
             :minW="item.minW || 4"
-            :minH="item.collapsed ? COLLAPSED_PANEL_ROWS : item.minH || 5"
+            :minH="
+              item.collapsed ? COLLAPSED_PANEL_ROWS : item.minH || DEFAULT_PANEL_MIN_HEIGHT_ROWS
+            "
             :is-resizable="!item.collapsed"
             :maxW="item.maxW || 12"
             :maxH="item.maxH || 12"
+            :class="{ 'pure-content-grid-item': pureContentItems.includes(item.i) }"
             @resize="resizeEvent"
             @resized="resizedEvent"
             @moved="movedEvent"
@@ -71,6 +75,8 @@
                 :class="{
                   'full-screen-card': fullScreenItem === item.i,
                   'collapsed-card': item.collapsed && fullScreenItem !== item.i,
+                  'pure-content-card':
+                    pureContentItems.includes(item.i) && fullScreenItem !== item.i,
                 }"
               >
                 <template v-if="fullScreenItem !== item.i" #header>
@@ -98,24 +104,14 @@
                       <span>{{ t(item.titleName) }}</span>
                     </button>
                     <div class="card-actions" @dblclick.stop>
-                      <el-button
-                        type="text"
-                        @click="createItemDesktopShortcut(item)"
-                        class="shortcut-btn"
-                        :title="t('app.dashboard.createShortcut')"
-                        :aria-label="t('app.dashboard.createShortcut')"
-                      >
-                        <SquareArrowOutUpRight :size="16" :stroke-width="1.8" />
-                      </el-button>
-                      <el-button
-                        type="text"
-                        @click="detachItem(item)"
-                        class="detach-btn"
-                        :title="t('app.dashboard.detach')"
-                        :aria-label="t('app.dashboard.detach')"
-                      >
-                        <el-icon><Share /></el-icon>
-                      </el-button>
+                      <PanelActionsMenu
+                        show-detach
+                        :pure-content="false"
+                        :pure-content-available="fullScreenItem !== item.i"
+                        @create-shortcut="createItemDesktopShortcut(item)"
+                        @toggle-pure-content="togglePureContent(item)"
+                        @detach="detachItem(item)"
+                      />
                       <el-button
                         type="text"
                         @click="toggleCardFullScreen(item.i)"
@@ -137,8 +133,35 @@
                     </div>
                   </div>
                 </template>
+                <div
+                  v-if="pureContentItems.includes(item.i) && fullScreenItem !== item.i"
+                  class="pure-content-actions"
+                >
+                  <button
+                    class="pure-content-fab"
+                    type="button"
+                    :title="t('app.dashboard.exitPureContent')"
+                    :aria-label="t('app.dashboard.exitPureContent')"
+                    @click.stop="togglePureContent(item)"
+                    @dblclick.stop
+                  >
+                    <el-icon><Back /></el-icon>
+                  </button>
+                  <button
+                    class="pure-content-fab is-close"
+                    type="button"
+                    :title="t('app.dashboard.removeCard')"
+                    :aria-label="t('app.dashboard.removeCard')"
+                    @click.stop="handleRemoveItem(item)"
+                    @dblclick.stop
+                  >
+                    <el-icon><Close /></el-icon>
+                  </button>
+                </div>
                 <div class="card-content component-surface">
-                  <GnssSolverScope v-if="isSolverWorkspace"><component :is="item.component" /></GnssSolverScope>
+                  <GnssSolverScope v-if="isSolverWorkspace"
+                    ><component :is="item.component"
+                  /></GnssSolverScope>
                   <component v-else :is="item.component" />
                 </div>
               </el-card>
@@ -166,12 +189,13 @@ import ApplicationSelector from './ApplicationSelector.vue'
 import { ref, computed, nextTick, onMounted, onUnmounted, provide, watch } from 'vue'
 import { GridLayout, GridItem } from 'grid-layout-plus'
 import { ElButton, ElCard, ElIcon, ElMessage, ElMessageBox } from 'element-plus'
-import { Close, Share, FullScreen } from '@element-plus/icons-vue'
-import { SquareArrowOutUpRight } from '@lucide/vue'
+import { Back, Close, FullScreen } from '@element-plus/icons-vue'
+import PanelActionsMenu from './PanelActionsMenu.vue'
 import emitter from '@/hooks/useMitt'
 import { useLayoutManager } from '@/composables/useLayoutManager'
 import {
   COLLAPSED_PANEL_ROWS,
+  DEFAULT_PANEL_MIN_HEIGHT_ROWS,
   expandPanel,
   togglePanelCollapsed,
 } from '@/core/layout/PanelCollapse'
@@ -214,7 +238,11 @@ const {
   openApplicationSelector,
   closeApplicationSelector,
 } = useApplicationSelector()
-const isSolverWorkspace = computed(() => currentApplication.value?.id === 'gnsslib' || (currentApplication.value?.windowIds.includes('gnsslib-solver') ?? false))
+const isSolverWorkspace = computed(
+  () =>
+    currentApplication.value?.id === 'gnsslib' ||
+    (currentApplication.value?.windowIds.includes('gnsslib-solver') ?? false),
+)
 const ipc = createBrowserIpcTransport()
 let removeSaveListener: (() => void) | undefined
 let removeRestoreListener: (() => void) | undefined
@@ -310,7 +338,7 @@ const handlePanelTitleDoubleClick = (item: LayoutItem) => {
 }
 
 /**
- * 组件卡片 ↗ 按钮:为该组件创建桌面快捷方式(保存位置自选,双击直达独立窗口,
+ * 组件卡片的「...」菜单:为该组件创建桌面快捷方式(保存位置自选,双击直达独立窗口,
  * 图标 = 应用主图标 + 组件角标)。用户在保存对话框取消时静默返回。
  */
 const createItemDesktopShortcut = async (item: { windowId: string }) => {
@@ -381,6 +409,18 @@ const statusbarSize = ref({ width: 200, height: 60 })
 
 // 全屏相关状态
 const fullScreenItem = ref<string | null>(null)
+const pureContentItems = ref<string[]>([])
+
+function togglePureContent(item: LayoutItem) {
+  if (fullScreenItem.value !== null) return
+  if (pureContentItems.value.includes(item.i)) {
+    pureContentItems.value = pureContentItems.value.filter((id) => id !== item.i)
+    return
+  }
+  expandPanel(item)
+  pureContentItems.value.push(item.i)
+  ElMessage({ message: t('app.dashboard.pureContentHint'), type: 'info', duration: 2000 })
+}
 
 const togglePanelCollapse = (item: LayoutItem) => {
   if (fullScreenItem.value !== null) return
@@ -521,8 +561,14 @@ const openPanelFromToolbar = (windowId: string) =>
 
 // 处理键盘事件
 const handleKeyDown = (event: KeyboardEvent) => {
-  if (event.key === 'Escape' && fullScreenItem.value !== null) {
+  if (event.key !== 'Escape') return
+  if (fullScreenItem.value !== null) {
     toggleCardFullScreen(null)
+    return
+  }
+  if (pureContentItems.value.length > 0) {
+    pureContentItems.value.pop()
+    event.preventDefault()
   }
 }
 
@@ -693,6 +739,7 @@ const movedEvent = (i: string, newX: number, newY: number) => {
 
 // 分离卡片到独立窗口
 const detachItem = async (item: any) => {
+  pureContentItems.value = pureContentItems.value.filter((id) => id !== item.i)
   if (window.ipcRenderer && item.componentName) {
     console.log('Detaching item:', item)
     console.log('Props:', item.props)
@@ -724,6 +771,7 @@ const detachItem = async (item: any) => {
 }
 
 const handleRemoveItem = async (item: any) => {
+  pureContentItems.value = pureContentItems.value.filter((id) => id !== item.i)
   if (item?.windowId === 'terminal' && window.ipcRenderer) {
     const sessions = await window.ipcRenderer.invoke('terminal-session-list')
     if (Array.isArray(sessions) && sessions.length > 0) {
@@ -917,6 +965,86 @@ onUnmounted(() => {
   display: none;
 }
 
+.pure-content-card {
+  position: relative;
+  border: 0;
+}
+
+.pure-content-card :deep(.el-card__header) {
+  display: none;
+}
+
+.pure-content-card :deep(.el-card__body) {
+  height: 100%;
+  overflow: hidden;
+}
+
+.pure-content-card::before {
+  position: absolute;
+  z-index: 10;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: 6px;
+  cursor: move;
+  content: '';
+}
+
+.pure-content-actions {
+  position: absolute;
+  z-index: 20;
+  top: 8px;
+  right: 8px;
+  display: flex;
+  gap: 6px;
+  padding: 4px;
+  border: 1px solid var(--app-border);
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--app-surface) 88%, transparent);
+  opacity: 0.38;
+  backdrop-filter: blur(6px);
+  transition: opacity 0.15s ease;
+}
+
+.pure-content-actions:hover,
+.pure-content-actions:focus-within {
+  opacity: 1;
+}
+
+.pure-content-fab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  color: var(--app-text-muted);
+  background: transparent;
+  cursor: pointer;
+}
+
+.pure-content-fab:hover,
+.pure-content-fab:focus-visible {
+  color: var(--el-color-primary);
+  background: var(--app-hover);
+  outline: none;
+}
+
+.pure-content-fab.is-close:hover,
+.pure-content-fab.is-close:focus-visible {
+  color: var(--el-color-danger);
+}
+
+.pure-content-card :deep(.console-header),
+.pure-content-card :deep(.search-bar),
+.pure-content-card :deep(.console-input-bar),
+.pure-content-card :deep(.console-footer),
+.pure-content-card :deep(.camera-controls) {
+  display: none;
+}
+
 /* 确保其他样式保持不变 */
 .card-content {
   height: 100%;
@@ -983,8 +1111,12 @@ onUnmounted(() => {
 
 .card-actions {
   display: flex;
-  gap: 8px;
+  gap: 20px;
   align-items: center;
+}
+
+.card-actions :deep(.el-button) {
+  margin-left: 0;
 }
 
 .detach-btn,

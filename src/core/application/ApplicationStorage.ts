@@ -10,6 +10,7 @@ const SERIAL_DEFAULT_MIGRATION_KEY = 'nav-tools:migration:serial-default-v1'
 const GNSS_MESSAGES_MIGRATION_KEY = 'nav-tools:migration:gnss-messages-v1'
 const FLOW_DEFAULT_MIGRATION_KEY = 'nav-tools:migration:flow-default-v1'
 const CAMERA_TERMINAL_MIGRATION_KEY = 'nav-tools:migration:camera-terminal-v1'
+const CAMERA_MESSAGES_MIGRATION_KEY = 'nav-tools:migration:camera-messages-v1'
 const LIDAR_DEFAULT_MIGRATION_KEY = 'nav-tools:migration:lidar-default-v1'
 const GNSSRAW_DEFAULT_MIGRATION_KEY = 'nav-tools:migration:gnssraw-default-v1'
 const GNSSLIB_DEFAULT_MIGRATION_KEY = 'nav-tools:migration:gnsslib-default-v1'
@@ -78,7 +79,7 @@ export const DEFAULT_APPLICATIONS: readonly UserApplication[] = [
     description: 'Camera live video and parameter control workspace',
     icon: 'camera',
     accent: '#14b8a6',
-    windowIds: ['camera-video', 'camera-parameters', 'terminal'],
+    windowIds: ['camera-video', 'camera-parameters', 'raw-messages', 'terminal'],
   },
   {
     id: 'lidar',
@@ -102,6 +103,7 @@ export class ApplicationStorage {
       this.storage.writeRaw(SERIAL_DEFAULT_MIGRATION_KEY, '1')
       this.storage.writeRaw(FLOW_DEFAULT_MIGRATION_KEY, '1')
       this.storage.writeRaw(CAMERA_TERMINAL_MIGRATION_KEY, '1')
+      this.storage.writeRaw(CAMERA_MESSAGES_MIGRATION_KEY, '1')
       this.storage.writeRaw(GNSSLIB_DEFAULT_MIGRATION_KEY, '1')
       this.storage.writeRaw(GNSSLIB_ENGINE_NAME_MIGRATION_KEY, '1')
       this.storage.writeRaw(GNSSLIB_SOLVER_MIGRATION_KEY, '1')
@@ -189,6 +191,18 @@ export class ApplicationStorage {
         cameraApplication.windowIds.push('terminal')
       }
       this.storage.writeRaw(CAMERA_TERMINAL_MIGRATION_KEY, '1')
+    }
+    if (this.storage.readRaw(CAMERA_MESSAGES_MIGRATION_KEY) === null) {
+      const cameraApplication = applications.find((application) => application.id === 'camera')
+      if (cameraApplication && !cameraApplication.windowIds.includes('raw-messages')) {
+        const terminalIndex = cameraApplication.windowIds.indexOf('terminal')
+        cameraApplication.windowIds.splice(
+          terminalIndex < 0 ? cameraApplication.windowIds.length : terminalIndex,
+          0,
+          'raw-messages',
+        )
+      }
+      this.storage.writeRaw(CAMERA_MESSAGES_MIGRATION_KEY, '1')
     }
     if (this.storage.readRaw(LIDAR_DEFAULT_MIGRATION_KEY) === null) {
       const lidarDefault = DEFAULT_APPLICATIONS.find((application) => application.id === 'lidar')

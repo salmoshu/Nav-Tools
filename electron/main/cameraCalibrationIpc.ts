@@ -1,9 +1,7 @@
 import { BrowserWindow, ipcMain } from 'electron'
 import type { CameraCalibrationConfig } from '../../src/core/camera/CameraCalibrationTypes'
 import type { CameraCalibrationService } from './services/CameraCalibrationService'
-import type {
-  CameraMeasurementAccessStore,
-} from './services/CameraMeasurementAccessStore'
+import type { CameraMeasurementAccessStore } from './services/CameraMeasurementAccessStore'
 
 function requireText(value: unknown, field: string): string {
   if (typeof value !== 'string' || !value.trim()) throw new Error(`请填写${field}`)
@@ -16,7 +14,8 @@ export function registerCameraCalibrationIpc(
 ): void {
   service.configure((state) => {
     for (const target of BrowserWindow.getAllWindows()) {
-      if (!target.isDestroyed() && !target.webContents.isDestroyed()) target.webContents.send('camera-calibration-state', state)
+      if (!target.isDestroyed() && !target.webContents.isDestroyed())
+        target.webContents.send('camera-calibration-state', state)
     }
   })
   const owners = new Set<number>()
@@ -32,13 +31,17 @@ export function registerCameraCalibrationIpc(
       username: requireText(request_.username ?? stored.username, 'SSH 用户名'),
       password: typeof request_.password === 'string' ? request_.password : '',
     }
-    if (!Number.isInteger(access.port) || access.port < 1 || access.port > 65535) throw new Error('SSH 端口无效')
+    if (!Number.isInteger(access.port) || access.port < 1 || access.port > 65535)
+      throw new Error('SSH 端口无效')
     const resolved = accessStore.resolve(access)
     accessStore.save(resolved)
     const state = await service.observe(event.sender.id, resolved)
     if (!owners.has(event.sender.id)) {
       owners.add(event.sender.id)
-      event.sender.once('destroyed', () => { service.close(event.sender.id); owners.delete(event.sender.id) })
+      event.sender.once('destroyed', () => {
+        service.close(event.sender.id, true)
+        owners.delete(event.sender.id)
+      })
     }
     return state
   })

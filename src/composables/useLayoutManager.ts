@@ -1,12 +1,23 @@
 import { computed, defineAsyncComponent, markRaw, ref, watch } from 'vue'
 import type { DefineComponent } from 'vue'
 import { ElMessage } from 'element-plus'
-import { getWindowById, getWindowsByIds, navMode, normalizeWindowId, type WindowDefinition } from '@/settings/config'
+import {
+  getWindowById,
+  getWindowsByIds,
+  navMode,
+  normalizeWindowId,
+  type WindowDefinition,
+} from '@/settings/config'
 import { useApplicationSelector } from '@/composables/useApplicationSelector'
-import { showStatusBar, showToolBar, toolbarPosition, statusbarPosition } from '@/composables/useStatusManager'
+import {
+  showStatusBar,
+  showToolBar,
+  toolbarPosition,
+  statusbarPosition,
+} from '@/composables/useStatusManager'
 import { LayoutStorage, type PersistedLayoutItem } from '@/core/layout/LayoutStorage'
 import { arrangeLayoutInBestGrid } from '@/core/layout/arrangeBestGrid'
-import { expandPanel } from '@/core/layout/PanelCollapse'
+import { DEFAULT_PANEL_MIN_HEIGHT_ROWS, expandPanel } from '@/core/layout/PanelCollapse'
 import { JsonStorage } from '@/core/storage/JsonStorage'
 import emitter from '@/hooks/useMitt'
 import { t } from '@/i18n'
@@ -67,7 +78,7 @@ function createLayoutItem(windowDefinition: WindowDefinition, index: number): La
     componentName: windowDefinition.componentName,
     component: markRaw(loadComponent(windowDefinition.componentPath)),
     minW: 4,
-    minH: 5,
+    minH: DEFAULT_PANEL_MIN_HEIGHT_ROWS,
     maxW: 12,
     maxH: 12,
   }
@@ -84,28 +95,28 @@ export function useLayoutManager() {
   let layoutPersistenceReady = false
 
   const currentApplication = computed(() =>
-    applications.value.find(application => application.id === layoutApplicationId.value),
+    applications.value.find((application) => application.id === layoutApplicationId.value),
   )
-  const allowedWindows = computed(() =>
-    getWindowsByIds(currentApplication.value?.windowIds ?? []),
-  )
+  const allowedWindows = computed(() => getWindowsByIds(currentApplication.value?.windowIds ?? []))
 
   const hasLayoutChanged = computed(() => {
     if (layoutDraggableList.value.length !== originalLayout.value.length) return true
 
     return layoutDraggableList.value.some((item, index) => {
       const original = originalLayout.value[index]
-      return !original
-        || item.x !== original.x
-        || item.y !== original.y
-        || item.w !== original.w
-        || item.h !== original.h
-        || item.collapsed !== original.collapsed
-        || item.windowId !== original.windowId
+      return (
+        !original ||
+        item.x !== original.x ||
+        item.y !== original.y ||
+        item.w !== original.w ||
+        item.h !== original.h ||
+        item.collapsed !== original.collapsed ||
+        item.windowId !== original.windowId
+      )
     })
   })
 
-  watch(hasLayoutChanged, changed => {
+  watch(hasLayoutChanged, (changed) => {
     if (changed) emitter.emit('layout-changed')
   })
 
@@ -155,7 +166,7 @@ export function useLayoutManager() {
   })
 
   function backupCurrentLayout() {
-    originalLayout.value = layoutDraggableList.value.map(item => ({ ...item }))
+    originalLayout.value = layoutDraggableList.value.map((item) => ({ ...item }))
   }
 
   function saveCurrentLayout() {
@@ -174,29 +185,42 @@ export function useLayoutManager() {
   }
 
   async function loadLayoutFromConfig(config: any[]) {
-    const allowedById = new Map(allowedWindows.value.map(item => [item.id, item]))
-    const allowedByComponent = new Map(allowedWindows.value.map(item => [item.componentName, item]))
+    const allowedById = new Map(allowedWindows.value.map((item) => [item.id, item]))
+    const allowedByComponent = new Map(
+      allowedWindows.value.map((item) => [item.componentName, item]),
+    )
     const restoredWindowIds = new Set<string>()
 
     const restored = config.flatMap((item: any) => {
-      const windowDefinition = allowedById.get(normalizeWindowId(item.windowId ?? ''))
-        ?? allowedByComponent.get(item.componentName === 'RtkPost' || item.componentName === 'RtkNavi' ? 'GnssSolver' : item.componentName)
+      const windowDefinition =
+        allowedById.get(normalizeWindowId(item.windowId ?? '')) ??
+        allowedByComponent.get(
+          item.componentName === 'RtkPost' || item.componentName === 'RtkNavi'
+            ? 'GnssSolver'
+            : item.componentName,
+        )
       if (!windowDefinition || restoredWindowIds.has(windowDefinition.id)) return []
 
       restoredWindowIds.add(windowDefinition.id)
 
-      return [{
-        ...item,
-        windowId: windowDefinition.id,
-        titleName: windowDefinition.title,
-        componentName: windowDefinition.componentName,
-        component: markRaw(loadComponent(windowDefinition.componentPath)),
-      }]
+      return [
+        {
+          ...item,
+          minH:
+            item.minH === 5 || item.minH === undefined ? DEFAULT_PANEL_MIN_HEIGHT_ROWS : item.minH,
+          windowId: windowDefinition.id,
+          titleName: windowDefinition.title,
+          componentName: windowDefinition.componentName,
+          component: markRaw(loadComponent(windowDefinition.componentPath)),
+        },
+      ]
     })
 
     const missing = allowedWindows.value
-      .filter(windowDefinition =>
-        !restoredWindowIds.has(windowDefinition.id) && !removedWindowIds.has(windowDefinition.id))
+      .filter(
+        (windowDefinition) =>
+          !restoredWindowIds.has(windowDefinition.id) && !removedWindowIds.has(windowDefinition.id),
+      )
       .map((windowDefinition, index) => createLayoutItem(windowDefinition, restored.length + index))
 
     layoutDraggableList.value = [...restored, ...missing]
@@ -229,7 +253,7 @@ export function useLayoutManager() {
     showToolBar.value = savedLayout?.showToolBar ?? true
     toolbarPosition.value = savedLayout?.toolbarPosition ?? 'bottom'
     statusbarPosition.value = savedLayout?.statusbarPosition ?? 'right'
-    savedLayout?.removedWindowIds?.forEach(id => removedWindowIds.add(normalizeWindowId(id)))
+    savedLayout?.removedWindowIds?.forEach((id) => removedWindowIds.add(normalizeWindowId(id)))
 
     // 恢复完成，此后停靠位置变化才静默持久化
     layoutPersistenceReady = true
@@ -306,7 +330,7 @@ export function useLayoutManager() {
   }
 
   function removeItem(id: string) {
-    const index = layoutDraggableList.value.findIndex(item => item.i === id)
+    const index = layoutDraggableList.value.findIndex((item) => item.i === id)
     if (index === -1) return
 
     removedWindowIds.add(layoutDraggableList.value[index].windowId)

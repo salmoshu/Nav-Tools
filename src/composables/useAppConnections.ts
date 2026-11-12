@@ -9,6 +9,7 @@ import { useApplicationSelector } from '@/composables/useApplicationSelector'
 import { useDevice } from '@/hooks/useDevice'
 import { useMcapPlayer } from '@/composables/useMcapPlayer'
 import { useGnssRaw } from '@/composables/useGnssRaw'
+import { isCameraTcpDataConnected } from '@/core/camera/CameraConnectionStatus'
 
 export type AppConnectionStatus = 'connected' | 'connecting' | 'disconnected'
 
@@ -21,6 +22,8 @@ export interface AppConnectionItem {
   note?: string
   action?: () => void
   actionLabel?: string
+  configAction?: () => void
+  configActionLabel?: string
 }
 
 export interface AppConnectionsContext {
@@ -31,6 +34,15 @@ export interface AppConnectionsContext {
 // —— 相机专属通道状态（RTSP 会话 / 标定 SSH）：主进程快照 + 事件推送 ——
 const cameraStreamSessions = ref<Array<{ url: string; ownerWindowId: number }>>([])
 const calibrationSsh = ref<{ state: string; host: string; port: number } | null>(null)
+const cameraAccess = ref({
+  host: '',
+  port: 22,
+  username: 'root',
+  password: '',
+  hasPassword: false,
+})
+let cameraAccessLoaded = false
+const cameraSshConfigVisible = ref(false)
 
 let calSnapshotListening = false
 function ensureCalibrationStateListener(): void {
@@ -58,47 +70,60 @@ async function refresh(): Promise<void> {
     /* 快照不可用时忽略 */
   }
   try {
-    cameraStreamSessions.value = (await window.ipcRenderer.invoke('camera-stream-sessions')) as Array<{
+    cameraStreamSessions.value = (await window.ipcRenderer.invoke(
+      'camera-stream-sessions',
+    )) as Array<{
       url: string
       ownerWindowId: number
     }>
   } catch {
     cameraStreamSessions.value = []
   }
-  try {
-    const access = (await window.ipcRenderer.invoke('camera-calibration-access')) as {
-      host?: string
-      port?: number
-    } | null
-    if (access?.host) {
-      calibrationSsh.value = {
-        host: access.host,
-        port: access.port ?? 22,
-        state: calibrationSsh.value?.state ?? 'disconnected',
+  if (!cameraAccessLoaded) {
+    try {
+      const access = (await window.ipcRenderer.invoke('camera-calibration-access')) as {
+        host?: string
+        port?: number
+        username?: string
+        hasPassword?: boolean
+      } | null
+      cameraAccess.value = {
+        host: access?.host ?? '',
+        port: access?.port ?? 22,
+        username: access?.username ?? 'root',
+        password: '',
+        hasPassword: access?.hasPassword ?? false,
       }
+      cameraAccessLoaded = true
+      if (access?.host) {
+        calibrationSsh.value = {
+          host: access.host,
+          port: access.port ?? 22,
+          state: calibrationSsh.value?.state ?? 'disconnected',
+        }
+      }
+    } catch {
+      calibrationSsh.value = null
     }
-  } catch {
-    calibrationSsh.value = null
   }
 }
 
-async function startCalibrationObservation(fallbackHost: string): Promise<void> {
+async function startCalibrationObservation(fallbackHost: string): Promise<boolean> {
   try {
-    const access = (await window.ipcRenderer.invoke('camera-calibration-access')) as {
-      host?: string
-      port?: number
-      username?: string
-      hasPassword?: boolean
-    } | null
-    const host = access?.host || fallbackHost
-    if (!host) return
+    const access = cameraAccess.value
+    const host = access.host.trim() || fallbackHost
+    if (!host) return false
     await window.ipcRenderer.invoke('camera-calibration-observe', {
       host,
-      port: access?.port ?? 22,
-      username: access?.username ?? 'root',
+      port: access.port,
+      username: access.username.trim() || 'root',
+      password: access.password,
     })
+    cameraAccess.value = { ...access, password: '', hasPassword: true }
+    return true
   } catch (error) {
     ElMessage.warning(error instanceof Error ? error.message : String(error))
+    return false
   }
 }
 
@@ -116,6 +141,9 @@ function baseName(path: string): string {
 
 export function useAppConnections(ctx: AppConnectionsContext): {
   items: ComputedRef<AppConnectionItem[]>
+  cameraAccess: typeof cameraAccess
+  cameraSshConfigVisible: typeof cameraSshConfigVisible
+  connect: (fallbackHost: string) => Promise<boolean>
   refresh: () => Promise<void>
 } {
   const { currentWindows } = useApplicationSelector()
@@ -133,13 +161,14 @@ export function useAppConnections(ctx: AppConnectionsContext): {
       : device.deviceConnecting.value
         ? 'connecting'
         : 'disconnected'
+    const source = device.activeSource.value
 
     // 主数据源（串口/网络/文件）：general/gnss 组件共用；终端组件自管连接，不参与
     const needMainSource = windows.some(
       (w) => (w.catalogGroup === 'general' || w.catalogGroup === 'gnss') && w.id !== 'terminal',
     )
+    const sharesCameraControl = groups.has('camera') && needMainSource && source === 'network'
     if (needMainSource) {
-      const source = device.activeSource.value
       let proto = '—'
       let endpoint = '—'
       if (source === 'serial') {
@@ -158,7 +187,9 @@ export function useAppConnections(ctx: AppConnectionsContext): {
       }
       list.push({
         id: 'main-source',
-        label: t('app.toolbar.appConnMainSource'),
+        label: sharesCameraControl
+          ? t('app.toolbar.appConnControl')
+          : t('app.toolbar.appConnMainSource'),
         proto,
         endpoint,
         status: mainStatus,
@@ -168,16 +199,25 @@ export function useAppConnections(ctx: AppConnectionsContext): {
     }
 
     if (groups.has('camera')) {
-      // 控制通道(TCP)：即主数据源的网络连接，在此呈现为相机控制
-      list.push({
-        id: 'camera-control-tcp',
-        label: t('app.toolbar.appConnControl'),
-        proto: 'TCP',
-        endpoint: `${device.networkIp.value || '—'}:${device.networkPort.value || '—'}`,
-        status: mainStatus,
-        action: () => ctx.gotoTab('network'),
-        actionLabel: t('app.toolbar.appConnGotoConfig'),
-      })
+      if (!sharesCameraControl) {
+        const connected = isCameraTcpDataConnected(device.globalDevice.value, {
+          host: device.networkIp.value,
+          port: device.networkPort.value ?? 0,
+        })
+        list.push({
+          id: 'camera-control-tcp',
+          label: t('app.toolbar.appConnControl'),
+          proto: 'TCP',
+          endpoint: `${device.networkIp.value || '—'}:${device.networkPort.value || '—'}`,
+          status: connected
+            ? 'connected'
+            : source === 'network' && mainStatus === 'connecting'
+              ? 'connecting'
+              : 'disconnected',
+          action: () => ctx.gotoTab('network'),
+          actionLabel: t('app.toolbar.appConnGotoConfig'),
+        })
+      }
 
       // 视频通道(RTSP)：由相机视频组件自动管理（播放时自动连接）
       const rtspActive = cameraStreamSessions.value.length > 0
@@ -206,6 +246,10 @@ export function useAppConnections(ctx: AppConnectionsContext): {
         actionLabel: sshConnected
           ? t('app.toolbar.appConnDisconnect')
           : t('app.toolbar.appConnConnect'),
+        configAction: () => {
+          cameraSshConfigVisible.value = true
+        },
+        configActionLabel: t('app.toolbar.appConnGotoConfig'),
       })
     }
 
@@ -246,5 +290,11 @@ export function useAppConnections(ctx: AppConnectionsContext): {
     return list
   })
 
-  return { items, refresh }
+  return {
+    items,
+    cameraAccess,
+    cameraSshConfigVisible,
+    connect: startCalibrationObservation,
+    refresh,
+  }
 }

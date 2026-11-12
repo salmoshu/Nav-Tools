@@ -64,9 +64,7 @@ test('caps component chips on the application card and lists the rest in the ove
   await expect(overflowItems).toHaveCount(9 - visibleCount)
 })
 
-test('creates a location-choosing shortcut from the card header button (no standalone window)', async ({
-  page,
-}) => {
+test('creates a shortcut and detaches a component from the card actions menu', async ({ page }) => {
   await page.addInitScript(() => {
     localStorage.setItem(
       'nav-tools:custom-applications',
@@ -92,9 +90,10 @@ test('creates a location-choosing shortcut from the card header button (no stand
       configurable: true,
       value: {
         invoke: async (channel: string, payload: unknown) => {
-          if (channel === 'create-desktop-shortcut') {
+          if (channel === 'create-desktop-shortcut' || channel === 'open-card-window') {
             void window.__recordInvoke(channel, payload)
-            return { ok: true }
+            if (channel === 'create-desktop-shortcut') return { ok: true }
+            return 1
           }
           if (channel === 'terminal-capabilities') {
             return { platform: 'win32', localShells: [], wslDistros: [], sshAvailable: true }
@@ -117,11 +116,14 @@ test('creates a location-choosing shortcut from the card header button (no stand
     await backdrop.getByRole('button', { name: 'Close Application Selector', exact: true }).click()
   }
   await expect(backdrop).toHaveCount(0)
-  const shortcut = page.locator('.card-actions .shortcut-btn').first()
+  const detachedPanel = page.locator('.layout-component')
+  await expect(detachedPanel).toHaveCount(1)
+  const shortcut = page.locator('.card-actions .panel-actions-trigger').first()
   await expect(shortcut).toBeVisible()
   await shortcut.click()
+  await page.getByRole('menuitem', { name: /创建快捷方式|Create shortcut/ }).click()
 
-  // 主界面按钮只创建快捷方式,不再打开独立窗口
+  // 创建快捷方式不会移除容器内的组件
   await expect
     .poll(() =>
       invokeLog.filter((call) => call.channel === 'create-desktop-shortcut').map((c) => c.payload),
@@ -130,7 +132,18 @@ test('creates a location-choosing shortcut from the card header button (no stand
   const payload = invokeLog[0].payload as { windowId: string; iconDataUrl: string }
   expect(payload.windowId).toBe('terminal')
   expect(typeof payload.iconDataUrl).toBe('string')
-  // 卡片保留在布局中:分离按钮与卡片都还在
-  await expect(page.locator('.card-actions .detach-btn').first()).toBeVisible()
-  await expect(page.locator('.layout-component').first()).toBeVisible()
+  await expect(detachedPanel).toHaveCount(1)
+
+  await shortcut.click()
+  await page.getByRole('menuitem', { name: /分离到独立窗口|Detach to Separate Window/ }).click()
+  await expect
+    .poll(() => invokeLog.filter((call) => call.channel === 'open-card-window').length)
+    .toBe(1)
+
+  const detachCall = invokeLog.find((call) => call.channel === 'open-card-window')
+  expect(JSON.parse(String(detachCall?.payload))).toMatchObject({
+    componentName: 'Terminal',
+    windowId: 'terminal',
+  })
+  await expect(detachedPanel).toHaveCount(0)
 })

@@ -95,7 +95,7 @@ describe('default application preferences', () => {
     expect(reloaded.applications.value).toHaveLength(7)
     reloaded.setDefaultApplicationEnabled('camera', true)
     expect(reloaded.visibleApplications.value.find(({ id }) => id === 'camera')?.windowIds).toEqual(
-      ['camera-video', 'camera-parameters', 'terminal'],
+      ['camera-video', 'camera-parameters', 'raw-messages', 'terminal'],
     )
   })
 

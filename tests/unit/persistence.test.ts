@@ -75,7 +75,7 @@ describe('panel and application persistence', () => {
     expect(applications[5]).toMatchObject({
       id: 'camera',
       icon: 'camera',
-      windowIds: ['camera-video', 'camera-parameters', 'terminal'],
+      windowIds: ['camera-video', 'camera-parameters', 'raw-messages', 'terminal'],
     })
     expect(applications[6]).toMatchObject({
       id: 'lidar',
@@ -145,7 +145,12 @@ describe('panel and application persistence', () => {
     const cameraApp = () =>
       storage.loadApplications().find((application) => application.id === 'camera')!
 
-    expect(cameraApp().windowIds).toEqual(['camera-video', 'camera-parameters', 'terminal'])
+    expect(cameraApp().windowIds).toEqual([
+      'camera-video',
+      'camera-parameters',
+      'raw-messages',
+      'terminal',
+    ])
     storage.saveApplications([{ ...cameraApp(), windowIds: ['camera-video'] }])
     expect(cameraApp().windowIds).toEqual(['camera-video'])
   })
@@ -171,9 +176,50 @@ describe('panel and application persistence', () => {
     const cameraApp = () =>
       storage.loadApplications().find((application) => application.id === 'camera')!
 
-    expect(cameraApp().windowIds).toEqual(['camera-video', 'camera-parameters', 'terminal'])
+    expect(cameraApp().windowIds).toEqual([
+      'camera-video',
+      'camera-parameters',
+      'raw-messages',
+      'terminal',
+    ])
     storage.saveApplications([{ ...cameraApp(), windowIds: ['camera-video', 'camera-parameters'] }])
     expect(cameraApp().windowIds).toEqual(['camera-video', 'camera-parameters'])
+  })
+
+  it('adds Raw Messages once to an existing Camera application', () => {
+    const memory = new MemoryStorage()
+    for (const key of [
+      'nav-tools:migration:camera-default-v1',
+      'nav-tools:migration:camera-parameters-v1',
+      'nav-tools:migration:camera-terminal-v1',
+    ]) {
+      memory.setItem(key, '1')
+    }
+    memory.setItem(
+      'nav-tools:custom-applications',
+      JSON.stringify([
+        {
+          id: 'camera',
+          name: 'Camera',
+          description: '',
+          icon: 'camera',
+          accent: '#14b8a6',
+          windowIds: ['camera-video', 'camera-parameters', 'terminal'],
+        },
+      ]),
+    )
+    const storage = new ApplicationStorage(new JsonStorage(memory))
+    const cameraApp = () =>
+      storage.loadApplications().find((application) => application.id === 'camera')!
+
+    expect(cameraApp().windowIds).toEqual([
+      'camera-video',
+      'camera-parameters',
+      'raw-messages',
+      'terminal',
+    ])
+    storage.saveApplications([{ ...cameraApp(), windowIds: ['camera-video'] }])
+    expect(cameraApp().windowIds).toEqual(['camera-video'])
   })
 
   it('adds Serial once when upgrading an existing application list without Serial', () => {
@@ -328,6 +374,7 @@ describe('panel and application persistence', () => {
       'nav-tools:migration:camera-default-v1',
       'nav-tools:migration:camera-parameters-v1',
       'nav-tools:migration:camera-terminal-v1',
+      'nav-tools:migration:camera-messages-v1',
       'nav-tools:migration:serial-default-v1',
       'nav-tools:migration:lidar-default-v1',
       'nav-tools:migration:gnssraw-default-v1',
@@ -603,23 +650,47 @@ describe('DataSourceStorage', () => {
 })
 
 describe('CameraParametersStorage', () => {
-  it('persists camera command inputs across application restarts', () => {
+  it('persists independent content and format for each sub-command', () => {
     const memory = new MemoryStorage()
     const storage = new CameraParametersStorage(new JsonStorage(memory))
 
-    storage.save({
-      version: 1,
-      subCommand: 'bbox_draw',
-      content: '06',
-      contentIsHex: true,
+    expect(storage.getCommandSettings('set_range')).toEqual({
+      content: '1.000,1.500',
+      contentIsHex: false,
     })
+    storage.saveCommand('set_params', '0.55,62.292,-20', false)
+    storage.saveCommand('set_range', '1.000,1.500', false)
+    storage.saveCommand('bbox_draw', '06', true)
 
-    expect(memory.getItem(CAMERA_PARAMETERS_SETTINGS_KEY)).not.toBeNull()
-    expect(new CameraParametersStorage(new JsonStorage(memory)).load()).toEqual({
-      version: 1,
+    expect(storage.getCommandSettings('set_params')).toEqual({
+      content: '0.55,62.292,-20',
+      contentIsHex: false,
+    })
+    expect(storage.getCommandSettings('set_range')).toEqual({
+      content: '1.000,1.500',
+      contentIsHex: false,
+    })
+    expect(storage.getCommandSettings('bbox_draw')).toEqual({ content: '06', contentIsHex: true })
+    expect(storage.getCommandSettings('read_params')).toEqual({ content: '', contentIsHex: false })
+    expect(storage.load()).toMatchObject({ version: 2, subCommand: 'bbox_draw' })
+  })
+
+  it('migrates the legacy single content value without losing it', () => {
+    const memory = new MemoryStorage()
+    memory.setItem(
+      CAMERA_PARAMETERS_SETTINGS_KEY,
+      JSON.stringify({ version: 1, subCommand: 'bbox_draw', content: '04', contentIsHex: true }),
+    )
+    const storage = new CameraParametersStorage(new JsonStorage(memory))
+
+    expect(storage.load()).toMatchObject({
+      version: 2,
       subCommand: 'bbox_draw',
-      content: '06',
-      contentIsHex: true,
+      commandSettings: {
+        bbox_draw: { content: '04', contentIsHex: true },
+        set_params: { content: '0.55,62.292,-22', contentIsHex: false },
+        set_range: { content: '1.000,1.500', contentIsHex: false },
+      },
     })
   })
 
@@ -629,13 +700,15 @@ describe('CameraParametersStorage', () => {
       CAMERA_PARAMETERS_SETTINGS_KEY,
       JSON.stringify({ host: 1, port: 70000, subCommand: 'unknown', content: null }),
     )
+    const storage = new CameraParametersStorage(new JsonStorage(memory))
 
-    expect(new CameraParametersStorage(new JsonStorage(memory)).load()).toMatchObject({
+    expect(storage.load()).toMatchObject({
       subCommand: 'set_params',
-      content: '0.55,62.292,-22',
-      contentIsHex: false,
+      commandSettings: {
+        set_params: { content: '0.55,62.292,-22', contentIsHex: false },
+      },
     })
-    expect(new CameraParametersStorage(new JsonStorage(memory)).load()).not.toHaveProperty('host')
-    expect(new CameraParametersStorage(new JsonStorage(memory)).load()).not.toHaveProperty('port')
+    expect(storage.load()).not.toHaveProperty('host')
+    expect(storage.load()).not.toHaveProperty('port')
   })
 })

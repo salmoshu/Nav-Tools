@@ -38,26 +38,27 @@ describe('camera configuration separation', () => {
     expect(deviceSource).not.toContain("case 'camera'")
   })
 
-  it('configures the RTSP stream parts in a dedicated Camera Video dialog', () => {
+  it('configures RTSP parts separately and links person-information settings to Data Source', () => {
     expect(cameraVideoSource).toContain('camera-video-source-dialog')
     expect(cameraVideoSource).toContain('v-model="streamProtocolDraft"')
     expect(cameraVideoSource).toContain('v-model="streamPortDraft"')
     expect(cameraVideoSource).toContain('v-model="streamSuffixDraft"')
     expect(cameraVideoSource).toContain('saveCameraSourceSettings')
     expect(cameraVideoSource).toContain('CameraVideoStorage')
-    expect(cameraVideoSource).not.toContain("emitter.emit('input-event'")
+    expect(cameraVideoSource).toContain('openObservationConnectionSettings')
+    expect(cameraVideoSource).toContain(
+      "emitter.emit('input-event', { tab: 'connections', protocol: 'tcp' })",
+    )
   })
 
-  it('shows read-only TCP settings and delegates editing to the network data-input tab', () => {
-    expect(cameraParametersSource).toContain(':model-value="host"')
-    expect(cameraParametersSource).toContain(':model-value="portText"')
-    expect(cameraParametersSource).toContain('readonly')
+  it('delegates all camera connection management to Data Source', () => {
+    expect(cameraParametersSource).not.toContain("t('common.camera.tabs.connection')")
+    expect(cameraParametersSource).not.toContain(':model-value="host"')
+    expect(cameraParametersSource).not.toContain(':model-value="portText"')
     expect(cameraParametersSource).toContain('openNetworkSettings')
     expect(cameraParametersSource).toContain(
-      "emitter.emit('input-event', { tab: 'network', protocol: 'tcp' })",
+      "emitter.emit('input-event', { tab: 'connections', protocol: 'tcp' })",
     )
-    expect(cameraParametersSource).toContain('model-value="0x00000001"')
-    expect(cameraParametersSource).toContain("t('common.camera.loginCommand')")
     expect(deviceSource).toContain("requestedProtocol === 'tcp'")
   })
 

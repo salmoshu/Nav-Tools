@@ -1,6 +1,9 @@
 <template>
   <section class="camera-player">
-    <div class="video-stage" :class="{ 'has-frame': Boolean(frameUrl) }">
+    <div
+      class="video-stage"
+      :class="{ 'has-frame': Boolean(frameUrl), 'has-bbox': Boolean(frameUrl) }"
+    >
       <div
         class="video-zoom"
         :style="zoomStyle"
@@ -15,6 +18,41 @@
           class="video-frame"
           draggable="false"
         />
+      </div>
+
+      <div
+        v-if="frameUrl"
+        class="bbox-overlay"
+        role="group"
+        :aria-label="t('common.video.targetFields')"
+      >
+        <template v-if="bboxTargets.length > 0">
+          <div
+            v-for="(target, index) in measurementTargets"
+            :key="`${target.trackId}-${index}`"
+            class="bbox-target"
+          >
+            <div class="bbox-target-identity">
+              <strong>#{{ index + 1 }}</strong>
+              <span>class={{ target.classId }}</span>
+              <span>track={{ target.trackId }}</span>
+            </div>
+            <div class="bbox-measurement">
+              distance={{ target.distance.toFixed(3) }} m
+              <span class="bbox-average">(avg {{ target.averageDistance.toFixed(3) }} m)</span>
+            </div>
+            <div class="bbox-measurement">
+              azimuth={{ target.azimuth.toFixed(3) }}°
+              <span class="bbox-average">(avg {{ target.averageAzimuth.toFixed(3) }}°)</span>
+            </div>
+          </div>
+        </template>
+        <div v-else class="bbox-empty">
+          <span>{{ emptyTargetText }}</span>
+          <button type="button" class="bbox-config" @click="openObservationConnectionSettings">
+            {{ t('common.video.configureConnection') }}
+          </button>
+        </div>
       </div>
 
       <div v-if="!frameUrl" class="stage-placeholder">
@@ -133,7 +171,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Link, Loading, VideoCamera, VideoPause, VideoPlay } from '@element-plus/icons-vue'
 import { t } from '@/i18n'
@@ -144,6 +182,11 @@ import {
 } from '@/core/camera/CameraVideoStorage'
 import { JsonStorage } from '@/core/storage/JsonStorage'
 import { useDataSourceManager } from '@/composables/useDataSourceManager'
+import { useDevice } from '@/hooks/useDevice'
+import { showToolBar } from '@/composables/useStatusManager'
+import emitter from '@/hooks/useMitt'
+import { isCameraTcpDataConnected } from '@/core/camera/CameraConnectionStatus'
+import type { CameraCalibrationSnapshot } from '@/core/camera/CameraCalibrationTypes'
 
 type StreamStatus = 'idle' | 'connecting' | 'playing' | 'stopped' | 'error' | 'unavailable'
 type StreamStatusPayload = { status?: StreamStatus; message?: string }
@@ -151,6 +194,13 @@ type StreamStatusPayload = { status?: StreamStatus; message?: string }
 // IP 与循环重连开关与数据接入 NETWORK 共用，相机只持久化协议/端口/后缀
 const { settings: dataSourceSettings, saveSettings: saveDataSourceSettings } =
   useDataSourceManager()
+const { globalDevice } = useDevice()
+const cameraTcpConnected = computed(() =>
+  isCameraTcpDataConnected(globalDevice.value, {
+    host: dataSourceSettings.network.host,
+    port: dataSourceSettings.network.port ?? 0,
+  }),
+)
 const videoStorage = new CameraVideoStorage(new JsonStorage(window.localStorage))
 const initialSettings = videoStorage.load()
 const streamProtocol = ref(initialSettings.protocol)
@@ -171,6 +221,149 @@ const showCameraSourceDialog = ref(false)
 const status = ref<StreamStatus>('idle')
 const statusMessage = ref(t('common.video.waitingToPlay'))
 const frameUrl = ref('')
+const inssegState = ref<CameraCalibrationSnapshot | null>(null)
+const bboxFresh = ref(false)
+const BBOX_STALE_MS = 1500
+let bboxFreshTimer: ReturnType<typeof setTimeout> | undefined
+let bboxFrameKey = ''
+
+const bboxTargets = computed(() =>
+  frameUrl.value && bboxFresh.value && inssegState.value?.observing
+    ? (inssegState.value.lastFrame?.targets ?? [])
+    : [],
+)
+
+type MeasurementSample = { at: number; distance: number; azimuth: number }
+const measurementSamples = new Map<number, MeasurementSample[]>()
+const measurementAverages = ref<Record<number, { distance: number; azimuth: number }>>({})
+const measurementTargets = computed(() =>
+  bboxTargets.value.map((target) => ({
+    ...target,
+    averageDistance: measurementAverages.value[target.trackId]?.distance ?? target.distance,
+    averageAzimuth: measurementAverages.value[target.trackId]?.azimuth ?? target.azimuth,
+  })),
+)
+
+function recordMeasurementSamples(targets: typeof bboxTargets.value) {
+  const at = Date.now()
+  for (const target of targets) {
+    const samples = measurementSamples.get(target.trackId) ?? []
+    samples.push({ at, distance: target.distance, azimuth: target.azimuth })
+    measurementSamples.set(target.trackId, samples)
+    if (!measurementAverages.value[target.trackId]) {
+      measurementAverages.value[target.trackId] = {
+        distance: target.distance,
+        azimuth: target.azimuth,
+      }
+    }
+  }
+}
+
+function updateMeasurementAverages() {
+  const cutoff = Date.now() - 2000
+  const next: typeof measurementAverages.value = {}
+  for (const [trackId, samples] of measurementSamples) {
+    const recent = samples.filter((sample) => sample.at >= cutoff)
+    if (recent.length === 0) {
+      measurementSamples.delete(trackId)
+      continue
+    }
+    measurementSamples.set(trackId, recent)
+    next[trackId] = {
+      distance: recent.reduce((sum, sample) => sum + sample.distance, 0) / recent.length,
+      azimuth: recent.reduce((sum, sample) => sum + sample.azimuth, 0) / recent.length,
+    }
+  }
+  measurementAverages.value = next
+}
+
+const measurementTimer = setInterval(updateMeasurementAverages, 2000)
+
+function clearBboxFreshTimer() {
+  if (bboxFreshTimer === undefined) return
+  clearTimeout(bboxFreshTimer)
+  bboxFreshTimer = undefined
+}
+
+function updateInssegState(state: CameraCalibrationSnapshot) {
+  inssegState.value = state
+  const frame = state.observing ? state.lastFrame : null
+  const nextFrameKey = frame ? `${frame.timestamp}/${frame.index}/${frame.pictureIndex}` : ''
+  if (nextFrameKey === bboxFrameKey && frame?.targets.length) return
+
+  bboxFrameKey = nextFrameKey
+  if (!frame?.targets.length) {
+    measurementSamples.clear()
+    measurementAverages.value = {}
+  }
+  recordMeasurementSamples(frame?.targets ?? [])
+  clearBboxFreshTimer()
+  bboxFresh.value = Boolean(frame?.targets.length)
+  if (!bboxFresh.value) return
+  bboxFreshTimer = setTimeout(() => {
+    bboxFreshTimer = undefined
+    bboxFresh.value = false
+  }, BBOX_STALE_MS)
+}
+
+let observationWanted = false
+let observationLease = false
+let observationStart: Promise<void> | undefined
+let observationGeneration = 0
+const observationConnecting = ref(false)
+const emptyTargetText = computed(() => {
+  if (observationConnecting.value || inssegState.value?.ssh?.state === 'connecting') {
+    return t('common.video.personInfoConnecting')
+  }
+  return inssegState.value?.observing
+    ? t('common.video.noPersonDetected')
+    : t('common.video.personInfoDisconnected')
+})
+
+async function openObservationConnectionSettings() {
+  if (showToolBar.value === false) {
+    showToolBar.value = true
+    await nextTick()
+  }
+  emitter.emit('input-event', { tab: 'connections', protocol: 'tcp' })
+}
+
+function ensureVideoObservation(): void {
+  if (!observationWanted || observationLease || observationStart) return
+  const api = window.electronAPI
+  if (!api?.cameraCalibrationAccess || !api.cameraCalibrationObserve) return
+  observationConnecting.value = true
+  const task = (async () => {
+    const access = await api.cameraCalibrationAccess()
+    const state = await api.cameraCalibrationObserve({
+      host: access?.host || dataSourceSettings.network.host.trim(),
+      port: access?.port ?? 22,
+      username: access?.username || 'root',
+    })
+    observationLease = true
+    updateInssegState(state)
+  })()
+    .catch(() => undefined)
+    .finally(() => {
+      observationConnecting.value = false
+      if (observationStart === task) observationStart = undefined
+    })
+  observationStart = task
+}
+
+async function releaseVideoObservation(): Promise<void> {
+  observationWanted = false
+  const generation = ++observationGeneration
+  if (observationStart) await observationStart
+  if (generation !== observationGeneration || !observationLease) return
+  observationLease = false
+  const state = await window.electronAPI?.cameraCalibrationClose?.().catch(() => undefined)
+  if (state) updateInssegState(state)
+}
+
+watch(cameraTcpConnected, (connected) => {
+  if (connected) ensureVideoObservation()
+})
 
 const RECONNECT_DELAY_MS = 3000
 let reconnectTimer: ReturnType<typeof setTimeout> | undefined
@@ -305,7 +498,11 @@ async function startStream() {
     status.value = 'error'
     statusMessage.value = result.message || t('common.video.errStartStream')
     scheduleReconnect()
+    return
   }
+  observationGeneration++
+  observationWanted = true
+  ensureVideoObservation()
 }
 
 function openCameraSourceSettings() {
@@ -335,6 +532,7 @@ function saveCameraSourceSettings() {
 async function pauseStream() {
   clearReconnectTimer()
   await window.electronAPI?.stopCameraStream?.()
+  await releaseVideoObservation()
   revokeFrameUrl()
   status.value = 'stopped'
   statusMessage.value = t('common.video.paused')
@@ -361,15 +559,33 @@ const statusListener = (_event: unknown, payload: StreamStatusPayload) => {
   }
 }
 
+let inssegListenerActive = true
+const inssegStateListener = (_event: unknown, state: CameraCalibrationSnapshot) => {
+  if (!inssegListenerActive || !state || typeof state !== 'object') return
+  updateInssegState(state)
+}
+
 onMounted(() => {
   window.ipcRenderer?.on('camera-stream-frame', frameListener)
   window.ipcRenderer?.on('camera-stream-status', statusListener)
+  window.ipcRenderer?.on('camera-calibration-state', inssegStateListener)
+  void window.electronAPI
+    ?.cameraCalibrationSnapshot?.()
+    .then((state) => {
+      if (inssegListenerActive && state) updateInssegState(state)
+    })
+    .catch(() => undefined)
 })
 
 onUnmounted(() => {
+  inssegListenerActive = false
   clearReconnectTimer()
+  clearBboxFreshTimer()
+  clearInterval(measurementTimer)
   window.ipcRenderer?.off('camera-stream-frame', frameListener)
   window.ipcRenderer?.off('camera-stream-status', statusListener)
+  window.ipcRenderer?.off('camera-calibration-state', inssegStateListener)
+  void releaseVideoObservation()
   void window.electronAPI?.stopCameraStream?.()
   revokeFrameUrl()
 })
@@ -499,6 +715,93 @@ onUnmounted(() => {
   height: 100%;
   object-fit: contain;
   user-select: none;
+}
+
+.bbox-overlay {
+  position: absolute;
+  z-index: 2;
+  left: 10px;
+  bottom: 10px;
+  display: grid;
+  gap: 6px;
+  max-width: calc(100% - 20px);
+  max-height: calc(100% - 64px);
+  padding: 8px 10px;
+  overflow-y: auto;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  color: #dbe5ee;
+  background: rgba(5, 10, 15, 0.78);
+  font-family: 'Consolas', 'Monaco', monospace;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.45;
+  scrollbar-width: thin;
+  backdrop-filter: blur(6px);
+}
+
+.bbox-target {
+  display: grid;
+  gap: 2px;
+}
+
+.bbox-target + .bbox-target {
+  padding-top: 6px;
+  border-top: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+.bbox-target-identity {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 12px;
+}
+
+.bbox-measurement {
+  display: block;
+}
+
+.bbox-average {
+  margin-left: 4px;
+  color: #a9bcc9;
+}
+
+.bbox-target-identity strong {
+  color: #67e8f9;
+  font-weight: 600;
+}
+
+.bbox-empty {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+}
+
+.bbox-config {
+  padding: 2px 7px;
+  border: 1px solid rgba(103, 232, 249, 0.4);
+  border-radius: 4px;
+  color: #67e8f9;
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+}
+
+.bbox-config:hover,
+.bbox-config:focus-visible {
+  border-color: #67e8f9;
+  background: rgba(103, 232, 249, 0.1);
+  outline: none;
+}
+
+.video-stage.has-bbox .zoom-hint {
+  top: 10px;
+  bottom: auto;
+}
+
+.video-stage.has-bbox .stream-status {
+  top: 10px;
+  bottom: auto;
 }
 
 .zoom-hint {

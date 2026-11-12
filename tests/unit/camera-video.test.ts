@@ -32,7 +32,7 @@ describe('camera panels', () => {
       expect.objectContaining({
         id: 'camera',
         icon: 'camera',
-        windowIds: ['camera-video', 'camera-parameters', 'terminal'],
+        windowIds: ['camera-video', 'camera-parameters', 'raw-messages', 'terminal'],
       }),
     )
   })
@@ -44,8 +44,13 @@ describe('camera panels', () => {
     expect(source).toContain("t('common.camera.subCommandContent')")
     expect(source).toMatch(/<el-switch\s+v-model="contentIsHex"/)
     expect(source).toContain(':rows="3"')
-    expect(source).toContain("t('common.camera.loginCommand')")
-    expect(source).toContain('model-value="0x00000001"')
+    expect(source).not.toContain("t('common.camera.tabs.connection')")
+    expect(source).not.toContain("activeTab = 'connection'")
+    expect(source).not.toContain('class="connection-grid"')
+    expect(source).toContain('const { addMessage } = useConsole(true)')
+    expect(source).not.toContain('class="output-summary"')
+    expect(source).not.toContain('class="script-output"')
+    expect(source).not.toContain('showFullOutput')
     expect(source).not.toContain('class="readonly-command"')
     expect(source).toContain('const showCommandHelp = ref(false)')
     expect(source).toContain('@click="showCommandHelp = true"')

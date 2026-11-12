@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { panelRegistry } from '../../src/core/panels/registry'
 import { getWindowById } from '../../src/settings/config'
 import { componentBadgeSvg, recolorSvg } from '../../src/core/panels/componentIcon'
+import { getPanelIconComponent } from '../../src/settings/panelIcons'
 
 describe('componentIcon 组件图形解析', () => {
   it('注册表中的每个面板都能解析出组件图形 SVG（无纯 logo 退化）', () => {
@@ -21,6 +22,10 @@ describe('componentIcon 组件图形解析', () => {
         .map((panel) => componentBadgeSvg(getWindowById(panel.id)!.action))
       expect(new Set(svgs).size).toBe(svgs.length)
     }
+  })
+
+  it('消息与终端使用不同的标题图标', () => {
+    expect(getPanelIconComponent('console')).not.toBe(getPanelIconComponent('terminal'))
   })
 })
 
@@ -41,7 +46,10 @@ describe('recolorSvg 单色素描化', () => {
   })
 
   it('根节点已有 fill 时不重复插入', () => {
-    const out = recolorSvg('<svg fill="#000000" viewBox="0 0 16 16"><path d="M0 0h8v8H0z"/></svg>', '#9333ea')
+    const out = recolorSvg(
+      '<svg fill="#000000" viewBox="0 0 16 16"><path d="M0 0h8v8H0z"/></svg>',
+      '#9333ea',
+    )
     expect(out).toContain('<svg fill="#9333ea"')
     expect(out.match(/<svg/g)).toHaveLength(1)
   })
@@ -133,7 +141,7 @@ describe('组件合成图标消费方接线(源码扫描)', () => {
     const header = readFileSync('src/components/AppHeader.vue', 'utf8')
     expect(header).toContain('brandIconUrl?: string')
     // 打包后走 file:// 协议,缺省回退用相对路径 ./logo.svg(绝对路径会解析到盘符根)
-    expect(header).toContain(":src=\"brandIconUrl || './logo.svg'\"")
+    expect(header).toContain(':src="brandIconUrl || \'./logo.svg\'"')
   })
 
   it('主进程窗口图标缓存与快捷方式 ICO 使用同一样式版本文件名(badge4)', () => {

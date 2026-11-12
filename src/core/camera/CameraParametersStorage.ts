@@ -17,19 +17,31 @@ export const CAMERA_SUB_COMMANDS = [
 
 export type CameraSubCommand = (typeof CAMERA_SUB_COMMANDS)[number] | ''
 
-export interface CameraParametersSettings {
-  version: 1
-  subCommand: CameraSubCommand
+export interface CameraCommandContentSettings {
   content: string
   contentIsHex: boolean
 }
 
+export interface CameraParametersSettings {
+  version: 2
+  subCommand: CameraSubCommand
+  commandSettings: Record<string, CameraCommandContentSettings>
+}
+
+function defaultsFor(subCommand: CameraSubCommand): CameraCommandContentSettings {
+  if (subCommand === 'set_params') return { content: '0.55,62.292,-22', contentIsHex: false }
+  if (subCommand === 'set_range') return { content: '1.000,1.500', contentIsHex: false }
+  return { content: '', contentIsHex: subCommand === 'bbox_draw' }
+}
+
 export function createDefaultCameraParametersSettings(): CameraParametersSettings {
   return {
-    version: 1,
+    version: 2,
     subCommand: 'set_params',
-    content: '0.55,62.292,-22',
-    contentIsHex: false,
+    commandSettings: {
+      set_params: defaultsFor('set_params'),
+      set_range: defaultsFor('set_range'),
+    },
   }
 }
 
@@ -44,14 +56,38 @@ function normalizeSettings(value: unknown): CameraParametersSettings {
       CAMERA_SUB_COMMANDS.includes(saved.subCommand as (typeof CAMERA_SUB_COMMANDS)[number]))
       ? (saved.subCommand as CameraSubCommand)
       : defaults.subCommand
+  const commandSettings = { ...defaults.commandSettings }
 
-  return {
-    version: 1,
-    subCommand,
-    content: typeof saved.content === 'string' ? saved.content : defaults.content,
-    contentIsHex:
-      typeof saved.contentIsHex === 'boolean' ? saved.contentIsHex : defaults.contentIsHex,
+  if (
+    saved.commandSettings &&
+    typeof saved.commandSettings === 'object' &&
+    !Array.isArray(saved.commandSettings)
+  ) {
+    for (const command of CAMERA_SUB_COMMANDS) {
+      const candidate = (saved.commandSettings as Record<string, unknown>)[command]
+      if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) continue
+      const entry = candidate as Record<string, unknown>
+      commandSettings[command] = {
+        content: typeof entry.content === 'string' ? entry.content : defaultsFor(command).content,
+        contentIsHex:
+          typeof entry.contentIsHex === 'boolean'
+            ? entry.contentIsHex
+            : defaultsFor(command).contentIsHex,
+      }
+    }
   }
+
+  if (typeof saved.content === 'string' || typeof saved.contentIsHex === 'boolean') {
+    commandSettings[subCommand] = {
+      content: typeof saved.content === 'string' ? saved.content : defaultsFor(subCommand).content,
+      contentIsHex:
+        typeof saved.contentIsHex === 'boolean'
+          ? saved.contentIsHex
+          : defaultsFor(subCommand).contentIsHex,
+    }
+  }
+
+  return { version: 2, subCommand, commandSettings }
 }
 
 export class CameraParametersStorage {
@@ -63,5 +99,17 @@ export class CameraParametersStorage {
 
   public save(settings: CameraParametersSettings): void {
     this.storage.write(CAMERA_PARAMETERS_SETTINGS_KEY, normalizeSettings(settings))
+  }
+
+  public getCommandSettings(subCommand: CameraSubCommand): CameraCommandContentSettings {
+    const settings = this.load()
+    return { ...(settings.commandSettings[subCommand] ?? defaultsFor(subCommand)) }
+  }
+
+  public saveCommand(subCommand: CameraSubCommand, content: string, contentIsHex: boolean): void {
+    const settings = this.load()
+    settings.subCommand = subCommand
+    settings.commandSettings[subCommand] = { content, contentIsHex }
+    this.save(settings)
   }
 }

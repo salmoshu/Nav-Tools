@@ -70,16 +70,12 @@
     </div>
 
     <div class="header-controls" @mousedown.stop @dblclick.stop>
-      <button
+      <PanelActionsMenu
         v-if="showDetachedControls"
-        class="header-button"
-        type="button"
-        :title="t('app.cardWindow.createShortcut')"
-        :aria-label="t('app.cardWindow.createShortcut')"
-        @click="$emit('create-shortcut')"
-      >
-        <SquareArrowOutUpRight :size="16" :stroke-width="1.8" aria-hidden="true" />
-      </button>
+        header
+        :shortcut-label="t('app.cardWindow.createShortcut')"
+        @create-shortcut="$emit('create-shortcut')"
+      />
       <button
         v-if="showDetachedControls"
         class="header-button"
@@ -110,7 +106,17 @@
         aria-label="退出组件全屏"
         @click="$emit('exit-panel-fullscreen')"
       >
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
           <path d="M8 3v3a2 2 0 0 1-2 2H3" />
           <path d="M21 8h-3a2 2 0 0 1-2-2V3" />
           <path d="M3 16h3a2 2 0 0 1 2 2v3" />
@@ -128,8 +134,25 @@
         @click="showToolBar = !(showToolBar !== false)"
       >
         <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
-          <rect x="1.5" y="1.5" width="13" height="13" rx="2" fill="none" stroke="currentColor" stroke-width="1.4" />
-          <rect x="3.5" y="9.5" width="9" height="3" stroke="currentColor" stroke-width="1.1" :fill="showToolBar !== false ? 'currentColor' : 'none'" />
+          <rect
+            x="1.5"
+            y="1.5"
+            width="13"
+            height="13"
+            rx="2"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.4"
+          />
+          <rect
+            x="3.5"
+            y="9.5"
+            width="9"
+            height="3"
+            stroke="currentColor"
+            stroke-width="1.1"
+            :fill="showToolBar !== false ? 'currentColor' : 'none'"
+          />
         </svg>
       </button>
       <button
@@ -143,8 +166,25 @@
         @click="showStatusBar = !(showStatusBar !== false)"
       >
         <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
-          <rect x="1.5" y="1.5" width="13" height="13" rx="2" fill="none" stroke="currentColor" stroke-width="1.4" />
-          <rect x="9.5" y="3.5" width="3" height="9" stroke="currentColor" stroke-width="1.1" :fill="showStatusBar !== false ? 'currentColor' : 'none'" />
+          <rect
+            x="1.5"
+            y="1.5"
+            width="13"
+            height="13"
+            rx="2"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.4"
+          />
+          <rect
+            x="9.5"
+            y="3.5"
+            width="3"
+            height="9"
+            stroke="currentColor"
+            stroke-width="1.1"
+            :fill="showStatusBar !== false ? 'currentColor' : 'none'"
+          />
         </svg>
       </button>
       <button
@@ -190,14 +230,9 @@
 
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref } from 'vue'
-import {
-  ArrowRight,
-  Close,
-  CopyDocument,
-  FullScreen,
-  Minus,
-} from '@element-plus/icons-vue'
-import { LayoutGrid, PanelTopOpen, Pin, SquareArrowOutUpRight } from '@lucide/vue'
+import { ArrowRight, Close, CopyDocument, FullScreen, Minus } from '@element-plus/icons-vue'
+import { LayoutGrid, PanelTopOpen, Pin } from '@lucide/vue'
+import PanelActionsMenu from './PanelActionsMenu.vue'
 import { showStatusBar, showToolBar } from '@/composables/useStatusManager'
 import { getBrowserWindowService } from '@/core/window/browserWindowService'
 import { settingsSectionForComponent } from '@/core/settings/ComponentSettings'

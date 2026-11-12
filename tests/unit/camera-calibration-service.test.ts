@@ -33,7 +33,9 @@ class FakeHost implements Partial<CameraCalibrationHost> {
     this.writes.push(content)
     const [height, fovDeg, offset] = content.split(',').map(Number)
     this.device = {
-      ...this.device, height, thetaOffset: offset,
+      ...this.device,
+      height,
+      thetaOffset: offset,
       fov: (fovDeg * Math.PI) / 180,
       raw: `test, ${height},${(fovDeg * Math.PI) / 180},${offset}`,
     }
@@ -63,7 +65,10 @@ class FakeHost implements Partial<CameraCalibrationHost> {
 }
 
 const ACCESS: CameraMeasurementAccess = {
-  host: '192.168.3.14', port: 22, username: 'root', password: 'x',
+  host: '192.168.3.14',
+  port: 22,
+  username: 'root',
+  password: 'x',
 }
 
 function flushMicrotasks(): Promise<void> {
@@ -106,6 +111,26 @@ describe('CameraCalibrationService 观测生命周期', () => {
 
     await expect(service.observe(2, ACCESS)).resolves.toBeDefined()
   })
+
+  it('视频和标定共享观测, 最后一个观测方退出才拆除通道并恢复开关', async () => {
+    const host = new FakeHost()
+    const service = new CameraCalibrationService(host as unknown as CameraCalibrationHost)
+
+    await service.observe(1, ACCESS)
+    await service.observe(1, ACCESS)
+    expect(host.startCalls).toBe(1)
+    expect(host.calibWrites).toEqual([true])
+
+    service.close(1)
+    await flushMicrotasks()
+    expect(host.channelOpen).toBe(true)
+    expect(host.calibWrites).toEqual([true])
+
+    service.close(1)
+    await flushMicrotasks()
+    expect(host.channelOpen).toBe(false)
+    expect(host.calibWrites).toEqual([true, false])
+  })
 })
 
 // ---- 启动基线直发（表单即真值，不回读） + 标定开关 ----
@@ -122,14 +147,26 @@ const TWO_PEOPLE = sentence(
 
 function calConfig(overrides: Partial<CameraCalibrationConfig> = {}): CameraCalibrationConfig {
   return {
-    height: 0.55, fov: 62.292, initialOffset: -21.5,
-    minOffset: -25, maxOffset: -18, step: 1, minStep: 0.2,
+    height: 0.55,
+    fov: 62.292,
+    initialOffset: -21.5,
+    minOffset: -25,
+    maxOffset: -18,
+    step: 1,
+    minStep: 0.2,
     targets: [
-      { distance: 1.2, biasMinCm: 2, biasMaxCm: 6 },
-      { distance: 2, biasMinCm: 2, biasMaxCm: 6 },
+      { distance: 1.2, biasMinM: 0.02, biasMaxM: 0.06 },
+      { distance: 2, biasMinM: 0.02, biasMaxM: 0.06 },
     ],
-    nearSide: 'left', personClassId: 0, sampleCount: 3, windowMs: 200, maxSpreadM: 0.04,
-    settleMs: 500, staleMs: 1000, maxWrites: 12, maxDurationMs: 120000,
+    nearSide: 'left',
+    personClassId: 0,
+    sampleCount: 3,
+    windowMs: 200,
+    maxSpreadM: 0.04,
+    settleMs: 500,
+    staleMs: 1000,
+    maxWrites: 12,
+    maxDurationMs: 120000,
     ...overrides,
   }
 }
@@ -182,7 +219,7 @@ describe('CameraCalibrationService 启动基线直发', () => {
   })
 })
 
-describe('CameraCalibrationService 标定开关', () => {
+describe('CameraCalibrationService 全量上报开关', () => {
   async function readyToStart(host: FakeHost): Promise<CameraCalibrationService> {
     const service = new CameraCalibrationService(host as unknown as CameraCalibrationHost)
     await service.observe(1, ACCESS)
@@ -190,12 +227,11 @@ describe('CameraCalibrationService 标定开关', () => {
     return service
   }
 
-  it('启动先开启标定开关、等待新鲜帧后才下发基线参数', async () => {
+  it('观测已开启全量上报, 标定启动不重复写开关', async () => {
     const host = new FakeHost()
     const service = await readyToStart(host)
     const promise = service.start(1, calConfig())
     await flushMicrotasks()
-    // 开关已开、基线未发：人数核对与参数写入都在等待新鲜帧之后
     expect(host.calibWrites).toEqual([true])
     expect(host.writes).toEqual([])
     service.receive(TWO_PEOPLE)
@@ -204,30 +240,47 @@ describe('CameraCalibrationService 标定开关', () => {
     expect(host.writes).toEqual(['0.55,62.292,-21.5'])
   })
 
-  it('开关开启失败时拒绝启动且不写任何参数', async () => {
+  it('全量上报开启失败时拒绝观测且不建立测量通道', async () => {
     const host = new FakeHost()
     host.failCalibSwitch = true
-    const service = await readyToStart(host)
-    await expect(service.start(1, calConfig())).rejects.toThrow(/标定开关开启失败/)
+    const service = new CameraCalibrationService(host as unknown as CameraCalibrationHost)
+    await expect(service.observe(1, ACCESS)).rejects.toThrow(/全量上报开启失败/)
+    expect(host.startCalls).toBe(0)
     expect(host.writes).toEqual([])
-    expect(service.snapshot().phase).toBe('observing')
+    expect(service.snapshot().observing).toBe(false)
   })
 
-  it('目标数不符时拒绝启动并自动恢复开关为 0', async () => {
+  it('目标数不符时拒绝启动但保持观测和全量上报', async () => {
     const host = new FakeHost()
     const service = await readyToStart(host)
     const promise = service.start(
       1,
-      calConfig({ targets: [{ distance: 1.2, biasMinCm: 2, biasMaxCm: 6 }] }),
+      calConfig({ targets: [{ distance: 1.2, biasMinM: 0.02, biasMaxM: 0.06 }] }),
     )
     await flushMicrotasks()
-    service.receive(TWO_PEOPLE) // 上报 2 个目标，配置 1 个 → 不符
+    service.receive(TWO_PEOPLE)
     await expect(promise).rejects.toThrow(/与配置的 1 个人形不符/)
-    expect(host.calibWrites).toEqual([true, false])
+    expect(host.calibWrites).toEqual([true])
     expect(service.snapshot().phase).toBe('observing')
   })
 
-  it('停止标定后现场恢复包含开关归 0', async () => {
+  it('重复报文去重后允许双目标启动', async () => {
+    const host = new FakeHost()
+    const service = new CameraCalibrationService(host as unknown as CameraCalibrationHost)
+    const duplicated = sentence(
+      'ESTAR,INSSEG,240601.120000.123,1,42,4,0,10,10,20,100,200,1.260,-5.000,0,11,200,20,300,200,2.030,5.000,0,10,10,20,100,200,1.260,-5.000,0,11,200,20,300,200,2.030,5.000',
+    )
+    await service.observe(1, ACCESS)
+    service.receive(duplicated)
+    const promise = service.start(1, calConfig())
+    await flushMicrotasks()
+    service.receive(duplicated)
+    const state = await promise
+    expect(state.phase).toBe('sampling')
+    expect(state.lastFrame?.targets.map((target) => target.trackId)).toEqual([10, 11])
+  })
+
+  it('停止标定仍保持人物信息, 停止观测后才恢复开关为 0', async () => {
     const host = new FakeHost()
     const service = await readyToStart(host)
     const promise = service.start(1, calConfig())
@@ -236,10 +289,14 @@ describe('CameraCalibrationService 标定开关', () => {
     await promise
 
     service.stop()
-    // finalize 异步执行：参数恢复 + 开关归 0
     await new Promise((resolve) => setTimeout(resolve, 20))
-    expect(host.calibWrites).toEqual([true, false])
+    expect(host.calibWrites).toEqual([true])
     expect(host.writes).toEqual(['0.55,62.292,-21.5', '0.55,62.292,-21.5'])
+    expect(service.snapshot().recovery?.calibSwitchRestored).toBeUndefined()
+
+    service.close(1)
+    await flushMicrotasks()
+    expect(host.calibWrites).toEqual([true, false])
     expect(service.snapshot().recovery?.calibSwitchRestored).toBe(true)
   })
 })

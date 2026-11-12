@@ -36,6 +36,7 @@ describe('GNSS-Lib registration', () => {
       'camera-default-v1',
       'camera-parameters-v1',
       'camera-terminal-v1',
+      'camera-messages-v1',
       'serial-default-v1',
       'gnss-messages-v1',
       'flow-default-v1',

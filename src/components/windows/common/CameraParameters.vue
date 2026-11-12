@@ -11,119 +11,6 @@
       </span>
     </div>
     <el-tabs v-model="activeTab" class="camera-tabs" stretch>
-      <el-tab-pane :label="t('common.camera.tabs.connection')" name="connection">
-        <div class="parameter-scroll">
-          <div class="connection-card section-card">
-            <div class="section-heading">
-              <span class="heading-icon"
-                ><el-icon><Connection /></el-icon
-              ></span>
-              <div class="section-title">
-                <strong>{{ t('common.camera.tcpTitle') }}</strong>
-                <p>{{ t('common.camera.tcpDesc') }}</p>
-              </div>
-              <el-button text type="primary" @click="openNetworkSettings">
-                {{ t('common.camera.configure') }}
-              </el-button>
-            </div>
-
-            <div class="connection-grid">
-              <label>
-                <span>{{ t('common.camera.serverAddress') }}</span>
-                <el-input
-                  class="network-setting-display"
-                  :model-value="host"
-                  :aria-label="t('common.camera.serverAddress')"
-                  :title="t('common.camera.networkSettingsHint')"
-                  readonly
-                  @click="openNetworkSettings"
-                />
-              </label>
-              <label>
-                <span>{{ t('common.camera.port') }}</span>
-                <el-input
-                  class="network-setting-display"
-                  :model-value="portText"
-                  :aria-label="t('common.camera.port')"
-                  :title="t('common.camera.networkSettingsHint')"
-                  readonly
-                  @click="openNetworkSettings"
-                />
-              </label>
-              <label>
-                <span>{{ t('common.camera.loginCommand') }}</span>
-                <el-input
-                  model-value="0x00000001"
-                  :aria-label="t('common.camera.loginCommand')"
-                  readonly
-                />
-              </label>
-            </div>
-          </div>
-          <div class="ssh-card section-card">
-            <div class="section-heading">
-              <span class="heading-icon"
-                ><el-icon><Key /></el-icon
-              ></span>
-              <div class="section-title">
-                <strong>{{ t('common.camera.sshTitle') }}</strong>
-                <p>{{ t('common.camera.sshDesc') }}</p>
-              </div>
-              <span class="protocol-tag">SSH</span>
-            </div>
-            <div class="cal-config cal-ssh">
-              <label>
-                <span>{{ t('common.camera.calibration.sshHost') }}</span>
-                <el-input
-                  v-model="sshForm.host"
-                  :disabled="calRunning || observing || scriptRunning"
-                  :aria-label="t('common.camera.calibration.sshHost')"
-                />
-              </label>
-              <label>
-                <span>{{ t('common.camera.calibration.sshPort') }}</span>
-                <el-input-number
-                  v-model="sshForm.port"
-                  :min="1"
-                  :max="65535"
-                  :step="1"
-                  :precision="0"
-                  controls-position="right"
-                  :disabled="calRunning || observing || scriptRunning"
-                  :aria-label="t('common.camera.calibration.sshPort')"
-                />
-              </label>
-              <label>
-                <span>{{ t('common.camera.calibration.sshUsername') }}</span>
-                <el-input
-                  v-model="sshForm.username"
-                  :disabled="calRunning || observing || scriptRunning"
-                  :aria-label="t('common.camera.calibration.sshUsername')"
-                />
-              </label>
-              <label>
-                <span>{{ t('common.camera.calibration.sshPassword') }}</span>
-                <el-input
-                  v-model="sshForm.password"
-                  type="password"
-                  show-password
-                  :disabled="calRunning || observing || scriptRunning"
-                  :aria-label="t('common.camera.calibration.sshPassword')"
-                  :placeholder="
-                    sshPasswordSaved
-                      ? t('common.camera.calibration.sshPasswordSaved')
-                      : t('common.camera.calibration.sshPassword')
-                  "
-                />
-              </label>
-            </div>
-            <p class="connection-note">
-              <el-icon><InfoFilled /></el-icon>{{ t('common.camera.sshHint') }}
-            </p>
-          </div>
-        </div>
-      </el-tab-pane>
-
       <el-tab-pane :label="t('common.camera.tabs.command')" name="command">
         <div class="parameter-scroll">
           <div class="command-card section-card">
@@ -212,21 +99,6 @@
                   {{ sending ? t('common.camera.sending') : t('common.camera.sendCommand') }}
                 </el-button>
               </div>
-
-              <div class="output-summary">
-                <span class="output-summary-text" :title="lastLogLine">{{
-                  lastLogLine || t('common.camera.waitingToSend')
-                }}</span>
-                <el-button
-                  text
-                  size="small"
-                  :disabled="logs.length === 0"
-                  @click="showFullOutput = true"
-                >
-                  <el-icon><Document /></el-icon>
-                  {{ t('common.camera.fullOutput') }}
-                </el-button>
-              </div>
             </div>
           </div>
         </div>
@@ -291,7 +163,7 @@
                 <div class="workflow-heading">
                   <span class="step-number">1</span>
                   <h3>{{ t('common.camera.calibration.observeTitle') }}</h3>
-                  <el-button text size="small" @click="activeTab = 'connection'">{{
+                  <el-button text size="small" @click="openNetworkSettings">{{
                     t('common.camera.connectionSettings')
                   }}</el-button>
                 </div>
@@ -336,14 +208,10 @@
                   {{ t('common.camera.calibration.recoveryTitle') }}
                 </div>
                 <div v-for="item in recoveryItems" :key="item.label" class="cal-recovery-item">
-                  <span
-                    v-if="item.pending"
-                    class="cal-remark-verify"
-                  >…</span>
-                  <span
-                    v-else
-                    :class="item.ok ? 'cal-ok' : 'cal-bad'"
-                  >{{ item.ok ? '✓' : '✗' }}</span>
+                  <span v-if="item.pending" class="cal-remark-verify">…</span>
+                  <span v-else :class="item.ok ? 'cal-ok' : 'cal-bad'">{{
+                    item.ok ? '✓' : '✗'
+                  }}</span>
                   <span>{{ item.label }}</span>
                   <span v-if="item.detail" class="cal-recovery-detail">{{ item.detail }}</span>
                 </div>
@@ -407,25 +275,25 @@
                       />
                     </label>
                     <label>
-                      <span>{{ t('common.camera.calibration.biasMinCm') }}</span>
+                      <span>{{ t('common.camera.calibration.biasMinM') }}</span>
                       <el-input-number
-                        v-model="target.biasMinCm"
-                        :min="-100"
-                        :max="100"
-                        :step="1"
-                        :precision="1"
+                        v-model="target.biasMinM"
+                        :min="-1"
+                        :max="1"
+                        :step="0.01"
+                        :precision="3"
                         controls-position="right"
                         :disabled="calRunning"
                       />
                     </label>
                     <label>
-                      <span>{{ t('common.camera.calibration.biasMaxCm') }}</span>
+                      <span>{{ t('common.camera.calibration.biasMaxM') }}</span>
                       <el-input-number
-                        v-model="target.biasMaxCm"
-                        :min="-100"
-                        :max="100"
-                        :step="1"
-                        :precision="1"
+                        v-model="target.biasMaxM"
+                        :min="-1"
+                        :max="1"
+                        :step="0.01"
+                        :precision="3"
                         controls-position="right"
                         :disabled="calRunning"
                       />
@@ -682,10 +550,7 @@
                     formatErrorCm(row.errorsCm[index] ?? 0)
                   }}</template>
                 </el-table-column>
-                <el-table-column
-                  :label="t('common.camera.calibration.historyRemark')"
-                  width="130"
-                >
+                <el-table-column :label="t('common.camera.calibration.historyRemark')" width="130">
                   <template #default="{ row }">
                     <span v-if="row.verification" class="cal-remark-verify">{{
                       t('common.camera.calibration.remarkVerify')
@@ -729,15 +594,6 @@
               {{ t('common.camera.calibration.restore') }}
             </el-button>
           </div>
-          <span class="cal-action-hint">{{
-            t(
-              calRunning
-                ? 'common.camera.calibration.runningHint'
-                : observing
-                  ? 'common.camera.calibration.readyHint'
-                  : 'common.camera.calibration.startHint',
-            )
-          }}</span>
         </div>
       </el-tab-pane>
       <el-tab-pane name="script">
@@ -765,7 +621,7 @@
               <div class="script-connection">
                 <el-icon><Connection /></el-icon>
                 <span :title="sshEndpoint">{{ sshEndpoint }}</span>
-                <el-button text size="small" @click="activeTab = 'connection'">{{
+                <el-button text size="small" @click="openNetworkSettings">{{
                   t('common.camera.connectionSettings')
                 }}</el-button>
               </div>
@@ -824,25 +680,6 @@
                 </div>
               </div>
               <p class="cal-hint">{{ t('common.camera.script.desc') }}</p>
-              <div class="script-output">
-                <div class="console-heading">
-                  <span>{{ t('common.camera.outputResult') }}</span>
-                  <span class="console-format">stdout / stderr</span>
-                  <el-button
-                    text
-                    size="small"
-                    :disabled="!scriptLogs.length"
-                    @click="scriptLogs = []"
-                    >{{ t('common.camera.clear') }}</el-button
-                  >
-                </div>
-                <pre
-                  ref="scriptOutputElement"
-                  class="output-console script-console"
-                  tabindex="0"
-                  :aria-label="t('common.camera.outputResult')"
-                  >{{ scriptOutputText || t('common.camera.script.outputEmpty') }}</pre>
-              </div>
             </div>
           </div>
         </div>
@@ -869,38 +706,18 @@
         </p>
       </div>
     </el-dialog>
-
-    <el-dialog
-      v-model="showFullOutput"
-      :title="t('common.camera.outputResult')"
-      class="app-dialog camera-output-dialog"
-      width="min(680px, calc(100vw - 32px))"
-      :close-on-click-modal="true"
-      :close-on-press-escape="true"
-      :append-to-body="true"
-      align-center
-    >
-      <pre ref="outputElement" class="output-console">{{ outputText }}</pre>
-      <template #footer>
-        <el-button :disabled="logs.length === 0" @click="clearOutput">{{
-          t('common.camera.clear')
-        }}</el-button>
-        <el-button type="primary" @click="showFullOutput = false">{{ t('app.close') }}</el-button>
-      </template>
-    </el-dialog>
   </section>
 </template>
 
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   Aim,
   Connection,
   Document,
   FolderOpened,
   InfoFilled,
-  Key,
   MagicStick,
   Promotion,
   Refresh,
@@ -911,7 +728,7 @@ import { t } from '@/i18n'
 import {
   CAMERA_SUB_COMMANDS,
   CameraParametersStorage,
-  type CameraParametersSettings,
+  type CameraSubCommand,
 } from '@/core/camera/CameraParametersStorage'
 import { JsonStorage } from '@/core/storage/JsonStorage'
 import { isCameraTcpDataConnected } from '@/core/camera/CameraConnectionStatus'
@@ -927,6 +744,7 @@ import {
 import { useDataSourceManager } from '@/composables/useDataSourceManager'
 import { useDevice } from '@/hooks/useDevice'
 import { showToolBar } from '@/composables/useStatusManager'
+import { useConsole } from '@/composables/flow/useConsole'
 import emitter from '@/hooks/useMitt'
 
 // 连接状态（同步相机 TCP 连接结果）：
@@ -939,16 +757,18 @@ const parametersStorage = new CameraParametersStorage(new JsonStorage(window.loc
 const savedSettings = parametersStorage.load()
 const { settings: dataSourceSettings } = useDataSourceManager()
 const { globalDevice } = useDevice()
+const { addMessage } = useConsole(true)
 const host = computed(() => dataSourceSettings.network.host)
 const port = computed(() => dataSourceSettings.network.port ?? 0)
 const portText = computed(() => (port.value > 0 ? String(port.value) : '—'))
 const subCommand = ref(savedSettings.subCommand)
-const content = ref(savedSettings.content)
+const content = ref(parametersStorage.getCommandSettings(savedSettings.subCommand).content)
 /** 命令内容输入框:发送期间 disabled 失焦后用于恢复焦点 */
 const contentInput = ref<{ focus: () => void } | null>(null)
-const contentIsHex = ref(savedSettings.contentIsHex)
+const contentIsHex = ref(
+  parametersStorage.getCommandSettings(savedSettings.subCommand).contentIsHex,
+)
 const showCommandHelp = ref(false)
-const showFullOutput = ref(false)
 const sending = ref(false)
 const status = computed<Status>(() =>
   isCameraTcpDataConnected(globalDevice.value, {
@@ -958,18 +778,11 @@ const status = computed<Status>(() =>
     ? 'connected'
     : 'disconnected',
 )
-const logs = ref<string[]>([])
-const outputElement = ref<HTMLElement>()
 
 watch(
-  [subCommand, content, contentIsHex],
+  [content, contentIsHex],
   () => {
-    parametersStorage.save({
-      version: 1,
-      subCommand: subCommand.value,
-      content: content.value,
-      contentIsHex: contentIsHex.value,
-    } satisfies CameraParametersSettings)
+    parametersStorage.saveCommand(subCommand.value, content.value, contentIsHex.value)
   },
   { flush: 'post' },
 )
@@ -989,21 +802,10 @@ const contentPlaceholder = computed(() =>
   contentIsHex.value ? t('common.camera.placeholderHex') : t('common.camera.placeholderUtf8'),
 )
 
-const outputText = computed(() =>
-  logs.value.length > 0 ? logs.value.join('\n') : t('common.camera.waitingToSend'),
-)
-
-/** 命令卡片底部的简略输出：最近一条非空日志 */
-const lastLogLine = computed(() => {
-  for (let i = logs.value.length - 1; i >= 0; i--) {
-    const line = logs.value[i].trim()
-    if (line) return line
-  }
-  return ''
-})
-
-function handleSubCommandChange(value: string) {
-  contentIsHex.value = value === 'bbox_draw'
+function handleSubCommandChange(value: CameraSubCommand) {
+  const saved = parametersStorage.getCommandSettings(value)
+  content.value = saved.content
+  contentIsHex.value = saved.contentIsHex
 }
 
 async function openNetworkSettings() {
@@ -1011,13 +813,15 @@ async function openNetworkSettings() {
     showToolBar.value = true
     await nextTick()
   }
-  emitter.emit('input-event', { tab: 'network', protocol: 'tcp' })
+  emitter.emit('input-event', { tab: 'connections', protocol: 'tcp' })
 }
 
 function validateInput(): string | undefined {
   if (status.value !== 'connected') return t('common.camera.errTcpConfigurationRequired')
   if (!subCommand.value) return t('common.camera.errSelectSubCommand')
-  if (!content.value.trim()) return t('common.camera.errEnterSubCommandContent')
+  if (!subCommand.value.startsWith('read_') && !content.value.trim()) {
+    return t('common.camera.errEnterSubCommandContent')
+  }
   if (contentIsHex.value) {
     const compact = content.value.replace(/\s/g, '')
     if (compact.length % 2 !== 0 || !/^[\da-fA-F]+$/.test(compact)) {
@@ -1027,10 +831,8 @@ function validateInput(): string | undefined {
   return undefined
 }
 
-async function appendLog(...messages: string[]) {
-  logs.value.push(...messages)
-  await nextTick()
-  if (outputElement.value) outputElement.value.scrollTop = outputElement.value.scrollHeight
+function appendLog(...messages: string[]) {
+  addMessage(`${messages.join('\n')}\n`)
 }
 
 function formatHex(value: string): string {
@@ -1095,10 +897,6 @@ async function sendCommand() {
   }
 }
 
-function clearOutput() {
-  logs.value = []
-}
-
 // ---------- 自动标定 ----------
 const calState = ref<CameraCalibrationSnapshot | null>(null)
 // structuredClone 深拷贝：DEFAULT 的 targets 数组是冻结对象，reactive 无法代理冻结属性
@@ -1108,7 +906,9 @@ const targetCount = ref(calForm.targets.length)
 
 watch(targetCount, (count) => {
   const targets = calForm.targets
-  while (targets.length < count) targets.push({ distance: 2, biasMinCm: 2, biasMaxCm: 6 })
+  while (targets.length < count) {
+    targets.push({ distance: 2, biasMinM: -0.02, biasMaxM: 0.02 })
+  }
   if (targets.length > count) targets.splice(count)
 })
 
@@ -1151,11 +951,7 @@ const calScrollContainer = ref<HTMLElement | null>(null)
 const calScrollFollow = ref(false)
 
 watch(
-  () => [
-    calState.value?.history.length,
-    calState.value?.phase,
-    calState.value?.recovery,
-  ],
+  () => [calState.value?.history.length, calState.value?.phase, calState.value?.recovery],
   async ([, phase]) => {
     if (isCalibrationRunning(phase as CameraCalibrationPhase)) calScrollFollow.value = true
     if (!calScrollFollow.value) return
@@ -1166,7 +962,10 @@ watch(
 
 async function reportCalibrationError(error: unknown) {
   const message = error instanceof Error ? error.message : String(error)
-  ElMessage.error(message)
+  await ElMessageBox.alert(message, t('common.camera.calibration.phase.failed'), {
+    type: 'error',
+    customClass: 'app-message-box',
+  })
 }
 
 // 测量源 = 主进程 SSH 测量通道（旁听相机板 ttyS6 的 INSSEG 报文流）
@@ -1263,11 +1062,11 @@ onMounted(async () => {
   void observeLifecycle()
 })
 
-// 观测自动生命周期:设备已连接且停留在标定页 → 自动开始观测;
-// 连接断开/切走页面 → 自动停止(标定运行中除外, 待其结束后再停)
+// 标定页独立申请和释放共享观测租约；全局 observing 不代表本页持有租约。
+let calibrationObservationLease = false
 async function observeLifecycle() {
   const shouldObserve = status.value === 'connected' && activeTab.value === 'calibration'
-  if (shouldObserve && !observing.value && !calRunning.value) {
+  if (shouldObserve && !calibrationObservationLease && !calRunning.value) {
     if (!sshForm.host.trim() || !sshForm.username.trim()) return
     try {
       calState.value = await window.electronAPI.cameraCalibrationObserve({
@@ -1276,15 +1075,18 @@ async function observeLifecycle() {
         username: sshForm.username.trim(),
         password: sshForm.password,
       })
+      calibrationObservationLease = true
       calScrollFollow.value = false
       sshForm.password = ''
     } catch {
       // 静默失败:测量源状态行会显示通道错误, 不在自动流程里弹窗
     }
-  } else if (!shouldObserve && observing.value && !calRunning.value) {
+  } else if (!shouldObserve && calibrationObservationLease && !calRunning.value) {
+    calibrationObservationLease = false
     try {
       calState.value = await window.electronAPI.cameraCalibrationClose()
     } catch (error) {
+      calibrationObservationLease = true
       await reportCalibrationError(error)
     }
   }
@@ -1348,8 +1150,8 @@ const CAL_NUMBER_FIELDS: Array<[keyof CameraCalibrationConfig, string]> = [
 
 const CAL_TARGET_FIELDS: Array<[keyof CameraCalibrationTargetConfig, string]> = [
   ['distance', 'calibration.targetDistance'],
-  ['biasMinCm', 'calibration.biasMinCm'],
-  ['biasMaxCm', 'calibration.biasMaxCm'],
+  ['biasMinM', 'calibration.biasMinM'],
+  ['biasMaxM', 'calibration.biasMaxM'],
 ]
 
 function validateCalibrationForm(): string | undefined {
@@ -1426,8 +1228,6 @@ const scriptFileName = computed(() =>
   scriptPaths.value.map((localPath) => localPath.split(/[\\/]/).pop() ?? '').join('、'),
 )
 const scriptTimeoutS = ref(120)
-const scriptLogs = ref<string[]>([])
-const scriptOutputElement = ref<HTMLElement | null>(null)
 const scriptState = ref<{ state: string; detail: string } | null>(null)
 const scriptStarting = ref(false)
 
@@ -1452,8 +1252,6 @@ const scriptStateText = computed(() => {
     ? t(`common.camera.script.state.${scriptState.value.state}`)
     : t('common.camera.script.idle')
 })
-
-const scriptOutputText = computed(() => scriptLogs.value.join(''))
 
 async function pickScriptFile() {
   if (!window.electronAPI?.openFileDialog) {
@@ -1480,8 +1278,7 @@ async function pickScriptFile() {
 }
 
 function appendScriptOutput(text: string) {
-  scriptLogs.value.push(text)
-  if (scriptLogs.value.length > 800) scriptLogs.value.splice(0, scriptLogs.value.length - 800)
+  addMessage(text)
 }
 
 async function runScript() {
@@ -1527,15 +1324,6 @@ const scriptEventListener = (_event: unknown, scriptEvent: CameraScriptEvent) =>
   scriptState.value = { state: scriptEvent.state, detail: scriptEvent.detail }
   appendScriptOutput(`\n[${scriptEvent.state}] ${scriptEvent.detail}\n`)
 }
-
-watch(
-  () => scriptLogs.value.length,
-  async () => {
-    await nextTick()
-    if (scriptOutputElement.value)
-      scriptOutputElement.value.scrollTop = scriptOutputElement.value.scrollHeight
-  },
-)
 
 onMounted(() => {
   window.ipcRenderer?.on('camera-calibration-state', calStateListener)
@@ -1920,45 +1708,6 @@ onUnmounted(() => {
   color: var(--el-color-primary);
 }
 
-.output-summary {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 9px 11px;
-  border: 1px solid var(--app-border);
-  border-radius: 7px;
-  background: var(--app-surface-muted);
-}
-.output-summary-text {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  color: var(--app-text-secondary);
-  font:
-    11px/1.5 Consolas,
-    monospace;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.output-summary .el-button {
-  flex-shrink: 0;
-}
-.output-console {
-  box-sizing: border-box;
-  height: min(52vh, 440px);
-  margin: 0;
-  overflow: auto;
-  padding: 14px;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  color: var(--app-text-secondary);
-  background: var(--app-surface-muted);
-  font:
-    12px/1.7 Consolas,
-    'Courier New',
-    monospace;
-  user-select: text;
-}
 .command-help {
   display: grid;
   gap: 12px;
@@ -2132,17 +1881,11 @@ onUnmounted(() => {
 .cal-actions {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 12px;
   padding: 12px;
   border-radius: 8px;
   background: var(--app-surface-muted);
-}
-.cal-action-hint {
-  flex: 1;
-  min-width: 0;
-  color: var(--app-text-muted);
-  font-size: 12px;
-  line-height: 1.5;
 }
 .cal-params {
   display: grid;
@@ -2281,30 +2024,6 @@ onUnmounted(() => {
 .script-timeout :deep(.el-input-number) {
   width: 148px;
 }
-.script-output {
-  min-width: 0;
-  overflow: hidden;
-  border: 1px solid var(--app-border);
-  border-radius: 8px;
-}
-.console-heading {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 4px 12px;
-  border-bottom: 1px solid var(--app-border);
-  font-size: 12px;
-}
-.console-format {
-  flex: 1;
-  color: var(--app-text-muted);
-  font:
-    11px/1.4 Consolas,
-    monospace;
-}
-.script-console {
-  height: 220px;
-}
 .script-file-input {
   display: none;
 }
@@ -2386,9 +2105,6 @@ onUnmounted(() => {
   }
   .calibration-pane > .cal-actions {
     flex-wrap: wrap;
-  }
-  .cal-action-hint {
-    flex-basis: 100%;
   }
   .cal-target-group {
     grid-template-columns: repeat(2, minmax(0, 1fr));

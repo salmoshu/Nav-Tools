@@ -29,4 +29,33 @@ describe('InssegParser', () => {
       },
     })
   })
+
+  it('deduplicates identical target records from full-report firmware', () => {
+    const duplicated = sentence(
+      'ESTAR,INSSEG,240601.120000.123,1,42,4,0,10,10,20,100,200,1.260,-5.000,0,11,200,20,300,200,2.030,5.000,0,10,10,20,100,200,1.260,-5.000,0,11,200,20,300,200,2.030,5.000',
+    )
+    const parser = new InssegParser()
+    const result = parser.push(duplicated)
+    expect(result).toHaveLength(1)
+    expect(result[0]).toMatchObject({
+      type: 'frame',
+      frame: {
+        targets: [
+          { trackId: 10, distance: 1.26 },
+          { trackId: 11, distance: 2.03 },
+        ],
+      },
+    })
+  })
+
+  it('keeps conflicting records that share a track id', () => {
+    const conflicting = sentence(
+      'ESTAR,INSSEG,240601.120000.123,1,42,2,0,10,10,20,100,200,1.260,-5.000,0,10,12,20,100,200,1.260,-5.000',
+    )
+    const parser = new InssegParser()
+    const result = parser.push(conflicting)
+    expect(result).toMatchObject([
+      { type: 'frame', frame: { targets: [{ left: 10 }, { left: 12 }] } },
+    ])
+  })
 })

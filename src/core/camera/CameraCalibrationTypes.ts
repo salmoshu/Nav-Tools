@@ -17,17 +17,16 @@ export interface InssegFrame {
 }
 
 export type InssegParseResult =
-  | { type: 'frame'; frame: InssegFrame }
-  | { type: 'error'; message: string }
+  { type: 'frame'; frame: InssegFrame } | { type: 'error'; message: string }
 
 /** 单个目标（人员）的参考距离与合格区间 */
 export interface CameraCalibrationTargetConfig {
   /** 参考距离（m，布置距离，不做斜距换算） */
   distance: number
-  /** 允许偏差下限（cm，测量值 - 参考距离） */
-  biasMinCm: number
-  /** 允许偏差上限（cm） */
-  biasMaxCm: number
+  /** 允许偏差下限（m，测量值 - 参考距离） */
+  biasMinM: number
+  /** 允许偏差上限（m） */
+  biasMaxM: number
 }
 
 export interface CameraCalibrationConfig {
@@ -111,7 +110,7 @@ export interface CameraCalibrationRecovery {
   detail: string
   /** true = strace/TracerPid 核查待「停止观测」时执行（观测仍在运行） */
   pendingChecks: boolean
-  /** 标定开关已恢复 0；undefined = 本次标定未开启过开关（或固件不支持） */
+  /** 最后一个观测方退出时全量上报已恢复 0；undefined = 尚未执行观测清理（或固件不支持） */
   calibSwitchRestored?: boolean
 }
 
@@ -130,14 +129,12 @@ export interface CameraCalibrationSnapshot extends CameraCalibrationProgress {
   recovery: CameraCalibrationRecovery | null
 }
 
-
 export function isCalibrationRunning(phase: CameraCalibrationPhase): boolean {
   return ['sampling', 'verifying', 'writing', 'settling', 'paused'].includes(phase)
 }
 
-/** 规格默认值：参数模板 0.55,62.292,-22；默认单目标（人员右侧 1.2 m），允许偏差 -2~+2 cm。
- *  双目标（1.2 m + 2.0 m）可在下拉框选择启用：标定启动时自动开启标定开关（set_calibParam=1），
- *  固件全量上报后 >1.5 m 的非跟随目标也可测量；结束时自动归 0 */
+/** 规格默认值：参数模板 0.55,62.292,-22；默认双目标（1.2 m + 2.0 m），
+ *  两个人员的允许偏差均为 -0.02~+0.02 m，人员 1 位于画面右侧。 */
 export const DEFAULT_CALIBRATION_CONFIG: Readonly<CameraCalibrationConfig> = Object.freeze({
   height: 0.55,
   fov: 62.292,
@@ -146,7 +143,10 @@ export const DEFAULT_CALIBRATION_CONFIG: Readonly<CameraCalibrationConfig> = Obj
   maxOffset: -10,
   step: 1,
   minStep: 0.2,
-  targets: [{ distance: 1.2, biasMinCm: -2, biasMaxCm: 2 }],
+  targets: [
+    { distance: 1.2, biasMinM: -0.02, biasMaxM: 0.02 },
+    { distance: 2, biasMinM: -0.02, biasMaxM: 0.02 },
+  ],
   nearSide: 'right',
   personClassId: 0,
   sampleCount: 12,

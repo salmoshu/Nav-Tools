@@ -63,3 +63,18 @@ describe('CameraCommandService', () => {
     ).toThrow('十六进制内容必须由完整的字节组成')
   })
 })
+
+describe('read command content', () => {
+  it('allows empty content for read commands but still requires it for write commands', () => {
+    const encoded = encodeCameraCommand({
+      subCommand: 'read_params',
+      content: '',
+      contentFormat: 'text',
+    })
+    expect(encoded.dataLength).toBe(16)
+
+    expect(() =>
+      encodeCameraCommand({ subCommand: 'set_params', content: '', contentFormat: 'text' }),
+    ).toThrow('子命令内容不能为空')
+  })
+})

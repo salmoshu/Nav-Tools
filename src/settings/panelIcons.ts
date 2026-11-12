@@ -1,6 +1,7 @@
 import type { Component } from 'vue'
 import {
   Aim,
+  ChatLineSquare,
   Compass,
   Document,
   Grid,
@@ -14,7 +15,7 @@ import {
 
 export const panelIconComponents: Readonly<Record<string, Component>> = {
   data: TrendCharts,
-  console: Monitor,
+  console: ChatLineSquare,
   terminal: Monitor,
   camera: VideoCamera,
   deviation: Aim,

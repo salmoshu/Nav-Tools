@@ -47,7 +47,9 @@ function encodeHexContent(value: string): Buffer {
 export function encodeCameraCommand(request: CameraCommandRequest): EncodedCameraCommand {
   const subCommandValue = request.subCommand.trim()
   if (!subCommandValue) throw new Error('子命令不能为空')
-  if (!request.content) throw new Error('子命令内容不能为空')
+  if (!request.content && !subCommandValue.startsWith('read_')) {
+    throw new Error('子命令内容不能为空')
+  }
   if (request.contentFormat !== 'text' && request.contentFormat !== 'hex') {
     throw new Error('不支持的内容格式')
   }
