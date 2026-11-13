@@ -58,7 +58,8 @@ export class CameraMeasurementAccessStore {
     fs.writeFileSync(this.file, JSON.stringify(stored, null, 2), 'utf8')
   }
 
-  private loadPassword(): string {
+  /** SSH 配置弹框按需读取密码；普通连接快照不包含密码。 */
+  public loadPassword(): string {
     let stored: StoredAccess
     try {
       stored = JSON.parse(fs.readFileSync(this.file, 'utf8')) as StoredAccess

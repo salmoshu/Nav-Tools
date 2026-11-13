@@ -39,11 +39,11 @@
             </div>
             <div class="bbox-measurement">
               distance={{ target.distance.toFixed(3) }} m
-              <span class="bbox-average">(avg {{ target.averageDistance.toFixed(3) }} m)</span>
+              <span class="bbox-average">(2s avg {{ target.averageDistance.toFixed(3) }} m)</span>
             </div>
             <div class="bbox-measurement">
               azimuth={{ target.azimuth.toFixed(3) }}°
-              <span class="bbox-average">(avg {{ target.averageAzimuth.toFixed(3) }}°)</span>
+              <span class="bbox-average">(2s avg {{ target.averageAzimuth.toFixed(3) }}°)</span>
             </div>
           </div>
         </template>

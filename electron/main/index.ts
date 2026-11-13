@@ -788,6 +788,11 @@ ipcMain.handle('open-network-connection', eventsMap['open-network-connection'])
 ipcMain.handle('close-network-connection', eventsMap['close-network-connection'])
 ipcMain.handle('network-connect-cancel', eventsMap['network-connect-cancel'])
 ipcMain.handle('camera-stream-sessions', eventsMap['camera-stream-sessions'])
+ipcMain.handle('camera-stream-stop-session', (_event, ownerWindowId) => {
+  if (!Number.isInteger(ownerWindowId)) return false
+  cameraStreamService.stop(ownerWindowId)
+  return true
+})
 ipcMain.handle('read-file-utf8', eventsMap['read-file-utf8'])
 ipcMain.on('send-network-hex-data', eventsMap['send-network-hex-data'])
 ipcMain.on('send-network-ascii-data', eventsMap['send-network-ascii-data'])

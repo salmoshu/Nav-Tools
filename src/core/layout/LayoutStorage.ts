@@ -29,6 +29,8 @@ interface LayoutDocument {
   statusbarPosition?: 'left' | 'right'
   /** 用户主动移除的窗口 ID，恢复布局时不再自动补回 */
   removedWindowIds?: string[]
+  /** 纯净内容模式中的布局项 ID，按应用随布局持久化 */
+  pureContentItemIds?: string[]
 }
 
 const STORAGE_PREFIX = 'nav-tools:layout'
@@ -69,6 +71,7 @@ export class LayoutStorage {
     showToolBar?: boolean,
     toolbarPosition?: 'top' | 'right' | 'bottom' | 'left',
     statusbarPosition?: 'left' | 'right',
+    pureContentItemIds: string[] = [],
   ): void {
     this.storage.write<LayoutDocument>(this.key(applicationId), {
       version: 1,
@@ -78,6 +81,7 @@ export class LayoutStorage {
       ...(toolbarPosition === undefined ? {} : { toolbarPosition }),
       ...(statusbarPosition === undefined ? {} : { statusbarPosition }),
       removedWindowIds,
+      ...(pureContentItemIds.length > 0 ? { pureContentItemIds } : {}),
     })
   }
 
@@ -145,7 +149,10 @@ function isLayoutDocument(value: unknown): value is LayoutDocument {
       document.statusbarPosition === 'right') &&
     (document.removedWindowIds === undefined ||
       (Array.isArray(document.removedWindowIds) &&
-        document.removedWindowIds.every((id) => typeof id === 'string')))
+        document.removedWindowIds.every((id) => typeof id === 'string'))) &&
+    (document.pureContentItemIds === undefined ||
+      (Array.isArray(document.pureContentItemIds) &&
+        document.pureContentItemIds.every((id) => typeof id === 'string')))
   )
 }
 

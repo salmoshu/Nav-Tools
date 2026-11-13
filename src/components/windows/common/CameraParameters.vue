@@ -379,18 +379,6 @@
                       :disabled="calRunning"
                     />
                   </label>
-                  <label>
-                    <span>{{ t('common.camera.calibration.step') }}</span>
-                    <el-input-number
-                      v-model="calForm.step"
-                      :min="0.05"
-                      :max="10"
-                      :step="0.1"
-                      :precision="2"
-                      controls-position="right"
-                      :disabled="calRunning"
-                    />
-                  </label>
                 </div>
 
                 <el-collapse class="cal-advanced">
@@ -455,18 +443,6 @@
                           :max="10000"
                           :step="100"
                           :precision="0"
-                          controls-position="right"
-                          :disabled="calRunning"
-                        />
-                      </label>
-                      <label>
-                        <span>{{ t('common.camera.calibration.minStep') }}</span>
-                        <el-input-number
-                          v-model="calForm.minStep"
-                          :min="0.01"
-                          :max="5"
-                          :step="0.05"
-                          :precision="2"
                           controls-position="right"
                           :disabled="calRunning"
                         />
@@ -562,7 +538,11 @@
                     }}</span>
                   </template>
                 </el-table-column>
-                <el-table-column :label="t('common.camera.calibration.historyAccepted')" width="80">
+                <el-table-column
+                  :label="t('common.camera.calibration.historyAccepted')"
+                  width="80"
+                  fixed="right"
+                >
                   <template #default="{ row }">
                     <span :class="row.accepted ? 'cal-ok' : 'cal-bad'">
                       {{
@@ -1138,8 +1118,6 @@ const CAL_NUMBER_FIELDS: Array<[keyof CameraCalibrationConfig, string]> = [
   ['personClassId', 'calibration.personClassId'],
   ['minOffset', 'calibration.minOffset'],
   ['maxOffset', 'calibration.maxOffset'],
-  ['step', 'calibration.step'],
-  ['minStep', 'calibration.minStep'],
   ['sampleCount', 'calibration.sampleCount'],
   ['windowMs', 'calibration.windowMs'],
   ['maxSpreadM', 'calibration.maxSpreadM'],

@@ -256,6 +256,7 @@ const device = useDevice()
 
 const {
   layoutDraggableList,
+  pureContentItems,
   initLayout,
   saveCurrentLayout,
   saveLayout,
@@ -409,7 +410,8 @@ const statusbarSize = ref({ width: 200, height: 60 })
 
 // 全屏相关状态
 const fullScreenItem = ref<string | null>(null)
-const pureContentItems = ref<string[]>([])
+
+watch(pureContentItems, () => saveCurrentLayout(), { deep: true })
 
 function togglePureContent(item: LayoutItem) {
   if (fullScreenItem.value !== null) return

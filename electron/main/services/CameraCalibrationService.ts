@@ -33,6 +33,7 @@ export class CameraCalibrationService {
   private owner: number | undefined
   private observationLeases = 0
   private observationStart: Promise<CameraCalibrationSnapshot> | undefined
+  private observationRevision = 0
   private lastFrameAt = -Infinity
   private rawBuffer = ''
   private writing = false
@@ -79,15 +80,20 @@ export class CameraCalibrationService {
       this.observationLeases++
       return this.observationStart
     }
-    if (this.state.observing) {
+    // 订阅仍在不代表采样仍在：设备端 timeout/SSH 故障后必须重建通道。
+    if (
+      this.state.observing &&
+      (this.state.ssh?.state === 'connecting' || this.state.ssh?.state === 'streaming')
+    ) {
       this.observationLeases++
       return this.emit()
     }
     if (this.writing || this.manualWrites || isCalibrationRunning(this.snapshot().phase))
       throw new Error('请先停止标定并等待发送结束')
     this.owner = owner
-    this.observationLeases = 1
-    const task = this.observeInternal(access)
+    this.observationLeases = (this.state.observing ? this.observationLeases : 0) + 1
+    const revision = ++this.observationRevision
+    const task = this.observeInternal(access, revision)
     this.observationStart = task
     try {
       return await task
@@ -96,8 +102,28 @@ export class CameraCalibrationService {
     }
   }
 
+  public async reconnect(
+    owner: number,
+    access: CameraMeasurementAccess,
+  ): Promise<CameraCalibrationSnapshot> {
+    if (this.owner !== undefined && this.owner !== owner) throw new Error('另一窗口正在观测或标定')
+    if (this.writing || this.manualWrites || isCalibrationRunning(this.snapshot().phase))
+      throw new Error('请先停止标定并等待发送结束')
+    ++this.observationRevision
+    const leases = this.observationLeases
+    const pending = this.observationStart
+    await this.host.stopMeasurement().catch(() => undefined)
+    if (pending) await pending.catch(() => undefined)
+    this.state.observing = true
+    if (this.state.ssh) this.state.ssh = { ...this.state.ssh, state: 'stopped' }
+    await this.observe(owner, access)
+    this.observationLeases = Math.max(1, leases)
+    return this.emit()
+  }
+
   private async observeInternal(
     access: CameraMeasurementAccess,
+    revision: number,
   ): Promise<CameraCalibrationSnapshot> {
     this.engine = undefined
     this.finalized = false
@@ -123,6 +149,7 @@ export class CameraCalibrationService {
     try {
       // 防陈旧通道:上一轮 close/finalize 未及拆除时先补拆(通道空闲时为瞬时空操作)
       await this.host.stopMeasurement().catch(() => undefined)
+      if (revision !== this.observationRevision) return this.emit()
       if (this.host.writeCalibSwitch) {
         this.ensureControlLink()
         this.writing = true
@@ -137,8 +164,10 @@ export class CameraCalibrationService {
           this.emit()
         }
       }
+      if (revision !== this.observationRevision) return this.emit()
       await this.host.startMeasurement(access)
     } catch (error) {
+      if (revision !== this.observationRevision) return this.emit()
       this.state.observing = false
       this.state.ssh = { ...this.state.ssh!, state: 'error', detail: errorMessage(error) }
       this.owner = undefined
@@ -278,7 +307,7 @@ export class CameraCalibrationService {
     if (this.engine && !this.finalized && !this.finalizing) void this.finalize()
   }
 
-  public stop(reason = '已停止；正在恢复标定前参数'): CameraCalibrationSnapshot {
+  public stop(reason = '已停止；保留最后发送的参数'): CameraCalibrationSnapshot {
     if (this.engine && isCalibrationRunning(this.engine.snapshot().phase)) this.engine.stop(reason)
     this.emit()
     if (this.engine && !this.finalized && !this.finalizing) void this.finalize()
@@ -305,7 +334,7 @@ export class CameraCalibrationService {
       return this.emit()
     }
     this.observationLeases = 0
-    this.stop('观测已结束；正在恢复现场')
+    this.stop('观测已结束；清理测量通道')
     this.state.observing = false
     this.owner = undefined
     this.parser.reset()
@@ -319,7 +348,7 @@ export class CameraCalibrationService {
     return this.snapshot()
   }
 
-  /** 窗口关闭/人为停止观测：参数恢复 → 拆除测量通道并核实现场 */
+  /** 窗口关闭/人为停止观测：保留最后参数 → 拆除测量通道并核实现场 */
   private async finalizeThenTeardown(): Promise<void> {
     await this.finalize()
     await this.teardownChannelQuietly()
@@ -364,7 +393,7 @@ export class CameraCalibrationService {
     }
   }
 
-  /** 控制链路断开/更换时调用：停止标定并尝试恢复参数，观测（SSH 测量通道）保持运行 */
+  /** 控制链路断开/更换时调用：停止标定并保留最后参数，观测（SSH 测量通道）保持运行 */
   public stopForControlLinkChange(reason: string): CameraCalibrationSnapshot {
     this.stop(reason)
     this.state.reason = reason
@@ -415,7 +444,7 @@ export class CameraCalibrationService {
     return this.snapshot()
   }
 
-  /** 标定结束后的现场恢复：失败/停止时回写原参数（表单基线），成功时保持参数 */
+  /** 标定结束后保留最后发送的参数；只有手动 Reset 才回写表单基线 */
   private async finalize(): Promise<void> {
     const engine = this.engine
     if (!engine || this.finalizing) return
@@ -425,27 +454,15 @@ export class CameraCalibrationService {
     const recovery: CameraCalibrationRecovery = {
       straceCleared: true,
       tracerPidZero: true,
-      paramsVerified: false,
+      paramsVerified: true,
       restored: false,
       expected: this.state.originalParams ?? '',
       readback: '',
-      detail: '',
+      detail:
+        phase === 'succeeded'
+          ? '标定成功，标定参数已保持'
+          : '已保留最后发送的参数（未做回读核对，请人工核实）',
       pendingChecks: true,
-    }
-
-    if (phase === 'failed' || phase === 'stopped') {
-      try {
-        await this.restoreOriginalParams()
-        recovery.paramsVerified = true
-        recovery.restored = true
-        recovery.detail = '已发送恢复参数（未做回读核对，请人工核实）'
-      } catch (error) {
-        recovery.paramsVerified = false
-        recovery.detail = `参数恢复失败，请人工核实：${errorMessage(error)}`
-      }
-    } else if (phase === 'succeeded') {
-      recovery.paramsVerified = true
-      recovery.detail = '标定成功，标定参数已保持'
     }
 
     this.state.recovery = recovery
@@ -487,8 +504,9 @@ export class CameraCalibrationService {
       this.state.lastSentParams = content
       this.emit()
       await this.writeWithTimeout(content)
-      if (engine.snapshot().phase === 'writing') engine.written(offset, this.host.now())
-      else if (isCalibrationRunning(engine.snapshot().phase)) {
+      const phase = engine.snapshot().phase
+      engine.written(offset, this.host.now())
+      if (phase !== 'writing' && isCalibrationRunning(phase)) {
         engine.fail('发送期间观测失效，参数可能已改变，请核实后重新开始')
       }
     } catch (error) {

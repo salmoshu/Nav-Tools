@@ -2,10 +2,31 @@ import { BrowserWindow, ipcMain } from 'electron'
 import type { CameraCalibrationConfig } from '../../src/core/camera/CameraCalibrationTypes'
 import type { CameraCalibrationService } from './services/CameraCalibrationService'
 import type { CameraMeasurementAccessStore } from './services/CameraMeasurementAccessStore'
+import type { CameraMeasurementAccess } from './services/CameraSshMeasurementChannel'
 
 function requireText(value: unknown, field: string): string {
   if (typeof value !== 'string' || !value.trim()) throw new Error(`请填写${field}`)
   return value.trim()
+}
+
+function resolveCameraAccess(
+  request: unknown,
+  accessStore: CameraMeasurementAccessStore,
+): CameraMeasurementAccess {
+  if (!request || typeof request !== 'object') throw new Error('请填写测量通道 SSH 配置')
+  const request_ = request as Record<string, unknown>
+  const stored = accessStore.load()
+  const access = {
+    host: requireText(request_.host ?? stored.host, '相机地址'),
+    port: Number(request_.port ?? stored.port ?? 22),
+    username: requireText(request_.username ?? stored.username, 'SSH 用户名'),
+    password: typeof request_.password === 'string' ? request_.password : '',
+  }
+  if (!Number.isInteger(access.port) || access.port < 1 || access.port > 65535)
+    throw new Error('SSH 端口无效')
+  const resolved = accessStore.resolve(access)
+  accessStore.save(resolved)
+  return resolved
 }
 
 export function registerCameraCalibrationIpc(
@@ -21,21 +42,22 @@ export function registerCameraCalibrationIpc(
   const owners = new Set<number>()
   ipcMain.handle('camera-calibration-snapshot', () => service.snapshot())
   ipcMain.handle('camera-calibration-access', () => accessStore.load())
+  ipcMain.handle('camera-calibration-password', () => accessStore.loadPassword())
   ipcMain.handle('camera-calibration-observe', async (event, request: unknown) => {
-    if (!request || typeof request !== 'object') throw new Error('请填写测量通道 SSH 配置')
-    const request_ = request as Record<string, unknown>
-    const stored = accessStore.load()
-    const access = {
-      host: requireText(request_.host ?? stored.host, '相机地址'),
-      port: Number(request_.port ?? stored.port ?? 22),
-      username: requireText(request_.username ?? stored.username, 'SSH 用户名'),
-      password: typeof request_.password === 'string' ? request_.password : '',
+    const access = resolveCameraAccess(request, accessStore)
+    const state = await service.observe(event.sender.id, access)
+    if (!owners.has(event.sender.id)) {
+      owners.add(event.sender.id)
+      event.sender.once('destroyed', () => {
+        service.close(event.sender.id, true)
+        owners.delete(event.sender.id)
+      })
     }
-    if (!Number.isInteger(access.port) || access.port < 1 || access.port > 65535)
-      throw new Error('SSH 端口无效')
-    const resolved = accessStore.resolve(access)
-    accessStore.save(resolved)
-    const state = await service.observe(event.sender.id, resolved)
+    return state
+  })
+  ipcMain.handle('camera-calibration-reconnect', async (event, request: unknown) => {
+    const access = resolveCameraAccess(request, accessStore)
+    const state = await service.reconnect(event.sender.id, access)
     if (!owners.has(event.sender.id)) {
       owners.add(event.sender.id)
       event.sender.once('destroyed', () => {

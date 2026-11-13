@@ -35,8 +35,6 @@ export interface CameraCalibrationConfig {
   initialOffset: number
   minOffset: number
   maxOffset: number
-  step: number
-  minStep: number
   /** 目标配置（1~2 个）；双目标时按 nearSide 把画面左/右目标对应到数组序号 */
   targets: CameraCalibrationTargetConfig[]
   /** 双目标时 targets[0] 位于画面哪一侧 */
@@ -99,7 +97,7 @@ export interface CameraCalibrationRecovery {
   straceCleared: boolean
   /** appMain 的 TracerPid 已归零 */
   tracerPidZero: boolean
-  /** 参数已回读核对 */
+  /** 参数保持/恢复已处理（不代表已回读核对） */
   paramsVerified: boolean
   /** 是否执行了回写原参数（标定成功时为 false，参数保持标定结果） */
   restored: boolean
@@ -141,8 +139,6 @@ export const DEFAULT_CALIBRATION_CONFIG: Readonly<CameraCalibrationConfig> = Obj
   initialOffset: -22,
   minOffset: -30,
   maxOffset: -10,
-  step: 1,
-  minStep: 0.2,
   targets: [
     { distance: 1.2, biasMinM: -0.02, biasMaxM: 0.02 },
     { distance: 2, biasMinM: -0.02, biasMaxM: 0.02 },

@@ -613,12 +613,14 @@
               <span class="app-connection-proto">{{ item.proto }}</span>
             </div>
             <span class="app-connection-endpoint">{{ item.endpoint }}</span>
+            <p v-if="item.error" class="app-connection-error" role="alert">{{ item.error }}</p>
             <div class="app-connection-foot">
               <span v-if="item.note" class="app-connection-note">{{ item.note }}</span>
               <button
                 v-if="item.configAction"
                 type="button"
                 class="app-connection-action"
+                :disabled="item.busy"
                 @click="item.configAction()"
               >
                 {{ item.configActionLabel }}
@@ -627,6 +629,8 @@
                 v-if="item.action"
                 type="button"
                 class="app-connection-action"
+                :disabled="item.busy"
+                :aria-busy="item.busy"
                 @click="item.action()"
               >
                 {{ item.actionLabel }}
@@ -668,6 +672,7 @@
           <span>{{ t('common.camera.calibration.sshHost') }}</span>
           <el-input
             v-model="cameraSshAccess.host"
+            :disabled="cameraSshConnecting || cameraSshPasswordLoading"
             :aria-label="t('common.camera.calibration.sshHost')"
           />
         </label>
@@ -675,6 +680,7 @@
           <span>{{ t('common.camera.calibration.sshPort') }}</span>
           <el-input-number
             v-model="cameraSshAccess.port"
+            :disabled="cameraSshConnecting || cameraSshPasswordLoading"
             :min="1"
             :max="65535"
             :precision="0"
@@ -686,6 +692,7 @@
           <span>{{ t('common.camera.calibration.sshUsername') }}</span>
           <el-input
             v-model="cameraSshAccess.username"
+            :disabled="cameraSshConnecting || cameraSshPasswordLoading"
             :aria-label="t('common.camera.calibration.sshUsername')"
           />
         </label>
@@ -693,22 +700,52 @@
           <span>{{ t('common.camera.calibration.sshPassword') }}</span>
           <el-input
             v-model="cameraSshAccess.password"
-            type="password"
-            show-password
+            :type="showCameraSshPassword ? 'text' : 'password'"
+            :disabled="cameraSshConnecting || cameraSshPasswordLoading"
+            autocomplete="off"
             :aria-label="t('common.camera.calibration.sshPassword')"
             :placeholder="
               cameraSshAccess.hasPassword
                 ? t('common.camera.calibration.sshPasswordSaved')
                 : t('common.camera.calibration.sshPassword')
             "
-          />
+          >
+            <template #suffix>
+              <button
+                type="button"
+                class="camera-ssh-password-toggle"
+                :aria-pressed="showCameraSshPassword"
+                :aria-label="
+                  t(
+                    showCameraSshPassword
+                      ? 'app.toolbar.appConnHidePassword'
+                      : 'app.toolbar.appConnShowPassword',
+                  )
+                "
+                @click="showCameraSshPassword = !showCameraSshPassword"
+              >
+                <el-icon aria-hidden="true">
+                  <Hide v-if="showCameraSshPassword" />
+                  <View v-else />
+                </el-icon>
+              </button>
+            </template>
+          </el-input>
         </label>
       </div>
+      <p v-if="cameraSshError" class="app-connection-error" role="alert">{{ cameraSshError }}</p>
     </div>
     <template #footer>
       <el-button @click="cameraSshDialogVisible = false">{{ t('app.cancel') }}</el-button>
-      <el-button type="primary" @click="connectCameraSsh">
-        {{ t('app.toolbar.appConnConnect') }}
+      <el-button
+        type="primary"
+        :loading="cameraSshConnecting"
+        :disabled="cameraSshPasswordLoading"
+        @click="connectCameraSsh"
+      >
+        {{
+          t(cameraSshConnecting ? 'app.toolbar.appConnConnecting' : 'app.toolbar.appConnConnect')
+        }}
       </el-button>
     </template>
   </el-dialog>
@@ -741,7 +778,16 @@ import {
   ElCheckbox,
   ElIcon,
 } from 'element-plus'
-import { Connection, Download, Film, FolderOpened, Monitor, Refresh } from '@element-plus/icons-vue'
+import {
+  Connection,
+  Download,
+  Film,
+  FolderOpened,
+  Hide,
+  Monitor,
+  Refresh,
+  View,
+} from '@element-plus/icons-vue'
 import { useApplicationSelector } from '@/composables/useApplicationSelector'
 import { getPanelIconComponent } from '@/settings/panelIcons'
 import { textDataParserOptions, dataFormatOptions } from '@/composables/useDataSourceManager'
@@ -1006,6 +1052,9 @@ const {
   items: appConnectionItems,
   cameraAccess: cameraSshAccess,
   cameraSshConfigVisible: cameraSshDialogVisible,
+  cameraSshConnecting,
+  cameraSshPasswordLoading,
+  cameraSshError,
   connect: connectCameraSshObservation,
   refresh: refreshAppConnections,
 } = useAppConnections({
@@ -1017,6 +1066,11 @@ const {
 const hasCameraSshConfig = computed(() =>
   appConnectionItems.value.some((item) => item.id === 'camera-ssh-measure'),
 )
+const showCameraSshPassword = ref(false)
+watch(cameraSshDialogVisible, (visible) => {
+  if (visible) showCameraSshPassword.value = false
+  else cameraSshAccess.value.password = ''
+})
 
 async function connectCameraSsh() {
   const connected = await connectCameraSshObservation(cameraSshAccess.value.host)
@@ -1898,6 +1952,36 @@ onUnmounted(() => {
 
 .camera-ssh-config-grid :deep(.el-input-number) {
   width: 100%;
+}
+
+.camera-ssh-password-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  padding: 4px;
+  background: transparent;
+  color: var(--app-text-muted);
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.camera-ssh-password-toggle:hover,
+.camera-ssh-password-toggle:focus-visible {
+  color: var(--el-color-primary);
+}
+
+.app-connection-error {
+  margin: 4px 0;
+  color: var(--el-color-danger);
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.app-connection-action:disabled {
+  opacity: 0.6;
+  cursor: wait;
 }
 
 .app-connection-card {

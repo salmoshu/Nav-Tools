@@ -161,10 +161,15 @@ export class CameraStreamService {
   }
 
   /** 当前运行中的 RTSP 会话列表(供数据接入连接总览展示) */
-  public listActive(): Array<{ url: string; ownerWindowId: number }> {
+  public listActive(): Array<{
+    url: string
+    ownerWindowId: number
+    status: 'connecting' | 'playing'
+  }> {
     return [...this.sessions.values()].map((session) => ({
       url: session.url,
       ownerWindowId: (session.target as unknown as { id: number }).id ?? -1,
+      status: session.receivedFrame ? 'playing' : 'connecting',
     }))
   }
 
@@ -175,7 +180,13 @@ export class CameraStreamService {
     this.sessions.delete(id)
     session.stopping = true
     session.parser.reset()
-    if (!session.process.killed) session.process.kill()
+    if (!session.process.killed) {
+      try {
+        session.process.kill()
+      } catch (error) {
+        if ((error as { code?: string }).code !== 'EINVAL') throw error
+      }
+    }
     this.sendStatus(session, 'stopped', '已停止')
   }
 

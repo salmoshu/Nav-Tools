@@ -15,6 +15,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   stopWindowResize: () => ipcRenderer.invoke('window-resize-stop'),
   startCameraStream: (url: string) => ipcRenderer.invoke('camera-stream-start', url),
   stopCameraStream: () => ipcRenderer.invoke('camera-stream-stop'),
+  stopCameraStreamSession: (ownerWindowId: number) =>
+    ipcRenderer.invoke('camera-stream-stop-session', ownerWindowId),
   sendCameraCommand: (request: {
     subCommand: string
     content: string

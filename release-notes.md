@@ -1,5 +1,19 @@
 # Nav-Tools 更新日志
 
+## v1.8.11
+
+- 相机人员均值标记明确为“2s avg”，避免与历史平均混淆；纯净内容状态随应用布局保存，重启后自动恢复。
+- 连接管理中的 TCP、RTSP、SSH、串口、文件、MCAP 和 GNSS-Raw 均支持统一的连接/断开操作，并保留独立配置入口。
+- 开启 Retry 后，任一相机链路成功会取消并重连其他无效连接中的链路；区分 RTSP 连接中与播放中状态，重连保留共享观测租约，手动断开的链路不会被自动拉起。
+- 自动标定停止或失败时保留最后发送的参数，不再自动回写基线；Reset Parameters 更名为 Reset Params，Accepted 列固定在最右侧。
+- 标定搜索不再配置固定步长，改用实测距离与目标距离的几何偏差计算 OFFSET 修正量，并通过阻尼逐步收敛到容差内。
+
+- Camera person averages are now labeled “2s avg” to distinguish them from lifetime averages. Pure-content state is persisted with each application layout and restored after restart.
+- TCP, RTSP, SSH, serial, file, MCAP and GNSS-Raw connection cards now provide consistent connect/disconnect actions while retaining separate configuration entries.
+- With Retry enabled, a successful camera link cancels and reconnects other links stuck in invalid connection attempts. RTSP distinguishes connecting from playing, shared observation leases are preserved, and manually disconnected links stay disconnected.
+- Stopping or failing calibration retains the last parameters sent instead of restoring the baseline. Reset Parameters is renamed Reset Params, and the Accepted column is pinned to the right edge.
+- Calibration no longer uses fixed search steps. It calculates OFFSET corrections from measured and target distance geometry, with damped iterations toward the configured tolerance.
+
 ## v1.8.10
 
 - 调整 Camera Video、Camera Parameters 与 Hex Message 的组件图标；纯净内容模式恢复与普通组件一致的边框。

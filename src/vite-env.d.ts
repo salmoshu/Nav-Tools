@@ -35,6 +35,7 @@ interface Window {
     stopWindowResize: () => Promise<void>
     startCameraStream: (url: string) => Promise<{ ok: boolean; message?: string }>
     stopCameraStream: () => Promise<void>
+    stopCameraStreamSession?: (ownerWindowId: number) => Promise<boolean>
     sendCameraCommand: (request: {
       subCommand: string
       content: string

@@ -24,8 +24,6 @@ export function validateCalibrationConfig(c: CameraCalibrationConfig): void {
     c.initialOffset,
     c.minOffset,
     c.maxOffset,
-    c.step,
-    c.minStep,
     c.personClassId,
     c.sampleCount,
     c.windowMs,
@@ -65,9 +63,6 @@ export function validateCalibrationConfig(c: CameraCalibrationConfig): void {
   )) {
     throw new Error('高度、FOV 或 OFFSET 范围无效；OFFSET 必须为负且初值在安全范围内')
   }
-  if (!(c.minStep > 0 && c.step >= c.minStep && c.step <= c.maxOffset - c.minOffset)) {
-    throw new Error('调参步长无效')
-  }
   if (
     !['left', 'right'].includes(c.nearSide) ||
     !Number.isSafeInteger(c.personClassId) ||
@@ -103,6 +98,14 @@ function median(values: number[]): number {
   return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2
 }
 
+const OFFSET_RESOLUTION_DEG = 0.001
+const CORRECTION_DAMPING = 0.5
+
+function offsetCorrectionDeg(height: number, measured: number, target: number): number {
+  const correction = (Math.atan(height / measured) - Math.atan(height / target)) * (180 / Math.PI)
+  return correction * CORRECTION_DAMPING
+}
+
 /** 按画面左右把帧内目标对应到配置序号（targets[0] 在 nearSide 一侧） */
 function assignTargets(
   frame: InssegFrame,
@@ -123,8 +126,6 @@ export class CameraCalibration {
   private verifying = false
   private settleUntil = 0
   private pending: number | undefined
-  private lower: number | undefined
-  private upper: number | undefined
   /** 连续采样被打断的次数：参数写入或成功清零，连续达到上限则失败退出 */
   private interruptionStreak = 0
 
@@ -137,7 +138,7 @@ export class CameraCalibration {
       ...createCalibrationProgress(),
       phase: 'sampling',
       offset: config.initialOffset,
-      reason: `等待稳定的 ${config.targets.length} 个目标；启动参数已经 read_params 回读核对`,
+      reason: `等待稳定的 ${config.targets.length} 个目标；将按实测偏差逐步修正 OFFSET`,
     }
   }
 
@@ -227,16 +228,17 @@ export class CameraCalibration {
   }
 
   public written(offset: number, now: number): void {
-    if (this.pending !== offset || !isCalibrationRunning(this.progress.phase)) return
+    if (this.pending !== offset) return
     this.pending = undefined
     this.progress.offset = offset
+    if (!isCalibrationRunning(this.progress.phase)) return
     this.progress.writeCount++
     this.samples = []
     this.progress.sampleCount = 0
-    // 一次经回读核实的参数写入是实质进展，打断计数清零
+    // 一次成功写入是实质进展，打断计数清零
     this.interruptionStreak = 0
     this.progress.phase = 'settling'
-    this.progress.reason = '参数已写入并经回读核对，等待测量稳定'
+    this.progress.reason = '参数已写入，等待测量稳定'
     this.settleUntil = now + this.config.settleMs
   }
 
@@ -244,7 +246,7 @@ export class CameraCalibration {
     this.finish('failed', reason)
   }
 
-  public stop(reason = '已停止；正在恢复标定前参数'): void {
+  public stop(reason = '已停止；保留最后发送的参数'): void {
     this.finish('stopped', reason)
   }
 
@@ -295,8 +297,7 @@ export class CameraCalibration {
       }
     }
     if (accepted) {
-      if (this.verifying)
-        this.finish('succeeded', '所有目标距离均通过独立窗口复验；标定参数保持并已回读核对')
+      if (this.verifying) this.finish('succeeded', '所有目标距离均通过独立窗口复验；标定参数已保持')
       else {
         this.verifying = true
         this.progress.phase = 'verifying'
@@ -315,32 +316,42 @@ export class CameraCalibration {
       this.fail('达到最大参数写入次数，未满足全部目标的容差')
       return
     }
-    if (tooFar) this.upper = offset
-    else this.lower = offset
-    let candidate =
-      this.lower !== undefined && this.upper !== undefined
-        ? (this.lower + this.upper) / 2
-        : offset + (tooFar ? -this.config.step : this.config.step)
-    candidate = Number(
-      Math.max(this.config.minOffset, Math.min(this.config.maxOffset, candidate)).toFixed(6),
+    const driver = errorsCm.reduce(
+      (worst, error, index) => {
+        const target = this.config.targets[index]
+        const tolerance = (error >= 0 ? target.biasMaxM : -target.biasMinM) * 100
+        const score = Math.abs(error) / Math.max(tolerance, EPSILON)
+        return score > worst.score ? { index, score } : worst
+      },
+      { index: 0, score: -1 },
+    ).index
+    const correction = offsetCorrectionDeg(
+      this.config.height,
+      distances[driver],
+      this.config.targets[driver].distance,
+    )
+    const candidate = Number(
+      Math.max(this.config.minOffset, Math.min(this.config.maxOffset, offset + correction)).toFixed(
+        3,
+      ),
     )
     if (
-      Math.abs(candidate - offset) < this.config.minStep - EPSILON ||
+      Math.abs(candidate - offset) < OFFSET_RESOLUTION_DEG - EPSILON ||
       this.progress.history.some((entry) => Math.abs(entry.offset - candidate) < EPSILON)
     ) {
-      this.fail('达到参数边界或最小步长，未找到共同合格参数')
+      this.fail('达到 OFFSET 安全边界或参数分辨率，未进入容差')
       return
     }
     this.pending = candidate
     this.progress.phase = 'writing'
-    this.progress.reason = '准备发送下一组持久参数'
+    this.progress.reason = `按实测偏差修正 OFFSET ${correction >= 0 ? '+' : ''}${correction.toFixed(3)}°`
     return candidate
   }
 
   private finish(phase: 'failed' | 'stopped' | 'succeeded', reason: string): void {
     this.progress.phase = phase
     this.progress.reason = reason
-    this.pending = undefined
+    // 保留待写 offset：迟到的成功写入只更新最终参数，不恢复标定。
     this.samples = []
     this.verifying = false
     this.interruptionStreak = 0

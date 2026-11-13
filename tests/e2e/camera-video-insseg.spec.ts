@@ -144,8 +144,8 @@ test('starts observation with video and shows person fields or an empty connecti
   await expect(overlay).toContainText('track=10')
   const firstTarget = overlay.locator('.bbox-target').first()
   await expect(firstTarget.locator('.bbox-measurement')).toHaveText([
-    'distance=1.260 m (avg 1.260 m)',
-    'azimuth=-5.000° (avg -5.000°)',
+    'distance=1.260 m (2s avg 1.260 m)',
+    'azimuth=-5.000° (2s avg -5.000°)',
   ])
   await expect(overlay).toHaveCSS('font-size', '12px')
   await expect(page.getByText('重试', { exact: true })).toBeVisible()
@@ -188,23 +188,23 @@ test('starts observation with video and shows person fields or an empty connecti
   await expect(overlay.locator('.bbox-target')).toHaveCount(2)
   const secondTarget = overlay.locator('.bbox-target').nth(1)
   await expect(firstTarget.locator('.bbox-measurement')).toHaveText([
-    'distance=1.300 m (avg 1.260 m)',
-    'azimuth=-4.500° (avg -5.000°)',
+    'distance=1.300 m (2s avg 1.260 m)',
+    'azimuth=-4.500° (2s avg -5.000°)',
   ])
   await expect(secondTarget.locator('.bbox-measurement')).toHaveText([
-    'distance=2.030 m (avg 2.030 m)',
-    'azimuth=5.000° (avg 5.000°)',
+    'distance=2.030 m (2s avg 2.030 m)',
+    'azimuth=5.000° (2s avg 5.000°)',
   ])
   await expect(overlay).toContainText('track=11')
 
   await page.clock.runFor(600)
   await expect(firstTarget.locator('.bbox-measurement')).toHaveText([
-    'distance=1.300 m (avg 1.280 m)',
-    'azimuth=-4.500° (avg -4.750°)',
+    'distance=1.300 m (2s avg 1.280 m)',
+    'azimuth=-4.500° (2s avg -4.750°)',
   ])
   await expect(secondTarget.locator('.bbox-measurement')).toHaveText([
-    'distance=2.030 m (avg 2.030 m)',
-    'azimuth=5.000° (avg 5.000°)',
+    'distance=2.030 m (2s avg 2.030 m)',
+    'azimuth=5.000° (2s avg 5.000°)',
   ])
 
   await page.evaluate(

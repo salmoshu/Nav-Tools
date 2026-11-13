@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { JpegStreamParser } from '@/core/camera/JpegStreamParser'
 import { getPanelById } from '@/core/panels/registry'
 import { DEFAULT_APPLICATIONS } from '@/core/application/ApplicationStorage'
+import { CameraStreamService } from '../../electron/main/services/CameraStreamService'
 
 describe('camera panels', () => {
   it('provides video and parameter panels in the registry', () => {
@@ -58,6 +59,37 @@ describe('camera panels', () => {
     expect(source).not.toContain('class="command-hints"')
     expect(source).not.toContain('<small>')
     expect(source).not.toContain('<el-checkbox v-model="contentIsHex"')
+  })
+
+  it('distinguishes an active RTSP connection attempt from a playing session', () => {
+    const service = new CameraStreamService('/nonexistent/nav-tools-ffmpeg')
+    service.start(1, 'rtsp://127.0.0.1:8554/rgbstream', {
+      id: 1,
+      isDestroyed: () => false,
+      send: () => undefined,
+    })
+    expect(service.listActive()).toEqual([
+      {
+        url: 'rtsp://127.0.0.1:8554/rgbstream',
+        ownerWindowId: 1,
+        status: 'connecting',
+      },
+    ])
+    service.stop(1)
+    expect(service.listActive()).toEqual([])
+  })
+
+  it('pins Accepted to the right and removes fixed-step controls', () => {
+    const source = readFileSync('src/components/windows/common/CameraParameters.vue', 'utf8')
+    const acceptedColumn = source.match(
+      /<el-table-column\s+:label="t\('common\.camera\.calibration\.historyAccepted'\)"[\s\S]*?>/,
+    )?.[0]
+    expect(acceptedColumn).toContain('fixed="right"')
+    expect(source).not.toContain('v-model="calForm.step"')
+    expect(source).not.toContain('v-model="calForm.minStep"')
+    expect(readFileSync('src/i18n/locales/en-US/common.ts', 'utf8')).toContain(
+      "restore: 'Reset Params'",
+    )
   })
 
   it('extracts JPEG frames split across stream chunks', () => {

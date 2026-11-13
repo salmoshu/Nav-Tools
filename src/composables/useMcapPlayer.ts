@@ -293,6 +293,18 @@ export function useMcapPlayer() {
     }
   }
 
+  function reset(): void {
+    pause()
+    status.value = 'idle'
+    errorText.value = ''
+    fileInfo.value = null
+    docRef.value = null
+    clockRef.value = null
+    playheadNs.value = 0
+    currentFrame.value = null
+    series.value = null
+  }
+
   function toggle(): void {
     if (playing.value) pause()
     else play()
@@ -366,6 +378,7 @@ export function useMcapPlayer() {
     loadFromPaths,
     play,
     pause,
+    reset,
     toggle,
     seek,
     stepFrames,

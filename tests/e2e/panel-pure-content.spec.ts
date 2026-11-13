@@ -89,4 +89,21 @@ test('keeps multiple cards in pure content mode and restores the latest one with
   await page.keyboard.press('Escape')
   await expect(messagesCard).not.toHaveClass(/pure-content-card/)
   await expect(videoCard).toHaveClass(/pure-content-card/)
+
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const layout = JSON.parse(localStorage.getItem('nav-tools:layout:pure-test') ?? '{}')
+        return layout.pureContentItemIds
+      }),
+    )
+    .toEqual(['camera-video-1'])
+  await page.reload()
+  await expect(page.locator('.pure-content-card')).toHaveCount(1)
+  await expect(page.locator('.box-card').filter({ hasText: '相机视频' })).toHaveClass(
+    /pure-content-card/,
+  )
+  await expect(page.locator('.box-card').filter({ hasText: '消息' })).not.toHaveClass(
+    /pure-content-card/,
+  )
 })

@@ -13,8 +13,6 @@ export function config(overrides: Partial<CameraCalibrationConfig> = {}): Camera
     initialOffset: -21.5,
     minOffset: -25,
     maxOffset: -18,
-    step: 0.5,
-    minStep: 0.025,
     targets: [
       { distance: 1.2, biasMinM: 0.02, biasMaxM: 0.06 },
       { distance: 2, biasMinM: 0.02, biasMaxM: 0.06 },
@@ -83,24 +81,41 @@ describe('CameraCalibration', () => {
     ])
   })
 
-  it('increases absolute offset for far readings and ignores pre-settle samples', () => {
+  it('uses measured errors to adjust offset and ignores pre-settle samples', () => {
     const engine = new CameraCalibration(config(), 0)
-    expect(window(engine, 1, 0, [1.3, 2.1])).toBe(-22)
+    const next = window(engine, 1, 0, [1.3, 2.1])
+    expect(next).toBeLessThan(-21.5)
     engine.push(frame(4), 300)
     expect(engine.snapshot().sampleCount).toBe(0)
-    engine.written(-22, 300)
+    engine.written(next!, 300)
     engine.push(frame(5), 700)
     expect(engine.snapshot().sampleCount).toBe(0)
     window(engine, 6, 800)
-    expect(engine.snapshot()).toMatchObject({ offset: -22, writeCount: 1, phase: 'verifying' })
+    expect(engine.snapshot()).toMatchObject({ offset: next, writeCount: 1, phase: 'verifying' })
   })
 
   it('decreases absolute offset for near readings', () => {
-    expect(window(new CameraCalibration(config(), 0), 1, 0, [1.1, 1.9])).toBe(-21)
+    expect(window(new CameraCalibration(config(), 0), 1, 0, [1.1, 1.9])).toBeGreaterThan(-21.5)
+  })
+
+  it('reduces each subsequent correction as the measured error converges', () => {
+    const engine = new CameraCalibration(
+      config({
+        targets: [
+          { distance: 1.2, biasMinM: -0.02, biasMaxM: 0.02 },
+          { distance: 2, biasMinM: -0.02, biasMaxM: 0.02 },
+        ],
+      }),
+      0,
+    )
+    const first = window(engine, 1, 0, [1.3, 2.1])!
+    engine.written(first, 300)
+    const second = window(engine, 4, 800, [1.25, 2.05])!
+    expect(Math.abs(second - first)).toBeLessThan(Math.abs(first + 21.5))
   })
 
   it('does not round 1.264 down to an accepted 1.26', () => {
-    expect(window(new CameraCalibration(config(), 0), 1, 0, [1.264, 2.03])).toBe(-22)
+    expect(window(new CameraCalibration(config(), 0), 1, 0, [1.264, 2.03])).toBeLessThan(-21.5)
   })
 
   it('drops verification on a third person and requires two entirely new windows', () => {
@@ -179,7 +194,7 @@ describe('CameraCalibration', () => {
     const rightSide = config({ nearSide: 'right' })
     const engine = new CameraCalibration(rightSide, 0)
     // 画面左=2.03（对人员 2 合格），画面右=1.3（对人员 1 偏远）；人员 1 配置为右侧
-    expect(window(engine, 1, 0, [2.03, 1.3])).toBe(-22)
+    expect(window(engine, 1, 0, [2.03, 1.3])).toBeLessThan(-21.5)
   })
 
   it('fails after repeated interruptions instead of resampling silently forever', () => {
@@ -214,20 +229,21 @@ describe('CameraCalibration', () => {
 
   it('resets the interruption streak after each confirmed parameter write', () => {
     const engine = new CameraCalibration(config(), 0)
-    let offset = window(engine, 1, 0, [1.3, 2.1])
-    expect(offset).toBe(-22)
+    let offset = window(engine, 1, 0, [1.3, 2.1])!
+    let previousOffset = -21.5
     let index = 4
     let at = 300
     for (let i = 0; i < 3; i++) {
-      engine.written(offset!, at)
+      expect(offset).toBeLessThan(previousOffset)
+      previousOffset = offset
+      engine.written(offset, at)
       const burst = frame(index, [1.3, 2.1])
       burst.targets.push({ ...burst.targets[0], trackId: 30 })
       index += 1
       engine.push(burst, at + 100)
       expect(engine.snapshot().phase).toBe('paused')
       at += 700
-      offset = window(engine, index, at, [1.3, 2.1])
-      expect(offset).toBeCloseTo(-22.5 - i * 0.5, 6)
+      offset = window(engine, index, at, [1.3, 2.1])!
       index += 3
       at += 300
     }

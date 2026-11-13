@@ -88,6 +88,7 @@ export function useLayoutManager() {
   const { applications, currentApplicationId } = useApplicationSelector()
   const layoutApplicationId = ref<string | undefined>()
   const layoutDraggableList = ref<LayoutItem[]>([])
+  const pureContentItems = ref<string[]>([])
   const originalLayout = ref<LayoutItem[]>([])
   // 用户主动移除的窗口，恢复布局时不再作为“缺失窗口”自动补回
   const removedWindowIds = new Set<string>()
@@ -181,7 +182,13 @@ export function useLayoutManager() {
       showToolBar.value !== false,
       toolbarPosition.value,
       statusbarPosition.value,
+      [...pureContentItems.value],
     )
+  }
+
+  function restorePureContentItems(itemIds: readonly string[] | undefined) {
+    const available = new Set(layoutDraggableList.value.map((item) => item.i))
+    pureContentItems.value = [...new Set(itemIds ?? [])].filter((id) => available.has(id))
   }
 
   async function loadLayoutFromConfig(config: any[]) {
@@ -240,6 +247,7 @@ export function useLayoutManager() {
     removedWindowIds.clear()
     if (!applicationId || !currentApplication.value) {
       layoutDraggableList.value = []
+      pureContentItems.value = []
       backupCurrentLayout()
       return
     }
@@ -260,6 +268,7 @@ export function useLayoutManager() {
 
     if (!savedLayout) {
       await createDefaultLayout()
+      restorePureContentItems([])
       return
     }
 
@@ -269,6 +278,7 @@ export function useLayoutManager() {
       console.error('Failed to load saved layout:', error)
       await createDefaultLayout()
     }
+    restorePureContentItems(savedLayout.pureContentItemIds)
   }
 
   async function createBestLayout() {
@@ -285,6 +295,7 @@ export function useLayoutManager() {
   async function resetLayout() {
     if (layoutApplicationId.value) layoutStorage.remove(layoutApplicationId.value)
     removedWindowIds.clear()
+    pureContentItems.value = []
     // 重置布局时一并复位工具栏/状态栏停靠位置（自适应 Auto 不应触碰工具栏/状态栏）
     toolbarPosition.value = 'bottom'
     statusbarPosition.value = 'right'
@@ -333,6 +344,7 @@ export function useLayoutManager() {
     const index = layoutDraggableList.value.findIndex((item) => item.i === id)
     if (index === -1) return
 
+    pureContentItems.value = pureContentItems.value.filter((itemId) => itemId !== id)
     removedWindowIds.add(layoutDraggableList.value[index].windowId)
     layoutDraggableList.value.splice(index, 1)
   }
@@ -346,6 +358,7 @@ export function useLayoutManager() {
 
   return {
     layoutDraggableList,
+    pureContentItems,
     hasLayoutChanged,
     initLayout,
     saveCurrentLayout,

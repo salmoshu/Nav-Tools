@@ -15,6 +15,7 @@ class FakeHost implements Partial<CameraCalibrationHost> {
   public calibWrites: boolean[] = []
   public failWrites = false
   public failCalibSwitch = false
+  public onMeasurementStart?: () => void
   public device = { version: 'test', height: 0.55, fov: 1.087, thetaOffset: -21.5, raw: 'test' }
   private ticks = 0
 
@@ -55,6 +56,7 @@ class FakeHost implements Partial<CameraCalibrationHost> {
     if (this.channelOpen) throw new Error('测量通道已存在，请先停止')
     this.channelOpen = true
     this.startCalls++
+    this.onMeasurementStart?.()
   }
 
   public async stopMeasurement(): Promise<CameraMeasurementTeardown> {
@@ -76,6 +78,72 @@ function flushMicrotasks(): Promise<void> {
 }
 
 describe('CameraCalibrationService 观测生命周期', () => {
+  it.each(['error', 'stopped'] as const)('测量通道 %s 后再次连接会重新启动采样', async (state) => {
+    const host = new FakeHost()
+    const service = new CameraCalibrationService(host as unknown as CameraCalibrationHost)
+    host.onMeasurementStart = () => service.measurementState('streaming', '正在采样')
+
+    await service.observe(1, ACCESS)
+    service.measurementState('stopped', '采样已结束')
+    if (state === 'error') service.measurementFailed('采样进程提前退出')
+
+    const reconnected = await service.observe(1, ACCESS)
+    expect(host.startCalls).toBe(2)
+    expect(reconnected.ssh?.state).toBe('streaming')
+    service.receive(TWO_PEOPLE)
+    expect(service.snapshot().validFrames).toBe(1)
+  })
+
+  it('强制重连终止旧连接尝试并保留共享观测租约', async () => {
+    const host = new FakeHost()
+    const service = new CameraCalibrationService(host as unknown as CameraCalibrationHost)
+    let releaseFirstStart: (() => void) | undefined
+    host.onMeasurementStart = () => {
+      if (host.startCalls !== 1) return
+      return new Promise<void>((resolve) => {
+        releaseFirstStart = resolve
+      })
+    }
+
+    const first = service.observe(1, ACCESS)
+    await flushMicrotasks()
+    const reconnected = service.reconnect(1, ACCESS)
+    await flushMicrotasks()
+    expect(host.stopCalls).toBeGreaterThan(0)
+    releaseFirstStart?.()
+    await first
+    await reconnected
+    expect(host.startCalls).toBe(2)
+    expect(service.snapshot().observing).toBe(true)
+
+    service.close(1)
+    await flushMicrotasks()
+    expect(host.channelOpen).toBe(false)
+  })
+
+  it('重连共享测量通道后保留已有观测订阅，最后一方退出才拆除', async () => {
+    const host = new FakeHost()
+    const service = new CameraCalibrationService(host as unknown as CameraCalibrationHost)
+    host.onMeasurementStart = () => service.measurementState('streaming', '正在采样')
+
+    await service.observe(1, ACCESS) // 视频
+    await service.observe(1, ACCESS) // 标定
+    service.measurementState('stopped', '采样已结束')
+    service.measurementFailed('采样已达到时限')
+
+    await service.observe(1, ACCESS) // 数据源中点击重连
+    expect(host.startCalls).toBe(2)
+    service.close(1)
+    service.close(1)
+    await flushMicrotasks()
+    expect(host.channelOpen).toBe(true)
+
+    service.close(1)
+    await flushMicrotasks()
+    expect(host.channelOpen).toBe(false)
+    expect(host.calibWrites).toEqual([true, true, false])
+  })
+
   it('停止观测后可以立即重新观测(纯观测路径必须拆除测量通道)', async () => {
     const host = new FakeHost()
     const service = new CameraCalibrationService(host as unknown as CameraCalibrationHost)
@@ -145,6 +213,12 @@ const TWO_PEOPLE = sentence(
   'ESTAR,INSSEG,240601.120000.123,1,42,2,0,10,10,20,100,200,1.260,-5.000,0,11,200,20,300,200,2.030,5.000',
 )
 
+function farFrame(index: number): string {
+  return sentence(
+    `ESTAR,INSSEG,240601.120000.123,${index},42,2,0,10,10,20,100,200,1.300,-5.000,0,11,200,20,300,200,2.100,5.000`,
+  )
+}
+
 function calConfig(overrides: Partial<CameraCalibrationConfig> = {}): CameraCalibrationConfig {
   return {
     height: 0.55,
@@ -152,8 +226,6 @@ function calConfig(overrides: Partial<CameraCalibrationConfig> = {}): CameraCali
     initialOffset: -21.5,
     minOffset: -25,
     maxOffset: -18,
-    step: 1,
-    minStep: 0.2,
     targets: [
       { distance: 1.2, biasMinM: 0.02, biasMaxM: 0.06 },
       { distance: 2, biasMinM: 0.02, biasMaxM: 0.06 },
@@ -280,23 +352,47 @@ describe('CameraCalibrationService 全量上报开关', () => {
     expect(state.lastFrame?.targets.map((target) => target.trackId)).toEqual([10, 11])
   })
 
-  it('停止标定仍保持人物信息, 停止观测后才恢复开关为 0', async () => {
+  it('停止标定保留最后参数, 停止观测后才恢复开关为 0', async () => {
     const host = new FakeHost()
     const service = await readyToStart(host)
     const promise = service.start(1, calConfig())
     await flushMicrotasks()
     service.receive(TWO_PEOPLE)
     await promise
+    for (const index of [2, 3, 4]) service.receive(farFrame(index))
+    await flushMicrotasks()
+    const retained = host.writes.at(-1)!
+    expect(host.writes).toHaveLength(2)
 
     service.stop()
     await new Promise((resolve) => setTimeout(resolve, 20))
     expect(host.calibWrites).toEqual([true])
-    expect(host.writes).toEqual(['0.55,62.292,-21.5', '0.55,62.292,-21.5'])
+    expect(host.writes).toEqual(['0.55,62.292,-21.5', retained])
+    expect(service.snapshot().lastSentParams).toBe(retained)
+    expect(service.snapshot().recovery).toMatchObject({ restored: false, paramsVerified: true })
     expect(service.snapshot().recovery?.calibSwitchRestored).toBeUndefined()
 
     service.close(1)
     await flushMicrotasks()
     expect(host.calibWrites).toEqual([true, false])
     expect(service.snapshot().recovery?.calibSwitchRestored).toBe(true)
+  })
+
+  it('标定失败也保留最后参数而不回写基线', async () => {
+    const host = new FakeHost()
+    const service = await readyToStart(host)
+    const promise = service.start(1, calConfig())
+    await flushMicrotasks()
+    service.receive(TWO_PEOPLE)
+    await promise
+    for (const index of [2, 3, 4]) service.receive(farFrame(index))
+    await flushMicrotasks()
+    const retained = host.writes.at(-1)!
+
+    service.measurementFailed('模拟测量通道故障')
+    await flushMicrotasks()
+    expect(host.writes).toEqual(['0.55,62.292,-21.5', retained])
+    expect(service.snapshot().lastSentParams).toBe(retained)
+    expect(service.snapshot().recovery).toMatchObject({ restored: false, paramsVerified: true })
   })
 })
