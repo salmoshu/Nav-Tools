@@ -20,6 +20,7 @@
           :show-tooltip="false"
           class="point-slider"
           @change="updatePointSize"
+          @dblclick="resetPointSize"
         />
         <span class="size-value">{{ mapPointSize }}</span>
       </div>
@@ -174,8 +175,9 @@ const isElectron = typeof window !== 'undefined' && !!window.ipcRenderer
 
 const containerRef = ref<HTMLElement | null>(null)
 const mapRef = ref<HTMLElement | null>(null)
+const DEFAULT_POINT_SIZE = 10
 const isTracking = ref(true)
-const mapPointSize = ref(10)
+const mapPointSize = ref(DEFAULT_POINT_SIZE)
 const offlineTilesDir = ref('')
 
 type SourceTrackPoint = [longitude: number, latitude: number, quality: number]
@@ -412,6 +414,20 @@ function updatePointSize(): void {
   }
 }
 
+function resetPointSize(event: MouseEvent): void {
+  const target = event.target
+  if (
+    !(target instanceof Element) ||
+    !target.closest('.el-slider__button-wrapper, .el-slider__button')
+  ) {
+    return
+  }
+  event.preventDefault()
+  event.stopPropagation()
+  mapPointSize.value = DEFAULT_POINT_SIZE
+  updatePointSize()
+}
+
 function historyPointTooltip(point: RenderedPoint, sequence: number): string {
   const [latitude, longitude] = point.latlng
   return [
@@ -438,10 +454,18 @@ function addHistoryPoint(point: RenderedPoint): void {
     if (!fileTimeline.active.value || fileTimeline.indexing.value) return
     L.DomEvent.stop(event.originalEvent)
     const history = mapPositionEpochHistory
-    const end = fileTimeline.mode.value === 'replay'
-      ? history.findNearestElapsedTime(fileTimeline.elapsedFor(history))
-      : history.length - 1
-    const index = findPositionEpoch(history, ['LONGITUDE', 'LATITUDE'], point.latlng[1], point.latlng[0], fileTimeline.elapsedFor(history), end)
+    const end =
+      fileTimeline.mode.value === 'replay'
+        ? history.findNearestElapsedTime(fileTimeline.elapsedFor(history))
+        : history.length - 1
+    const index = findPositionEpoch(
+      history,
+      ['LONGITUDE', 'LATITUDE'],
+      point.latlng[1],
+      point.latlng[0],
+      fileTimeline.elapsedFor(history),
+      end,
+    )
     if (index >= 0) fileTimeline.seekEpoch(history, index)
   })
   marker.bindTooltip(historyPointTooltip(point, historyPointMarkers.length + 1), {

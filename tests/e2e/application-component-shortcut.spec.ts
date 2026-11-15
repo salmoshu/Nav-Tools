@@ -135,7 +135,7 @@ test('creates a shortcut and detaches a component from the card actions menu', a
   await expect(detachedPanel).toHaveCount(1)
 
   await shortcut.click()
-  await page.getByRole('menuitem', { name: /分离到独立窗口|Detach to Separate Window/ }).click()
+  await page.getByRole('menuitem', { name: /分离窗口|Detach/ }).click()
   await expect
     .poll(() => invokeLog.filter((call) => call.channel === 'open-card-window').length)
     .toBe(1)

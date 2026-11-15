@@ -25,6 +25,11 @@ export interface MultiSeriesTrajectoryRenderer {
   setSeriesVisible(id: string, visible: boolean): void
   /** 设置序列颜色（归一化 RGBA） */
   setSeriesColor(id: string, color: [number, number, number, number]): void
+  /** 按定位质量逐点着色 */
+  setSeriesColorMapper(
+    id: string,
+    mapper: (quality: number) => [number, number, number, number],
+  ): void
   /** 设置点大小 */
   setPointSize(px: number): void
   /** 设置公共视口 */
@@ -61,6 +66,7 @@ interface SeriesState {
   id: string
   visible: boolean
   color: [number, number, number, number]
+  colorMapper?: (quality: number) => [number, number, number, number]
   points: Array<[number, number, number]>
   pointCount: number
   vertexData: Float32Array
@@ -321,6 +327,17 @@ export class MultiSeriesWebGLTrajectoryRenderer implements MultiSeriesTrajectory
     this.draw()
   }
 
+  setSeriesColorMapper(
+    id: string,
+    mapper: (quality: number) => [number, number, number, number],
+  ): void {
+    const state = this.series.get(id)
+    if (!state) return
+    state.colorMapper = mapper
+    if (state.pointCount > 0) this.recomputeColors(state)
+    this.draw()
+  }
+
   setPointSize(px: number): void {
     this.pointSize = Math.max(0.1, px)
     this.draw()
@@ -543,9 +560,9 @@ export class MultiSeriesWebGLTrajectoryRenderer implements MultiSeriesTrajectory
     index: number,
     x: number,
     y: number,
-    _quality: number,
+    quality: number,
   ): void {
-    const [r, g, b, a] = state.color
+    const [r, g, b, a] = state.colorMapper?.(quality) ?? state.color
     const off = index * VERTEX_STRIDE
     state.vertexData[off] = x
     state.vertexData[off + 1] = y
@@ -564,8 +581,8 @@ export class MultiSeriesWebGLTrajectoryRenderer implements MultiSeriesTrajectory
   }
 
   private recomputeColors(state: SeriesState): void {
-    const [r, g, b, a] = state.color
     for (let i = 0; i < state.pointCount; i++) {
+      const [r, g, b, a] = state.colorMapper?.(state.points[i][2]) ?? state.color
       const off = i * VERTEX_STRIDE + 2
       state.vertexData[off] = r
       state.vertexData[off + 1] = g
@@ -702,6 +719,7 @@ interface CanvasSeriesState {
   id: string
   visible: boolean
   color: [number, number, number, number]
+  colorMapper?: (quality: number) => [number, number, number, number]
   points: Array<[number, number, number]>
   dataBounds: Bounds | null
   quadTree: QuadTree<PickData> | null
@@ -805,6 +823,16 @@ export class MultiSeriesCanvasTrajectoryRenderer implements MultiSeriesTrajector
     const state = this.series.get(id)
     if (!state) return
     state.color = color
+    this.draw()
+  }
+
+  setSeriesColorMapper(
+    id: string,
+    mapper: (quality: number) => [number, number, number, number],
+  ): void {
+    const state = this.series.get(id)
+    if (!state) return
+    state.colorMapper = mapper
     this.draw()
   }
 
@@ -1017,10 +1045,10 @@ export class MultiSeriesCanvasTrajectoryRenderer implements MultiSeriesTrajector
     for (const id of this.seriesOrder) {
       const state = this.series.get(id)
       if (!state || !state.visible || state.points.length === 0) continue
-      const [r, g, b, a] = state.color
-      this.ctx.fillStyle = `rgba(${Math.round(r * 255)}, ${Math.round(g * 255)}, ${Math.round(b * 255)}, ${a})`
       const radius = this.pointSize / 2
-      for (const [x, y] of state.points) {
+      for (const [x, y, quality] of state.points) {
+        const [r, g, b, a] = state.colorMapper?.(quality) ?? state.color
+        this.ctx.fillStyle = `rgba(${Math.round(r * 255)}, ${Math.round(g * 255)}, ${Math.round(b * 255)}, ${a})`
         this.ctx.beginPath()
         this.ctx.arc(x, y, radius, 0, Math.PI * 2)
         this.ctx.fill()

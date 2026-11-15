@@ -27,7 +27,7 @@ const COLOR_PALETTE = [
   '#c1232b'   // 深红
 ]
 
-// FlowDeviation 配置对象
+// Deviation（偏差）配置对象
 const deviationConfig = {
   // 轨迹字段
   track1X: ref<string>(''),
@@ -440,7 +440,7 @@ export function useDataConfig(flowData: any) {
 
   // 应用数据源配置
   function applyDataSourceConfig(config: any) {
-    // 应用FlowDeviation配置
+    // 应用Deviation配置
     if (config.deviation) {
       // 应用Deviation轨迹配置
       deviationConfig.track1X.value = config.deviation.track1X || ''

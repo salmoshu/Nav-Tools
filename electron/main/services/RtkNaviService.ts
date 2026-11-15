@@ -84,7 +84,7 @@ export class RtkNaviService {
       const baseConfig = request.options.baseConfigPath
         ? await fs.readFile(request.options.baseConfigPath, 'utf8')
         : ''
-      const generatedConfig = buildRtkNaviConfig(request, outputPath)
+      const generatedConfig = buildRtkNaviConfig(request, outputPath, baseConfig)
       await fs.writeFile(
         configPath,
         `${baseConfig.trimEnd()}${baseConfig ? '\n' : ''}${generatedConfig}`,

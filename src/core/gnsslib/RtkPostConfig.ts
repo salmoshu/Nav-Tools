@@ -360,6 +360,17 @@ const writers: Readonly<Record<string, Writer>> = {
   'out-trace': number('traceLevel'),
 }
 
+/** Serialize one shared processing option using the same rules as post-processing. */
+export function serializeRtkPostConfigOption(key: string, options: RtkPostOptions): string {
+  const writer = writers[key]
+  const reader = readers[key]
+  const value = writer?.(options)
+  if (value === undefined || !reader || !reader(value, {})) {
+    throw new Error(`处理参数无效: ${key}`)
+  }
+  return value
+}
+
 export function mergeRtkPostConfig(source: string, options: RtkPostOptions): string {
   const values = Object.fromEntries(
     Object.entries(writers).map(([key, write]) => [key, write(options)]),

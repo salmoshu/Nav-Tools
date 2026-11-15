@@ -67,11 +67,11 @@ test('uses the full overlap by default and blocks a non-overlapping base', async
   await base.fill('/data/outside.obs')
   await expect(timeline.getByRole('alert')).toContainText('no usable time overlap')
   await expect(panel.getByRole('button', { name: 'Execute', exact: true })).toBeDisabled()
-  await page.evaluate(async () => {
-    const path = '/src/composables/useRtkPost.ts'
-    const { useRtkPost } = await import(/* @vite-ignore */ path)
-    useRtkPost().settings.options.mode = 0
-  })
+  await panel.getByRole('tab', { name: 'Options', exact: true }).click()
+  await panel.locator('[data-option="mode"] .el-select').click()
+  await page.getByRole('option', { name: 'Single', exact: true }).click()
+  await panel.getByRole('button', { name: 'Confirm', exact: true }).click()
+  await panel.getByRole('tab', { name: 'Inputs', exact: true }).click()
   await expect(timeline).toContainText('Rover observation span')
   await panel.getByRole('button', { name: 'Execute', exact: true }).click()
   await expect.poll(() => page.evaluate(() => Reflect.get(window, '__solverPostCalls'))).toBe(1)
@@ -88,6 +88,30 @@ test('uses the full common observation span when no manual times are set', async
   const options = await page.evaluate(() => Reflect.get(window, '__solverPostRequest').options)
   expect(options.startTime).toBe('2024-07-30T00:02:00')
   expect(options.endTime).toBe('2024-07-30T00:08:00')
+})
+
+test('applies imported time bounds to the timeline only after confirmation', async ({ page }) => {
+  const panel = await openSolver(page)
+  const timeline = panel.locator('.observation-time-section')
+  await expect(timeline).toContainText('Rover and base overlap')
+  await page.evaluate(() =>
+    Reflect.set(window.electronAPI, 'rtkPostReadConfig', async () =>
+      'pos1-posmode=single\npos1-ts=2024/07/30 00:03:00\npos1-te=2024/07/30 00:07:00\n',
+    ),
+  )
+  await panel.getByRole('tab', { name: 'Options', exact: true }).click()
+  const config = panel.locator('.config-file-panel input')
+  await config.fill('/data/time.conf')
+  await config.press('Enter')
+  await expect(panel.locator('.config-status')).toContainText('Loaded 3 parameters')
+  await panel.getByRole('tab', { name: 'Inputs', exact: true }).click()
+  await expect(timeline.locator('.observation-time-selected')).toContainText('00:02:00')
+  await panel.getByRole('tab', { name: 'Options', exact: true }).click()
+  await panel.getByRole('button', { name: 'Confirm', exact: true }).click()
+  await panel.getByRole('tab', { name: 'Inputs', exact: true }).click()
+  await expect(timeline).toContainText('Rover observation span')
+  await expect(timeline.locator('.observation-time-selected')).toContainText('00:03:00')
+  await expect(timeline.locator('.observation-time-selected')).toContainText('00:07:00')
 })
 
 test('both time-range handles can be dragged and the interval can be reset', async ({ page }) => {
@@ -124,13 +148,12 @@ test('both time-range handles can be dragged and the interval can be reset', asy
 test('ignores a late observation read after the rover is changed', async ({ page }) => {
   const panel = await openSolver(page)
   await expect(panel.locator('.observation-time-section')).toContainText('Rover and base overlap')
-  await page.evaluate(async () => {
-    const path = '/src/composables/useRtkPost.ts'
-    const { useRtkPost } = await import(/* @vite-ignore */ path)
-    const settings = useRtkPost().settings
-    settings.options.mode = 0
-    settings.roverObsPath = '/data/stale.obs'
-  })
+  await panel.getByRole('tab', { name: 'Options', exact: true }).click()
+  await panel.locator('[data-option="mode"] .el-select').click()
+  await page.getByRole('option', { name: 'Single', exact: true }).click()
+  await panel.getByRole('button', { name: 'Confirm', exact: true }).click()
+  await panel.getByRole('tab', { name: 'Inputs', exact: true }).click()
+  await panel.locator('.file-row').filter({ hasText: 'RINEX OBS: Rover' }).locator('input').fill('/data/stale.obs')
   await page.waitForTimeout(350)
   await panel
     .locator('.file-row')

@@ -116,8 +116,8 @@ export const panelRegistry: readonly PanelDefinition[] = [
     action: 'deviation',
     title: 'panel.flow-deviation.title',
     description: 'panel.flow-deviation.desc',
-    componentName: 'FlowDeviation',
-    componentPath: '@/components/windows/common/FlowDeviation.vue',
+    componentName: 'Deviation',
+    componentPath: '@/components/windows/common/Deviation.vue',
   },
   {
     id: 'gnss-deviation',

@@ -16,7 +16,18 @@
         class="execute-button"
         type="primary"
         size="small"
-        :disabled="solver.mode.value === 'post' && solver.post.timeRangeBlocked.value"
+        :disabled="
+          solver.mode.value === 'post' &&
+          (solver.post.timeRangeBlocked.value ||
+            solver.post.hasPendingOptions.value ||
+            solver.post.configSaving.value ||
+            solver.post.configStatus.value === 'loading')
+        "
+        :title="
+          solver.mode.value === 'post' && solver.post.hasPendingOptions.value
+            ? t('gnssRaw.rtkpost.optionsPending')
+            : undefined
+        "
         @click="execute"
       >
         {{ t(solver.mode.value === 'post' ? 'gnssRaw.rtkpost.execute' : 'gnssLib.rtknavi.start') }}
@@ -32,6 +43,15 @@
         @click="solver.stop"
       >
         {{ t(solver.mode.value === 'post' ? 'gnssRaw.rtkpost.cancel' : 'gnssLib.rtknavi.stop') }}
+      </el-button>
+      <el-button
+        v-if="canOpenInGnss"
+        class="handoff-button"
+        size="small"
+        :loading="handoff.handoffBusy.value"
+        @click="openInGnss"
+      >
+        {{ t('gnssLib.solver.openInGnss') }}
       </el-button>
     </div>
 
@@ -59,6 +79,13 @@
       type="info"
       :closable="false"
       :title="t('gnssLib.solver.desktopOnly')"
+    />
+    <el-alert
+      v-if="solver.mode.value === 'post' && solver.post.handoffNotice.value"
+      class="solver-alert handoff-input-alert"
+      type="info"
+      :closable="false"
+      :title="solver.post.handoffNotice.value"
     />
     <el-alert
       v-if="solver.post.result.value?.warnings?.length && solver.session.mode.value === 'post'"
@@ -121,24 +148,53 @@
         {{ solver.post.progress.value.processingMessage }}
       </div>
       <div v-if="solver.errorText.value" class="solver-error">{{ solver.errorText.value }}</div>
+      <div
+        v-else-if="solver.mode.value === 'post' && solver.post.hasPendingOptions.value"
+        class="solver-error"
+      >
+        {{ t('gnssRaw.rtkpost.optionsPending') }}
+      </div>
     </footer>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, useId } from 'vue'
+import { computed, onMounted, reactive, useId } from 'vue'
 import { t } from '@/i18n'
 import { useGnssSolver } from '@/composables/useGnssSolver'
+import { useAppHandoff } from '@/composables/useAppHandoff'
 import type { GnssSolverMode } from '@/composables/useGnssSolverSession'
 import RtkPost from './RtkPost.vue'
 import RtkNavi from './RtkNavi.vue'
 
 const solver = useGnssSolver()
+const handoff = useAppHandoff()
+const canOpenInGnss = computed(() => {
+  if (
+    !handoff.apiAvailable.value ||
+    !solver.outputPath.value ||
+    !solver.session.runId.value ||
+    solver.session.epochs.value <= 0
+  ) {
+    return false
+  }
+  if (solver.session.mode.value === 'post') return solver.state.value === 'success'
+  return ['running', 'stopping', 'stopped', 'error'].includes(solver.state.value)
+})
 onMounted(() => {
   void solver.refresh().catch(() => undefined)
 })
 const viewId = `solver-${useId()}`
-const activeView = ref('inputs')
+const activeViews = reactive<Record<GnssSolverMode, string>>({
+  post: 'inputs',
+  realtime: 'inputs',
+})
+const activeView = computed({
+  get: () => activeViews[solver.mode.value],
+  set: (value: string) => {
+    activeViews[solver.mode.value] = value
+  },
+})
 const desktopAvailable =
   typeof window.electronAPI?.rtkPostRun === 'function' &&
   typeof window.electronAPI?.rtkNaviStart === 'function'
@@ -175,6 +231,20 @@ const progressStatus = computed(() =>
 
 async function execute(): Promise<void> {
   await solver.start()
+}
+
+async function openInGnss(): Promise<void> {
+  if (!canOpenInGnss.value) return
+  const mode = solver.session.mode.value
+  await handoff.openSolutionInGnss({
+    outputPath: solver.outputPath.value,
+    runId: solver.session.runId.value,
+    kind: mode === 'realtime' ? 'realtime-snapshot' : 'completed-result',
+    format:
+      mode === 'post' && solver.post.settings.options.outputFormat === 'nmea'
+        ? 'nmea'
+        : 'rtklib-pos',
+  })
 }
 
 function switchTab(event: KeyboardEvent): void {

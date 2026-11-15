@@ -21,7 +21,7 @@ export default {
     desc: '读取和配置相机参数及显示模式',
   },
   'flow-deviation': {
-    title: '偏差图',
+    title: '偏差',
     desc: '分析 Flow 轨迹与偏差（WebGL 渲染）',
   },
   'gnss-deviation': {

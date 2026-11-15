@@ -9,7 +9,16 @@ import {
   type RtkPostRunResult,
   type RtkPostSettings,
 } from '@/core/gnsslib/RtkPost'
-import { parseRtkPostConfig } from '@/core/gnsslib/RtkPostConfig'
+import { mergeRtkPostConfig, parseRtkPostConfig } from '@/core/gnsslib/RtkPostConfig'
+import {
+  copyPostOptions,
+  equalPostOption,
+  restorePostManualBaselines,
+  updatePostOptionDraft,
+  type EditablePostKey,
+  type PostManualBaselines,
+} from '@/core/gnsslib/RtkPostOptionDraft'
+import type { SolverOptionKey, SolverOptionValue } from '@/core/gnsslib/GnssSolverOptions'
 import { JsonStorage } from '@/core/storage/JsonStorage'
 import { t } from '@/i18n'
 import {
@@ -22,8 +31,33 @@ import {
 export type RtkPostStatus = 'idle' | 'running' | 'success' | 'error' | 'cancelled'
 
 const STORAGE_KEY = 'nav-tools:gnssraw-rtkpost-v1'
+const MANUAL_MARKERS_KEY = 'nav-tools:gnssraw-rtkpost-manual-v1'
 const storage = new JsonStorage(localStorage)
 const settings = reactive<RtkPostSettings>(loadSettings())
+const draftOptions = reactive(copyPostOptions(settings.options))
+const draftConfigPath = ref(settings.configPath)
+const committedManualBaselines = ref<PostManualBaselines>(
+  restorePostManualBaselines(storage.read<unknown>(MANUAL_MARKERS_KEY, {}), settings.options),
+)
+const draftManualBaselines = reactive<PostManualBaselines>({ ...committedManualBaselines.value })
+const manualModifiedKeys = computed(() => Object.keys(draftManualBaselines) as EditablePostKey[])
+const hasPendingOptions = computed(() => {
+  if (draftConfigPath.value.trim() !== settings.configPath.trim()) return true
+  for (const key of Object.keys(settings.options) as Array<keyof RtkPostSettings['options']>) {
+    if (!equalPostOption(draftOptions[key], settings.options[key])) return true
+  }
+  const keys = new Set([
+    ...Object.keys(draftManualBaselines),
+    ...Object.keys(committedManualBaselines.value),
+  ])
+  return [...keys].some(
+    (key) =>
+      !equalPostOption(
+        draftManualBaselines[key as EditablePostKey],
+        committedManualBaselines.value[key as EditablePostKey],
+      ),
+  )
+})
 const status = ref<RtkPostStatus>('idle')
 const errorText = ref('')
 const logText = ref('')
@@ -42,7 +76,43 @@ let initializedObservationSource = false
 const observationRefresh = ref(0)
 const configStatus = ref<'idle' | 'loading' | 'ready' | 'error'>('idle')
 const configDetail = ref('')
+const configSaving = ref(false)
 let configContent: string | undefined
+let draftConfigContent: string | undefined
+let loadedDraftPath = settings.configPath.trim()
+let configRevision = 0
+
+/** Any form edit invalidates a handoff return context, including uncommitted option edits. */
+const formRevision = ref(0)
+const handoffInputState = ref<{
+  missingRover: boolean
+  missingNavigation: boolean
+  baseOnly: boolean
+} | null>(null)
+const handoffNotice = computed(() => {
+  const state = handoffInputState.value
+  if (!state) return ''
+  const missingRover = !settings.roverObsPath.trim()
+  const missingNavigation = !settings.navPaths.some((path) => path.trim())
+  if (missingRover && missingNavigation) return t('gnssLib.solver.handoffNeedRoverNav')
+  if (missingRover) return t('gnssLib.solver.handoffNeedRover')
+  if (missingNavigation) return t('gnssLib.solver.handoffNeedNav')
+  return t('gnssLib.solver.handoffInputsReady')
+})
+watch(settings, () => formRevision.value++, { deep: true, flush: 'sync' })
+watch(draftOptions, () => formRevision.value++, { deep: true, flush: 'sync' })
+watch(draftManualBaselines, () => formRevision.value++, { deep: true, flush: 'sync' })
+watch(draftConfigPath, () => formRevision.value++, { flush: 'sync' })
+
+// The time range is edited in Inputs, outside the options draft.
+watch(
+  () => [settings.options.startTime, settings.options.endTime] as const,
+  ([start, end]) => {
+    draftOptions.startTime = start
+    draftOptions.endTime = end
+  },
+  { flush: 'sync' },
+)
 
 watch(
   () =>
@@ -166,7 +236,11 @@ export function useRtkPost() {
   }
   async function execute(requestRunId?: string): Promise<void> {
     if (running.value) return
+    if (hasPendingOptions.value || configSaving.value || configStatus.value === 'loading') {
+      throw new Error(t('gnssRaw.rtkpost.optionsPending'))
+    }
     const runId = requestRunId ?? crypto.randomUUID()
+    handoffInputState.value = null
     activeRunId = runId
     status.value = 'running'
     errorText.value = ''
@@ -237,11 +311,13 @@ export function useRtkPost() {
     }
   }
 
-  async function loadConfig(path = settings.configPath): Promise<boolean> {
+  async function loadConfig(path = draftConfigPath.value): Promise<boolean> {
     const nextPath = path.trim()
-    configContent = undefined
+    const revision = ++configRevision
     if (!nextPath) {
-      settings.configPath = ''
+      draftConfigPath.value = ''
+      loadedDraftPath = ''
+      draftConfigContent = undefined
       configStatus.value = 'idle'
       configDetail.value = ''
       return true
@@ -256,22 +332,109 @@ export function useRtkPost() {
     configDetail.value = ''
     try {
       const content = await api(nextPath)
+      if (revision !== configRevision || draftConfigPath.value.trim() !== nextPath) return false
+      if (typeof content !== 'string') throw new Error(t('gnssRaw.rtkpost.configEmpty'))
       const parsed = parseRtkPostConfig(content)
       if (parsed.recognizedKeys.length === 0) {
         throw new Error(t('gnssRaw.rtkpost.configEmpty'))
       }
-      Object.assign(settings.options, parsed.options)
-      settings.configPath = nextPath
-      configContent = content
+      Object.assign(draftOptions, parsed.options)
+      for (const key of Object.keys(parsed.options))
+        delete draftManualBaselines[key as EditablePostKey]
+      draftConfigPath.value = nextPath
+      loadedDraftPath = nextPath
+      draftConfigContent = content
       configStatus.value = 'ready'
       configDetail.value = t('gnssRaw.rtkpost.configLoaded', {
         count: parsed.recognizedKeys.length,
       })
       return true
     } catch (error) {
+      if (revision !== configRevision || draftConfigPath.value.trim() !== nextPath) return false
       configStatus.value = 'error'
       configDetail.value = error instanceof Error ? error.message : String(error)
       return false
+    }
+  }
+
+  function updateOption(key: SolverOptionKey, value: SolverOptionValue): void {
+    if (value === undefined) return
+    updatePostOptionDraft(
+      draftOptions,
+      draftManualBaselines,
+      key as EditablePostKey,
+      value as RtkPostSettings['options'][EditablePostKey],
+    )
+  }
+
+  function confirmOptions(): void {
+    if (configSaving.value || configStatus.value === 'loading') return
+    if (draftConfigPath.value.trim() !== loadedDraftPath || configStatus.value === 'error') {
+      throw new Error(t('gnssRaw.rtkpost.configMustLoad'))
+    }
+    const snapshot = copyPostOptions(draftOptions)
+    // Changing the positioning mode can reset the observation range synchronously.
+    Object.assign(settings.options, snapshot)
+    settings.configPath = draftConfigPath.value.trim()
+    configContent = draftConfigContent
+    committedManualBaselines.value = restorePostManualBaselines(draftManualBaselines, snapshot)
+    storage.write(MANUAL_MARKERS_KEY, committedManualBaselines.value)
+    storage.write(STORAGE_KEY, settings)
+    Object.assign(draftOptions, copyPostOptions(settings.options))
+  }
+
+  function cancelOptions(): void {
+    ++configRevision
+    Object.assign(draftOptions, copyPostOptions(settings.options))
+    for (const key of Object.keys(draftManualBaselines))
+      delete draftManualBaselines[key as EditablePostKey]
+    Object.assign(draftManualBaselines, committedManualBaselines.value)
+    draftConfigPath.value = settings.configPath
+    loadedDraftPath = settings.configPath.trim()
+    draftConfigContent = configContent
+    configStatus.value = 'idle'
+    configDetail.value = ''
+  }
+
+  async function saveOptions(): Promise<boolean> {
+    if (configSaving.value || configStatus.value === 'loading') return false
+    if (draftConfigPath.value.trim() !== loadedDraftPath || configStatus.value === 'error') {
+      throw new Error(t('gnssRaw.rtkpost.configMustLoad'))
+    }
+    const read = window.electronAPI?.rtkPostReadConfig
+    const save = window.electronAPI?.rtkPostSaveConfig
+    if (!save || (draftConfigPath.value.trim() && !read)) {
+      throw new Error(t('gnssRaw.rtkpost.desktopOnly'))
+    }
+    configSaving.value = true
+    try {
+      const source = draftConfigPath.value.trim() ? await read!(draftConfigPath.value.trim()) : ''
+      if (typeof source !== 'string') throw new Error(t('gnssRaw.rtkpost.configEmpty'))
+      const content = mergeRtkPostConfig(source, copyPostOptions(draftOptions))
+      const filePath = await save({
+        defaultPath: draftConfigPath.value.trim() || 'rtkpost.conf',
+        content,
+        protectedPaths: [
+          settings.executablePath,
+          settings.roverObsPath,
+          settings.baseObsPath,
+          settings.outputPath,
+          ...settings.navPaths,
+        ].filter((item) => item.trim()),
+      })
+      if (!filePath) return false
+      draftConfigPath.value = filePath
+      loadedDraftPath = filePath.trim()
+      draftConfigContent = content
+      for (const key of Object.keys(draftManualBaselines))
+        delete draftManualBaselines[key as EditablePostKey]
+      configSaving.value = false
+      confirmOptions()
+      configStatus.value = 'ready'
+      configDetail.value = t('gnssRaw.rtkpost.configSaved')
+      return true
+    } finally {
+      configSaving.value = false
     }
   }
 
@@ -289,6 +452,11 @@ export function useRtkPost() {
     progress,
     configStatus,
     configDetail,
+    configSaving,
+    draftOptions,
+    draftConfigPath,
+    manualModifiedKeys,
+    hasPendingOptions,
     observationSpan,
     roverObservationSpan,
     baseObservationSpan,
@@ -296,12 +464,46 @@ export function useRtkPost() {
     observationError,
     timeSelectionError,
     timeRangeBlocked,
+    formRevision,
+    handoffNotice,
     loadConfig,
+    updateOption,
+    confirmOptions,
+    cancelOptions,
+    saveOptions,
     refreshObservationSpan,
     execute,
     cancel,
     suggestOutput,
     clearResult,
+    loadRinexInput(
+      files: import('@/core/handoff/AppHandoff').AppHandoffFile[],
+    ): void {
+      if (running.value) throw new Error('HANDOFF_SOLVER_BUSY')
+      const rover = files.find(
+        (file) => file.role === 'rover-observation' && file.format === 'rinex',
+      )
+      const base = files.find(
+        (file) => file.role === 'base-observation' && file.format === 'rinex',
+      )
+      if (!rover && !base) throw new Error('HANDOFF_OBSERVATION_FILE_MISSING')
+      const navigation = files.filter(
+        (file) => file.role === 'navigation' && file.format === 'rinex',
+      )
+      settings.roverObsPath = rover?.path ?? ''
+      settings.baseObsPath = base?.path ?? ''
+      settings.navPaths = navigation.length > 0 ? navigation.map((file) => file.path) : ['']
+      settings.outputPath = ''
+      settings.options.startTime = ''
+      settings.options.endTime = ''
+      automaticOutputPath = ''
+      clearResult()
+      handoffInputState.value = {
+        missingRover: !rover,
+        missingNavigation: navigation.length === 0,
+        baseOnly: !rover && !!base,
+      }
+    },
     restoreTask,
     completeTask,
   }

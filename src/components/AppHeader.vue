@@ -35,6 +35,33 @@
       >
         <LayoutGrid :size="16" :stroke-width="1.8" aria-hidden="true" />
       </button>
+      <el-dropdown
+        v-if="handoffTargets?.length"
+        class="handoff-target-menu"
+        trigger="click"
+        :disabled="handoffBusy"
+        @command="emit('open-handoff-target', $event)"
+      >
+        <button
+          class="header-button handoff-open"
+          type="button"
+          :title="t('app.handoff.openIn')"
+          :aria-label="t('app.handoff.openIn')"
+        >
+          <Share2 :size="16" :stroke-width="1.8" aria-hidden="true" />
+        </button>
+        <template #dropdown>
+          <el-dropdown-menu>
+            <el-dropdown-item
+              v-for="target in handoffTargets"
+              :key="target.applicationId"
+              :command="target.applicationId"
+            >
+              {{ t('app.handoff.openTarget', { name: target.name }) }}
+            </el-dropdown-item>
+          </el-dropdown-menu>
+        </template>
+      </el-dropdown>
       <span v-if="contextTitle || contextPanelTitle" class="context-title">
         <span v-if="contextTitle" class="context-app-name">{{ contextTitle }}</span>
         <!-- 常规态:文件名在应用名右侧;组件全屏时排到组件名右侧 -->
@@ -97,6 +124,17 @@
         @click="toggleAlwaysOnTop"
       >
         <Pin :size="16" :stroke-width="1.8" aria-hidden="true" />
+      </button>
+      <button
+        v-if="handoffSourceName"
+        class="header-button handoff-return"
+        type="button"
+        :title="t('app.handoff.returnTo', { name: handoffSourceName })"
+        :aria-label="t('app.handoff.returnTo', { name: handoffSourceName })"
+        @click="emit('return-handoff-source')"
+      >
+        <el-icon><ArrowLeft /></el-icon>
+        <span>{{ t('app.handoff.returnTo', { name: handoffSourceName }) }}</span>
       </button>
       <button
         v-if="showPanelFullscreenExit"
@@ -230,8 +268,8 @@
 
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref } from 'vue'
-import { ArrowRight, Close, CopyDocument, FullScreen, Minus } from '@element-plus/icons-vue'
-import { LayoutGrid, PanelTopOpen, Pin } from '@lucide/vue'
+import { ArrowLeft, ArrowRight, Close, CopyDocument, FullScreen, Minus } from '@element-plus/icons-vue'
+import { LayoutGrid, PanelTopOpen, Pin, Share2 } from '@lucide/vue'
 import PanelActionsMenu from './PanelActionsMenu.vue'
 import { showStatusBar, showToolBar } from '@/composables/useStatusManager'
 import { getBrowserWindowService } from '@/core/window/browserWindowService'
@@ -251,6 +289,9 @@ const props = defineProps<{
   contextFileTitle?: string
   contextIconAction?: string
   contextWindowId?: string
+  handoffSourceName?: string
+  handoffTargets?: Array<{ applicationId: string; name: string }>
+  handoffBusy?: boolean
   showApplicationSelector?: boolean
   showDetachedControls?: boolean
   showPanelFullscreenExit?: boolean
@@ -258,7 +299,9 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   'open-application-selector': []
+  'open-handoff-target': [applicationId: string]
   'exit-panel-fullscreen': []
+  'return-handoff-source': []
   'create-shortcut': []
   'maximized-change': [maximized: boolean]
 }>()
@@ -457,6 +500,28 @@ onUnmounted(() => {
 .panel-fullscreen-exit {
   color: var(--el-color-primary);
   background: color-mix(in srgb, var(--el-color-primary) 9%, transparent);
+}
+
+.header-button.handoff-return {
+  display: inline-flex;
+  align-self: center;
+  gap: 5px;
+  width: auto;
+  max-width: 190px;
+  height: 28px;
+  margin: 0 6px;
+  padding: 0 10px;
+  border-radius: 6px;
+  color: var(--el-color-primary);
+  background: color-mix(in srgb, var(--el-color-primary) 9%, transparent);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.handoff-return span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .header-controls {

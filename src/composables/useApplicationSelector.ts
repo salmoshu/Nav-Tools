@@ -10,6 +10,7 @@ import { JsonStorage } from '@/core/storage/JsonStorage'
 const applicationStorage = new ApplicationStorage(new JsonStorage(localStorage))
 const applications = ref<UserApplication[]>(applicationStorage.loadApplications())
 const enabledDefaultApplicationIds = ref(applicationStorage.loadEnabledDefaultApplicationIds())
+const selectorViewMode = ref(applicationStorage.loadSelectorViewMode())
 const defaultApplicationIds = new Set(DEFAULT_APPLICATIONS.map((application) => application.id))
 const visibleApplications = computed({
   get: () =>
@@ -184,6 +185,11 @@ export function useApplicationSelector() {
   return {
     applications,
     visibleApplications,
+    selectorViewMode,
+    setSelectorViewMode(mode: 'cards' | 'rows') {
+      selectorViewMode.value = mode
+      applicationStorage.saveSelectorViewMode(mode)
+    },
     isDefaultApplicationEnabled,
     setDefaultApplicationEnabled,
     windowCatalog,

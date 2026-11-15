@@ -24,7 +24,7 @@ export default {
     desc: 'Read and configure camera parameters and display mode',
   },
   'flow-deviation': {
-    title: 'Deviation Chart',
+    title: 'Deviation',
     desc: 'Analyze Flow trajectory and deviation (WebGL rendering)',
   },
   'gnss-deviation': {

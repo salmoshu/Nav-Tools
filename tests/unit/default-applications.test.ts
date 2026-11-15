@@ -132,4 +132,20 @@ describe('default application preferences', () => {
       'gnsslib',
     ])
   })
+
+  it('persists the selector view mode and falls back to cards for invalid values', async () => {
+    const { useApplicationSelector } = await import('@/composables/useApplicationSelector')
+    const state = useApplicationSelector()
+    expect(state.selectorViewMode.value).toBe('cards')
+    state.setSelectorViewMode('rows')
+    expect(localStorage.getItem('nav-tools:application-selector-view')).toBe('"rows"')
+
+    vi.resetModules()
+    const reloaded = (await import('@/composables/useApplicationSelector')).useApplicationSelector()
+    expect(reloaded.selectorViewMode.value).toBe('rows')
+
+    localStorage.setItem('nav-tools:application-selector-view', '"columns"')
+    const storage = new ApplicationStorage(new JsonStorage(localStorage))
+    expect(storage.loadSelectorViewMode()).toBe('cards')
+  })
 })

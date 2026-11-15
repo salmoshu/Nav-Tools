@@ -24,6 +24,24 @@ export default {
     stateStopped: 'Stopped',
     stateCancelled: 'Cancelled',
     stateError: 'Failed',
+    openInGnss: 'Inspect in GNSS',
+    handoffUnavailable: 'Application handoff is available only in the desktop main window.',
+    handoffTargetUnavailable: 'The target application is unavailable, or a compatible target must be selected explicitly.',
+    handoffNoRecords: 'The current output has no complete solution epochs to inspect.',
+    handoffSuccess: 'Solution loaded in GNSS.',
+    handoffFailed: 'Cannot open GNSS: {message}',
+    handoffSolverBusy: 'The solver is running. Stop it before receiving a RINEX file group.',
+    handoffDiscardOptionsTitle: 'Discard uncommitted option changes',
+    handoffDiscardOptionsMessage:
+      'Loading handoff inputs discards uncommitted option edits. Saved solver options are preserved. Continue?',
+    handoffNeedRover:
+      'RTCM observations were loaded as base-station data. Add a rover OBS file, review the inputs, and start solving manually. Nothing runs automatically.',
+    handoffNeedRoverNav:
+      'RTCM observations were loaded as base-station data. Add rover OBS and NAV files, review them, and start solving manually. Nothing runs automatically.',
+    handoffNeedNav:
+      'Observation inputs are prefilled. Add a NAV file, review the inputs, and start solving manually.',
+    handoffInputsReady:
+      'The RINEX file group is prefilled. Review rover, base, and navigation files before starting the solver manually.',
   },
   rtknavi: {
     start: 'Start',
@@ -57,7 +75,7 @@ export default {
     serialHint: 'Format: COM3:115200:8:N:1:off (use ttyUSB0 on Linux)',
     tcpServerHint: 'Format: :2101 to listen for clients on this machine',
     tcpClientHint: 'Format: 127.0.0.1:2101',
-    ntripHint: 'Format: user:password@host:2101/mountpoint',
+    ntripHint: "Format: user:password{'@'}host:2101/mountpoint",
     processingOptions: 'Processing options',
     positioningMode: 'Positioning mode',
     frequency: 'Frequencies',
@@ -69,7 +87,16 @@ export default {
     fixAndHold: 'Fix and hold',
     constellations: 'Navigation systems',
     baseConfig: 'Base config file',
-    baseConfigHint: 'Optional rtkrcv.conf; options below override matching config values.',
+    baseConfigHint:
+      'Optional rtkrcv.conf. Basic controls take precedence; advanced values are loaded from the file unless edited here.',
+    configLoading: 'Loading real-time processing configuration…',
+    configLoaded:
+      'Advanced parameters loaded from the base configuration; manual edits take precedence.',
+    configReadError: 'Unable to read the real-time processing configuration.',
+    configReload: 'Reload configuration file',
+    configResetOverrides: 'Restore advanced values from file',
+    systemSupportHint:
+      'The default Open-GNSS real-time engine does not enable GLONASS, QZSS or NavIC; support depends on the engine build.',
     basePosition: 'Base position source',
     positionRtcm: 'RTCM station position',
     positionRinex: 'RINEX header',

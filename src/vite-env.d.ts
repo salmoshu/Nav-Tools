@@ -104,6 +104,9 @@ interface Window {
     ) => Promise<import('./core/gnsslib/RtkPost').RtkPostRunResult>
     rtkPostCancel: (runId: string) => Promise<boolean>
     rtkPostReadConfig: (path: string) => Promise<string>
+    rtkPostSaveConfig: (
+      request: import('./core/gnsslib/RtkPost').RtkPostSaveConfigRequest,
+    ) => Promise<string | null>
     rtkPostObservationSpans: (request: {
       roverPath: string
       basePath?: string
@@ -120,6 +123,15 @@ interface Window {
     rtkNaviStop: (runId: string) => Promise<import('./core/gnsslib/RtkNavi').RtkNaviStatus>
     rtkNaviStatus: () => Promise<import('./core/gnsslib/RtkNavi').RtkNaviStatus>
     rtkNaviChooseOutput: (defaultPath?: string) => Promise<string | null>
+    appHandoffCreateSolutionSnapshot?: (
+      request: import('./core/handoff/AppHandoff').AppHandoffSnapshotRequest,
+    ) => Promise<import('./core/handoff/AppHandoff').AppHandoffSnapshotResult>
+    appHandoffRegisterArtifact?: (
+      artifact: import('./core/handoff/AppHandoff').AppHandoffArtifact,
+    ) => Promise<import('./core/handoff/AppHandoff').AppHandoffArtifact>
+    appHandoffCreateRinexArtifact?: (
+      request: import('./core/handoff/AppHandoff').AppHandoffRinexWriteRequest,
+    ) => Promise<import('./core/handoff/AppHandoff').AppHandoffArtifact>
   }
   ipcRenderer: import('electron').IpcRenderer
 }

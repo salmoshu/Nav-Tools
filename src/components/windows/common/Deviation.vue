@@ -2,7 +2,12 @@
   <div class="deviation-container">
     <div class="control-panel">
       <div class="controls">
-        <el-button type="default" size="small" @click="showViewConfig" class="control-btn config-btn">
+        <el-button
+          type="default"
+          size="small"
+          @click="showViewConfig"
+          class="control-btn config-btn"
+        >
           <el-icon><Setting /></el-icon>&nbsp;{{ t('flow.config') }}
         </el-button>
 
@@ -15,7 +20,9 @@
           @click="toggleTracking"
         >
           <el-icon><Aim /></el-icon>
-          <span class="tracking-text">&nbsp;{{ isTracking ? t('flow.disableTracking') : t('flow.enableTracking') }}</span>
+          <span class="tracking-text"
+            >&nbsp;{{ isTracking ? t('flow.disableTracking') : t('flow.enableTracking') }}</span
+          >
         </el-button>
 
         <div class="point-size-control">
@@ -27,6 +34,7 @@
             :step="1"
             class="point-slider"
             @change="updatePointSize"
+            @dblclick="resetPointSize"
           />
           <span class="size-value">{{ pointSize }}</span>
         </div>
@@ -39,19 +47,28 @@
             :class="{ disabled: !legendVisible[track - 1] }"
             @click="toggleLegend(track)"
           >
-            <span
-              class="legend-color"
-              :style="{ backgroundColor: getTrackColor(track) }"
-            ></span>
+            <span class="legend-color" :style="{ backgroundColor: getTrackColor(track) }"></span>
             <span class="legend-label">{{ t('flow.trackN', { n: track }) }}</span>
           </div>
         </div>
 
         <div class="right-buttons">
-          <el-button type="text" size="small" @click="resetZoom" class="zoom-btn" style="margin: 0px 0px;">
+          <el-button
+            type="text"
+            size="small"
+            @click="resetZoom"
+            class="zoom-btn"
+            style="margin: 0px 0px"
+          >
             <el-icon><Refresh /></el-icon>
           </el-button>
-          <el-button type="text" size="small" @click="clearTrack" class="clear-btn" style="margin: 0px 0px;">
+          <el-button
+            type="text"
+            size="small"
+            @click="clearTrack"
+            class="clear-btn"
+            style="margin: 0px 0px"
+          >
             <el-icon><Delete /></el-icon>
           </el-button>
         </div>
@@ -61,12 +78,7 @@
     <div class="chart-container" ref="chartContainerRef">
       <canvas ref="canvasRef" class="chart"></canvas>
       <canvas ref="axisCanvasRef" class="axis-layer"></canvas>
-      <div
-        ref="tooltipRef"
-        class="deviation-tooltip"
-        :style="tooltipStyle"
-        v-show="tooltipVisible"
-      >
+      <div ref="tooltipRef" class="deviation-tooltip" :style="tooltipStyle" v-show="tooltipVisible">
         {{ tooltipText }}
       </div>
       <div ref="infoBarRef" class="info-bar" v-show="infoBarVisible">
@@ -130,8 +142,9 @@ let axisDpr = 1
 let axisCssWidth = 0
 let axisCssHeight = 0
 
+const DEFAULT_POINT_SIZE = 10
 const isTracking = ref(false)
-const pointSize = ref(10)
+const pointSize = ref(DEFAULT_POINT_SIZE)
 const tooltipVisible = ref(false)
 const tooltipText = ref('')
 const tooltipStyle = ref<Record<string, string>>({})
@@ -426,8 +439,12 @@ function determineTrackingTarget(sourceData: Record<string, unknown>): {
 } {
   for (let i = 0; i < 4; i++) {
     const n = i + 1
-    const xField = (deviationConfig[`track${n}X` as keyof typeof deviationConfig] as { value: string }).value
-    const yField = (deviationConfig[`track${n}Y` as keyof typeof deviationConfig] as { value: string }).value
+    const xField = (
+      deviationConfig[`track${n}X` as keyof typeof deviationConfig] as { value: string }
+    ).value
+    const yField = (
+      deviationConfig[`track${n}Y` as keyof typeof deviationConfig] as { value: string }
+    ).value
     if (!xField || !yField) continue
     const xData = sourceData[xField] as number[] | undefined
     const yData = sourceData[yField] as number[] | undefined
@@ -587,12 +604,7 @@ function handleFlowUpdate(): void {
   syncRendererData()
 
   if (isTracking.value) {
-    updateViewport(
-      -trackingXHalfSpan,
-      trackingXHalfSpan,
-      -trackingYHalfSpan,
-      trackingYHalfSpan,
-    )
+    updateViewport(-trackingXHalfSpan, trackingXHalfSpan, -trackingYHalfSpan, trackingYHalfSpan)
   } else {
     renderer.render()
     drawAxisLayer()
@@ -711,6 +723,20 @@ function updatePointSize(): void {
   drawCurrentPositions()
 }
 
+function resetPointSize(event: MouseEvent): void {
+  const target = event.target
+  if (
+    !(target instanceof Element) ||
+    !target.closest('.el-slider__button-wrapper, .el-slider__button')
+  ) {
+    return
+  }
+  event.preventDefault()
+  event.stopPropagation()
+  pointSize.value = DEFAULT_POINT_SIZE
+  updatePointSize()
+}
+
 function toggleLegend(track: number): void {
   const idx = track - 1
   legendVisible.value[idx] = !legendVisible.value[idx]
@@ -759,8 +785,12 @@ function showHover(picked: PickedPoint, sx: number, sy: number): void {
     return
   }
 
-  const xField = (deviationConfig[`track${trackNum}X` as keyof typeof deviationConfig] as { value: string }).value
-  const yField = (deviationConfig[`track${trackNum}Y` as keyof typeof deviationConfig] as { value: string }).value
+  const xField = (
+    deviationConfig[`track${trackNum}X` as keyof typeof deviationConfig] as { value: string }
+  ).value
+  const yField = (
+    deviationConfig[`track${trackNum}Y` as keyof typeof deviationConfig] as { value: string }
+  ).value
   const originX = Number((plotData.value[xField] as number[] | undefined)?.[rawIndex])
   const originY = Number((plotData.value[yField] as number[] | undefined)?.[rawIndex])
 
@@ -911,10 +941,16 @@ function setupResizeObserver(): void {
       if (!chartContainerRef.value || !canvasRef.value || !axisCanvasRef.value) return
       const width = chartContainerRef.value.clientWidth
       const height = chartContainerRef.value.clientHeight
+      if (width <= 0 || height <= 0) return
       renderer?.onResize(width, height)
       resizeAxisCanvas(width, height)
-      drawAxisLayer()
-      drawCurrentPositions()
+      if (!isTracking.value) {
+        // 全览状态随画布尺寸重新适配轨迹，保证全屏与还原后仍按比例铺满。
+        resetZoom()
+      } else {
+        drawAxisLayer()
+        drawCurrentPositions()
+      }
     })
   })
   resizeObserver.observe(chartContainerRef.value)
@@ -1216,7 +1252,7 @@ onUnmounted(() => {
 :deep(.el-slider__button) {
   width: var(--el-slider-button-size);
   height: var(--el-slider-button-size);
-  background-image: url("data:image/svg+xml;charset=utf-8;base64,PHN2ZyBjbGFzcz0iaWNvbiIgdmlld0JveD0iMCAwIDEwMjQgMTAyNCIgdmVyc2lvbj0iMS4xIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHN0eWxlPSJoZWlnaHQ6IDE2cHg7IHdpZHRoOiAxNnB4OyI+PHBhdGggZD0iTTUxMiA2NGE0NDggNDQ4IDAgMCAxIDEzMC4yNCAxOS4yMzJjLTM3LjQwOCAxNDIuNzItMTUuMDQgMjM0LjQgNzUuODQgMjY0LjcwNGwxNy4yOCA1Ljg4OCAxNi40OCA1Ljg4OGMxMDUuNTM2IDM4Ljk3NiAxMjkuMzc2IDcxLjc0NCAxMDQuNjQgMTQ1Ljk4NC0xMS4yIDMzLjYtMzQuOTQ0IDQ5LjgyNC0xMDEuNjk2IDczLjE1MmwtMzUuODQgMTIuMjI0LTE3LjQ0IDYuMzA0Yy03Mi40NDggMjcuMTA0LTEwNC40MTYgNTIuMTI4LTEyMi41NiAxMDYuNTYtMjYuMTQ0IDc4LjM2OCA4LjY0IDE1My4zNzYgOTguMTc2IDIyNC42MDhBNDQ1Ljc5MiA0NDUuNzkyIDAgMCAxIDUxMiA5NjBjLTMyLjg2NCAwLTY0Ljg5Ni0zLjUyLTk1Ljc0NC0xMC4yNCA1Ni4wOTYtNDMuMDcyIDY2LjA0OC0xMDguOCAyNC44LTE5MS4yOTYtMjYuODgtNTMuNjk2LTY5LjI0OC04My4xMzYtMTI5LjkyLTEwMS4zNDRhNDgwLjk2IDQ4MC45NiAwIDAgMC0xOS43NDQtNS40NGwtMzMuNDA4LTcuOTM2Yy0zNC4yNC04LjEyOC00OC40OC0xMy45NTItNTQuNTI4LTIxLjYzMi02LjQtOC4xNi02LjM2OC0yNS45ODQgNi41OTItNjAuMzJsMi41Ni02LjY1NmM1My44MjQtMTM0LjU2IDE1LjEwNC0yMTkuMDcyLTEwNi40NjQtMjMzLjA4OEMxNzcuNjMyIDE2OS42IDMzMi40OCA2NCA1MTIgNjR6TTgyLjQ2NCAzODQuMjU2Yzg5LjYgMy42NDggMTEwLjYyNCA0My4wNCA3My41MDQgMTQwLjA2NGwtMi43ODQgNy4wNGMtMjMuMDQgNTcuNjk2LTI0LjEyOCA5OS42NDgtMC4wNjQgMTMwLjI3MiAxNy40MDggMjIuMjA4IDM4Ljg0OCAzMS43NzYgODIuNTYgNDIuNTZsMzMuMjggNy44NzJjOS4wMjQgMi4yMDggMTYuNjQgNC4yMjQgMjMuNzc2IDYuMzY4IDQ1LjI0OCAxMy41NjggNzMuMjQ4IDMzLjAyNCA5MS4wNzIgNjguNjcyIDM1LjIgNzAuMzY4IDIxLjQ0IDExMS4zNi01MS44NCAxMzUuMjMyQzE3NC4xNzYgODUzLjAyNCA2NCA2OTUuMzYgNjQgNTEyYzAtNDQuMzg0IDYuNDY0LTg3LjI2NCAxOC40NjQtMTI3Ljc0NHogbTYxOS44MDgtMjc3Ljk1MkM4NTQuNTYgMTc3LjgyNCA5NjAgMzMyLjYwOCA5NjAgNTEyYzAgMTYzLjUyLTg3LjYxNiAzMDYuNjI0LTIxOC40OTYgMzg0LjgzMi04OC4zMi02MS44MjQtMTE5LjY4LTExOS4xNjgtMTAxLjg1Ni0xNzIuNjQgMTEuMTY4LTMzLjUzNiAzNC44OC00OS43NiAxMDEuMzQ0LTczLjAyNGwxNy4xODQtNS44NTZjOTguNzItMzIuODk2IDEzOC4wNDgtNTYuNTEyIDE1OS4wNC0xMTkuMzYgNDIuMTc2LTEyNi41OTItMTUuNTUyLTE4NC4zMi0xNzguODgtMjM4LjcyLTQ3LjItMTUuNzQ0LTYyLjQ5Ni02OS42MzItMzguNzUyLTE3MC4w");
+  background-image: url('data:image/svg+xml;charset=utf-8;base64,PHN2ZyBjbGFzcz0iaWNvbiIgdmlld0JveD0iMCAwIDEwMjQgMTAyNCIgdmVyc2lvbj0iMS4xIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHN0eWxlPSJoZWlnaHQ6IDE2cHg7IHdpZHRoOiAxNnB4OyI+PHBhdGggZD0iTTUxMiA2NGE0NDggNDQ4IDAgMCAxIDEzMC4yNCAxOS4yMzJjLTM3LjQwOCAxNDIuNzItMTUuMDQgMjM0LjQgNzUuODQgMjY0LjcwNGwxNy4yOCA1Ljg4OCAxNi40OCA1Ljg4OGMxMDUuNTM2IDM4Ljk3NiAxMjkuMzc2IDcxLjc0NCAxMDQuNjQgMTQ1Ljk4NC0xMS4yIDMzLjYtMzQuOTQ0IDQ5LjgyNC0xMDEuNjk2IDczLjE1MmwtMzUuODQgMTIuMjI0LTE3LjQ0IDYuMzA0Yy03Mi40NDggMjcuMTA0LTEwNC40MTYgNTIuMTI4LTEyMi41NiAxMDYuNTYtMjYuMTQ0IDc4LjM2OCA4LjY0IDE1My4zNzYgOTguMTc2IDIyNC42MDhBNDQ1Ljc5MiA0NDUuNzkyIDAgMCAxIDUxMiA5NjBjLTMyLjg2NCAwLTY0Ljg5Ni0zLjUyLTk1Ljc0NC0xMC4yNCA1Ni4wOTYtNDMuMDcyIDY2LjA0OC0xMDguOCAyNC44LTE5MS4yOTYtMjYuODgtNTMuNjk2LTY5LjI0OC04My4xMzYtMTI5LjkyLTEwMS4zNDRhNDgwLjk2IDQ4MC45NiAwIDAgMC0xOS43NDQtNS40NGwtMzMuNDA4LTcuOTM2Yy0zNC4yNC04LjEyOC00OC40OC0xMy45NTItNTQuNTI4LTIxLjYzMi02LjQtOC4xNi02LjM2OC0yNS45ODQgNi41OTItNjAuMzJsMi41Ni02LjY1NmM1My44MjQtMTM0LjU2IDE1LjEwNC0yMTkuMDcyLTEwNi40NjQtMjMzLjA4OEMxNzcuNjMyIDE2OS42IDMzMi40OCA2NCA1MTIgNjR6TTgyLjQ2NCAzODQuMjU2Yzg5LjYgMy42NDggMTEwLjYyNCA0My4wNCA3My41MDQgMTQwLjA2NGwtMi43ODQgNy4wNGMtMjMuMDQgNTcuNjk2LTI0LjEyOCA5OS42NDgtMC4wNjQgMTMwLjI3MiAxNy40MDggMjIuMjA4IDM4Ljg0OCAzMS43NzYgODIuNTYgNDIuNTZsMzMuMjggNy44NzJjOS4wMjQgMi4yMDggMTYuNjQgNC4yMjQgMjMuNzc2IDYuMzY4IDQ1LjI0OCAxMy41NjggNzMuMjQ4IDMzLjAyNCA5MS4wNzIgNjguNjcyIDM1LjIgNzAuMzY4IDIxLjQ0IDExMS4zNi01MS44NCAxMzUuMjMyQzE3NC4xNzYgODUzLjAyNCA2NCA2OTUuMzYgNjQgNTEyYzAtNDQuMzg0IDYuNDY0LTg3LjI2NCAxOC40NjQtMTI3Ljc0NHogbTYxOS44MDgtMjc3Ljk1MkM4NTQuNTYgMTc3LjgyNCA5NjAgMzMyLjYwOCA5NjAgNTEyYzAgMTYzLjUyLTg3LjYxNiAzMDYuNjI0LTIxOC40OTYgMzg0LjgzMi04OC4zMi02MS44MjQtMTE5LjY4LTExOS4xNjgtMTAxLjg1Ni0xNzIuNjQgMTEuMTY4LTMzLjUzNiAzNC44OC00OS43NiAxMDEuMzQ0LTczLjAyNGwxNy4xODQtNS44NTZjOTguNzItMzIuODk2IDEzOC4wNDgtNTYuNTEyIDE1OS4wNC0xMTkuMzYgNDIuMTc2LTEyNi41OTItMTUuNTUyLTE4NC4zMi0xNzguODgtMjM4LjcyLTQ3LjItMTUuNzQ0LTYyLjQ5Ni02OS42MzItMzguNzUyLTE3MC4w');
   background-size: contain;
   background-position: center;
   background-repeat: no-repeat;

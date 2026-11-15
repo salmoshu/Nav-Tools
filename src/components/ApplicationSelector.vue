@@ -14,6 +14,30 @@
           <p>{{ t('app.selector.subtitle') }}</p>
         </div>
         <div class="header-actions">
+          <div class="view-mode-switch" role="group" :aria-label="t('app.selector.viewMode')">
+            <el-button
+              text
+              circle
+              class="view-mode-button"
+              :class="{ active: selectorViewMode === 'cards' }"
+              :icon="Grid"
+              :title="t('app.selector.cardView')"
+              :aria-label="t('app.selector.cardView')"
+              :aria-pressed="selectorViewMode === 'cards'"
+              @click="setSelectorViewMode('cards')"
+            />
+            <el-button
+              text
+              circle
+              class="view-mode-button"
+              :class="{ active: selectorViewMode === 'rows' }"
+              :icon="List"
+              :title="t('app.selector.rowView')"
+              :aria-label="t('app.selector.rowView')"
+              :aria-pressed="selectorViewMode === 'rows'"
+              @click="setSelectorViewMode('rows')"
+            />
+          </div>
           <el-button
             text
             circle
@@ -66,6 +90,7 @@
         v-else
         v-model="applications"
         class="application-grid"
+        :class="{ 'application-grid--rows': selectorViewMode === 'rows' }"
         tag="div"
         item-key="id"
         :animation="180"
@@ -84,6 +109,7 @@
             class="application-card"
             :class="{
               selected: application.id === currentApplicationId,
+              'application-card--row': selectorViewMode === 'rows',
               'application-card-dragging': application.id === draggingApplicationId,
             }"
             :style="{ '--application-accent': application.accent }"
@@ -114,6 +140,8 @@
               <p>{{ application.description || t('app.selector.noDescription') }}</p>
               <ApplicationPanelChips
                 :windows="applicationWindows(application)"
+                :max-rows="selectorViewMode === 'rows' ? 1 : 2"
+                :compact="selectorViewMode === 'rows'"
                 @open="(windowId) => $emit('open-component-window', windowId)"
               />
             </div>
@@ -173,6 +201,7 @@ import {
   Edit,
   FolderAdd,
   Grid,
+  List,
   Plus,
   Refresh,
   Setting,
@@ -200,6 +229,8 @@ const {
   visibleApplications: applications,
   windowCatalog,
   currentApplicationId,
+  selectorViewMode,
+  setSelectorViewMode,
   saveApplication,
   deleteApplication,
   reorderApplications,
@@ -546,6 +577,79 @@ onUnmounted(() => window.removeEventListener('keydown', handleEscape, { capture:
   color: #ef4444;
 }
 
+.view-mode-switch {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-right: 6px;
+  padding: 2px;
+  border: 1px solid var(--app-border);
+  border-radius: 6px;
+  background: var(--app-surface-muted);
+}
+
+.view-mode-button {
+  margin: 0 !important;
+}
+
+.view-mode-button.active {
+  color: var(--el-color-primary);
+  background: var(--app-surface);
+  box-shadow: 0 1px 3px var(--app-shadow);
+}
+
+.application-grid--rows {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+  padding: 14px 20px;
+}
+
+.application-card--row {
+  grid-template-columns: 36px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  min-height: 0;
+  padding: 10px 12px;
+}
+
+.application-card--row:hover,
+.application-card--row:focus-visible {
+  transform: none;
+}
+
+.application-card--row .application-icon {
+  width: 36px;
+  height: 36px;
+}
+
+.application-card--row .application-copy {
+  display: grid;
+  grid-template-columns: minmax(130px, 0.7fr) minmax(160px, 1.3fr);
+  align-items: center;
+  column-gap: 16px;
+}
+
+.application-card--row .application-title-row h2 {
+  font-size: 14px;
+}
+
+.application-card--row .application-copy p {
+  margin: 0;
+  -webkit-line-clamp: 1;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.application-card--row .panel-list {
+  grid-column: 1 / -1;
+  margin-top: 6px;
+}
+
+.application-card--row .application-actions {
+  flex-direction: row;
+  gap: 3px;
+}
+
 @media (max-width: 680px) {
   .selector-backdrop {
     padding: 12px;
@@ -575,6 +679,7 @@ onUnmounted(() => window.removeEventListener('keydown', handleEscape, { capture:
 
   .header-actions {
     width: 100%;
+    flex-wrap: wrap;
     gap: 8px;
   }
 
@@ -585,6 +690,27 @@ onUnmounted(() => window.removeEventListener('keydown', handleEscape, { capture:
   .header-actions > .el-button:not(.is-circle) {
     min-width: 0;
     flex: 1;
+  }
+
+  .view-mode-switch {
+    margin-right: auto;
+  }
+
+  .application-card--row {
+    grid-template-columns: 36px minmax(0, 1fr);
+  }
+
+  .application-card--row .application-copy {
+    display: block;
+  }
+
+  .application-card--row .application-copy p {
+    margin-top: 3px;
+  }
+
+  .application-card--row .application-actions {
+    grid-column: 2;
+    justify-content: flex-start;
   }
 }
 </style>

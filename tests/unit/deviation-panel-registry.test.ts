@@ -11,6 +11,13 @@ describe('deviation panel implementations', () => {
     expect(registry).not.toContain("id: 'gnss-deviation-canvas'")
   })
 
+  it('registers the renamed Deviation component file', () => {
+    expect(registry).toContain("componentName: 'Deviation'")
+    expect(registry).toContain("componentPath: '@/components/windows/common/Deviation.vue'")
+    expect(existsSync('src/components/windows/common/Deviation.vue')).toBe(true)
+    expect(existsSync('src/components/windows/common/FlowDeviation.vue')).toBe(false)
+  })
+
   it('removes the obsolete Canvas deviation components and shared helper', () => {
     expect(existsSync('src/components/windows/common/FlowDeviationCanvas.vue')).toBe(false)
     expect(existsSync('src/components/windows/gnss/GnssDeviationCanvas.vue')).toBe(false)

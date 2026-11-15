@@ -34,6 +34,36 @@ afterEach(async () => {
 })
 
 describe('RtkPostService', () => {
+  it('saves a config only to the chosen path, requires overwrite approval and protects inputs', async () => {
+    const fixture = await createFixture()
+    const directory = path.dirname(fixture.request.outputPath)
+    const source = path.join(directory, 'source.conf')
+    const destination = path.join(directory, 'saved.conf')
+    const service = new RtkPostService()
+    await writeFile(source, 'original configuration\n')
+    await service.writeConfig(
+      destination,
+      'new configuration\n',
+      [fixture.request.roverObsPath],
+      false,
+    )
+    expect(await readFile(source, 'utf8')).toBe('original configuration\n')
+    expect(await readFile(destination, 'utf8')).toBe('new configuration\n')
+    await expect(service.writeConfig(destination, 'unapproved', [], false)).rejects.toThrow(
+      '已存在',
+    )
+    expect(await readFile(destination, 'utf8')).toBe('new configuration\n')
+    await service.writeConfig(destination, 'approved replacement\n', [], true)
+    expect(await readFile(destination, 'utf8')).toBe('approved replacement\n')
+    await expect(
+      service.writeConfig(
+        fixture.request.roverObsPath,
+        'data loss',
+        [fixture.request.roverObsPath],
+        true,
+      ),
+    ).rejects.toThrow('不能覆盖')
+  })
   it.each([true, false])(
     'uses supplied bounds without rereading or tolerates an optional span read failure (bounds: %s)',
     async (hasBounds) => {

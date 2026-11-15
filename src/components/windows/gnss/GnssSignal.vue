@@ -3,9 +3,9 @@
     <div class="snr-content">
       <div class="view-controls">
         <el-select v-model="currentView" size="small" class="view-select">
+          <el-option :label="t('gnss.signal.satCount')" value="nsat" />
           <el-option :label="t('gnss.signal.tableView')" value="table" />
           <el-option :label="t('gnss.signal.chartView')" value="chart" />
-          <el-option :label="t('gnss.signal.satCount')" value="nsat" />
           <el-option :label="t('gnss.signal.perSatView')" value="persat" />
         </el-select>
 
@@ -219,11 +219,16 @@ import { t } from '@/i18n'
 import SatelliteCountChart from './SatelliteCountChart.vue'
 
 // 初始化NMEA解析器与主题
-const { satelliteSnrData, snrHistory, clearSatelliteEpochHistory } = useNmea()
+const {
+  satelliteSnrData,
+  snrHistory,
+  clearSatelliteEpochHistory,
+  clearSatelliteCountHistory,
+} = useNmea()
 const { chartTheme, resolvedTheme } = useTheme()
 
 // 视图状态
-const currentView = ref('table')
+const currentView = ref('nsat')
 const constellationFilter = ref('all')
 
 // 图表相关
@@ -765,9 +770,10 @@ function schedulePerSatUpdate() {
   }, DATA_UPDATE_INTERVAL_MS)
 }
 
-// 清除卫星数目历史；WebGL 子组件会通过共享 store 的变更自动清空。
+// 清除两种来源的卫星数历史；保留当前 GSV/GGA 来源选择。
 function clearNsatHistory() {
   clearSatelliteEpochHistory()
+  clearSatelliteCountHistory()
 }
 
 // 明确选择实时 40 历元或可缩放的全局概览。

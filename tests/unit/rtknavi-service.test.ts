@@ -14,16 +14,49 @@ import {
   createDefaultRtkNaviSettings,
   type RtkNaviStartRequest,
 } from '../../src/core/gnsslib/RtkNavi'
+import { parseRtkPostConfig } from '../../src/core/gnsslib/RtkPostConfig'
 
 const directories: string[] = []
 
 afterEach(async () => {
   await Promise.all(
-    directories.splice(0).map((directory) => rm(directory, { recursive: true, force: true })),
+    directories.splice(0).map((directory) => {
+      const resolved = path.resolve(directory)
+      if (
+        path.dirname(resolved) !== path.resolve(os.tmpdir()) ||
+        !path.basename(resolved).startsWith('nav-tools-rtknavi-')
+      ) {
+        throw new Error(`Unexpected test directory: ${resolved}`)
+      }
+      return rm(resolved, { recursive: true, force: true })
+    }),
   )
 })
 
 describe('RtkNaviService', () => {
+  it('passes edited advanced values to rtkrcv without replacing unedited base config values', async () => {
+    const fixture = await createFixture()
+    const configPath = path.join(fixture.workspace, 'custom.conf')
+    await writeFile(configPath, 'pos2-arthres=6\npos2-thresdop=0.7\nstats-errphase=0.02\n')
+    fixture.request.options.baseConfigPath = configPath
+    fixture.request.options.ratioThreshold = 4.2
+    fixture.request.advancedOptionOverrides = ['ratioThreshold']
+    const child = fakeChild()
+    const spawnMock = vi.fn().mockReturnValue(child)
+    const sender = fakeSender()
+    const service = new RtkNaviService(fixture.workspace, spawnMock as unknown as typeof spawn)
+    try {
+      await service.start(sender, fixture.request)
+      const generated = await readFile(spawnMock.mock.calls[0][1][2], 'utf8')
+      expect(parseRtkPostConfig(generated).options).toMatchObject({
+        ratioThreshold: 4.2,
+        dopplerSlipThresholdHz: 0.7,
+        phaseErrorM: 0.02,
+      })
+    } finally {
+      await service.stop(sender.id)
+    }
+  })
   it('waits for startup cancellation and preserves the previous solution file', async () => {
     const fixture = await createFixture()
     const oldResult = 'previous solution remains available\n'

@@ -1,6 +1,9 @@
 // RTCM 二进制流文件获取与识别：Electron 走主进程 IPC，Web 降级 File API。
 // 扩展名之外提供内容嗅探——实际采样（如 RTCM_test）可能没有扩展名。
+import { classifyRinexFile as classifyRinexFileContent } from './RinexFileAccess'
 import type { GnssRawKind } from './types'
+
+export type { RinexFileType } from './RinexFileAccess'
 
 export type { GnssRawKind }
 
@@ -57,6 +60,10 @@ export function sniffRnx(bytes: Uint8Array, probeBytes = 512): boolean {
   let text = ''
   for (let i = 0; i < limit; i++) text += String.fromCharCode(bytes[i])
   return text.slice(60, 80) === 'RINEX VERSION / TYPE'
+}
+
+export function classifyRinexFile(name: string, headBytes?: Uint8Array) {
+  return classifyRinexFileContent(name, headBytes)
 }
 
 /** 按文件名优先、内容嗅探兜底判定 GNSS-Raw 可加载的数据种类。 */

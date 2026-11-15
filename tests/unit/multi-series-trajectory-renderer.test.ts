@@ -201,6 +201,30 @@ describe('MultiSeriesWebGLTrajectoryRenderer', () => {
     expect(result!.y).toBe(10)
   })
 
+  it('maps each point color from its quality', () => {
+    const gl = createMockWebGLContext()
+    const canvas = createMockCanvasWebGL(gl)
+    const renderer = new MultiSeriesWebGLTrajectoryRenderer()
+    renderer.init(canvas)
+    renderer.addSeries('track1')
+    renderer.setSeriesData('track1', [
+      [0, 0, 4],
+      [1, 1, 5],
+    ])
+    gl.bufferSubData.mockClear()
+
+    renderer.setSeriesColorMapper('track1', (quality) =>
+      quality === 4 ? [0, 0.5, 0, 1] : [0, 0.25, 0.5, 0.9],
+    )
+
+    const uploaded = gl.bufferSubData.mock.calls[0][2] as Float32Array
+    expect(Array.from(uploaded.slice(2, 6))).toEqual([0, 0.5, 0, 1])
+    const secondColor = Array.from(uploaded.slice(8, 12))
+    for (const [index, expected] of [0, 0.25, 0.5, 0.9].entries()) {
+      expect(secondColor[index]).toBeCloseTo(expected, 6)
+    }
+  })
+
   it('clear removes all series data', () => {
     const gl = createMockWebGLContext()
     const canvas = createMockCanvasWebGL(gl)
@@ -276,6 +300,28 @@ describe('MultiSeriesCanvasTrajectoryRenderer', () => {
     ctx.arc.mockClear()
     renderer.setSeriesVisible('track1', false)
     expect(ctx.arc).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('Canvas quality color mapping', () => {
+  it('applies quality colors in the Canvas fallback', () => {
+    const ctx = createMockCanvas2DContext()
+    const canvas = createMockCanvas2D(ctx)
+    const renderer = new MultiSeriesCanvasTrajectoryRenderer()
+    renderer.init(canvas)
+    renderer.addSeries('track1')
+    renderer.setSeriesData('track1', [
+      [0, 0, 4],
+      [1, 1, 5],
+    ])
+    const colors: string[] = []
+    ctx.fill.mockImplementation(() => colors.push(ctx.fillStyle))
+
+    renderer.setSeriesColorMapper('track1', (quality) =>
+      quality === 4 ? [0, 0.5, 0, 1] : [0, 0.25, 0.5, 0.9],
+    )
+
+    expect(colors).toEqual(['rgba(0, 128, 0, 1)', 'rgba(0, 64, 128, 0.9)'])
   })
 })
 

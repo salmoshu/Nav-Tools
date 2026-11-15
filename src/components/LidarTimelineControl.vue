@@ -182,13 +182,11 @@ function endDrag(): void {
   wasPlayingBeforeDrag = false
 }
 
-function onSpeedChange(event: Event): void {
-  const value = Number((event.target as HTMLSelectElement).value)
+function onSpeedChange(value: number): void {
   if (Number.isFinite(value)) player.setSpeed(value)
 }
 
-function onStepModeChange(event: Event): void {
-  const mode = (event.target as HTMLSelectElement).value
+function onStepModeChange(mode: string): void {
   if (isPlaybackStepMode(mode)) player.setStepMode(mode)
 }
 
@@ -286,20 +284,24 @@ watch(ready, (visible) => {
         >
           <el-icon><ArrowRight /></el-icon>
         </button>
-        <select
+        <el-select
           class="timeline-step-mode"
+          size="small"
+          :model-value="player.stepMode.value"
           :title="t('lidar.timeline.stepBasis')"
           :aria-label="t('lidar.timeline.stepBasis')"
-          :value="player.stepMode.value"
-          @change.stop="onStepModeChange"
+          :teleported="true"
+          popper-class="timeline-select-dropdown"
+          @change="onStepModeChange"
         >
-          <option
+          <el-option
             v-for="mode in PLAYBACK_STEP_MODES"
             :key="mode"
             :value="mode"
+            :label="t(`lidar.timeline.stepModes.${mode}`)"
             :disabled="!player.stepModes.value.includes(mode)"
-          >{{ t(`lidar.timeline.stepModes.${mode}`) }}</option>
-        </select>
+          />
+        </el-select>
         <input
           class="timeline-slider"
           type="range"
@@ -320,14 +322,23 @@ watch(ready, (visible) => {
         <span class="timeline-epoch" :title="epochTooltip"
           >{{ player.stepPosition.value }}/{{ player.stepTotal.value }}</span
         >
-        <select
+        <el-select
           class="timeline-speed"
+          size="small"
+          :model-value="player.speed.value"
           :title="t('lidar.timeline.speed')"
-          :value="player.speed.value"
-          @change.stop="onSpeedChange"
+          :aria-label="t('lidar.timeline.speed')"
+          :teleported="true"
+          popper-class="timeline-select-dropdown"
+          @change="onSpeedChange"
         >
-          <option v-for="option in SPEED_OPTIONS" :key="option" :value="option">×{{ option }}</option>
-        </select>
+          <el-option
+            v-for="option in SPEED_OPTIONS"
+            :key="option"
+            :label="`×${option}`"
+            :value="option"
+          />
+        </el-select>
         <button
           class="timeline-button"
           :class="{ 'timeline-button--active': player.loop.value }"
@@ -412,20 +423,24 @@ watch(ready, (visible) => {
             <el-icon><Close /></el-icon>
           </button>
         </div>
-        <select
+        <el-select
           class="timeline-step-mode timeline-step-mode--popover"
+          size="small"
+          :model-value="player.stepMode.value"
           :title="t('lidar.timeline.stepBasis')"
           :aria-label="t('lidar.timeline.stepBasis')"
-          :value="player.stepMode.value"
-          @change.stop="onStepModeChange"
+          :teleported="true"
+          popper-class="timeline-select-dropdown"
+          @change="onStepModeChange"
         >
-          <option
+          <el-option
             v-for="mode in PLAYBACK_STEP_MODES"
             :key="mode"
             :value="mode"
+            :label="t(`lidar.timeline.stepModes.${mode}`)"
             :disabled="!player.stepModes.value.includes(mode)"
-          >{{ t(`lidar.timeline.stepModes.${mode}`) }}</option>
-        </select>
+          />
+        </el-select>
         <input
           class="timeline-slider timeline-slider--popover"
           type="range"
@@ -448,14 +463,23 @@ watch(ready, (visible) => {
             >{{ player.stepPosition.value }}/{{ player.stepTotal.value }}</span
           >
         </div>
-        <select
+        <el-select
           class="timeline-speed timeline-speed--popover"
+          size="small"
+          :model-value="player.speed.value"
           :title="t('lidar.timeline.speed')"
-          :value="player.speed.value"
-          @change.stop="onSpeedChange"
+          :aria-label="t('lidar.timeline.speed')"
+          :teleported="true"
+          popper-class="timeline-select-dropdown"
+          @change="onSpeedChange"
         >
-          <option v-for="option in SPEED_OPTIONS" :key="option" :value="option">×{{ option }}</option>
-        </select>
+          <el-option
+            v-for="option in SPEED_OPTIONS"
+            :key="option"
+            :label="`×${option}`"
+            :value="option"
+          />
+        </el-select>
       </div>
       </Teleport>
     </template>
@@ -709,16 +733,32 @@ watch(ready, (visible) => {
 
 .timeline-speed,
 .timeline-step-mode {
-  height: 24px;
-  padding: 0 2px;
   flex: none;
-  color: var(--app-text);
-  font-size: 11px;
-  background: var(--app-surface-muted);
+}
+
+.timeline-speed {
+  width: 68px;
+}
+
+.timeline-speed :deep(.el-select__wrapper),
+.timeline-step-mode :deep(.el-select__wrapper) {
+  min-height: 24px;
+  padding: 0 8px;
   border: 1px solid var(--app-border);
   border-radius: 5px;
-  cursor: pointer;
-  outline: none;
+  background: var(--app-surface-muted);
+  box-shadow: none;
+}
+
+.timeline-speed :deep(.el-select__wrapper.is-focused),
+.timeline-step-mode :deep(.el-select__wrapper.is-focused) {
+  box-shadow: 0 0 0 1px #06b6d4 inset;
+}
+
+.timeline-speed :deep(.el-select__selected-item),
+.timeline-step-mode :deep(.el-select__selected-item) {
+  color: var(--app-text);
+  font-size: 11px;
 }
 
 .timeline-speed--popover {

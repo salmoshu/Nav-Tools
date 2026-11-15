@@ -1,5 +1,9 @@
-import { BrowserWindow, ipcMain } from 'electron'
-import type { RtkPostObservationSpans, RtkPostRunRequest } from '../../src/core/gnsslib/RtkPost'
+import { BrowserWindow, dialog, ipcMain } from 'electron'
+import type {
+  RtkPostObservationSpans,
+  RtkPostRunRequest,
+  RtkPostSaveConfigRequest,
+} from '../../src/core/gnsslib/RtkPost'
 import { showScopedSaveDialog } from './dialogs'
 import { RtkPostService } from './services/RtkPostService'
 import { gnssSolverTasks } from './services/GnssSolverTasks'
@@ -55,6 +59,38 @@ export function registerRtkPostIpc(service = new RtkPostService()): void {
   ipcMain.handle('gnss-solver-status', (event) => gnssSolverTasks.status(event.sender.id))
   ipcMain.handle('rtkpost-read-config', async (_event, filePath: unknown) => {
     return service.readConfig(typeof filePath === 'string' ? filePath : '')
+  })
+  ipcMain.handle('rtkpost-save-config', async (event, request: RtkPostSaveConfigRequest) => {
+    if (!request || typeof request.content !== 'string' || !Array.isArray(request.protectedPaths)) {
+      throw new Error('配置文件保存请求无效')
+    }
+    const target = BrowserWindow.fromWebContents(event.sender)
+    const result = await showScopedSaveDialog(target, 'gnssraw-rtkpost-config', {
+      title: '保存后处理配置文件',
+      defaultPath: typeof request.defaultPath === 'string' ? request.defaultPath : 'rtkpost.conf',
+      filters: [{ name: 'RTKLIB 配置文件', extensions: ['conf'] }],
+      properties: ['createDirectory', 'showOverwriteConfirmation'],
+    })
+    if (result.canceled || !result.filePath) return null
+    const exists = await service.inspectConfigTarget(result.filePath, request.protectedPaths)
+    if (exists) {
+      const options = {
+        type: 'warning' as const,
+        title: '覆盖配置文件',
+        message: '所选配置文件已存在，是否覆盖？',
+        detail: result.filePath,
+        buttons: ['取消', '覆盖'],
+        defaultId: 0,
+        cancelId: 0,
+        noLink: true,
+      }
+      const confirmation = target
+        ? await dialog.showMessageBox(target, options)
+        : await dialog.showMessageBox(options)
+      if (confirmation.response !== 1) return null
+    }
+    await service.writeConfig(result.filePath, request.content, request.protectedPaths, exists)
+    return result.filePath
   })
   ipcMain.handle('rtkpost-run', async (event, request: RtkPostRunRequest) => {
     return service.run(event.sender, request)

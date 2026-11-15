@@ -1,5 +1,7 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { createReadStream } from 'node:fs'
+import { constants as fsConstants } from 'node:fs'
+import { randomUUID } from 'node:crypto'
 import * as fs from 'node:fs/promises'
 import * as os from 'node:os'
 import * as path from 'node:path'
@@ -41,6 +43,72 @@ export class RtkPostService {
     if (!stat.isFile()) throw new Error(`配置文件不是文件: ${absolute}`)
     if (stat.size > 4 * 1024 * 1024) throw new Error('配置文件超过 4 MiB，无法载入')
     return fs.readFile(absolute, 'utf8')
+  }
+
+  public async inspectConfigTarget(filePath: string, protectedPaths: string[]): Promise<boolean> {
+    if (typeof filePath !== 'string' || !filePath.trim()) throw new Error('配置文件路径为空')
+    if (!Array.isArray(protectedPaths) || protectedPaths.some((item) => typeof item !== 'string')) {
+      throw new Error('保护文件路径无效')
+    }
+    const target = path.resolve(filePath.trim())
+    const identity = await comparableFilePath(target)
+    for (const protectedPath of protectedPaths) {
+      if (protectedPath.trim() && (await comparableFilePath(protectedPath)) === identity) {
+        throw new Error('配置文件不能覆盖可执行文件、观测文件、导航文件或解算结果')
+      }
+    }
+    try {
+      const stat = await fs.stat(target)
+      if (!stat.isFile()) throw new Error(`配置文件目标不是普通文件: ${target}`)
+      return true
+    } catch (error) {
+      if ((error as { code?: string }).code === 'ENOENT') return false
+      throw error
+    }
+  }
+
+  public async writeConfig(
+    filePath: string,
+    content: string,
+    protectedPaths: string[],
+    overwrite: boolean,
+  ): Promise<void> {
+    if (typeof content !== 'string' || Buffer.byteLength(content, 'utf8') > 4 * 1024 * 1024) {
+      throw new Error('配置文件内容无效或超过 4 MiB')
+    }
+    const target = path.resolve(filePath.trim())
+    const exists = await this.inspectConfigTarget(target, protectedPaths)
+    if (exists && !overwrite) throw new Error('配置文件已存在，请确认覆盖后重试')
+    // Write through an existing symlink without replacing the link itself.
+    const destination =
+      exists && (await fs.lstat(target)).isSymbolicLink() ? await fs.realpath(target) : target
+    const temporary = path.join(path.dirname(destination), `.rtk-config-${randomUUID()}.tmp`)
+    let temporaryCreated = false
+    try {
+      const handle = await fs.open(temporary, 'wx')
+      temporaryCreated = true
+      try {
+        await handle.writeFile(content, 'utf8')
+      } finally {
+        await handle.close()
+      }
+      // Recheck protected paths after the user confirms, before touching the destination.
+      const stillExists = await this.inspectConfigTarget(target, protectedPaths)
+      if (
+        exists &&
+        (!stillExists ||
+          (await comparableFilePath(target)) !== (await comparableFilePath(destination)))
+      ) {
+        throw new Error('配置文件目标已变化，请重新选择并确认覆盖')
+      }
+      if (overwrite) await fs.rename(temporary, destination)
+      else await fs.copyFile(temporary, destination, fsConstants.COPYFILE_EXCL)
+    } finally {
+      if (temporaryCreated)
+        await fs.unlink(temporary).catch((error: { code?: string }) => {
+          if (error.code !== 'ENOENT') throw error
+        })
+    }
   }
 
   public async run(sender: WebContents, rawRequest: RtkPostRunRequest): Promise<RtkPostRunResult> {
@@ -357,5 +425,21 @@ async function statOrThrow(filePath: string, label: string): Promise<import('nod
 
 function comparablePath(filePath: string): string {
   const resolved = path.resolve(filePath)
+  return process.platform === 'win32' ? resolved.toLowerCase() : resolved
+}
+
+async function comparableFilePath(filePath: string): Promise<string> {
+  const absolute = path.resolve(filePath.trim())
+  let resolved = absolute
+  try {
+    resolved = await fs.realpath(absolute)
+  } catch (error) {
+    if ((error as { code?: string }).code !== 'ENOENT') throw error
+    try {
+      resolved = path.join(await fs.realpath(path.dirname(absolute)), path.basename(absolute))
+    } catch (parentError) {
+      if ((parentError as { code?: string }).code !== 'ENOENT') throw parentError
+    }
+  }
   return process.platform === 'win32' ? resolved.toLowerCase() : resolved
 }

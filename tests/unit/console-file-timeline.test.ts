@@ -88,6 +88,27 @@ describe('file replay message projection', () => {
     ])
   })
 
+  it('marks valid RTKLIB POS rows as valid while keeping malformed rows invalid', () => {
+    consoleState.dataFormat.value = 'none'
+    consoleState.beginFileReplayMessages()
+    consoleState.addFileReplayData(
+      [
+        '% GPST latitude(deg) longitude(deg) height(m) Q ns sdn(m) sde(m) sdu(m)',
+        '2024/04/26 03:00:00.000 39.980000000 116.470000000 60.000 4 18 0.01 0.01 0.02',
+        '2024/04/26 03:00:01.000 invalid-row',
+        '',
+      ].join('\n'),
+    )
+    consoleState.endFileReplayMessages()
+
+    const rows = consoleState.messages.value.filter((message) =>
+      message.raw.startsWith('2024/04/26'),
+    )
+    expect(rows.map((message) => message.isValid)).toEqual([true, false])
+    expect(rows.map((message) => message.dataType)).toEqual(['none', 'none'])
+    expect(consoleState.validMsgCount.value).toBe(1)
+  })
+
   it('indexes NMEA messages even before the Messages panel selects its parser', () => {
     consoleState.dataFormat.value = 'none'
     consoleState.dataFilter.value = true

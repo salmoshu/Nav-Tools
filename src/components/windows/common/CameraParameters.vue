@@ -498,6 +498,7 @@
 
               <el-table
                 v-if="calState && calState.history.length"
+                ref="calHistoryTable"
                 :data="calState.history"
                 size="small"
                 :max-height="180"
@@ -928,15 +929,16 @@ const canRestoreParams = computed(
 
 // 标定运行与结束时保持标定页视图置底跟随(用户手动上滚即停止跟随)
 const calScrollContainer = ref<HTMLElement | null>(null)
+const calHistoryTable = ref<{ $el: HTMLElement } | null>(null)
 const calScrollFollow = ref(false)
 
 watch(
   () => [calState.value?.history.length, calState.value?.phase, calState.value?.recovery],
   async ([, phase]) => {
     if (isCalibrationRunning(phase as CameraCalibrationPhase)) calScrollFollow.value = true
-    if (!calScrollFollow.value) return
     await nextTick()
-    scrollCalView()
+    scrollCalHistoryToBottom()
+    if (calScrollFollow.value) scrollCalView()
   },
 )
 
@@ -1102,6 +1104,14 @@ function scrollCalView(): void {
   const el = calScrollContainer.value
   if (!el) return
   el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })
+}
+
+function scrollCalHistoryToBottom(): void {
+  const root = calHistoryTable.value?.$el
+  const scroller = root?.querySelector<HTMLElement>(
+    '.el-table__body-wrapper .el-scrollbar__wrap',
+  )
+  if (scroller) scroller.scrollTop = scroller.scrollHeight
 }
 
 function onCalViewScroll(): void {

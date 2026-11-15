@@ -7,6 +7,7 @@ import {
   DEFAULT_KEY_VALUE_REGEX,
   parseTextRecord,
 } from '@/core/data/TextRecordParser'
+import { RtkSolutionParser } from '@/core/gnsslib/RtkSolution'
 
 // 消息类型定义
 export interface ConsoleMessage {
@@ -122,6 +123,7 @@ export function useConsole(useGlobal: boolean = true, timeline = useFileTimeline
   let fileReplayLastElapsed = 0;
   let fileReplayElapsedResolver: FileReplayElapsedResolver | null = null;
   let fileReplayLineIndex = 0;
+  const fileReplayRtkSolutionParser = new RtkSolutionParser();
   let tempDataString = ''; // 临时存储数据，用于处理不完整的消息
   let messageKeySequence = 0;
   let noneFlushTimer: ReturnType<typeof setTimeout> | null = null; // none模式下无换行符时的刷新定时器
@@ -344,6 +346,8 @@ export function useConsole(useGlobal: boolean = true, timeline = useFileTimeline
     const trimmedLine = line.trim();
     const lineIndex = fileReplayLineIndex;
     fileReplayLineIndex += 1;
+    // 同一个有状态解析器持续接收表头和数据行，支持 LLH/XYZ/ENU 等 POS 布局。
+    const rtkSolution = fileReplayRtkSolutionParser.addLine(line);
 
     if (dataFormat.value === 'regex') {
       dataType = 'regex';
@@ -360,6 +364,9 @@ export function useConsole(useGlobal: boolean = true, timeline = useFileTimeline
     ) {
       dataType = 'json';
       isValid = validateJsonMessage(trimmedLine);
+    } else if (rtkSolution) {
+      // POS 在控制台使用 none 数据类型；有效历元应与 Raw 模式的主体颜色一致。
+      isValid = true;
     }
 
     appendConsoleMessage({
@@ -583,6 +590,7 @@ export function useConsole(useGlobal: boolean = true, timeline = useFileTimeline
     fileReplayDayOffset = 0;
     fileReplayLastElapsed = 0;
     fileReplayLineIndex = 0;
+    fileReplayRtkSolutionParser.reset();
   };
 
   const setFileReplayElapsedResolver = (resolver: FileReplayElapsedResolver | null) => {
@@ -630,6 +638,7 @@ export function useConsole(useGlobal: boolean = true, timeline = useFileTimeline
     fileReplayLastElapsed = 0;
     fileReplayElapsedResolver = null;
     fileReplayLineIndex = 0;
+    fileReplayRtkSolutionParser.reset();
   };
 
   const toggleFilter = () => {

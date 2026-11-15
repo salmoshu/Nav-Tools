@@ -38,6 +38,28 @@ test.beforeEach(async ({ page }) => {
       if (maxWidth === undefined) fillText.call(this, text, x, y)
       else fillText.call(this, text, x, y, maxWidth)
     }
+    const originalGetContext = HTMLCanvasElement.prototype.getContext
+    HTMLCanvasElement.prototype.getContext = function (type: string, ...args: unknown[]) {
+      const context = Reflect.apply(originalGetContext, this, [type, ...args]) as
+        | WebGLRenderingContext
+        | null
+      if (
+        context &&
+        (type === 'webgl' || type === 'webgl2') &&
+        this.classList.contains('chart') &&
+        this.closest('.deviation-container') &&
+        !Reflect.get(context, '__deviationViewportWrapped')
+      ) {
+        Reflect.set(context, '__deviationViewportWrapped', true)
+        const uniformMatrix3fv = context.uniformMatrix3fv.bind(context)
+        context.uniformMatrix3fv = (...params: unknown[]) => {
+          const matrix = params[2] as ArrayLike<number>
+          Reflect.set(window, '__deviationViewportTransform', Array.from(matrix))
+          return Reflect.apply(uniformMatrix3fv, context, params)
+        }
+      }
+      return context
+    } as typeof originalGetContext
   })
 })
 
@@ -102,6 +124,70 @@ test('deviation keeps only the current Float status in small windows and restore
   await expect(card).toHaveCount(0)
   await page.getByRole('button', { name: 'Show or hide position status' }).click()
   await expect(card.locator('.status-card-summary')).toHaveText('Float')
+})
+
+test('deviation refits a loaded trajectory when the canvas grows and shrinks', async ({
+  page,
+}) => {
+  const payload = encodeURIComponent(
+    JSON.stringify({
+      componentName: 'GnssDeviation',
+      windowId: 'gnss-deviation',
+      title: 'Deviation',
+    }),
+  )
+  await page.setViewportSize({ width: 500, height: 420 })
+  await page.goto(`/#card/${payload}`)
+  await expect(page.locator('.deviation-container canvas.chart')).toBeVisible()
+  await page.evaluate(async () => {
+    const { useNmea } = await import('/src/composables/gnss/useNmea.ts')
+    const { useFileTimeline } = await import('/src/composables/useFileTimeline.ts')
+    useFileTimeline().active.value = true
+    const rows = Array.from(
+      { length: 3 },
+      (_, index) =>
+        `2024/04/26 03:00:0${index}.000 ${(39.98 + index * 0.000005).toFixed(9)} ${(116.47 + index * 0.00001).toFixed(9)} 60.000 4 18`,
+    )
+    useNmea().processRtkLibPosData(`${rows.join('\n')}\n`)
+  })
+
+  for (const size of [
+    { width: 500, height: 420 },
+    { width: 1200, height: 720 },
+    { width: 500, height: 420 },
+  ]) {
+    await page.setViewportSize(size)
+    await expect
+      .poll(() =>
+        page.evaluate(async () => {
+          const canvas = document.querySelector<HTMLCanvasElement>(
+            '.deviation-container canvas.chart',
+          )
+          const matrix = Reflect.get(window, '__deviationViewportTransform') as
+            | number[]
+            | undefined
+          if (!canvas || !matrix || canvas.clientHeight === 0) return false
+          const { useNmea } = await import('/src/composables/gnss/useNmea.ts')
+          const { fitDeviationPoints } = await import(
+            '/src/core/deviation/DeviationViewport.ts'
+          )
+          const expected = fitDeviationPoints(
+            useNmea().deviationPoints.value,
+            canvas.clientWidth / canvas.clientHeight,
+          )
+          if (!expected) return false
+          const actualXSpan = 2 / matrix[0]
+          const actualYSpan = 2 / matrix[4]
+          const expectedXSpan = expected.xMax - expected.xMin
+          const expectedYSpan = expected.yMax - expected.yMin
+          return (
+            Math.abs(actualXSpan - expectedXSpan) < 1e-6 &&
+            Math.abs(actualYSpan - expectedYSpan) < 1e-6
+          )
+        }),
+      )
+      .toBe(true)
+  }
 })
 
 test('signal bars show grouped horizontal labels, current and peak values, and keep narrow cards scrollable', async ({

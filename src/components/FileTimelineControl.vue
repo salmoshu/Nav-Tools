@@ -114,8 +114,7 @@ function previewSlider(event: Event): void {
   previewElapsedTime(Number((event.target as HTMLInputElement).value))
 }
 
-function onSpeedChange(event: Event): void {
-  const value = Number((event.target as HTMLSelectElement).value)
+function onSpeedChange(value: number): void {
   if (Number.isFinite(value)) emit('update:speed', value)
 }
 
@@ -214,17 +213,24 @@ watch(active, (visible) => {
         />
         <span class="timeline-time" :title="elapsedLabel">{{ cursorTime }}</span>
         <span class="timeline-epoch">{{ cursorIndex + 1 }} / {{ totalEpochs }}</span>
-        <select
+        <el-select
           v-if="speed !== undefined"
           class="timeline-speed"
+          size="small"
+          :model-value="speed"
           :title="t('app.toolbar.replaySpeed')"
-          :value="speed"
-          @change.stop="onSpeedChange"
+          :aria-label="t('app.toolbar.replaySpeed')"
+          :teleported="true"
+          popper-class="timeline-select-dropdown"
+          @change="onSpeedChange"
         >
-          <option v-for="option in speedOptions" :key="option" :value="option">
-            ×{{ option }}
-          </option>
-        </select>
+          <el-option
+            v-for="option in speedOptions"
+            :key="option"
+            :label="`×${option}`"
+            :value="option"
+          />
+        </el-select>
       </div>
     </template>
 
@@ -294,17 +300,24 @@ watch(active, (visible) => {
           <div class="timeline-details">
             <span class="timeline-time" :title="elapsedLabel">{{ cursorTime }}</span>
             <span class="timeline-epoch">{{ cursorIndex + 1 }} / {{ totalEpochs }}</span>
-            <select
+            <el-select
               v-if="speed !== undefined"
               class="timeline-speed"
+              size="small"
+              :model-value="speed"
               :title="t('app.toolbar.replaySpeed')"
-              :value="speed"
-              @change.stop="onSpeedChange"
+              :aria-label="t('app.toolbar.replaySpeed')"
+              :teleported="true"
+              popper-class="timeline-select-dropdown"
+              @change="onSpeedChange"
             >
-              <option v-for="option in speedOptions" :key="option" :value="option">
-                ×{{ option }}
-              </option>
-            </select>
+              <el-option
+                v-for="option in speedOptions"
+                :key="option"
+                :label="`×${option}`"
+                :value="option"
+              />
+            </el-select>
           </div>
         </div>
       </Teleport>
@@ -456,18 +469,27 @@ watch(active, (visible) => {
   white-space: nowrap;
 }
 
-/* 回放倍速下拉:形态对齐 LiDAR 时间轴的 timeline-speed */
 .timeline-speed {
-  height: 24px;
-  padding: 0 2px;
+  width: 68px;
   flex: none;
-  color: var(--app-text);
-  font-size: 11px;
-  background: var(--app-surface-muted);
+}
+
+.timeline-speed :deep(.el-select__wrapper) {
+  min-height: 24px;
+  padding: 0 8px;
   border: 1px solid var(--app-border);
   border-radius: 5px;
-  cursor: pointer;
-  outline: none;
+  background: var(--app-surface-muted);
+  box-shadow: none;
+}
+
+.timeline-speed :deep(.el-select__wrapper.is-focused) {
+  box-shadow: 0 0 0 1px var(--el-color-primary) inset;
+}
+
+.timeline-speed :deep(.el-select__selected-item) {
+  color: var(--app-text);
+  font-size: 11px;
 }
 
 .timeline-time {

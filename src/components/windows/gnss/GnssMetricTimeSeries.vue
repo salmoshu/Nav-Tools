@@ -7,6 +7,7 @@
     @mousemove="handleMouseMove"
     @mouseleave="clearHover"
     @mousedown="handleMouseDown"
+    @click="handlePointClick"
     @contextmenu.prevent
     @dblclick="fitAll"
   >
@@ -34,15 +35,49 @@
       ></span>
     </div>
 
-    <div class="metric-heading">
+    <div class="metric-heading" :class="{ 'is-expandable': expandable }">
       <i :style="{ backgroundColor: headingColor }"></i>
       <strong>{{ label }}</strong>
       <span>{{ unit }}</span>
+      <button
+        v-if="expandable"
+        type="button"
+        class="metric-expand-button"
+        :aria-label="expanded ? collapseLabel : expandLabel"
+        :title="expanded ? collapseLabel : expandLabel"
+        :aria-pressed="expanded"
+        :data-testid="expanded ? 'collapse-axis-view' : 'expand-axis-view'"
+        @mousedown.stop
+        @dblclick.stop
+        @click.stop="$emit('toggle-expand')"
+      >
+        <el-icon><ScaleToOriginal v-if="expanded" /><FullScreen v-else /></el-icon>
+      </button>
     </div>
 
-    <div v-if="hoverValue !== null" class="metric-tooltip" :style="tooltipStyle">
+    <div v-if="hoverTime" class="metric-tooltip" :style="tooltipStyle">
       <strong>{{ hoverTime }}</strong>
-      <span>{{ hoverValue.toFixed(3) }} {{ unit }}</span>
+      <div v-if="primaryVisible && hoverValue !== null" class="metric-tooltip-primary">
+        <span class="metric-tooltip-label">
+          <i :style="{ backgroundColor: headingColor }"></i>{{ primaryLabel }}
+        </span>
+        <span>{{ hoverValue.toFixed(3) }} {{ unit }}</span>
+      </div>
+      <div v-if="referencePoints.length > 0" class="metric-tooltip-reference">
+        <span class="metric-tooltip-label">
+          <i :style="{ backgroundColor: referenceColor }"></i>{{ referenceLabel }}
+        </span>
+        <span>{{ hoverReferenceValue === null ? '—' : hoverReferenceValue.toFixed(3) }} {{ unit }}</span>
+      </div>
+      <div
+        v-if="primaryVisible && hoverDifferenceValue !== null"
+        class="metric-tooltip-difference"
+      >
+        <span class="metric-tooltip-label">
+          <i :style="{ backgroundColor: differenceColor }"></i>{{ differenceLabel }}
+        </span>
+        <span>{{ hoverDifferenceValue.toFixed(3) }} {{ unit }}</span>
+      </div>
     </div>
   </div>
 </template>
@@ -53,6 +88,7 @@ import { gnssDisplayContext } from '@/composables/gnss/GnssDisplayContext'
 import { useNmea } from '@/composables/gnss/useNmea'
 import { useFileTimeline } from '@/composables/useFileTimeline'
 import { useTheme } from '@/composables/useTheme'
+import { FullScreen, ScaleToOriginal } from '@element-plus/icons-vue'
 import {
   clampSatelliteCountViewport,
   fitSatelliteCountViewport,
@@ -67,6 +103,14 @@ import {
   type MetricViewportBroadcast,
 } from './metricViewportSync'
 import { splitSeriesByQuality } from '@/core/gnss/QualitySeries'
+import {
+  findNearestMetricOverlaySample,
+  findNearestTimeIndex,
+  fractionalEpochIndex,
+  projectMetricOverlay,
+  type MetricOverlaySample,
+} from '@/core/gnss/MetricOverlay'
+import { NumericEpochStore } from '@/core/gnss/NumericEpochStore'
 import { createSatelliteTimeSeriesRenderer } from '@/core/render/createSatelliteTimeSeriesRenderer'
 import type {
   SatelliteRendererKind,
@@ -103,21 +147,104 @@ const props = withDefaults(
     pointSize?: number
     /** 同源图表只在最下方显示共享时间滚动条。 */
     xScrollbar?: boolean
+    sourceOverride?: NumericEpochStore | null
+    referencePoints?: readonly MetricOverlaySample[]
+    referenceTimeOffset?: number
+    referenceColor?: string
+    referenceColors?: Readonly<Record<number, string>>
+    referenceLabel?: string
+    primaryLabel?: string
+    differenceLabel?: string
+    differenceColor?: string
+    primaryVisible?: boolean
+    /** 双轨迹共享的选中历元；null 表示继续使用时间线或最新点。 */
+    selectedTimeMs?: number | null
+    expandable?: boolean
+    expanded?: boolean
+    expandLabel?: string
+    collapseLabel?: string
   }>(),
-  { tracking: false, pointSize: 10, xScrollbar: true },
+  {
+    tracking: false,
+    pointSize: 10,
+    xScrollbar: true,
+    sourceOverride: null,
+    referencePoints: () => [],
+    referenceTimeOffset: 0,
+    referenceColor: '#004080',
+    referenceColors: () => ({}),
+    referenceLabel: 'Reference',
+    primaryLabel: 'Main',
+    differenceLabel: 'Main − Ref',
+    differenceColor: '#f56c6c',
+    primaryVisible: true,
+    selectedTimeMs: null,
+    expandable: false,
+    expanded: false,
+    expandLabel: 'Expand this axis',
+    collapseLabel: 'Restore three-axis view',
+  },
 )
+
+const emit = defineEmits<{
+  (event: 'toggle-expand'): void
+  (event: 'select-epoch', timeMs: number): void
+}>()
 
 const scopedDisplay = inject(gnssDisplayContext, null)
 const { positionEpochHistory, speedEpochHistory } = scopedDisplay?.data ?? useNmea()
 const fileTimeline = scopedDisplay?.timeline ?? useFileTimeline()
 const { chartTheme, resolvedTheme } = useTheme()
 
-const sourceStore = computed(() =>
-  props.field === 'SPEED' ? speedEpochHistory.value : positionEpochHistory.value,
-)
-// 历史库原地追加并通过 triggerRef 通知，直接读取 ref 才能追踪长度变化。
-const sourceLength = computed(() =>
-  props.field === 'SPEED' ? speedEpochHistory.value.length : positionEpochHistory.value.length,
+function getPrimarySourceStore(): NumericEpochStore {
+  return (
+    props.sourceOverride ??
+    (props.field === 'SPEED' ? speedEpochHistory.value : positionEpochHistory.value)
+  )
+}
+
+const primarySourceStore = computed(getPrimarySourceStore)
+// NumericEpochStore appends in place behind a shallowRef. Read that ref directly
+// in a primitive-length computed so Vue propagates appends even when the store
+// object identity returned by primarySourceStore stays unchanged.
+const primarySourceLength = computed(() => getPrimarySourceStore().length)
+// A reference file is a complete data source in its own right. Before a main
+// track exists, use its timestamps for the X axis instead of rendering into an
+// empty primary store. The overlay remains the only visible position series.
+const referenceOnlySource = computed(() => {
+  if (primarySourceLength.value > 0 || props.referencePoints.length === 0) return null
+  const store = new NumericEpochStore([props.field, 'QUALITY'])
+  const ordered = props.referencePoints
+    .map((sample, index) => ({ sample, index }))
+    .sort((left, right) => left.sample.timeMs - right.sample.timeMs || left.index - right.index)
+  for (const { sample } of ordered) {
+    if (!Number.isFinite(sample.timeMs)) continue
+    store.append(new Date(sample.timeMs).toISOString(), {
+      [props.field]: sample.value,
+      QUALITY: Number.isFinite(sample.quality) ? sample.quality : 0,
+    })
+  }
+  return store
+})
+const sourceStore = computed(() => referenceOnlySource.value ?? primarySourceStore.value)
+const primaryVisible = computed(() => props.primaryVisible && referenceOnlySource.value === null)
+// Track the primitive primary length explicitly as well as the selected store;
+// a computed that only reads sourceStore.value.length would not be invalidated
+// when an in-place append keeps the computed store reference unchanged.
+const sourceLength = computed(() => {
+  void primarySourceLength.value
+  return sourceStore.value.length
+})
+const sourceTimes = computed(() => {
+  void sourceLength.value
+  const store = sourceStore.value
+  return Array.from({ length: store.length }, (_, index) => store.getTimestamp(index))
+})
+const orderedReferencePoints = computed(() =>
+  props.referencePoints
+    .map((sample, index) => ({ sample, index }))
+    .sort((left, right) => left.sample.timeMs - right.sample.timeMs || left.index - right.index)
+    .map(({ sample }) => sample),
 )
 
 const containerRef = ref<HTMLDivElement | null>(null)
@@ -127,6 +254,8 @@ const scrollbarRef = ref<HTMLDivElement | null>(null)
 const rendererKind = ref<SatelliteRendererKind>('canvas')
 const viewport = ref<SatelliteCountViewport>(fitSatelliteCountViewport(sourceStore.value.length))
 const hoverValue = ref<number | null>(null)
+const hoverReferenceValue = ref<number | null>(null)
+const hoverDifferenceValue = ref<number | null>(null)
 const hoverTime = ref('')
 const headingColor = ref(fixStatusColor(0))
 const tooltipStyle = ref<Record<string, string>>({})
@@ -139,6 +268,7 @@ interface ChartLayout {
 }
 
 let layout: ChartLayout = { left: 54, right: 14, top: 38, bottom: 34 }
+const X_EDGE_OVERSCAN_RATIO = 0.5
 const OVERVIEW_RENDER_INTERVAL_MS = 1_000
 
 let renderer: SatelliteTimeSeriesRenderer | null = null
@@ -173,29 +303,63 @@ function pointDiameterForSize(size: number): number {
   return Math.max(2, Math.min(14, size / 2 + 1))
 }
 
-/** 跟随目标索引：回放时为时间线光标处，实时流为最新历元 */
+/** 跟随目标索引：回放优先使用时间线，实时流可使用双轨迹共享的选中历元。 */
 function trackingTargetIndex(): number {
   const store = sourceStore.value
   if (store.length === 0) return -1
   if (fileTimeline.active.value) {
-    const index = store.findNearestElapsedTime(fileTimeline.elapsedMilliseconds.value)
+    const index = store.findNearestElapsedTime(fileTimeline.elapsedFor(store))
     if (index >= 0) return index
+  }
+  if (props.selectedTimeMs !== null) {
+    return findNearestTimeIndex(sourceTimes.value, props.selectedTimeMs)
   }
   return store.length - 1
 }
 
-/** 跟踪视口：中心 = 目标历元 + 用户偏移，跨度沿用当前跨度（首次用 live 窗口） */
+/** 跟踪视口同时容纳主、参考当前点；只有单轨迹才沿用原来的边界钳制。 */
 function applyTrackingViewport(): void {
   const store = sourceStore.value
   const target = trackingTargetIndex()
   if (target < 0) return
-  const span =
+  const currentSpan =
     viewport.value.end > viewport.value.start
       ? viewport.value.end - viewport.value.start
       : Math.min(store.length, TRACKING_LIVE_WINDOW_EPOCHS)
+  const targets = [target]
+  if (orderedReferencePoints.value.length > 0 && sourceTimes.value[target] !== undefined) {
+    const targetTime = sourceTimes.value[target]
+    const reference =
+      !fileTimeline.active.value && props.selectedTimeMs === null
+        ? { sample: orderedReferencePoints.value.at(-1)!, index: orderedReferencePoints.value.length - 1 }
+        : findNearestMetricOverlaySample(
+            orderedReferencePoints.value,
+            targetTime - props.referenceTimeOffset,
+          )
+    if (reference) {
+      const index = fractionalEpochIndex(
+        sourceTimes.value,
+        reference.sample.timeMs + props.referenceTimeOffset,
+      )
+      if (index !== null && Number.isFinite(index)) targets.push(index)
+    }
+  }
+  if (targets.length > 1) {
+    const minimum = Math.min(...targets)
+    const maximum = Math.max(...targets)
+    const span = Math.max(currentSpan, maximum - minimum + 2)
+    const center = (minimum + maximum) / 2 + 0.5 + trackOffset
+    applyViewport({ start: center - span / 2, end: center + span / 2 }, false)
+    return
+  }
   const center = target + 0.5 + trackOffset
   applyViewport(
-    clampSatelliteCountViewport({ start: center - span / 2, end: center + span / 2 }, store.length),
+    clampSatelliteCountViewport(
+      { start: center - currentSpan / 2, end: center + currentSpan / 2 },
+      store.length,
+      undefined,
+      trackOffset === 0 ? 0 : X_EDGE_OVERSCAN_RATIO,
+    ),
     false,
   )
 }
@@ -219,6 +383,14 @@ function hexToRgba(hex: string): SatelliteSeriesColor {
 
 function qualitySeriesId(quality: number): string {
   return `quality-${quality}`
+}
+
+function referenceSeriesId(quality: number): string {
+  return `reference-quality-${quality}`
+}
+
+function referenceSeriesColor(quality: number): SatelliteSeriesColor {
+  return hexToRgba(props.referenceColors?.[quality] ?? props.referenceColor)
 }
 
 function plotSize(): { width: number; height: number } {
@@ -331,9 +503,11 @@ function renderChart(): void {
     end,
     Math.max(64, Math.floor(width * 2)),
   )
-  const qualityGeometry = splitSeriesByQuality(extracted.points, extracted.segments, (epochIndex) =>
-    normalizeFixStatusQuality(store.getValue('QUALITY', epochIndex)),
-  )
+  const qualityGeometry = primaryVisible.value
+    ? splitSeriesByQuality(extracted.points, extracted.segments, (epochIndex) =>
+        normalizeFixStatusQuality(store.getValue('QUALITY', epochIndex)),
+      )
+    : new Map()
   for (const quality of FIX_STATUS_QUALITIES) {
     const geometry = qualityGeometry.get(quality)
     renderer.setSeriesData(
@@ -342,8 +516,33 @@ function renderChart(): void {
       new Uint32Array(geometry?.segments ?? []),
     )
   }
+
+  const reference = projectMetricOverlay(
+    sourceTimes.value,
+    props.referencePoints,
+    props.referenceTimeOffset,
+    start,
+    end,
+  )
+  for (const quality of FIX_STATUS_QUALITIES) {
+    const geometry = reference.byQuality.get(quality)
+    renderer.setSeriesData(
+      referenceSeriesId(quality),
+      new Float32Array(geometry?.points ?? []),
+      new Uint32Array(geometry?.segments ?? []),
+    )
+  }
+
+  const primaryRange = primaryVisible.value ? store.getRange(props.field, start, end) : null
+  let valueRange = primaryRange
+  if (reference.range) {
+    valueRange = {
+      min: Math.min(primaryRange?.min ?? reference.range.min, reference.range.min),
+      max: Math.max(primaryRange?.max ?? reference.range.max, reference.range.max),
+    }
+  }
   // 手动 y 范围为绝对值（滚轮设置，dblclick 重置）；未设置时用可见窗口数据自动适配
-  renderedRange = yRangeOverride ?? paddedRange(store.getRange(props.field, start, end))
+  renderedRange = yRangeOverride ?? paddedRange(valueRange)
   renderer.setViewport(
     viewport.value.start - 0.5,
     Math.max(viewport.value.start + 0.5, viewport.value.end - 0.5),
@@ -394,7 +593,7 @@ function drawAxes(): void {
   context.font = '11px sans-serif'
   context.lineWidth = 1
 
-  const yTickCount = plotHeight < 80 ? 2 : 4
+  const yTickCount = plotHeight < 80 ? 3 : 6
   for (let tick = 0; tick <= yTickCount; tick += 1) {
     const ratio = tick / yTickCount
     const y = layout.top + plotHeight * (1 - ratio)
@@ -414,14 +613,12 @@ function drawAxes(): void {
   context.strokeRect(layout.left, layout.top, plotWidth, plotHeight)
 
   if (store.length > 0 && viewport.value.end > viewport.value.start) {
-    const headingIndex = fileTimeline.active.value
-      ? store.findNearestElapsedTime(fileTimeline.elapsedMilliseconds.value)
-      : store.length - 1
+    const headingIndex = trackingTargetIndex()
     headingColor.value = fixStatusColor(
       normalizeFixStatusQuality(store.getValue('QUALITY', headingIndex)),
     )
 
-    const xTickCount = plotWidth < 320 ? 2 : 3
+    const xTickCount = plotWidth < 320 ? 4 : 6
     for (let tick = 0; tick <= xTickCount; tick += 1) {
       const ratio = tick / xTickCount
       const index = Math.max(
@@ -434,44 +631,85 @@ function drawAxes(): void {
         ),
       )
       const x = layout.left + plotWidth * ratio
+      context.strokeStyle = colors.grid
+      context.beginPath()
+      context.moveTo(x, layout.top)
+      context.lineTo(x, layout.top + plotHeight)
+      context.stroke()
       context.fillStyle = colors.textMuted
       context.textAlign = tick === 0 ? 'left' : tick === xTickCount ? 'right' : 'center'
       context.textBaseline = 'top'
       context.fillText(store.formatTime(index), x, layout.top + plotHeight + 9)
     }
 
-    if (fileTimeline.active.value) {
-      const cursorIndex = store.findNearestElapsedTime(fileTimeline.elapsedMilliseconds.value)
-      if (cursorIndex >= viewport.value.start && cursorIndex < viewport.value.end) {
+    const selectionTimeMs = fileTimeline.active.value
+      ? store.getTimestamp(headingIndex)
+      : props.selectedTimeMs
+    if (selectionTimeMs !== null && Number.isFinite(selectionTimeMs)) {
+      const primaryIndex = findNearestTimeIndex(sourceTimes.value, selectionTimeMs)
+      const reference = findNearestMetricOverlaySample(
+        orderedReferencePoints.value,
+        selectionTimeMs - props.referenceTimeOffset,
+      )
+      const referenceIndex = reference
+        ? fractionalEpochIndex(
+            sourceTimes.value,
+            reference.sample.timeMs + props.referenceTimeOffset,
+          )
+        : null
+      const cursorIndex = primaryVisible.value && primaryIndex >= 0 ? primaryIndex : referenceIndex
+      if (cursorIndex !== null) {
         const ratio =
           (cursorIndex + 0.5 - viewport.value.start) /
           Math.max(1, viewport.value.end - viewport.value.start)
-        const x = layout.left + plotWidth * ratio
-        const value = store.getValue(props.field, cursorIndex)
-        const cursorColor = fixStatusColor(
-          normalizeFixStatusQuality(store.getValue('QUALITY', cursorIndex)),
-        )
-
-        context.strokeStyle = cursorColor
-        context.lineWidth = 1.5
-        context.beginPath()
-        context.moveTo(x, layout.top)
-        context.lineTo(x, layout.top + plotHeight)
-        context.stroke()
-
-        if (value !== null) {
-          const yRatio =
-            (value - renderedRange.min) /
-            Math.max(Number.EPSILON, renderedRange.max - renderedRange.min)
-          const y = layout.top + plotHeight * (1 - Math.max(0, Math.min(1, yRatio)))
-          context.fillStyle = cursorColor
-          context.strokeStyle = '#ffffff'
+        if (ratio >= 0 && ratio <= 1) {
+          const x = layout.left + plotWidth * ratio
+          const cursorColor =
+            primaryVisible.value && primaryIndex >= 0
+              ? fixStatusColor(normalizeFixStatusQuality(store.getValue('QUALITY', primaryIndex)))
+              : props.referenceColor
+          context.strokeStyle = cursorColor
           context.lineWidth = 1.5
           context.beginPath()
-          context.arc(x, y, 4, 0, Math.PI * 2)
-          context.fill()
+          context.moveTo(x, layout.top)
+          context.lineTo(x, layout.top + plotHeight)
           context.stroke()
         }
+      }
+
+      const drawMarker = (epochIndex: number, value: number | null, color: string): void => {
+        if (value === null || !Number.isFinite(value)) return
+        const xRatio =
+          (epochIndex + 0.5 - viewport.value.start) /
+          Math.max(1, viewport.value.end - viewport.value.start)
+        if (xRatio < 0 || xRatio > 1) return
+        const yRatio =
+          (value - renderedRange.min) /
+          Math.max(Number.EPSILON, renderedRange.max - renderedRange.min)
+        const x = layout.left + plotWidth * xRatio
+        const y = layout.top + plotHeight * (1 - Math.max(0, Math.min(1, yRatio)))
+        context.fillStyle = color
+        context.strokeStyle = '#ffffff'
+        context.lineWidth = 1.5
+        context.beginPath()
+        context.arc(x, y, 4, 0, Math.PI * 2)
+        context.fill()
+        context.stroke()
+      }
+      if (primaryVisible.value && primaryIndex >= 0) {
+        drawMarker(
+          primaryIndex,
+          store.getValue(props.field, primaryIndex),
+          fixStatusColor(normalizeFixStatusQuality(store.getValue('QUALITY', primaryIndex))),
+        )
+      }
+      if (reference && referenceIndex !== null) {
+        const quality = normalizeFixStatusQuality(reference.sample.quality)
+        drawMarker(
+          referenceIndex,
+          reference.sample.value,
+          props.referenceColors?.[quality] ?? props.referenceColor,
+        )
       }
     }
   }
@@ -574,7 +812,15 @@ function handleWindowMouseMove(event: MouseEvent): void {
   if (isScrollbarDragging) {
     const store = sourceStore.value
     const delta = (event.clientX - scrollbarStartX) * scrollbarEpochsPerPixel
-    applyViewport(panSatelliteCountViewport(scrollbarStartViewport, delta, store.length))
+    applyViewport(
+      panSatelliteCountViewport(
+        scrollbarStartViewport,
+        delta,
+        store.length,
+        undefined,
+        X_EDGE_OVERSCAN_RATIO,
+      ),
+    )
     clearHover()
     return
   }
@@ -584,7 +830,16 @@ function handleWindowMouseMove(event: MouseEvent): void {
     // 向右拖放大（时间窗变窄），向左拖缩小；以按下点为锚
     const dx = event.clientX - dragStartX
     const factor = Math.pow(2, -dx / 160)
-    applyViewport(zoomSatelliteCountViewport(dragStartViewport, xZoomAnchor, factor, store.length))
+    applyViewport(
+      zoomSatelliteCountViewport(
+        dragStartViewport,
+        xZoomAnchor,
+        factor,
+        store.length,
+        undefined,
+        X_EDGE_OVERSCAN_RATIO,
+      ),
+    )
     clearHover()
     return
   }
@@ -598,7 +853,15 @@ function handleWindowMouseMove(event: MouseEvent): void {
     min: dragStartRange.min + deltaY,
     max: dragStartRange.max + deltaY,
   }
-  applyViewport(panSatelliteCountViewport(dragStartViewport, deltaX, sourceStore.value.length))
+  applyViewport(
+    panSatelliteCountViewport(
+      dragStartViewport,
+      deltaX,
+      sourceStore.value.length,
+      undefined,
+      X_EDGE_OVERSCAN_RATIO,
+    ),
+  )
   clearHover()
 }
 
@@ -638,6 +901,8 @@ function handleScrollbarTrackMouseDown(event: MouseEvent): void {
       { start: targetStart, end: targetStart + span },
       0,
       sourceStore.value.length,
+      undefined,
+      X_EDGE_OVERSCAN_RATIO,
     ),
   )
 }
@@ -651,7 +916,15 @@ function handleScrollbarWheel(event: WheelEvent): void {
   const pixels = delta * (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? width : 1)
   const span = viewport.value.end - viewport.value.start
   preserveCurrentYAxis()
-  applyViewport(panSatelliteCountViewport(viewport.value, (pixels / width) * span, length))
+  applyViewport(
+    panSatelliteCountViewport(
+      viewport.value,
+      (pixels / width) * span,
+      length,
+      undefined,
+      X_EDGE_OVERSCAN_RATIO,
+    ),
+  )
   clearHover()
 }
 
@@ -668,6 +941,22 @@ function handleViewportSync(payload: MetricViewportBroadcast): void {
   scheduleRender()
 }
 
+function metricIndexAtClientX(clientX: number): number {
+  const container = containerRef.value
+  const store = sourceStore.value
+  if (!container || store.length === 0) return -1
+  const rect = container.getBoundingClientRect()
+  const x = clientX - rect.left - layout.left
+  const ratio = x / plotSize().width
+  return Math.max(
+    0,
+    Math.min(
+      store.length - 1,
+      Math.round(viewport.value.start + ratio * (viewport.value.end - viewport.value.start - 1)),
+    ),
+  )
+}
+
 function handleMouseMove(event: MouseEvent): void {
   if (isDragging) return
   const container = containerRef.value
@@ -681,28 +970,110 @@ function handleMouseMove(event: MouseEvent): void {
     clearHover()
     return
   }
-  const ratio = x / width
-  const index = Math.max(
-    0,
-    Math.min(
-      store.length - 1,
-      Math.round(viewport.value.start + ratio * (viewport.value.end - viewport.value.start - 1)),
-    ),
+  const index = metricIndexAtClientX(event.clientX)
+  if (index < 0) return
+  const timeMs = store.getTimestamp(index)
+  const reference = findNearestMetricOverlaySample(
+    orderedReferencePoints.value,
+    timeMs - props.referenceTimeOffset,
   )
-  hoverValue.value = store.getValue(props.field, index)
+  hoverValue.value = primaryVisible.value ? store.getValue(props.field, index) : null
+  hoverReferenceValue.value = reference?.sample.value ?? null
+  hoverDifferenceValue.value =
+    hoverValue.value !== null &&
+    Number.isFinite(hoverValue.value) &&
+    hoverReferenceValue.value !== null &&
+    Number.isFinite(hoverReferenceValue.value)
+      ? hoverValue.value - hoverReferenceValue.value
+      : null
   hoverTime.value = store.formatTime(index)
   tooltipStyle.value = {
-    left: `${Math.min(container.clientWidth - 145, x + layout.left + 10)}px`,
+    left: `${Math.max(8, Math.min(container.clientWidth - 190, x + layout.left + 10))}px`,
     top: `${Math.max(8, y + layout.top - 18)}px`,
   }
 }
 
+/** 单击实际点而非空白区域；若主、参考点接近，选择距离鼠标更近的一条。 */
+function handlePointClick(event: MouseEvent): void {
+  if (
+    event.button !== 0 ||
+    event.detail !== 1 ||
+    Math.hypot(event.clientX - dragStartX, event.clientY - dragStartY) > 3 ||
+    (event.target instanceof Element && event.target.closest('.metric-x-scrollbar')) ||
+    orderedReferencePoints.value.length === 0
+  ) {
+    return
+  }
+  const store = sourceStore.value
+  const container = containerRef.value
+  const index = metricIndexAtClientX(event.clientX)
+  if (!container || index < 0) return
+  const rect = container.getBoundingClientRect()
+  const mouseX = event.clientX - rect.left
+  const mouseY = event.clientY - rect.top
+  const { width, height } = plotSize()
+  const screenPoint = (epochIndex: number, value: number) => ({
+    x:
+      layout.left +
+      ((epochIndex + 0.5 - viewport.value.start) /
+        Math.max(1, viewport.value.end - viewport.value.start)) *
+        width,
+    y:
+      layout.top +
+      height *
+        (1 -
+          Math.max(
+            0,
+            Math.min(
+              1,
+              (value - renderedRange.min) /
+                Math.max(Number.EPSILON, renderedRange.max - renderedRange.min),
+            ),
+          )),
+  })
+  const candidates: Array<{ timeMs: number; distance: number }> = []
+  const primaryValue = primaryVisible.value ? store.getValue(props.field, index) : null
+  if (primaryValue !== null) {
+    const point = screenPoint(index, primaryValue)
+    candidates.push({
+      timeMs: store.getTimestamp(index),
+      distance: Math.hypot(mouseX - point.x, mouseY - point.y),
+    })
+  }
+  const primaryTime = store.getTimestamp(index)
+  const reference = findNearestMetricOverlaySample(
+    orderedReferencePoints.value,
+    primaryTime - props.referenceTimeOffset,
+  )
+  if (reference?.sample.value !== null && reference) {
+    const referenceIndex = fractionalEpochIndex(
+      sourceTimes.value,
+      reference.sample.timeMs + props.referenceTimeOffset,
+    )
+    if (referenceIndex !== null) {
+      const point = screenPoint(referenceIndex, reference.sample.value)
+      candidates.push({
+        timeMs: reference.sample.timeMs,
+        distance: Math.hypot(mouseX - point.x, mouseY - point.y),
+      })
+    }
+  }
+  candidates.sort((left, right) => left.distance - right.distance)
+  const selected = candidates[0]
+  if (!selected || selected.distance > Math.max(12, pointDiameterForSize(props.pointSize) + 4)) return
+  event.preventDefault()
+  event.stopPropagation()
+  emit('select-epoch', selected.timeMs)
+}
+
 function clearHover(): void {
   hoverValue.value = null
+  hoverReferenceValue.value = null
+  hoverDifferenceValue.value = null
   hoverTime.value = ''
 }
 
-watch([positionEpochHistory, speedEpochHistory], () => {
+watch([sourceStore, sourceLength], () => {
   const nextLength = sourceStore.value.length
   if (props.tracking && nextLength > 0) {
     previousLength = nextLength
@@ -714,18 +1085,52 @@ watch([positionEpochHistory, speedEpochHistory], () => {
     previousLength > 0 && viewport.value.start <= 0.5 && viewport.value.end >= previousLength - 0.5
   viewport.value = wasFull
     ? fitSatelliteCountViewport(nextLength)
-    : updateSatelliteCountViewportOnData(viewport.value, previousLength, nextLength, 'overview')
+    : updateSatelliteCountViewportOnData(
+        viewport.value,
+        previousLength,
+        nextLength,
+        'overview',
+        undefined,
+        undefined,
+        X_EDGE_OVERSCAN_RATIO,
+      )
   previousLength = nextLength
   scheduleRender(false)
 })
 
-// 跟踪开关：开启时清除拖拽偏移并立即居中到目标（同偏差图 toggleTracking 语义）
+watch(
+  () => [
+    props.referencePoints,
+    props.referenceTimeOffset,
+    props.primaryVisible,
+    props.selectedTimeMs,
+  ],
+  () => {
+    if (props.tracking) applyTrackingViewport()
+    else scheduleRender()
+  },
+)
+watch(
+  () => [props.referenceColor, props.referenceColors],
+  () => {
+    for (const quality of FIX_STATUS_QUALITIES) {
+      renderer?.setSeriesColor(referenceSeriesId(quality), referenceSeriesColor(quality))
+    }
+    scheduleRender()
+  },
+)
+
+// 文件载入后退出跟随并展示全部历元；实时数据仍保留原有的跟随窗口语义。
 watch(
   () => props.tracking,
   (tracking) => {
-    if (!tracking) return
     trackOffset = 0
-    applyTrackingViewport()
+    if (tracking) {
+      applyTrackingViewport()
+      scheduleRender()
+    } else if (fileTimeline.active.value) {
+      fitAll()
+    }
   },
 )
 
@@ -744,6 +1149,7 @@ watch(
     if (!active) return
     nextTick(() => {
       resizeLayers()
+      if (props.tracking) applyTrackingViewport()
       scheduleRender()
     })
   },
@@ -766,6 +1172,7 @@ onMounted(() => {
     rendererKind.value = renderer.kind
     for (const quality of FIX_STATUS_QUALITIES) {
       renderer.addSeries(qualitySeriesId(quality), hexToRgba(fixStatusColor(quality)))
+      renderer.addSeries(referenceSeriesId(quality), referenceSeriesColor(quality))
     }
     // 点线图：细灰线勾连续性，粗点按质量分色承载信息（尺寸滑杆可调）
     renderer.setLineWidth(POINT_LINE_LINE_WIDTH_PX)
@@ -893,7 +1300,16 @@ onUnmounted(() => {
   gap: 6px;
   color: var(--app-text);
   font-size: 12px;
+  line-height: 1;
   pointer-events: none;
+}
+
+.metric-heading > strong,
+.metric-heading > span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 14px;
+  line-height: 1;
 }
 
 .metric-heading i {
@@ -907,13 +1323,43 @@ onUnmounted(() => {
   font-size: 10px;
 }
 
+.metric-heading.is-expandable {
+  box-sizing: border-box;
+  padding-right: 26px;
+}
+
+.metric-expand-button {
+  position: absolute;
+  top: 50%;
+  right: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  color: var(--app-text-muted);
+  font-size: 14px;
+  cursor: pointer;
+  pointer-events: auto;
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  transform: translateY(-50%);
+}
+
+.metric-expand-button:hover {
+  color: var(--app-primary);
+  background: color-mix(in srgb, var(--app-primary) 12%, transparent);
+}
+
 .metric-tooltip {
   position: absolute;
   z-index: 4;
   display: flex;
-  min-width: 125px;
+  min-width: 165px;
   flex-direction: column;
-  gap: 4px;
+  gap: 5px;
   padding: 7px 9px;
   border: 1px solid var(--app-border);
   border-radius: 6px;
@@ -924,8 +1370,31 @@ onUnmounted(() => {
   pointer-events: none;
 }
 
+.metric-tooltip-primary,
+.metric-tooltip-reference,
+.metric-tooltip-difference {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  white-space: nowrap;
+}
+
 .metric-tooltip span {
   color: var(--app-text-secondary);
   font-variant-numeric: tabular-nums;
+}
+
+.metric-tooltip-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.metric-tooltip-label i {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 7px;
+  border-radius: 50%;
 }
 </style>

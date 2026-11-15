@@ -26,7 +26,10 @@ const ggaData = shallowRef<GgaData[]>([])
 const deviationPoints = shallowRef<Array<[number, number, number]>>([])
 const mapTrackPoints = shallowRef<Array<[number, number, number]>>([])
 const satelliteSnrData = shallowRef<SatelliteSnrData[]>([])
+const hasGsvData = ref(false)
+const satelliteCountSource = ref<'gga' | 'rtklib-pos'>('gga')
 const satelliteEpochHistory = shallowRef(new SatelliteEpochStore())
+const satelliteCountEpochHistory = shallowRef(new NumericEpochStore(['SATS_USED']))
 const satelliteDetailEpochHistory = new SatelliteDetailEpochStore()
 const snrHistory = shallowRef(new SnrHistoryStore())
 const positionEpochHistory = shallowRef(new NumericEpochStore(['E', 'N', 'U', 'QUALITY']))
@@ -67,6 +70,7 @@ let deviationPointsDirty = false
 let mapTrackPointsDirty = false
 let satelliteDataDirty = false
 let satelliteEpochHistoryDirty = false
+let satelliteCountEpochHistoryDirty = false
 let snrHistoryDirty = false
 let positionEpochHistoryDirty = false
 let speedEpochHistoryDirty = false
@@ -119,6 +123,10 @@ function publishPendingData(): void {
   if (satelliteEpochHistoryDirty) {
     satelliteEpochHistoryDirty = false
     triggerRef(satelliteEpochHistory)
+  }
+  if (satelliteCountEpochHistoryDirty) {
+    satelliteCountEpochHistoryDirty = false
+    triggerRef(satelliteCountEpochHistory)
   }
   if (snrHistoryDirty) {
     snrHistoryDirty = false
@@ -587,6 +595,31 @@ function commitSatelliteEpoch(rawGgaTime: string): void {
   publishPendingData()
 }
 
+function commitSatelliteCountEpoch(
+  epochTime: string,
+  rawSatellitesUsed: string | number,
+  source: 'gga' | 'rtklib-pos',
+): void {
+  if (!epochTime.trim()) return
+  const hasValue = typeof rawSatellitesUsed === 'number' || rawSatellitesUsed.trim().length > 0
+  const parsed = hasValue ? Number(rawSatellitesUsed) : null
+  const satellitesUsed =
+    parsed !== null && Number.isFinite(parsed) ? Math.max(0, Math.trunc(parsed)) : null
+  satelliteCountSource.value = source
+  satelliteCountEpochHistory.value.append(
+    epochTime,
+    { SATS_USED: satellitesUsed },
+    { replaceLast: true },
+  )
+  satelliteCountEpochHistoryDirty = true
+}
+
+function clearSatelliteCountHistory(): void {
+  satelliteCountEpochHistoryDirty = false
+  satelliteCountEpochHistory.value.clear()
+  triggerRef(satelliteCountEpochHistory)
+}
+
 function clearSatelliteEpochHistory(): void {
   satelliteEpochAssembler.clear()
   satelliteEpochHistoryDirty = false
@@ -904,6 +937,7 @@ export function useNmea() {
     // GSV blocks in the supported receiver stream precede their matching GGA.
     // Commit here so every GGA epoch gets one speed-independent satellite snapshot.
     commitSatelliteEpoch(timeParts)
+    commitSatelliteCountEpoch(timeParts, data.satellites, 'gga')
     addGgaData(data)
 
     gnssStore.status.utcTime = data.time
@@ -943,6 +977,7 @@ export function useNmea() {
   function appendRtkSolution(solution: RtkSolution): void {
     const gnssStore = useGnssStore()
     const quality = rtkSolutionQualityToGnssQuality(solution.quality)
+    commitSatelliteCountEpoch(solution.time, solution.satellites, 'rtklib-pos')
     if (!Number.isFinite(solution.latitude) || !Number.isFinite(solution.longitude) ||
         !Number.isFinite(solution.height) || Math.abs(solution.latitude) > 90 ||
         Math.abs(solution.longitude) > 180) return
@@ -989,6 +1024,7 @@ export function useNmea() {
   }
 
   function parseGsv(sentence: string): Partial<NmeaData> {
+    hasGsvData.value = true
     const gnssStore = useGnssStore()
     const parts = sentence.split(',')
     if (parts.length < 8) return {}
@@ -1343,6 +1379,7 @@ export function useNmea() {
     mapTrackPointsDirty = false
     satelliteDataDirty = false
     satelliteEpochHistoryDirty = false
+    satelliteCountEpochHistoryDirty = false
     positionEpochHistoryDirty = false
     speedEpochHistoryDirty = false
     statusEpochHistoryDirty = false
@@ -1359,6 +1396,8 @@ export function useNmea() {
     timelineMapIndex = -1
     latestSatelliteData.clear()
     pendingSatelliteDetails.clear()
+    hasGsvData.value = false
+    satelliteCountSource.value = 'gga'
     satelliteEpochAssembler.clear()
     satelliteDetailEpochHistory.clear()
     utcTime.fill(0)
@@ -1372,6 +1411,8 @@ export function useNmea() {
     satelliteSnrData.value = []  // 确保清除卫星数据
     satelliteEpochHistory.value.clear()
     triggerRef(satelliteEpochHistory)
+    satelliteCountEpochHistory.value.clear()
+    triggerRef(satelliteCountEpochHistory)
     snrHistoryDirty = false
     snrHistory.value.clear()
     triggerRef(snrHistory)
@@ -1496,7 +1537,10 @@ export function useNmea() {
       latestPosition,
       latestGgaPosition,
       satelliteSnrData, // 添加卫星SNR数据
+      hasGsvData,
+      satelliteCountSource,
       satelliteEpochHistory,
+      satelliteCountEpochHistory,
       satelliteDetailEpochHistory,
       snrHistory, // 逐星 SNR 滚动历史（实时面板逐星视图）
       positionEpochHistory,
@@ -1518,6 +1562,7 @@ export function useNmea() {
       applyTimelineEpoch,
       prepareTimelineProjection,
       clearSatelliteEpochHistory,
+      clearSatelliteCountHistory,
       processRawData,
       processRtkLibPosData,
       clearBuffer

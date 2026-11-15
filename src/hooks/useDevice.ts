@@ -1,5 +1,6 @@
 import { computed, reactive, ref, toRef, watch } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import type { AppHandoffArtifact, AppHandoffFile } from '@/core/handoff/AppHandoff'
 import { useApplicationSelector } from '@/composables/useApplicationSelector'
 import { useNmea } from '@/composables/gnss/useNmea'
 import { createGnssLiveHistory } from '@/composables/gnss/useGnssLiveHistory'
@@ -78,7 +79,13 @@ const {
   displayFormat: flowDisplayFormat,
 } = useConsole(true) // 使用全局实例
 const { convertByteArrayToJson } = useMotorCmd()
-const { activeDataModes, currentWindows, currentApplication } = useApplicationSelector()
+const {
+  activeDataModes,
+  applications,
+  currentWindows,
+  currentApplication,
+  currentApplicationId,
+} = useApplicationSelector()
 const autoFormatSettings = useAutoFormatSettings()
 const detectedFormats = reactive<Record<'file' | 'serial' | 'network', FormatDetection | undefined>>({
   file: undefined, serial: undefined, network: undefined,
@@ -198,6 +205,16 @@ const selectedFileCount = computed(() =>
 const serialPorts = ref<string[]>([])
 const logRecordingActive = ref(false)
 const logRecordingPath = ref('')
+const recordingHandoff = ref<AppHandoffArtifact | null>(null)
+let recordingDraft:
+  | {
+      path: string
+      producerAppId: string
+      runId: string
+      format: TextDataParser
+      regexPattern?: string
+    }
+  | undefined
 // const fileContent = ref("");
 
 // 创建全局设备变量，connected值：null(无设备)、true(有设备已连接)、false(有设备未连接)
@@ -236,6 +253,13 @@ const deviceConnected = computed(() => {
 const deviceConnecting = computed(() => {
   return globalDevice.value.connecting === true
 })
+
+const dataFormatSession = computed(() => ({
+  source: activeSource.value,
+  format: effectiveFormat(activeSource.value),
+  attempted: formatAttempted[activeSource.value],
+  detected: detectedFormats[activeSource.value],
+}))
 
 const activeDataParser = computed<TextDataParser>(() => {
   const type = globalDevice.value.type
@@ -709,6 +733,46 @@ logRecordingService.onStatus((status) => {
   logRecordingPath.value = status.state === 'recording' ? status.path : ''
 
   if (status.state === 'recording') {
+    recordingHandoff.value = null
+    if (recordingDraft?.path !== status.path) {
+      const producerAppId = currentApplicationId.value
+      recordingDraft = producerAppId
+        ? {
+            path: status.path,
+            producerAppId,
+            runId: crypto.randomUUID(),
+            format: activeDataParser.value,
+            ...(activeDataParser.value === 'regex'
+              ? { regexPattern: activeRegexPattern.value }
+              : {}),
+          }
+        : undefined
+    }
+  } else if (status.state === 'stopped' && recordingDraft?.path === status.path) {
+    const draft = recordingDraft
+    recordingHandoff.value = {
+      artifactId: crypto.randomUUID(),
+      producerAppId: draft.producerAppId,
+      runId: draft.runId,
+      createdAt: new Date().toISOString(),
+      kind: 'recording',
+      files: [
+        {
+          path: draft.path,
+          role: 'recording',
+          format: draft.format,
+          sizeBytes: 0,
+          modifiedAt: new Date().toISOString(),
+          ...(draft.regexPattern ? { regexPattern: draft.regexPattern } : {}),
+        },
+      ],
+    }
+    recordingDraft = undefined
+  } else if (status.state === 'error') {
+    recordingDraft = undefined
+  }
+
+  if (status.state === 'recording') {
     ElMessage({
       message: t('data.logRecordStart', { path: status.path }),
       type: 'success',
@@ -763,6 +827,7 @@ type GnssTimelineReader = (
 async function loadGnssTimelineSource(
   timelineMode: FileTimelineMode,
   readSource: GnssTimelineReader,
+  notify = true,
 ): Promise<void> {
   gnssLiveHistory.discard()
   const streamPlot = isWindowActive('plot')
@@ -834,12 +899,14 @@ async function loadGnssTimelineSource(
   })
   if (!attached) throw new Error(t('data.noGnssEpochs'))
 
-  ElMessage({
-    message: timelineMode === 'replay' ? t('data.tsPlayStarted') : t('data.dataLoadSuccess'),
-    type: 'success',
-    placement: 'bottom-right',
-    offset: 50,
-  })
+  if (notify) {
+    ElMessage({
+      message: timelineMode === 'replay' ? t('data.tsPlayStarted') : t('data.dataLoadSuccess'),
+      type: 'success',
+      placement: 'bottom-right',
+      offset: 50,
+    })
+  }
 }
 
 async function streamFileContent(
@@ -889,9 +956,15 @@ async function loadGnssTimelineFile(file: File, timelineMode: FileTimelineMode):
   )
 }
 
-async function loadGnssTimelinePath(path: string, timelineMode: FileTimelineMode): Promise<void> {
-  await loadGnssTimelineSource(timelineMode, (onChunk, onProgress) =>
-    textFileStreamService.read(path, { onChunk, onProgress }),
+async function loadGnssTimelinePath(
+  path: string,
+  timelineMode: FileTimelineMode,
+  notify = true,
+): Promise<void> {
+  await loadGnssTimelineSource(
+    timelineMode,
+    (onChunk, onProgress) => textFileStreamService.read(path, { onChunk, onProgress }),
+    notify,
   )
 }
 
@@ -902,6 +975,7 @@ async function loadGnssTimelinePath(path: string, timelineMode: FileTimelineMode
  */
 async function loadTextTimelineSource(
   readSource: GnssTimelineReader,
+  options: { projectFlow?: boolean; notify?: boolean } = {},
 ): Promise<void> {
   fileTimeline.beginIndexing()
   globalDevice.value.connected = false
@@ -932,12 +1006,12 @@ async function loadTextTimelineSource(
     addFileReplayData(content)
     endFileReplayMessages()
 
-    // 图表投影：前向增量追加、回退全量重建；记录注入虚拟时间（秒）作为 time，
-    // 使 x 轴与时间轴一致（绕过 addRawData 的墙钟盖戳）。
+    // 跨应用交接必须显式使用目标应用面板，不能读取导航前的来源应用上下文。
     const projectFlow =
-      isWindowActive('plot') ||
-      activeDataModes.value.includes('flow') ||
-      activeDataModes.value.includes('motor')
+      options.projectFlow ??
+      (isWindowActive('plot') ||
+        activeDataModes.value.includes('flow') ||
+        activeDataModes.value.includes('motor'))
     let recordCursor = 0
     let appliedEpoch = -1
     const applyEpoch = (index: number) => {
@@ -965,12 +1039,14 @@ async function loadTextTimelineSource(
     })
     if (!attached) throw new Error(t('data.noTextRecords'))
 
-    ElMessage({
-      message: t('data.tsPlayStarted'),
-      type: 'success',
-      placement: 'bottom-right',
-      offset: 50,
-    })
+    if (options.notify !== false) {
+      ElMessage({
+        message: t('data.tsPlayStarted'),
+        type: 'success',
+        placement: 'bottom-right',
+        offset: 50,
+      })
+    }
   } catch (error) {
     setFileReplayElapsedResolver(null)
     endFileReplayMessages()
@@ -1876,42 +1952,182 @@ export function useDevice() {
     }
   }
 
-  const closeCurrDevice = () => {
-    if (globalDevice.value.connected !== null) {
-      if (globalDevice.value.type === 'serial') {
-        const device = globalDevice.value
-        const options = currentSerialOptions()
-        if (!options) return
-        serialService.close(options).then(() => {
-          if (globalDevice.value !== device) return
-          finishStreamDetection()
-          activeDataTransport.clear('serial')
-          stopLiveGnssHistory()
-          if (globalDevice.value.type) {
-            globalDevice.value.connected = false
-          }
-        })
-      } else if (globalDevice.value.type === 'network') {
-        const device = globalDevice.value
-        cancelNetworkReconnect()
-        // 手动断开同样作废在途尝试, 避免迟到 open() 成功后状态复活为「已连接」
-        networkOpenAttempt++
-        networkService.close().then(() => {
-          if (globalDevice.value !== device) return
-          finishStreamDetection()
-          activeDataTransport.clear('network')
-          stopLiveGnssHistory()
-          if (globalDevice.value.type === 'network') globalDevice.value.connected = false
-        })
-      } else if (globalDevice.value.type === 'file') {
-        globalDevice.value.connected = false
-        fileTimeline.pause()
-        filePlaybackService.stop().then(() => {
-          if (globalDevice.value.type === 'file') globalDevice.value.connected = false
-        })
-      }
+  const closeCurrDevice = async (): Promise<void> => {
+    if (globalDevice.value.connected === null) return
+    if (globalDevice.value.type === 'serial') {
+      const device = globalDevice.value
+      const options = currentSerialOptions()
+      if (!options) return
+      await serialService.close(options)
+      if (globalDevice.value !== device) return
+      finishStreamDetection()
+      activeDataTransport.clear('serial')
+      stopLiveGnssHistory()
+      if (globalDevice.value.type) globalDevice.value.connected = false
+      return
+    }
+    if (globalDevice.value.type === 'network') {
+      const device = globalDevice.value
+      cancelNetworkReconnect()
+      // 手动断开同样作废在途尝试, 避免迟到 open() 成功后状态复活为「已连接」
+      networkOpenAttempt++
+      await networkService.close()
+      if (globalDevice.value !== device) return
+      finishStreamDetection()
+      activeDataTransport.clear('network')
+      stopLiveGnssHistory()
+      if (globalDevice.value.type === 'network') globalDevice.value.connected = false
+      return
+    }
+    if (globalDevice.value.type === 'file') {
+      globalDevice.value.connected = false
+      fileTimeline.pause()
+      await filePlaybackService.stop()
+      if (globalDevice.value.type === 'file') globalDevice.value.connected = false
     }
   }
+
+  /**
+   * 单文件交接共用连接保护、设置提交和失败回滚；多文件 RINEX 不进入此通道。
+   * 文本投影使用目标应用的面板定义，而不是导航前的当前应用。
+   */
+  const loadSingleFileHandoff = async (
+    file: AppHandoffFile,
+    loader: 'gnss' | 'text',
+    targetAppId?: string,
+  ): Promise<boolean> => {
+    if (!window.ipcRenderer || !file.path) throw new Error(t('app.handoff.loadUnavailable'))
+    const format = file.format
+    if (!isTextFormat(format)) throw new Error('INVALID_HANDOFF_FORMAT')
+    if (logRecordingActive.value) {
+      ElMessage.warning(t('app.handoff.recordingActive'))
+      return false
+    }
+
+    const previousSettings = snapshotDataSourceSettings()
+    const previousDevice = { ...globalDevice.value }
+    const previousSelectedFiles = selectedFiles.value
+    const previousSelectedPaths = selectedPaths.value
+    const previousSelectedFilePath = selectedFilePath.value
+    const previousDetectedFormat = detectedFormats.file
+    const previousFormatAttempted = formatAttempted.file
+    const liveSourceNeedsReplacement =
+      (globalDevice.value.type === 'serial' || globalDevice.value.type === 'network') &&
+      (globalDevice.value.connected === true ||
+        globalDevice.value.connecting === true ||
+        (globalDevice.value.type === 'network' && networkLoop.value))
+
+    if (liveSourceNeedsReplacement) {
+      try {
+        await ElMessageBox.confirm(
+          t('app.handoff.replaceActiveMessage'),
+          t('app.handoff.replaceActiveTitle'),
+          {
+            confirmButtonText: t('app.handoff.replaceActiveConfirm'),
+            cancelButtonText: t('app.cancel'),
+            type: 'warning',
+          },
+        )
+      } catch {
+        return false
+      }
+    }
+
+    const restorePreviousSource = async (): Promise<void> => {
+      await filePlaybackService.stop().catch(() => undefined)
+      fileTimeline.clearTimeline()
+      clearGnssData()
+      clearFlowData()
+      clearFlowConsole()
+      dataSourceSettings.activeSource = previousSettings.activeSource
+      Object.assign(dataSourceSettings.serial, previousSettings.serial)
+      Object.assign(dataSourceSettings.file, previousSettings.file)
+      Object.assign(dataSourceSettings.network, previousSettings.network)
+      detectedFormats.file = previousDetectedFormat
+      formatAttempted.file = previousFormatAttempted
+      selectedFiles.value = previousSelectedFiles
+      selectedPaths.value = previousSelectedPaths
+      selectedFilePath.value = previousSelectedFilePath
+      globalDevice.value = {
+        ...previousDevice,
+        ...(previousDevice.type === 'file'
+          ? {}
+          : { connected: previousDevice.connected === null ? null : false, connecting: false }),
+      }
+      saveDataSourceSettings()
+      if (previousDevice.type === 'file' && previousDevice.path) {
+        const reader: GnssTimelineReader = (onChunk, onProgress) =>
+          textFileStreamService.read(previousDevice.path!, { onChunk, onProgress })
+        if (isGnssSolutionParser(activeDataParser.value)) {
+          await loadGnssTimelinePath(previousDevice.path, 'loaded', false)
+        } else if (isTextFormat(previousSettings.file.format)) {
+          await loadTextTimelineSource(reader, { notify: false })
+        }
+      }
+    }
+
+    if (globalDevice.value.connected !== null) await closeCurrDevice()
+    selectedFiles.value = []
+    selectedPaths.value = []
+    selectedFilePath.value = ''
+    filePath.value = file.path
+    fileTimeTag.value = false
+    fileStartOffset.value = 0
+    dataSourceSettings.activeSource = 'file'
+    dataSourceSettings.file.format = format
+    dataSourceSettings.file.parser = format
+    if (format === 'regex' && file.regexPattern) {
+      dataSourceSettings.file.regexPattern = file.regexPattern
+    }
+    detectedFormats.file = undefined
+    formatAttempted.file = false
+    globalDevice.value = { type: 'file', path: file.path, connected: false }
+    saveDataSourceSettings()
+
+    try {
+      if (loader === 'gnss') {
+        await loadGnssTimelinePath(file.path, 'loaded', false)
+      } else {
+        const target = applications.value.find((application) => application.id === targetAppId)
+        if (!target) throw new Error('HANDOFF_TARGET_UNAVAILABLE')
+        const windows = getWindowsByIds(target.windowIds)
+        const projectFlow = windows.some(
+          (definition) =>
+            definition.id === 'plot' ||
+            definition.funcMode === 'flow' ||
+            definition.funcMode === 'motor',
+        )
+        await loadTextTimelineSource(
+          (onChunk, onProgress) =>
+            textFileStreamService.read(file.path, { onChunk, onProgress }),
+          { projectFlow, notify: false },
+        )
+      }
+      recentInputFilesStore.record({
+        path: file.path,
+        name: mcapBasename(file.path),
+        sizeBytes: file.sizeBytes,
+      })
+      return true
+    } catch (error) {
+      await restorePreviousSource().catch((restoreError) => {
+        console.error('Failed to restore the data source after handoff failure:', restoreError)
+      })
+      throw error
+    }
+  }
+
+  const loadGnssSolutionHandoff = async (file: AppHandoffFile): Promise<boolean> => {
+    if (file.format !== 'nmea' && file.format !== 'rtklib-pos') {
+      throw new Error('INVALID_HANDOFF_FORMAT')
+    }
+    return loadSingleFileHandoff(file, 'gnss')
+  }
+
+  const loadTextFileHandoff = async (
+    file: AppHandoffFile,
+    targetAppId: string,
+  ): Promise<boolean> => loadSingleFileHandoff(file, 'text', targetAppId)
 
   /**
    * 提交输入表单
@@ -2075,6 +2291,7 @@ export function useDevice() {
     sourceFormat,
     sourceDetectedFormat,
     sourceFormatAttempted,
+    dataFormatSession,
     sourceRegexPattern,
     activeDataParser,
     serialPorts,
@@ -2087,6 +2304,7 @@ export function useDevice() {
     activeSource,
     logRecordingActive,
     logRecordingPath,
+    recordingHandoff,
     globalDevice,
     isDragOver,
     handleDragOver,
@@ -2100,6 +2318,8 @@ export function useDevice() {
     openCurrDevice,
     cancelNetworkConnect,
     closeCurrDevice,
+    loadGnssSolutionHandoff,
+    loadTextFileHandoff,
     removeCurrDevice,
     toggleLogRecording,
     searchSerialPorts,

@@ -9,6 +9,14 @@ import {
   type RtkNaviStatus,
 } from '@/core/gnsslib/RtkNavi'
 import { JsonStorage } from '@/core/storage/JsonStorage'
+import { t } from '@/i18n'
+import { parseRtkPostConfig } from '@/core/gnsslib/RtkPostConfig'
+import {
+  createDefaultRtkNaviAdvancedOptions,
+  RTKNAVI_ADVANCED_CONFIG,
+  type RtkNaviAdvancedKey,
+} from '@/core/gnsslib/RtkNaviAdvancedOptions'
+import type { SolverOptionKey, SolverOptionValue } from '@/core/gnsslib/GnssSolverOptions'
 
 const STORAGE_KEY = 'nav-tools:gnsslib-rtknavi-v1'
 const storage = new JsonStorage(localStorage)
@@ -20,10 +28,15 @@ const epochs = ref(0)
 const qualityCounts = ref<Record<number, number>>({})
 const logText = ref('')
 const errorText = ref('')
+const configStatus = ref<'idle' | 'loading' | 'ready' | 'error'>('idle')
+const configDetail = ref('')
+let configRevision = 0
+let pendingConfigRead: { path: string; promise: Promise<boolean> } | undefined
 const running = computed(
   () => status.value.state === 'running' || status.value.state === 'stopping',
 )
 let activeRunId = ''
+let startRevision = 0
 
 watch(settings, (value) => storage.write(STORAGE_KEY, value), { deep: true })
 
@@ -46,8 +59,79 @@ window.ipcRenderer?.on('rtknavi-log', (_event, payload: RtkNaviLogEvent) => {
 })
 
 export function useRtkNavi() {
+  function loadBaseConfig(): Promise<boolean> {
+    const path = settings.options.baseConfigPath.trim()
+    if (pendingConfigRead?.path === path) return pendingConfigRead.promise
+    const revision = ++configRevision
+    const promise = readBaseConfig(path, revision)
+    pendingConfigRead = { path, promise }
+    void promise.then(() => {
+      if (pendingConfigRead?.promise === promise) pendingConfigRead = undefined
+    })
+    return promise
+  }
+
+  async function readBaseConfig(path: string, revision: number): Promise<boolean> {
+    if (!path) {
+      configStatus.value = 'idle'
+      configDetail.value = ''
+      return true
+    }
+    const api = window.electronAPI?.rtkPostReadConfig
+    if (typeof api !== 'function') {
+      configStatus.value = 'error'
+      configDetail.value = t('gnssRaw.rtkpost.desktopOnly')
+      return false
+    }
+    configStatus.value = 'loading'
+    configDetail.value = ''
+    try {
+      const content = await api(path)
+      if (typeof content !== 'string') throw new Error(t('gnssLib.rtknavi.configReadError'))
+      if (revision !== configRevision || settings.options.baseConfigPath.trim() !== path)
+        return false
+      const parsed = parseRtkPostConfig(content)
+      const defaults = createDefaultRtkNaviAdvancedOptions()
+      const overrides = new Set(settings.advancedOptionOverrides)
+      for (const { key } of RTKNAVI_ADVANCED_CONFIG) {
+        if (overrides.has(key)) continue
+        Object.assign(settings.options, { [key]: parsed.options[key] ?? defaults[key] })
+      }
+      configStatus.value = 'ready'
+      configDetail.value = t('gnssLib.rtknavi.configLoaded')
+      return true
+    } catch (error) {
+      if (revision !== configRevision || settings.options.baseConfigPath.trim() !== path)
+        return false
+      configStatus.value = 'error'
+      configDetail.value = error instanceof Error ? error.message : String(error)
+      return false
+    }
+  }
+
+  function updateOption(key: SolverOptionKey, value: SolverOptionValue): void {
+    Object.assign(settings.options, { [key]: value })
+    if (RTKNAVI_ADVANCED_CONFIG.some((entry) => entry.key === key)) {
+      const advancedKey = key as RtkNaviAdvancedKey
+      if (!settings.advancedOptionOverrides.includes(advancedKey))
+        settings.advancedOptionOverrides.push(advancedKey)
+    }
+  }
+
+  async function restoreBaseConfig(): Promise<void> {
+    const previous = [...settings.advancedOptionOverrides]
+    settings.advancedOptionOverrides = []
+    if (!(await loadBaseConfig())) settings.advancedOptionOverrides = previous
+  }
+
   async function start(requestRunId?: string): Promise<void> {
     if (running.value) return
+    const revision = ++startRevision
+    if (settings.options.baseConfigPath.trim()) {
+      const loaded = await loadBaseConfig()
+      if (revision !== startRevision) return
+      if (!loaded) throw new Error(configDetail.value || t('gnssLib.rtknavi.configReadError'))
+    }
     buildRtkNaviConfig(settings, settings.outputPath || 'rtknavi-current.pos')
     const api = window.electronAPI?.rtkNaviStart
     if (!api) throw new Error('RTKNAVI 仅可在 Electron 桌面端运行')
@@ -73,6 +157,7 @@ export function useRtkNavi() {
   }
 
   async function stop(): Promise<void> {
+    startRevision++
     if (!activeRunId) return
     const runId = activeRunId
     const result = await window.electronAPI?.rtkNaviStop?.(runId)
@@ -107,6 +192,11 @@ export function useRtkNavi() {
     qualityCounts,
     logText,
     errorText,
+    configStatus,
+    configDetail,
+    loadBaseConfig,
+    restoreBaseConfig,
+    updateOption,
     start,
     stop,
     refreshStatus,
@@ -123,6 +213,11 @@ function loadSettings(): RtkNaviSettings {
   return {
     executablePath: typeof stored.executablePath === 'string' ? stored.executablePath : '',
     outputPath: typeof stored.outputPath === 'string' ? stored.outputPath : '',
+    advancedOptionOverrides: Array.isArray(stored.advancedOptionOverrides)
+      ? stored.advancedOptionOverrides.filter((key): key is RtkNaviAdvancedKey =>
+          RTKNAVI_ADVANCED_CONFIG.some((entry) => entry.key === key),
+        )
+      : [],
     inputs: defaults.inputs.map((input, index) => ({
       ...input,
       ...(Array.isArray(stored.inputs) ? stored.inputs[index] : undefined),
@@ -140,6 +235,7 @@ function loadSettings(): RtkNaviSettings {
 function toPlainSettings(value: RtkNaviSettings): RtkNaviSettings {
   return {
     ...value,
+    advancedOptionOverrides: [...value.advancedOptionOverrides],
     inputs: value.inputs.map((stream) => ({ ...stream })),
     options: {
       ...value.options,

@@ -25,14 +25,16 @@
 
     <div v-if="hoverSample" class="satellite-count-tooltip" :style="tooltipStyle">
       <div class="tooltip-title">{{ hoverSample.time }}</div>
-      <div v-for="series in constellationSeries" :key="series.id" class="tooltip-row">
-        <span class="tooltip-name">
-          <i :style="{ backgroundColor: series.color }"></i>{{ series.label }}
-        </span>
-        <strong>{{ hoverSample.counts[series.id] }}</strong>
-      </div>
+      <template v-if="hasGsvData">
+        <div v-for="series in constellationSeries" :key="series.id" class="tooltip-row">
+          <span class="tooltip-name">
+            <i :style="{ backgroundColor: series.color }"></i>{{ series.label }}
+          </span>
+          <strong>{{ hoverSample.counts[series.id] ?? '—' }}</strong>
+        </div>
+      </template>
       <div class="tooltip-row tooltip-total">
-        <span>{{ t('gnss.signal.nsatTotal') }}</span>
+        <span>{{ t(hasGsvData ? 'gnss.signal.nsatTotal' : 'gnss.signal.nsatUsed') }}</span>
         <strong>{{ hoverSample.total }}</strong>
       </div>
     </div>
@@ -45,7 +47,6 @@ import { useNmea } from '@/composables/gnss/useNmea'
 import { useFileTimeline } from '@/composables/useFileTimeline'
 import { useTheme } from '@/composables/useTheme'
 import { t } from '@/i18n'
-import type { SatelliteEpochSample } from '@/core/gnss/SatelliteEpochAssembler'
 import {
   createInitialSatelliteCountViewport,
   fitSatelliteCountViewport,
@@ -66,7 +67,12 @@ const props = defineProps<{
   slidingWindow: boolean
 }>()
 
-const { satelliteEpochHistory } = useNmea()
+const {
+  satelliteEpochHistory,
+  satelliteCountEpochHistory: satelliteCountHistory,
+  hasGsvData,
+  satelliteCountSource,
+} = useNmea()
 const fileTimeline = useFileTimeline()
 const { chartTheme, resolvedTheme } = useTheme()
 
@@ -74,7 +80,11 @@ const containerRef = ref<HTMLDivElement | null>(null)
 const plotCanvasRef = ref<HTMLCanvasElement | null>(null)
 const axisCanvasRef = ref<HTMLCanvasElement | null>(null)
 const rendererKind = ref<SatelliteRendererKind>('canvas')
-const hoverSample = ref<SatelliteEpochSample | null>(null)
+const hoverSample = ref<{
+  time: string
+  total: number | null
+  counts: Record<string, number>
+} | null>(null)
 const hoverIndex = ref<number | null>(null)
 const tooltipStyle = ref<Record<string, string>>({})
 
@@ -108,19 +118,28 @@ const constellationSeries = [
   { id: 'OTHER', label: 'OTHER', color: '#ff4d4f' },
 ] as const
 
+const fallbackSeriesLabel = computed(
+  () =>
+    `${satelliteCountSource.value === 'rtklib-pos' ? 'RTKLIB POS ns' : 'GGA'} · ${t('gnss.signal.nsatUsed')}`,
+)
+
 const displaySeries = computed(() => [
-  ...constellationSeries,
+  ...(hasGsvData.value ? constellationSeries : []),
   {
     id: 'TOTAL',
-    label: t('gnss.signal.total'),
+    label: hasGsvData.value ? t('gnss.signal.total') : fallbackSeriesLabel.value,
     color: chartTheme.value.text,
   },
 ])
 
+function currentHistory() {
+  return hasGsvData.value ? satelliteEpochHistory.value : satelliteCountHistory.value
+}
+
 const viewport = ref<SatelliteCountViewport>(
   props.slidingWindow
-    ? createInitialSatelliteCountViewport(satelliteEpochHistory.value.length)
-    : fitSatelliteCountViewport(satelliteEpochHistory.value.length),
+    ? createInitialSatelliteCountViewport(currentHistory().length)
+    : fitSatelliteCountViewport(currentHistory().length),
 )
 
 function hexToRgba(color: string): SatelliteSeriesColor {
@@ -193,7 +212,7 @@ function renderChart(): void {
   lastOverviewRenderAt = performance.now()
   if (!props.active || !renderer || document.hidden) return
 
-  const store = satelliteEpochHistory.value
+  const store = currentHistory()
   const length = store.length
   if (length === 0) {
     renderer.clear()
@@ -223,21 +242,30 @@ function renderChart(): void {
   const { width } = currentPlotSize()
   const maxPoints = Math.max(64, Math.floor(width * 2))
 
-  for (const series of constellationSeries) {
-    const extracted = store.extractSeries(series.id, start, end, maxPoints)
-    renderer.setSeriesData(
-      series.id,
-      new Float32Array(extracted.points),
-      new Uint32Array(extracted.segments),
-    )
-    renderer.setSeriesColor(series.id, hexToRgba(series.color))
+  let total: { points: number[]; segments: number[] }
+  let yMax: number
+  if (hasGsvData.value) {
+    const gsvStore = satelliteEpochHistory.value
+    for (const series of constellationSeries) {
+      const extracted = gsvStore.extractSeries(series.id, start, end, maxPoints)
+      renderer.setSeriesData(
+        series.id,
+        new Float32Array(extracted.points),
+        new Uint32Array(extracted.segments),
+      )
+      renderer.setSeriesColor(series.id, hexToRgba(series.color))
+    }
+    total = gsvStore.extractSeries('TOTAL', start, end, maxPoints)
+    yMax = niceYMax(gsvStore.getRangeMax('TOTAL', start, end))
+  } else {
+    for (const series of constellationSeries) {
+      renderer.setSeriesData(series.id, new Float32Array(), new Uint32Array())
+    }
+    total = satelliteCountHistory.value.extractSeries('SATS_USED', start, end, maxPoints)
+    yMax = niceYMax(satelliteCountHistory.value.getRange('SATS_USED', start, end)?.max ?? 0)
   }
-
-  const total = store.extractSeries('TOTAL', start, end, maxPoints)
   renderer.setSeriesData('TOTAL', new Float32Array(total.points), new Uint32Array(total.segments))
   renderer.setSeriesColor('TOTAL', hexToRgba(chartTheme.value.text))
-
-  const yMax = niceYMax(store.getRangeMax('TOTAL', start, end))
   renderedYMax = yMax
   renderer.setViewport(
     viewport.value.start - 0.5,
@@ -276,7 +304,7 @@ function scheduleRender(immediate = true): void {
 function drawAxes(yMax: number): void {
   const canvas = axisCanvasRef.value
   const context = axisContext
-  const store = satelliteEpochHistory.value
+  const store = currentHistory()
   if (!canvas || !context || !containerRef.value) return
 
   const dpr = window.devicePixelRatio || 1
@@ -344,8 +372,10 @@ function drawAxes(yMax: number): void {
           (cursorIndex + 0.5 - viewport.value.start) /
           Math.max(1, viewport.value.end - viewport.value.start)
         const x = layout.left + ratio * plotWidth
-        const sample = store.getSample(cursorIndex)
-        const y = layout.top + plotHeight * (1 - Math.min(1, sample.total / Math.max(1, yMax)))
+        const count = hasGsvData.value
+          ? satelliteEpochHistory.value.getSample(cursorIndex).total
+          : (satelliteCountHistory.value.getValue('SATS_USED', cursorIndex) ?? 0)
+        const y = layout.top + plotHeight * (1 - Math.min(1, count / Math.max(1, yMax)))
 
         context.strokeStyle = '#409eff'
         context.lineWidth = 1.5
@@ -382,14 +412,14 @@ function drawAxes(yMax: number): void {
 
 function fitOverview(): void {
   if (props.slidingWindow) return
-  viewport.value = fitSatelliteCountViewport(satelliteEpochHistory.value.length)
+  viewport.value = fitSatelliteCountViewport(currentHistory().length)
   hoverSample.value = null
   hoverIndex.value = null
   scheduleRender()
 }
 
 function handleWheel(event: WheelEvent): void {
-  if (props.slidingWindow || satelliteEpochHistory.value.length < 2) return
+  if (props.slidingWindow || currentHistory().length < 2) return
   const container = containerRef.value
   if (!container) return
   const rect = container.getBoundingClientRect()
@@ -401,7 +431,7 @@ function handleWheel(event: WheelEvent): void {
     viewport.value,
     anchor,
     event.deltaY > 0 ? 1.25 : 0.8,
-    satelliteEpochHistory.value.length,
+    currentHistory().length,
   )
   hoverSample.value = null
   hoverIndex.value = null
@@ -422,7 +452,7 @@ function handleWindowMouseMove(event: MouseEvent): void {
   viewport.value = panSatelliteCountViewport(
     dragStartViewport,
     delta,
-    satelliteEpochHistory.value.length,
+    currentHistory().length,
   )
   hoverSample.value = null
   hoverIndex.value = null
@@ -436,7 +466,7 @@ function handleWindowMouseUp(): void {
 function handleMouseMove(event: MouseEvent): void {
   if (isDragging) return
   const container = containerRef.value
-  const store = satelliteEpochHistory.value
+  const store = currentHistory()
   if (!container || store.length === 0) return
   const rect = container.getBoundingClientRect()
   const { width, height } = currentPlotSize()
@@ -457,7 +487,13 @@ function handleMouseMove(event: MouseEvent): void {
       Math.round(viewport.value.start + ratio * (viewport.value.end - viewport.value.start - 1)),
     ),
   )
-  hoverSample.value = store.getSample(index)
+  hoverSample.value = hasGsvData.value
+    ? { ...satelliteEpochHistory.value.getSample(index) }
+    : {
+        time: satelliteCountHistory.value.formatTime(index),
+        total: satelliteCountHistory.value.getValue('SATS_USED', index),
+        counts: {},
+      }
   hoverIndex.value = index
   tooltipStyle.value = {
     left: `${Math.min(container.clientWidth - 190, x + layout.left + 14)}px`,
@@ -474,8 +510,8 @@ function handleMouseLeave(): void {
   }
 }
 
-watch(satelliteEpochHistory, () => {
-  const nextLength = satelliteEpochHistory.value.length
+watch([satelliteEpochHistory, satelliteCountHistory], () => {
+  const nextLength = currentHistory().length
   const wasFullOverview =
     !props.slidingWindow &&
     previousLength > 0 &&
@@ -494,10 +530,21 @@ watch(satelliteEpochHistory, () => {
   scheduleRender(false)
 })
 
+watch(hasGsvData, () => {
+  const length = currentHistory().length
+  previousLength = length
+  viewport.value = props.slidingWindow
+    ? createInitialSatelliteCountViewport(length)
+    : fitSatelliteCountViewport(length)
+  hoverSample.value = null
+  hoverIndex.value = null
+  scheduleRender()
+})
+
 watch(
   () => props.slidingWindow,
   (sliding) => {
-    const store = satelliteEpochHistory.value
+    const store = currentHistory()
     if (sliding && fileTimeline.active.value) {
       const cursorIndex = store.findNearestElapsedTime(fileTimeline.elapsedMilliseconds.value)
       viewport.value = {
@@ -531,7 +578,7 @@ watch(resolvedTheme, () => scheduleRender())
 watch([fileTimeline.active, fileTimeline.mode, fileTimeline.elapsedMilliseconds], () => {
   if (!props.active) return
   if (props.slidingWindow && fileTimeline.active.value) {
-    const store = satelliteEpochHistory.value
+    const store = currentHistory()
     const cursorIndex = store.findNearestElapsedTime(fileTimeline.elapsedMilliseconds.value)
     viewport.value = {
       start: Math.max(0, cursorIndex - 39),
@@ -544,7 +591,7 @@ watch([fileTimeline.active, fileTimeline.mode, fileTimeline.elapsedMilliseconds]
 })
 
 onMounted(() => {
-  previousLength = satelliteEpochHistory.value.length
+  previousLength = currentHistory().length
   axisContext = axisCanvasRef.value?.getContext('2d') ?? null
   initRenderer()
   resizeObserver = new ResizeObserver(resizeLayers)

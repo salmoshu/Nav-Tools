@@ -14,6 +14,7 @@ import { useApplicationSelector } from '@/composables/useApplicationSelector'
 import { useMcapPlayer } from '@/composables/useMcapPlayer'
 import { useLocale } from '@/composables/useLocale'
 import { useDevice } from '@/hooks/useDevice'
+import { registerAppHandoffNavigator, useAppHandoff } from '@/composables/useAppHandoff'
 import { mcapBasename } from '@/core/lidar/McapFileAccess'
 import { getWindowsByIds } from '@/settings/config'
 import { isSettingsSectionKey, type SettingsSectionKey } from '@/core/settings/ComponentSettings'
@@ -57,6 +58,14 @@ const settingsInitialSection = ref<SettingsSectionKey>('theme')
 const isCardWindow = computed(() => window.location.hash.startsWith('#card/'))
 const { currentApplication, isApplicationSelectorOpen } = useApplicationSelector()
 const mcapPlayer = useMcapPlayer()
+const handoff = useAppHandoff()
+let unregisterAppHandoffNavigator: (() => void) | undefined
+const handoffSourceName = computed(() => {
+  if (isCardWindow.value || !handoff.activeHandoff.value) return undefined
+  return (
+    handoff.sourceApplication.value?.name ?? handoff.activeHandoff.value.sourceAppId
+  )
+})
 
 const applicationId = computed(() => {
   const match = window.location.hash.match(/^#app\/([^/?]+)/)
@@ -178,10 +187,16 @@ const handleFullscreenPanelChange = (panel?: FullscreenPanelContext) => {
 
 onMounted(() => {
   emitter.on('open-settings', openSettings)
+  unregisterAppHandoffNavigator = registerAppHandoffNavigator(async (targetApplicationId) => {
+    const dashboard = dashboardRef.value
+    if (!dashboard) throw new Error('HANDOFF_NAVIGATION_UNAVAILABLE')
+    await dashboard.navigateToApplication(targetApplicationId)
+  })
   void resolveCardWindowIcon()
 })
 
 onUnmounted(() => {
+  unregisterAppHandoffNavigator?.()
   emitter.off('open-settings', openSettings)
 })
 </script>
@@ -199,11 +214,16 @@ onUnmounted(() => {
         :context-panel-title="fullscreenPanel?.title"
         :context-icon-action="fullscreenPanel?.action"
         :context-window-id="isCardWindow ? cardWindowId : fullscreenPanel?.windowId"
+        :handoff-source-name="handoffSourceName"
+        :handoff-targets="handoff.recordingTargets.value"
+        :handoff-busy="handoff.handoffBusy.value"
         :show-application-selector="!isCardWindow"
         :show-detached-controls="isCardWindow"
         :show-panel-fullscreen-exit="Boolean(fullscreenPanel)"
         @open-application-selector="openApplicationSelector"
+        @open-handoff-target="handoff.openRecordingIn"
         @exit-panel-fullscreen="exitPanelFullscreen"
+        @return-handoff-source="handoff.returnToSource"
         @create-shortcut="createCardWindowShortcut"
         @maximized-change="maximized = $event"
       />

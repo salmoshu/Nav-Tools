@@ -1,9 +1,14 @@
-import { expect, type Page } from '@playwright/test'
+import { expect, type Locator, type Page } from '@playwright/test'
 
-export async function openSolver(page: Page, mode: 'post' | 'realtime' = 'post', desktop = true) {
+export async function openSolver(
+  page: Page,
+  mode: 'post' | 'realtime' = 'post',
+  desktop = true,
+  locale: 'en-US' | 'zh-CN' = 'en-US',
+) {
   await page.addInitScript(
-    ({ initialMode, useDesktop }) => {
-      localStorage.setItem('nav-tools:locale', 'en-US')
+    ({ initialMode, useDesktop, initialLocale }) => {
+      localStorage.setItem('nav-tools:locale', initialLocale)
       if (!localStorage.getItem('nav-tools:custom-applications')) {
         localStorage.setItem(
           'nav-tools:custom-applications',
@@ -267,7 +272,7 @@ export async function openSolver(page: Page, mode: 'post' | 'realtime' = 'post',
         }),
       })
     },
-    { initialMode: mode, useDesktop: desktop },
+    { initialMode: mode, useDesktop: desktop, initialLocale: locale },
   )
   await page.goto('/#app/gnsslib')
   const solver = page.locator('.gnss-solver')
@@ -275,6 +280,30 @@ export async function openSolver(page: Page, mode: 'post' | 'realtime' = 'post',
   await expect(page.locator('.flow-console-virtual')).toBeVisible({ timeout: 20_000 })
   await expect(page.locator('.deviation-container')).toBeVisible({ timeout: 20_000 })
   return solver
+}
+
+export async function selectSolverCategory(
+  panel: Locator,
+  category: 'common' | 'ambiguity' | 'quality' | 'base' | 'filter' | 'output',
+) {
+  const tab = panel.locator(`.options-categories [data-category="${category}"]`)
+  if (await tab.isVisible()) {
+    await tab.click()
+    return
+  }
+  const labels = {
+    common: 'Common',
+    ambiguity: 'Ambiguity fixing',
+    quality: 'Quality control',
+    base: 'Base & constraints',
+    filter: 'Errors & filter',
+    output: 'Output & diagnostics',
+  }
+  await panel.locator('.options-category-picker .el-select').click()
+  await panel
+    .page()
+    .getByRole('option', { name: new RegExp(`^${labels[category]}(?: · \\d+)?$`) })
+    .click()
 }
 
 export async function solverSnapshot(page: Page) {

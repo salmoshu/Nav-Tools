@@ -7,6 +7,7 @@ const ENABLED_DEFAULT_APPLICATIONS_KEY = 'nav-tools:enabled-default-applications
 const CAMERA_DEFAULT_MIGRATION_KEY = 'nav-tools:migration:camera-default-v1'
 const CAMERA_PARAMETERS_MIGRATION_KEY = 'nav-tools:migration:camera-parameters-v1'
 const SERIAL_DEFAULT_MIGRATION_KEY = 'nav-tools:migration:serial-default-v1'
+const SERIAL_DEVIATION_MIGRATION_KEY = 'nav-tools:migration:serial-deviation-v1'
 const GNSS_MESSAGES_MIGRATION_KEY = 'nav-tools:migration:gnss-messages-v1'
 const FLOW_DEFAULT_MIGRATION_KEY = 'nav-tools:migration:flow-default-v1'
 const CAMERA_TERMINAL_MIGRATION_KEY = 'nav-tools:migration:camera-terminal-v1'
@@ -17,6 +18,9 @@ const GNSSLIB_DEFAULT_MIGRATION_KEY = 'nav-tools:migration:gnsslib-default-v1'
 const GNSSLIB_ENGINE_NAME_MIGRATION_KEY = 'nav-tools:migration:gnsslib-engine-name-v1'
 const GNSSLIB_SOLVER_MIGRATION_KEY = 'nav-tools:migration:gnsslib-solver-v1'
 const APPLICATION_ORDER_MIGRATION_KEY = 'nav-tools:migration:application-order-v2'
+const APPLICATION_SELECTOR_VIEW_KEY = 'nav-tools:application-selector-view'
+
+export type ApplicationSelectorViewMode = 'cards' | 'rows'
 
 export const DEFAULT_ENABLED_APPLICATION_IDS: readonly string[] = [
   'serial',
@@ -32,7 +36,7 @@ export const DEFAULT_APPLICATIONS: readonly UserApplication[] = [
     description: 'Serial port telemetry and raw message workspace',
     icon: 'connection',
     accent: '#8b5cf6',
-    windowIds: ['plot', 'raw-messages', 'motor-parameters'],
+    windowIds: ['raw-messages', 'motor-parameters', 'plot', 'flow-deviation'],
   },
   {
     id: 'motor',
@@ -101,6 +105,7 @@ export class ApplicationStorage {
       this.storage.writeRaw(CAMERA_DEFAULT_MIGRATION_KEY, '1')
       this.storage.writeRaw(CAMERA_PARAMETERS_MIGRATION_KEY, '1')
       this.storage.writeRaw(SERIAL_DEFAULT_MIGRATION_KEY, '1')
+      this.storage.writeRaw(SERIAL_DEVIATION_MIGRATION_KEY, '1')
       this.storage.writeRaw(FLOW_DEFAULT_MIGRATION_KEY, '1')
       this.storage.writeRaw(CAMERA_TERMINAL_MIGRATION_KEY, '1')
       this.storage.writeRaw(CAMERA_MESSAGES_MIGRATION_KEY, '1')
@@ -184,6 +189,23 @@ export class ApplicationStorage {
         serialApplication.windowIds.push('motor-parameters')
       }
       this.storage.writeRaw(FLOW_DEFAULT_MIGRATION_KEY, '1')
+    }
+    if (this.storage.readRaw(SERIAL_DEVIATION_MIGRATION_KEY) === null) {
+      // Serial 默认组件顺序调整为 消息 → Hex报文 → 图表 → 偏差（须排在 flow-default
+      // 迁移补挂 motor-parameters 之后执行）：已知面板按该序重排（用户删过的保持
+      // 删除），flow-deviation 作为新默认补挂，自定义面板保持相对顺序跟在后面。
+      const serialApplication = applications.find((application) => application.id === 'serial')
+      if (serialApplication) {
+        const order = ['raw-messages', 'motor-parameters', 'plot', 'flow-deviation']
+        serialApplication.windowIds = [
+          ...order.filter((id) => serialApplication.windowIds.includes(id)),
+          ...serialApplication.windowIds.filter((id) => !order.includes(id)),
+        ]
+        if (!serialApplication.windowIds.includes('flow-deviation')) {
+          serialApplication.windowIds.push('flow-deviation')
+        }
+      }
+      this.storage.writeRaw(SERIAL_DEVIATION_MIGRATION_KEY, '1')
     }
     if (this.storage.readRaw(CAMERA_TERMINAL_MIGRATION_KEY) === null) {
       const cameraApplication = applications.find((application) => application.id === 'camera')
@@ -349,6 +371,7 @@ export class ApplicationStorage {
     this.storage.writeRaw(CAMERA_DEFAULT_MIGRATION_KEY, '1')
     this.storage.writeRaw(CAMERA_PARAMETERS_MIGRATION_KEY, '1')
     this.storage.writeRaw(SERIAL_DEFAULT_MIGRATION_KEY, '1')
+    this.storage.writeRaw(SERIAL_DEVIATION_MIGRATION_KEY, '1')
     this.storage.writeRaw(GNSS_MESSAGES_MIGRATION_KEY, '1')
     this.storage.writeRaw(FLOW_DEFAULT_MIGRATION_KEY, '1')
     this.storage.writeRaw(CAMERA_TERMINAL_MIGRATION_KEY, '1')
@@ -375,6 +398,18 @@ export class ApplicationStorage {
   public saveSelectedApplicationId(applicationId: string | undefined): void {
     if (applicationId) this.storage.writeRaw(SELECTED_APPLICATION_KEY, applicationId)
     else this.storage.remove(SELECTED_APPLICATION_KEY)
+  }
+
+  public loadSelectorViewMode(): ApplicationSelectorViewMode {
+    return this.storage.read<ApplicationSelectorViewMode>(
+      APPLICATION_SELECTOR_VIEW_KEY,
+      'cards',
+      (value): value is ApplicationSelectorViewMode => value === 'cards' || value === 'rows',
+    )
+  }
+
+  public saveSelectorViewMode(mode: ApplicationSelectorViewMode): void {
+    this.storage.write(APPLICATION_SELECTOR_VIEW_KEY, mode)
   }
 }
 

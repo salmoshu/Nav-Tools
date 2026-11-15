@@ -22,12 +22,14 @@ function normalizeEpochCount(value: number, fallback: number): number {
 
 /**
  * Fits a viewport inside the available epoch indices while preserving its span
- * whenever possible.
+ * whenever possible. `overscanRatio` optionally permits up to half a viewport
+ * beyond either data boundary.
  */
 export function clampSatelliteCountViewport(
   viewport: SatelliteCountViewport,
   length: number,
   minVisibleEpochs = SATELLITE_COUNT_MIN_VISIBLE_EPOCHS,
+  overscanRatio = 0,
 ): SatelliteCountViewport {
   const safeLength = normalizeLength(length)
   if (safeLength === 0) return { ...EMPTY_VIEWPORT }
@@ -46,23 +48,13 @@ export function clampSatelliteCountViewport(
   const low = Math.min(viewport.start, viewport.end)
   const high = Math.max(viewport.start, viewport.end)
   const span = Math.min(maximumSpan, Math.max(minimumSpan, high - low))
-  let start = (low + high - span) / 2
-  let end = start + span
+  const overscan = Math.min(0.5, Math.max(0, overscanRatio)) * span
+  const minimumStart = -overscan
+  const maximumStart = maximumSpan - span + overscan
+  const start = Math.max(minimumStart, Math.min(maximumStart, (low + high - span) / 2))
 
-  if (start < 0) {
-    end -= start
-    start = 0
-  }
-  if (end > maximumSpan) {
-    start -= end - maximumSpan
-    end = maximumSpan
-  }
-
-  // Avoid tiny floating-point excursions outside the legal index range.
-  return {
-    start: Math.max(0, start),
-    end: Math.min(maximumSpan, end),
-  }
+  const normalizedStart = start === 0 ? 0 : start
+  return { start: normalizedStart, end: normalizedStart + span }
 }
 
 /** Returns the full data range, or the neutral [0, 0] range for no data. */
@@ -105,11 +97,12 @@ export function zoomSatelliteCountViewport(
   scale: number,
   length: number,
   minVisibleEpochs = SATELLITE_COUNT_MIN_VISIBLE_EPOCHS,
+  overscanRatio = 0,
 ): SatelliteCountViewport {
   const safeLength = normalizeLength(length)
   if (safeLength <= 2) return fitSatelliteCountViewport(safeLength)
 
-  const current = clampSatelliteCountViewport(viewport, safeLength, minVisibleEpochs)
+  const current = clampSatelliteCountViewport(viewport, safeLength, minVisibleEpochs, overscanRatio)
   if (!Number.isFinite(scale) || scale <= 0) return current
 
   const maximumSpan = safeLength
@@ -132,6 +125,7 @@ export function zoomSatelliteCountViewport(
     },
     safeLength,
     minVisibleEpochs,
+    overscanRatio,
   )
 }
 
@@ -141,8 +135,9 @@ export function panSatelliteCountViewport(
   deltaEpochs: number,
   length: number,
   minVisibleEpochs = SATELLITE_COUNT_MIN_VISIBLE_EPOCHS,
+  overscanRatio = 0,
 ): SatelliteCountViewport {
-  const current = clampSatelliteCountViewport(viewport, length, minVisibleEpochs)
+  const current = clampSatelliteCountViewport(viewport, length, minVisibleEpochs, overscanRatio)
   if (!Number.isFinite(deltaEpochs) || deltaEpochs === 0) return current
 
   return clampSatelliteCountViewport(
@@ -152,6 +147,7 @@ export function panSatelliteCountViewport(
     },
     length,
     minVisibleEpochs,
+    overscanRatio,
   )
 }
 
@@ -169,6 +165,7 @@ export function updateSatelliteCountViewportOnData(
   mode: SatelliteCountViewportMode,
   liveWindow = SATELLITE_COUNT_LIVE_WINDOW_EPOCHS,
   minVisibleEpochs = SATELLITE_COUNT_MIN_VISIBLE_EPOCHS,
+  overscanRatio = 0,
 ): SatelliteCountViewport {
   const safePreviousLength = normalizeLength(previousLength)
   const safeNextLength = normalizeLength(nextLength)
@@ -181,5 +178,5 @@ export function updateSatelliteCountViewportOnData(
     return fitSatelliteCountViewport(safeNextLength)
   }
 
-  return clampSatelliteCountViewport(viewport, safeNextLength, minVisibleEpochs)
+  return clampSatelliteCountViewport(viewport, safeNextLength, minVisibleEpochs, overscanRatio)
 }

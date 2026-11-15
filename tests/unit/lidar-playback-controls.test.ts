@@ -1,5 +1,6 @@
 /* eslint-disable vue/one-component-per-file -- Test host and presentation-only stubs share this fixture. */
 import { createApp, defineComponent, h, nextTick, type App } from 'vue'
+import { ElOption, ElSelect } from 'element-plus'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import LidarTimelineControl from '../../src/components/LidarTimelineControl.vue'
 import { useLidarPanelPresence, useMcapPlayer } from '../../src/composables/useMcapPlayer'
@@ -39,6 +40,32 @@ vi.mock('element-plus', async () => {
     ElIcon: defineComponent({
       setup(_, { slots }) {
         return () => h('span', slots.default?.())
+      },
+    }),
+    ElSelect: defineComponent({
+      props: { modelValue: { type: [String, Number], default: undefined } },
+      emits: ['change'],
+      setup(props, { attrs, emit, slots }) {
+        return () =>
+          h(
+            'select',
+            {
+              ...attrs,
+              value: props.modelValue,
+              onChange: (event: Event) => emit('change', (event.target as HTMLSelectElement).value),
+            },
+            slots.default?.(),
+          )
+      },
+    }),
+    ElOption: defineComponent({
+      props: {
+        label: { type: String, default: '' },
+        value: { type: [String, Number], default: undefined },
+        disabled: { type: Boolean, default: false },
+      },
+      setup(props) {
+        return () => h('option', { value: props.value, disabled: props.disabled }, props.label)
       },
     }),
   }
@@ -153,6 +180,8 @@ function mountTimeline(position: 'bottom' | 'left' = 'bottom'): void {
       },
     }),
   )
+  mounted.component('ElSelect', ElSelect)
+  mounted.component('ElOption', ElOption)
   for (const name of [
     'ElTag',
     'ElTooltip',
@@ -207,7 +236,9 @@ describe('LiDAR playback timeline', () => {
     mountTimeline()
     // 横向时间只留已播放(完整区间在 title),计数区只留数字(帧定义在 title)
     expect(host.querySelector('.timeline-time')?.textContent).toBe('00:00.000')
-    expect(host.querySelector('.timeline-time')?.getAttribute('title')).toBe('00:00.000 / 00:00.220')
+    expect(host.querySelector('.timeline-time')?.getAttribute('title')).toBe(
+      '00:00.000 / 00:00.220',
+    )
     expect(host.querySelector('.timeline-epoch')?.textContent).toBe('0/3')
     expect(host.querySelector('.timeline-epoch')?.getAttribute('title')).toContain('规划帧 0 / 3')
     expect(button('上一步').disabled).toBe(true)
@@ -257,7 +288,9 @@ describe('LiDAR playback timeline', () => {
     await nextTick()
     expect(player.playheadNs.value).toBe(Number(at(102)))
     expect(host.querySelector('.timeline-epoch')?.textContent).toBe('6/12')
-    expect(host.querySelector('.timeline-epoch')?.getAttribute('title')).toContain('事件时间点 6 / 12')
+    expect(host.querySelector('.timeline-epoch')?.getAttribute('title')).toContain(
+      '事件时间点 6 / 12',
+    )
     expect(host.querySelector('.timeline-planner-number')).toBeNull()
   })
 
@@ -320,11 +353,15 @@ describe('LiDAR playback timeline', () => {
     expect(popover).not.toBeNull()
     await selectMode('events', popover)
     expect(popover.querySelector('.timeline-epoch')?.textContent).toBe('1/12')
-    expect(popover.querySelector('.timeline-epoch')?.getAttribute('title')).toContain('事件时间点 1 / 12')
+    expect(popover.querySelector('.timeline-epoch')?.getAttribute('title')).toContain(
+      '事件时间点 1 / 12',
+    )
     player.seek(player.document.value!.endNs!)
     await nextTick()
     expect(popover.querySelector('.timeline-epoch')?.textContent).toBe('12/12')
-    expect(popover.querySelector('.timeline-epoch')?.getAttribute('title')).toContain('事件时间点 12 / 12')
+    expect(popover.querySelector('.timeline-epoch')?.getAttribute('title')).toContain(
+      '事件时间点 12 / 12',
+    )
     expect(button('下一步', popover).disabled).toBe(true)
   })
 })

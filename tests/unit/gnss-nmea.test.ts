@@ -295,6 +295,56 @@ describe('NMEA GNSS status extraction', () => {
     expect(nmea.mapTrackPoints.value.length).toBe(600)
   })
 
+  it('uses RTKLIB POS ns values for the no-GSV satellite-count fallback', () => {
+    const nmea = useNmea()
+    nmea.processRtkLibPosData(
+      [
+        '% GPST latitude(deg) longitude(deg) height(m) Q ns sdn(m) sde(m) sdu(m)',
+        '2024/04/26 03:21:26.000 39.980744192 116.476662780 63.7868 1 37 0.01 0.01 0.01',
+        '2024/04/26 03:21:27.000 39.980744292 116.476662880 63.7868 1 29 0.01 0.01 0.01',
+        '',
+      ].join('\n'),
+    )
+
+    expect(nmea.hasGsvData.value).toBe(false)
+    expect(nmea.satelliteCountSource.value).toBe('rtklib-pos')
+    expect(nmea.satelliteCountEpochHistory.value.length).toBe(2)
+    expect(nmea.satelliteCountEpochHistory.value.getValue('SATS_USED', 0)).toBe(37)
+    expect(nmea.satelliteCountEpochHistory.value.getValue('SATS_USED', 1)).toBe(29)
+    expect(nmea.satelliteEpochHistory.value.length).toBe(0)
+  })
+
+  it('records GGA satellites-used totals and switches back to GSV when it arrives', () => {
+    const nmea = useNmea()
+    const firstGga = withChecksum(
+      '$GPGGA,091214.30,3110.7353943,N,12124.3158362,E,5,05,1.0,5.754,M,10.841,M,0.2,0000',
+    )
+    nmea.processRawData(`${firstGga}\n`)
+
+    expect(nmea.hasGsvData.value).toBe(false)
+    expect(nmea.satelliteCountEpochHistory.value.length).toBe(1)
+    expect(nmea.satelliteCountEpochHistory.value.getValue('SATS_USED', 0)).toBe(5)
+
+    const gsv = withChecksum('$GPGSV,1,1,01,07,30,180,38')
+    const secondGga = withChecksum(
+      '$GPGGA,091214.40,3110.7354639,N,12124.3157707,E,5,03,1.0,5.751,M,10.841,M,0.3,0000',
+    )
+    nmea.processRawData(`${gsv}\n${secondGga}\n`)
+
+    expect(nmea.hasGsvData.value).toBe(true)
+    expect(nmea.satelliteCountEpochHistory.value.getValue('SATS_USED', 1)).toBe(3)
+    expect(nmea.satelliteEpochHistory.value.getSample(1)).toMatchObject({
+      total: 1,
+      complete: true,
+    })
+
+    nmea.clearSatelliteCountHistory()
+    expect(nmea.satelliteCountEpochHistory.value.length).toBe(0)
+    expect(nmea.hasGsvData.value).toBe(true)
+    nmea.clearData()
+    expect(nmea.hasGsvData.value).toBe(false)
+  })
+
   it('records every fractional-second GGA epoch from complete GSV cycles', () => {
     const { processRawData, satelliteEpochHistory } = useNmea()
     const lines = [

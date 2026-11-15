@@ -103,6 +103,15 @@
                       </el-icon>
                       <span>{{ t(item.titleName) }}</span>
                     </button>
+                    <span
+                      v-if="shouldShowNoData(item.windowId)"
+                      class="panel-data-hint"
+                      role="status"
+                      :title="t('app.dashboard.noValidDataHint')"
+                    >
+                      <el-icon><InfoFilled /></el-icon>
+                      <span>{{ t('app.dashboard.noValidData') }}</span>
+                    </span>
                     <div class="card-actions" @dblclick.stop>
                       <PanelActionsMenu
                         show-detach
@@ -189,7 +198,7 @@ import ApplicationSelector from './ApplicationSelector.vue'
 import { ref, computed, nextTick, onMounted, onUnmounted, provide, watch } from 'vue'
 import { GridLayout, GridItem } from 'grid-layout-plus'
 import { ElButton, ElCard, ElIcon, ElMessage, ElMessageBox } from 'element-plus'
-import { Back, Close, FullScreen } from '@element-plus/icons-vue'
+import { Back, Close, FullScreen, InfoFilled } from '@element-plus/icons-vue'
 import PanelActionsMenu from './PanelActionsMenu.vue'
 import emitter from '@/hooks/useMitt'
 import { useLayoutManager } from '@/composables/useLayoutManager'
@@ -212,6 +221,7 @@ import { settingsSectionForComponent } from '@/core/settings/ComponentSettings'
 import { getPanelIconComponent } from '@/settings/panelIcons'
 import { useDevice } from '@/hooks/useDevice'
 import { useApplicationSelector } from '@/composables/useApplicationSelector'
+import { usePanelDataStatus } from '@/composables/usePanelDataStatus'
 import { createBrowserIpcTransport } from '@/core/platform/IpcTransport'
 import {
   buildConfigurationExport,
@@ -243,6 +253,7 @@ const isSolverWorkspace = computed(
     currentApplication.value?.id === 'gnsslib' ||
     (currentApplication.value?.windowIds.includes('gnsslib-solver') ?? false),
 )
+const { shouldShowNoData } = usePanelDataStatus()
 const ipc = createBrowserIpcTransport()
 let removeSaveListener: (() => void) | undefined
 let removeRestoreListener: (() => void) | undefined
@@ -547,7 +558,7 @@ const toggleCardFullScreen = (itemId: string | null) => {
   })
 }
 
-defineExpose({ exitFullScreen })
+defineExpose({ exitFullScreen, navigateToApplication: handleApplicationSelect })
 
 const runAfterExitingFullScreen = async (action: () => void | Promise<void>) => {
   if (fullScreenItem.value !== null) {
@@ -1012,6 +1023,16 @@ onUnmounted(() => {
   opacity: 1;
 }
 
+.pure-content-fab .el-icon {
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.pure-content-actions:hover .pure-content-fab .el-icon,
+.pure-content-actions:focus-within .pure-content-fab .el-icon {
+  opacity: 1;
+}
+
 .pure-content-fab {
   display: inline-flex;
   align-items: center;
@@ -1108,6 +1129,22 @@ onUnmounted(() => {
 .panel-title-icon {
   flex: none;
   color: var(--el-color-primary);
+}
+
+.panel-data-hint {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+  margin-left: 8px;
+  color: var(--el-color-warning);
+  font-size: 10px;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.panel-data-hint .el-icon {
+  font-size: 13px;
 }
 
 .card-actions {

@@ -11,9 +11,10 @@ describe('GNSS default tracking', () => {
     expect(mapSource).toContain('fileTimeline.active.value && !isTracking.value')
   })
 
-  it('starts Deviation tracking enabled and preserves it while importing file data', () => {
+  it('uses a full-track overview for files and enables tracking for live input', () => {
     expect(deviationSource).toContain('const isTracking = ref(true)')
-    expect(deviationSource).not.toContain('isTracking.value = false')
+    expect(deviationSource).toContain('watch(\n  fileTimeline.active,')
+    expect(deviationSource).toContain('isTracking.value = !active')
     expect(deviationSource).toContain('fileTimeline.active.value &&')
     expect(deviationSource).toContain('!isTracking.value &&')
   })

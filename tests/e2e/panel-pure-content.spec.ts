@@ -70,6 +70,18 @@ test('keeps multiple cards in pure content mode and restores the latest one with
   await expect(messagesCard.locator('.console-input-bar')).toBeHidden()
   await expect(messagesCard.locator('.console-footer')).toBeHidden()
 
+  const pureActions = videoCard.locator('.pure-content-actions')
+  const pureIcons = pureActions.locator('.pure-content-fab .el-icon')
+  await page.mouse.move(0, 0)
+  await expect(pureActions).toHaveCSS('opacity', '0.38')
+  await expect(pureIcons.first()).toHaveCSS('opacity', '0')
+  await expect(pureIcons.last()).toHaveCSS('opacity', '0')
+  await pureActions.hover()
+  await expect(pureActions).toHaveCSS('opacity', '1')
+  await expect(pureIcons.first()).toHaveCSS('opacity', '1')
+  await expect(pureIcons.last()).toHaveCSS('opacity', '1')
+  await page.mouse.move(0, 0)
+
   const videoGridItem = videoCard.locator('..').locator('..')
   const beforeDrag = await videoGridItem.boundingBox()
   const dragHandle = await videoCard.boundingBox()

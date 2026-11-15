@@ -29,11 +29,34 @@
             :show-tooltip="false"
             class="point-slider"
             @change="updatePointSize"
+            @dblclick="resetPointSize"
           />
           <span class="size-value">{{ pointSize }}</span>
         </div>
 
         <div class="right-buttons">
+          <input
+            ref="referenceTrackInputRef"
+            class="comparison-file-input"
+            type="file"
+            accept=".nmea,.pos,.txt,.log"
+            data-testid="reference-track-input"
+            @change="loadReferenceTrack"
+          />
+          <el-button
+            type="primary"
+            size="small"
+            class="control-btn status-toggle-btn reference-load-btn"
+            :class="{ active: referenceFile !== null }"
+            :loading="loadingReference"
+            :aria-label="t('gnss.deviation.loadReferenceTrack')"
+            :title="referenceFileTitle"
+            data-testid="load-reference-track"
+            @click="referenceTrackInputRef?.click()"
+          >
+            <el-icon><Flag /></el-icon>
+            <span class="status-toggle-copy">{{ t('gnss.deviation.referenceTrack') }}</span>
+          </el-button>
           <el-button
             type="primary"
             size="small"
@@ -44,7 +67,7 @@
             :title="t('gnss.deviation.toggleStatus')"
             @click="statusCardVisible = !statusCardVisible"
           >
-            <el-icon><InfoFilled /></el-icon>
+            <el-icon><Odometer /></el-icon>
             <span class="status-toggle-copy">{{ t('gnss.deviation.positionStatus') }}</span>
           </el-button>
           <el-button
@@ -76,7 +99,14 @@
       class="deviation-visual-container"
     >
       <div v-show="layerMode === 'grid'" ref="chartContainerRef" class="chart-container">
-        <canvas ref="canvasRef" class="chart"></canvas>
+        <canvas v-show="!comparisonActive" ref="canvasRef" class="chart"></canvas>
+        <canvas
+          v-show="comparisonActive"
+          ref="comparisonCanvasRef"
+          class="comparison-chart"
+          data-testid="comparison-canvas"
+          :data-current-time-ms="comparisonTargetTimeMs ?? ''"
+        ></canvas>
         <canvas ref="axisCanvasRef" class="axis-layer"></canvas>
         <div
           v-show="tooltipVisible"
@@ -98,71 +128,6 @@
           @view-change="handleMapViewChange"
         />
       </div>
-
-      <section
-        v-if="statusCardVisible"
-        class="deviation-status-card"
-        :class="{ 'is-compact': statusCardCompact }"
-      >
-        <div class="status-card-header">
-          <span v-if="currentStats" class="status-card-heading">
-            <span
-              class="status-card-indicator"
-              :style="{ backgroundColor: currentStatusColor }"
-            ></span>
-            <span>{{ t('gnss.deviation.positionStatus') }}</span>
-          </span>
-          <strong class="status-card-summary" :style="{ color: currentStatusColor }">
-            {{ currentStatusLabel }}
-          </strong>
-          <button
-            type="button"
-            class="status-card-close"
-            :aria-label="t('gnss.deviation.closeStatus')"
-            :title="t('gnss.deviation.closeStatus')"
-            @click="statusCardVisible = false"
-          >
-            <el-icon><Close /></el-icon>
-          </button>
-        </div>
-
-        <div v-if="!statusCardCompact && currentStats" class="status-card-body">
-          <div class="status-card-stats">
-            <div class="status-card-stat-grid">
-              <div class="status-card-stat">
-                <span>{{ t('gnss.deviation.sampleCount') }}</span>
-                <strong>{{ currentStats.count.toLocaleString() }}</strong>
-              </div>
-              <div
-                v-for="row in qualityRows"
-                :key="row.quality"
-                class="status-card-stat status-card-quality"
-              >
-                <span>{{ numberToQuality(row.quality) }}</span>
-                <strong>{{ row.count.toLocaleString() }} / {{ row.ratio }}%</strong>
-              </div>
-            </div>
-            <div class="status-card-metrics">
-              <div class="status-card-metric">
-                <span>AVE</span>
-                <span>E {{ formatStatMeters(currentStats.aveE) }}</span>
-                <span>N {{ formatStatMeters(currentStats.aveN) }}</span>
-              </div>
-              <div class="status-card-metric">
-                <span>STD</span>
-                <span>E {{ formatStatMeters(currentStats.stdE) }}</span>
-                <span>N {{ formatStatMeters(currentStats.stdN) }}</span>
-              </div>
-              <div class="status-card-metric status-card-metric-rms">
-                <span>RMS</span>
-                <span>E {{ formatStatMeters(currentStats.rmsE) }}</span>
-                <span>N {{ formatStatMeters(currentStats.rmsN) }}</span>
-                <span>2D {{ formatStatMeters(currentStats.rms2dDoubled) }}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
 
       <div class="scale-readout-container" :aria-label="scaleLabel">
         <span class="scale-readout-label">{{ scaleLabel }}</span>
@@ -195,43 +160,219 @@
           :class="{ active: layerMode === 'map' }"
           :aria-pressed="layerMode === 'map'"
           :aria-label="t('gnss.deviation.mapLayer')"
-          :title="t('gnss.deviation.mapLayer')"
+          :title="
+            comparisonActive ? t('gnss.deviation.comparisonOnlyGrid') : t('gnss.deviation.mapLayer')
+          "
+          :disabled="comparisonActive"
           @click="selectLayer('map')"
         >
           <el-icon><MapLocation /></el-icon>
         </button>
       </div>
     </div>
-    <div v-show="currentView === 'position'" class="position-chart-grid">
+
+    <!-- 三视图共用悬浮层：比较工具与定位状态不随当前画布一起隐藏。 -->
+    <div ref="floatingLayerRef" class="deviation-floating-layer">
+      <section
+        v-if="comparisonActive"
+        class="comparison-options comparison-floating"
+        :aria-label="t('gnss.deviation.comparisonOptions')"
+        :title="t('gnss.deviation.commonOrigin')"
+      >
+        <el-checkbox
+          v-for="track in comparisonTracks"
+          v-show="track.key !== 'difference' || currentView === 'deviation'"
+          :key="track.key"
+          v-model="trackVisibility[track.key]"
+          :disabled="comparisonPoints(track.key).length === 0"
+          class="comparison-series-toggle"
+          :title="trackLabel(track.key)"
+          :data-testid="`show-track-${track.key.toLowerCase()}`"
+          @change="syncComparisonRenderer"
+        >
+          <span class="comparison-series-swatch" :style="{ backgroundColor: track.color }"></span>
+          {{ comparisonToolbarLabel(track.key) }}
+        </el-checkbox>
+        <el-select
+          v-model="comparisonStatsKey"
+          size="small"
+          class="comparison-stats-select"
+          :aria-label="t('gnss.deviation.statisticsFor')"
+          data-testid="comparison-stats-select"
+        >
+          <el-option
+            v-for="track in comparisonTracks"
+            :key="track.key"
+            :label="comparisonToolbarLabel(track.key)"
+            :value="track.key"
+            :disabled="comparisonPoints(track.key).length === 0"
+          />
+        </el-select>
+        <span
+          v-if="comparison && comparison.differences.length === 0"
+          class="comparison-match-info is-warning"
+          :title="comparisonMatchTitle"
+          data-testid="comparison-match-info"
+        >
+          {{
+            comparison.trackA.length > 0
+              ? t('gnss.deviation.noMatchedEpochsShort')
+              : t('gnss.deviation.mainTrackRequired')
+          }}
+        </span>
+        <el-button
+          text
+          size="small"
+          class="comparison-close"
+          :aria-label="t('gnss.deviation.clearReferenceTrack')"
+          :title="t('gnss.deviation.clearReferenceTrack')"
+          @click="clearReferenceTrack"
+        >
+          <el-icon><Close /></el-icon>
+        </el-button>
+      </section>
+
+      <section
+        v-if="statusCardVisible"
+        class="deviation-status-card"
+        :class="{ 'is-compact': statusCardCompact, 'is-comparison': comparisonActive }"
+        data-testid="deviation-status-card"
+      >
+        <div class="status-card-header">
+          <span v-if="currentStats || comparisonActive" class="status-card-heading">
+            <span
+              class="status-card-indicator"
+              :style="{ backgroundColor: currentStatusColor }"
+            ></span>
+            <span>{{
+              comparisonActive ? trackLabel(comparisonStatsKey) : t('gnss.deviation.positionStatus')
+            }}</span>
+          </span>
+          <strong class="status-card-summary" :style="{ color: currentStatusColor }">
+            {{ currentStatusLabel }}
+          </strong>
+          <button
+            type="button"
+            class="status-card-close"
+            :aria-label="t('gnss.deviation.closeStatus')"
+            :title="t('gnss.deviation.closeStatus')"
+            @click="statusCardVisible = false"
+          >
+            <el-icon><Close /></el-icon>
+          </button>
+        </div>
+
+        <div v-if="!statusCardCompact && currentStats" class="status-card-body">
+          <div class="status-card-stats">
+            <div class="status-card-stat-grid">
+              <div class="status-card-stat">
+                <span>{{
+                  isDifferenceStats
+                    ? t('gnss.deviation.matchedSampleCount')
+                    : t('gnss.deviation.sampleCount')
+                }}</span>
+                <strong>{{ currentStats.count.toLocaleString() }}</strong>
+              </div>
+              <div
+                v-for="row in qualityRows"
+                :key="row.quality"
+                class="status-card-stat status-card-quality"
+              >
+                <span>{{ numberToQuality(row.quality) }}</span>
+                <strong>{{ row.count.toLocaleString() }} / {{ row.ratio }}%</strong>
+              </div>
+            </div>
+            <div class="status-card-metrics">
+              <div class="status-card-metric">
+                <span>AVE</span>
+                <span>E {{ formatStatMeters(currentStats.aveE) }}</span>
+                <span>N {{ formatStatMeters(currentStats.aveN) }}</span>
+                <span v-if="differenceStats && isDifferenceStats"
+                  >U {{ formatStatMeters(differenceStats.meanUp) }}</span
+                >
+              </div>
+              <div class="status-card-metric">
+                <span>STD</span>
+                <span>E {{ formatStatMeters(currentStats.stdE) }}</span>
+                <span>N {{ formatStatMeters(currentStats.stdN) }}</span>
+                <span v-if="differenceStats && isDifferenceStats"
+                  >U {{ formatStatMeters(differenceStats.stdUp) }}</span
+                >
+              </div>
+              <div class="status-card-metric status-card-metric-rms">
+                <span>RMS</span>
+                <span>E {{ formatStatMeters(currentStats.rmsE) }}</span>
+                <span>N {{ formatStatMeters(currentStats.rmsN) }}</span>
+                <span v-if="differenceStats && isDifferenceStats"
+                  >U {{ formatStatMeters(differenceStats.rmsUp) }}</span
+                >
+                <span>2D {{ formatStatMeters(currentStats.rms2dDoubled) }}</span>
+              </div>
+              <div v-if="differenceStats && isDifferenceStats" class="status-card-metric">
+                <span>MAX</span>
+                <span>2D {{ formatStatMeters(differenceStats.maxHorizontal) }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <div
+      v-show="currentView === 'position'"
+      class="position-chart-grid"
+      :class="{ 'is-expanded': expandedAxis !== null }"
+    >
       <GnssMetricTimeSeries
+        v-show="axisVisible('E')"
         ref="eSeriesRef"
         field="E"
         :x-scrollbar="false"
         :label="t('gnss.deviation.axisE')"
         unit="m"
-        :active="currentView === 'position'"
+        :active="currentView === 'position' && axisVisible('E')"
         :tracking="isTracking"
         :point-size="pointSize"
+        expandable
+        :expanded="expandedAxis === 'E'"
+        :expand-label="t('gnss.deviation.expandAxis')"
+        :collapse-label="t('gnss.deviation.collapseAxis')"
+        v-bind="metricReferenceBindings.E"
+        @toggle-expand="toggleAxisExpand('E')"
       />
       <GnssMetricTimeSeries
+        v-show="axisVisible('N')"
         ref="nSeriesRef"
         field="N"
         :x-scrollbar="false"
         :label="t('gnss.deviation.axisN')"
         unit="m"
-        :active="currentView === 'position'"
+        :active="currentView === 'position' && axisVisible('N')"
         :tracking="isTracking"
         :point-size="pointSize"
+        expandable
+        :expanded="expandedAxis === 'N'"
+        :expand-label="t('gnss.deviation.expandAxis')"
+        :collapse-label="t('gnss.deviation.collapseAxis')"
+        v-bind="metricReferenceBindings.N"
+        @toggle-expand="toggleAxisExpand('N')"
       />
       <!-- 最下方的 U 图提供共享时间滚动条，经视口广播同步 E/N/U。 -->
       <GnssMetricTimeSeries
+        v-show="axisVisible('U')"
         ref="uSeriesRef"
         field="U"
         :label="t('gnss.deviation.axisU')"
         unit="m"
-        :active="currentView === 'position'"
+        :active="currentView === 'position' && axisVisible('U')"
         :tracking="isTracking"
         :point-size="pointSize"
+        expandable
+        :expanded="expandedAxis === 'U'"
+        :expand-label="t('gnss.deviation.expandAxis')"
+        :collapse-label="t('gnss.deviation.collapseAxis')"
+        v-bind="metricReferenceBindings.U"
+        @toggle-expand="toggleAxisExpand('U')"
       />
     </div>
     <div v-show="currentView === 'speed'" class="speed-chart-container">
@@ -243,20 +384,53 @@
         :active="currentView === 'speed'"
         :tracking="isTracking"
         :point-size="pointSize"
+        v-bind="metricReferenceBindings.SPEED"
       />
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, inject, onMounted, onUnmounted, ref, watch, nextTick } from 'vue'
+import { computed, inject, onMounted, onUnmounted, reactive, ref, watch, nextTick } from 'vue'
 import { gnssDisplayContext } from '@/composables/gnss/GnssDisplayContext'
-import { Close, Delete, Grid, InfoFilled, MapLocation, RefreshLeft } from '@element-plus/icons-vue'
+import {
+  Close,
+  Delete,
+  Flag,
+  Grid,
+  MapLocation,
+  Odometer,
+  RefreshLeft,
+} from '@element-plus/icons-vue'
+import { ElMessage, ElNotification } from 'element-plus'
 import { useNmea, numberToQuality } from '@/composables/gnss/useNmea'
 import { useFileTimeline } from '@/composables/useFileTimeline'
-import { fixStatusColorRgb01 } from '@/components/windows/gnss/fixStatusColors'
+import { fixStatusColor, fixStatusColorRgb01 } from '@/components/windows/gnss/fixStatusColors'
+import {
+  referenceQualityColor,
+  referenceQualityColorRgb01,
+  RTKPLOT_REFERENCE_COLORS,
+} from '@/components/windows/gnss/referenceTrackColors'
 import { useTheme } from '@/composables/useTheme'
 import { createTrajectoryRenderer } from '@/core/render/createTrajectoryRenderer'
+import { createMultiSeriesTrajectoryRenderer } from '@/core/render/createMultiSeriesTrajectoryRenderer'
+import type { MultiSeriesTrajectoryRenderer } from '@/core/render/MultiSeriesTrajectoryRenderer'
+import {
+  compareTracks,
+  computeTrackDifferenceStats,
+  parseTrackFile,
+  readPrimaryTrackEpochs,
+  toDeviationPoints,
+  trackSpeedKmh,
+  TRACK_TIME_TOLERANCE_MS,
+  type TrackEpoch,
+} from '@/core/gnss/DualTrack'
+import type { GnssTextParser } from '@/core/data/GnssTextFormat'
+import {
+  findNearestTimeIndex,
+  type MetricOverlaySample,
+} from '@/core/gnss/MetricOverlay'
+import { NumericEpochStore } from '@/core/gnss/NumericEpochStore'
 import { t } from '@/i18n'
 import type { TrajectoryRenderer } from '@/core/render/TrajectoryRenderer'
 import GnssMetricTimeSeries from './GnssMetricTimeSeries.vue'
@@ -276,8 +450,11 @@ const scopedDisplay = inject(gnssDisplayContext, null)
 const {
   deviationPoints: plotData,
   mapTrackPoints,
+  mapPositionEpochHistory,
   currentData,
   positionEpochHistory,
+  speedEpochHistory,
+  statusEpochHistory,
   clearData,
 } = scopedDisplay?.data ?? useNmea()
 const fileTimeline = scopedDisplay?.timeline ?? useFileTimeline()
@@ -293,6 +470,7 @@ const canvasRef = ref<HTMLCanvasElement | null>(null)
 const axisCanvasRef = ref<HTMLCanvasElement | null>(null)
 const chartContainerRef = ref<HTMLDivElement | null>(null)
 const visualContainerRef = ref<HTMLDivElement | null>(null)
+const floatingLayerRef = ref<HTMLDivElement | null>(null)
 const tooltipRef = ref<HTMLDivElement | null>(null)
 
 let renderer: TrajectoryRenderer | null = null
@@ -302,8 +480,9 @@ let axisDpr = 1
 let axisCssWidth = 0
 let axisCssHeight = 0
 
+const DEFAULT_POINT_SIZE = 10
 const isTracking = ref(true)
-const pointSize = ref(10)
+const pointSize = ref(DEFAULT_POINT_SIZE)
 const tooltipVisible = ref(false)
 const tooltipText = ref('')
 const tooltipStyle = ref<Record<string, string>>({})
@@ -347,8 +526,353 @@ type DeviationLayer = 'grid' | 'map'
 
 const currentView = ref<DeviationView>('deviation')
 const layerMode = ref<DeviationLayer>('grid')
+const expandedAxis = ref<PositionAxis | null>(null)
+
+function axisVisible(axis: PositionAxis): boolean {
+  return expandedAxis.value === null || expandedAxis.value === axis
+}
+
+function toggleAxisExpand(axis: PositionAxis): void {
+  expandedAxis.value = expandedAxis.value === axis ? null : axis
+}
+
+type ComparisonTrackKey = 'main' | 'reference' | 'difference'
+type MetricField = 'E' | 'N' | 'U' | 'SPEED'
+type PositionAxis = Exclude<MetricField, 'SPEED'>
+interface LoadedTrackFile {
+  name: string
+  format: GnssTextParser
+  points: TrackEpoch[]
+}
+
+const comparisonCanvasRef = ref<HTMLCanvasElement | null>(null)
+const referenceTrackInputRef = ref<HTMLInputElement | null>(null)
+const referenceFile = ref<LoadedTrackFile | null>(null)
+const loadingReference = ref(false)
+const selectedComparisonTimeMs = ref<number | null>(null)
+const comparisonStatsKey = ref<ComparisonTrackKey>('main')
+const trackVisibility = reactive<Record<ComparisonTrackKey, boolean>>({
+  main: true,
+  reference: true,
+  difference: true,
+})
+const referenceTrackColor = referenceQualityColor(4)
+const comparisonTracks: Array<{ key: ComparisonTrackKey; color: string }> = [
+  { key: 'main', color: fixStatusColor(4) },
+  { key: 'reference', color: referenceTrackColor },
+  { key: 'difference', color: '#f56c6c' },
+]
+const comparisonColors: Record<ComparisonTrackKey, [number, number, number, number]> = {
+  main: qualityToColor(4),
+  reference: referenceQualityToColor(4),
+  difference: [245 / 255, 108 / 255, 108 / 255, 0.95],
+}
+let comparisonRenderer: MultiSeriesTrajectoryRenderer | null = null
+
+const mainTrackEpochs = computed(() => {
+  void mapTrackPoints.value
+  return readPrimaryTrackEpochs(
+    mapPositionEpochHistory,
+    positionEpochHistory.value,
+    statusEpochHistory?.value,
+  )
+})
+const comparison = computed(() =>
+  compareTracks(mainTrackEpochs.value, referenceFile.value?.points ?? []),
+)
+const comparisonActive = computed(() => referenceFile.value !== null && comparison.value !== null)
+const referenceSpeedKmh = computed(() => trackSpeedKmh(referenceFile.value?.points ?? []))
+const fallbackSpeedSource = computed(() => {
+  if (
+    !comparisonActive.value ||
+    speedEpochHistory.value.length > 0 ||
+    mainTrackEpochs.value.length < 2
+  ) {
+    return null
+  }
+  const speeds = trackSpeedKmh(mainTrackEpochs.value)
+  const store = new NumericEpochStore(['SPEED', 'QUALITY'])
+  for (const [index, speed] of speeds.entries()) {
+    if (speed === null) continue
+    const epoch = mainTrackEpochs.value[index]
+    store.append(new Date(epoch.timeMs).toISOString(), { SPEED: speed, QUALITY: epoch.quality })
+  }
+  return store
+})
+const metricReferencePoints = computed<Record<MetricField, MetricOverlaySample[]>>(() => {
+  const reference =
+    comparisonActive.value && trackVisibility.reference ? (comparison.value?.trackB ?? []) : []
+  return {
+    E: reference.map((point) => ({
+      timeMs: point.timeMs,
+      value: point.east,
+      quality: point.quality,
+    })),
+    N: reference.map((point) => ({
+      timeMs: point.timeMs,
+      value: point.north,
+      quality: point.quality,
+    })),
+    U: reference.map((point) => ({
+      timeMs: point.timeMs,
+      value: point.height === null ? null : point.up,
+      quality: point.quality,
+    })),
+    SPEED: reference.map((point, index) => ({
+      timeMs: point.timeMs,
+      value: referenceSpeedKmh.value[index] ?? null,
+      quality: point.quality,
+    })),
+  }
+})
+
+function metricReferenceTimeOffset(field: MetricField): number {
+  // 派生速度源直接用绝对历元时间创建，且首个无速度历元会被跳过；
+  // 不能再用它相对于主轨迹首点的偏移，否则参考速度会错配一个历元。
+  if (field === 'SPEED' && fallbackSpeedSource.value) return 0
+  const store = field === 'SPEED' ? speedEpochHistory.value : positionEpochHistory.value
+  const first = mainTrackEpochs.value[0]
+  if (!first || store.length === 0) return 0
+  const offset = store.getTimestamp(0) - first.timeMs
+  return Number.isFinite(offset) ? offset : 0
+}
+
+const metricReferenceBindings = computed(() => {
+  const shared = {
+    referenceColor: referenceTrackColor,
+    referenceColors: RTKPLOT_REFERENCE_COLORS,
+    referenceLabel: trackLabel('reference'),
+    primaryLabel: trackLabel('main'),
+    differenceLabel: trackLabel('difference'),
+    primaryVisible: trackVisibility.main,
+    selectedTimeMs: selectedComparisonTimeMs.value,
+    onSelectEpoch: selectComparisonEpoch,
+  }
+  return {
+    E: {
+      ...shared,
+      referencePoints: metricReferencePoints.value.E,
+      referenceTimeOffset: metricReferenceTimeOffset('E'),
+    },
+    N: {
+      ...shared,
+      referencePoints: metricReferencePoints.value.N,
+      referenceTimeOffset: metricReferenceTimeOffset('N'),
+    },
+    U: {
+      ...shared,
+      referencePoints: metricReferencePoints.value.U,
+      referenceTimeOffset: metricReferenceTimeOffset('U'),
+    },
+    SPEED: {
+      ...shared,
+      referencePoints: metricReferencePoints.value.SPEED,
+      referenceTimeOffset: metricReferenceTimeOffset('SPEED'),
+      sourceOverride: fallbackSpeedSource.value,
+    },
+  }
+})
+
+const comparisonSeriesPoints = computed<
+  Record<ComparisonTrackKey, Array<[number, number, number]>>
+>(() => ({
+  main: toDeviationPoints(comparison.value?.trackA ?? []),
+  reference: toDeviationPoints(comparison.value?.trackB ?? []),
+  difference: toDeviationPoints(comparison.value?.differences ?? []),
+}))
+const differenceStats = computed(() =>
+  computeTrackDifferenceStats(comparison.value?.differences ?? []),
+)
+const isDifferenceStats = computed(
+  () => comparisonActive.value && comparisonStatsKey.value === 'difference',
+)
+
+function comparisonPoints(track: ComparisonTrackKey): Array<[number, number, number]> {
+  return comparisonSeriesPoints.value[track]
+}
+
+function trackLabel(track: ComparisonTrackKey): string {
+  const key =
+    track === 'difference' ? 'trackDifference' : track === 'main' ? 'mainTrack' : 'referenceTrack'
+  return t(`gnss.deviation.${key}`)
+}
+
+function comparisonToolbarLabel(track: ComparisonTrackKey): string {
+  if (track === 'difference') return trackLabel(track)
+  return t(`gnss.deviation.${track === 'main' ? 'mainTrackShort' : 'referenceTrackShort'}`)
+}
+
+function formatLabel(format: GnssTextParser): string {
+  return format === 'nmea' ? 'NMEA' : 'RTKLIB POS'
+}
+
+const referenceFileTitle = computed(() =>
+  referenceFile.value
+    ? `${referenceFile.value.name} · ${formatLabel(referenceFile.value.format)} · ${referenceFile.value.points.length}`
+    : t('gnss.deviation.loadReferenceTrack'),
+)
+const comparisonMatchTitle = computed(() =>
+  comparison.value?.differences.length
+    ? t('gnss.deviation.matchedEpochs', {
+        count: comparison.value.differences.length,
+        tolerance: TRACK_TIME_TOLERANCE_MS,
+      })
+    : t('gnss.deviation.noMatchedEpochs', { tolerance: TRACK_TIME_TOLERANCE_MS }),
+)
+
+function comparisonEpoch(track: ComparisonTrackKey, index: number) {
+  if (track === 'main') return comparison.value?.trackA[index]
+  if (track === 'reference') return comparison.value?.trackB[index]
+  return comparison.value?.differences[index]
+}
+
+const comparisonEpochTimes = computed<Record<ComparisonTrackKey, number[]>>(() => ({
+  main: comparison.value?.trackA.map((epoch) => epoch.timeMs) ?? [],
+  reference: comparison.value?.trackB.map((epoch) => epoch.timeMs) ?? [],
+  difference: comparison.value?.differences.map((epoch) => epoch.timeMs) ?? [],
+}))
+
+/** 文件回放以时间轴为准；实时模式下点击任一轨迹后使用共享选中历元。 */
+const comparisonTargetTimeMs = computed<number | null>(() => {
+  if (!comparisonActive.value) return null
+  if (fileTimeline.active.value) {
+    const history = positionEpochHistory.value
+    const elapsed =
+      history.length > 0
+        ? fileTimeline.elapsedFor(history)
+        : fileTimeline.elapsedMilliseconds.value
+    // readPrimaryTrackEpochs 与 NumericEpochStore 可能使用不同的绝对时间基准，
+    // 但共享同一相对历元时长；必须加上轨迹自身首点时间而不是仓库时间戳。
+    const first = mainTrackEpochs.value[0] ?? referenceFile.value?.points[0]
+    return first ? first.timeMs + elapsed : null
+  }
+  return selectedComparisonTimeMs.value
+})
+
+function comparisonCurrentPoint(track: ComparisonTrackKey): [number, number, number] | undefined {
+  const points = comparisonPoints(track)
+  if (points.length === 0) return undefined
+  const targetTime = comparisonTargetTimeMs.value
+  if (targetTime === null) return points.at(-1)
+  const index = findNearestTimeIndex(comparisonEpochTimes.value[track], targetTime)
+  return index >= 0 ? points[index] : undefined
+}
+
+function selectComparisonEpoch(timeMs: number): void {
+  if (!comparisonActive.value || !Number.isFinite(timeMs)) return
+  selectedComparisonTimeMs.value = timeMs
+  const history = positionEpochHistory.value
+  if (fileTimeline.active.value && !fileTimeline.indexing.value && history.length > 0) {
+    const mainFirst = mainTrackEpochs.value[0]
+    const timeOffset = mainFirst ? history.getTimestamp(0) - mainFirst.timeMs : 0
+    const times = Array.from({ length: history.length }, (_, index) => history.getTimestamp(index))
+    const index = findNearestTimeIndex(times, timeMs + timeOffset)
+    if (index >= 0) fileTimeline.seekEpoch(history, index)
+  } else if (!fileTimeline.active.value) {
+    // 实时模式暂停自动跟随，否则下一次数据刷新会立即覆盖用户选中的历元。
+    isTracking.value = false
+  }
+  drawAxisLayer()
+  drawCurrentPosition()
+}
+
+async function loadReferenceTrack(event: Event): Promise<void> {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+  if (!file) return
+  loadingReference.value = true
+  try {
+    const parsed = parseTrackFile(await file.text())
+    if (!parsed || parsed.points.length === 0) {
+      ElMessage.warning(t('gnss.deviation.noTrackData', { name: file.name }))
+      return
+    }
+    selectedComparisonTimeMs.value = null
+    referenceFile.value = { name: file.name, format: parsed.format, points: parsed.points }
+    isTracking.value = false
+    comparisonStatsKey.value = mainTrackEpochs.value.length > 0 ? 'difference' : 'reference'
+    currentView.value = 'deviation'
+    layerMode.value = 'grid'
+    ElNotification({
+      title: trackLabel('reference'),
+      message: t('gnss.deviation.referenceTrackLoaded', { count: parsed.points.length }),
+      type: 'success',
+      position: 'bottom-right',
+      duration: 3000,
+      customClass: 'reference-track-notification',
+    })
+  } catch {
+    ElMessage.error(t('gnss.deviation.importFailed', { name: file.name }))
+  } finally {
+    loadingReference.value = false
+  }
+}
+
+function clearReferenceTrack(): void {
+  hideTooltip()
+  selectedComparisonTimeMs.value = null
+  referenceFile.value = null
+  comparisonStatsKey.value = 'main'
+  trackVisibility.main = true
+  trackVisibility.reference = true
+  trackVisibility.difference = true
+  comparisonRenderer?.clear()
+  nextTick(() => {
+    if (currentView.value === 'deviation') {
+      resetZoom()
+      scheduleNmeaUpdate()
+    } else {
+      resetLayout()
+    }
+  })
+}
+
+function syncComparisonRenderer(): void {
+  if (!comparisonRenderer) return
+  for (const { key } of comparisonTracks) {
+    comparisonRenderer.setSeriesData(key, comparisonActive.value ? comparisonPoints(key) : [])
+    comparisonRenderer.setSeriesVisible(key, trackVisibility[key])
+  }
+  comparisonRenderer.setPointSize(pointSize.value)
+  const { xMin, xMax, yMin, yMax } = viewport.value
+  comparisonRenderer.setViewport(xMin, xMax, yMin, yMax)
+  comparisonRenderer.render()
+  drawAxisLayer()
+  drawCurrentPosition()
+  if (comparisonCanvasRef.value) {
+    comparisonCanvasRef.value.dataset.currentTimeMs =
+      comparisonTargetTimeMs.value === null ? '' : String(comparisonTargetTimeMs.value)
+  }
+}
+
+watch(referenceFile, () => {
+  nextTick(() => {
+    syncComparisonRenderer()
+    if (comparisonActive.value && currentView.value === 'deviation') resetZoom()
+  })
+})
+watch(mainTrackEpochs, (current, previous) => {
+  if (!comparisonActive.value) return
+  if (current.length > 0 && previous.length === 0) comparisonStatsKey.value = 'difference'
+  nextTick(() => {
+    syncComparisonRenderer()
+    if (
+      current[0]?.timeMs !== previous[0]?.timeMs ||
+      (current.length > 0 && previous.length === 0)
+    ) {
+      if (currentView.value === 'deviation') resetZoom()
+    }
+    if (isTracking.value && currentView.value === 'deviation') applyTrackingViewport()
+  })
+})
+watch(comparisonStatsKey, () => {
+  drawAxisLayer()
+  drawCurrentPosition()
+})
 
 const currentStatusPoint = computed<[number, number, number] | undefined>(() => {
+  if (comparisonActive.value) return comparisonCurrentPoint(comparisonStatsKey.value)
   const timelinePoint = getTimelinePositionPoint()
   if (timelinePoint) return timelinePoint
   const points = plotData.value
@@ -357,12 +881,16 @@ const currentStatusPoint = computed<[number, number, number] | undefined>(() => 
 
 const currentStatusLabel = computed(() => {
   const point = currentStatusPoint.value
-  return point ? numberToQuality(point[2]) : t('gnss.deviation.statusUnavailable')
+  if (!point) return t('gnss.deviation.statusUnavailable')
+  return isDifferenceStats.value ? trackLabel('difference') : numberToQuality(point[2])
 })
 
 const currentStatusColor = computed(() => {
   const point = currentStatusPoint.value
   if (!point) return 'var(--app-text-muted)'
+  if (comparisonActive.value) {
+    return comparisonPointColor(comparisonStatsKey.value, point[2])
+  }
   const [r, g, b] = qualityToRgb(point[2])
   return `rgba(${Math.round(r * 255)}, ${Math.round(g * 255)}, ${Math.round(b * 255)}, 1)`
 })
@@ -409,6 +937,7 @@ function resetLayout(): void {
     resetZoom()
     return
   }
+  expandedAxis.value = null
   eSeriesRef.value?.resetLayout()
   nSeriesRef.value?.resetLayout()
   uSeriesRef.value?.resetLayout()
@@ -416,6 +945,7 @@ function resetLayout(): void {
 }
 
 function selectLayer(layer: DeviationLayer): void {
+  if (comparisonActive.value && layer === 'map') return
   if (layerMode.value === layer) return
   if (layer === 'map') mapLayerReady.value = true
   layerMode.value = layer
@@ -472,11 +1002,32 @@ function handleMapViewChange(view: GnssMapViewChange): void {
   }
 }
 
+/**
+ * 状态卡 compact 阈值：卡片全展开约 250×220，浮层（图表可视区）低于该尺寸时
+ * 占比过大，只保留"当前解状态"一行。注意测量的是悬浮层自身——它 inset:50px 0 0，
+ * 即卡片真实覆盖的盒子：三视图常在（不随 deviation 画布 v-show 归零），也不含
+ * 工具栏高度（测面板根会把 340/520 的高度判定抬高 50px 导致矮面板不降级）。
+ */
+const STATUS_CARD_COMPACT_MAX_WIDTH = 840
+const STATUS_CARD_COMPACT_MAX_HEIGHT = 520
+
 function updateStatusCardCompact(): void {
-  const container = visualContainerRef.value
+  const container = floatingLayerRef.value
   if (!container) return
-  statusCardCompact.value = container.clientWidth < 620 || container.clientHeight < 340
+  statusCardCompact.value =
+    container.clientWidth < STATUS_CARD_COMPACT_MAX_WIDTH ||
+    container.clientHeight < STATUS_CARD_COMPACT_MAX_HEIGHT
 }
+
+// 文件与实时数据使用不同的默认视口：文件全览，数据接入跟随最新历元。
+// 只在输入模式变化时设置默认值，用户之后手动切换 Track 不会被逐帧覆盖。
+watch(
+  fileTimeline.active,
+  (active) => {
+    isTracking.value = !active
+  },
+  { immediate: true },
+)
 
 watch(currentView, (view) => {
   if (view !== 'deviation') {
@@ -507,7 +1058,8 @@ let dragLastClientX = 0
 let dragLastClientY = 0
 let dragHasMoved = false
 
-function formatDistance(value: number): string {
+function formatDistance(value: number | null | undefined): string {
+  if (value === null || value === undefined || !Number.isFinite(value)) return '—'
   const numericValue = Number(value)
   if (Math.abs(numericValue) < 0.01) return `${(numericValue * 100).toFixed(2)} cm`
   return `${numericValue.toFixed(2)} m`
@@ -534,6 +1086,17 @@ function qualityToRgb(quality: number): [number, number, number] {
 function qualityToColor(quality: number): [number, number, number, number] {
   const [r, g, b] = qualityToRgb(quality)
   return [r, g, b, 1]
+}
+
+function referenceQualityToColor(quality: number): [number, number, number, number] {
+  const [r, g, b] = referenceQualityColorRgb01(quality)
+  return [r, g, b, 0.9]
+}
+
+function comparisonPointColor(track: ComparisonTrackKey, quality: number): string {
+  if (track === 'main') return fixStatusColor(quality)
+  if (track === 'reference') return referenceQualityColor(quality)
+  return comparisonTracks.find((item) => item.key === track)?.color ?? 'var(--app-text-muted)'
 }
 
 function dataToScreenX(x: number): number {
@@ -648,6 +1211,8 @@ let statsCacheLength = -1
 let statsCacheFirst: readonly number[] | undefined
 
 function deviationStats(): DeviationStats | null {
+  if (comparisonActive.value)
+    return computeDeviationStats(comparisonPoints(comparisonStatsKey.value))
   const points = plotData.value
   if (statsCacheLength === points.length && statsCacheFirst === points[0]) return statsCache
   statsCache = computeDeviationStats(points)
@@ -659,7 +1224,7 @@ function deviationStats(): DeviationStats | null {
 const currentStats = computed(() => deviationStats())
 const qualityRows = computed(() => {
   const stats = currentStats.value
-  if (!stats) return []
+  if (!stats || isDifferenceStats.value) return []
   return [...stats.qualityCounts.entries()]
     .sort((a, b) => a[0] - b[0])
     .map(([quality, count]) => ({
@@ -669,7 +1234,8 @@ const qualityRows = computed(() => {
     }))
 })
 
-function formatStatMeters(value: number): string {
+function formatStatMeters(value: number | null | undefined): string {
+  if (value === null || value === undefined || !Number.isFinite(value)) return '—'
   const abs = Math.abs(value)
   if (abs >= 100) return `${value.toFixed(1)} m`
   if (abs >= 1) return `${value.toFixed(3)} m`
@@ -777,6 +1343,32 @@ function drawStatsOverlay(): void {
 function drawCurrentPosition(): void {
   if (!axisCtx || axisCssWidth <= 0 || axisCssHeight <= 0) return
 
+  if (comparisonActive.value) {
+    const ctx = axisCtx
+    ctx.save()
+    ctx.setTransform(axisDpr, 0, 0, axisDpr, 0, 0)
+    for (const { key } of comparisonTracks) {
+      if (!trackVisibility[key]) continue
+      const latest = comparisonCurrentPoint(key)
+      if (!latest) continue
+      ctx.fillStyle = comparisonPointColor(key, latest[2])
+      ctx.strokeStyle = '#ffffff'
+      ctx.lineWidth = 2
+      ctx.beginPath()
+      ctx.arc(
+        dataToScreenX(latest[0]),
+        dataToScreenY(latest[1]),
+        Math.max(2, (pointSize.value * 1.2) / 2),
+        0,
+        Math.PI * 2,
+      )
+      ctx.fill()
+      ctx.stroke()
+    }
+    ctx.restore()
+    return
+  }
+
   const latestPoint = getTimelinePositionPoint() ?? getLatestRenderedPoint()
   if (!latestPoint) return
   const [x, y, q] = latestPoint
@@ -799,7 +1391,7 @@ function drawCurrentPosition(): void {
 }
 
 function getTimelinePositionPoint(): [number, number, number] | undefined {
-  if (!fileTimeline.active.value) return undefined
+  if (comparisonActive.value || !fileTimeline.active.value) return undefined
   const history = positionEpochHistory.value
   if (history.length === 0) return undefined
   const index = history.findNearestElapsedTime(fileTimeline.elapsedFor(history))
@@ -810,21 +1402,57 @@ function getTimelinePositionPoint(): [number, number, number] | undefined {
   return [east, north, history.getValue('QUALITY', index) ?? 0]
 }
 
-/**
- * 跟踪模式的中心点：文件回放时取时间线光标处的定位点（当前定位点始终居中），
- * 实时流取最新渲染点。
- */
+function comparisonTrackingPoints(): Array<[number, number, number]> {
+  return (['main', 'reference'] as const)
+    .filter((key) => trackVisibility[key])
+    .map((key) => comparisonCurrentPoint(key))
+    .filter((point): point is [number, number, number] => point !== undefined)
+}
+
+/** 双轨迹以两个同历元点的包围盒中心跟踪，避免只追主轨迹而遗漏参考轨迹。 */
 function getTrackingCenterPoint(): [number, number, number] | undefined {
+  if (comparisonActive.value) {
+    const points = comparisonTrackingPoints()
+    if (points.length === 0) return comparisonCurrentPoint(comparisonStatsKey.value)
+    return [
+      (Math.min(...points.map((point) => point[0])) +
+        Math.max(...points.map((point) => point[0]))) /
+        2,
+      (Math.min(...points.map((point) => point[1])) +
+        Math.max(...points.map((point) => point[1]))) /
+        2,
+      0,
+    ]
+  }
   return getTimelinePositionPoint() ?? getLatestRenderedPoint()
 }
 
-/** 跟踪视口：中心 = 跟踪点 + 用户拖拽偏移，跨度沿用跟踪半跨度 */
+/** 跟踪保持用户缩放；两点超出当前窗口时仅扩大到足以同时显示。 */
 function applyTrackingViewport(): void {
   const center = getTrackingCenterPoint()
   if (!center) {
     drawAxisLayer()
     drawCurrentPosition()
     return
+  }
+  if (comparisonActive.value) {
+    const points = comparisonTrackingPoints()
+    if (points.length > 1) {
+      trackingXHalfSpan = Math.max(
+        trackingXHalfSpan,
+        (Math.max(...points.map((point) => point[0])) -
+          Math.min(...points.map((point) => point[0]))) /
+          2 +
+          GNSS_MIN_VISIBLE_SPAN_METERS,
+      )
+      trackingYHalfSpan = Math.max(
+        trackingYHalfSpan,
+        (Math.max(...points.map((point) => point[1])) -
+          Math.min(...points.map((point) => point[1]))) /
+          2 +
+          GNSS_MIN_VISIBLE_SPAN_METERS,
+      )
+    }
   }
   const centerX = center[0] + panOffsetX
   const centerY = center[1] + panOffsetY
@@ -846,6 +1474,7 @@ function updateViewport(xMin: number, xMax: number, yMin: number, yMax: number):
   const next = clampViewportCenter(equalized, LIMIT_METERS)
   viewport.value = next
   renderer?.setViewport(next.xMin, next.xMax, next.yMin, next.yMax)
+  comparisonRenderer?.setViewport(next.xMin, next.xMax, next.yMin, next.yMax)
   drawAxisLayer()
   drawCurrentPosition()
 }
@@ -857,11 +1486,13 @@ function syncTrackingSpans(): void {
 }
 
 function getLatestRenderedPoint(): [number, number, number] | undefined {
+  if (comparisonActive.value) return comparisonCurrentPoint(comparisonStatsKey.value)
   if (renderedPointCount <= 0) return undefined
   return plotData.value[Math.min(renderedPointCount, plotData.value.length) - 1]
 }
 
 function syncRendererData(): boolean {
+  if (comparisonActive.value) return false
   if (!renderer) return false
 
   const points = plotData.value
@@ -906,6 +1537,11 @@ function syncRendererData(): boolean {
 }
 
 function handleNmeaUpdate(): boolean {
+  if (comparisonActive.value) {
+    syncComparisonRenderer()
+    if (isTracking.value) applyTrackingViewport()
+    return false
+  }
   if (!renderer) return false
 
   const sourceChanged =
@@ -991,25 +1627,21 @@ function toggleTracking(): void {
   if (!latestPoint) return
 
   if (isTracking.value) {
-    // 开启跟踪：重置用户拖拽偏移，视口以跟踪点（回放时为时间线光标点）为中心
+    if (!fileTimeline.active.value) selectedComparisonTimeMs.value = null
+    // 开启跟踪：清除选点和拖拽偏移，并将主、参考当前点都纳入视口。
     panOffsetX = 0
     panOffsetY = 0
-    const xSpan = viewport.value.xMax - viewport.value.xMin
-    const ySpan = viewport.value.yMax - viewport.value.yMin
-    trackingXHalfSpan = xSpan / 2
-    trackingYHalfSpan = ySpan / 2
-    updateViewport(
-      latestPoint[0] - trackingXHalfSpan,
-      latestPoint[0] + trackingXHalfSpan,
-      latestPoint[1] - trackingYHalfSpan,
-      latestPoint[1] + trackingYHalfSpan,
-    )
+    trackingXHalfSpan = (viewport.value.xMax - viewport.value.xMin) / 2
+    trackingYHalfSpan = (viewport.value.yMax - viewport.value.yMin) / 2
+    applyTrackingViewport()
   }
 }
 
 function resetZoom(): void {
   if (!renderer || !chartContainerRef.value) return
-  const points = plotData.value
+  const points = comparisonActive.value
+    ? comparisonTracks.flatMap(({ key }) => (trackVisibility[key] ? comparisonPoints(key) : []))
+    : plotData.value
 
   // 重置布局时清除用户拖拽偏移
   panOffsetX = 0
@@ -1021,7 +1653,7 @@ function resetZoom(): void {
   const trackCenter = getTrackingCenterPoint()
 
   const newViewport =
-    isTracking.value && points.length > 0 && trackCenter
+    !comparisonActive.value && isTracking.value && points.length > 0 && trackCenter
       ? fitDeviationPointsAroundCenter(
           points,
           trackCenter[0],
@@ -1045,6 +1677,10 @@ function resetZoom(): void {
 
 function clearTrack(): void {
   cancelScheduledNmeaUpdate()
+  if (comparisonActive.value) {
+    clearReferenceTrack()
+    return
+  }
   renderer?.clear()
   renderedPointCount = 0
   firstRenderedPoint = undefined
@@ -1060,8 +1696,23 @@ function clearTrack(): void {
 
 function updatePointSize(): void {
   renderer?.setPointSize(pointSize.value)
+  comparisonRenderer?.setPointSize(pointSize.value)
   drawAxisLayer()
   drawCurrentPosition()
+}
+
+function resetPointSize(event: MouseEvent): void {
+  const target = event.target
+  if (
+    !(target instanceof Element) ||
+    !target.closest('.el-slider__button-wrapper, .el-slider__button')
+  ) {
+    return
+  }
+  event.preventDefault()
+  event.stopPropagation()
+  pointSize.value = DEFAULT_POINT_SIZE
+  updatePointSize()
 }
 
 function handleWheel(e: WheelEvent): void {
@@ -1099,15 +1750,25 @@ function handleMouseMove(e: MouseEvent): void {
     hideTooltip()
     return
   }
-  if (!renderer || !canvasRef.value) return
-  const rect = canvasRef.value.getBoundingClientRect()
+  const canvas = comparisonActive.value ? comparisonCanvasRef.value : canvasRef.value
+  if (!canvas) return
+  const rect = canvas.getBoundingClientRect()
   const x = e.clientX - rect.left
   const y = e.clientY - rect.top
-  const picked = renderer.pickPoint(x, y)
+  const picked = comparisonActive.value
+    ? comparisonRenderer?.pickPoint(x, y)
+    : renderer?.pickPoint(x, y)
   if (picked) {
     tooltipVisible.value = true
-    tooltipText.value = `${t('gnss.deviation.tooltipPositionPrefix')}: (${formatDistance(picked.x)}, ${formatDistance(picked.y)})\n${t('gnss.deviation.tooltipQuality')}: ${numberToQuality(picked.quality)}`
-    if (fileTimeline.active.value) tooltipText.value += `\n${t('gnss.deviation.seekEpochHint')}`
+    tooltipText.value = `${t('gnss.deviation.tooltipPositionPrefix')}: (${formatDistance(picked.x)}, ${formatDistance(picked.y)})`
+    if (comparisonActive.value && 'seriesId' in picked) {
+      const track = picked.seriesId as ComparisonTrackKey
+      const epoch = comparisonEpoch(track, picked.pointIndex)
+      tooltipText.value = `${trackLabel(track)}\n${tooltipText.value}\nU: ${formatDistance(epoch?.up)}\n${epoch?.timeLabel ?? ''}`
+    } else {
+      tooltipText.value += `\n${t('gnss.deviation.tooltipQuality')}: ${numberToQuality(picked.quality)}`
+      if (fileTimeline.active.value) tooltipText.value += `\n${t('gnss.deviation.seekEpochHint')}`
+    }
     tooltipStyle.value = {
       left: `${x + 12}px`,
       top: `${y + 12}px`,
@@ -1121,7 +1782,25 @@ function hideTooltip(): void {
   tooltipVisible.value = false
 }
 
+function handleComparisonClick(event: MouseEvent): void {
+  if (!comparisonActive.value || dragHasMoved || event.button !== 0) return
+  const canvas = comparisonCanvasRef.value
+  if (!canvas) return
+  const bounds = canvas.getBoundingClientRect()
+  const point = comparisonRenderer?.pickPoint(
+    event.clientX - bounds.left,
+    event.clientY - bounds.top,
+  )
+  if (!point) return
+  const epoch = comparisonEpoch(point.seriesId as ComparisonTrackKey, point.pointIndex)
+  if (!epoch) return
+  event.preventDefault()
+  event.stopPropagation()
+  selectComparisonEpoch(epoch.timeMs)
+}
+
 function handleDoubleClick(event: MouseEvent): void {
+  if (comparisonActive.value) return
   if (!fileTimeline.active.value || fileTimeline.indexing.value || !canvasRef.value) return
   const bounds = canvasRef.value.getBoundingClientRect()
   const point = renderer?.pickPoint(event.clientX - bounds.left, event.clientY - bounds.top)
@@ -1157,7 +1836,7 @@ function handleMouseDown(e: MouseEvent): void {
 }
 
 function handleWindowMouseMove(e: MouseEvent): void {
-  if (!isDragging || !canvasRef.value) return
+  if (!isDragging) return
   const dx = e.clientX - dragLastClientX
   const dy = e.clientY - dragLastClientY
   const totalDx = e.clientX - dragStartClientX
@@ -1170,7 +1849,9 @@ function handleWindowMouseMove(e: MouseEvent): void {
   }
   if (!dragHasMoved) return
 
-  const rect = canvasRef.value.getBoundingClientRect()
+  const canvas = comparisonActive.value ? comparisonCanvasRef.value : canvasRef.value
+  const rect = canvas?.getBoundingClientRect()
+  if (!rect || rect.width <= 0 || rect.height <= 0) return
   const { xMin, xMax, yMin, yMax } = viewport.value
   const xRange = xMax - xMin
   const yRange = yMax - yMin
@@ -1230,17 +1911,26 @@ function setupResizeObserver(): void {
       const height = visualContainerRef.value?.clientHeight || chartContainerRef.value.clientHeight
       if (width <= 0 || height <= 0) return
       renderer?.onResize(width, height)
+      comparisonRenderer?.onResize(width, height)
       resizeAxisCanvas(width, height)
-      // 容器宽高比变了：按新比例重新等比例当前视口，再重绘画层
-      const current = viewport.value
-      updateViewport(current.xMin, current.xMax, current.yMin, current.yMax)
-      syncTrackingSpans()
+      if (!isTracking.value) {
+        // 文件全览与轨迹比较按新画布比例重新适配，避免全屏或还原后仍沿用旧跨度。
+        resetZoom()
+      } else {
+        // 实时跟踪保留当前中心与缩放，仅按新比例修正等比例视口。
+        const current = viewport.value
+        updateViewport(current.xMin, current.xMax, current.yMin, current.yMax)
+        syncTrackingSpans()
+      }
       renderer?.render()
       drawCurrentPosition()
     })
   })
   resizeObserver.observe(chartContainerRef.value)
   if (visualContainerRef.value) resizeObserver.observe(visualContainerRef.value)
+  // 悬浮层常在（三视图均可见）：position/speed 视图下隐藏的画布容器不随面板
+  // resize 触发回调，靠它保证状态卡 compact 判定在所有视图下实时更新。
+  if (floatingLayerRef.value) resizeObserver.observe(floatingLayerRef.value)
   updateStatusCardCompact()
 }
 
@@ -1267,13 +1957,29 @@ function initRenderer(): void {
 
   renderer.setPointSize(pointSize.value)
   renderer.setColorMapper(qualityToColor)
+
+  if (comparisonCanvasRef.value) {
+    comparisonRenderer = createMultiSeriesTrajectoryRenderer(comparisonCanvasRef.value)
+    comparisonRenderer.onResize(width, height)
+    for (const { key } of comparisonTracks) {
+      comparisonRenderer.addSeries(key, comparisonColors[key])
+      if (key === 'main') comparisonRenderer.setSeriesColorMapper(key, qualityToColor)
+      if (key === 'reference') {
+        comparisonRenderer.setSeriesColorMapper(key, referenceQualityToColor)
+      }
+    }
+  }
   updateViewport(-10, 10, -10, 10)
 
-  canvasRef.value.addEventListener('wheel', handleWheel, { passive: false, capture: true })
-  canvasRef.value.addEventListener('mousemove', handleMouseMove)
-  canvasRef.value.addEventListener('mouseleave', hideTooltip)
-  canvasRef.value.addEventListener('mousedown', handleMouseDown)
-  canvasRef.value.addEventListener('dblclick', handleDoubleClick)
+  for (const canvas of [canvasRef.value, comparisonCanvasRef.value]) {
+    if (!canvas) continue
+    canvas.addEventListener('wheel', handleWheel, { passive: false, capture: true })
+    canvas.addEventListener('mousemove', handleMouseMove)
+    canvas.addEventListener('mouseleave', hideTooltip)
+    canvas.addEventListener('mousedown', handleMouseDown)
+    canvas.addEventListener('click', handleComparisonClick)
+    canvas.addEventListener('dblclick', handleDoubleClick)
+  }
 }
 
 onMounted(() => {
@@ -1285,7 +1991,7 @@ onMounted(() => {
     stopWatch = watch(
       plotData,
       () => {
-        if (currentView.value === 'deviation') scheduleNmeaUpdate()
+        if (currentView.value === 'deviation' && !comparisonActive.value) scheduleNmeaUpdate()
       },
       { immediate: true },
     )
@@ -1293,13 +1999,13 @@ onMounted(() => {
     stopThemeWatch = watch(resolvedTheme, scheduleThemeRefresh)
     stopTimelineWatch = watch([fileTimeline.active, fileTimeline.elapsedMilliseconds], () => {
       if (currentView.value !== 'deviation') return
-      // 跟踪模式：回放光标移动后当前定位点重新居中（track 预期行为）；
-      // 非跟踪只刷新光标点与轴层（含统计信息）
+      // 单双轨迹都响应回放光标；Track 开启时两条当前点一起跟随。
       if (isTracking.value) applyTrackingViewport()
       else {
         drawAxisLayer()
         drawCurrentPosition()
       }
+      if (comparisonActive.value) syncComparisonRenderer()
     })
   })
 })
@@ -1315,23 +2021,28 @@ onUnmounted(() => {
   stopThemeWatch?.()
   stopTimelineWatch?.()
   teardownResizeObserver()
-  if (canvasRef.value) {
-    canvasRef.value.removeEventListener('wheel', handleWheel)
-    canvasRef.value.removeEventListener('mousemove', handleMouseMove)
-    canvasRef.value.removeEventListener('mouseleave', hideTooltip)
-    canvasRef.value.removeEventListener('mousedown', handleMouseDown)
-    canvasRef.value.removeEventListener('dblclick', handleDoubleClick)
+  for (const canvas of [canvasRef.value, comparisonCanvasRef.value]) {
+    if (!canvas) continue
+    canvas.removeEventListener('wheel', handleWheel)
+    canvas.removeEventListener('mousemove', handleMouseMove)
+    canvas.removeEventListener('mouseleave', hideTooltip)
+    canvas.removeEventListener('mousedown', handleMouseDown)
+    canvas.removeEventListener('click', handleComparisonClick)
+    canvas.removeEventListener('dblclick', handleDoubleClick)
   }
   window.removeEventListener('mousemove', handleWindowMouseMove)
   window.removeEventListener('mouseup', handleWindowMouseUp)
   renderer?.dispose()
   renderer = null
+  comparisonRenderer?.dispose()
+  comparisonRenderer = null
   axisCtx = null
 })
 </script>
 
 <style scoped>
 .deviation-container {
+  position: relative;
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -1354,11 +2065,103 @@ onUnmounted(() => {
   align-items: center;
 }
 
+.deviation-floating-layer {
+  position: absolute;
+  inset: 50px 0 0;
+  z-index: 30;
+  pointer-events: none;
+}
+
+.deviation-floating-layer > * {
+  pointer-events: auto;
+}
+
+.comparison-file-input {
+  display: none;
+}
+
+.comparison-options {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  min-width: 0;
+  color: var(--app-text-secondary);
+  font-size: 10px;
+}
+
+.comparison-floating {
+  position: absolute;
+  top: 10px;
+  left: 72px;
+  z-index: 18;
+  max-width: calc(100% - 86px);
+  padding: 4px 6px;
+  background: color-mix(in srgb, var(--app-surface-raised) 92%, transparent);
+  border: 1px solid color-mix(in srgb, var(--app-border) 86%, transparent);
+  border-radius: 7px;
+  box-shadow: 0 5px 14px rgb(0 0 0 / 12%);
+  backdrop-filter: blur(10px);
+}
+
+.comparison-floating :deep(.el-checkbox__label),
+.comparison-floating :deep(.el-select__selected-item),
+.comparison-floating :deep(.el-select__placeholder) {
+  font-size: 10px;
+}
+
+.comparison-floating :deep(.el-select__wrapper) {
+  min-height: 24px;
+  padding-top: 1px;
+  padding-bottom: 1px;
+}
+
+.comparison-close {
+  min-height: 22px;
+  margin: 0;
+  padding: 2px;
+}
+
+.comparison-series-toggle {
+  flex: 0 0 auto;
+  height: 22px;
+  margin-right: 0;
+}
+
+.comparison-series-swatch {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 3px;
+  vertical-align: middle;
+  border-radius: 50%;
+}
+
+.comparison-match-info {
+  font-size: 10px;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.comparison-stats-select {
+  width: 84px;
+}
+
+.comparison-match-info.is-warning {
+  color: var(--el-color-warning);
+}
+
+.layer-icon-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.35;
+}
+
 .controls {
   display: flex;
   align-items: center;
   justify-content: flex-start;
   width: 100%;
+  min-width: 0;
   position: relative;
 }
 
@@ -1422,7 +2225,8 @@ onUnmounted(() => {
 .deviation-status-card {
   position: absolute;
   top: 14px;
-  right: 14px;
+  /* 给 Position 三轴右侧的最大化按钮保留完整点击区域。 */
+  right: 52px;
   z-index: 20;
   width: min(250px, calc(100% - 28px));
   overflow: hidden;
@@ -1432,6 +2236,16 @@ onUnmounted(() => {
   border-radius: 12px;
   box-shadow: 0 10px 28px rgb(0 0 0 / 18%);
   backdrop-filter: blur(12px);
+}
+
+.deviation-status-card.is-comparison {
+  top: 58px;
+  width: min(340px, calc(100% - 28px));
+}
+
+.deviation-status-card.is-comparison .status-card-metric-rms {
+  flex-wrap: wrap;
+  white-space: normal;
 }
 
 .deviation-status-card.is-compact {
@@ -1721,6 +2535,10 @@ onUnmounted(() => {
   box-sizing: border-box;
 }
 
+.position-chart-grid.is-expanded {
+  grid-template-rows: minmax(0, 1fr);
+}
+
 .position-chart-grid > * {
   min-height: 0;
 }
@@ -1740,7 +2558,8 @@ onUnmounted(() => {
   flex-shrink: 0;
 }
 
-.chart {
+.chart,
+.comparison-chart {
   position: absolute;
   top: 0;
   left: 0;
@@ -1836,8 +2655,10 @@ onUnmounted(() => {
 
 .right-buttons {
   display: flex;
+  flex: 0 0 auto;
   align-items: center;
   gap: 6px;
+  min-width: 0;
   margin-left: auto;
 }
 
@@ -1867,13 +2688,34 @@ onUnmounted(() => {
   white-space: nowrap;
 }
 
-@container (max-width: 680px) {
+@container (max-width: 800px) {
+  .control-panel {
+    padding: 0 8px;
+  }
+
+  .view-switch {
+    width: 86px;
+    margin-right: 8px;
+  }
+
+  .tracking-switch {
+    flex-shrink: 0;
+    margin-right: 4px;
+  }
+
   .size-label {
     display: none;
   }
 
   .point-size-control {
+    flex: 0 1 84px;
+    min-width: 0;
     margin-left: 4px;
+  }
+
+  .point-slider {
+    width: 48px;
+    min-width: 24px;
   }
 
   .status-toggle-btn {
@@ -1881,7 +2723,8 @@ onUnmounted(() => {
     padding: 0;
   }
 
-  .status-toggle-copy {
+  .status-toggle-copy,
+  .control-btn-label {
     display: none;
   }
 
@@ -1894,8 +2737,39 @@ onUnmounted(() => {
     padding: 0;
     justify-content: center;
   }
+}
 
-  .control-btn-label {
+@container (max-width: 520px) {
+  .point-size-control {
+    display: none;
+  }
+
+  .comparison-floating {
+    gap: 4px 6px;
+  }
+
+  .comparison-match-info {
+    display: none;
+  }
+
+  .comparison-stats-select {
+    width: 116px;
+  }
+}
+
+@container (max-width: 320px) {
+  .view-switch {
+    width: 72px;
+    margin-right: 4px;
+  }
+
+  .right-buttons {
+    gap: 2px;
+  }
+}
+
+@container (max-width: 260px) {
+  .tracking-switch {
     display: none;
   }
 }

@@ -1,4 +1,5 @@
 import { computed, ref, watch } from 'vue'
+import { ElMessageBox } from 'element-plus'
 import { useRtkPost } from './useRtkPost'
 import { useRtkNavi } from './useRtkNavi'
 import { useGnssSolverSession, type GnssSolverMode } from './useGnssSolverSession'
@@ -202,6 +203,13 @@ function createSolver() {
 
   async function start(): Promise<void> {
     if (busy.value || post.running.value || realtime.running.value) return
+    if (
+      mode.value === 'post' &&
+      (post.hasPendingOptions.value ||
+        post.configSaving.value ||
+        post.configStatus.value === 'loading')
+    )
+      return
     const runId = crypto.randomUUID()
     const runMode = mode.value
     const options = post.settings.options
@@ -228,6 +236,7 @@ function createSolver() {
         await completePost(post.result.value, runId)
       } else {
         await realtime.start(runId)
+        if (session.runId.value !== runId || state.value !== 'running') return
         const status = realtime.status.value
         outputPath.value = status.outputPath
         if (status.state === 'error') throw new Error(status.error ?? t('gnssLib.rtknavi.error'))
@@ -269,6 +278,41 @@ function createSolver() {
     elapsedSeconds,
     busy,
     setMode,
+    async loadRinexHandoff(
+      artifact: import('@/core/handoff/AppHandoff').AppHandoffArtifact,
+    ): Promise<boolean> {
+      if (busy.value || post.running.value || realtime.running.value) {
+        throw new Error('HANDOFF_SOLVER_BUSY')
+      }
+      if (post.hasPendingOptions.value) {
+        try {
+          await ElMessageBox.confirm(
+            t('gnssLib.solver.handoffDiscardOptionsMessage'),
+            t('gnssLib.solver.handoffDiscardOptionsTitle'),
+            {
+              type: 'warning',
+              confirmButtonText: t('app.handoff.replaceActiveConfirm'),
+              cancelButtonText: t('app.cancel'),
+            },
+          )
+        } catch {
+          return false
+        }
+        post.cancelOptions()
+      }
+      setMode('post')
+      if (mode.value !== 'post') throw new Error('HANDOFF_SOLVER_BUSY')
+      post.loadRinexInput(artifact.files)
+      session.reset()
+      restoredPostRunId = ''
+      recentPostCompletion = undefined
+      state.value = 'idle'
+      errorText.value = ''
+      outputPath.value = ''
+      loadingProgress.value = 0
+      elapsedSeconds.value = 0
+      return true
+    },
     start,
     stop,
     refresh,

@@ -15,15 +15,25 @@
         <span v-if="store.fileInfo.value.count > 1" class="source-count">
           {{ t('gnssRaw.frames.sourceFiles', { count: store.fileInfo.value.count }) }}
         </span>
-        <el-button
-          v-if="store.kind.value === 'rtcm' && !store.fileInfo.value.stream"
-          class="export-btn"
-          size="small"
-          :loading="exporting"
-          @click="exportRnx"
-        >
-          {{ t('gnssRaw.frames.exportRnx') }}
-        </el-button>
+        <div class="source-actions">
+          <el-button
+            v-if="store.kind.value === 'rtcm' && !store.fileInfo.value.stream"
+            size="small"
+            :loading="exporting"
+            @click="exportRnx"
+          >
+            {{ t('gnssRaw.frames.exportRnx') }}
+          </el-button>
+          <el-button
+            v-if="canSolveInGnssLib"
+            type="primary"
+            size="small"
+            :loading="openingSolver || handoff.handoffBusy.value"
+            @click="solveInGnssLib"
+          >
+            {{ t('gnssRaw.frames.openInGnssLib') }}
+          </el-button>
+        </div>
       </div>
       <div class="cards">
         <div v-for="card in cards" :key="card.label" class="card">
@@ -72,11 +82,44 @@ import { computed, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { t } from '@/i18n'
 import { useGnssRaw } from '@/composables/useGnssRaw'
+import { useAppHandoff } from '@/composables/useAppHandoff'
 import { msgTypeName } from '@/core/gnssraw/analysis'
 
 const store = useGnssRaw()
+const handoff = useAppHandoff()
 
 const exporting = ref(false)
+const openingSolver = ref(false)
+const canSolveInGnssLib = computed(() => {
+  const info = store.fileInfo.value
+  if (!handoff.apiAvailable.value || !info || store.status.value !== 'ready') return false
+  if (store.kind.value === 'rtcm') return !info.stream
+  const files = info.sourceFiles ?? []
+  return (
+    store.kind.value === 'rnx' &&
+    files.length === info.count &&
+    files.some(
+      (file) => file.role === 'rover-observation' || file.role === 'base-observation',
+    )
+  )
+})
+
+async function solveInGnssLib(): Promise<void> {
+  if (!canSolveInGnssLib.value || openingSolver.value) return
+  openingSolver.value = true
+  try {
+    const convertedFiles = store.kind.value === 'rtcm' ? await store.convertToRnx() : undefined
+    await handoff.openRinexInGnssLib({
+      ...(convertedFiles ? { convertedFiles } : { sourceFiles: store.fileInfo.value?.sourceFiles }),
+    })
+  } catch (error) {
+    ElMessage.error(
+      `${t('gnssRaw.frames.handoffFailed')}: ${error instanceof Error ? error.message : String(error)}`,
+    )
+  } finally {
+    openingSolver.value = false
+  }
+}
 
 async function exportRnx(): Promise<void> {
   if (exporting.value) return
@@ -207,9 +250,15 @@ const station = computed(() => {
   flex-shrink: 0;
   color: var(--el-text-color-secondary);
 }
-.export-btn {
+.source-actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
   margin-left: auto;
-  flex-shrink: 0;
+}
+.source-actions .el-button + .el-button {
+  margin-left: 0;
 }
 .card {
   background: var(--el-fill-color-light);

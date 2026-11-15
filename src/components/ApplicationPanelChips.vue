@@ -1,6 +1,11 @@
 <template>
   <!-- 徽章区固定两行流式布局:按容器实际宽度动态决定完整可见的个数,+N 排在行末,余下收进弹层 -->
-  <div ref="rowEl" class="panel-list">
+  <div
+    ref="rowEl"
+    class="panel-list"
+    :class="{ 'panel-list--compact': compact }"
+    :style="{ maxHeight: `${maxRows * 26 + (maxRows - 1) * 6}px` }"
+  >
     <button
       v-for="(windowDefinition, index) in windows"
       v-show="index < visibleCount"
@@ -53,9 +58,14 @@ import { SquareArrowOutUpRight } from '@lucide/vue'
 import { t } from '@/i18n'
 import type { WindowDefinition } from '@/settings/config'
 
-const props = defineProps<{
-  windows: WindowDefinition[]
-}>()
+const props = withDefaults(
+  defineProps<{
+    windows: WindowDefinition[]
+    maxRows?: number
+    compact?: boolean
+  }>(),
+  { maxRows: 2, compact: false },
+)
 
 const emit = defineEmits<{
   open: [windowId: string]
@@ -64,8 +74,6 @@ const emit = defineEmits<{
 const CHIP_GAP_PX = 6
 /** 「+N」角标宽度估算:两位数也按这个预算,宁少勿溢出 */
 const MORE_CHIP_WIDTH_PX = 44
-/** 徽章最多占两行:再多的组件收进 +N 弹层,卡片高度保持稳定 */
-const MAX_CHIP_ROWS = 2
 
 const rowEl = ref<HTMLElement | null>(null)
 const chipEls: HTMLElement[] = []
@@ -75,10 +83,7 @@ function collectChip(index: number, element: unknown): void {
   if (element instanceof HTMLElement) chipEls[index] = element
 }
 
-/**
- * 贪心流式装箱:逐个放入徽章,行宽用尽换行,超过 maxRows 停止。
- * 返回放下的项数(序列里可以混入 +N 的预算宽度)。
- */
+/** 贪心流式装箱:逐个放入徽章,行宽用尽换行,超过 maxRows 停止。 */
 function packItems(widths: number[], available: number, maxRows: number): number {
   let rows = 1
   let usedInRow = 0
@@ -97,10 +102,7 @@ function packItems(widths: number[], available: number, maxRows: number): number
   return count
 }
 
-/**
- * 先按纯容量试装两行;装不下时把「+N」当作末尾一项重新装,
- * 让出的那个位置正好放 +N——保证文字永不截断、+N 必有位置。
- */
+/** 给「+N」预留末尾位置，确保行模式也只占指定的一行。 */
 function measure(): void {
   const row = rowEl.value
   if (!row) return
@@ -109,15 +111,15 @@ function measure(): void {
     visibleCount.value = 0
     return
   }
-  // 先全部显示拿到真实宽度,再按预算收紧(测量在 nextTick 后的 DOM 上进行)
   visibleCount.value = props.windows.length
   void nextTick(() => {
     const available = row.clientWidth
     if (available <= 0) return
     const widths = chips.map((chip) => chip.offsetWidth)
-    let count = packItems(widths, available, MAX_CHIP_ROWS)
+    const rows = Math.max(1, Math.min(4, Math.floor(props.maxRows)))
+    let count = packItems(widths, available, rows)
     if (count < widths.length) {
-      count = packItems([...widths, MORE_CHIP_WIDTH_PX], available, MAX_CHIP_ROWS) - 1
+      count = Math.max(0, packItems([...widths, MORE_CHIP_WIDTH_PX], available, rows) - 1)
     }
     visibleCount.value = count
   })
@@ -137,7 +139,7 @@ onBeforeUnmount(() => {
 })
 
 watch(
-  () => props.windows,
+  () => [props.windows, props.maxRows, props.compact] as const,
   () => {
     chipEls.length = 0
     void nextTick(measure)
@@ -152,8 +154,16 @@ watch(
   flex-wrap: wrap;
   align-content: flex-start;
   gap: 6px;
-  max-height: 58px;
   overflow: clip;
+}
+
+.panel-list--compact {
+  gap: 4px;
+}
+
+.panel-list--compact .panel-chip {
+  padding: 2px 6px;
+  font-size: 11px;
 }
 
 .panel-chip {

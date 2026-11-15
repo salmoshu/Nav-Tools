@@ -1,5 +1,6 @@
 import { reactive } from 'vue'
 import { DETECTABLE_FORMATS, type DetectableFormat } from '@/core/data/DataFormat'
+import { defaultFormatsForPanels } from '@/core/panels/PanelDataContract'
 
 const STORAGE_KEY = 'nav-tools:auto-format-settings'
 const defaults: Record<string, DetectableFormat[]> = {
@@ -52,10 +53,7 @@ export function useAutoFormatSettings() {
   ): DetectableFormat[] {
     if (id && saved[id]) return saved[id]
     if (id && defaults[id]) return defaults[id]
-    if (windowIds.some((name) => name.startsWith('gnssraw-'))) return defaults.gnssraw
-    if (windowIds.some((name) => name.startsWith('lidar-'))) return defaults.lidar
-    if (windowIds.some((name) => name.startsWith('gnss-'))) return defaults.gnss
-    return defaults.serial
+    return defaultFormatsForPanels(windowIds)
   }
   function setFormats(id: string, formats: readonly DetectableFormat[]): void {
     saved[id] = DETECTABLE_FORMATS.filter((format) => formats.includes(format))

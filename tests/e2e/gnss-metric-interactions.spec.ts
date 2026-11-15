@@ -8,6 +8,19 @@ async function xTicks(chart: Locator): Promise<string[]> {
   return chart.locator('.metric-axis').evaluate((canvas) => Reflect.get(canvas, '__xTicks') ?? [])
 }
 
+interface GridLine {
+  x0: number
+  y0: number
+  x1: number
+  y1: number
+}
+
+async function gridLines(chart: Locator): Promise<GridLine[]> {
+  return chart
+    .locator('.metric-axis')
+    .evaluate((canvas) => Reflect.get(canvas, '__gridLines') ?? [])
+}
+
 async function drag(page: Page, chart: Locator, dx: number, dy: number, button: 'left' | 'right') {
   const bounds = (await chart.locator('.metric-plot').boundingBox())!
   const x = bounds.x + bounds.width / 2
@@ -18,16 +31,49 @@ async function drag(page: Page, chart: Locator, dx: number, dy: number, button: 
   await page.mouse.up({ button })
 }
 
+async function dragFraction(page: Page, chart: Locator, fraction: number) {
+  const bounds = (await chart.locator('.metric-plot').boundingBox())!
+  await drag(page, chart, bounds.width * fraction, 0, 'left')
+}
+
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
     localStorage.setItem('nav-tools:locale', 'en-US')
-    const { clearRect, fillText } = CanvasRenderingContext2D.prototype
+    const { clearRect, fillText, moveTo, lineTo, stroke } = CanvasRenderingContext2D.prototype
     CanvasRenderingContext2D.prototype.clearRect = function (x, y, width, height) {
       if (this.canvas.classList.contains('metric-axis')) {
         Reflect.set(this.canvas, '__yTicks', [])
         Reflect.set(this.canvas, '__xTicks', [])
+        Reflect.set(this.canvas, '__gridLines', [])
       }
       clearRect.call(this, x, y, width, height)
+    }
+    CanvasRenderingContext2D.prototype.moveTo = function (x, y) {
+      if (this.canvas.classList.contains('metric-axis')) {
+        Reflect.set(this.canvas, '__gridStart', { x, y })
+      }
+      moveTo.call(this, x, y)
+    }
+    CanvasRenderingContext2D.prototype.lineTo = function (x, y) {
+      if (this.canvas.classList.contains('metric-axis')) {
+        Reflect.set(this.canvas, '__gridEnd', { x, y })
+      }
+      lineTo.call(this, x, y)
+    }
+    CanvasRenderingContext2D.prototype.stroke = function (...args) {
+      if (this.canvas.classList.contains('metric-axis')) {
+        const start = Reflect.get(this.canvas, '__gridStart')
+        const end = Reflect.get(this.canvas, '__gridEnd')
+        if (start && end) {
+          Reflect.get(this.canvas, '__gridLines').push({
+            x0: start.x,
+            y0: start.y,
+            x1: end.x,
+            y1: end.y,
+          })
+        }
+      }
+      stroke.apply(this, args)
     }
     CanvasRenderingContext2D.prototype.fillText = function (text, x, y, maxWidth) {
       if (this.canvas.classList.contains('metric-axis') && this.textBaseline === 'top') {
@@ -78,6 +124,143 @@ test.beforeEach(async ({ page }) => {
     .toBeGreaterThan(500)
 })
 
+test('shows the complete loaded position and speed tracks with Track off by default', async ({
+  page,
+}) => {
+  await page.evaluate(async () => {
+    const { useNmea } = await import('/src/composables/gnss/useNmea.ts')
+    const { useFileTimeline } = await import('/src/composables/useFileTimeline.ts')
+    const data = useNmea()
+    const sentences = Array.from({ length: 200 }, (_, index) => {
+      const minute = String(Math.floor(index / 60)).padStart(2, '0')
+      const second = String(index % 60).padStart(2, '0')
+      const body = `GPRMC,03${minute}${second}.00,A,3958.8,N,11628.2,E,${5 + index / 10},0.0,260424,,,R`
+      const checksum = [...body].reduce((sum, character) => sum ^ character.charCodeAt(0), 0)
+      return `$${body}*${checksum.toString(16).toUpperCase().padStart(2, '0')}\r\n`
+    })
+    data.processRawData(sentences.join(''))
+    useFileTimeline().attachTimeline(data.statusEpochHistory.value, {
+      mode: 'loaded',
+      speed: 1,
+      applyEpoch: data.applyTimelineEpoch,
+    })
+  })
+
+  const position = page.locator('.position-chart-grid .metric-chart').first()
+  await expect(page.getByRole('switch')).not.toBeChecked()
+  await expect(page.locator('.position-chart-grid .metric-x-scrollbar')).toHaveCount(0)
+  await expect.poll(async () => (await xTicks(position)).at(0)).toBe('03:00:00.000')
+  await expect.poll(async () => (await xTicks(position)).at(-1)).toBe('03:03:19.000')
+
+  await page.locator('.view-switch').click()
+  await page.getByRole('option', { name: 'Speed', exact: true }).click()
+  const speed = page.locator('.speed-chart-container .metric-chart')
+  await expect(speed).toBeVisible()
+  await expect(page.locator('.speed-chart-container .metric-x-scrollbar')).toHaveCount(0)
+  await expect.poll(async () => (await xTicks(speed)).at(0)).toBe('03:00:00.000')
+  await expect.poll(async () => (await xTicks(speed)).at(-1)).toBe('03:03:19.000')
+
+  await page.evaluate(async () => {
+    const { useFileTimeline } = await import('/src/composables/useFileTimeline.ts')
+    useFileTimeline().clearTimeline()
+  })
+  await expect(page.getByRole('switch')).toBeChecked()
+})
+
+test('double-clicks the trajectory size slider button to restore the default size', async ({
+  page,
+}) => {
+  const slider = page.locator('.control-panel .point-slider')
+  const runway = slider.locator('.el-slider__runway')
+  const bounds = (await runway.boundingBox())!
+  await runway.click({ position: { x: bounds.width - 1, y: bounds.height / 2 } })
+  await expect(page.locator('.control-panel .size-value')).toHaveText('20')
+
+  await slider.locator('.el-slider__button').dblclick()
+  await expect(page.locator('.control-panel .size-value')).toHaveText('10')
+})
+
+test('draws dense x/y gridlines inside position and speed charts', async ({ page }) => {
+  const position = page.locator('.position-chart-grid .metric-chart').first()
+  await expect
+    .poll(async () => (await gridLines(position)).filter((line) => line.x0 === line.x1).length)
+    .toBe(7)
+  await expect
+    .poll(async () => (await gridLines(position)).filter((line) => line.y0 === line.y1).length)
+    .toBe(7)
+  expect(await yTicks(position)).toHaveLength(7)
+
+  await page.evaluate(async () => {
+    const { useNmea } = await import('/src/composables/gnss/useNmea.ts')
+    const sentences = Array.from({ length: 3 }, (_, index) => {
+      const body = `GPRMC,12350${index}.00,A,3958.8,N,11628.2,E,${5 + index},0.0,260424,,,R`
+      const checksum = [...body].reduce((sum, character) => sum ^ character.charCodeAt(0), 0)
+      return `$${body}*${checksum.toString(16).toUpperCase().padStart(2, '0')}\r\n`
+    })
+    useNmea().processRawData(sentences.join(''))
+  })
+  await page.locator('.view-switch').click()
+  await page.getByRole('option', { name: 'Speed', exact: true }).click()
+  const speed = page.locator('.speed-chart-container .metric-chart')
+  await expect
+    .poll(async () => (await gridLines(speed)).filter((line) => line.x0 === line.x1).length)
+    .toBe(7)
+  await expect
+    .poll(async () => (await gridLines(speed)).filter((line) => line.y0 === line.y1).length)
+    .toBe(7)
+  expect(await yTicks(speed)).toHaveLength(7)
+})
+
+test('allows first and last epochs to stop at the center after panning and zooming', async ({
+  page,
+}) => {
+  await page.evaluate(async () => {
+    const { subscribeMetricViewport } =
+      await import('/src/components/windows/gnss/metricViewportSync.ts')
+    subscribeMetricViewport(({ start, end }) => {
+      Reflect.set(window, '__lastMetricViewport', { start, end })
+    })
+  })
+  const readViewport = () => page.evaluate(() => Reflect.get(window, '__lastMetricViewport'))
+  const expectViewport = async (start: number, end: number) => {
+    const actual = await readViewport()
+    expect(actual.start).toBeCloseTo(start, 0)
+    expect(actual.end).toBeCloseTo(end, 0)
+  }
+  await page.locator('.tracking-switch').click()
+  await page.getByRole('button', { name: 'Reset Layout' }).click()
+  const position = page.locator('.position-chart-grid .metric-chart').first()
+
+  await dragFraction(page, position, 0.5 - 1 / 400)
+  await expectViewport(-99.5, 100.5)
+  await page.getByRole('button', { name: 'Reset Layout' }).click()
+  await dragFraction(page, position, -(0.5 - 1 / 400))
+  await expectViewport(99.5, 299.5)
+
+  await page.getByRole('button', { name: 'Reset Layout' }).click()
+  await drag(page, position, 160, 0, 'right')
+  await dragFraction(page, position, 1 - 1 / 200)
+  await expectViewport(-49.5, 50.5)
+
+  await page.evaluate(async () => {
+    const { useNmea } = await import('/src/composables/gnss/useNmea.ts')
+    const sentences = Array.from({ length: 3 }, (_, index) => {
+      const body = `GPRMC,12350${index}.00,A,3958.8,N,11628.2,E,${5 + index},0.0,260424,,,R`
+      const checksum = [...body].reduce((sum, character) => sum ^ character.charCodeAt(0), 0)
+      return `$${body}*${checksum.toString(16).toUpperCase().padStart(2, '0')}\r\n`
+    })
+    useNmea().processRawData(sentences.join(''))
+  })
+  await page.locator('.view-switch').click()
+  await page.getByRole('option', { name: 'Speed', exact: true }).click()
+  const speed = page.locator('.speed-chart-container .metric-chart')
+  await dragFraction(page, speed, 1 / 3)
+  await expectViewport(-1, 2)
+  await page.getByRole('button', { name: 'Reset Layout' }).click()
+  await dragFraction(page, speed, -1 / 3)
+  await expectViewport(1, 4)
+})
+
 test('fits each position Y axis when switching from deviation after data arrives', async ({
   page,
 }) => {
@@ -91,6 +274,50 @@ test('fits each position Y axis when switching from deviation after data arrives
     expect(Math.min(...ticks)).toBeLessThanOrEqual(range!.min + 0.01)
     expect(Math.max(...ticks)).toBeGreaterThanOrEqual(range!.max - 0.01)
   }
+})
+
+test('maximizes each position axis into the three-axis area and restores the grid', async ({
+  page,
+}) => {
+  const grid = page.locator('.position-chart-grid')
+  const charts = grid.locator('.metric-chart')
+  await expect(charts).toHaveCount(3)
+  await expect(grid.getByTestId('expand-axis-view')).toHaveCount(3)
+  const initial = await charts.evaluateAll((elements) =>
+    elements.map((element) => {
+      const rect = element.getBoundingClientRect()
+      return { top: rect.top, bottom: rect.bottom, width: rect.width, height: rect.height }
+    }),
+  )
+
+  for (let index = 0; index < 3; index += 1) {
+    const expandButton = charts.nth(index).getByTestId('expand-axis-view')
+    const buttonBounds = (await expandButton.boundingBox())!
+    const titleBounds = (await charts.nth(index).locator('.metric-heading strong').boundingBox())!
+    expect(buttonBounds.x).toBeGreaterThan(titleBounds.x + titleBounds.width)
+    await expandButton.click()
+    await expect(grid).toHaveClass(/is-expanded/)
+    for (let other = 0; other < 3; other += 1) {
+      if (other === index) await expect(charts.nth(other)).toBeVisible()
+      else await expect(charts.nth(other)).toBeHidden()
+    }
+    const expanded = (await charts.nth(index).boundingBox())!
+    expect(expanded.y).toBeCloseTo(initial[0].top, 0)
+    expect(expanded.y + expanded.height).toBeCloseTo(initial[2].bottom, 0)
+    expect(expanded.width).toBeCloseTo(initial[index].width, 0)
+    expect(expanded.height).toBeGreaterThan(initial[index].height * 2)
+
+    if (index < 2) {
+      await charts.nth(index).getByTestId('collapse-axis-view').click()
+      await expect(grid).not.toHaveClass(/is-expanded/)
+      await expect(grid.getByTestId('expand-axis-view')).toHaveCount(3)
+    }
+  }
+
+  await page.getByRole('button', { name: 'Reset Layout', exact: true }).click()
+  await expect(grid).not.toHaveClass(/is-expanded/)
+  await expect(grid.getByTestId('expand-axis-view')).toHaveCount(3)
+  for (let index = 0; index < 3; index += 1) await expect(charts.nth(index)).toBeVisible()
 })
 
 test('places one shared position scrollbar below the three axes with a usable hit area', async ({
@@ -161,7 +388,7 @@ for (const view of ['Position', 'Speed']) {
 
     const track = (await scrollbar.boundingBox())!
     await scrollbar.click({ position: { x: 1, y: track.height / 2 } })
-    await expect(scrollbar).toHaveAttribute('aria-valuenow', '0')
+    await expect(scrollbar).toHaveAttribute('aria-valuenow', '-50')
     await scrollbar.click({ position: { x: track.width - 1, y: track.height / 2 } })
     await expect
       .poll(async () => Number(await scrollbar.getAttribute('aria-valuenow')))

@@ -99,6 +99,7 @@ import { ElMessage } from 'element-plus'
 import { InfoFilled } from '@element-plus/icons-vue'
 import { useConsole } from '@/composables/flow/useConsole'
 import { useDevice } from '@/hooks/useDevice'
+import { useFileTimeline } from '@/composables/useFileTimeline'
 import { useTheme } from '@/composables/useTheme'
 import PlotConfigDialog from './plot/PlotConfigDialog.vue'
 import AppDialogTitle from '@/components/AppDialogTitle.vue'
@@ -108,6 +109,7 @@ import { t } from '@/i18n'
 const { flowData, plotData, enableWindow, toggleSlideWindow, clearRawData } = useFlow()
 const { searchQuery } = useConsole(true)
 const { deviceConnected } = useDevice()
+const fileTimeline = useFileTimeline()
 
 // 初始化视图配置处理
 const { 
@@ -1412,10 +1414,10 @@ function setupTouchEvents() {
   chartRef.value.addEventListener('touchend', touchEndEvent, { passive: false }) // 触摸结束
 }
 
-// 组件挂载时初始化图表
+// 组件挂载时初始化图表；跨应用交接已建立时间轴时不得清空其首历元投影。
 onMounted(() => {
-  clearRawData();
-  createChart();
+  if (!fileTimeline.active.value) clearRawData()
+  createChart()
   
   // 设置ResizeObserver监听图表容器大小变化
   if (chartRef.value) {

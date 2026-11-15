@@ -300,10 +300,13 @@
                       :class="['parser-select', { 'parser-select-flash': parserFlash }]"
                       popper-class="parser-select-dropdown"
                     />
+                    <small
+                      v-if="sourceFormat === 'auto'"
+                      :class="['format-detected', formatDetectionTone]"
+                      :title="formatDetectionLabel"
+                      >{{ formatDetectionLabel }}</small
+                    >
                   </div>
-                  <small v-if="sourceFormat === 'auto'" class="format-detected">{{
-                    formatDetectionLabel
-                  }}</small>
                   <div v-if="sourceFormat === 'regex'" class="regex-parser-config">
                     <div class="input-group">
                       <span class="input-label">{{ t('app.toolbar.regexPattern') }}</span>
@@ -479,10 +482,13 @@
                     :class="['parser-select', { 'parser-select-flash': parserFlash }]"
                     popper-class="parser-select-dropdown"
                   />
+                  <small
+                    v-if="sourceFormat === 'auto'"
+                    :class="['format-detected', formatDetectionTone]"
+                    :title="formatDetectionLabel"
+                    >{{ formatDetectionLabel }}</small
+                  >
                 </div>
-                <small v-if="sourceFormat === 'auto'" class="format-detected">{{
-                  formatDetectionLabel
-                }}</small>
                 <div v-if="sourceFormat === 'regex'" class="regex-parser-config">
                   <div class="input-group">
                     <span class="input-label">{{ t('app.toolbar.regexPattern') }}</span>
@@ -568,10 +574,13 @@
                     :class="['parser-select', { 'parser-select-flash': parserFlash }]"
                     popper-class="parser-select-dropdown"
                   />
+                  <small
+                    v-if="sourceFormat === 'auto'"
+                    :class="['format-detected', formatDetectionTone]"
+                    :title="formatDetectionLabel"
+                    >{{ formatDetectionLabel }}</small
+                  >
                 </div>
-                <small v-if="sourceFormat === 'auto'" class="format-detected">{{
-                  formatDetectionLabel
-                }}</small>
                 <div v-if="sourceFormat === 'regex'" class="regex-parser-config">
                   <div class="input-group">
                     <span class="input-label">{{ t('app.toolbar.regexPattern') }}</span>
@@ -789,6 +798,7 @@ import {
   View,
 } from '@element-plus/icons-vue'
 import { useApplicationSelector } from '@/composables/useApplicationSelector'
+import { shouldPreserveDeviceForHandoff } from '@/composables/useAppHandoff'
 import { getPanelIconComponent } from '@/settings/panelIcons'
 import { textDataParserOptions, dataFormatOptions } from '@/composables/useDataSourceManager'
 import { FORMAT_LABELS } from '@/core/data/DataFormat'
@@ -993,6 +1003,13 @@ const formatDetectionLabel = computed(() =>
       )
     : t(sourceFormatAttempted.value ? 'data.formatUnknown' : 'data.formatPending'),
 )
+const formatDetectionTone = computed(() => {
+  const result = sourceDetectedFormat.value
+  if (result?.disabled) return 'is-disabled'
+  if (result?.candidate) return 'is-candidate'
+  if (result) return 'is-success'
+  return sourceFormatAttempted.value ? 'is-unknown' : 'is-pending'
+})
 const activeParserDescription = computed(() =>
   sourceFormat.value === 'auto'
     ? t('data.formatAutoDesc')
@@ -1125,7 +1142,8 @@ watch(currentApplicationId, (newApplicationId, oldApplicationId) => {
 
   showSaveButton.value = false
   ipcRenderer?.send('console-to-node', ['watch:application', newApplicationId])
-  deviceInstance.removeCurrDevice()
+  if (!shouldPreserveDeviceForHandoff(oldApplicationId, newApplicationId))
+    deviceInstance.removeCurrDevice()
 })
 
 // 扩展事件定义
@@ -2221,9 +2239,34 @@ onUnmounted(() => {
   line-height: 1.45;
 }
 .format-detected {
-  color: var(--app-text-secondary);
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: none;
+  margin-left: 8px;
+  overflow: hidden;
   font-size: 12px;
-  margin-left: 106px;
+  font-weight: 600;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.format-detected.is-success {
+  color: var(--el-color-success);
+}
+
+.format-detected.is-candidate,
+.format-detected.is-unknown {
+  color: var(--el-color-warning);
+}
+
+.format-detected.is-disabled {
+  color: var(--el-color-danger);
+}
+
+.format-detected.is-pending {
+  color: var(--app-text-muted);
+  font-weight: 400;
 }
 
 .source-tab-label {
@@ -2357,8 +2400,11 @@ onUnmounted(() => {
   margin-bottom: 0;
 }
 
-.parser-select {
-  flex: 1;
+.parser-card :deep(.parser-select) {
+  flex: 0 1 auto;
+  width: 180px;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .regex-parser-config :deep(.el-textarea) {
@@ -2418,6 +2464,10 @@ onUnmounted(() => {
   grid-template-columns: 94px minmax(0, 1fr);
   column-gap: 12px;
   align-items: center;
+}
+
+.network-config-card .parser-card .input-group {
+  grid-template-columns: 94px minmax(120px, 180px) minmax(0, 1fr);
 }
 
 .network-config-card .input-group .input-label {
@@ -2604,6 +2654,11 @@ onUnmounted(() => {
     align-items: stretch;
     flex-direction: column;
     gap: 6px;
+  }
+
+  .parser-card .input-group .format-detected {
+    max-width: none;
+    margin-left: 0;
   }
 
   .input-label {

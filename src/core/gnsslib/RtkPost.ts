@@ -86,6 +86,12 @@ export interface RtkPostRunRequest extends RtkPostSettings {
   configContent?: string
 }
 
+export interface RtkPostSaveConfigRequest {
+  defaultPath: string
+  content: string
+  protectedPaths: string[]
+}
+
 export interface RtkPostObservationSpans {
   rover: RtkPostTimeSpan | null
   base: RtkPostTimeSpan | null

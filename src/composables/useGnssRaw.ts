@@ -3,6 +3,7 @@
 // 支持 RTCM 二进制流（单文件）与 RINEX 文本（obs/nav 多文件合并）。
 import { ref, shallowRef } from 'vue'
 import {
+  classifyRinexFile,
   detectGnssRawKind,
   isRtcmFileName,
   readRtcmFromFile,
@@ -11,6 +12,7 @@ import {
   type LoadedRtcmBytes,
 } from '@/core/gnssraw/RtcmFileAccess'
 import type { GnssRawDataset, GnssRawKind, GnssStreamStats } from '@/core/gnssraw/types'
+import type { AppHandoffFile } from '@/core/handoff/AppHandoff'
 import { RecentInputFiles } from '@/core/file/RecentInputFiles'
 import { JsonStorage } from '@/core/storage/JsonStorage'
 
@@ -19,11 +21,24 @@ export interface RnxOutputFile {
   name: string
   data: Uint8Array
 }
+export type GnssRawSourceFile = Pick<
+  AppHandoffFile,
+  'path' | 'role' | 'format' | 'sizeBytes'
+> & { name: string }
+export interface GnssRawFileInfo {
+  name: string
+  path?: string
+  sizeBytes: number
+  count: number
+  stream?: boolean
+  /** RINEX handoff needs every source path, not only the first display name. */
+  sourceFiles?: GnssRawSourceFile[]
+}
 
 const status = ref<GnssRawStatus>('idle')
 const errorText = ref('')
 const kind = ref<GnssRawKind | null>(null)
-const fileInfo = ref<{ name: string; path?: string; sizeBytes: number; count: number; stream?: boolean } | null>(null)
+const fileInfo = ref<GnssRawFileInfo | null>(null)
 const progress = ref<{ done: number; total: number } | null>(null)
 const liveStats = shallowRef<GnssStreamStats | null>(null)
 const dataset = shallowRef<GnssRawDataset | null>(null)
@@ -56,11 +71,30 @@ async function startLoad(loadKind: GnssRawKind, items: LoadedRtcmBytes[]): Promi
   status.value = 'loading'
   errorText.value = ''
   kind.value = loadKind
+  const sourceFiles: GnssRawSourceFile[] =
+    loadKind === 'rnx'
+      ? items.flatMap((item) => {
+          if (!item.path) return []
+          const type = classifyRinexFile(item.name, item.bytes)
+          if (type === 'unknown') return []
+          return [
+            {
+              name: item.name,
+              path: item.path,
+              role:
+                type === 'observation' ? ('rover-observation' as const) : ('navigation' as const),
+              format: 'rinex' as const,
+              sizeBytes: item.sizeBytes,
+            },
+          ]
+        })
+      : []
   fileInfo.value = {
     name: items[0].name,
     path: items[0].path,
     sizeBytes: items.reduce((sum, item) => sum + item.sizeBytes, 0),
     count: items.length,
+    ...(loadKind === 'rnx' ? { sourceFiles } : {}),
   }
   progress.value = { done: 0, total: items.length }
   liveStats.value = null

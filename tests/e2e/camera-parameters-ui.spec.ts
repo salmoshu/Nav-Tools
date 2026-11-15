@@ -186,6 +186,72 @@ test('preserves camera inputs across tabs and displays background task states at
   expect(errors).toEqual([])
 })
 
+test('keeps the calibration history table at its latest row while running', async ({ page }) => {
+  const history = Array.from({ length: 12 }, (_, index) => ({
+    offset: -20 + index * 0.1,
+    distances: [2 + index * 0.001],
+    errorsCm: [index * 0.1],
+    accepted: true,
+    verification: false,
+  }))
+  const snapshot = {
+    ...createCalibrationSnapshot(),
+    observing: true,
+    busy: true,
+    phase: 'sampling' as const,
+    history,
+  }
+  await page.addInitScript((initial) => {
+    localStorage.setItem('nav-tools:locale', 'zh-CN')
+    Object.defineProperty(window, 'ipcRenderer', {
+      value: {
+        on(channel: string, listener: (event: unknown, data: unknown) => void) {
+          window.addEventListener(channel, (event) => listener(null, (event as CustomEvent).detail))
+        },
+        off() {},
+        send() {},
+        invoke: async () => undefined,
+      },
+    })
+    Object.defineProperty(window, 'electronAPI', {
+      value: {
+        getAppVersion: async () => '1.8.11',
+        getWindowState: async () => ({ maximized: false, alwaysOnTop: false }),
+        setUpdaterPrefs() {},
+        cameraCalibrationSnapshot: async () => initial,
+      },
+    })
+  }, snapshot)
+  await page.goto(
+    `/#card/${encodeURIComponent(JSON.stringify({ componentName: 'CameraParameters', title: '相机参数' }))}`,
+  )
+  await page.getByRole('tab', { name: '自动标定', exact: true }).click()
+  const rows = page.locator('.cal-history .el-table__body tbody tr')
+  const scroller = page.locator('.cal-history .el-table__body-wrapper .el-scrollbar__wrap')
+  await expect(rows).toHaveCount(12)
+  await expect.poll(() => scroller.evaluate((el) => el.scrollHeight > el.clientHeight)).toBe(true)
+  await scroller.evaluate((el) => {
+    el.scrollTop = 0
+  })
+  await page.evaluate(
+    (state) =>
+      window.dispatchEvent(new CustomEvent('camera-calibration-state', { detail: state })),
+    {
+      ...snapshot,
+      history: [
+        ...history,
+        { offset: -18.8, distances: [2.012], errorsCm: [1.2], accepted: true, verification: false },
+      ],
+    },
+  )
+  await expect(rows).toHaveCount(13)
+  await expect
+    .poll(() =>
+      scroller.evaluate((el) => Math.abs(el.scrollHeight - el.scrollTop - el.clientHeight) <= 1),
+    )
+    .toBe(true)
+})
+
 test('keeps the default English interface usable in a narrow panel', async ({ page }) => {
   await page.setViewportSize({ width: 380, height: 760 })
   await page.goto(

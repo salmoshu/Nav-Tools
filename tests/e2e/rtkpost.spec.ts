@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { openSolver } from './support/gnssSolver'
+import { openSolver, selectSolverCategory } from './support/gnssSolver'
 
 test('preserves both engine configurations when switching modes and reloading the unified workspace', async ({
   page,
@@ -17,9 +17,11 @@ test('preserves both engine configurations when switching modes and reloading th
   await output.fill('/data/my-solution.pos')
   await panel.locator('.add-nav').click()
   await panel.getByRole('tab', { name: 'Options', exact: true }).click()
+  await selectSolverCategory(panel, 'output')
   const format = panel.locator('.option-field').filter({ hasText: 'Coordinate / protocol format' })
   await format.locator('.el-select').click()
   await page.getByRole('option', { name: 'NMEA-0183 GGA', exact: true }).click()
+  await panel.getByRole('button', { name: 'Confirm', exact: true }).click()
   await panel.locator('.el-radio-button').filter({ hasText: 'Real-time' }).click()
   await panel.getByRole('tab', { name: 'Inputs', exact: true }).click()
   const liveInput = panel.locator('.stream-section').first().locator('.stream-path input')
@@ -34,6 +36,7 @@ test('preserves both engine configurations when switching modes and reloading th
   await expect(panel).toBeVisible({ timeout: 20_000 })
   await expect(rover).toHaveValue('/data/my-rover.obs')
   await panel.getByRole('tab', { name: 'Options', exact: true }).click()
+  await selectSolverCategory(panel, 'output')
   await expect(
     panel.locator('.option-field').filter({ hasText: 'Coordinate / protocol format' }),
   ).toContainText('NMEA-0183 GGA')

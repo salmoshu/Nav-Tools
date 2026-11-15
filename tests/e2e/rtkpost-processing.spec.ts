@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { openSolver, solverSnapshot } from './support/gnssSolver'
+import { openSolver, selectSolverCategory, solverSnapshot } from './support/gnssSolver'
 
 test('merges legacy engine entries and imports complete post-processing results into isolated messages and Deviation', async ({
   page,
@@ -227,9 +227,11 @@ test('loads a configuration into the visible form and executes the edited values
       .filter({ hasText: 'Positioning mode' })
       .locator('.el-select__placeholder'),
   ).toHaveText('Static RTK')
+  await selectSolverCategory(panel, 'ambiguity')
   await expect(
     panel.locator('.option-field').filter({ hasText: 'Min satellites to fix' }).locator('input'),
   ).toHaveValue('8')
+  await selectSolverCategory(panel, 'output')
   await expect(
     panel
       .locator('.option-field')
@@ -239,12 +241,13 @@ test('loads a configuration into the visible form and executes the edited values
   await expect(panel.locator('.options-section')).not.toContainText('Start time (GPST)')
   await expect(panel.locator('.options-section')).not.toContainText('End time (GPST)')
 
+  await selectSolverCategory(panel, 'ambiguity')
   const ratio = panel.locator('.option-field').filter({ hasText: 'Minimum ratio' }).locator('input')
   await ratio.fill('2.2')
   await ratio.press('Enter')
   await panel.locator('.config-file-panel').scrollIntoViewIfNeeded()
   await panel.screenshot({ path: 'test-results/gnss-solver-options-top.png' })
-  await panel.locator('.advanced-options').scrollIntoViewIfNeeded()
+  await selectSolverCategory(panel, 'filter')
   await panel.screenshot({ path: 'test-results/gnss-solver-options-advanced.png' })
   expect(
     await panel
@@ -254,6 +257,7 @@ test('loads a configuration into the visible form and executes the edited values
       ),
   ).toBe(true)
 
+  await panel.getByRole('button', { name: 'Confirm', exact: true }).click()
   await panel.getByRole('tab', { name: 'Inputs', exact: true }).click()
   await panel.getByRole('button', { name: 'Execute', exact: true }).click()
   await expect.poll(() => page.evaluate(() => Reflect.get(window, '__solverPostCalls'))).toBe(1)

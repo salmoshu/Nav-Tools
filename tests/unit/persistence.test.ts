@@ -43,7 +43,7 @@ describe('panel and application persistence', () => {
     expect(applications[0]).toMatchObject({
       id: 'serial',
       icon: 'connection',
-      windowIds: ['plot', 'raw-messages', 'motor-parameters'],
+      windowIds: ['raw-messages', 'motor-parameters', 'plot', 'flow-deviation'],
     })
     expect(applications[1]).toMatchObject({
       id: 'motor',
@@ -280,7 +280,13 @@ describe('panel and application persistence', () => {
     const storage = new ApplicationStorage(new JsonStorage(memory))
 
     const [serialApplication, motorApplication] = storage.loadApplications()
-    expect(serialApplication.windowIds).toEqual(['plot', 'raw-messages', 'motor-parameters'])
+    // serial 迁移：按 消息→Hex报文→图表→偏差 重排并补挂 flow-deviation
+    expect(serialApplication.windowIds).toEqual([
+      'raw-messages',
+      'motor-parameters',
+      'plot',
+      'flow-deviation',
+    ])
     expect(motorApplication.name).toBe('Flow')
     expect(motorApplication.description).toBe('Flow deviation, telemetry, and parameter workspace')
     expect(motorApplication.windowIds).toEqual([

@@ -12,7 +12,8 @@ export interface GnssDisplayContext {
     | 'positionEpochHistory'
     | 'speedEpochHistory'
     | 'clearData'
-  >
+  > &
+    Partial<Pick<ReturnType<typeof useNmea>, 'statusEpochHistory'>>
   timeline: ReturnType<typeof createFileTimeline>
   mapState: {
     status: { latitude: number | string; longitude: number | string; quality: number }

@@ -63,8 +63,56 @@ test('identifies RTCM in a .dat file and shows the result without changing auto 
   }, frameHex)
   await expect(page.locator('.gnssraw-frames tbody')).toContainText('1005')
   await page.getByTitle('Input', { exact: true }).click()
-  await expect(page.locator('#pane-file .format-detected')).toHaveText('Detected: RTCM3')
+  await expect(page.locator('#pane-file .format-detected')).toHaveText('RTCM3 detected')
   await expect(page.locator('#pane-file .parser-select input')).toHaveValue('Auto detect')
+})
+
+test('shows detected NMEA beside Data Format in the success color', async ({ page }) => {
+  await page.goto('/#app/gnss')
+  await page.getByTitle('Input', { exact: true }).click()
+  const dialog = page.locator('.data-input-dialog')
+  const chooser = page.waitForEvent('filechooser')
+  await dialog.getByRole('button', { name: 'Select File', exact: true }).click()
+  const body = 'GNGGA,123500,4807.038,N,01131.000,E,4,18,0.9,545.4,M,46.9,M,,'
+  const checksum = [...body]
+    .reduce((value, char) => value ^ char.charCodeAt(0), 0)
+    .toString(16)
+    .toUpperCase()
+    .padStart(2, '0')
+  await (
+    await chooser
+  ).setFiles({
+    name: 'sample.log',
+    mimeType: 'text/plain',
+    buffer: Buffer.from(`$${body}*${checksum}\n`),
+  })
+
+  const detected = dialog.locator('#pane-file .format-detected')
+  await expect(detected).toHaveText('NMEA detected')
+  await expect(detected).toHaveAttribute('title', 'NMEA detected')
+  await expect(detected).toHaveClass(/is-success/)
+  await expect(detected).toHaveCSS('white-space', 'nowrap')
+  const successColor = await page.evaluate(() => {
+    const probe = document.createElement('span')
+    probe.style.color = 'var(--el-color-success)'
+    document.body.appendChild(probe)
+    const color = getComputedStyle(probe).color
+    probe.remove()
+    return color
+  })
+  await expect(detected).toHaveCSS('color', successColor)
+  await expect(detected.locator('..').locator('.input-label')).toHaveText('Data Format')
+  const selectBox = await dialog.locator('#pane-file .parser-select').boundingBox()
+  const detectedBox = await detected.boundingBox()
+  expect(selectBox).not.toBeNull()
+  expect(detectedBox).not.toBeNull()
+  expect(selectBox!.width).toBeLessThanOrEqual(181)
+  expect(await detected.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(
+    true,
+  )
+  expect(detectedBox!.x).toBeGreaterThanOrEqual(selectBox!.x + selectBox!.width - 1)
+  expect(detectedBox!.y).toBeGreaterThanOrEqual(selectBox!.y - 2)
+  expect(detectedBox!.y).toBeLessThanOrEqual(selectBox!.y + selectBox!.height)
 })
 
 test('detects a generic binary file before confirming the file picker', async ({ page }) => {
@@ -80,7 +128,7 @@ test('detects a generic binary file before confirming the file picker', async ({
     mimeType: 'application/octet-stream',
     buffer: Buffer.from(frameHex + frameHex, 'hex'),
   })
-  await expect(dialog.locator('#pane-file .format-detected')).toHaveText('Detected: RTCM3')
+  await expect(dialog.locator('#pane-file .format-detected')).toHaveText('RTCM3 detected')
   await dialog.getByRole('button', { name: 'OK', exact: true }).click()
   await expect(page.locator('.gnssraw-frames tbody')).toContainText('1005')
 })

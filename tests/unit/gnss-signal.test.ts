@@ -15,6 +15,14 @@ describe('GNSS signal SNR bar chart view', () => {
     expect(source).toContain('value="chart"')
   })
 
+  it('places satellite count first in the view selector', () => {
+    const nsat = source.indexOf('<el-option :label="t(\'gnss.signal.satCount\')" value="nsat" />')
+    const table = source.indexOf('<el-option :label="t(\'gnss.signal.tableView\')" value="table" />')
+    expect(nsat).toBeGreaterThanOrEqual(0)
+    expect(table).toBeGreaterThan(nsat)
+    expect(source).toContain("const currentView = ref('nsat')")
+  })
+
   it('shows satellite details in the SNR tooltip', () => {
     expect(source).toContain('data.prn')
     expect(source).toContain('data.constellation')
@@ -64,6 +72,7 @@ describe('GNSS signal satellite-count view', () => {
 
   it('keeps the satellite-history clear control', () => {
     expect(parent).toContain('clearSatelliteEpochHistory')
+    expect(parent).toContain('clearSatelliteCountHistory')
     expect(parent).toContain('@click="clearNsatHistory"')
     expect(parent).toContain('.nsat-controls {')
     expect(parent).toContain('margin-left: auto')
@@ -83,14 +92,25 @@ describe('GNSS signal satellite-count view', () => {
       expect(chart).toContain(`id: '${constellation}'`)
     }
     expect(chart).toContain("renderer.addSeries('TOTAL'")
-    expect(chart).toContain('...constellationSeries')
+    expect(chart).toContain('hasGsvData.value ? constellationSeries : []')
+  })
+
+  it('falls back to the GGA satellites-used total only when GSV is absent', () => {
+    const nmea = readFileSync('src/composables/gnss/useNmea.ts', 'utf8')
+    expect(chart).toContain('hasGsvData.value ? satelliteEpochHistory.value : satelliteCountHistory.value')
+    expect(chart).toContain('...(hasGsvData.value ? constellationSeries : [])')
+    expect(chart).toContain("extractSeries('SATS_USED'")
+    expect(nmea).toContain('hasGsvData.value = true')
+    expect(nmea).toContain("commitSatelliteCountEpoch(timeParts, data.satellites, 'gga')")
+    expect(nmea).toContain("commitSatelliteCountEpoch(solution.time, solution.satellites, 'rtklib-pos')")
+    expect(chart).toContain("satelliteCountSource.value === 'rtklib-pos'")
   })
 
   it('renders every recent epoch and applies LOD only to large viewports', () => {
     expect(chart).toContain('props.slidingWindow')
     expect(chart).toContain('createInitialSatelliteCountViewport')
-    expect(chart).toContain('fitSatelliteCountViewport(satelliteEpochHistory.value.length)')
-    expect(chart).toContain('store.extractSeries')
+    expect(chart).toContain('fitSatelliteCountViewport(currentHistory().length)')
+    expect(chart).toContain('gsvStore.extractSeries')
     expect(chart).toContain('Math.max(64, Math.floor(width * 2))')
     expect(chart).not.toContain('NSAT_MAX_SAMPLES')
   })
@@ -101,7 +121,7 @@ describe('GNSS signal satellite-count view', () => {
     expect(chart).toContain('zoomSatelliteCountViewport')
     expect(chart).toContain('panSatelliteCountViewport')
     expect(chart).toContain('hoverIndex.value = index')
-    expect(chart).toContain('store.getSample')
+    expect(chart).toContain('satelliteEpochHistory.value.getSample(index)')
   })
 
   it('schedules rendering and responds to resize and theme changes', () => {

@@ -1,4 +1,11 @@
-import type { RtkPostConstellation } from './RtkPost'
+import type { RtkPostConstellation, RtkPostOptions } from './RtkPost'
+import {
+  createDefaultRtkNaviAdvancedOptions,
+  RTKNAVI_ADVANCED_CONFIG,
+  type RtkNaviAdvancedKey,
+  type RtkNaviAdvancedOptions,
+} from './RtkNaviAdvancedOptions'
+import { serializeRtkPostConfigOption } from './RtkPostConfig'
 
 export type RtkNaviStreamType = 'serial' | 'file' | 'tcpsvr' | 'tcpcli' | 'ntripcli'
 export type RtkNaviInputFormat =
@@ -25,7 +32,7 @@ export interface RtkNaviInputStream {
   replaySpeed: number
 }
 
-export interface RtkNaviOptions {
+export interface RtkNaviOptions extends RtkNaviAdvancedOptions {
   mode: number
   frequency: number
   elevationMaskDeg: number
@@ -43,6 +50,8 @@ export interface RtkNaviSettings {
   outputPath: string
   inputs: RtkNaviInputStream[]
   options: RtkNaviOptions
+  /** Advanced parameters explicitly changed in the UI; other config-file values are preserved. */
+  advancedOptionOverrides: RtkNaviAdvancedKey[]
 }
 
 export interface RtkNaviStartRequest extends RtkNaviSettings {
@@ -87,12 +96,14 @@ export function createDefaultRtkNaviSettings(): RtkNaviSettings {
   return {
     executablePath: '',
     outputPath: '',
+    advancedOptionOverrides: [],
     inputs: [
       createInput('file', true),
       createInput('ntripcli', false),
       createInput('tcpcli', false),
     ],
     options: {
+      ...createDefaultRtkNaviAdvancedOptions(),
       mode: 2,
       frequency: 2,
       elevationMaskDeg: 15,
@@ -119,7 +130,11 @@ export function buildRtkNaviStreamPath(stream: RtkNaviInputStream): string {
   }`
 }
 
-export function buildRtkNaviConfig(request: RtkNaviSettings, outputPath: string): string {
+export function buildRtkNaviConfig(
+  request: RtkNaviSettings,
+  outputPath: string,
+  baseConfig?: string,
+): string {
   if (!Array.isArray(request.inputs) || request.inputs.length !== 3) {
     throw new Error('RTKNAVI 必须配置流动站、基站和改正数三路输入')
   }
@@ -135,7 +150,7 @@ export function buildRtkNaviConfig(request: RtkNaviSettings, outputPath: string)
   ) {
     throw new Error('定位模式无效')
   }
-  if (![1, 2, 3].includes(request.options.frequency)) throw new Error('频点数无效')
+  if (![1, 2, 3, 4].includes(request.options.frequency)) throw new Error('频点数无效')
   if (
     !Number.isFinite(request.options.elevationMaskDeg) ||
     request.options.elevationMaskDeg < 0 ||
@@ -189,7 +204,7 @@ export function buildRtkNaviConfig(request: RtkNaviSettings, outputPath: string)
     'file-cmdfile2 =',
     'file-cmdfile3 =',
     `pos1-posmode =${positionModeName(request.options.mode)}`,
-    `pos1-frequency =${['', 'l1', 'l1+l2', 'l1+l2+l5'][request.options.frequency]}`,
+    `pos1-frequency =${['', 'l1', 'l1+l2', 'l1+l2+l5', 'l1+l5'][request.options.frequency]}`,
     'pos1-soltype =forward',
     `pos1-elmask =${request.options.elevationMaskDeg}`,
     `pos1-navsys =${navsys}`,
@@ -213,6 +228,29 @@ export function buildRtkNaviConfig(request: RtkNaviSettings, outputPath: string)
       `ant2-pos2 =${request.options.baseLongitudeDeg}`,
       `ant2-pos3 =${request.options.baseHeightM}`,
     )
+  }
+  // Defer merging until the service has read the actual config file. This preserves
+  // existing advanced settings, including either spelling of aliased RTKLIB keys.
+  const existingKeys = new Set(
+    (baseConfig ?? '').split(/\r?\n/).flatMap((line) => {
+      const match = line.match(/^\s*([A-Za-z][\w-]*)\s*=/)
+      return match ? [match[1].toLowerCase()] : []
+    }),
+  )
+  const overrides = new Set(request.advancedOptionOverrides ?? [])
+  const advancedDefaults = createDefaultRtkNaviAdvancedOptions()
+  for (const { key, configKeys } of RTKNAVI_ADVANCED_CONFIG) {
+    if (typeof request.options[key] !== typeof advancedDefaults[key]) {
+      throw new Error(`处理参数无效: ${configKeys[0]}`)
+    }
+    // The selected writers access only shared fields, which are present on RtkNaviOptions.
+    const value = serializeRtkPostConfigOption(
+      configKeys[0],
+      request.options as unknown as RtkPostOptions,
+    )
+    if (request.options.baseConfigPath && baseConfig === undefined) continue
+    if (configKeys.some((configKey) => existingKeys.has(configKey)) && !overrides.has(key)) continue
+    lines.push(`${configKeys[0]} =${value}`)
   }
   return `${lines.join('\n')}\n`
 }

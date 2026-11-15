@@ -351,6 +351,21 @@ export function createGnssSolverSession() {
     solutionConsole,
     logConsole,
     begin,
+    reset(): void {
+      runId.value = ''
+      mode.value = 'post'
+      channel.value = 'solution'
+      clearData()
+      solutionConsole.clearMessages()
+      logConsole.clearMessages()
+      buffer = ''
+      nmeaDate = ''
+      nmeaParser.clear()
+      parser = new RtkSolutionParser()
+      messageParser = new RtkSolutionParser()
+      messageClock.clear()
+      messageElapsed = 0
+    },
     append,
     appendLog,
     attachTimeline,

@@ -1,5 +1,21 @@
 # Nav-Tools 更新日志
 
+## v1.9.0
+
+- 新增通用应用交接机制：按产物类型、文件角色与格式匹配兼容目标，支持解算结果、RINEX 文件组、已停止录制及源文件，并提供单步返回与来源现场保护。
+- GNSS-Lib 解算结果可在 GNSS 中检核；GNSS-Raw 的 RINEX 文件组可预填 GNSS-Lib，RTCM 转换观测进入基站槽，交接仅预填表单而不自动解算。
+- 已停止的 NMEA/POS、JSON、CSV、regex 与 raw 录制可交接到兼容的 GNSS、Serial 或 Flow 应用，保留解析配置；修复 Flow 回放首段曲线被清空的问题。
+- GNSS Deviation 完善双轨迹显示、同历元联动、最新点跟踪、双轨迹提示与主参考差值；轨迹按历元顺序连接，轨迹尺寸控件支持双击恢复默认值。
+- GNSS Solver 选项按类别组织并支持搜索、草稿确认、配置载入与保存；实时解算可复用基础配置，后处理时间范围与配置双向同步。
+- 应用选择器新增卡片/按行显示切换并持久化偏好，保留拖拽与键盘排序，窄屏布局同步优化。
+
+- Added a general application handoff framework that matches compatible targets by artifact kind, file role and format, covering solver results, RINEX groups, stopped recordings and source files, with single-step return and source-workspace preservation.
+- GNSS-Lib solutions can now be inspected in GNSS. GNSS-Raw RINEX groups prefill GNSS-Lib, while RTCM-derived observations populate the base slot; handoff never starts processing automatically.
+- Stopped NMEA/POS, JSON, CSV, regex and raw recordings can be handed to compatible GNSS, Serial or Flow targets with parser settings preserved. Fixed Flow clearing the first replayed curve segment during mount.
+- GNSS Deviation now provides refined dual-track display, same-epoch selection, latest-point tracking, dual-track hints and main-reference deltas. Track polylines follow epoch order, and point-size controls reset on double-click.
+- GNSS Solver options are categorized and searchable, with draft confirmation plus configuration loading and saving. Realtime solving can reuse a base configuration, and post-processing time bounds synchronize with the configuration.
+- The application selector supports persistent card and row layouts while retaining drag and keyboard reordering, with improved narrow-screen behavior.
+
 ## v1.8.11
 
 - 相机人员均值标记明确为“2s avg”，避免与历史平均混淆；纯净内容状态随应用布局保存，重启后自动恢复。

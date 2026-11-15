@@ -68,6 +68,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   rtkPostCancel: (runId: string) => ipcRenderer.invoke('rtkpost-cancel', runId),
   rtkPostReadConfig: (path: string) =>
     ipcRenderer.invoke('rtkpost-read-config', path) as Promise<string>,
+  rtkPostSaveConfig: (request: import('../../src/core/gnsslib/RtkPost').RtkPostSaveConfigRequest) =>
+    ipcRenderer.invoke('rtkpost-save-config', request) as Promise<string | null>,
   rtkPostObservationSpans: (request: { roverPath: string; basePath?: string }) =>
     ipcRenderer.invoke('rtkpost-observation-spans', request),
   rtkPostCancelObservationRead: () => ipcRenderer.invoke('rtkpost-cancel-observation-read'),
@@ -80,6 +82,24 @@ contextBridge.exposeInMainWorld('electronAPI', {
   rtkNaviStatus: () => ipcRenderer.invoke('rtknavi-status'),
   rtkNaviChooseOutput: (defaultPath?: string) =>
     ipcRenderer.invoke('rtknavi-choose-output', defaultPath),
+  appHandoffCreateSolutionSnapshot: (
+    request: import('../../src/core/handoff/AppHandoff').AppHandoffSnapshotRequest,
+  ) =>
+    ipcRenderer.invoke('app-handoff-create-solution-snapshot', request) as Promise<
+      import('../../src/core/handoff/AppHandoff').AppHandoffSnapshotResult
+    >,
+  appHandoffRegisterArtifact: (
+    artifact: import('../../src/core/handoff/AppHandoff').AppHandoffArtifact,
+  ) =>
+    ipcRenderer.invoke('app-handoff-register-artifact', artifact) as Promise<
+      import('../../src/core/handoff/AppHandoff').AppHandoffArtifact
+    >,
+  appHandoffCreateRinexArtifact: (
+    request: import('../../src/core/handoff/AppHandoff').AppHandoffRinexWriteRequest,
+  ) =>
+    ipcRenderer.invoke('app-handoff-create-rinex-artifact', request) as Promise<
+      import('../../src/core/handoff/AppHandoff').AppHandoffArtifact
+    >,
 })
 const listenerMap = new Map<string, Map<Function, (...args: unknown[]) => void>>()
 

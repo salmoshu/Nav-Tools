@@ -1,5 +1,9 @@
 <template>
-  <div ref="rootElement" class="rtknavi">
+  <div
+    ref="rootElement"
+    class="rtknavi"
+    :class="{ 'is-options-view': props.embedded && props.view === 'options' }"
+  >
     <div v-if="!props.embedded" class="run-toolbar">
       <div class="view-tabs" role="tablist" aria-label="RTKNAVI">
         <button
@@ -139,6 +143,7 @@
       <section
         v-show="activeTab === 'configuration'"
         :id="`${viewId}-configuration-panel`"
+        class="navi-configuration"
         role="tabpanel"
         :aria-labelledby="`${viewId}-configuration-tab`"
       >
@@ -147,8 +152,8 @@
           <div class="file-row">
             <label>rtkrcv</label>
             <el-input
-              spellcheck="false"
               v-model="store.settings.executablePath"
+              spellcheck="false"
               :disabled="store.running.value"
               :placeholder="t('gnssLib.rtknavi.executablePlaceholder')"
               clearable
@@ -161,8 +166,8 @@
           <div class="file-row">
             <label>.pos</label>
             <el-input
-              spellcheck="false"
               v-model="store.settings.outputPath"
+              spellcheck="false"
               :disabled="store.running.value"
             />
             <el-button :disabled="store.running.value" @click="chooseOutput"
@@ -217,8 +222,8 @@
               t(stream.type === 'file' ? 'gnssLib.rtknavi.filePath' : 'gnssLib.rtknavi.path')
             }}</label>
             <el-input
-              spellcheck="false"
               v-model="stream.path"
+              spellcheck="false"
               :disabled="store.running.value || !stream.enabled"
               :placeholder="streamHint(stream.type)"
             />
@@ -252,126 +257,69 @@
           <div v-else class="field-hint">{{ streamHint(stream.type) }}</div>
         </section>
 
-        <section v-show="!props.embedded || props.view === 'options'" class="config-section">
-          <div class="section-title">{{ t('gnssLib.rtknavi.processingOptions') }}</div>
-          <div class="option-grid">
-            <label class="option-field wide">
-              <span>{{ t('gnssLib.rtknavi.positioningMode') }}</span>
-              <el-select v-model="store.settings.options.mode" :disabled="store.running.value">
-                <el-option
-                  v-for="mode in positioningModes"
-                  :key="mode.value"
-                  :label="mode.label"
-                  :value="mode.value"
-                />
-              </el-select>
-            </label>
-            <label class="option-field">
-              <span>{{ t('gnssLib.rtknavi.frequency') }}</span>
-              <el-select v-model="store.settings.options.frequency" :disabled="store.running.value">
-                <el-option label="L1" :value="1" />
-                <el-option label="L1 + L2" :value="2" />
-                <el-option label="L1 + L2 + L5" :value="3" />
-              </el-select>
-            </label>
-            <label class="option-field">
-              <span>{{ t('gnssLib.rtknavi.elevationMask') }}</span>
-              <el-input-number
-                v-model="store.settings.options.elevationMaskDeg"
-                :disabled="store.running.value"
-                :min="0"
-                :max="90"
-                :precision="1"
-                controls-position="right"
+        <section
+          v-show="!props.embedded || props.view === 'options'"
+          class="config-section navi-options"
+        >
+          <div class="navi-options-config" :title="t('gnssLib.rtknavi.baseConfigHint')">
+            <div class="file-row base-config-row">
+              <label :for="`${viewId}-base-config`">{{ t('gnssLib.rtknavi.baseConfig') }}</label>
+              <el-input
+                :id="`${viewId}-base-config`"
+                v-model="store.settings.options.baseConfigPath"
+                spellcheck="false"
+                :disabled="store.running.value || store.configStatus.value === 'loading'"
+                placeholder="rtkrcv.conf"
+                clearable
+                @change="store.loadBaseConfig()"
               />
-            </label>
-            <label class="option-field">
-              <span>{{ t('gnssLib.rtknavi.ambiguityResolution') }}</span>
-              <el-select
-                v-model="store.settings.options.ambiguityResolution"
-                :disabled="store.running.value"
-              >
-                <el-option :label="t('gnssLib.rtknavi.off')" value="off" />
-                <el-option :label="t('gnssLib.rtknavi.continuous')" value="continuous" />
-                <el-option :label="t('gnssLib.rtknavi.instantaneous')" value="instantaneous" />
-                <el-option :label="t('gnssLib.rtknavi.fixAndHold')" value="fix-and-hold" />
-              </el-select>
-            </label>
-          </div>
-          <div class="constellation-field">
-            <span>{{ t('gnssLib.rtknavi.constellations') }}</span>
-            <el-checkbox-group
-              v-model="store.settings.options.constellations"
-              :disabled="store.running.value"
+              <el-button
+                :disabled="store.running.value || store.configStatus.value === 'loading'"
+                @click="chooseBaseConfig"
+                ><el-icon><FolderOpened /></el-icon
+              ></el-button>
+              <el-button
+                :disabled="
+                  store.running.value ||
+                  store.configStatus.value === 'loading' ||
+                  !store.settings.options.baseConfigPath
+                "
+                :title="t('gnssLib.rtknavi.configReload')"
+                :aria-label="t('gnssLib.rtknavi.configReload')"
+                @click="store.loadBaseConfig()"
+                ><el-icon><Refresh /></el-icon
+              ></el-button>
+            </div>
+            <div
+              v-if="store.configStatus.value !== 'idle'"
+              class="field-hint base-config-status"
+              :class="{ 'is-error': store.configStatus.value === 'error' }"
+              role="status"
             >
-              <el-checkbox value="G">GPS</el-checkbox>
-              <el-checkbox value="R">GLONASS</el-checkbox>
-              <el-checkbox value="E">Galileo</el-checkbox>
-              <el-checkbox value="C">BDS</el-checkbox>
-              <el-checkbox value="J">QZSS</el-checkbox>
-              <el-checkbox value="I">NavIC</el-checkbox>
-            </el-checkbox-group>
-          </div>
-          <div class="option-grid base-position-grid">
-            <label class="option-field">
-              <span>{{ t('gnssLib.rtknavi.basePosition') }}</span>
-              <el-select
-                v-model="store.settings.options.basePositionMode"
-                :disabled="store.running.value"
+              {{
+                store.configStatus.value === 'loading'
+                  ? t('gnssLib.rtknavi.configLoading')
+                  : store.configDetail.value
+              }}
+              <el-button
+                v-if="
+                  store.settings.options.baseConfigPath &&
+                  store.settings.advancedOptionOverrides.length
+                "
+                link
+                type="primary"
+                :disabled="store.running.value || store.configStatus.value === 'loading'"
+                @click="store.restoreBaseConfig()"
+                >{{ t('gnssLib.rtknavi.configResetOverrides') }}</el-button
               >
-                <el-option :label="t('gnssLib.rtknavi.positionRtcm')" value="rtcm" />
-                <el-option :label="t('gnssLib.rtknavi.positionRinex')" value="rinexhead" />
-                <el-option :label="t('gnssLib.rtknavi.positionLlh')" value="llh" />
-              </el-select>
-            </label>
-            <template v-if="store.settings.options.basePositionMode === 'llh'">
-              <label class="option-field">
-                <span>{{ t('gnssLib.rtknavi.latitude') }}</span>
-                <el-input-number
-                  v-model="store.settings.options.baseLatitudeDeg"
-                  :disabled="store.running.value"
-                  :min="-90"
-                  :max="90"
-                  :precision="8"
-                  controls-position="right"
-                />
-              </label>
-              <label class="option-field">
-                <span>{{ t('gnssLib.rtknavi.longitude') }}</span>
-                <el-input-number
-                  v-model="store.settings.options.baseLongitudeDeg"
-                  :disabled="store.running.value"
-                  :min="-180"
-                  :max="180"
-                  :precision="8"
-                  controls-position="right"
-                />
-              </label>
-              <label class="option-field">
-                <span>{{ t('gnssLib.rtknavi.height') }}</span>
-                <el-input-number
-                  v-model="store.settings.options.baseHeightM"
-                  :disabled="store.running.value"
-                  :precision="4"
-                  controls-position="right"
-                />
-              </label>
-            </template>
+            </div>
           </div>
-          <div class="file-row base-config-row">
-            <label>{{ t('gnssLib.rtknavi.baseConfig') }}</label>
-            <el-input
-              spellcheck="false"
-              v-model="store.settings.options.baseConfigPath"
-              :disabled="store.running.value"
-              placeholder="rtkrcv.conf"
-              clearable
-            />
-            <el-button :disabled="store.running.value" @click="chooseBaseConfig"
-              ><el-icon><FolderOpened /></el-icon
-            ></el-button>
-          </div>
-          <div class="field-hint">{{ t('gnssLib.rtknavi.baseConfigHint') }}</div>
+          <GnssSolverOptions
+            mode="realtime"
+            :options="store.settings.options"
+            :disabled="store.running.value || store.configStatus.value === 'loading'"
+            @change="updateOption"
+          />
         </section>
       </section>
 
@@ -391,10 +339,12 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, useId, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import { FolderOpened } from '@element-plus/icons-vue'
+import { FolderOpened, Refresh } from '@element-plus/icons-vue'
 import { t } from '@/i18n'
 import { useRtkNavi } from '@/composables/useRtkNavi'
 import type { RtkNaviStreamType } from '@/core/gnsslib/RtkNavi'
+import type { SolverOptionKey, SolverOptionValue } from '@/core/gnsslib/GnssSolverOptions'
+import GnssSolverOptions from './GnssSolverOptions.vue'
 
 const store = useRtkNavi()
 const props = defineProps<{ embedded?: boolean; view?: string }>()
@@ -433,18 +383,6 @@ const inputFormats = [
   'sp3',
 ]
 
-const positioningModes = computed(() => [
-  { value: 0, label: t('gnssRaw.rtkpost.modeSingle') },
-  { value: 1, label: t('gnssRaw.rtkpost.modeDgps') },
-  { value: 2, label: t('gnssRaw.rtkpost.modeKinematic') },
-  { value: 3, label: t('gnssRaw.rtkpost.modeStatic') },
-  { value: 4, label: t('gnssRaw.rtkpost.modeStaticStart') },
-  { value: 5, label: t('gnssRaw.rtkpost.modeMovingBase') },
-  { value: 6, label: t('gnssRaw.rtkpost.modeFixed') },
-  { value: 7, label: t('gnssRaw.rtkpost.modePppKinematic') },
-  { value: 8, label: t('gnssRaw.rtkpost.modePppStatic') },
-  { value: 9, label: t('gnssRaw.rtkpost.modePppFixed') },
-])
 const currentOutputPath = computed(
   () => store.status.value.outputPath || store.settings.outputPath || 'rtknavi-current.pos',
 )
@@ -490,6 +428,7 @@ const trackScale = computed(() => trackGeometry.value.scale)
 
 onMounted(() => {
   void store.refreshStatus()
+  if (store.settings.options.baseConfigPath) void store.loadBaseConfig()
 })
 
 function qualityCount(quality: number): string {
@@ -511,6 +450,10 @@ function switchTabWithKeyboard(event: KeyboardEvent): void {
     event.currentTarget as HTMLElement
   ).parentElement?.querySelectorAll<HTMLButtonElement>('[role="tab"]')
   buttons?.[next]?.focus()
+}
+
+function updateOption(key: SolverOptionKey, value: SolverOptionValue): void {
+  store.updateOption(key, value)
 }
 
 function formatOptional(value: number | null, suffix = ''): string {
@@ -546,7 +489,10 @@ async function chooseBaseConfig(): Promise<void> {
     { name: 'rtkrcv.conf', extensions: ['conf'] },
     { name: t('gnssLib.rtknavi.allFiles'), extensions: ['*'] },
   ])
-  if (path) store.settings.options.baseConfigPath = path
+  if (path) {
+    store.settings.options.baseConfigPath = path
+    await store.loadBaseConfig()
+  }
 }
 
 async function chooseOutput(): Promise<void> {
@@ -592,6 +538,43 @@ async function stop(): Promise<void> {
 </script>
 
 <style scoped>
+.navi-options {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  box-sizing: border-box;
+  height: 520px;
+  min-height: 0;
+  padding: 12px;
+  overflow: hidden;
+}
+.navi-options-config {
+  flex: none;
+  min-width: 0;
+}
+.navi-options .base-config-row {
+  margin-top: 0;
+  margin-bottom: 0;
+}
+.rtknavi.is-options-view {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+.is-options-view .navi-panels,
+.is-options-view .navi-configuration {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+.is-options-view .navi-options {
+  flex: 1;
+  height: auto;
+}
 .rtknavi {
   height: 100%;
   overflow: auto;
@@ -760,8 +743,7 @@ async function stop(): Promise<void> {
   justify-content: space-between;
   margin-bottom: 8px;
 }
-.stream-grid,
-.option-grid {
+.stream-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(150px, 1fr));
   gap: 8px;
@@ -769,19 +751,15 @@ async function stop(): Promise<void> {
 .stream-grid {
   margin-bottom: 8px;
 }
-.stream-grid label,
-.option-field {
+.stream-grid label {
   display: flex;
   flex-direction: column;
   gap: 4px;
 }
-.stream-grid label > span,
-.option-field > span {
+.stream-grid label > span {
   color: var(--el-text-color-regular);
 }
-.stream-grid .el-select,
-.option-grid .el-select,
-.option-grid .el-input-number {
+.stream-grid .el-select {
   width: 100%;
 }
 .stream-path {
@@ -798,34 +776,11 @@ async function stop(): Promise<void> {
   align-items: center;
   gap: 8px;
 }
-.option-grid {
-  grid-template-columns: repeat(3, minmax(140px, 1fr));
-}
-.option-field.wide {
-  grid-column: span 1;
-}
-.constellation-field {
-  display: flex;
-  gap: 12px;
-  margin-top: 10px;
-}
-.constellation-field > span {
-  flex: 0 0 100px;
-  color: var(--el-text-color-regular);
-}
-.constellation-field :deep(.el-checkbox-group) {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0 10px;
-}
-.constellation-field :deep(.el-checkbox) {
-  margin-right: 0;
-}
-.base-position-grid {
-  margin-top: 10px;
-}
 .base-config-row {
   margin-top: 12px;
+}
+.base-config-status.is-error {
+  color: var(--el-color-danger);
 }
 .run-log {
   box-sizing: border-box;
@@ -845,9 +800,6 @@ async function stop(): Promise<void> {
 }
 @media (max-width: 700px) {
   .solution-grid {
-    grid-template-columns: repeat(2, minmax(120px, 1fr));
-  }
-  .option-grid {
     grid-template-columns: repeat(2, minmax(120px, 1fr));
   }
   .file-row > label {

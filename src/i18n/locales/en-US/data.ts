@@ -70,7 +70,7 @@ export default {
   formatAuto: 'Auto detect',
   formatRaw: 'Raw data (no parsing)',
   formatAutoDesc: 'Detect formats enabled for this application; configure them in Settings.',
-  formatDetected: 'Detected: {format}',
+  formatDetected: '{format} detected',
   formatCandidate: 'Possibly {format}; select it manually to parse',
   formatDisabled: '{format} detected but disabled for this application; enable it in Settings or switch applications',
   formatPending: 'Waiting to detect the format',

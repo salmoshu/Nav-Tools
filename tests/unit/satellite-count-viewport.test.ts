@@ -71,6 +71,38 @@ describe('SatelliteCountViewport', () => {
     })
   })
 
+  it('allows the first and last epochs to stop at the center with half-viewport overscan', () => {
+    expect(panSatelliteCountViewport({ start: 0, end: 10 }, 4.5, 10, undefined, 0.5)).toEqual({
+      start: 4.5,
+      end: 14.5,
+    })
+    expect(panSatelliteCountViewport({ start: 0, end: 10 }, -4.5, 10, undefined, 0.5)).toEqual({
+      start: -4.5,
+      end: 5.5,
+    })
+    expect(panSatelliteCountViewport({ start: 0, end: 10 }, 100, 10, undefined, 0.5)).toEqual({
+      start: 5,
+      end: 15,
+    })
+    expect(panSatelliteCountViewport({ start: 0, end: 10 }, -100, 10, undefined, 0.5)).toEqual({
+      start: -5,
+      end: 5,
+    })
+  })
+
+  it('allows both epochs to be centered after zooming', () => {
+    const zoomed = zoomSatelliteCountViewport({ start: 0, end: 10 }, 5, 0.5, 10, undefined, 0.5)
+    expect(zoomed).toEqual({ start: 2.5, end: 7.5 })
+    expect(panSatelliteCountViewport(zoomed, -4.5, 10, undefined, 0.5)).toEqual({
+      start: -2,
+      end: 3,
+    })
+    expect(panSatelliteCountViewport(zoomed, 2, 10, undefined, 0.5)).toEqual({
+      start: 4.5,
+      end: 9.5,
+    })
+  })
+
   it('follows the newest epoch when live data is appended', () => {
     expect(
       updateSatelliteCountViewportOnData({ start: 100, end: 200 }, 1_000, 1_001, 'live'),
