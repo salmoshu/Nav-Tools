@@ -14,8 +14,8 @@ export function config(overrides: Partial<CameraCalibrationConfig> = {}): Camera
     minOffset: -25,
     maxOffset: -18,
     targets: [
-      { distance: 1.2, biasMinM: 0.02, biasMaxM: 0.06 },
-      { distance: 2, biasMinM: 0.02, biasMaxM: 0.06 },
+      { distance: 1.2, biasMinM: 0.02, biasMaxM: 0.06, azimuthMinDeg: -180, azimuthMaxDeg: 180 },
+      { distance: 2, biasMinM: 0.02, biasMaxM: 0.06, azimuthMinDeg: -180, azimuthMaxDeg: 180 },
     ],
     nearSide: 'left',
     personClassId: 0,
@@ -68,7 +68,17 @@ describe('CameraCalibration', () => {
     expect(
       () =>
         new CameraCalibration(
-          config({ targets: [{ distance: 1.2, biasMinM: 0.06, biasMaxM: 0.02 }] }),
+          config({
+            targets: [
+              {
+                distance: 1.2,
+                biasMinM: 0.06,
+                biasMaxM: 0.02,
+                azimuthMinDeg: -180,
+                azimuthMaxDeg: 180,
+              },
+            ],
+          }),
           0,
         ),
     ).toThrow()
@@ -76,9 +86,76 @@ describe('CameraCalibration', () => {
 
   it('defaults to two targets with ±0.02 m tolerance', () => {
     expect(DEFAULT_CALIBRATION_CONFIG.targets).toEqual([
-      { distance: 1.2, biasMinM: -0.02, biasMaxM: 0.02 },
-      { distance: 2, biasMinM: -0.02, biasMaxM: 0.02 },
+      { distance: 1.2, biasMinM: -0.02, biasMaxM: 0.02, azimuthMinDeg: -180, azimuthMaxDeg: 180 },
+      { distance: 2, biasMinM: -0.02, biasMaxM: 0.02, azimuthMinDeg: -180, azimuthMaxDeg: 180 },
     ])
+  })
+
+  it('rejects an invalid azimuth range', () => {
+    const targets = config().targets
+    expect(
+      () =>
+        new CameraCalibration(
+          config({
+            targets: [{ ...targets[0], azimuthMinDeg: 10, azimuthMaxDeg: -10 }],
+          }),
+          0,
+        ),
+    ).toThrow('目标角度范围无效')
+  })
+
+  it('ignores a person outside both configured azimuth ranges', () => {
+    const base = config()
+    const engine = new CameraCalibration(
+      config({
+        targets: [
+          { ...base.targets[0], azimuthMinDeg: -10, azimuthMaxDeg: 0 },
+          { ...base.targets[1], azimuthMinDeg: 0, azimuthMaxDeg: 10 },
+        ],
+      }),
+      0,
+    )
+    const sampleWithDistractor = (firstIndex: number, start: number) => {
+      for (let offset = 0; offset < 3; offset++) {
+        const current = frame(firstIndex + offset)
+        current.targets.push({
+          ...current.targets[0],
+          trackId: 30,
+          left: 400,
+          right: 500,
+          distance: 3,
+          azimuth: 60,
+        })
+        engine.push(current, start + offset * 100)
+      }
+    }
+
+    sampleWithDistractor(1, 0)
+    expect(engine.snapshot()).toMatchObject({
+      phase: 'verifying',
+      reportedCount: 3,
+      sampleCount: 0,
+    })
+    sampleWithDistractor(4, 300)
+    expect(engine.snapshot()).toMatchObject({ phase: 'succeeded', reportedCount: 3 })
+  })
+
+  it('pauses when the left-right assignment conflicts with a person azimuth range', () => {
+    const base = config()
+    const engine = new CameraCalibration(
+      config({
+        targets: [
+          { ...base.targets[0], azimuthMinDeg: -10, azimuthMaxDeg: 10 },
+          { ...base.targets[1], azimuthMinDeg: -10, azimuthMaxDeg: 0 },
+        ],
+      }),
+      0,
+    )
+    engine.push(frame(1), 0)
+    expect(engine.snapshot()).toMatchObject({
+      phase: 'paused',
+      reason: '目标角度与人员配置不匹配，已暂停调参',
+    })
   })
 
   it('uses measured errors to adjust offset and ignores pre-settle samples', () => {
@@ -102,8 +179,14 @@ describe('CameraCalibration', () => {
     const engine = new CameraCalibration(
       config({
         targets: [
-          { distance: 1.2, biasMinM: -0.02, biasMaxM: 0.02 },
-          { distance: 2, biasMinM: -0.02, biasMaxM: 0.02 },
+          {
+            distance: 1.2,
+            biasMinM: -0.02,
+            biasMaxM: 0.02,
+            azimuthMinDeg: -180,
+            azimuthMaxDeg: 180,
+          },
+          { distance: 2, biasMinM: -0.02, biasMaxM: 0.02, azimuthMinDeg: -180, azimuthMaxDeg: 180 },
         ],
       }),
       0,
@@ -174,7 +257,11 @@ describe('CameraCalibration', () => {
   })
 
   it('supports single-target calibration end to end', () => {
-    const single = config({ targets: [{ distance: 1.2, biasMinM: 0.02, biasMaxM: 0.06 }] })
+    const single = config({
+      targets: [
+        { distance: 1.2, biasMinM: 0.02, biasMaxM: 0.06, azimuthMinDeg: -180, azimuthMaxDeg: 180 },
+      ],
+    })
     const engine = new CameraCalibration(single, 0)
     expect(window(engine, 1, 0, [1.26])).toBeUndefined()
     expect(engine.snapshot().phase).toBe('verifying')

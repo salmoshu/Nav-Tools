@@ -111,6 +111,18 @@ test('preserves camera inputs across tabs and displays background task states at
   await page.getByRole('combobox', { name: '目标数目' }).press('Enter')
   await page.getByRole('option', { name: '双目标', exact: true }).click()
   await expect(page.locator('.cal-target-group')).toHaveCount(2)
+  const firstTarget = page.locator('.cal-target-group').first()
+  const azimuthFrom = firstTarget.locator('input[aria-label="角度下限 (°)"]')
+  const azimuthTo = firstTarget.locator('input[aria-label="角度上限 (°)"]')
+  await expect(azimuthFrom).toHaveValue('-180.0')
+  await expect(azimuthTo).toHaveValue('180.0')
+  await azimuthFrom.fill('-10.5')
+  await azimuthTo.fill('10.5')
+  await expect(azimuthFrom).toHaveValue('-10.5')
+  await expect(azimuthTo).toHaveValue('10.5')
+  const secondTarget = page.locator('.cal-target-group').nth(1)
+  await expect(secondTarget.locator('input[aria-label="角度下限 (°)"]')).toHaveValue('-180.0')
+  await expect(secondTarget.locator('input[aria-label="角度上限 (°)"]')).toHaveValue('180.0')
   await page.getByRole('tab', { name: '脚本注入' }).click()
   await expect(page.locator('.script-connection')).toContainText('192.168.3.14')
   await page.getByRole('button', { name: '选择脚本' }).click()
@@ -234,8 +246,7 @@ test('keeps the calibration history table at its latest row while running', asyn
     el.scrollTop = 0
   })
   await page.evaluate(
-    (state) =>
-      window.dispatchEvent(new CustomEvent('camera-calibration-state', { detail: state })),
+    (state) => window.dispatchEvent(new CustomEvent('camera-calibration-state', { detail: state })),
     {
       ...snapshot,
       history: [

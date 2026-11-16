@@ -275,6 +275,32 @@
                       />
                     </label>
                     <label>
+                      <span>{{ t('common.camera.calibration.azimuthMinDeg') }}</span>
+                      <el-input-number
+                        v-model="target.azimuthMinDeg"
+                        :min="-180"
+                        :max="180"
+                        :step="1"
+                        :precision="1"
+                        controls-position="right"
+                        :disabled="calRunning"
+                        :aria-label="t('common.camera.calibration.azimuthMinDeg')"
+                      />
+                    </label>
+                    <label>
+                      <span>{{ t('common.camera.calibration.azimuthMaxDeg') }}</span>
+                      <el-input-number
+                        v-model="target.azimuthMaxDeg"
+                        :min="-180"
+                        :max="180"
+                        :step="1"
+                        :precision="1"
+                        controls-position="right"
+                        :disabled="calRunning"
+                        :aria-label="t('common.camera.calibration.azimuthMaxDeg')"
+                      />
+                    </label>
+                    <label>
                       <span>{{ t('common.camera.calibration.biasMinM') }}</span>
                       <el-input-number
                         v-model="target.biasMinM"
@@ -888,7 +914,7 @@ const targetCount = ref(calForm.targets.length)
 watch(targetCount, (count) => {
   const targets = calForm.targets
   while (targets.length < count) {
-    targets.push({ distance: 2, biasMinM: -0.02, biasMaxM: 0.02 })
+    targets.push({ ...DEFAULT_CALIBRATION_CONFIG.targets[1] })
   }
   if (targets.length > count) targets.splice(count)
 })
@@ -1138,6 +1164,8 @@ const CAL_NUMBER_FIELDS: Array<[keyof CameraCalibrationConfig, string]> = [
 
 const CAL_TARGET_FIELDS: Array<[keyof CameraCalibrationTargetConfig, string]> = [
   ['distance', 'calibration.targetDistance'],
+  ['azimuthMinDeg', 'calibration.azimuthMinDeg'],
+  ['azimuthMaxDeg', 'calibration.azimuthMaxDeg'],
   ['biasMinM', 'calibration.biasMinM'],
   ['biasMaxM', 'calibration.biasMaxM'],
 ]

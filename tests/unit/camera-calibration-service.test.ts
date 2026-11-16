@@ -213,6 +213,10 @@ const TWO_PEOPLE = sentence(
   'ESTAR,INSSEG,240601.120000.123,1,42,2,0,10,10,20,100,200,1.260,-5.000,0,11,200,20,300,200,2.030,5.000',
 )
 
+const TWO_PEOPLE_WITH_DISTRACTOR = sentence(
+  'ESTAR,INSSEG,240601.120000.124,2,43,3,0,10,10,20,100,200,1.260,-5.000,0,11,200,20,300,200,2.030,5.000,0,12,400,20,500,200,3.000,60.000',
+)
+
 function farFrame(index: number): string {
   return sentence(
     `ESTAR,INSSEG,240601.120000.123,${index},42,2,0,10,10,20,100,200,1.300,-5.000,0,11,200,20,300,200,2.100,5.000`,
@@ -227,8 +231,8 @@ function calConfig(overrides: Partial<CameraCalibrationConfig> = {}): CameraCali
     minOffset: -25,
     maxOffset: -18,
     targets: [
-      { distance: 1.2, biasMinM: 0.02, biasMaxM: 0.06 },
-      { distance: 2, biasMinM: 0.02, biasMaxM: 0.06 },
+      { distance: 1.2, biasMinM: 0.02, biasMaxM: 0.06, azimuthMinDeg: -180, azimuthMaxDeg: 180 },
+      { distance: 2, biasMinM: 0.02, biasMaxM: 0.06, azimuthMinDeg: -180, azimuthMaxDeg: 180 },
     ],
     nearSide: 'left',
     personClassId: 0,
@@ -282,6 +286,31 @@ describe('CameraCalibrationService 启动基线直发', () => {
     expect(host.writes).toEqual([])
   })
 
+  it('范围外人员不妨碍通过启动前人数检查', async () => {
+    const host = new FakeHost()
+    const service = await readyToStart(host)
+    const base = calConfig()
+    const filteredConfig = calConfig({
+      targets: [
+        { ...base.targets[0], azimuthMinDeg: -10, azimuthMaxDeg: 0 },
+        { ...base.targets[1], azimuthMinDeg: 0, azimuthMaxDeg: 10 },
+      ],
+    })
+    const promise = service.start(1, filteredConfig)
+    await flushMicrotasks()
+    service.receive(TWO_PEOPLE_WITH_DISTRACTOR)
+    const state = await promise
+    expect(state.phase).toBe('sampling')
+    expect(state.lastFrame?.targets).toHaveLength(3)
+    expect(
+      state.config?.targets.map((target) => [target.azimuthMinDeg, target.azimuthMaxDeg]),
+    ).toEqual([
+      [-10, 0],
+      [0, 10],
+    ])
+    expect(host.writes).toEqual(['0.55,62.292,-21.5'])
+  })
+
   it('启动包含 settle 等待, 让设备应用参数后再开始采样', async () => {
     const host = new FakeHost()
     const service = await readyToStart(host)
@@ -327,7 +356,17 @@ describe('CameraCalibrationService 全量上报开关', () => {
     const service = await readyToStart(host)
     const promise = service.start(
       1,
-      calConfig({ targets: [{ distance: 1.2, biasMinM: 0.02, biasMaxM: 0.06 }] }),
+      calConfig({
+        targets: [
+          {
+            distance: 1.2,
+            biasMinM: 0.02,
+            biasMaxM: 0.06,
+            azimuthMinDeg: -180,
+            azimuthMaxDeg: 180,
+          },
+        ],
+      }),
     )
     await flushMicrotasks()
     service.receive(TWO_PEOPLE)

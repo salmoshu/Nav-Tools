@@ -3,6 +3,7 @@ import {
   isCalibrationRunning,
   type CameraCalibrationConfig,
   type CameraCalibrationProgress,
+  type CameraCalibrationTargetConfig,
   type InssegFrame,
 } from './CameraCalibrationTypes'
 
@@ -40,9 +41,15 @@ export function validateCalibrationConfig(c: CameraCalibrationConfig): void {
     throw new Error('目标数目必须为 1 或 2，请为每个目标填写参考距离与合格区间')
   }
   for (const target of c.targets) {
-    const targetNumbers = [target.distance, target.biasMinM, target.biasMaxM]
+    const targetNumbers = [
+      target.distance,
+      target.biasMinM,
+      target.biasMaxM,
+      target.azimuthMinDeg,
+      target.azimuthMaxDeg,
+    ]
     if (!targetNumbers.every((value) => typeof value === 'number' && Number.isFinite(value))) {
-      throw new Error('请为每个目标填写参考距离与偏差区间')
+      throw new Error('请为每个目标填写参考距离、偏差区间与角度范围')
     }
     if (
       !(target.distance > 0) ||
@@ -50,6 +57,13 @@ export function validateCalibrationConfig(c: CameraCalibrationConfig): void {
       target.distance + target.biasMinM <= 0
     ) {
       throw new Error('目标的参考距离或偏差区间无效')
+    }
+    if (
+      target.azimuthMinDeg < -180 ||
+      target.azimuthMaxDeg > 180 ||
+      target.azimuthMinDeg > target.azimuthMaxDeg
+    ) {
+      throw new Error('目标角度范围无效；应在 -180°~180° 内且下限不大于上限')
     }
   }
   if (!(
@@ -106,12 +120,35 @@ function offsetCorrectionDeg(height: number, measured: number, target: number): 
   return correction * CORRECTION_DAMPING
 }
 
-/** 按画面左右把帧内目标对应到配置序号（targets[0] 在 nearSide 一侧） */
-function assignTargets(
-  frame: InssegFrame,
+function targetInAzimuthRange(
+  target: InssegFrame['targets'][number],
+  config: CameraCalibrationTargetConfig,
+): boolean {
+  return (
+    Number.isFinite(target.azimuth) &&
+    target.azimuth >= config.azimuthMinDeg &&
+    target.azimuth <= config.azimuthMaxDeg
+  )
+}
+
+/** 忽略非指定类别及所有人员角度范围之外的目标，避免场内其他人员干扰标定 */
+export function filterCalibrationTargets(
+  targets: InssegFrame['targets'],
   config: CameraCalibrationConfig,
 ): InssegFrame['targets'] {
-  const sorted = [...frame.targets].sort((a, b) => a.left + a.right - (b.left + b.right))
+  return targets.filter(
+    (target) =>
+      target.classId === config.personClassId &&
+      config.targets.some((targetConfig) => targetInAzimuthRange(target, targetConfig)),
+  )
+}
+
+/** 按画面左右把过滤后的帧内目标对应到配置序号（targets[0] 在 nearSide 一侧） */
+function assignTargets(
+  targets: InssegFrame['targets'],
+  config: CameraCalibrationConfig,
+): InssegFrame['targets'] {
+  const sorted = [...targets].sort((a, b) => a.left + a.right - (b.left + b.right))
   return config.nearSide === 'left' ? sorted : sorted.reverse()
 }
 
@@ -159,14 +196,18 @@ export class CameraCalibration {
     }
     this.lastIndex = frame.index
     const expected = this.config.targets.length
-    if (
-      frame.targets.length !== expected ||
-      frame.targets.some((t) => t.classId !== this.config.personClassId)
-    ) {
+    const eligibleTargets = filterCalibrationTargets(frame.targets, this.config)
+    if (eligibleTargets.length !== expected) {
       this.invalidate(`必须恰好上报 ${expected} 个指定类别的人形目标，已暂停调参`, now)
       return
     }
-    const assigned = assignTargets(frame, this.config)
+    const assigned = assignTargets(eligibleTargets, this.config)
+    if (
+      assigned.some((target, index) => !targetInAzimuthRange(target, this.config.targets[index]))
+    ) {
+      this.invalidate('目标角度与人员配置不匹配，已暂停调参', now)
+      return
+    }
     if (
       assigned.some((t) => !Number.isFinite(t.distance) || t.distance <= 0) ||
       (expected === 2 &&

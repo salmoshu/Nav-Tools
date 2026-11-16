@@ -6,6 +6,10 @@ test('supports persistent row view, reordering and a narrow viewport', async ({ 
   await page.addInitScript(() => localStorage.setItem('nav-tools:locale', 'zh-CN'))
   await page.goto('/')
   await expect(page.locator('.application-grid')).toBeVisible()
+  await expect(page.locator('.view-mode-button')).toHaveCount(2)
+  for (const button of await page.locator('.view-mode-button').all()) {
+    await expect(button).toHaveCSS('border-radius', '3px')
+  }
   await expect(page.locator('.application-card--row')).toHaveCount(0)
 
   await page.getByRole('button', { name: '按行显示', exact: true }).click()

@@ -27,6 +27,10 @@ export interface CameraCalibrationTargetConfig {
   biasMinM: number
   /** 允许偏差上限（m） */
   biasMaxM: number
+  /** 人员方位角下限（°，包含边界） */
+  azimuthMinDeg: number
+  /** 人员方位角上限（°，包含边界） */
+  azimuthMaxDeg: number
 }
 
 export interface CameraCalibrationConfig {
@@ -132,7 +136,8 @@ export function isCalibrationRunning(phase: CameraCalibrationPhase): boolean {
 }
 
 /** 规格默认值：参数模板 0.55,62.292,-22；默认双目标（1.2 m + 2.0 m），
- *  两个人员的允许偏差均为 -0.02~+0.02 m，人员 1 位于画面右侧。 */
+ *  两个人员的允许偏差均为 -0.02~+0.02 m，人员 1 位于画面右侧。
+ *  默认角度覆盖 -180°~180°，未配置角度过滤时保持原有行为。 */
 export const DEFAULT_CALIBRATION_CONFIG: Readonly<CameraCalibrationConfig> = Object.freeze({
   height: 0.55,
   fov: 62.292,
@@ -140,8 +145,20 @@ export const DEFAULT_CALIBRATION_CONFIG: Readonly<CameraCalibrationConfig> = Obj
   minOffset: -30,
   maxOffset: -10,
   targets: [
-    { distance: 1.2, biasMinM: -0.02, biasMaxM: 0.02 },
-    { distance: 2, biasMinM: -0.02, biasMaxM: 0.02 },
+    {
+      distance: 1.2,
+      biasMinM: -0.02,
+      biasMaxM: 0.02,
+      azimuthMinDeg: -180,
+      azimuthMaxDeg: 180,
+    },
+    {
+      distance: 2,
+      biasMinM: -0.02,
+      biasMaxM: 0.02,
+      azimuthMinDeg: -180,
+      azimuthMaxDeg: 180,
+    },
   ],
   nearSide: 'right',
   personClassId: 0,

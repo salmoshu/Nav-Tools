@@ -112,6 +112,8 @@ export default {
       person1Side: '人员 1 方位',
       targetGroup: '人员 {n}',
       targetDistance: '参考距离 (m)',
+      azimuthMinDeg: '角度下限 (°)',
+      azimuthMaxDeg: '角度上限 (°)',
       targetMedian: '人员 {n} 中位 {value} m（波动 {spread}）',
       biasMinM: '偏差下限 (m)',
       biasMaxM: '偏差上限 (m)',

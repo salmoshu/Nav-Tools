@@ -114,6 +114,8 @@ export default {
       person1Side: 'Person 1 side',
       targetGroup: 'Person {n}',
       targetDistance: 'Reference distance (m)',
+      azimuthMinDeg: 'Azimuth from (°)',
+      azimuthMaxDeg: 'Azimuth to (°)',
       targetMedian: 'Person {n} median {value} m (spread {spread})',
       biasMinM: 'Bias lower (m)',
       biasMaxM: 'Bias upper (m)',

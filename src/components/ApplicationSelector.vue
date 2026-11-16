@@ -17,7 +17,6 @@
           <div class="view-mode-switch" role="group" :aria-label="t('app.selector.viewMode')">
             <el-button
               text
-              circle
               class="view-mode-button"
               :class="{ active: selectorViewMode === 'cards' }"
               :icon="Grid"
@@ -28,7 +27,6 @@
             />
             <el-button
               text
-              circle
               class="view-mode-button"
               :class="{ active: selectorViewMode === 'rows' }"
               :icon="List"
@@ -589,7 +587,11 @@ onUnmounted(() => window.removeEventListener('keydown', handleEscape, { capture:
 }
 
 .view-mode-button {
+  width: 30px;
+  height: 28px;
   margin: 0 !important;
+  padding: 0;
+  border-radius: 3px;
 }
 
 .view-mode-button.active {

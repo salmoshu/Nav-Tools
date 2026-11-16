@@ -1,4 +1,7 @@
-import { CameraCalibration } from '../../../src/core/camera/CameraCalibration'
+import {
+  CameraCalibration,
+  filterCalibrationTargets,
+} from '../../../src/core/camera/CameraCalibration'
 import { InssegParser } from '../../../src/core/camera/InssegParser'
 import {
   createCalibrationSnapshot,
@@ -196,6 +199,8 @@ export class CameraCalibrationService {
       throw new Error('请先取得实时 INSSEG 数据')
     if (!this.host.tcpTarget())
       throw new Error('相机控制连接已断开，请检查工具栏数据接入的 TCP 连接')
+    // 先校验配置合法性，再开启标定开关或写入任何参数。
+    const engine = new CameraCalibration(config, this.host.now())
 
     // 观测通常已经开启全量上报；兼容未提供开关写入的旧观测通道。
     if (this.host.writeCalibSwitch && !this.calibSwitchOn) {
@@ -216,11 +221,8 @@ export class CameraCalibrationService {
     if (this.calibSwitchOn) await this.waitForFreshFrame(2000)
 
     const last = this.state.lastFrame
-    if (
-      !last ||
-      last.targets.length !== config.targets.length ||
-      last.targets.some((t) => t.classId !== config.personClassId)
-    ) {
+    const eligibleCount = last ? filterCalibrationTargets(last.targets, config).length : 0
+    if (!last || eligibleCount !== config.targets.length) {
       const reported = last
         ? `${last.targets.length} 个目标（${last.targets
             .map((t) => `${t.distance.toFixed(2)}m`)
@@ -228,14 +230,12 @@ export class CameraCalibrationService {
         : '尚无有效帧'
       throw new Error(
         this.calibSwitchOn
-          ? `串口当前上报 ${reported}，与配置的 ${config.targets.length} 个人形不符。` +
-              `标定开关已开启（固件应全量上报），请核对现场人数与目标对应关系`
-          : `串口当前上报 ${reported}，与配置的 ${config.targets.length} 个人形不符。` +
+          ? `串口当前上报 ${reported}，角度范围内 ${eligibleCount} 个，与配置的 ${config.targets.length} 个人形不符。` +
+              `标定开关已开启（固件应全量上报），请核对现场人数、角度范围与目标对应关系`
+          : `串口当前上报 ${reported}，角度范围内 ${eligibleCount} 个，与配置的 ${config.targets.length} 个人形不符。` +
               `注意：固件仅上报 1.5 m 内的非跟随目标，RTSP 画面中更远的目标不会出现在串口流里`,
       )
     }
-    // 先构造引擎校验配置合法性，再进行任何写入
-    const engine = new CameraCalibration(config, this.host.now())
     this.state.config = { ...config }
 
     // 表单即真值：启动时把表单参数整组下发作为搜索基线（不回读核对），
