@@ -55,7 +55,7 @@ test('opens an immutable solver result in GNSS and returns to the intact source 
             kind: request.kind,
             files: [
               {
-                path: '/data/handoff-e2e.pos',
+                path: '/data/handoff-e2e-solution-with-an-intentionally-long-file-name-for-header-layout.pos',
                 role: 'solution',
                 format: request.format,
                 sizeBytes: 512,
@@ -71,20 +71,50 @@ test('opens an immutable solver result in GNSS and returns to the intact source 
   })
 
   await expect(panel.locator('.solver-state')).toHaveText('解算完成')
+  const buttonGap = await panel.evaluate((element) => {
+    const execute = element.querySelector('.execute-button')!.getBoundingClientRect()
+    const handoff = element.querySelector('.handoff-button')!.getBoundingClientRect()
+    return handoff.left - execute.right
+  })
+  expect(buttonGap).toBe(10)
+  await page.setViewportSize({ width: 1000, height: 720 })
   await panel.getByRole('button', { name: '在 GNSS 中检核', exact: true }).click()
 
+  const successMessage = page.locator('.el-message--success').last()
+  await expect(successMessage).toBeVisible()
+  const messageBounds = (await successMessage.boundingBox())!
+  expect(messageBounds.y).toBeGreaterThan(360)
+  expect(messageBounds.x).toBeGreaterThan(500)
   await expect(page.locator('.handoff-return')).toBeVisible()
   await expect(page.locator('.handoff-return')).toHaveText('返回 My GNSS-Lib')
-  await expect(page.locator('.context-app-name')).toHaveText('My GNSS')
-  await expect(page.locator('.context-file-name')).toHaveText('handoff-e2e.pos')
+  const appName = page.locator('.context-app-name')
+  const fileName = page.locator('.context-file-name')
+  await expect(appName).toHaveText('My GNSS')
+  await expect(appName).toHaveCSS('text-overflow', 'clip')
+  await expect(fileName).toHaveText(
+    'handoff-e2e-solution-with-an-intentionally-long-file-name-for-header-layout.pos',
+  )
+  await expect(fileName).toHaveCSS('text-overflow', 'ellipsis')
+  expect(await fileName.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true)
   await expect(page.locator('.deviation-container')).toBeVisible()
-  expect(
-    await page.evaluate(() => Reflect.get(window, '__handoffSnapshotRequest')),
-  ).toMatchObject({
+  expect(await page.evaluate(() => Reflect.get(window, '__handoffSnapshotRequest'))).toMatchObject({
     sourcePath: '/data/rover.pos',
     kind: 'completed-result',
     format: 'rtklib-pos',
   })
+
+  const deviationCard = page
+    .locator('.box-card')
+    .filter({ has: page.locator('.deviation-container') })
+  await deviationCard.getByRole('button', { name: '全屏展示', exact: true }).click()
+  const panelTitle = page.locator('.context-panel-title')
+  await expect(panelTitle).toBeVisible()
+  await expect(panelTitle).toHaveCSS('text-overflow', 'clip')
+  expect(
+    await panelTitle.evaluate((element) => element.scrollWidth <= element.clientWidth + 1),
+  ).toBe(true)
+  await expect(fileName).toHaveCSS('text-overflow', 'ellipsis')
+  await page.getByRole('button', { name: '退出组件全屏', exact: true }).click()
 
   await page.locator('.handoff-return').click()
   await expect(panel).toBeVisible()

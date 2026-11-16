@@ -1,5 +1,19 @@
 # Nav-Tools 更新日志
 
+## v1.10.0
+
+- 应用选择器列表模式的标题与描述间距缩小一半，卡片与列表切换按钮保持紧凑的方形视觉。
+- 自动标定的人员相关描述统一更名为目标，新增角度范围表盘，支持拖动扇区整体旋转、拖动端点调整扇区大小及键盘精细调节，并处理 ±180° 边界。
+- GNSS Solver 的 Execute 与 Inspect in GNSS 按钮间距收紧为 10px，交接成功提示统一从右下角向左弹出。
+- 长文件名仅在自身区域内省略，不再挤压应用名和组件名；组件全屏时同样保持标题完整。
+- GNSS Deviation 的 Fixed、Float 等解状态文字、数量与百分比按解质量配色，便于快速识别。
+
+- Reduced the spacing between application titles and descriptions in row view by half while retaining the compact, squared view-switch buttons.
+- Renamed person-related Auto Calibration labels to Target and added an azimuth-range dial with sector rotation, endpoint resizing, keyboard adjustment and ±180° boundary handling.
+- Tightened the Execute and Inspect in GNSS button spacing to 10px and made successful handoff messages enter from the bottom-right like other messages.
+- Long file names now truncate within their own space instead of ellipsizing application or component titles, including component fullscreen mode.
+- GNSS Deviation now colors Fixed, Float and other solution-quality labels, counts and percentages by status for faster recognition.
+
 ## v1.9.0
 
 - 新增通用应用交接机制：按产物类型、文件角色与格式匹配兼容目标，支持解算结果、RINEX 文件组、已停止录制及源文件，并提供单步返回与来源现场保护。

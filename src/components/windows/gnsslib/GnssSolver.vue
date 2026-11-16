@@ -302,6 +302,10 @@ function switchTab(event: KeyboardEvent): void {
   margin-left: auto;
 }
 
+.solver-toolbar > .handoff-button {
+  margin-left: 0;
+}
+
 .solver-tabs {
   align-self: flex-start;
   flex: none;

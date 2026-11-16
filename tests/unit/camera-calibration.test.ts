@@ -154,7 +154,7 @@ describe('CameraCalibration', () => {
     engine.push(frame(1), 0)
     expect(engine.snapshot()).toMatchObject({
       phase: 'paused',
-      reason: '目标角度与人员配置不匹配，已暂停调参',
+      reason: '目标角度与目标配置不匹配，已暂停调参',
     })
   })
 

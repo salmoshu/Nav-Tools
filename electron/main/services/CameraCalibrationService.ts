@@ -230,9 +230,9 @@ export class CameraCalibrationService {
         : '尚无有效帧'
       throw new Error(
         this.calibSwitchOn
-          ? `串口当前上报 ${reported}，角度范围内 ${eligibleCount} 个，与配置的 ${config.targets.length} 个人形不符。` +
+          ? `串口当前上报 ${reported}，角度范围内 ${eligibleCount} 个，与配置的 ${config.targets.length} 个目标不符。` +
               `标定开关已开启（固件应全量上报），请核对现场人数、角度范围与目标对应关系`
-          : `串口当前上报 ${reported}，角度范围内 ${eligibleCount} 个，与配置的 ${config.targets.length} 个人形不符。` +
+          : `串口当前上报 ${reported}，角度范围内 ${eligibleCount} 个，与配置的 ${config.targets.length} 个目标不符。` +
               `注意：固件仅上报 1.5 m 内的非跟随目标，RTSP 画面中更远的目标不会出现在串口流里`,
       )
     }

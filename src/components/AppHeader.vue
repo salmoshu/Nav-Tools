@@ -268,7 +268,14 @@
 
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref } from 'vue'
-import { ArrowLeft, ArrowRight, Close, CopyDocument, FullScreen, Minus } from '@element-plus/icons-vue'
+import {
+  ArrowLeft,
+  ArrowRight,
+  Close,
+  CopyDocument,
+  FullScreen,
+  Minus,
+} from '@element-plus/icons-vue'
 import { LayoutGrid, PanelTopOpen, Pin, Share2 } from '@lucide/vue'
 import PanelActionsMenu from './PanelActionsMenu.vue'
 import { showStatusBar, showToolBar } from '@/composables/useStatusManager'
@@ -440,28 +447,29 @@ onUnmounted(() => {
 
 .context-title {
   display: inline-flex;
+  flex: 1 1 auto;
   align-items: center;
   gap: 6px;
-  max-width: min(36vw, 360px);
+  max-width: none;
   margin-left: 8px;
   padding-left: 12px;
+  overflow: hidden;
   border-left: 1px solid var(--app-border);
   font-size: 13px;
   min-width: 0;
 }
 
 .context-app-name {
-  max-width: min(18vw, 180px);
+  flex: none;
   color: var(--app-text);
   font-size: 13px;
   font-weight: 600;
-  overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .context-panel {
   display: inline-flex;
+  flex: none;
   align-items: center;
   gap: 6px;
   min-width: 0;
@@ -491,9 +499,7 @@ onUnmounted(() => {
 }
 
 .context-panel-title {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  flex: none;
   white-space: nowrap;
 }
 
@@ -591,6 +597,8 @@ onUnmounted(() => {
   }
 }
 .context-file-name {
+  flex: 0 1 260px;
+  min-width: 0;
   max-width: 260px;
   overflow: hidden;
   color: var(--app-text-muted);

@@ -370,7 +370,7 @@ describe('CameraCalibrationService 全量上报开关', () => {
     )
     await flushMicrotasks()
     service.receive(TWO_PEOPLE)
-    await expect(promise).rejects.toThrow(/与配置的 1 个人形不符/)
+    await expect(promise).rejects.toThrow(/与配置的 1 个目标不符/)
     expect(host.calibWrites).toEqual([true])
     expect(service.snapshot().phase).toBe('observing')
   })

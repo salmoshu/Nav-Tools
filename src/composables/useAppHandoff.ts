@@ -221,15 +221,19 @@ export function useAppHandoff() {
         artifact,
         targetContext: targetContext(target.applicationId),
       }
-      ElMessage.success(
-        successMessage ??
+      ElMessage({
+        type: 'success',
+        message:
+          successMessage ??
           t('app.handoff.success', {
             name:
               visibleApplications.value.find(
                 (application) => application.id === target.applicationId,
               )?.name ?? target.applicationId,
           }),
-      )
+        placement: 'bottom-right',
+        offset: 50,
+      })
       return true
     } catch (error) {
       const code = error instanceof Error ? error.message : String(error)

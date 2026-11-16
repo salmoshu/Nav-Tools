@@ -120,6 +120,53 @@ test('preserves camera inputs across tabs and displays background task states at
   await azimuthTo.fill('10.5')
   await expect(azimuthFrom).toHaveValue('-10.5')
   await expect(azimuthTo).toHaveValue('10.5')
+  const dial = firstTarget.locator('.azimuth-dial')
+  const sector = dial.locator('.azimuth-sector')
+  const startHandle = dial.locator('.azimuth-handle--start')
+  const endHandle = dial.locator('.azimuth-handle--end')
+  await expect(startHandle).toHaveAttribute('aria-valuenow', '-10.5')
+  await expect(endHandle).toHaveAttribute('aria-valuenow', '10.5')
+  await startHandle.press('ArrowRight')
+  await expect(azimuthFrom).toHaveValue('-9.5')
+  await sector.press('ArrowRight')
+  await expect(azimuthFrom).toHaveValue('-8.5')
+  await expect(azimuthTo).toHaveValue('11.5')
+
+  const dialBounds = (await dial.locator('svg').boundingBox())!
+  const dialPoint = (angle: number, radius: number) => ({
+    x: dialBounds.x + (dialBounds.width * (120 + radius * Math.sin((angle * Math.PI) / 180))) / 240,
+    y:
+      dialBounds.y + (dialBounds.height * (120 - radius * Math.cos((angle * Math.PI) / 180))) / 240,
+  })
+  const dragStart = dialPoint(0, 42)
+  const dragEnd = dialPoint(20, 42)
+  await page.mouse.move(dragStart.x, dragStart.y)
+  await page.mouse.down()
+  await page.mouse.move(dragEnd.x, dragEnd.y, { steps: 8 })
+  await page.mouse.up()
+  await expect(azimuthFrom).toHaveValue('11.5')
+  await expect(azimuthTo).toHaveValue('31.5')
+
+  const endBounds = (await endHandle.boundingBox())!
+  const resizeEnd = dialPoint(60, 82)
+  await page.mouse.move(endBounds.x + endBounds.width / 2, endBounds.y + endBounds.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(resizeEnd.x, resizeEnd.y, { steps: 8 })
+  await page.mouse.up()
+  await expect(azimuthFrom).toHaveValue('11.5')
+  expect(Number(await azimuthTo.inputValue())).toBeCloseTo(60, 0)
+
+  await endHandle.press('End')
+  await expect(azimuthTo).toHaveValue('180.0')
+  await sector.press('ArrowRight')
+  await expect(azimuthFrom).toHaveValue('11.5')
+  await expect(azimuthTo).toHaveValue('180.0')
+  await startHandle.press('Home')
+  await expect(azimuthFrom).toHaveValue('-180.0')
+  await sector.press('ArrowLeft')
+  await expect(azimuthTo).toHaveValue('180.0')
+  await azimuthFrom.fill('-10.5')
+  await azimuthTo.fill('10.5')
   const secondTarget = page.locator('.cal-target-group').nth(1)
   await expect(secondTarget.locator('input[aria-label="角度下限 (°)"]')).toHaveValue('-180.0')
   await expect(secondTarget.locator('input[aria-label="角度上限 (°)"]')).toHaveValue('180.0')

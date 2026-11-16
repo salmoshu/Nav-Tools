@@ -277,6 +277,8 @@
                 v-for="row in qualityRows"
                 :key="row.quality"
                 class="status-card-stat status-card-quality"
+                :style="{ color: fixStatusColor(row.quality) }"
+                :data-quality="row.quality"
               >
                 <span>{{ numberToQuality(row.quality) }}</span>
                 <strong>{{ row.count.toLocaleString() }} / {{ row.ratio }}%</strong>
@@ -426,10 +428,7 @@ import {
   type TrackEpoch,
 } from '@/core/gnss/DualTrack'
 import type { GnssTextParser } from '@/core/data/GnssTextFormat'
-import {
-  findNearestTimeIndex,
-  type MetricOverlaySample,
-} from '@/core/gnss/MetricOverlay'
+import { findNearestTimeIndex, type MetricOverlaySample } from '@/core/gnss/MetricOverlay'
 import { NumericEpochStore } from '@/core/gnss/NumericEpochStore'
 import { t } from '@/i18n'
 import type { TrajectoryRenderer } from '@/core/render/TrajectoryRenderer'
@@ -738,9 +737,7 @@ const comparisonTargetTimeMs = computed<number | null>(() => {
   if (fileTimeline.active.value) {
     const history = positionEpochHistory.value
     const elapsed =
-      history.length > 0
-        ? fileTimeline.elapsedFor(history)
-        : fileTimeline.elapsedMilliseconds.value
+      history.length > 0 ? fileTimeline.elapsedFor(history) : fileTimeline.elapsedMilliseconds.value
     // readPrimaryTrackEpochs 与 NumericEpochStore 可能使用不同的绝对时间基准，
     // 但共享同一相对历元时长；必须加上轨迹自身首点时间而不是仓库时间戳。
     const first = mainTrackEpochs.value[0] ?? referenceFile.value?.points[0]
@@ -2368,6 +2365,10 @@ onUnmounted(() => {
 .status-card-stat strong {
   color: var(--app-text);
   font-size: 11px;
+}
+
+.status-card-quality strong {
+  color: inherit;
 }
 
 .status-card-metrics {

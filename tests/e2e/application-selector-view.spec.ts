@@ -15,6 +15,10 @@ test('supports persistent row view, reordering and a narrow viewport', async ({ 
   await page.getByRole('button', { name: '按行显示', exact: true }).click()
   await expect(page.locator('.application-grid--rows')).toBeVisible()
   await expect(page.locator('.application-card--row')).toHaveCount(4)
+  await expect(page.locator('.application-card--row .application-copy').first()).toHaveCSS(
+    'column-gap',
+    '8px',
+  )
   await expect(page.getByRole('button', { name: '按行显示', exact: true })).toHaveAttribute(
     'aria-pressed',
     'true',

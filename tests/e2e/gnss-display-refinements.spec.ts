@@ -5,7 +5,7 @@ function nmea(body: string) {
   return `$${body}*${checksum.toString(16).toUpperCase().padStart(2, '0')}\r\n`
 }
 
-function signalEpoch(second: number, snr: number) {
+function signalEpoch(second: number, snr: number, quality = 5) {
   const lines: string[] = []
   for (const talker of ['GP', 'GA', 'GB']) {
     for (let part = 1; part <= 2; part += 1) {
@@ -20,7 +20,7 @@ function signalEpoch(second: number, snr: number) {
   }
   lines.push(
     nmea(
-      `GNGGA,1235${String(second).padStart(2, '0')},4807.038,N,01131.000,E,5,18,0.9,545.4,M,46.9,M,,`,
+      `GNGGA,1235${String(second).padStart(2, '0')},4807.038,N,01131.000,E,${quality},18,0.9,545.4,M,46.9,M,,`,
     ),
   )
   return lines.join('')
@@ -40,9 +40,10 @@ test.beforeEach(async ({ page }) => {
     }
     const originalGetContext = HTMLCanvasElement.prototype.getContext
     HTMLCanvasElement.prototype.getContext = function (type: string, ...args: unknown[]) {
-      const context = Reflect.apply(originalGetContext, this, [type, ...args]) as
-        | WebGLRenderingContext
-        | null
+      const context = Reflect.apply(originalGetContext, this, [
+        type,
+        ...args,
+      ]) as WebGLRenderingContext | null
       if (
         context &&
         (type === 'webgl' || type === 'webgl2') &&
@@ -77,15 +78,23 @@ test('deviation keeps only the current Float status in small windows and restore
   await page.goto(`/#card/${payload}`)
   await expect(page.locator('.deviation-container')).toBeVisible()
   await page.evaluate(
-    async (epoch) => {
+    async (epochs) => {
       const { useNmea } = await import('/src/composables/gnss/useNmea.ts')
-      useNmea().processRawData(epoch)
+      for (const epoch of epochs) useNmea().processRawData(epoch)
     },
-    signalEpoch(0, 45),
+    [signalEpoch(0, 45, 4), signalEpoch(1, 45, 5)],
   )
   const card = page.locator('.deviation-status-card')
   await expect(card.locator('.status-card-summary')).toHaveText('Float')
   await expect(card.locator('.status-card-metric')).toHaveCount(3)
+  const fixedRow = card.locator('[data-quality="4"]')
+  const floatRow = card.locator('[data-quality="5"]')
+  await expect(fixedRow).toHaveText('Fixed1 / 50.0%')
+  await expect(floatRow).toHaveText('Float1 / 50.0%')
+  await expect(fixedRow.locator('span')).toHaveCSS('color', 'rgb(0, 128, 0)')
+  await expect(fixedRow.locator('strong')).toHaveCSS('color', 'rgb(0, 128, 0)')
+  await expect(floatRow.locator('span')).toHaveCSS('color', 'rgb(255, 165, 0)')
+  await expect(floatRow.locator('strong')).toHaveCSS('color', 'rgb(255, 165, 0)')
 
   for (const size of [
     { width: 500, height: 420 },
@@ -96,7 +105,7 @@ test('deviation keeps only the current Float status in small windows and restore
     await expect(card.getByText('Float', { exact: true })).toHaveCount(1)
     await expect(page.getByRole('button', { name: 'Reset Layout', exact: true })).toBeVisible()
     await expect(page.getByRole('button', { name: 'Clear', exact: true })).toBeVisible()
-    const buttons = page.locator('.right-buttons .control-btn')
+    const buttons = page.locator('.right-buttons .control-btn:not(.reference-load-btn)')
     await expect(buttons).toHaveCount(3)
     const bounds = await buttons.evaluateAll((elements) =>
       elements.map((element) => {
@@ -126,9 +135,7 @@ test('deviation keeps only the current Float status in small windows and restore
   await expect(card.locator('.status-card-summary')).toHaveText('Float')
 })
 
-test('deviation refits a loaded trajectory when the canvas grows and shrinks', async ({
-  page,
-}) => {
+test('deviation refits a loaded trajectory when the canvas grows and shrinks', async ({ page }) => {
   const payload = encodeURIComponent(
     JSON.stringify({
       componentName: 'GnssDeviation',
@@ -163,14 +170,10 @@ test('deviation refits a loaded trajectory when the canvas grows and shrinks', a
           const canvas = document.querySelector<HTMLCanvasElement>(
             '.deviation-container canvas.chart',
           )
-          const matrix = Reflect.get(window, '__deviationViewportTransform') as
-            | number[]
-            | undefined
+          const matrix = Reflect.get(window, '__deviationViewportTransform') as number[] | undefined
           if (!canvas || !matrix || canvas.clientHeight === 0) return false
           const { useNmea } = await import('/src/composables/gnss/useNmea.ts')
-          const { fitDeviationPoints } = await import(
-            '/src/core/deviation/DeviationViewport.ts'
-          )
+          const { fitDeviationPoints } = await import('/src/core/deviation/DeviationViewport.ts')
           const expected = fitDeviationPoints(
             useNmea().deviationPoints.value,
             canvas.clientWidth / canvas.clientHeight,

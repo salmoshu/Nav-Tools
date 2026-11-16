@@ -628,7 +628,7 @@ onUnmounted(() => window.removeEventListener('keydown', handleEscape, { capture:
   display: grid;
   grid-template-columns: minmax(130px, 0.7fr) minmax(160px, 1.3fr);
   align-items: center;
-  column-gap: 16px;
+  column-gap: 8px;
 }
 
 .application-card--row .application-title-row h2 {

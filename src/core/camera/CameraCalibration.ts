@@ -35,7 +35,7 @@ export function validateCalibrationConfig(c: CameraCalibrationConfig): void {
     c.maxDurationMs,
   ]
   if (!numbers.every((value) => typeof value === 'number' && Number.isFinite(value))) {
-    throw new Error('请填写所有数值，包括人工确认的 OFFSET 安全范围和人形类别编号')
+    throw new Error('请填写所有数值，包括人工确认的 OFFSET 安全范围和目标类别编号')
   }
   if (!Array.isArray(c.targets) || c.targets.length < 1 || c.targets.length > 2) {
     throw new Error('目标数目必须为 1 或 2，请为每个目标填写参考距离与合格区间')
@@ -82,7 +82,7 @@ export function validateCalibrationConfig(c: CameraCalibrationConfig): void {
     !Number.isSafeInteger(c.personClassId) ||
     c.personClassId < 0
   ) {
-    throw new Error('请确认目标方位和人形类别编号')
+    throw new Error('请确认目标方位和目标类别编号')
   }
   if (
     !Number.isInteger(c.sampleCount) ||
@@ -198,14 +198,14 @@ export class CameraCalibration {
     const expected = this.config.targets.length
     const eligibleTargets = filterCalibrationTargets(frame.targets, this.config)
     if (eligibleTargets.length !== expected) {
-      this.invalidate(`必须恰好上报 ${expected} 个指定类别的人形目标，已暂停调参`, now)
+      this.invalidate(`必须恰好上报 ${expected} 个指定类别的目标，已暂停调参`, now)
       return
     }
     const assigned = assignTargets(eligibleTargets, this.config)
     if (
       assigned.some((target, index) => !targetInAzimuthRange(target, this.config.targets[index]))
     ) {
-      this.invalidate('目标角度与人员配置不匹配，已暂停调参', now)
+      this.invalidate('目标角度与目标配置不匹配，已暂停调参', now)
       return
     }
     if (

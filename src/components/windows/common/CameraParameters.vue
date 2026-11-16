@@ -324,6 +324,13 @@
                         :disabled="calRunning"
                       />
                     </label>
+                    <CalibrationAzimuthDial
+                      v-model:min="target.azimuthMinDeg"
+                      v-model:max="target.azimuthMaxDeg"
+                      :disabled="calRunning"
+                      :label="t('common.camera.calibration.targetGroup', { n: index + 1 })"
+                      class="cal-target-dial"
+                    />
                   </div>
                 </div>
               </div>
@@ -753,6 +760,7 @@ import { useDevice } from '@/hooks/useDevice'
 import { showToolBar } from '@/composables/useStatusManager'
 import { useConsole } from '@/composables/flow/useConsole'
 import emitter from '@/hooks/useMitt'
+import CalibrationAzimuthDial from './CalibrationAzimuthDial.vue'
 
 // 连接状态（同步相机 TCP 连接结果）：
 // disconnected 未连接 / connecting 连接中 / connected 连接成功(就绪) / error 连接失败
@@ -1134,9 +1142,7 @@ function scrollCalView(): void {
 
 function scrollCalHistoryToBottom(): void {
   const root = calHistoryTable.value?.$el
-  const scroller = root?.querySelector<HTMLElement>(
-    '.el-table__body-wrapper .el-scrollbar__wrap',
-  )
+  const scroller = root?.querySelector<HTMLElement>('.el-table__body-wrapper .el-scrollbar__wrap')
   if (scroller) scroller.scrollTop = scroller.scrollHeight
 }
 
@@ -1872,6 +1878,9 @@ onUnmounted(() => {
   color: var(--app-text);
   font-size: 12px;
   font-weight: 600;
+}
+.cal-target-dial {
+  grid-column: 1 / -1;
 }
 .cal-advanced {
   border: 1px solid var(--app-border);
