@@ -1,6 +1,7 @@
 export default {
   signal: {
     barEmpty: '等待卫星信号数据',
+    solverSatelliteDetails: '解算工作区当前显示 GGA 或 POS 的定位卫星数，逐星信号信息尚未接入。',
     recentPeak: '近期峰值',
     recentPeakHint: '当前保留的逐星历史中的最大 C/N₀',
     tableView: '表格视图',
@@ -39,6 +40,7 @@ export default {
     nsatUsed: '定位卫星数',
     nsatYAxis: '卫星数',
     total: '总数',
+    legendToggle: '点击显示 / 隐藏该曲线',
   },
   deviation: {
     deviationView: '偏差图',

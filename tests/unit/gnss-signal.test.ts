@@ -15,12 +15,16 @@ describe('GNSS signal SNR bar chart view', () => {
     expect(source).toContain('value="chart"')
   })
 
-  it('places satellite count first in the view selector', () => {
-    const nsat = source.indexOf('<el-option :label="t(\'gnss.signal.satCount\')" value="nsat" />')
-    const table = source.indexOf('<el-option :label="t(\'gnss.signal.tableView\')" value="table" />')
-    expect(nsat).toBeGreaterThanOrEqual(0)
-    expect(table).toBeGreaterThan(nsat)
-    expect(source).toContain("const currentView = ref('nsat')")
+  it('places bar chart above table view in the view selector', () => {
+    const chart = source.indexOf(
+      '<el-option :label="t(\'gnss.signal.chartView\')" value="chart" />',
+    )
+    const table = source.indexOf(
+      '<el-option :label="t(\'gnss.signal.tableView\')" value="table" />',
+    )
+    expect(chart).toBeGreaterThanOrEqual(0)
+    expect(table).toBeGreaterThan(chart)
+    expect(source).toContain("usePersistentSelection('gnss-signal:view', 'nsat'")
   })
 
   it('shows satellite details in the SNR tooltip', () => {
@@ -92,18 +96,54 @@ describe('GNSS signal satellite-count view', () => {
       expect(chart).toContain(`id: '${constellation}'`)
     }
     expect(chart).toContain("renderer.addSeries('TOTAL'")
-    expect(chart).toContain('hasGsvData.value ? constellationSeries : []')
+    expect(chart).toContain('visibleConstellationSeries')
+    expect(chart).toContain('(sample.counts[series.id] ?? 0) > 0')
+  })
+
+  it('matches the sky-plot constellation colors', () => {
+    // 星座曲线颜色与星空图 GnssSky.constellationColors 保持一致（OTHER 取 UNKNOWN 灰）
+    const sky = readFileSync('src/components/windows/gnss/GnssSky.vue', 'utf8')
+    for (const [id, color] of [
+      ['GPS', '#BADC7E'],
+      ['GLONASS', '#9DA007'],
+      ['GALILEO', '#82C3E5'],
+      ['BEIDOU', '#FF8A80'],
+      ['QZSS', '#AF52DE'],
+    ] as const) {
+      expect(sky).toContain(`${id}: '${color}'`)
+      expect(chart).toContain(`{ id: '${id}', label: '${id}', color: '${color}' }`)
+    }
+    expect(sky).toContain("UNKNOWN: '#757575'")
+    expect(chart).toContain("{ id: 'OTHER', label: 'OTHER', color: '#757575' }")
   })
 
   it('falls back to the GGA satellites-used total only when GSV is absent', () => {
     const nmea = readFileSync('src/composables/gnss/useNmea.ts', 'utf8')
-    expect(chart).toContain('hasGsvData.value ? satelliteEpochHistory.value : satelliteCountHistory.value')
-    expect(chart).toContain('...(hasGsvData.value ? constellationSeries : [])')
+    expect(chart).toContain(
+      'hasGsvData.value ? satelliteEpochHistory.value : satelliteCountHistory.value',
+    )
+    expect(chart).toContain('...visibleConstellationSeries.value')
     expect(chart).toContain("extractSeries('SATS_USED'")
     expect(nmea).toContain('hasGsvData.value = true')
     expect(nmea).toContain("commitSatelliteCountEpoch(timeParts, data.satellites, 'gga')")
-    expect(nmea).toContain("commitSatelliteCountEpoch(solution.time, solution.satellites, 'rtklib-pos')")
+    expect(nmea).toContain(
+      "commitSatelliteCountEpoch(solution.time, solution.satellites, 'rtklib-pos')",
+    )
     expect(chart).toContain("satelliteCountSource.value === 'rtklib-pos'")
+  })
+
+  it('toggles constellation lines by clicking legend items', () => {
+    // 自研 WebGL 渲染器不走 echarts：图例点击需自带显隐状态并调 setSeriesVisible
+    expect(chart).toContain('@click="toggleSeries(series.id)"')
+    expect(chart).toContain('const hiddenSeries = ref(new Set<string>())')
+    expect(chart).toContain('renderer?.setSeriesVisible(id, !next.has(id))')
+    // setSeriesVisible 不触发绘制，切换后必须主动调度重绘（否则要等下一次鼠标事件）
+    expect(chart).toMatch(/function toggleSeries[\s\S]{0,400}scheduleRender\(\)/)
+    // 渲染器重建后恢复隐藏选择
+    expect(chart).toContain('function applySeriesVisibility()')
+    // 图例容器 pointer-events:none，仅图例项恢复可点击
+    expect(chart).toMatch(/\.legend-item\s*\{[\s\S]*?pointer-events:\s*auto/)
+    expect(chart).toContain('.legend-item--hidden')
   })
 
   it('renders every recent epoch and applies LOD only to large viewports', () => {
@@ -140,7 +180,8 @@ describe('GNSS signal satellite-count view', () => {
 
   it('shows the shared file-timeline cursor and follows it in latest-40 mode', () => {
     expect(chart).toContain('useFileTimeline')
-    expect(chart).toContain('store.findNearestElapsedTime(fileTimeline.elapsedMilliseconds.value)')
+    expect(chart).toContain('currentTimelineIndex(store)')
+    expect(chart).toContain('fileTimeline.elapsedFor(store)')
     expect(chart).toContain('cursorIndex - 39')
   })
 })

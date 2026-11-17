@@ -144,4 +144,14 @@ describe('camera configuration separation', () => {
       suffix: 'rgbstream',
     })
   })
+
+  it('preserves the encoded result returned to manual camera commands', () => {
+    const eventsSource = readFileSync('electron/main/events.ts', 'utf8')
+    const helper = eventsSource.match(/async function sendCameraControlCommand[\s\S]*?\n}/)?.[0]
+    expect(helper).toContain('Promise<CameraCommandResult>')
+    expect(helper).toContain('return await cameraCommandService.send(request)')
+    expect(eventsSource).toContain(
+      'cameraCalibrationService.manual(() => sendCameraControlCommand(request))',
+    )
+  })
 })

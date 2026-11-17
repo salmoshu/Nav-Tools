@@ -100,7 +100,11 @@ test('keeps a stopped NTRIP solver run available on the toolbar timeline', async
   await expect(page.locator('.flow-console-virtual .timeline-current')).toContainText(
     '2024/07/30 00:00:00.000',
   )
-  await expect(panel.locator('.solver-latest')).toContainText('2024/07/30 00:00:00.000')
+  const solutionTime = page
+    .locator('.status-item')
+    .filter({ has: page.getByText('Solution Time', { exact: true }) })
+    .locator('.status-indicator')
+  await expect(solutionTime).toContainText('2024/07/30 00:00:00.000')
   expect(await page.evaluate(() => Reflect.get(window, '__solverLiveRequest').inputs[0].type)).toBe(
     'ntripcli',
   )

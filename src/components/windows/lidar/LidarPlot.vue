@@ -25,6 +25,7 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import * as echarts from 'echarts'
 import { DArrowLeft, DArrowRight } from '@element-plus/icons-vue'
 import { useTheme } from '@/composables/useTheme'
+import { usePersistentSelection } from '@/composables/usePersistentSelection'
 import { t } from '@/i18n'
 import { useLidarPanelPresence, useMcapPlayer } from '@/composables/useMcapPlayer'
 
@@ -35,7 +36,12 @@ useLidarPanelPresence()
 const { chartTheme, resolvedTheme } = useTheme()
 
 const chartRef = ref<HTMLDivElement>()
-const preset = ref<PresetKey>('cmd')
+const preset = usePersistentSelection<PresetKey>('lidar-plot:preset', 'cmd', [
+  'cmd',
+  'cmdVsOdom',
+  'scores',
+  'odom',
+])
 let chart: echarts.ECharts | null = null
 let resizeObserver: ResizeObserver | null = null
 

@@ -39,10 +39,8 @@ export interface CameraCalibrationConfig {
   initialOffset: number
   minOffset: number
   maxOffset: number
-  /** 目标配置（1~2 个）；双目标时按 nearSide 把画面左/右目标对应到数组序号 */
+  /** 目标配置（1~2 个）；双目标按各自角度范围对应到数组序号 */
   targets: CameraCalibrationTargetConfig[]
-  /** 双目标时 targets[0] 位于画面哪一侧 */
-  nearSide: 'left' | 'right'
   personClassId: number
   sampleCount: number
   windowMs: number
@@ -136,8 +134,8 @@ export function isCalibrationRunning(phase: CameraCalibrationPhase): boolean {
 }
 
 /** 规格默认值：参数模板 0.55,62.292,-22；默认双目标（1.2 m + 2.0 m），
- *  两个人员的允许偏差均为 -0.02~+0.02 m，人员 1 位于画面右侧。
- *  默认角度覆盖 -180°~180°，未配置角度过滤时保持原有行为。 */
+ *  两个人员的允许偏差均为 -0.02~+0.02 m。
+ *  目标 1 默认右侧 0°~90°，目标 2 默认左侧 -90°~0°，按角度范围匹配。 */
 export const DEFAULT_CALIBRATION_CONFIG: Readonly<CameraCalibrationConfig> = Object.freeze({
   height: 0.55,
   fov: 62.292,
@@ -149,18 +147,17 @@ export const DEFAULT_CALIBRATION_CONFIG: Readonly<CameraCalibrationConfig> = Obj
       distance: 1.2,
       biasMinM: -0.02,
       biasMaxM: 0.02,
-      azimuthMinDeg: -180,
-      azimuthMaxDeg: 180,
+      azimuthMinDeg: 0,
+      azimuthMaxDeg: 90,
     },
     {
       distance: 2,
       biasMinM: -0.02,
       biasMaxM: 0.02,
-      azimuthMinDeg: -180,
-      azimuthMaxDeg: 180,
+      azimuthMinDeg: -90,
+      azimuthMaxDeg: 0,
     },
   ],
-  nearSide: 'right',
   personClassId: 0,
   sampleCount: 12,
   windowMs: 2000,

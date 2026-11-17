@@ -240,17 +240,6 @@
                       />
                     </el-select>
                   </label>
-                  <label v-if="targetCount === 2" class="cal-target-count">
-                    <span>{{ t('common.camera.calibration.person1Side') }}</span>
-                    <el-select
-                      v-model="calForm.nearSide"
-                      :disabled="calRunning"
-                      :aria-label="t('common.camera.calibration.person1Side')"
-                    >
-                      <el-option :label="t('common.camera.calibration.sideLeft')" value="left" />
-                      <el-option :label="t('common.camera.calibration.sideRight')" value="right" />
-                    </el-select>
-                  </label>
                 </div>
 
                 <div class="cal-target-groups">
@@ -274,32 +263,43 @@
                         :disabled="calRunning"
                       />
                     </label>
-                    <label>
-                      <span>{{ t('common.camera.calibration.azimuthMinDeg') }}</span>
-                      <el-input-number
-                        v-model="target.azimuthMinDeg"
-                        :min="-180"
-                        :max="180"
-                        :step="1"
-                        :precision="1"
-                        controls-position="right"
-                        :disabled="calRunning"
-                        :aria-label="t('common.camera.calibration.azimuthMinDeg')"
-                      />
-                    </label>
-                    <label>
-                      <span>{{ t('common.camera.calibration.azimuthMaxDeg') }}</span>
-                      <el-input-number
-                        v-model="target.azimuthMaxDeg"
-                        :min="-180"
-                        :max="180"
-                        :step="1"
-                        :precision="1"
-                        controls-position="right"
-                        :disabled="calRunning"
-                        :aria-label="t('common.camera.calibration.azimuthMaxDeg')"
-                      />
-                    </label>
+                    <div class="cal-azimuth-control">
+                      <label>
+                        <span>{{ t('common.camera.calibration.azimuthMinDeg') }}</span>
+                        <el-input-number
+                          v-model="target.azimuthMinDeg"
+                          :min="-180"
+                          :max="180"
+                          :step="1"
+                          :precision="1"
+                          controls-position="right"
+                          :disabled="calRunning"
+                          :aria-label="t('common.camera.calibration.azimuthMinDeg')"
+                        />
+                      </label>
+                      <label>
+                        <span>{{ t('common.camera.calibration.azimuthMaxDeg') }}</span>
+                        <el-input-number
+                          v-model="target.azimuthMaxDeg"
+                          :min="-180"
+                          :max="180"
+                          :step="1"
+                          :precision="1"
+                          controls-position="right"
+                          :disabled="calRunning"
+                          :aria-label="t('common.camera.calibration.azimuthMaxDeg')"
+                        />
+                      </label>
+                      <el-button
+                        class="cal-dial-toggle"
+                        :aria-label="t('common.camera.calibration.azimuthDialOpen')"
+                        :title="t('common.camera.calibration.azimuthDialOpen')"
+                        @click="openAzimuthDial(index)"
+                      >
+                        <el-icon><Aim /></el-icon>
+                        {{ t('common.camera.calibration.azimuthDialOpen') }}
+                      </el-button>
+                    </div>
                     <label>
                       <span>{{ t('common.camera.calibration.biasMinM') }}</span>
                       <el-input-number
@@ -324,13 +324,6 @@
                         :disabled="calRunning"
                       />
                     </label>
-                    <CalibrationAzimuthDial
-                      v-model:min="target.azimuthMinDeg"
-                      v-model:max="target.azimuthMaxDeg"
-                      :disabled="calRunning"
-                      :label="t('common.camera.calibration.targetGroup', { n: index + 1 })"
-                      class="cal-target-dial"
-                    />
                   </div>
                 </div>
               </div>
@@ -720,6 +713,23 @@
         </p>
       </div>
     </el-dialog>
+    <el-dialog
+      v-model="showAzimuthDial"
+      :title="azimuthDialTitle"
+      class="app-dialog camera-azimuth-dial-dialog"
+      width="min(560px, calc(100vw - 32px))"
+      :append-to-body="true"
+      destroy-on-close
+      align-center
+    >
+      <CalibrationAzimuthDial
+        v-if="calForm.targets[activeDialTarget]"
+        v-model:min="calForm.targets[activeDialTarget].azimuthMinDeg"
+        v-model:max="calForm.targets[activeDialTarget].azimuthMaxDeg"
+        :disabled="calRunning"
+        :label="t('common.camera.calibration.targetGroup', { n: activeDialTarget + 1 })"
+      />
+    </el-dialog>
   </section>
 </template>
 
@@ -918,6 +928,17 @@ const calState = ref<CameraCalibrationSnapshot | null>(null)
 const calForm = reactive<CameraCalibrationConfig>(structuredClone(DEFAULT_CALIBRATION_CONFIG))
 const calDurationS = ref(Math.round(DEFAULT_CALIBRATION_CONFIG.maxDurationMs / 1000))
 const targetCount = ref(calForm.targets.length)
+const showAzimuthDial = ref(false)
+const activeDialTarget = ref(0)
+const azimuthDialTitle = computed(
+  () =>
+    `${t('common.camera.calibration.targetGroup', { n: activeDialTarget.value + 1 })} · ${t('common.camera.calibration.azimuthDial')}`,
+)
+
+function openAzimuthDial(index: number): void {
+  activeDialTarget.value = index
+  showAzimuthDial.value = true
+}
 
 watch(targetCount, (count) => {
   const targets = calForm.targets
@@ -925,6 +946,7 @@ watch(targetCount, (count) => {
     targets.push({ ...DEFAULT_CALIBRATION_CONFIG.targets[1] })
   }
   if (targets.length > count) targets.splice(count)
+  if (activeDialTarget.value >= count) showAzimuthDial.value = false
 })
 
 const observing = computed(() => calState.value?.observing === true)
@@ -1347,9 +1369,16 @@ const scriptEventListener = (_event: unknown, scriptEvent: CameraScriptEvent) =>
   appendScriptOutput(`\n[${scriptEvent.state}] ${scriptEvent.detail}\n`)
 }
 
+const calibSwitchWriteListener = (_event: unknown, value: unknown) => {
+  if (value !== 0 && value !== 1) return
+  // 前置换行同时结束可能未带换行的 read_params 应答，避免两条消息粘连。
+  appendLog('', `set_calibParam = ${value}`)
+}
+
 onMounted(() => {
   window.ipcRenderer?.on('camera-calibration-state', calStateListener)
   window.ipcRenderer?.on('camera-script-event', scriptEventListener)
+  window.ipcRenderer?.on('camera-calibration-switch-write', calibSwitchWriteListener)
   void window.electronAPI
     ?.cameraCalibrationSnapshot?.()
     .then((state) => {
@@ -1361,6 +1390,7 @@ onMounted(() => {
 onUnmounted(() => {
   window.ipcRenderer?.off('camera-calibration-state', calStateListener)
   window.ipcRenderer?.off('camera-script-event', scriptEventListener)
+  window.ipcRenderer?.off('camera-calibration-switch-write', calibSwitchWriteListener)
 })
 </script>
 
@@ -1879,8 +1909,18 @@ onUnmounted(() => {
   font-size: 12px;
   font-weight: 600;
 }
-.cal-target-dial {
-  grid-column: 1 / -1;
+.cal-azimuth-control {
+  display: grid;
+  grid-column: span 2;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 10px;
+  min-width: 0;
+}
+.cal-dial-toggle {
+  height: 32px;
+  margin: 0 0 1px;
+  padding: 8px 11px;
 }
 .cal-advanced {
   border: 1px solid var(--app-border);
@@ -1953,6 +1993,20 @@ onUnmounted(() => {
   min-width: 0;
   border: 1px solid var(--app-border);
   border-radius: 7px;
+}
+.cal-history :deep(.el-table-fixed-column--right) {
+  z-index: 4;
+  overflow: hidden;
+  background: var(--app-surface);
+  box-shadow: -1px 0 0 var(--app-border);
+}
+.cal-history :deep(.el-table__row:hover .el-table-fixed-column--right) {
+  background: var(--app-hover);
+}
+.cal-history :deep(.el-table__body .cell) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .cal-recovery-title {
   font-size: 12px;

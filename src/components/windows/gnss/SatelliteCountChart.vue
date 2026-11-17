@@ -17,16 +17,30 @@
         v-for="series in displaySeries"
         :key="series.id"
         class="legend-item"
-        :class="{ 'legend-item--total': series.id === 'TOTAL' }"
+        :class="{
+          'legend-item--total': series.id === 'TOTAL',
+          'legend-item--hidden': hiddenSeries.has(series.id),
+        }"
+        role="button"
+        tabindex="0"
+        :aria-pressed="hiddenSeries.has(series.id)"
+        :title="t('gnss.signal.legendToggle')"
+        @click="toggleSeries(series.id)"
+        @keydown.enter.prevent="toggleSeries(series.id)"
       >
         <i :style="{ backgroundColor: series.color }"></i>{{ series.label }}
+        <strong
+          v-if="scopedDisplay?.signals && series.id === 'TOTAL' && currentCount !== null"
+          class="legend-current"
+          >{{ currentCount }}</strong
+        >
       </span>
     </div>
 
     <div v-if="hoverSample" class="satellite-count-tooltip" :style="tooltipStyle">
       <div class="tooltip-title">{{ hoverSample.time }}</div>
       <template v-if="hasGsvData">
-        <div v-for="series in constellationSeries" :key="series.id" class="tooltip-row">
+        <div v-for="series in tooltipConstellationSeries" :key="series.id" class="tooltip-row">
           <span class="tooltip-name">
             <i :style="{ backgroundColor: series.color }"></i>{{ series.label }}
           </span>
@@ -42,8 +56,9 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, inject, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useNmea } from '@/composables/gnss/useNmea'
+import { gnssDisplayContext } from '@/composables/gnss/GnssDisplayContext'
 import { useFileTimeline } from '@/composables/useFileTimeline'
 import { useTheme } from '@/composables/useTheme'
 import { t } from '@/i18n'
@@ -67,13 +82,14 @@ const props = defineProps<{
   slidingWindow: boolean
 }>()
 
+const scopedDisplay = inject(gnssDisplayContext, null)
 const {
   satelliteEpochHistory,
   satelliteCountEpochHistory: satelliteCountHistory,
   hasGsvData,
   satelliteCountSource,
-} = useNmea()
-const fileTimeline = useFileTimeline()
+} = scopedDisplay?.signals ?? useNmea()
+const fileTimeline = scopedDisplay?.timeline ?? useFileTimeline()
 const { chartTheme, resolvedTheme } = useTheme()
 
 const containerRef = ref<HTMLDivElement | null>(null)
@@ -109,13 +125,16 @@ const layout = {
 
 const OVERVIEW_RENDER_INTERVAL_MS = 1_000
 
+// 星座颜色与星空图（GnssSky.constellationColors）保持一致，
+// 同一星座在两个视图中的曲线/散点颜色统一；OTHER 收容 SBS/IRN 等其余系统，
+// 取星空图 UNKNOWN 灰。
 const constellationSeries = [
-  { id: 'GPS', label: 'GPS', color: '#52c41a' },
-  { id: 'GLONASS', label: 'GLONASS', color: '#1890ff' },
-  { id: 'BEIDOU', label: 'BEIDOU', color: '#faad14' },
-  { id: 'GALILEO', label: 'GALILEO', color: '#13c2c2' },
-  { id: 'QZSS', label: 'QZSS', color: '#722ed1' },
-  { id: 'OTHER', label: 'OTHER', color: '#ff4d4f' },
+  { id: 'GPS', label: 'GPS', color: '#BADC7E' },
+  { id: 'GLONASS', label: 'GLONASS', color: '#9DA007' },
+  { id: 'BEIDOU', label: 'BEIDOU', color: '#FF8A80' },
+  { id: 'GALILEO', label: 'GALILEO', color: '#82C3E5' },
+  { id: 'QZSS', label: 'QZSS', color: '#AF52DE' },
+  { id: 'OTHER', label: 'OTHER', color: '#757575' },
 ] as const
 
 const fallbackSeriesLabel = computed(
@@ -123,8 +142,22 @@ const fallbackSeriesLabel = computed(
     `${satelliteCountSource.value === 'rtklib-pos' ? 'RTKLIB POS ns' : 'GGA'} · ${t('gnss.signal.nsatUsed')}`,
 )
 
+const visibleConstellationSeries = computed(() => {
+  if (!hasGsvData.value) return []
+  const store = satelliteEpochHistory.value
+  if (store.length === 0) return []
+  const sample = store.getSample(store.length - 1)
+  return constellationSeries.filter((series) => (sample.counts[series.id] ?? 0) > 0)
+})
+
+const tooltipConstellationSeries = computed(() => {
+  const sample = hoverSample.value
+  if (!sample) return visibleConstellationSeries.value
+  return constellationSeries.filter((series) => (sample.counts[series.id] ?? 0) > 0)
+})
+
 const displaySeries = computed(() => [
-  ...(hasGsvData.value ? constellationSeries : []),
+  ...visibleConstellationSeries.value,
   {
     id: 'TOTAL',
     label: hasGsvData.value ? t('gnss.signal.total') : fallbackSeriesLabel.value,
@@ -132,9 +165,46 @@ const displaySeries = computed(() => [
   },
 ])
 
+/** 图例点击隐藏的系列；渲染器 setSeriesVisible 按系列显隐，TOTAL 同样可切 */
+const hiddenSeries = ref(new Set<string>())
+
+function toggleSeries(id: string): void {
+  const next = new Set(hiddenSeries.value)
+  if (next.has(id)) next.delete(id)
+  else next.add(id)
+  hiddenSeries.value = next
+  renderer?.setSeriesVisible(id, !next.has(id))
+  // setSeriesVisible 只改状态不触发绘制，需主动调度一帧重绘
+  scheduleRender()
+}
+
+/** 渲染器重建（初始化/主题刷新）后恢复用户的隐藏选择 */
+function applySeriesVisibility(): void {
+  for (const id of hiddenSeries.value) renderer?.setSeriesVisible(id, false)
+}
+
 function currentHistory() {
   return hasGsvData.value ? satelliteEpochHistory.value : satelliteCountHistory.value
 }
+
+function currentTimelineIndex(store: ReturnType<typeof currentHistory>): number {
+  const elapsed = scopedDisplay?.signals
+    ? fileTimeline.elapsedFor(store)
+    : fileTimeline.elapsedMilliseconds.value
+  return store.findNearestElapsedTime(elapsed)
+}
+
+const currentCount = computed(() => {
+  const store = currentHistory()
+  if (!store.length) return null
+  const index = fileTimeline.active.value ? currentTimelineIndex(store) : store.length - 1
+  if (index < 0) return null
+  if (hasGsvData.value) {
+    const sample = satelliteEpochHistory.value.getSample(index)
+    return sample.complete ? sample.total : null
+  }
+  return satelliteCountHistory.value.getValue('SATS_USED', index)
+})
 
 const viewport = ref<SatelliteCountViewport>(
   props.slidingWindow
@@ -203,7 +273,8 @@ function initRenderer(): void {
     renderer.addSeries(series.id, hexToRgba(series.color))
   }
   renderer.addSeries('TOTAL', hexToRgba(chartTheme.value.text))
-  renderer.setLineWidth(1.5)
+  renderer.setLineWidth(2.2)
+  applySeriesVisibility()
   resizeLayers()
 }
 
@@ -225,7 +296,7 @@ function renderChart(): void {
   const start = Math.max(0, Math.floor(viewport.value.start))
   const replayEndExclusive =
     fileTimeline.active.value && fileTimeline.mode.value === 'replay'
-      ? store.findNearestElapsedTime(fileTimeline.elapsedMilliseconds.value) + 1
+      ? currentTimelineIndex(store) + 1
       : length
   const endExclusive = Math.min(
     replayEndExclusive,
@@ -366,16 +437,18 @@ function drawAxes(yMax: number): void {
     }
 
     if (fileTimeline.active.value) {
-      const cursorIndex = store.findNearestElapsedTime(fileTimeline.elapsedMilliseconds.value)
+      const cursorIndex = currentTimelineIndex(store)
       if (cursorIndex >= viewport.value.start && cursorIndex < viewport.value.end) {
         const ratio =
           (cursorIndex + 0.5 - viewport.value.start) /
           Math.max(1, viewport.value.end - viewport.value.start)
         const x = layout.left + ratio * plotWidth
-        const count = hasGsvData.value
-          ? satelliteEpochHistory.value.getSample(cursorIndex).total
-          : (satelliteCountHistory.value.getValue('SATS_USED', cursorIndex) ?? 0)
-        const y = layout.top + plotHeight * (1 - Math.min(1, count / Math.max(1, yMax)))
+        const sample = hasGsvData.value ? satelliteEpochHistory.value.getSample(cursorIndex) : null
+        const count = sample
+          ? sample.complete
+            ? sample.total
+            : null
+          : satelliteCountHistory.value.getValue('SATS_USED', cursorIndex)
 
         context.strokeStyle = '#409eff'
         context.lineWidth = 1.5
@@ -384,13 +457,16 @@ function drawAxes(yMax: number): void {
         context.lineTo(x, layout.top + plotHeight)
         context.stroke()
 
-        context.fillStyle = '#409eff'
-        context.strokeStyle = '#ffffff'
-        context.lineWidth = 1.5
-        context.beginPath()
-        context.arc(x, y, 4, 0, Math.PI * 2)
-        context.fill()
-        context.stroke()
+        if (count !== null) {
+          const y = layout.top + plotHeight * (1 - Math.min(1, count / Math.max(1, yMax)))
+          context.fillStyle = '#409eff'
+          context.strokeStyle = '#ffffff'
+          context.lineWidth = 1.5
+          context.beginPath()
+          context.arc(x, y, 4, 0, Math.PI * 2)
+          context.fill()
+          context.stroke()
+        }
       }
     }
   }
@@ -449,11 +525,7 @@ function handleWindowMouseMove(event: MouseEvent): void {
   if (!isDragging) return
   const span = dragStartViewport.end - dragStartViewport.start
   const delta = -((event.clientX - dragStartX) / currentPlotSize().width) * span
-  viewport.value = panSatelliteCountViewport(
-    dragStartViewport,
-    delta,
-    currentHistory().length,
-  )
+  viewport.value = panSatelliteCountViewport(dragStartViewport, delta, currentHistory().length)
   hoverSample.value = null
   hoverIndex.value = null
   scheduleRender()
@@ -546,7 +618,7 @@ watch(
   (sliding) => {
     const store = currentHistory()
     if (sliding && fileTimeline.active.value) {
-      const cursorIndex = store.findNearestElapsedTime(fileTimeline.elapsedMilliseconds.value)
+      const cursorIndex = currentTimelineIndex(store)
       viewport.value = {
         start: Math.max(0, cursorIndex - 39),
         end: Math.max(1, cursorIndex + 1),
@@ -579,7 +651,7 @@ watch([fileTimeline.active, fileTimeline.mode, fileTimeline.elapsedMilliseconds]
   if (!props.active) return
   if (props.slidingWindow && fileTimeline.active.value) {
     const store = currentHistory()
-    const cursorIndex = store.findNearestElapsedTime(fileTimeline.elapsedMilliseconds.value)
+    const cursorIndex = currentTimelineIndex(store)
     viewport.value = {
       start: Math.max(0, cursorIndex - 39),
       end: Math.max(1, cursorIndex + 1),
@@ -667,12 +739,29 @@ onUnmounted(() => {
   border-radius: 6px;
   background: var(--app-surface-muted);
   line-height: 16px;
+  /* 图例容器整体 pointer-events:none 防止遮挡图表交互，仅图例项恢复可点击 */
+  pointer-events: auto;
+  cursor: pointer;
+  user-select: none;
+}
+
+.legend-item:hover {
+  color: var(--app-text);
+}
+
+.legend-item--hidden {
+  opacity: 0.45;
 }
 
 .legend-item--total {
   border-color: var(--app-border);
   color: var(--app-text);
   font-weight: 600;
+}
+
+.legend-current {
+  color: var(--app-text);
+  font-variant-numeric: tabular-nums;
 }
 
 .legend-item i,

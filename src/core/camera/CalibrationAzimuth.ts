@@ -44,3 +44,32 @@ export function resizeAzimuthRange(
     ? { min: Math.min(next, high), max: high }
     : { min: low, max: Math.max(next, low) }
 }
+
+export const AZIMUTH_SNAP_THRESHOLD_DEG = 1.5
+export const AZIMUTH_SNAP_STEP_DEG = 5
+
+/**
+ * 拖拽原始位置靠近 5° 倍数时吸附，松开时可强制落到最近的 5° 倍数。
+ * 整体平移分别吸附起止端点并限制在全局范围内；单边调整只修改当前端点。
+ */
+export function snapAzimuthDrag(
+  min: number,
+  max: number,
+  kind: 'move' | 'min' | 'max',
+  force = false,
+): AzimuthRange {
+  const low = clampAzimuth(Math.min(min, max))
+  const high = clampAzimuth(Math.max(min, max))
+  if (kind === 'move') {
+    const lowTarget = Math.round(low / AZIMUTH_SNAP_STEP_DEG) * AZIMUTH_SNAP_STEP_DEG
+    const highTarget = Math.round(high / AZIMUTH_SNAP_STEP_DEG) * AZIMUTH_SNAP_STEP_DEG
+    return {
+      min: force || Math.abs(low - lowTarget) <= AZIMUTH_SNAP_THRESHOLD_DEG ? lowTarget : low,
+      max: force || Math.abs(high - highTarget) <= AZIMUTH_SNAP_THRESHOLD_DEG ? highTarget : high,
+    }
+  }
+  const value = kind === 'min' ? low : high
+  const target = Math.round(value / AZIMUTH_SNAP_STEP_DEG) * AZIMUTH_SNAP_STEP_DEG
+  const snapped = force || Math.abs(value - target) <= AZIMUTH_SNAP_THRESHOLD_DEG ? target : value
+  return resizeAzimuthRange(low, high, kind, snapped)
+}

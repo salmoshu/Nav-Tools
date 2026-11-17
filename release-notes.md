@@ -1,5 +1,17 @@
 # Nav-Tools 更新日志
 
+## v1.9.2
+
+- GNSS Signals 加粗逐星 SNR 与卫星数曲线，支持左键平移、滚轮缩放、右键水平缩放和双击复位；卫星数图例仅列出当前数据中实际存在的星座。
+- GNSS Signals 的 Bar Chart 选项移到 Table View 上方；Signals、Deviation、Sky Plot、LiDAR Plot 与 GNSS-Raw SNR 的视图/筛选下拉框支持重启后恢复，失效历史选项自动回退。
+- 相机自动标定窄屏表格提高 Accepted 固定列的层级并补齐背景，避免 Remark 文本穿透到固定列。
+- 相机自动标定角度表盘的拖拽和键盘操作均吸附到最近的 5° 倍数，起止端点同步处理并保留全局边界限制。
+
+- Thickened per-satellite and satellite-count curves in GNSS Signals, with left-drag panning, wheel zoom, right-drag horizontal zoom and double-click reset. The satellite-count legend now lists only constellations present in the data.
+- Moved Bar Chart above Table View in GNSS Signals. View and filter selections in Signals, Deviation, Sky Plot, LiDAR Plot and GNSS-Raw SNR now persist across restarts with fallback for stale values.
+- Raised the fixed Accepted column above Remark text in narrow calibration tables with an opaque background and corrected fixed-cell selectors.
+- Auto-calibration dial dragging and keyboard input now snap both endpoints to the nearest 5-degree increment while preserving global boundaries.
+
 ## v1.9.1
 
 - 应用选择器列表模式的标题与描述间距缩小一半，卡片与列表切换按钮保持紧凑的方形视觉。

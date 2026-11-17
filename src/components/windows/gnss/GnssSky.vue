@@ -29,7 +29,12 @@
       <div class="controls">
         <div class="control-group">
           <span class="control-label">{{ t('gnss.sky.viewMode') }}</span>
-          <el-select v-model="viewMode" @change="applyViewMode" size="default" class="view-mode-select">
+          <el-select
+            v-model="viewMode"
+            @change="applyViewMode"
+            size="default"
+            class="view-mode-select"
+          >
             <el-option :label="t('gnss.sky.constellationView')" value="constellation" />
             <el-option :label="t('gnss.sky.snrView')" value="snr" />
             <el-option :label="t('gnss.sky.elevationView')" value="elevation" />
@@ -38,7 +43,12 @@
 
         <div class="control-group">
           <span class="control-label">{{ t('gnss.sky.constellationFilter') }}</span>
-          <el-select v-model="constellationFilter" @change="onConstellationFilterChange" size="default" class="constellation-select">
+          <el-select
+            v-model="constellationFilter"
+            @change="onConstellationFilterChange"
+            size="default"
+            class="constellation-select"
+          >
             <el-option :label="t('gnss.sky.allConstellations')" value="all" />
             <el-option label="GPS" value="GPS" />
             <el-option label="GLONASS" value="GLONASS" />
@@ -50,24 +60,12 @@
 
         <div class="satellite-size-control">
           <span>{{ t('gnss.sky.satSize') }}: {{ satelliteSize }}px</span>
-          <el-slider
-            v-model="satelliteSize"
-            :min="10"
-            :max="40"
-            :step="1"
-            size="small"
-          />
+          <el-slider v-model="satelliteSize" :min="10" :max="40" :step="1" size="small" />
         </div>
 
         <div class="elevation-limit-control">
           <span>{{ t('gnss.sky.elevLimit') }}: {{ elevationLimit }}°</span>
-          <el-slider
-            v-model="elevationLimit"
-            :min="0"
-            :max="30"
-            :step="1"
-            size="small"
-          />
+          <el-slider v-model="elevationLimit" :min="0" :max="30" :step="1" size="small" />
         </div>
 
         <div v-if="viewMode === 'constellation'" class="constellation-legend">
@@ -111,11 +109,7 @@
       </div>
     </aside>
 
-    <div
-      v-if="panelOpen && isNarrow"
-      class="panel-backdrop"
-      @click="collapsePanel"
-    ></div>
+    <div v-if="panelOpen && isNarrow" class="panel-backdrop" @click="collapsePanel"></div>
 
     <div class="chart-area">
       <button
@@ -146,6 +140,7 @@ import { ref, shallowRef, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import * as echarts from 'echarts'
 import { useNmea } from '@/composables/gnss/useNmea'
 import { useTheme } from '@/composables/useTheme'
+import { usePersistentSelection } from '@/composables/usePersistentSelection'
 import { t } from '@/i18n'
 
 // 获取卫星数据
@@ -160,8 +155,19 @@ const chartRef = ref(null)
 // resize() 在 polar 重建坐标系时抛 "Cannot read properties of undefined (reading 'get')"，
 // 最终表现为窗口调整后图表停留在左上角旧尺寸不铺满（apache/echarts#16642 同类问题）
 const chartInstance = shallowRef(null)
-const viewMode = ref('constellation')
-const constellationFilter = ref('all')
+const viewMode = usePersistentSelection('gnss-sky:view', 'constellation', [
+  'constellation',
+  'snr',
+  'elevation',
+])
+const constellationFilter = usePersistentSelection('gnss-sky:constellation', 'all', [
+  'all',
+  'GPS',
+  'GLONASS',
+  'GALILEO',
+  'BEIDOU',
+  'QZSS',
+])
 // 图例点击隐藏的星座集合（叠加在星座下拉筛选之上，下拉选具体星座时清空）
 const hiddenConstellations = ref(new Set())
 const satelliteSize = ref(25)
@@ -243,7 +249,7 @@ const constellationPrefixes = {
   GALILEO: 'E',
   BEIDOU: 'C',
   QZSS: 'J',
-  UNKNOWN: 'U'
+  UNKNOWN: 'U',
 }
 
 // 星座颜色映射
@@ -253,7 +259,7 @@ const constellationColors = {
   GALILEO: '#82C3E5',
   BEIDOU: '#FF8A80',
   QZSS: '#AF52DE',
-  UNKNOWN: '#757575'
+  UNKNOWN: '#757575',
 }
 
 // 设置ResizeObserver监控容器尺寸变化
@@ -310,7 +316,7 @@ function initChart() {
         hideDelay: 0,
         enterable: false,
         transitionDuration: 0,
-        formatter: function(params) {
+        formatter: function (params) {
           const data = params.data
           const prefix = constellationPrefixes[data.constellation] || 'U'
           const color = constellationColors[data.constellation] || '#757575'
@@ -340,21 +346,23 @@ function initChart() {
         },
         backgroundColor: 'transparent',
         borderWidth: 0,
-        padding: 0
+        padding: 0,
       },
       legend: {
-        data: [{
-          name: 'sky view',
-          icon: 'circle',
-          textStyle: { color: colors.text }
-        }],
+        data: [
+          {
+            name: 'sky view',
+            icon: 'circle',
+            textStyle: { color: colors.text },
+          },
+        ],
         bottom: 10,
         show: false,
       },
       polar: {
         radius: '85%',
         splitNumber: 6,
-        center: ['50%', '50%']
+        center: ['50%', '50%'],
       },
       angleAxis: {
         type: 'value',
@@ -364,7 +372,7 @@ function initChart() {
         max: 360,
         interval: 45,
         axisLabel: {
-          formatter: function(value) {
+          formatter: function (value) {
             if (value === 0) return 'N'
             if (value === 90) return 'E'
             if (value === 180) return 'S'
@@ -372,13 +380,13 @@ function initChart() {
             return ''
           },
           color: colors.textMuted,
-          fontSize: 12
+          fontSize: 12,
         },
         splitLine: {
           lineStyle: {
-            color: colors.grid
-          }
-        }
+            color: colors.grid,
+          },
+        },
       },
       radiusAxis: {
         type: 'value',
@@ -389,29 +397,31 @@ function initChart() {
         axisLabel: {
           formatter: '{value}°',
           color: colors.textMuted,
-          fontSize: 12
+          fontSize: 12,
         },
         splitLine: {
           lineStyle: {
-            color: colors.grid
-          }
+            color: colors.grid,
+          },
         },
         splitArea: {
           show: true,
           areaStyle: {
-            color: [colors.background, colors.surfaceMuted]
-          }
-        }
+            color: [colors.background, colors.surfaceMuted],
+          },
+        },
       },
-      series: [{
-        name: 'sky view',
-        type: 'scatter',
-        coordinateSystem: 'polar',
-        data: [],
-        animation: false
-      }],
+      series: [
+        {
+          name: 'sky view',
+          type: 'scatter',
+          coordinateSystem: 'polar',
+          data: [],
+          animation: false,
+        },
+      ],
       visualMap: [],
-      animation: false
+      animation: false,
     }
 
     chartInstance.value.setOption(option)
@@ -435,33 +445,37 @@ function buildVisualMap(colors) {
     itemWidth: 12,
     itemHeight: 100,
     textStyle: { color: colors.text, fontSize: 11 },
-    show: true
+    show: true,
   }
 
   if (viewMode.value === 'snr') {
-    return [{
-      ...common,
-      dimension: 2,
-      min: 0,
-      max: 60,
-      inRange: {
-        color: ['#d73027', '#fc8d59', '#fee08b', '#d9ef8b', '#91cf60', '#1a9850']
+    return [
+      {
+        ...common,
+        dimension: 2,
+        min: 0,
+        max: 60,
+        inRange: {
+          color: ['#d73027', '#fc8d59', '#fee08b', '#d9ef8b', '#91cf60', '#1a9850'],
+        },
+        text: [t('gnss.sky.visualSnrHigh'), t('gnss.sky.visualSnrLow')],
       },
-      text: [t('gnss.sky.visualSnrHigh'), t('gnss.sky.visualSnrLow')]
-    }]
+    ]
   }
 
   if (viewMode.value === 'elevation') {
-    return [{
-      ...common,
-      dimension: 0,
-      min: 0,
-      max: 90,
-      inRange: {
-        color: ['#313695', '#4575b4', '#74add1', '#fee090', '#f46d43', '#d73027']
+    return [
+      {
+        ...common,
+        dimension: 0,
+        min: 0,
+        max: 90,
+        inRange: {
+          color: ['#313695', '#4575b4', '#74add1', '#fee090', '#f46d43', '#d73027'],
+        },
+        text: [t('gnss.sky.visualElevHigh'), t('gnss.sky.visualElevLow')],
       },
-      text: [t('gnss.sky.visualElevHigh'), t('gnss.sky.visualElevLow')]
-    }]
+    ]
   }
 
   return []
@@ -476,7 +490,7 @@ function buildSeriesOption(polarData, colors) {
     type: 'scatter',
     coordinateSystem: 'polar',
     data: polarData,
-    symbolSize: function(value, params) {
+    symbolSize: function (value, params) {
       let size = satelliteSize.value
       if (viewMode.value === 'snr') {
         const scale = Math.min(1, Math.max(0, params.data.snr / 60))
@@ -492,7 +506,7 @@ function buildSeriesOption(polarData, colors) {
       height: satelliteSize.value,
       align: 'center',
       verticalAlign: 'middle',
-      formatter: function(params) {
+      formatter: function (params) {
         const prefix = constellationPrefixes[params.data.constellation] || 'U'
         return `${prefix}${params.data.prn}`
       },
@@ -504,28 +518,28 @@ function buildSeriesOption(polarData, colors) {
     },
     itemStyle: {
       ...(isConstellation && {
-        color: function(params) {
+        color: function (params) {
           return constellationColors[params.data.constellation] || '#757575'
-        }
+        },
       }),
       borderColor: colors.background,
       borderWidth: 1,
-      opacity: 1.0
+      opacity: 1.0,
     },
     emphasis: {
       scale: true,
       scaleSize: 6,
       itemStyle: {
         shadowBlur: 10,
-        shadowColor: 'rgba(0, 0, 0, 0.3)'
+        shadowColor: 'rgba(0, 0, 0, 0.3)',
       },
       label: {
         show: true,
         fontSize: 12,
         fontWeight: 700,
-      }
+      },
     },
-    animation: false
+    animation: false,
   }
 }
 
@@ -534,9 +548,12 @@ function applyViewMode() {
   if (!chartInstance.value) return
   const colors = chartTheme.value
 
-  chartInstance.value.setOption({
-    visualMap: buildVisualMap(colors)
-  }, { replaceMerge: ['visualMap'] })
+  chartInstance.value.setOption(
+    {
+      visualMap: buildVisualMap(colors),
+    },
+    { replaceMerge: ['visualMap'] },
+  )
 
   updateChartData()
 }
@@ -551,48 +568,45 @@ function updateChartData() {
 
   // 按星座过滤
   if (constellationFilter.value !== 'all') {
-    filteredData = filteredData.filter(sat =>
-      sat.constellation === constellationFilter.value
-    )
+    filteredData = filteredData.filter((sat) => sat.constellation === constellationFilter.value)
   }
 
   // 图例点击隐藏的星座
   if (hiddenConstellations.value.size > 0) {
-    filteredData = filteredData.filter(sat =>
-      !hiddenConstellations.value.has(sat.constellation)
-    )
+    filteredData = filteredData.filter((sat) => !hiddenConstellations.value.has(sat.constellation))
   }
 
   // 按仰角过滤
-  filteredData = filteredData.filter(sat =>
-    sat.elevation >= elevationLimit.value
-  )
+  filteredData = filteredData.filter((sat) => sat.elevation >= elevationLimit.value)
 
   // 去重：保留每个PRN的最新数据
   const uniqueDataMap = new Map()
-  filteredData.forEach(sat => {
+  filteredData.forEach((sat) => {
     const key = `${sat.constellation}-${sat.prn}`
     uniqueDataMap.set(key, sat)
   })
   const uniqueData = Array.from(uniqueDataMap.values())
 
   // 转换为极坐标数据格式 [仰角, 方位角, SNR]
-  const polarData = uniqueData.map(sat => ({
+  const polarData = uniqueData.map((sat) => ({
     value: [sat.elevation, sat.azimuth, sat.snr],
     prn: sat.prn,
     constellation: sat.constellation,
     elevation: sat.elevation,
     azimuth: sat.azimuth,
-    snr: sat.snr
+    snr: sat.snr,
   }))
 
   const colors = chartTheme.value
 
   // setOption 重建 series 会打断 tooltip 隐藏逻辑，先强制隐藏避免滞留
   chartInstance.value.dispatchAction({ type: 'hideTip' })
-  chartInstance.value.setOption({
-    series: [buildSeriesOption(polarData, colors)]
-  }, { replaceMerge: ['series'] })
+  chartInstance.value.setOption(
+    {
+      series: [buildSeriesOption(polarData, colors)],
+    },
+    { replaceMerge: ['series'] },
+  )
 }
 
 function hideSkyTooltip() {
@@ -683,7 +697,7 @@ onUnmounted(() => {
 
   window.removeEventListener('resize', scheduleResize)
   // 执行所有清理函数
-  cleanupFunctions.forEach(func => func())
+  cleanupFunctions.forEach((func) => func())
   cleanupFunctions.length = 0 // 清空数组
 
   // 清理ResizeObserver
@@ -725,14 +739,22 @@ onUnmounted(() => {
   z-index: 5;
   /* 折叠时整体滑出（负 margin 抵消自身宽度，内容不压缩、直接平移），
      宽屏滑 margin-left，抽屉模式滑 transform；收起后延迟隐藏保证焦点不可达 */
-  transition: margin-left 0.28s ease, transform 0.28s ease, opacity 0.2s ease, visibility 0s;
+  transition:
+    margin-left 0.28s ease,
+    transform 0.28s ease,
+    opacity 0.2s ease,
+    visibility 0s;
 }
 
 .control-panel.closed {
   margin-left: calc(-1 * min(260px, 30%) - 2px);
   visibility: hidden;
   opacity: 0;
-  transition: margin-left 0.28s ease, transform 0.28s ease, opacity 0.2s ease, visibility 0s 0.28s;
+  transition:
+    margin-left 0.28s ease,
+    transform 0.28s ease,
+    opacity 0.2s ease,
+    visibility 0s 0.28s;
 }
 
 /* 小窗模式下面板变为抽屉，浮在图表之上，不占用布局宽度 */
@@ -781,7 +803,10 @@ onUnmounted(() => {
   background: var(--app-surface-raised);
   color: var(--app-text-muted);
   cursor: pointer;
-  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease,
+    border-color 0.15s ease;
 }
 
 .sky-toggle:hover,
@@ -804,7 +829,9 @@ onUnmounted(() => {
 .toggle-arrow-glyph {
   transform-box: fill-box;
   transform-origin: center;
-  transition: opacity 0.15s ease, transform 0.15s ease;
+  transition:
+    opacity 0.15s ease,
+    transform 0.15s ease;
 }
 
 .toggle-arrow-glyph {
@@ -982,14 +1009,14 @@ onUnmounted(() => {
 }
 
 :deep(.el-slider__bar) {
-  background: #6E6E6E;
+  background: #6e6e6e;
   border-radius: 4px;
 }
 
 :deep(.el-slider__button) {
   width: var(--el-slider-button-size);
   height: var(--el-slider-button-size);
-  background-image: url("data:image/svg+xml;charset=utf-8;base64,PHN2ZyBjbGFzcz0iaWNvbiIgdmlld0JveD0iMCAwIDEwMjQgMTAyNCIgdmVyc2lvbj0iMS4xIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHN0eWxlPSJoZWlnaHQ6IDE2cHg7IHdpZHRoOiAxNnB4OyI+PHBhdGggZD0iTTUxMiA2NGE0NDggNDQ4IDAgMCAxIDEzMC4yNCAxOS4yMzJjLTM3LjQwOCAxNDIuNzItMTUuMDQgMjM0LjQgNzUuODQgMjY0LjcwNGwxNy4yOCA1Ljg4OCAxNi40OCA1Ljg4OGMxMDUuNTM2IDM4Ljk3NiAxMjkuMzc2IDcxLjc0NCAxMDQuNjQgMTQ1Ljk4NC0xMS4yIDMzLjYtMzQuOTQ0IDQ5LjgyNC0xMDEuNjk2IDczLjE1MmwtMzUuODQgMTIuMjI0LTE3LjQ0IDYuMzA0Yy03Mi40NDggMjcuMTA0LTEwNC40MTYgNTIuMTI4LTEyMi41NiAxMDYuNTYtMjYuMTQ0IDc4LjM2OCA4LjY0IDE1My4zNzYgOTguMTc2IDIyNC42MDhBNDQ1Ljc5MiA0NDUuNzkyIDAgMCAxIDUxMiA5NjBjLTMyLjg2NCAwLTY0Ljg5Ni0zLjUyLTk1Ljc0NC0xMC4yNCA1Ni4wOTYtNDMuMDcyIDY2LjA0OC0xMDguOCAyNC44LTE5MS4yOTYtMjYuODgtNTMuNjk2LTY5LjI0OC04My4xMzYtMTI5LjkyLTEwMS4zNDRhNDgwLjk2IDQ4MC45NiAwIDAgMC0xOS43NDQtNS40NGwtMzMuNDA4LTcuOTM2Yy0zNC4yNC04LjEyOC00OC40OC0xMy45NTItNTQuNTI4LTIxLjYzMi02LjQtOC4xNi02LjM2OC0yNS45ODQgNi41OTItNjAuMzJsMi41Ni02LjY1NmM1My44MjQtMTM0LjU2IDE1LjEwNC0yMTkuMDcyLTEwNi40NjQtMjMzLjA4OEMxNzcuNjMyIDE2OS42IDMzMi40OCA2NCA1MTIgNjR6TTgyLjQ2NCAzODQuMjU2Yzg5LjYgMy42NDggMTEwLjYyNCA0My4wNCA3My41MDQgMTQwLjA2NGwtMi43ODQgNy4wNGMtMjMuMDQgNTcuNjk2LTI0LjEyOCA5OS42NDgtMC4wNjQgMTMwLjI3MiAxNy40MDggMjIuMjA4IDM4Ljg0OCAzMS43NzYgODIuNTYgNDIuNTZsMzMuMjggNy44NzJjOS4wMjQgMi4yMDggMTYuNjQgNC4yMjQgMjMuNzc2IDYuMzY4IDQ1LjI0OCAxMy41NjggNzMuMjQ4IDMzLjAyNCA5MS4wNzIgNjguNjcyIDM1LjIgNzAuMzY4IDIxLjQ0IDExMS4zNi01MS44NCAxMzUuMjMyQzE3NC4xNzYgODUzLjAyNCA2NCA2OTUuMzYgNjQgNTEyYzAtNDQuMzg0IDYuNDY0LTg3LjI2NCAxOC40NjQtMTI3Ljc0NHogbTYxOS44MDgtMjc3Ljk1MkM4NTQuNTYgMTc3LjgyNCA5NjAgMzMyLjYwOCA5NjAgNTEyYzAgMTYzLjUyLTg3LjYxNiAzMDYuNjI0LTIxOC40OTYgMzg0LjgzMi04OC4zMi02MS44MjQtMTE5LjY4LTExOS4xNjgtMTAxLjg1Ni0xNzIuNjQgMTEuMTY4LTMzLjUzNiAzNC44OC00OS43NiAxMDEuMzQ0LTczLjAyNGwxNy4xODQtNS44NTZjOTguNzItMzIuODk2IDEzOC4wNDgtNTYuNTEyIDE1OS4wNC0xMTkuMzYgNDIuMTc2LTEyNi41OTItMTUuNTUyLTE4NC4zMi0xNzguODgtMjM4LjcyLTQ3LjItMTUuNzQ0LTYyLjQ5Ni02OS42MzItMzguNzUyLTE3MC4w...");
+  background-image: url('data:image/svg+xml;charset=utf-8;base64,PHN2ZyBjbGFzcz0iaWNvbiIgdmlld0JveD0iMCAwIDEwMjQgMTAyNCIgdmVyc2lvbj0iMS4xIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHN0eWxlPSJoZWlnaHQ6IDE2cHg7IHdpZHRoOiAxNnB4OyI+PHBhdGggZD0iTTUxMiA2NGE0NDggNDQ4IDAgMCAxIDEzMC4yNCAxOS4yMzJjLTM3LjQwOCAxNDIuNzItMTUuMDQgMjM0LjQgNzUuODQgMjY0LjcwNGwxNy4yOCA1Ljg4OCAxNi40OCA1Ljg4OGMxMDUuNTM2IDM4Ljk3NiAxMjkuMzc2IDcxLjc0NCAxMDQuNjQgMTQ1Ljk4NC0xMS4yIDMzLjYtMzQuOTQ0IDQ5LjgyNC0xMDEuNjk2IDczLjE1MmwtMzUuODQgMTIuMjI0LTE3LjQ0IDYuMzA0Yy03Mi40NDggMjcuMTA0LTEwNC40MTYgNTIuMTI4LTEyMi41NiAxMDYuNTYtMjYuMTQ0IDc4LjM2OCA4LjY0IDE1My4zNzYgOTguMTc2IDIyNC42MDhBNDQ1Ljc5MiA0NDUuNzkyIDAgMCAxIDUxMiA5NjBjLTMyLjg2NCAwLTY0Ljg5Ni0zLjUyLTk1Ljc0NC0xMC4yNCA1Ni4wOTYtNDMuMDcyIDY2LjA0OC0xMDguOCAyNC44LTE5MS4yOTYtMjYuODgtNTMuNjk2LTY5LjI0OC04My4xMzYtMTI5LjkyLTEwMS4zNDRhNDgwLjk2IDQ4MC45NiAwIDAgMC0xOS43NDQtNS40NGwtMzMuNDA4LTcuOTM2Yy0zNC4yNC04LjEyOC00OC40OC0xMy45NTItNTQuNTI4LTIxLjYzMi02LjQtOC4xNi02LjM2OC0yNS45ODQgNi41OTItNjAuMzJsMi41Ni02LjY1NmM1My44MjQtMTM0LjU2IDE1LjEwNC0yMTkuMDcyLTEwNi40NjQtMjMzLjA4OEMxNzcuNjMyIDE2OS42IDMzMi40OCA2NCA1MTIgNjR6TTgyLjQ2NCAzODQuMjU2Yzg5LjYgMy42NDggMTEwLjYyNCA0My4wNCA3My41MDQgMTQwLjA2NGwtMi43ODQgNy4wNGMtMjMuMDQgNTcuNjk2LTI0LjEyOCA5OS42NDgtMC4wNjQgMTMwLjI3MiAxNy40MDggMjIuMjA4IDM4Ljg0OCAzMS43NzYgODIuNTYgNDIuNTZsMzMuMjggNy44NzJjOS4wMjQgMi4yMDggMTYuNjQgNC4yMjQgMjMuNzc2IDYuMzY4IDQ1LjI0OCAxMy41NjggNzMuMjQ4IDMzLjAyNCA5MS4wNzIgNjguNjcyIDM1LjIgNzAuMzY4IDIxLjQ0IDExMS4zNi01MS44NCAxMzUuMjMyQzE3NC4xNzYgODUzLjAyNCA2NCA2OTUuMzYgNjQgNTEyYzAtNDQuMzg0IDYuNDY0LTg3LjI2NCAxOC40NjQtMTI3Ljc0NHogbTYxOS44MDgtMjc3Ljk1MkM4NTQuNTYgMTc3LjgyNCA5NjAgMzMyLjYwOCA5NjAgNTEyYzAgMTYzLjUyLTg3LjYxNiAzMDYuNjI0LTIxOC40OTYgMzg0LjgzMi04OC4zMi02MS44MjQtMTE5LjY4LTExOS4xNjgtMTAxLjg1Ni0xNzIuNjQgMTEuMTY4LTMzLjUzNiAzNC44OC00OS43NiAxMDEuMzQ0LTczLjAyNGwxNy4xODQtNS44NTZjOTguNzItMzIuODk2IDEzOC4wNDgtNTYuNTEyIDE1OS4wNC0xMTkuMzYgNDIuMTc2LTEyNi41OTItMTUuNTUyLTE4NC4zMi0xNzguODgtMjM4LjcyLTQ3LjItMTUuNzQ0LTYyLjQ5Ni02OS42MzItMzguNzUyLTE3MC4w...');
   background-size: contain;
   background-position: center;
   background-repeat: no-repeat;
@@ -1026,7 +1053,7 @@ onUnmounted(() => {
 }
 
 :deep(.el-select .el-input__wrapper:hover) {
-  border-color: #409EFF;
+  border-color: #409eff;
   box-shadow: 0 2px 6px rgba(64, 158, 255, 0.2);
 }
 
@@ -1036,7 +1063,7 @@ onUnmounted(() => {
 }
 
 :deep(.el-select .el-input__suffix) {
-  color: #409EFF;
+  color: #409eff;
 }
 
 :deep(.el-select-dropdown__item) {
@@ -1047,7 +1074,7 @@ onUnmounted(() => {
 
 :deep(.el-select-dropdown__item:hover) {
   background-color: rgba(64, 158, 255, 0.1);
-  color: #409EFF;
+  color: #409eff;
 }
 
 :deep(.el-select-dropdown__item.selected) {

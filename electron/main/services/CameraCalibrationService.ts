@@ -27,6 +27,8 @@ export interface CameraCalibrationHost {
   stopMeasurement(): Promise<CameraMeasurementTeardown>
   /** 标定开关 set_calibParam：1 = 串口全量上报，0 = 跟随 + ≤1.5 m 过滤（重启归 0）；固件不支持时缺省 */
   writeCalibSwitch?(enabled: boolean): Promise<void>
+  /** 测试可注入等待器；生产环境缺省使用 setTimeout */
+  wait?(ms: number): Promise<void>
 }
 
 export class CameraCalibrationService {
@@ -153,6 +155,11 @@ export class CameraCalibrationService {
       // 防陈旧通道:上一轮 close/finalize 未及拆除时先补拆(通道空闲时为瞬时空操作)
       await this.host.stopMeasurement().catch(() => undefined)
       if (revision !== this.observationRevision) return this.emit()
+      await this.host.startMeasurement(access)
+      // 先让人物信息观测运行 3 秒，再开启固件全量上报；等待期间关闭/重连会取消本次写入。
+      await (this.host.wait?.(3000) ??
+        new Promise<void>((resolve) => setTimeout(resolve, 3000)))
+      if (revision !== this.observationRevision) return this.emit()
       if (this.host.writeCalibSwitch) {
         this.ensureControlLink()
         this.writing = true
@@ -167,8 +174,6 @@ export class CameraCalibrationService {
           this.emit()
         }
       }
-      if (revision !== this.observationRevision) return this.emit()
-      await this.host.startMeasurement(access)
     } catch (error) {
       if (revision !== this.observationRevision) return this.emit()
       this.state.observing = false
@@ -176,8 +181,10 @@ export class CameraCalibrationService {
       this.owner = undefined
       this.observationLeases = 0
       this.state.phase = 'stopped'
-      this.state.reason = '测量通道建立失败'
+      this.state.reason = '观测开启失败'
       await this.resetSwitchQuietly()
+      // 新流程先建立测量再延迟写开关；任何后续失败都不能遗留 SSH 采样进程。
+      await this.host.stopMeasurement().catch(() => undefined)
       this.emit()
       throw error
     }
@@ -322,6 +329,8 @@ export class CameraCalibrationService {
         return this.emit()
       }
       this.observationLeases = 0
+      // 作废仍在 3 秒等待中的旧观测，避免关闭后迟到发送 set_calibParam=1。
+      ++this.observationRevision
       const pending = this.observationStart
       const cleanup = () => {
         if (this.observationLeases === 0) this.close(owner, true)

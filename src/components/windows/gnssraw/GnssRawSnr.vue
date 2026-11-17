@@ -76,6 +76,7 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import { usePersistentSelection } from '@/composables/usePersistentSelection'
 import { t } from '@/i18n'
 import { useGnssRawChart, satLabel, relativeTimes, type ChartColors } from './useGnssRawChart'
 import {
@@ -91,7 +92,7 @@ const SLOT_LIGHTEN = ['', '66', '99']
 type SortCol = 'sat' | 'freq' | 'samples' | 'mean' | 'range'
 
 /** 0 = 全部星座 */
-const sysFilter = ref(0)
+const sysFilter = usePersistentSelection('gnssraw-snr:filter', 0, () => [0, ...presentSys.value])
 const selectedKeys = ref<string[]>([])
 const sortCol = ref<SortCol>('sat')
 const sortAsc = ref(true)
@@ -183,8 +184,7 @@ function buildTimeSeries(colors: ChartColors, dataset: GnssRawDataset) {
       backgroundColor: colors.surface,
       borderColor: colors.border,
       textStyle: { color: colors.text },
-      valueFormatter: (v: unknown) =>
-        typeof v === 'number' ? `${v.toFixed(1)} dBHz` : '—',
+      valueFormatter: (v: unknown) => (typeof v === 'number' ? `${v.toFixed(1)} dBHz` : '—'),
     },
     legend: { top: 2, textStyle: { color: colors.text, fontSize: 11 } },
     grid: { left: 44, right: 12, top: 26, bottom: 24 },

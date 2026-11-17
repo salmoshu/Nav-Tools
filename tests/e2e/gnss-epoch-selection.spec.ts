@@ -113,7 +113,11 @@ test('post-processing publishes its own toolbar timeline and links the selected 
   await expect(page.locator('.flow-console-virtual .timeline-current')).toContainText(
     '2024/07/30 00:00:00.000',
   )
-  await expect(panel.locator('.solver-latest')).toContainText('2024/07/30 00:00:00.000')
+  const solutionTime = page
+    .locator('.status-item')
+    .filter({ has: page.getByText('Solution Time', { exact: true }) })
+    .locator('.status-indicator')
+  await expect(solutionTime).toContainText('2024/07/30 00:00:00.000')
   const canvas = await fitGrid(page)
   const box = (await canvas.boundingBox())!
   await canvas.dblclick({ position: { x: box.width / 2, y: box.height / 2 } })
@@ -136,7 +140,7 @@ test('post-processing publishes its own toolbar timeline and links the selected 
   })
   await expect(page.locator('.flow-console-virtual .timeline-current')).toContainText(selectedTime)
   await expect(page.locator('.flow-console-virtual .timeline-current')).toBeInViewport()
-  await expect(panel.locator('.solver-latest')).toContainText(selectedTime)
+  await expect(solutionTime).toContainText(selectedTime)
   await page.screenshot({ path: 'test-results/gnss-solver-epoch-selection.png', fullPage: true })
 })
 

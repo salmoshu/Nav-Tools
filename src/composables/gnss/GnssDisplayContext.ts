@@ -15,6 +15,18 @@ export interface GnssDisplayContext {
   > &
     Partial<Pick<ReturnType<typeof useNmea>, 'statusEpochHistory'>>
   timeline: ReturnType<typeof createFileTimeline>
+  /** Satellite data for this workspace; it must not fall back to another receiver. */
+  signals?: Pick<
+    ReturnType<typeof useNmea>,
+    | 'satelliteSnrData'
+    | 'snrHistory'
+    | 'satelliteEpochHistory'
+    | 'satelliteCountEpochHistory'
+    | 'hasGsvData'
+    | 'satelliteCountSource'
+    | 'clearSatelliteEpochHistory'
+    | 'clearSatelliteCountHistory'
+  >
   mapState: {
     status: { latitude: number | string; longitude: number | string; quality: number }
     trackResetToken: number

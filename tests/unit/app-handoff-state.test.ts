@@ -67,7 +67,7 @@ vi.mock('@/composables/useMcapPlayer', () => ({
   }),
 }))
 vi.mock('element-plus', () => ({
-  ElMessage: { success: vi.fn(), error: vi.fn(), warning: vi.fn() },
+  ElMessage: Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn(), warning: vi.fn() }),
 }))
 
 function snapshot(): AppHandoffSnapshotResult {

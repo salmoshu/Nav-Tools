@@ -114,6 +114,7 @@ import {
   normalizeAzimuthDelta,
   resizeAzimuthRange,
   shiftAzimuthRange,
+  snapAzimuthDrag,
   type AzimuthRange,
 } from '@/core/camera/CalibrationAzimuth'
 import { t } from '@/i18n'
@@ -178,6 +179,7 @@ type DragKind = 'move' | 'min' | 'max'
 const drag = ref<DragKind | null>(null)
 let dragPointerId: number | null = null
 let previousPointerAngle = 0
+let rawDragRange: AzimuthRange = { min: 0, max: 0 }
 
 function pointerAngle(event: PointerEvent): number {
   const svg = (event.currentTarget as SVGGraphicsElement).ownerSVGElement
@@ -200,6 +202,7 @@ function startDrag(kind: DragKind, event: PointerEvent): void {
   drag.value = kind
   dragPointerId = event.pointerId
   previousPointerAngle = pointerAngle(event)
+  rawDragRange = { ...range.value }
   ;(event.currentTarget as Element).setPointerCapture(event.pointerId)
 }
 
@@ -209,22 +212,24 @@ function moveDrag(event: PointerEvent): void {
   const delta = normalizeAzimuthDelta(angle - previousPointerAngle)
   previousPointerAngle = angle
   if (delta === 0) return
-  updateRange(
+  rawDragRange =
     drag.value === 'move'
-      ? shiftAzimuthRange(range.value.min, range.value.max, delta)
+      ? shiftAzimuthRange(rawDragRange.min, rawDragRange.max, delta)
       : resizeAzimuthRange(
-          range.value.min,
-          range.value.max,
+          rawDragRange.min,
+          rawDragRange.max,
           drag.value,
-          range.value[drag.value] + delta,
-        ),
-  )
+          rawDragRange[drag.value] + delta,
+        )
+  // 显示值吸附到 5° 倍数，原始值继续跟随指针；越过吸附区后仍能自然离开。
+  updateRange(snapAzimuthDrag(rawDragRange.min, rawDragRange.max, drag.value))
 }
 
 function endDrag(event: PointerEvent): void {
-  if (event.pointerId !== dragPointerId) return
+  if (event.pointerId !== dragPointerId || drag.value === null) return
   const element = event.currentTarget as Element
   if (element.hasPointerCapture(event.pointerId)) element.releasePointerCapture(event.pointerId)
+  updateRange(snapAzimuthDrag(rawDragRange.min, rawDragRange.max, drag.value, true))
   drag.value = null
   dragPointerId = null
 }
@@ -238,18 +243,21 @@ function onRangeKeydown(event: KeyboardEvent): void {
       : 0
   if (direction === 0) return
   event.preventDefault()
-  updateRange(
-    shiftAzimuthRange(range.value.min, range.value.max, direction * (event.shiftKey ? 10 : 1)),
+  const next = shiftAzimuthRange(
+    range.value.min,
+    range.value.max,
+    direction * (event.shiftKey ? 25 : 5),
   )
+  updateRange(snapAzimuthDrag(next.min, next.max, 'move', true))
 }
 
 function onEdgeKeydown(edge: 'min' | 'max', event: KeyboardEvent): void {
   if (props.disabled) return
   let value: number | undefined
   if (['ArrowLeft', 'ArrowDown'].includes(event.key)) {
-    value = range.value[edge] - (event.shiftKey ? 10 : 1)
+    value = range.value[edge] - (event.shiftKey ? 25 : 5)
   } else if (['ArrowRight', 'ArrowUp'].includes(event.key)) {
-    value = range.value[edge] + (event.shiftKey ? 10 : 1)
+    value = range.value[edge] + (event.shiftKey ? 25 : 5)
   } else if (event.key === 'Home') {
     value = edge === 'min' ? AZIMUTH_MIN_DEG : range.value.min
   } else if (event.key === 'End') {
@@ -257,7 +265,8 @@ function onEdgeKeydown(edge: 'min' | 'max', event: KeyboardEvent): void {
   }
   if (value === undefined) return
   event.preventDefault()
-  updateRange(resizeAzimuthRange(range.value.min, range.value.max, edge, value))
+  const next = resizeAzimuthRange(range.value.min, range.value.max, edge, value)
+  updateRange(snapAzimuthDrag(next.min, next.max, edge, true))
 }
 </script>
 

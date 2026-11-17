@@ -414,6 +414,7 @@ import {
   RTKPLOT_REFERENCE_COLORS,
 } from '@/components/windows/gnss/referenceTrackColors'
 import { useTheme } from '@/composables/useTheme'
+import { usePersistentSelection } from '@/composables/usePersistentSelection'
 import { createTrajectoryRenderer } from '@/core/render/createTrajectoryRenderer'
 import { createMultiSeriesTrajectoryRenderer } from '@/core/render/createMultiSeriesTrajectoryRenderer'
 import type { MultiSeriesTrajectoryRenderer } from '@/core/render/MultiSeriesTrajectoryRenderer'
@@ -523,7 +524,11 @@ let stopTimelineWatch: (() => void) | null = null
 type DeviationView = 'deviation' | 'position' | 'speed'
 type DeviationLayer = 'grid' | 'map'
 
-const currentView = ref<DeviationView>('deviation')
+const currentView = usePersistentSelection<DeviationView>('gnss-deviation:view', 'deviation', [
+  'deviation',
+  'position',
+  'speed',
+])
 const layerMode = ref<DeviationLayer>('grid')
 const expandedAxis = ref<PositionAxis | null>(null)
 
@@ -904,9 +909,25 @@ const mapViewState = computed<GnssMapViewSync | null>(() => {
       visualContainerRef.value?.clientWidth ||
       1,
   )
+  let centerE = (viewport.value.xMin + viewport.value.xMax) / 2
+  let centerN = (viewport.value.yMin + viewport.value.yMax) / 2
+  if (isTracking.value && !comparisonActive.value && mapPositionEpochHistory.length > 0) {
+    const history = mapPositionEpochHistory
+    const index = fileTimeline.active.value
+      ? history.findNearestElapsedTime(fileTimeline.elapsedFor(history))
+      : history.length - 1
+    const longitude = history.getValue('LONGITUDE', index)
+    const latitude = history.getValue('LATITUDE', index)
+    if (longitude !== null && latitude !== null) {
+      centerE =
+        (longitude - firstLongitude) * 111320 * Math.cos((firstLatitude * Math.PI) / 180) +
+        panOffsetX
+      centerN = (latitude - firstLatitude) * 110574 + panOffsetY
+    }
+  }
   return {
-    centerE: (viewport.value.xMin + viewport.value.xMax) / 2,
-    centerN: (viewport.value.yMin + viewport.value.yMax) / 2,
+    centerE,
+    centerN,
     // Use the same fixed origin as the ENU parser, including when the file
     // timeline is positioned before the final map point.
     anchorE: 0,
@@ -1910,7 +1931,7 @@ function setupResizeObserver(): void {
       renderer?.onResize(width, height)
       comparisonRenderer?.onResize(width, height)
       resizeAxisCanvas(width, height)
-      if (!isTracking.value) {
+      if (!isTracking.value && (fileTimeline.active.value || comparisonActive.value)) {
         // 文件全览与轨迹比较按新画布比例重新适配，避免全屏或还原后仍沿用旧跨度。
         resetZoom()
       } else {

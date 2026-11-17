@@ -62,11 +62,12 @@ test('uses readable table typography and a refined satellite-count view', async 
 
   await page.locator('.view-select').click()
   const viewOptions = page.locator('.el-select-dropdown:visible .el-select-dropdown__item')
-  await expect(viewOptions.first()).toHaveText('Satellite Count')
-  await viewOptions.first().click()
+  await expect(viewOptions.first()).toHaveText('Bar Chart View')
+  await viewOptions.filter({ hasText: 'Satellite Count' }).click()
   const chart = page.locator('.satellite-count-chart')
   await expect(chart).toBeVisible()
-  await expect(chart.locator('.legend-item')).toHaveCount(7)
+  await expect(chart.locator('.legend-item')).toHaveCount(4)
+  await expect(chart.locator('.legend-item')).toHaveText(['GPS', 'BEIDOU', 'GALILEO', 'Total'])
   await expect(chart.locator('.legend-item--total')).toHaveText('Total')
   await expect(chart.locator('.satellite-count-plot')).toBeVisible()
   await expect(chart.locator('.satellite-count-axis')).toBeVisible()
@@ -81,25 +82,25 @@ test('uses readable table typography and a refined satellite-count view', async 
   await expect(page.locator('.el-select-dropdown:visible')).toHaveCount(0)
   await page.screenshot({ path: 'test-results/v186-gnss-nsat.png' })
 
-  await page.evaluate(
-    async (epoch) => {
-      const { useNmea } = await import('/src/composables/gnss/useNmea.ts')
-      useNmea().clearData()
-      useNmea().processRawData(epoch)
-    },
-    nmea('GNGGA,123504,4807.038,N,01131.000,E,5,18,0.9,545.4,M,46.9,M,,'),
-  )
+  await page.evaluate(async (epoch) => {
+    const { useNmea } = await import('/src/composables/gnss/useNmea.ts')
+    useNmea().clearData()
+    useNmea().processRawData(epoch)
+  }, nmea('GNGGA,123504,4807.038,N,01131.000,E,5,18,0.9,545.4,M,46.9,M,,'))
   await expect(chart.locator('.legend-item')).toHaveCount(1)
   await expect(chart.locator('.legend-item--total')).toHaveText('GGA · Satellites used')
   await chart.hover({ position: { x: 120, y: 100 } })
   await expect(chart.locator('.satellite-count-tooltip')).toContainText('Satellites used')
   await expect(chart.locator('.satellite-count-tooltip strong')).toHaveText('18')
 
-  await page.evaluate(async (epoch) => {
-    const { useNmea } = await import('/src/composables/gnss/useNmea.ts')
-    useNmea().processRawData(epoch)
-  }, signalEpoch(5, 50))
-  await expect(chart.locator('.legend-item')).toHaveCount(7)
+  await page.evaluate(
+    async (epoch) => {
+      const { useNmea } = await import('/src/composables/gnss/useNmea.ts')
+      useNmea().processRawData(epoch)
+    },
+    signalEpoch(5, 50),
+  )
+  await expect(chart.locator('.legend-item')).toHaveCount(4)
   await expect(chart.locator('.legend-item--total')).toHaveText('Total')
 
   await page.evaluate(async () => {

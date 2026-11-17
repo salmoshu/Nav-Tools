@@ -20,6 +20,11 @@ describe('GNSS solver session', () => {
       session.append(text.slice(index, index + 1337))
     expect(session.epochs.value).toBe(1205)
     expect(session.display.data.positionEpochHistory.value.length).toBe(1205)
+    expect(session.display.signals?.satelliteCountEpochHistory.value.length).toBe(1205)
+    expect(session.display.signals?.satelliteCountSource.value).toBe('rtklib-pos')
+    expect(session.display.signals?.satelliteCountEpochHistory.value.getValue('SATS_USED', 0)).toBe(
+      12,
+    )
     expect(session.display.data.deviationPoints.value).toHaveLength(1205)
     expect(session.display.data.deviationPoints.value[0]).toEqual([0, 0, 4])
     expect(session.display.data.deviationPoints.value[1][2]).toBe(5)
@@ -60,6 +65,8 @@ describe('GNSS solver session', () => {
     expect(first.logConsole.totalCount.value).toBe(0)
     expect(second.epochs.value).toBe(0)
     expect(first.display.timeline).not.toBe(useFileTimeline())
+    expect(first.display.signals?.satelliteCountEpochHistory.value.length).toBe(1)
+    expect(second.display.signals?.satelliteCountEpochHistory.value.length).toBe(0)
   })
 
   it('uses the first valid position as origin and counts invalid solution qualities separately', () => {
@@ -111,6 +118,47 @@ describe('GNSS solver session', () => {
         quality: 1,
         time: '2024/07/30 00:00:00.000',
       })
+      expect(session.display.signals?.satelliteCountSource.value).toBe('gga')
+      expect(
+        session.display.signals?.satelliteCountEpochHistory.value.getValue('SATS_USED', 0),
+      ).toBe(12)
     },
   )
+
+  it('records missing and zero GGA counts correctly and clears only this session', () => {
+    const sentence = (body: string) => {
+      let checksum = 0
+      for (const char of body) checksum ^= char.charCodeAt(0)
+      return `$${body}*${checksum.toString(16).toUpperCase().padStart(2, '0')}\r\n`
+    }
+    const first = createGnssSolverSession()
+    const second = createGnssSolverSession()
+    first.begin('first', 'post')
+    second.begin('second', 'post')
+    first.append(sentence('GPRMC,000000.00,A,3100.0000,N,12100.0000,E,0,0,300724,,,A'))
+    first.append(sentence('GPGGA,000000.00,3100.0000,N,12100.0000,E,1,,1.0,10.0,M,20.0,M,,'))
+    first.append(sentence('GPGGA,000001.00,3100.0000,N,12100.0000,E,1,00,1.0,10.0,M,20.0,M,,'))
+    second.append(line(0))
+    const signals = first.display.signals!
+    expect(signals.satelliteCountEpochHistory.value.length).toBe(2)
+    expect(signals.satelliteCountEpochHistory.value.getValue('SATS_USED', 0)).toBeNull()
+    expect(signals.satelliteCountEpochHistory.value.getValue('SATS_USED', 1)).toBe(0)
+    expect(signals.satelliteSnrData.value).toEqual([])
+    signals.clearSatelliteCountHistory()
+    expect(signals.satelliteCountEpochHistory.value.length).toBe(0)
+    expect(first.display.data.positionEpochHistory.value.length).toBe(2)
+    expect(second.display.signals?.satelliteCountEpochHistory.value.length).toBe(1)
+  })
+
+  it('aligns counts with the position timeline when no-fix epochs precede valid positions', () => {
+    const session = createGnssSolverSession()
+    session.begin('alignment', 'realtime')
+    session.append(line(0, 0) + line(1, 1) + line(2, 1))
+    const counts = session.display.signals!.satelliteCountEpochHistory.value
+    expect(counts.length).toBe(3)
+    expect(session.display.data.positionEpochHistory.value.length).toBe(2)
+    expect(session.attachTimeline()).toBe(true)
+    session.display.timeline.seekElapsedTime(0)
+    expect(counts.findNearestElapsedTime(session.display.timeline.elapsedFor(counts))).toBe(1)
+  })
 })

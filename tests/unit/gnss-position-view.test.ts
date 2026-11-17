@@ -26,7 +26,7 @@ describe('GNSS deviation position and speed views', () => {
     expect(metric).toContain('min-height: 0')
     expect(metric).toContain('updateLayout(container.clientHeight)')
     expect(metric).toContain('containerHeight < 150')
-    expect(metric).toContain('plotHeight < 80 ? 2 : 4')
+    expect(metric).toContain('plotHeight < 80 ? 3 : 6')
   })
 
   it('adds a separate ground-speed chart in km/h', () => {
@@ -82,17 +82,16 @@ describe('GNSS deviation position and speed views', () => {
     expect(source).toContain('renderedPointCount')
     expect(source).toContain('fitDeviationPoints(')
     expect(source).toContain('const isTracking = ref(true)')
-    expect(source).not.toContain('isTracking.value = false')
+    expect(source).toContain('selectedComparisonTimeMs.value = timeMs')
+    expect(source).toContain('else if (!fileTimeline.active.value)')
   })
 
   it('moves deviation and metric cursors with the shared file timeline', () => {
     expect(source).toContain('getTimelinePositionPoint')
-    expect(source).toContain(
-      'history.findNearestElapsedTime(fileTimeline.elapsedFor(history))',
-    )
+    expect(source).toContain('history.findNearestElapsedTime(fileTimeline.elapsedFor(history))')
     expect(metric).toContain('useFileTimeline')
     expect(metric).toContain('store.findNearestElapsedTime(fileTimeline.elapsedMilliseconds.value)')
-    expect(metric).toContain("store.getValue('QUALITY', cursorIndex)")
+    expect(metric).toContain("store.getValue('QUALITY', primaryIndex)")
   })
 
   it('renders bare axis numbers with an rtkplot-style bottom-right scale bar', () => {

@@ -15,14 +15,17 @@ import {
   CameraCommandService,
   encodeCameraCommand,
   type CameraCommandRequest,
+  type CameraCommandResult,
 } from './services/CameraCommandService'
 import { CameraCalibrationService } from './services/CameraCalibrationService'
 import { CameraSshMeasurementChannel } from './services/CameraSshMeasurementChannel'
 import { chooseOpenFiles } from './dialogs'
 import { ReadParamsSniffer, type CameraParamSnapshot } from '../../src/core/camera/CameraParamReadback'
+import { CameraResponseFramer } from '../../src/core/camera/CameraResponseFramer'
 
 const serialService = new SerialPortService()
 const networkService = new NetworkConnectionService()
+let controlResponseFramer: CameraResponseFramer | undefined
 let primaryTransport: 'serial' | 'network' | undefined
 let primaryOwnerId: number | undefined
 let primaryGeneration = 0
@@ -82,6 +85,20 @@ async function startDataInjection(event: IpcMainInvokeEvent, settings: DataInjec
 const cameraCommandService = new CameraCommandService({
   write: (packet) => networkService.sendTcp(packet),
 })
+
+async function sendCameraControlCommand(
+  request: CameraCommandRequest,
+): Promise<CameraCommandResult> {
+  const framer = controlResponseFramer
+  framer?.request(request.subCommand)
+  try {
+    return await cameraCommandService.send(request)
+  } catch (error) {
+    framer?.cancelRequest(request.subCommand)
+    throw error
+  }
+}
+
 const measurementChannel = new CameraSshMeasurementChannel()
 let cameraStreamServiceRef: { listActive(): Array<{ url: string; ownerWindowId: number }> } | undefined
 
@@ -94,13 +111,19 @@ const cameraCalibrationService = new CameraCalibrationService({
   now: () => performance.now(),
   tcpTarget: () => networkService.getTcpTarget(),
   writeParams: async (content) => {
-    await cameraCommandService.send({ subCommand: 'set_params', content, contentFormat: 'text' })
+    await sendCameraControlCommand({ subCommand: 'set_params', content, contentFormat: 'text' })
   },
   // 标定开关（2026-10 固件新增）：1 = 串口全量上报跟踪目标，0 = 跟随目标 + ≤1.5 m 非跟随目标；设备重启后默认 0
   writeCalibSwitch: async (enabled) => {
-    await cameraCommandService.send({
+    const value = enabled ? 1 : 0
+    // 自动写入也进入相机消息区；设备应答本身不带 1/0，无法从应答还原设置值。
+    for (const window of BrowserWindow.getAllWindows()) {
+      if (!window.isDestroyed() && !window.webContents.isDestroyed())
+        window.webContents.send('camera-calibration-switch-write', value)
+    }
+    await sendCameraControlCommand({
       subCommand: 'set_calibParam',
-      content: enabled ? '1' : '0',
+      content: String(value),
       contentFormat: 'text',
     })
   },
@@ -147,8 +170,12 @@ async function readbackParams(): Promise<CameraParamSnapshot> {
     readbackSettled = resolve
     readbackFailed = reject
     readbackTimer = setTimeout(() => settleReadback(undefined, new Error('回读超时：设备未响应 read_params')), 2500)
-    networkService.sendTcp(packet).catch((error) =>
-      settleReadback(undefined, error instanceof Error ? error : new Error(String(error))))
+    const framer = controlResponseFramer
+    framer?.request('read_params')
+    networkService.sendTcp(packet).catch((error) => {
+      framer?.cancelRequest('read_params')
+      settleReadback(undefined, error instanceof Error ? error : new Error(String(error)))
+    })
   })
 }
 
@@ -253,10 +280,21 @@ async function openNetworkConnection(event: IpcMainInvokeEvent, options: Network
   await invalidateInjectionTarget()
   const attempt = primaryGeneration
   cameraCalibrationService.stopForControlLinkChange('控制连接正在改变，已停止自动标定（观测保持运行）')
+  const framer = new CameraResponseFramer((text) => {
+    if (!event.sender.isDestroyed()) event.sender.send('network-data-to-renderer', text)
+  })
+  controlResponseFramer?.reset()
+  controlResponseFramer = framer
+  const clearResponseFramer = () => {
+    if (controlResponseFramer !== framer) return
+    framer.reset()
+    controlResponseFramer = undefined
+  }
   return networkService
     .open(options, {
-      onData: (data) => event.sender.send('network-data-to-renderer', data),
+      onData: (data) => framer.push(data),
       onDisconnected: (connection, reason) => {
+        clearResponseFramer()
         if (primaryTransport === 'network') void invalidateInjectionTarget()
         cameraCalibrationService.stopForControlLinkChange('控制连接已断开，设备参数需人工核实')
         event.sender.send('network-disconnected', { ...connection, reason })
@@ -269,6 +307,7 @@ async function openNetworkConnection(event: IpcMainInvokeEvent, options: Network
       }
     })
     .catch((error: unknown) => {
+      clearResponseFramer()
       // 用户取消或被新连接顶掉属预期结局, 不作为 handler 异常刷主进程控制台;
       // 渲染端以尝试序号守卫状态, 不会把这个静默结果当成连接成功
       const message = error instanceof Error ? error.message : String(error)
@@ -278,11 +317,15 @@ async function openNetworkConnection(event: IpcMainInvokeEvent, options: Network
 }
 
 function cancelNetworkConnect() {
+  controlResponseFramer?.reset()
+  controlResponseFramer = undefined
   void invalidateInjectionTarget()
   networkService.cancelPending()
 }
 
 async function closeNetworkConnection() {
+  controlResponseFramer?.reset()
+  controlResponseFramer = undefined
   if (primaryTransport === 'network') await invalidateInjectionTarget()
   cameraCalibrationService.stopForControlLinkChange('控制连接已关闭，已停止自动标定（观测保持运行）')
   return networkService.close()
@@ -307,7 +350,7 @@ async function sendNetworkData(event: IpcMainEvent, data: string, format: 'hex' 
 }
 
 function sendCameraCommand(_event: IpcMainInvokeEvent, request: CameraCommandRequest) {
-  return cameraCalibrationService.manual(() => cameraCommandService.send(request))
+  return cameraCalibrationService.manual(() => sendCameraControlCommand(request))
 }
 
 /** 渲染端主动 read_params（进入相机参数窗口/数据接入连上时自动读取一次） */

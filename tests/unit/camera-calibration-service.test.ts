@@ -13,6 +13,8 @@ class FakeHost implements Partial<CameraCalibrationHost> {
   public stopCalls = 0
   public writes: string[] = []
   public calibWrites: boolean[] = []
+  public waits: number[] = []
+  public sequence: string[] = []
   public failWrites = false
   public failCalibSwitch = false
   public onMeasurementStart?: () => void
@@ -46,6 +48,12 @@ class FakeHost implements Partial<CameraCalibrationHost> {
   public async writeCalibSwitch(enabled: boolean): Promise<void> {
     if (this.failCalibSwitch) throw new Error('模拟开关写入失败')
     this.calibWrites.push(enabled)
+    this.sequence.push(`calib:${enabled}`)
+  }
+
+  public async wait(ms: number): Promise<void> {
+    this.waits.push(ms)
+    this.sequence.push(`wait:${ms}`)
   }
 
   public async readbackParams() {
@@ -56,6 +64,7 @@ class FakeHost implements Partial<CameraCalibrationHost> {
     if (this.channelOpen) throw new Error('测量通道已存在，请先停止')
     this.channelOpen = true
     this.startCalls++
+    this.sequence.push('start')
     this.onMeasurementStart?.()
   }
 
@@ -78,6 +87,37 @@ function flushMicrotasks(): Promise<void> {
 }
 
 describe('CameraCalibrationService 观测生命周期', () => {
+  it('人物信息观测启动 3 秒后才开启全量上报', async () => {
+    const host = new FakeHost()
+    const service = new CameraCalibrationService(host as unknown as CameraCalibrationHost)
+
+    await service.observe(1, ACCESS)
+
+    expect(host.waits).toEqual([3000])
+    expect(host.sequence).toEqual(['start', 'wait:3000', 'calib:true'])
+  })
+
+  it('3 秒等待期间关闭观测会取消尚未发送的开关命令', async () => {
+    const host = new FakeHost()
+    const service = new CameraCalibrationService(host as unknown as CameraCalibrationHost)
+    let releaseWait: (() => void) | undefined
+    host.wait = () =>
+      new Promise<void>((resolve) => {
+        releaseWait = resolve
+      })
+
+    const observing = service.observe(1, ACCESS)
+    await flushMicrotasks()
+    expect(host.calibWrites).toEqual([])
+    service.close(1)
+    releaseWait?.()
+    await observing
+    await flushMicrotasks()
+
+    expect(host.calibWrites).toEqual([])
+    expect(host.channelOpen).toBe(false)
+  })
+
   it.each(['error', 'stopped'] as const)('测量通道 %s 后再次连接会重新启动采样', async (state) => {
     const host = new FakeHost()
     const service = new CameraCalibrationService(host as unknown as CameraCalibrationHost)
@@ -234,7 +274,6 @@ function calConfig(overrides: Partial<CameraCalibrationConfig> = {}): CameraCali
       { distance: 1.2, biasMinM: 0.02, biasMaxM: 0.06, azimuthMinDeg: -180, azimuthMaxDeg: 180 },
       { distance: 2, biasMinM: 0.02, biasMaxM: 0.06, azimuthMinDeg: -180, azimuthMaxDeg: 180 },
     ],
-    nearSide: 'left',
     personClassId: 0,
     sampleCount: 3,
     windowMs: 200,
@@ -341,12 +380,13 @@ describe('CameraCalibrationService 全量上报开关', () => {
     expect(host.writes).toEqual(['0.55,62.292,-21.5'])
   })
 
-  it('全量上报开启失败时拒绝观测且不建立测量通道', async () => {
+  it('全量上报开启失败时拒绝观测并清理测量通道', async () => {
     const host = new FakeHost()
     host.failCalibSwitch = true
     const service = new CameraCalibrationService(host as unknown as CameraCalibrationHost)
     await expect(service.observe(1, ACCESS)).rejects.toThrow(/全量上报开启失败/)
-    expect(host.startCalls).toBe(0)
+    expect(host.startCalls).toBe(1)
+    expect(host.channelOpen).toBe(false)
     expect(host.writes).toEqual([])
     expect(service.snapshot().observing).toBe(false)
   })

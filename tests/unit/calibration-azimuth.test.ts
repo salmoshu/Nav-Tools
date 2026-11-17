@@ -4,6 +4,7 @@ import {
   normalizeAzimuthDelta,
   resizeAzimuthRange,
   shiftAzimuthRange,
+  snapAzimuthDrag,
 } from '../../src/core/camera/CalibrationAzimuth'
 
 describe('calibration azimuth dial geometry', () => {
@@ -45,5 +46,23 @@ describe('calibration azimuth dial geometry', () => {
   it('prevents handles from leaving the global boundaries', () => {
     expect(resizeAzimuthRange(-20, 40, 'min', -200)).toEqual({ min: -180, max: 40 })
     expect(resizeAzimuthRange(-20, 40, 'max', 200)).toEqual({ min: -20, max: 180 })
+  })
+
+  it('magnetically snaps whole-sector movement to 5 degree multiples without changing width', () => {
+    expect(snapAzimuthDrag(19.6, 79.6, 'move')).toEqual({ min: 20, max: 80 })
+    expect(snapAzimuthDrag(20, 80, 'move')).toEqual({ min: 20, max: 80 })
+    expect(snapAzimuthDrag(22, 82, 'move')).toEqual({ min: 22, max: 82 })
+  })
+
+  it('snaps only the dragged edge near a 5 degree multiple', () => {
+    expect(snapAzimuthDrag(-20, 40.8, 'max')).toEqual({ min: -20, max: 40 })
+    expect(snapAzimuthDrag(-20, 42, 'max')).toEqual({ min: -20, max: 42 })
+    expect(snapAzimuthDrag(-20.9, 40, 'min')).toEqual({ min: -20, max: 40 })
+  })
+
+  it('snaps both drag modes to the nearest 5 degree multiple on release', () => {
+    expect(snapAzimuthDrag(20.2, 80.2, 'move', true)).toEqual({ min: 20, max: 80 })
+    expect(snapAzimuthDrag(-20, 42.2, 'max', true)).toEqual({ min: -20, max: 40 })
+    expect(snapAzimuthDrag(-20.2, 40, 'min', true)).toEqual({ min: -20, max: 40 })
   })
 })

@@ -17,7 +17,6 @@ export function config(overrides: Partial<CameraCalibrationConfig> = {}): Camera
       { distance: 1.2, biasMinM: 0.02, biasMaxM: 0.06, azimuthMinDeg: -180, azimuthMaxDeg: 180 },
       { distance: 2, biasMinM: 0.02, biasMaxM: 0.06, azimuthMinDeg: -180, azimuthMaxDeg: 180 },
     ],
-    nearSide: 'left',
     personClassId: 0,
     sampleCount: 3,
     windowMs: 200,
@@ -84,10 +83,10 @@ describe('CameraCalibration', () => {
     ).toThrow()
   })
 
-  it('defaults to two targets with ±0.02 m tolerance', () => {
+  it('defaults to right-side target 1 and left-side target 2 angle ranges', () => {
     expect(DEFAULT_CALIBRATION_CONFIG.targets).toEqual([
-      { distance: 1.2, biasMinM: -0.02, biasMaxM: 0.02, azimuthMinDeg: -180, azimuthMaxDeg: 180 },
-      { distance: 2, biasMinM: -0.02, biasMaxM: 0.02, azimuthMinDeg: -180, azimuthMaxDeg: 180 },
+      { distance: 1.2, biasMinM: -0.02, biasMaxM: 0.02, azimuthMinDeg: 0, azimuthMaxDeg: 90 },
+      { distance: 2, biasMinM: -0.02, biasMaxM: 0.02, azimuthMinDeg: -90, azimuthMaxDeg: 0 },
     ])
   })
 
@@ -140,13 +139,13 @@ describe('CameraCalibration', () => {
     expect(engine.snapshot()).toMatchObject({ phase: 'succeeded', reportedCount: 3 })
   })
 
-  it('pauses when the left-right assignment conflicts with a person azimuth range', () => {
+  it('pauses when no angle-based assignment matches every target config', () => {
     const base = config()
     const engine = new CameraCalibration(
       config({
         targets: [
           { ...base.targets[0], azimuthMinDeg: -10, azimuthMaxDeg: 10 },
-          { ...base.targets[1], azimuthMinDeg: -10, azimuthMaxDeg: 0 },
+          { ...base.targets[1], azimuthMinDeg: 20, azimuthMaxDeg: 30 },
         ],
       }),
       0,
@@ -277,10 +276,16 @@ describe('CameraCalibration', () => {
     expect(engine.snapshot()).toMatchObject({ phase: 'paused', reportedCount: 1 })
   })
 
-  it('assigns frame targets to config entries by the configured side', () => {
-    const rightSide = config({ nearSide: 'right' })
-    const engine = new CameraCalibration(rightSide, 0)
-    // 画面左=2.03（对人员 2 合格），画面右=1.3（对人员 1 偏远）；人员 1 配置为右侧
+  it('assigns frame targets to config entries by angle range', () => {
+    const base = config()
+    const angleConfig = config({
+      targets: [
+        { ...base.targets[0], azimuthMinDeg: 0, azimuthMaxDeg: 90 },
+        { ...base.targets[1], azimuthMinDeg: -90, azimuthMaxDeg: 0 },
+      ],
+    })
+    const engine = new CameraCalibration(angleConfig, 0)
+    // 左侧人员角度 -5° 匹配目标 2，右侧人员角度 5° 匹配目标 1。
     expect(window(engine, 1, 0, [2.03, 1.3])).toBeLessThan(-21.5)
   })
 

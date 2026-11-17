@@ -77,12 +77,8 @@ export function validateCalibrationConfig(c: CameraCalibrationConfig): void {
   )) {
     throw new Error('高度、FOV 或 OFFSET 范围无效；OFFSET 必须为负且初值在安全范围内')
   }
-  if (
-    !['left', 'right'].includes(c.nearSide) ||
-    !Number.isSafeInteger(c.personClassId) ||
-    c.personClassId < 0
-  ) {
-    throw new Error('请确认目标方位和目标类别编号')
+  if (!Number.isSafeInteger(c.personClassId) || c.personClassId < 0) {
+    throw new Error('请确认目标类别编号')
   }
   if (
     !Number.isInteger(c.sampleCount) ||
@@ -143,13 +139,19 @@ export function filterCalibrationTargets(
   )
 }
 
-/** 按画面左右把过滤后的帧内目标对应到配置序号（targets[0] 在 nearSide 一侧） */
+/** 双目标按角度范围匹配配置序号，不再依赖人工选择画面左右。 */
 function assignTargets(
   targets: InssegFrame['targets'],
   config: CameraCalibrationConfig,
 ): InssegFrame['targets'] {
-  const sorted = [...targets].sort((a, b) => a.left + a.right - (b.left + b.right))
-  return config.nearSide === 'left' ? sorted : sorted.reverse()
+  const matches = (candidate: InssegFrame['targets']) =>
+    candidate.every((target, index) => targetInAzimuthRange(target, config.targets[index]))
+  if (matches(targets)) return targets
+  if (targets.length === 2) {
+    const reversed = [targets[1], targets[0]]
+    if (matches(reversed)) return reversed
+  }
+  return targets
 }
 
 export class CameraCalibration {
@@ -214,7 +216,7 @@ export class CameraCalibration {
         (assigned[0].trackId === assigned[1].trackId ||
           assigned[0].left + assigned[0].right === assigned[1].left + assigned[1].right))
     ) {
-      this.invalidate('目标身份或左右位置不明确', now)
+      this.invalidate('目标身份或位置不明确', now)
       return
     }
     const identity = assigned.map((t) => t.trackId).join(':')

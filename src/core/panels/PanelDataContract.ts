@@ -41,7 +41,12 @@ export const PANEL_DATA_CONTRACTS: Readonly<Record<string, PanelDataContract>> =
   'gnsslib-solver': { role: 'excluded' },
 }
 
-export const SOLVER_SCOPED_PANEL_IDS = new Set(['gnsslib-solver', 'raw-messages', 'gnss-deviation'])
+export const SOLVER_SCOPED_PANEL_IDS = new Set([
+  'gnsslib-solver',
+  'raw-messages',
+  'gnss-deviation',
+  'gnss-signals',
+])
 
 export function panelDataContract(windowId: string): PanelDataContract {
   return PANEL_DATA_CONTRACTS[windowId] ?? { role: 'excluded' }

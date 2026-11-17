@@ -15,6 +15,12 @@ async function inject(page: Page, sentence: string): Promise<void> {
   }, sentence)
 }
 
+async function enableTracking(page: Page): Promise<void> {
+  const tracking = page.getByRole('switch', { name: 'Track', exact: true })
+  if (!(await tracking.isChecked())) await page.locator('.tracking-switch .el-switch__core').click()
+  await expect(tracking).toBeChecked()
+}
+
 async function scaleReadout(page: Page) {
   return page.locator('.scale-readout-container').evaluate((element) => ({
     label: element.querySelector('.scale-readout-label')!.textContent,
@@ -194,6 +200,7 @@ test('centers the map on the file cursor when viewing an earlier epoch', async (
     })
     useFileTimeline().stepEpoch(-2)
   })
+  await enableTracking(page)
   await page.getByRole('button', { name: 'Map', exact: true }).click()
   await expect
     .poll(async () => Math.abs(((await currentMarker(page, 'map'))?.x ?? 0) - 500))
@@ -219,6 +226,7 @@ for (const mode of ['loaded', 'replay'] as const) {
       timeline.pause()
       timeline.stepEpoch(1)
     }, mode)
+    await enableTracking(page)
     await page.locator('canvas.chart').evaluate((canvas) => {
       for (let index = 0; index < 4; index += 1) {
         canvas.dispatchEvent(new WheelEvent('wheel', { deltaY: -1200, cancelable: true }))
@@ -310,10 +318,13 @@ for (const mode of ['loaded', 'replay'] as const) {
       timeline.pause()
       if (mode === 'loaded') timeline.stepEpoch(-15)
     }, mode)
+    await enableTracking(page)
     await page.getByRole('button', { name: 'Map', exact: true }).click()
-    await expect.poll(() => page.locator('.leaflet-tile-loaded').count()).toBeGreaterThan(0)
+    await expect
+      .poll(() => page.locator('.leaflet-tile-loaded[src*="/19/"]').count())
+      .toBeGreaterThan(0)
     const initialScale = await scaleReadout(page)
-    await page.locator('.leaflet-tile-loaded').evaluateAll((tiles) => {
+    await page.locator('.leaflet-tile-loaded[src*="/19/"]').evaluateAll((tiles) => {
       Reflect.set(window, '__playbackTiles', tiles)
     })
 
@@ -326,6 +337,7 @@ for (const mode of ['loaded', 'replay'] as const) {
           requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
         )
       })
+      // The current native-zoom tiles must stay attached while following nearby epochs.
       expect(
         await page.evaluate(() =>
           Reflect.get(window, '__playbackTiles').every((tile: Element) => tile.isConnected),

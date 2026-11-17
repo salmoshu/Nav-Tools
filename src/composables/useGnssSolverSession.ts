@@ -1,5 +1,8 @@
 import { computed, reactive, ref, shallowRef, triggerRef, type InjectionKey, type Ref } from 'vue'
 import { NumericEpochStore } from '@/core/gnss/NumericEpochStore'
+import { SatelliteEpochStore } from '@/core/gnss/SatelliteEpochStore'
+import { SnrHistoryStore } from '@/core/gnss/SnrHistoryStore'
+import type { SatelliteDetailSample } from '@/core/gnss/SatelliteDetailEpochStore'
 import {
   RtkSolutionParser,
   nmeaQualityToRtkQuality,
@@ -57,6 +60,14 @@ export function createGnssSolverSession() {
     valuePrecision: 'float64',
   })
   const speedEpochHistory = shallowRef(new NumericEpochStore(['SPEED', 'QUALITY']))
+  const satelliteCountEpochHistory = shallowRef(new NumericEpochStore(['SATS_USED']))
+  const satelliteCountSource = ref<'gga' | 'rtklib-pos'>('gga')
+  // Solver results contain solution records, not receiver satellite snapshots.
+  // Keep these stores isolated even when the receiver workspace has GSV data.
+  const satelliteSnrData = shallowRef<SatelliteDetailSample[]>([])
+  const satelliteEpochHistory = shallowRef(new SatelliteEpochStore())
+  const snrHistory = shallowRef(new SnrHistoryStore())
+  const hasGsvData = ref(false)
   const mapState = reactive({
     status: { latitude: '' as number | string, longitude: '' as number | string, quality: 0 },
     trackResetToken: 0,
@@ -93,6 +104,18 @@ export function createGnssSolverSession() {
   let nmeaDate = ''
   const nmeaParser = new NmeaStreamParser()
 
+  function clearSatelliteCountHistory(): void {
+    satelliteCountEpochHistory.value.clear()
+    triggerRef(satelliteCountEpochHistory)
+  }
+
+  function clearSatelliteEpochHistory(): void {
+    satelliteEpochHistory.value.clear()
+    snrHistory.value.clear()
+    triggerRef(satelliteEpochHistory)
+    triggerRef(snrHistory)
+  }
+
   function clearData(): void {
     timeline.clearTimeline()
     origin = undefined
@@ -105,6 +128,11 @@ export function createGnssSolverSession() {
     positionEpochHistory.value = createPositionHistory()
     mapPositionEpochHistory.clear()
     speedEpochHistory.value = new NumericEpochStore(['SPEED', 'QUALITY'])
+    clearSatelliteCountHistory()
+    clearSatelliteEpochHistory()
+    satelliteCountSource.value = 'gga'
+    satelliteSnrData.value = []
+    hasGsvData.value = false
     currentData.value = emptyPosition()
     mapState.status = { latitude: '', longitude: '', quality: 0 }
     mapState.trackResetToken++
@@ -141,7 +169,11 @@ export function createGnssSolverSession() {
     nmeaParser.clear()
   }
 
-  function appendSolution(solution: RtkSolution): void {
+  function appendSolution(
+    solution: RtkSolution,
+    source: 'gga' | 'rtklib-pos',
+    satelliteCount: number | null = solution.satellites,
+  ): void {
     if (
       !Number.isFinite(solution.latitude) ||
       !Number.isFinite(solution.longitude) ||
@@ -153,6 +185,12 @@ export function createGnssSolverSession() {
     qualityCounts.value[solution.quality] = (qualityCounts.value[solution.quality] ?? 0) + 1
     latest.value = solution
     currentSolution.value = solution
+    satelliteCountSource.value = source
+    satelliteCountEpochHistory.value.append(
+      solution.time,
+      { SATS_USED: satelliteCount },
+      { replaceLast: true },
+    )
     if (solution.quality === 0) return
     origin ??= [solution.latitude, solution.longitude, solution.height]
     const east = (solution.longitude - origin[1]) * 111320 * Math.cos((origin[0] * Math.PI) / 180)
@@ -276,10 +314,12 @@ export function createGnssSolverSession() {
       (direction === 'S' || direction === 'W' ? -1 : 1)
     const clock = fields[1]
     const quality = nmeaQualityToRtkQuality(Number(fields[6]))
+    const countText = fields[7]?.trim() ?? ''
+    const satelliteCount = /^\d+$/.test(countText) ? Number(countText) : null
     const solution = new RtkSolutionParser().addLine(
-      `${nmeaDate} ${clock.slice(0, 2)}:${clock.slice(2, 4)}:${clock.slice(4)} ${coordinate(fields[2], fields[3])} ${coordinate(fields[4], fields[5])} ${Number(fields[9]) + Number(fields[11] || 0)} ${quality} ${Number(fields[7])}`,
+      `${nmeaDate} ${clock.slice(0, 2)}:${clock.slice(2, 4)}:${clock.slice(4)} ${coordinate(fields[2], fields[3])} ${coordinate(fields[4], fields[5])} ${Number(fields[9]) + Number(fields[11] || 0)} ${quality} ${satelliteCount ?? 0}`,
     )
-    if (solution) appendSolution({ ...solution, raw: sentence })
+    if (solution) appendSolution({ ...solution, raw: sentence }, 'gga', satelliteCount)
   }
 
   function append(text: string, id = runId.value): void {
@@ -291,11 +331,12 @@ export function createGnssSolverSession() {
     buffer = lines.pop() ?? ''
     for (const line of lines) {
       const solution = parser.addLine(line)
-      if (solution) appendSolution(solution)
+      if (solution) appendSolution(solution, 'rtklib-pos')
     }
     triggerRef(positionEpochHistory)
     triggerRef(deviationPoints)
     triggerRef(mapTrackPoints)
+    triggerRef(satelliteCountEpochHistory)
   }
 
   function appendLog(text: string, id = runId.value): void {
@@ -336,6 +377,16 @@ export function createGnssSolverSession() {
     },
     timeline,
     mapState,
+    signals: {
+      satelliteSnrData,
+      snrHistory,
+      satelliteEpochHistory,
+      satelliteCountEpochHistory,
+      hasGsvData,
+      satelliteCountSource,
+      clearSatelliteEpochHistory,
+      clearSatelliteCountHistory,
+    },
   }
   return {
     runId,

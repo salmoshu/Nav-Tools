@@ -3,6 +3,8 @@ export default {
     tableView: 'Table View',
     chartView: 'Bar Chart View',
     barEmpty: 'Waiting for satellite signal data',
+    solverSatelliteDetails:
+      'The solver workspace displays satellites used from GGA or POS. Per-satellite signal details are not yet connected.',
     recentPeak: 'Recent peak',
     recentPeakHint: 'Maximum C/N₀ in the retained per-satellite history',
     satCount: 'Satellite Count',
@@ -39,6 +41,7 @@ export default {
     nsatUsed: 'Satellites used',
     nsatYAxis: 'Satellites',
     total: 'Total',
+    legendToggle: 'Click to show / hide this series',
   },
   deviation: {
     deviationView: 'Deviation',

@@ -3,9 +3,9 @@
     <div class="snr-content">
       <div class="view-controls">
         <el-select v-model="currentView" size="small" class="view-select">
-          <el-option :label="t('gnss.signal.satCount')" value="nsat" />
-          <el-option :label="t('gnss.signal.tableView')" value="table" />
           <el-option :label="t('gnss.signal.chartView')" value="chart" />
+          <el-option :label="t('gnss.signal.tableView')" value="table" />
+          <el-option :label="t('gnss.signal.satCount')" value="nsat" />
           <el-option :label="t('gnss.signal.perSatView')" value="persat" />
         </el-select>
 
@@ -76,6 +76,10 @@
             <el-icon><Delete /></el-icon>&nbsp;{{ t('gnss.signal.clear') }}
           </el-button>
         </div>
+      </div>
+
+      <div v-if="scopedDisplay?.signals && currentView !== 'nsat'" class="solver-signal-hint">
+        {{ t('gnss.signal.solverSatelliteDetails') }}
       </div>
 
       <div v-show="currentView === 'table'" class="snr-table-container">
@@ -188,7 +192,13 @@
         </div>
       </div>
 
-      <div v-show="currentView === 'persat'" class="persat-chart-wrapper">
+      <div
+        v-show="currentView === 'persat'"
+        class="persat-chart-wrapper"
+        @mousedown="handlePerSatMouseDown"
+        @contextmenu.prevent
+        @dblclick="resetPerSatViewport"
+      >
         <div ref="perSatChartRef" class="snr-chart-container persat-chart"></div>
         <div v-if="perSatEmpty" class="persat-empty">
           <div class="persat-empty-title">{{ perSatEmptyTitle }}</div>
@@ -207,28 +217,32 @@
 </template>
 
 <script setup>
-import { computed, ref, shallowRef, onMounted, onUnmounted, watch, nextTick } from 'vue'
+import { computed, inject, ref, shallowRef, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import * as echarts from 'echarts'
 import { Delete, Timer } from '@element-plus/icons-vue'
 import { useNmea } from '@/composables/gnss/useNmea'
+import { gnssDisplayContext } from '@/composables/gnss/GnssDisplayContext'
 import { snrHistoryKey, formatSnrEpochLabel } from '@/core/gnss/SnrHistoryStore'
 import { assignSnrSeriesColors } from '@/core/gnss/SnrSeriesColors'
 import { buildSignalBarLayout } from '@/core/gnss/SignalBarLayout'
 import { useTheme } from '@/composables/useTheme'
+import { usePersistentSelection } from '@/composables/usePersistentSelection'
 import { t } from '@/i18n'
 import SatelliteCountChart from './SatelliteCountChart.vue'
 
 // 初始化NMEA解析器与主题
-const {
-  satelliteSnrData,
-  snrHistory,
-  clearSatelliteEpochHistory,
-  clearSatelliteCountHistory,
-} = useNmea()
+const scopedDisplay = inject(gnssDisplayContext, null)
+const { satelliteSnrData, snrHistory, clearSatelliteEpochHistory, clearSatelliteCountHistory } =
+  scopedDisplay?.signals ?? useNmea()
 const { chartTheme, resolvedTheme } = useTheme()
 
 // 视图状态
-const currentView = ref('nsat')
+const currentView = usePersistentSelection('gnss-signal:view', 'nsat', [
+  'nsat',
+  'table',
+  'chart',
+  'persat',
+])
 const constellationFilter = ref('all')
 
 // 图表相关
@@ -688,6 +702,28 @@ function initPerSatChart() {
         top: '14%',
         containLabel: true,
       },
+      dataZoom: [
+        {
+          id: 'x-zoom',
+          type: 'inside',
+          xAxisIndex: 0,
+          filterMode: 'none',
+          zoomOnMouseWheel: false,
+          moveOnMouseMove: true,
+          moveOnMouseWheel: false,
+          throttle: 50,
+        },
+        {
+          id: 'y-zoom',
+          type: 'inside',
+          yAxisIndex: 0,
+          filterMode: 'none',
+          zoomOnMouseWheel: true,
+          moveOnMouseMove: false,
+          moveOnMouseWheel: false,
+          throttle: 50,
+        },
+      ],
       xAxis: {
         type: 'category',
         data: [],
@@ -748,8 +784,9 @@ function updatePerSatChart() {
     color: perSatColors.value.get(key),
     showSymbol: true,
     symbol: 'circle',
-    symbolSize: 4,
-    lineStyle: { width: 1.6 },
+    symbolSize: 5,
+    lineStyle: { width: 2.6 },
+    emphasis: { lineStyle: { width: 3.2 } },
     connectNulls: false,
     data: history.getSeries(key).map((point) => point.snr),
   }))
@@ -758,6 +795,78 @@ function updatePerSatChart() {
   perSatChartInstance.value.setOption({
     xAxis: { data: labels },
     series,
+  })
+}
+
+let perSatZoomDrag = null
+
+function perSatZoomRange(index) {
+  const zoom = perSatChartInstance.value?.getOption().dataZoom?.[index]
+  return { start: zoom?.start ?? 0, end: zoom?.end ?? 100 }
+}
+
+function handlePerSatMouseDown(event) {
+  if (event.button !== 2 || !perSatChartInstance.value) return
+  event.preventDefault()
+  const bounds = event.currentTarget.getBoundingClientRect()
+  const ratio = Math.max(0, Math.min(1, (event.clientX - bounds.left) / Math.max(1, bounds.width)))
+  const zoom = perSatZoomRange(0)
+  perSatZoomDrag = {
+    pointerId: event.pointerId,
+    startX: event.clientX,
+    start: zoom.start,
+    end: zoom.end,
+    anchorRatio: ratio,
+  }
+  window.addEventListener('mousemove', handlePerSatWindowMouseMove)
+  window.addEventListener('mouseup', stopPerSatZoomDrag)
+}
+
+function handlePerSatWindowMouseMove(event) {
+  if (!perSatZoomDrag || event.pointerId !== perSatZoomDrag.pointerId || !perSatChartInstance.value) {
+    return
+  }
+  const { startX, start, end, anchorRatio } = perSatZoomDrag
+  const factor = Math.pow(2, -(event.clientX - startX) / 160)
+  const span = Math.min(100, (end - start) * factor)
+  const anchor = start + (end - start) * anchorRatio
+  let nextStart = anchor - span * anchorRatio
+  let nextEnd = nextStart + span
+  if (nextStart < 0) {
+    nextEnd -= nextStart
+    nextStart = 0
+  }
+  if (nextEnd > 100) {
+    nextStart = nextEnd - 100
+    nextEnd = 100
+  }
+  perSatChartInstance.value.dispatchAction({
+    type: 'dataZoom',
+    dataZoomId: 'x-zoom',
+    start: nextStart,
+    end: nextEnd,
+  })
+}
+
+function stopPerSatZoomDrag() {
+  perSatZoomDrag = null
+  window.removeEventListener('mousemove', handlePerSatWindowMouseMove)
+  window.removeEventListener('mouseup', stopPerSatZoomDrag)
+}
+
+function resetPerSatViewport() {
+  if (!perSatChartInstance.value) return
+  perSatChartInstance.value.dispatchAction({
+    type: 'dataZoom',
+    dataZoomId: 'x-zoom',
+    start: 0,
+    end: 100,
+  })
+  perSatChartInstance.value.dispatchAction({
+    type: 'dataZoom',
+    dataZoomId: 'y-zoom',
+    start: 0,
+    end: 100,
   })
 }
 
@@ -862,6 +971,7 @@ onMounted(() => {
 
 // 组件卸载时
 onUnmounted(() => {
+  stopPerSatZoomDrag()
   if (dataUpdateTimer !== null) {
     clearTimeout(dataUpdateTimer)
     dataUpdateTimer = null
@@ -927,6 +1037,13 @@ onUnmounted(() => {
   flex-wrap: wrap;
   gap: 12px;
   flex-shrink: 0;
+}
+
+.solver-signal-hint {
+  flex: none;
+  color: var(--app-text-secondary);
+  font-size: 12px;
+  line-height: 1.4;
 }
 
 .view-select {

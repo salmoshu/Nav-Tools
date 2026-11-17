@@ -61,7 +61,7 @@ test('keeps legacy configuration dialogs polished and inside a narrow viewport',
   await page.keyboard.press('Escape')
   await expect(dialog).toBeHidden()
 
-  const deviationCard = cards.filter({ has: page.getByText('偏差图', { exact: true }) })
+  const deviationCard = cards.filter({ has: page.getByText('偏差', { exact: true }) })
   await deviationCard.locator('.config-btn').click()
   dialog = page.locator('.deviation-config-dialog')
   await expectDialogInsideViewport(page, dialog)

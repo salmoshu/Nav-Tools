@@ -309,11 +309,23 @@ function syncViewFromDeviation(): void {
     Math.abs(Math.pow(2, targetZoom - map.getZoom()) - 1) * Math.max(size.x, size.y)
   const nextZoom =
     zoomScaleErrorPixels <= MAP_ZOOM_SCALE_TOLERANCE_PIXELS ? map.getZoom() : targetZoom
+  const center: L.LatLngExpression = [centerLatitude, centerLongitude]
+  const centerOffset = map.latLngToContainerPoint(center).subtract(size.divideBy(2))
   viewSyncing = true
   try {
-    map.setView([centerLatitude, centerLongitude], nextZoom, {
-      animate: false,
-    })
+    if (nextZoom !== map.getZoom()) {
+      map.setView(center, nextZoom, { animate: false })
+    } else if (centerOffset.distanceTo(L.point(0, 0)) > MAP_ZOOM_SCALE_TOLERANCE_PIXELS) {
+      const panSteps = Math.max(
+        1,
+        Math.ceil(
+          Math.max(Math.abs(centerOffset.x) / (size.x / 2), Math.abs(centerOffset.y) / (size.y / 2)),
+        ),
+      )
+      for (let step = 0; step < panSteps; step++) {
+        map.panBy(centerOffset.divideBy(panSteps), { animate: false })
+      }
+    }
     hasCentered = true
     emitViewChangeWithState(true)
   } finally {

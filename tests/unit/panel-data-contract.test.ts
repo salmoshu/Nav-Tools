@@ -30,5 +30,6 @@ describe('panel data contracts', () => {
     expect(panelDataContract('raw-messages').formats).toContain('nmea')
     expect(SOLVER_SCOPED_PANEL_IDS.has('raw-messages')).toBe(true)
     expect(SOLVER_SCOPED_PANEL_IDS.has('gnss-deviation')).toBe(true)
+    expect(SOLVER_SCOPED_PANEL_IDS.has('gnss-signals')).toBe(true)
   })
 })

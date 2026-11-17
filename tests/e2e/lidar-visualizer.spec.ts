@@ -270,7 +270,7 @@ test('file input detects MCAP and bypasses text parser and timestamp settings', 
       'nav-tools:data-source-settings',
       JSON.stringify({
         activeSource: 'file',
-        file: { parser: 'regex', regexPattern: '[', timeTag: true },
+        file: { format: 'auto', parser: 'regex', regexPattern: '[', timeTag: true },
       }),
     )
   })
@@ -294,8 +294,9 @@ test('file input detects MCAP and bypasses text parser and timestamp settings', 
   await dialog.getByRole('button', { name: /选择文件|Select File/ }).click()
   await (await fileChooser).setFiles(fixturePath)
   await expect(dialog.locator('.mcap-hint')).toBeVisible()
-  await expect(dialog.locator('.parser-card:visible')).toHaveCount(0)
   await expect(dialog.locator('.time-tag-options')).toHaveCount(0)
+  await expect(dialog.locator('.regex-parser-config')).toHaveCount(0)
+  await expect(dialog.locator('.format-detected:visible')).toHaveText('MCAP detected')
   await page.screenshot({ animations: 'disabled', path: 'test-results/file-input-mcap.png' })
   // 确认后对话框关闭，时间轴出现且帧计数就绪
   await dialog.getByRole('button', { name: /确认|Confirm|OK/ }).click()
@@ -405,7 +406,7 @@ test('a recent recording reopens all parts and an edited path uses the new file'
 })
 
 test('switching from an MCAP selection back to text imports the text file', async ({ page }) => {
-  await openLidarApp(page, { ...LIDAR_APP, windowIds: ['raw-messages'] })
+  await openLidarApp(page, { ...LIDAR_APP, windowIds: ['lidar-scene', 'raw-messages'] })
   await page
     .getByTitle(/Input|输入/)
     .first()
