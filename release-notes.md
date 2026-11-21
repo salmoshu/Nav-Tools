@@ -1,5 +1,27 @@
 # Nav-Tools 更新日志
 
+## v1.9.3
+
+- 应用 Header 在应用名左侧显示与应用选择器一致的应用图标（含强调色）。
+- Deviation 组件窄窗时 Config/Track 按钮仅保留图标并收紧间距，Track 文案简化，四条轨迹仅显示颜色方块。
+- 导入文件时的索引进度条与 GNSS-Raw 加载进度条加长，便于观察进度。
+- GNSS Signals 鼠标交互对齐 GNSS Deviation 的位置/速度图（左键平移、右键水平缩放、滚轮纵向缩放、双击复位）；卫星数目视图新增布局重置按钮、限制滚轮缩放范围，拖动端点可越过数据边界。
+- GNSS Signals 视图下拉框将卫星数目置于首位；柱状图星座配色与 Sky Plot 一致并保留渐变质感；取消悬停切换柱状图时的白色指示带闪烁；按钮区样式与 GNSS Deviation 统一。
+- 串口支持 RTS/DTR 控制线配置并在连接与重连时应用；串口选择下拉框提升层级并限制高度。
+- 消息组件支持串口循环发送（频率可配置，断开连接自动停止）；换行与循环发送按钮移到 IAP 右侧，仅保留图标，循环发送改用时钟图标并去除按钮底色。
+- 修复十六进制电机指令在串口未连接时仍提示发送成功的问题，改为提示串口未连接。
+- 双击组件标题栏改为最大化组件，再次双击或按 Esc 退出；移除折叠交互，旧布局中的折叠卡片恢复时自动展开。
+
+- Added the application icon (matching the application selector) to the left of the application name in the header.
+- In narrow Deviation panels, Config/Track buttons now show icons only with tighter spacing and the shorter Track label; the four tracks collapse to color swatches.
+- Widened the file import/indexing progress bar and the GNSS-Raw loading progress bar.
+- GNSS Signals mouse interactions now match GNSS Deviation position/speed views (left-drag pan, right-drag horizontal zoom, wheel vertical zoom, double-click reset). The satellite-count view gains a layout reset button, bounded wheel zoom, and draggable edge overscan.
+- Moved Satellite Count to the top of the GNSS Signals view selector. Bar chart constellation colors now match the Sky Plot while keeping the existing gradient finish, bar hover no longer flashes a white axis band, and the control buttons match GNSS Deviation.
+- Serial ports now support RTS/DTR control-line settings applied on connect and reconnect; the serial port dropdown is raised above dialogs with a bounded height.
+- Messages gained serial loop sending with configurable frequency and automatic stop on disconnect. Newline and loop-send buttons moved to the right of IAP, are icon-only, and loop send uses a clock icon without a button background.
+- Fixed hex motor commands reporting success while the serial port was disconnected; they now warn that the port is not connected.
+- Double-clicking a panel header now maximizes the panel (double-click again or press Esc to exit). The collapse interaction was removed and previously collapsed cards expand automatically.
+
 ## v1.9.2
 
 - GNSS Signals 加粗逐星 SNR 与卫星数曲线，支持左键平移、滚轮缩放、右键水平缩放和双击复位；卫星数图例仅列出当前数据中实际存在的星座。

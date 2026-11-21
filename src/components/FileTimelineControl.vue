@@ -510,7 +510,7 @@ watch(active, (visible) => {
 }
 
 .indexing-track {
-  width: 120px;
+  width: 240px;
   height: 4px;
   overflow: hidden;
   background: var(--app-surface-muted);

@@ -99,6 +99,13 @@ const contextTitle = computed(() => {
   return currentApplication.value?.name
 })
 
+const contextApplicationIcon = computed(() =>
+  isCardWindow.value || settingsOpen.value ? undefined : currentApplication.value?.icon,
+)
+const contextApplicationAccent = computed(() =>
+  isCardWindow.value || settingsOpen.value ? undefined : currentApplication.value?.accent,
+)
+
 /**
  * 应用内容名片:LiDAR 为正在播放的录像文件名,GNSS 为当前载入的回放文件名。
  * 组件全屏时由 AppHeader 把文件名排到组件名右侧。
@@ -209,6 +216,8 @@ onUnmounted(() => {
         :brand-title="isCardWindow ? contextTitle : 'Nav-Tools'"
         :brand-icon-url="isCardWindow ? cardWindowIconUrl : undefined"
         :context-title="isCardWindow ? undefined : contextTitle"
+        :context-icon="isCardWindow ? undefined : contextApplicationIcon"
+        :context-accent="isCardWindow ? undefined : contextApplicationAccent"
         :context-file-name="isCardWindow ? undefined : contextFileName"
         :context-file-title="contextFileTitle"
         :context-panel-title="fullscreenPanel?.title"

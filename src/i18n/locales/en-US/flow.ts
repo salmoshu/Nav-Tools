@@ -1,6 +1,6 @@
 export default {
   config: 'Config',
-  tracking: 'Tracking',
+  tracking: 'Track',
   enableTracking: 'Enable tracking',
   disableTracking: 'Disable tracking',
   enableSlideWindow: 'Enable sliding window',

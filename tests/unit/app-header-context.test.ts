@@ -13,6 +13,12 @@ describe('application header context file name', () => {
     expect(app).toContain("device.type === 'file' && device.path")
   })
 
+  it('shows the application icon before the application name in the header', () => {
+    expect(app).toContain(':context-icon=')
+    expect(header).toContain('applicationIconComponents')
+    expect(header).toContain('class="context-app-icon"')
+  })
+
   it('keeps the file name by the app name normally and by the panel title when fullscreen', () => {
     expect(header).toContain('v-if="contextFileName && !contextPanelTitle"')
     expect(header).toContain('v-if="contextFileName && contextPanelTitle"')

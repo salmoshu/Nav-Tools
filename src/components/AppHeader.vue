@@ -63,7 +63,19 @@
         </template>
       </el-dropdown>
       <span v-if="contextTitle || contextPanelTitle" class="context-title">
-        <span v-if="contextTitle" class="context-app-name">{{ contextTitle }}</span>
+        <span v-if="contextTitle" class="context-app-name">
+          <span
+            v-if="contextIconComponent"
+            class="context-app-icon"
+            :style="contextAccent ? { '--application-accent': contextAccent } : undefined"
+            aria-hidden="true"
+          >
+            <el-icon :size="14">
+              <component :is="contextIconComponent" />
+            </el-icon>
+          </span>
+          <span>{{ contextTitle }}</span>
+        </span>
         <!-- 常规态:文件名在应用名右侧;组件全屏时排到组件名右侧 -->
         <span
           v-if="contextFileName && !contextPanelTitle"
@@ -267,7 +279,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import {
   ArrowLeft,
   ArrowRight,
@@ -282,6 +294,8 @@ import { showStatusBar, showToolBar } from '@/composables/useStatusManager'
 import { getBrowserWindowService } from '@/core/window/browserWindowService'
 import { settingsSectionForComponent } from '@/core/settings/ComponentSettings'
 import { getPanelIconComponent } from '@/settings/panelIcons'
+import { applicationIconComponents } from '@/settings/applicationIcons'
+import type { ApplicationIcon } from '@/core/panels/registry'
 import emitter from '@/hooks/useMitt'
 import { t } from '@/i18n'
 
@@ -290,6 +304,9 @@ const props = defineProps<{
   /** 品牌位图标 URL:缺省用应用 logo;组件独立窗口传入「组件主体+logo角标」合成图标 */
   brandIconUrl?: string
   contextTitle?: string
+  /** 当前应用图标(与应用选择器一致),仅主窗口且非设置页时传入 */
+  contextIcon?: string
+  contextAccent?: string
   contextPanelTitle?: string
   /** 当前应用的内容名片(LiDAR 为正在播放的录像文件名),完整路径经 contextFileTitle 悬浮 */
   contextFileName?: string
@@ -312,6 +329,11 @@ const emit = defineEmits<{
   'create-shortcut': []
   'maximized-change': [maximized: boolean]
 }>()
+
+const contextIconComponent = computed(() => {
+  const icon = props.contextIcon as ApplicationIcon | undefined
+  return icon ? applicationIconComponents[icon] : undefined
+})
 
 const version = ref('')
 const maximized = ref(false)
@@ -460,11 +482,29 @@ onUnmounted(() => {
 }
 
 .context-app-name {
+  display: inline-flex;
   flex: none;
+  align-items: center;
+  gap: 6px;
   color: var(--app-text);
   font-size: 13px;
   font-weight: 600;
   white-space: nowrap;
+}
+
+.context-app-icon {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 5px;
+  color: var(--application-accent, var(--el-color-primary));
+  background: color-mix(
+    in srgb,
+    var(--application-accent, var(--el-color-primary)) 12%,
+    var(--app-surface)
+  );
 }
 
 .context-panel {

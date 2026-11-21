@@ -3,6 +3,9 @@ import {
   createInitialSatelliteCountViewport,
   fitSatelliteCountViewport,
   panSatelliteCountViewport,
+  panTimeSeriesRange,
+  TIME_SERIES_WHEEL_ZOOM_IN_FACTOR,
+  TIME_SERIES_WHEEL_ZOOM_OUT_FACTOR,
   SATELLITE_COUNT_LIVE_WINDOW_EPOCHS,
   SATELLITE_COUNT_MIN_VISIBLE_EPOCHS,
   updateSatelliteCountViewportOnData,
@@ -130,5 +133,12 @@ describe('SatelliteCountViewport', () => {
     expect(
       updateSatelliteCountViewportOnData({ start: 900, end: 1_000 }, 1_000, 500, 'overview'),
     ).toEqual({ start: 400, end: 500 })
+  })
+
+  it('keeps the vertical span fixed at the nonnegative boundary and shares gentle wheel factors', () => {
+    expect(panTimeSeriesRange({ min: 0, max: 20 }, -4, 0)).toEqual({ min: 0, max: 20 })
+    expect(panTimeSeriesRange({ min: 0, max: 20 }, 4, 0)).toEqual({ min: 4, max: 24 })
+    expect(TIME_SERIES_WHEEL_ZOOM_OUT_FACTOR).toBe(1.15)
+    expect(TIME_SERIES_WHEEL_ZOOM_IN_FACTOR).toBeCloseTo(1 / 1.15)
   })
 })

@@ -67,12 +67,12 @@
         <span class="metric-tooltip-label">
           <i :style="{ backgroundColor: referenceColor }"></i>{{ referenceLabel }}
         </span>
-        <span>{{ hoverReferenceValue === null ? '—' : hoverReferenceValue.toFixed(3) }} {{ unit }}</span>
+        <span
+          >{{ hoverReferenceValue === null ? '—' : hoverReferenceValue.toFixed(3) }}
+          {{ unit }}</span
+        >
       </div>
-      <div
-        v-if="primaryVisible && hoverDifferenceValue !== null"
-        class="metric-tooltip-difference"
-      >
+      <div v-if="primaryVisible && hoverDifferenceValue !== null" class="metric-tooltip-difference">
         <span class="metric-tooltip-label">
           <i :style="{ backgroundColor: differenceColor }"></i>{{ differenceLabel }}
         </span>
@@ -93,6 +93,8 @@ import {
   clampSatelliteCountViewport,
   fitSatelliteCountViewport,
   panSatelliteCountViewport,
+  TIME_SERIES_WHEEL_ZOOM_IN_FACTOR,
+  TIME_SERIES_WHEEL_ZOOM_OUT_FACTOR,
   updateSatelliteCountViewportOnData,
   zoomSatelliteCountViewport,
   type SatelliteCountViewport,
@@ -331,7 +333,10 @@ function applyTrackingViewport(): void {
     const targetTime = sourceTimes.value[target]
     const reference =
       !fileTimeline.active.value && props.selectedTimeMs === null
-        ? { sample: orderedReferencePoints.value.at(-1)!, index: orderedReferencePoints.value.length - 1 }
+        ? {
+            sample: orderedReferencePoints.value.at(-1)!,
+            index: orderedReferencePoints.value.length - 1,
+          }
         : findNearestMetricOverlaySample(
             orderedReferencePoints.value,
             targetTime - props.referenceTimeOffset,
@@ -762,7 +767,8 @@ function handleWheel(event: WheelEvent): void {
   const ratio = Math.max(0, Math.min(1, 1 - localY / Math.max(1, height)))
   const span = renderedRange.max - renderedRange.min
   const anchorValue = renderedRange.min + ratio * span
-  const factor = event.deltaY > 0 ? 1.25 : 0.8
+  const factor =
+    event.deltaY > 0 ? TIME_SERIES_WHEEL_ZOOM_OUT_FACTOR : TIME_SERIES_WHEEL_ZOOM_IN_FACTOR
   yRangeOverride = {
     min: anchorValue - (anchorValue - renderedRange.min) * factor,
     max: anchorValue + (renderedRange.max - anchorValue) * factor,
@@ -1060,7 +1066,8 @@ function handlePointClick(event: MouseEvent): void {
   }
   candidates.sort((left, right) => left.distance - right.distance)
   const selected = candidates[0]
-  if (!selected || selected.distance > Math.max(12, pointDiameterForSize(props.pointSize) + 4)) return
+  if (!selected || selected.distance > Math.max(12, pointDiameterForSize(props.pointSize) + 4))
+    return
   event.preventDefault()
   event.stopPropagation()
   emit('select-epoch', selected.timeMs)

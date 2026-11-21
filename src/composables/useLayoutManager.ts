@@ -230,6 +230,8 @@ export function useLayoutManager() {
       )
       .map((windowDefinition, index) => createLayoutItem(windowDefinition, restored.length + index))
 
+    // 折叠功能已移除：旧布局中保存的折叠态在恢复时展开，避免残留矮卡片
+    restored.forEach((item) => expandPanel(item))
     layoutDraggableList.value = [...restored, ...missing]
     backupCurrentLayout()
   }

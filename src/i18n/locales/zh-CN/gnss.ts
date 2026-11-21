@@ -41,6 +41,7 @@ export default {
     nsatYAxis: '卫星数',
     total: '总数',
     legendToggle: '点击显示 / 隐藏该曲线',
+    resetLayout: '重置布局',
   },
   deviation: {
     deviationView: '偏差图',

@@ -42,6 +42,7 @@ export default {
     nsatYAxis: 'Satellites',
     total: 'Total',
     legendToggle: 'Click to show / hide this series',
+    resetLayout: 'Reset Layout',
   },
   deviation: {
     deviationView: 'Deviation',

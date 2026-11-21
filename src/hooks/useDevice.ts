@@ -170,6 +170,8 @@ const serialBaudRate = toRef(dataSourceSettings.serial, 'baudRate')
 const serialDataBits = toRef(dataSourceSettings.serial, 'dataBits')
 const serialStopBits = toRef(dataSourceSettings.serial, 'stopBits')
 const serialParity = toRef(dataSourceSettings.serial, 'parity')
+const serialRts = toRef(dataSourceSettings.serial, 'rts')
+const serialDtr = toRef(dataSourceSettings.serial, 'dtr')
 const serialAdvanced = toRef(dataSourceSettings.serial, 'advanced')
 
 // 网络配置
@@ -485,6 +487,8 @@ function currentSerialOptions(): SerialPortOptions | undefined {
     dataBits: device.dataBits as SerialDataBits,
     stopBits: device.stopBits as SerialStopBits,
     parity: device.parity as SerialParity,
+    rts: dataSourceSettings.serial.rts,
+    dtr: dataSourceSettings.serial.dtr,
   }
 }
 
@@ -1279,7 +1283,7 @@ export function useDevice() {
   })
 
   // 下拉框选项数据
-  const baudRates = ['9600', '19200', '38400', '57600', '115200', '230400', '460800', '921600']
+  const baudRates = ['9600', '12800', '19200', '38400', '57600', '115200', '230400', '460800', '921600']
   const dataBits = ['5', '6', '7', '8']
   const stopBits = ['1', '1.5', '2']
   const parities = [
@@ -2272,6 +2276,8 @@ export function useDevice() {
     serialDataBits,
     serialStopBits,
     serialParity,
+    serialRts,
+    serialDtr,
     serialAdvanced,
     filePath,
     fileIsMcap,

@@ -8,21 +8,21 @@
           @click="showViewConfig"
           class="control-btn config-btn"
         >
-          <el-icon><Setting /></el-icon>&nbsp;{{ t('flow.config') }}
+          <el-icon><Setting /></el-icon>
+          <span class="config-text">&nbsp;{{ t('flow.config') }}</span>
         </el-button>
 
         <el-button
           type="default"
           size="small"
-          :title="t('flow.tracking')"
-          :aria-label="t('flow.tracking')"
+          :title="isTracking ? t('flow.disableTracking') : t('flow.enableTracking')"
+          :aria-label="isTracking ? t('flow.disableTracking') : t('flow.enableTracking')"
           class="tracking-button"
+          :class="{ active: isTracking }"
           @click="toggleTracking"
         >
           <el-icon><Aim /></el-icon>
-          <span class="tracking-text"
-            >&nbsp;{{ isTracking ? t('flow.disableTracking') : t('flow.enableTracking') }}</span
-          >
+          <span class="tracking-text">&nbsp;{{ t('flow.tracking') }}</span>
         </el-button>
 
         <div class="point-size-control">
@@ -1119,6 +1119,15 @@ onUnmounted(() => {
   align-items: center;
 }
 
+.config-btn + .tracking-button {
+  margin-left: 0;
+}
+
+.tracking-button.active {
+  color: var(--el-color-primary);
+  border-color: var(--el-color-primary);
+}
+
 .chart-container {
   flex: 1;
   position: relative;
@@ -1278,6 +1287,7 @@ onUnmounted(() => {
 }
 
 @container (max-width: 680px) {
+  .config-text,
   .tracking-text,
   .size-label {
     display: none;

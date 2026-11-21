@@ -58,6 +58,7 @@ export default {
   readSendFailed: '读指令 "{name}" 发送失败',
   writeSendFailed: '写指令 "{name}" 发送失败',
   serialNotInitialized: '串口通信未初始化',
+  serialNotConnected: '串口未连接，指令未发送',
   restoreDefaultConfirm: '确定恢复内置默认值吗？点击"取消"或关闭配置窗口仍可撤销本次更改。',
   restoreDefaultTitle: '恢复默认配置',
   restoredDefault: '已恢复默认值，点击"确定"后保存',

@@ -2,13 +2,14 @@ import type { SatelliteDetailSample } from './SatelliteDetailEpochStore'
 
 export type SignalBarSample = Omit<SatelliteDetailSample, 'prn'> & { prn: string | number }
 
+/** 星座配色与 GnssSky 星空图保持一致；柱状图在此基础上叠加渐变质感。 */
 export const SIGNAL_CONSTELLATIONS: Record<string, { prefix: string; color: string }> = {
-  GPS: { prefix: 'G', color: '#3ba96b' },
-  GLONASS: { prefix: 'R', color: '#468ddd' },
-  GALILEO: { prefix: 'E', color: '#9670dc' },
-  BEIDOU: { prefix: 'C', color: '#dc9b28' },
-  QZSS: { prefix: 'J', color: '#2aa8a0' },
-  OTHER: { prefix: 'U', color: '#8290a4' },
+  GPS: { prefix: 'G', color: '#BADC7E' },
+  GLONASS: { prefix: 'R', color: '#9DA007' },
+  GALILEO: { prefix: 'E', color: '#82C3E5' },
+  BEIDOU: { prefix: 'C', color: '#FF8A80' },
+  QZSS: { prefix: 'J', color: '#AF52DE' },
+  OTHER: { prefix: 'U', color: '#757575' },
 }
 
 export interface SignalBar {

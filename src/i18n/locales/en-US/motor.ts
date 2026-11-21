@@ -58,6 +58,7 @@ export default {
   readSendFailed: 'Failed to send read command "{name}"',
   writeSendFailed: 'Failed to send write command "{name}"',
   serialNotInitialized: 'Serial communication not initialized',
+  serialNotConnected: 'Serial port is not connected; command not sent',
   restoreDefaultConfirm: 'Restore built-in defaults? Clicking "Cancel" or closing the config window will still undo this change.',
   restoreDefaultTitle: 'Restore Default Configuration',
   restoredDefault: 'Defaults restored; click "OK" to save',

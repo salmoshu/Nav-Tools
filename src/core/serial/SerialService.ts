@@ -11,6 +11,8 @@ export interface SerialPortOptions {
   dataBits: SerialDataBits
   stopBits: SerialStopBits
   parity: SerialParity
+  rts?: boolean
+  dtr?: boolean
 }
 
 export interface SerialDisconnectEvent {

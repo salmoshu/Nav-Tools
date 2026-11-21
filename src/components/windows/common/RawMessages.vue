@@ -129,6 +129,7 @@
             size="default"
             :placeholder="t('common.rawMessages.format')"
             :aria-label="t('common.rawMessages.format')"
+            :disabled="!deviceConnected || loopSendActive"
             :teleported="false"
           >
             <el-option label="ASCII" value="ascii"></el-option>
@@ -141,7 +142,7 @@
             size="default"
             :placeholder="inputFormat === 'hex' ? t('common.rawMessages.inputHexPlaceholder') : t('common.rawMessages.inputAsciiPlaceholder')"
             :aria-label="inputFormat === 'hex' ? t('common.rawMessages.inputHexPlaceholder') : t('common.rawMessages.inputAsciiPlaceholder')"
-            :disabled="!deviceConnected"
+            :disabled="!deviceConnected || loopSendActive"
             @keyup.enter="handleSendMessage"
           >
             <template #suffix>
@@ -153,34 +154,9 @@
         <div class="composer-actions">
           <div class="message-actions">
             <el-button
-              :type="addNewLine ? 'success' : 'default'"
-              size="default"
-              :disabled="inputFormat === 'hex' || !deviceConnected"
-              :title="addNewLine ? t('common.rawMessages.newlineOn') : t('common.rawMessages.newlineOff')"
-              :aria-pressed="addNewLine"
-              @click="addNewLine = !addNewLine"
-            >
-              <svg
-                class="newline-icon"
-                viewBox="0 0 24 24"
-                width="14"
-                height="14"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <path d="M9 10l-5 5 5 5" />
-                <path d="M20 4v7a4 4 0 0 1-4 4H4" />
-              </svg>
-              <span>{{ t('common.rawMessages.newline') }}</span>
-            </el-button>
-
-            <el-button
               type="primary"
               size="default"
-              :disabled="!deviceConnected || !inputMessage.trim()"
+              :disabled="!deviceConnected || !inputMessage.trim() || loopSendActive"
               :title="t('common.rawMessages.sendMessage')"
               @click="handleSendMessage"
             >
@@ -199,6 +175,80 @@
               <el-icon><UploadFilled /></el-icon>
               <span>{{ t('common.rawMessages.iap') }}</span>
             </el-button>
+
+            <el-button
+              text
+              class="icon-only-action newline-button"
+              :class="{ active: addNewLine }"
+              size="default"
+              :disabled="inputFormat === 'hex' || !deviceConnected || loopSendActive"
+              :title="addNewLine ? t('common.rawMessages.newlineOn') : t('common.rawMessages.newlineOff')"
+              :aria-pressed="addNewLine"
+              :aria-label="t('common.rawMessages.newline')"
+              @click="addNewLine = !addNewLine"
+            >
+              <svg
+                class="newline-icon"
+                viewBox="0 0 24 24"
+                width="14"
+                height="14"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M9 10l-5 5 5 5" />
+                <path d="M20 4v7a4 4 0 0 1-4 4H4" />
+              </svg>
+            </el-button>
+
+            <el-popover
+              v-if="serialConnected"
+              placement="top-end"
+              :width="240"
+              trigger="click"
+              popper-class="loop-send-popover"
+            >
+              <template #reference>
+                <el-button
+                  text
+                  class="icon-only-action loop-send-button"
+                  :class="{ active: loopSendActive, danger: loopSendActive }"
+                  size="default"
+                  :disabled="(!inputMessage.trim() && !loopSendActive) || !serialConnected"
+                  :title="loopSendActive ? t('common.rawMessages.loopStop') : t('common.rawMessages.loopSend')"
+                  :aria-label="t('common.rawMessages.loopSend')"
+                >
+                  <el-icon><Clock /></el-icon>
+                </el-button>
+              </template>
+              <div class="loop-send-settings">
+                <label for="serial-loop-frequency">{{ t('common.rawMessages.loopFrequency') }}</label>
+                <div class="loop-frequency-row">
+                  <el-input-number
+                    id="serial-loop-frequency"
+                    v-model="loopSendFrequency"
+                    size="small"
+                    :min="0.1"
+                    :max="100"
+                    :precision="1"
+                    :step="1"
+                    :disabled="loopSendActive"
+                    :aria-label="t('common.rawMessages.loopFrequency')"
+                  />
+                  <span>Hz</span>
+                </div>
+                <el-button
+                  size="small"
+                  :type="loopSendActive ? 'danger' : 'primary'"
+                  :disabled="!inputMessage.trim() || !serialConnected || !loopFrequencyValid"
+                  @click="toggleLoopSend"
+                >
+                  {{ loopSendActive ? t('common.rawMessages.loopStop') : t('common.rawMessages.loopStart') }}
+                </el-button>
+              </div>
+            </el-popover>
           </div>
         </div>
       </div>
@@ -235,6 +285,7 @@ import {
   DataAnalysis,
   UploadFilled,
 } from '@element-plus/icons-vue'
+import { SerialLoopSender } from '@/core/serial/SerialLoopSender'
 import { findTimelineMessageIndex, useConsole } from '@/composables/flow/useConsole'
 import { useFileTimeline } from '@/composables/useFileTimeline'
 import { useMessageSettings } from '@/composables/useMessageSettings'
@@ -281,7 +332,7 @@ const {
 } = solverSession?.displayConsole ?? useConsole(true)
 
 // 获取设备连接状态
-const { deviceConnected, activeDataParser } = useDevice()
+const { deviceConnected, activeDataParser, globalDevice } = useDevice()
 const fileTimeline = solverSession?.display.timeline ?? useFileTimeline()
 const timelineMessageIndex = computed(() => {
   if (!fileTimeline.active.value || fileTimeline.indexing.value || solverSession?.channel.value === 'log') return -1
@@ -310,6 +361,40 @@ const iapDialogVisible = ref(false)
 const inputMessage = ref('')
 const inputFormat = ref<'hex' | 'ascii'>('ascii')
 const addNewLine = ref(false)
+const loopSendFrequency = ref(1)
+const loopSendActive = ref(false)
+const loopSender = new SerialLoopSender()
+const serialConnected = computed(
+  () => globalDevice.value.type === 'serial' && deviceConnected.value,
+)
+const loopFrequencyValid = computed(
+  () =>
+    Number.isFinite(loopSendFrequency.value) &&
+    loopSendFrequency.value >= 0.1 &&
+    loopSendFrequency.value <= 100,
+)
+
+function stopLoopSend(): void {
+  loopSender.stop()
+  loopSendActive.value = false
+}
+
+function toggleLoopSend(): void {
+  if (loopSendActive.value) {
+    stopLoopSend()
+    return
+  }
+  if (!serialConnected.value || !inputMessage.value.trim() || !loopFrequencyValid.value) return
+  loopSender.start(loopSendFrequency.value, handleSendMessage)
+  loopSendActive.value = loopSender.running
+}
+
+watch(serialConnected, (connected) => {
+  if (!connected) stopLoopSend()
+})
+watch(iapDialogVisible, (visible) => {
+  if (visible) stopLoopSend()
+})
 
 // 性能监控
 const messageRate = ref(0)
@@ -643,6 +728,7 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  stopLoopSend()
   if (consoleRoot.value) {
     consoleRoot.value.removeEventListener('keydown', handleKeydown);
   }
@@ -837,6 +923,26 @@ onUnmounted(() => {
   background: color-mix(in srgb, var(--el-color-primary) 12%, var(--app-surface));
 }
 
+.loop-send-settings {
+  display: grid;
+  gap: 10px;
+  font-size: 12px;
+}
+
+.loop-frequency-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.loop-frequency-row .el-input-number {
+  width: 176px;
+}
+
+.loop-send-settings > .el-button {
+  width: 100%;
+}
+
 .timestamp {
   margin-right: 12px;
   opacity: 1;
@@ -935,6 +1041,29 @@ onUnmounted(() => {
 
 .input-container :deep(.el-button + .el-button) {
   margin-left: 0;
+}
+
+/* 换行/循环发送仅保留图标，去掉按钮底色与边框 */
+.input-container :deep(.icon-only-action.el-button) {
+  min-width: 28px;
+  padding-inline: 4px;
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+}
+
+.input-container :deep(.icon-only-action.el-button:hover),
+.input-container :deep(.icon-only-action.el-button:focus-visible) {
+  border-color: transparent;
+  background: transparent;
+}
+
+.input-container :deep(.icon-only-action.el-button.active) {
+  color: var(--el-color-primary);
+}
+
+.input-container :deep(.icon-only-action.el-button.active.danger) {
+  color: var(--el-color-danger);
 }
 
 /* 默认半栏与窄窗下输入栏按钮仅保留图标，拉宽后恢复文字（悬浮 title 保留语义）。

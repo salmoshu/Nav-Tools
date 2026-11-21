@@ -403,7 +403,8 @@
                   v-model="serialPort"
                   :placeholder="t('app.toolbar.portPlaceholder')"
                   style="flex: 1"
-                  :teleported="false"
+                  :teleported="true"
+                  popper-class="serial-port-dropdown"
                   @click="searchSerialPorts"
                 >
                   <el-option v-for="port in serialPorts" :key="port" :label="port" :value="port" />
@@ -459,6 +460,13 @@
                     :value="parity.value"
                   />
                 </el-select>
+              </div>
+              <div v-if="serialAdvanced" class="input-group serial-signal-options">
+                <span class="input-label" :title="t('app.toolbar.rtsDtrHint')">{{
+                  t('app.toolbar.controlLines')
+                }}</span>
+                <el-checkbox v-model="serialRts">RTS</el-checkbox>
+                <el-checkbox v-model="serialDtr">DTR</el-checkbox>
               </div>
               <div class="input-group compact-input-group">
                 <span class="input-label">{{ t('app.toolbar.advanced') }}</span>
@@ -913,6 +921,8 @@ const {
   serialDataBits,
   serialStopBits,
   serialParity,
+  serialRts,
+  serialDtr,
   serialAdvanced,
   selectTargetFile,
   selectFilePath,
@@ -2325,6 +2335,10 @@ onUnmounted(() => {
   padding: 5px 2px 0;
 }
 
+.serial-signal-options .el-checkbox {
+  margin-right: 16px;
+}
+
 .source-info-card {
   display: grid;
   grid-template-columns: minmax(80px, auto) 1fr;
@@ -2773,6 +2787,17 @@ onUnmounted(() => {
 .recent-files-select {
   min-width: 0;
   flex: 1;
+}
+
+:global(.serial-port-dropdown) {
+  z-index: 9000 !important;
+}
+
+:global(.serial-port-dropdown .el-select-dropdown__wrap) {
+  max-height: min(240px, calc(100vh - 48px));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
 }
 
 :global(.recent-files-dropdown) {

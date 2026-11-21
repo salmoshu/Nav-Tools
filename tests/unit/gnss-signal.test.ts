@@ -82,8 +82,8 @@ describe('GNSS signal satellite-count view', () => {
     expect(parent).toContain('margin-left: auto')
   })
 
-  it('uses a custom WebGL time-series renderer instead of ECharts bars', () => {
-    expect(chart).toContain('createSatelliteTimeSeriesRenderer')
+  it('uses a custom time-series renderer instead of ECharts bars', () => {
+    expect(chart).toContain('CanvasSatelliteTimeSeriesRenderer')
     expect(chart).toContain('renderer.setSeriesData')
     expect(chart).toContain('renderer.render()')
     expect(chart).not.toContain("type: 'bar'")
@@ -144,6 +144,53 @@ describe('GNSS signal satellite-count view', () => {
     // 图例容器 pointer-events:none，仅图例项恢复可点击
     expect(chart).toMatch(/\.legend-item\s*\{[\s\S]*?pointer-events:\s*auto/)
     expect(chart).toContain('.legend-item--hidden')
+  })
+
+  it('matches the speed-view mouse interactions', () => {
+    // 滚轮 = y 轴锚定光标值伸缩；左键 = x+y 平移且 Y 跨度不变；右键 = x 伸缩
+    // （锚定按下点，向右拖放大 factor=2^(-dx/160)）；双击 = x fit + y 恢复自动范围
+    expect(chart).toContain('@contextmenu.prevent')
+    expect(chart).toContain('TIME_SERIES_WHEEL_ZOOM_OUT_FACTOR')
+    expect(chart).toContain('anchorValue + (max - anchorValue) * scale')
+    expect(chart).toContain('let isXZoomDragging = false')
+    expect(chart).toContain('Math.pow(2, -dx / 160)')
+    expect(chart).toContain('panTimeSeriesRange(dragStartRange, deltaY, 0)')
+    expect(chart).toMatch(/function fitOverview[\s\S]{0,300}yRangeOverride = null/)
+    // 手动 y 范围下限钳 0，轴刻度按 [yMin,yMax] 线性取值
+    expect(chart).toContain('Math.max(0, yRangeOverride.min)')
+    expect(chart).toContain('Math.round(yMin + (yMax - yMin) * ratio)')
+    // 滚轮跨度限制（防无限伸缩）与 x 拖动越界余量（端点可拖到中部，同速度图）
+    expect(chart).toContain('Y_ZOOM_MIN_SPAN = 1')
+    expect(chart).toContain('Y_ZOOM_MAX_SPAN = 1000')
+    expect(chart).toContain('const X_EDGE_OVERSCAN_RATIO = 0.5')
+    expect(chart).toContain('X_EDGE_OVERSCAN_RATIO,\n    )')
+    // 重置布局：父组件按钮经 defineExpose 调 fitOverview
+    expect(chart).toContain('defineExpose({ fitOverview })')
+    expect(parent).toContain('@click="resetNsatLayout"')
+    expect(parent).toContain('nsatChartRef.value?.fitOverview()')
+  })
+
+  it('orders the satellite-count option first and calms the bar chart hover', () => {
+    // 视图下拉：卫星数目排第一位
+    expect(parent.indexOf('value="nsat"')).toBeLessThan(parent.indexOf('value="chart"'))
+    expect(parent.indexOf('value="nsat"')).toBeLessThan(parent.indexOf('value="table"'))
+    // 柱状图：关闭轴指示阴影带 + 不淡化同系列柱子，消除悬停切换闪烁
+    expect(parent).toContain('axisPointer: { show: false }')
+    expect(parent).toContain("emphasis: { focus: 'none'")
+  })
+
+  it('colors the bar chart with the sky-plot constellation palette', () => {
+    // 柱状图/tooltip/逐星曲线的星座色与星空图一致（QZSS 补齐，OTHER 取灰）
+    for (const [id, color] of [
+      ['GPS', '#BADC7E'],
+      ['GLONASS', '#9DA007'],
+      ['BEIDOU', '#FF8A80'],
+      ['GALILEO', '#82C3E5'],
+      ['QZSS', '#AF52DE'],
+      ['OTHER', '#757575'],
+    ] as const) {
+      expect(parent).toContain(`${id}: '${color}'`)
+    }
   })
 
   it('renders every recent epoch and applies LOD only to large viewports', () => {

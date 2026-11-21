@@ -688,6 +688,7 @@ import {
   type WriteCommand,
 } from '@/composables/motor/useMotorCmd'
 import { useConsole } from '@/composables/flow/useConsole'
+import { useDevice } from '@/hooks/useDevice'
 import draggable from 'vuedraggable'
 import MotorCommandPanel from './MotorCommandPanel.vue'
 import AppDialogTitle from '@/components/AppDialogTitle.vue'
@@ -742,6 +743,7 @@ const {
   initializeCommandStatusCache
 } = useMotorCmd()
 const { sendMessage } = useConsole(true)
+const { deviceConnected } = useDevice()
 
 // 响应式变量
 const configDialogVisible = ref(false)
@@ -1211,6 +1213,19 @@ const generateCommandPreview = () => {
 
 // 发送读指令
 const sendReadCommand = (cmd: any) => {
+  // 已激活的定时读指令允许在断开后继续操作以停止发送
+  const stoppingPeriodic =
+    Boolean(cmd.frequency && cmd.frequency > 0) && activeReadCommands.value.has(cmd.name)
+  if (!deviceConnected.value && !stoppingPeriodic) {
+    ElMessage({
+      message: t('motor.serialNotConnected'),
+      type: 'warning',
+      duration: 2000,
+      placement: 'bottom-right',
+      offset: 50,
+    })
+    return
+  }
   try {
     // 使用钩子中的函数构建报文，传入messageStructure以支持动态顺序
     const message = buildReadCommandMessage(cmd, configForm, messageStructure.value as Array<{id: string, title: string}>)
@@ -1271,6 +1286,16 @@ const sendReadCommand = (cmd: any) => {
 
 // 发送写指令
 const sendWriteCommand = (cmd: any) => {
+  if (!deviceConnected.value) {
+    ElMessage({
+      message: t('motor.serialNotConnected'),
+      type: 'warning',
+      duration: 2000,
+      placement: 'bottom-right',
+      offset: 50,
+    })
+    return
+  }
   try {
     // 使用钩子中的函数构建报文，传入messageStructure以支持动态顺序
     const message = buildWriteCommandMessage(cmd, configForm, messageStructure.value as Array<{id: string, title: string}>)
@@ -1490,6 +1515,8 @@ const handleDragEnd = () => {
 
 // 发送数据到串口
 const sendDataToSerial = (data: string) => {
+  // 无连接时不发送；调用方负责提示，定时器重复触发时保持静默
+  if (!deviceConnected.value) return
   if (window.ipcRenderer) {
     sendMessage(data, 'hex', false)
     // window.ipcRenderer.send('send-serial-hex-data', data)

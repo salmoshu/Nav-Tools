@@ -118,6 +118,8 @@ export default {
     parityPlaceholder: '请选择校验位',
     advanced: '高级选项',
     showAdvanced: '显示完整串口参数',
+    controlLines: '控制信号',
+    rtsDtrHint: '打开串口后应用 RTS / DTR 电平设置',
     networkTab: '网络连接',
     networkTabShort: '网络',
     mcapSource: 'LiDAR 录像（MCAP）',
@@ -266,8 +268,7 @@ export default {
     },
   },
   dashboard: {
-    collapseHint: '双击标题栏折叠组件',
-    expandHint: '双击标题栏展开组件',
+    maximizeHint: '双击标题栏最大化组件（再次双击或按 Esc 退出）',
     detach: '分离窗口',
     shortcutWindow: '在独立窗口打开（保留原卡片）',
     createShortcut: '创建快捷方式',

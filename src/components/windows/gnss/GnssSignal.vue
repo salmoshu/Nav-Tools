@@ -3,9 +3,9 @@
     <div class="snr-content">
       <div class="view-controls">
         <el-select v-model="currentView" size="small" class="view-select">
+          <el-option :label="t('gnss.signal.satCount')" value="nsat" />
           <el-option :label="t('gnss.signal.chartView')" value="chart" />
           <el-option :label="t('gnss.signal.tableView')" value="table" />
-          <el-option :label="t('gnss.signal.satCount')" value="nsat" />
           <el-option :label="t('gnss.signal.perSatView')" value="persat" />
         </el-select>
 
@@ -72,8 +72,27 @@
         </el-button-group>
 
         <div v-show="currentView === 'nsat'" class="nsat-controls">
-          <el-button size="small" class="nsat-clear-btn" @click="clearNsatHistory">
-            <el-icon><Delete /></el-icon>&nbsp;{{ t('gnss.signal.clear') }}
+          <el-button
+            type="primary"
+            size="small"
+            class="control-btn nsat-reset-btn"
+            :aria-label="t('gnss.signal.resetLayout')"
+            :title="t('gnss.signal.resetLayout')"
+            @click="resetNsatLayout"
+          >
+            <el-icon><RefreshLeft /></el-icon>
+            <span class="control-btn-label">{{ t('gnss.signal.resetLayout') }}</span>
+          </el-button>
+          <el-button
+            type="primary"
+            size="small"
+            class="control-btn nsat-clear-btn"
+            :aria-label="t('gnss.signal.clear')"
+            :title="t('gnss.signal.clear')"
+            @click="clearNsatHistory"
+          >
+            <el-icon><Delete /></el-icon>
+            <span class="control-btn-label">{{ t('gnss.signal.clear') }}</span>
           </el-button>
         </div>
       </div>
@@ -207,6 +226,7 @@
       </div>
 
       <SatelliteCountChart
+        ref="nsatChartRef"
         v-show="currentView === 'nsat'"
         :active="currentView === 'nsat'"
         :sliding-window="nsatSlidingWindow"
@@ -219,7 +239,7 @@
 <script setup>
 import { computed, inject, ref, shallowRef, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import * as echarts from 'echarts'
-import { Delete, Timer } from '@element-plus/icons-vue'
+import { Delete, RefreshLeft, Timer } from '@element-plus/icons-vue'
 import { useNmea } from '@/composables/gnss/useNmea'
 import { gnssDisplayContext } from '@/composables/gnss/GnssDisplayContext'
 import { snrHistoryKey, formatSnrEpochLabel } from '@/core/gnss/SnrHistoryStore'
@@ -273,13 +293,14 @@ const constellationFilters = [
   { text: 'OTHER', value: 'OTHER' },
 ]
 
-// 星座颜色映射（用于 tooltip 与图例提示）
+// 星座颜色映射（用于柱状图/tooltip/逐星曲线），与星空图 GnssSky.constellationColors 一致
 const constellationColors = {
-  GPS: '#52c41a',
-  GLONASS: '#1890ff',
-  BEIDOU: '#faad14',
-  GALILEO: '#13c2c2',
-  OTHER: '#ff4d4f',
+  GPS: '#BADC7E',
+  GLONASS: '#9DA007',
+  BEIDOU: '#FF8A80',
+  GALILEO: '#82C3E5',
+  QZSS: '#AF52DE',
+  OTHER: '#757575',
 }
 
 // 星座标识映射（用于柱状图 X 轴标签，如 G20、C12）
@@ -519,7 +540,8 @@ function updateChart() {
       tooltip: {
         trigger: 'axis',
         confine: true,
-        axisPointer: { type: 'shadow', shadowStyle: { color: dark ? '#ffffff08' : '#00000005' } },
+        // 关闭轴指示阴影带：鼠标扫过柱列时白色 shadow 逐列重绘会产生闪烁感
+        axisPointer: { show: false },
         backgroundColor: colors.surface,
         borderColor: colors.border,
         padding: [9, 12],
@@ -573,7 +595,8 @@ function updateChart() {
           barMinHeight: 2,
           showBackground: true,
           backgroundStyle: { color: dark ? '#ffffff06' : '#00000003', borderRadius: [2, 2, 0, 0] },
-          emphasis: { focus: 'self', itemStyle: { borderWidth: 1, borderColor: colors.textMuted } },
+          // focus 'none'：不淡化同系列其它柱子，避免悬停切换时的整体闪烁
+          emphasis: { focus: 'none', itemStyle: { borderWidth: 1, borderColor: colors.textMuted } },
           label: {
             show: true,
             position: 'inside',
@@ -823,7 +846,11 @@ function handlePerSatMouseDown(event) {
 }
 
 function handlePerSatWindowMouseMove(event) {
-  if (!perSatZoomDrag || event.pointerId !== perSatZoomDrag.pointerId || !perSatChartInstance.value) {
+  if (
+    !perSatZoomDrag ||
+    event.pointerId !== perSatZoomDrag.pointerId ||
+    !perSatChartInstance.value
+  ) {
     return
   }
   const { startX, start, end, anchorRatio } = perSatZoomDrag
@@ -883,6 +910,13 @@ function schedulePerSatUpdate() {
 function clearNsatHistory() {
   clearSatelliteEpochHistory()
   clearSatelliteCountHistory()
+}
+
+// 重置卫星数目视图布局：退出滑动窗口，x 全览 + y 恢复自动范围（与双击同款）
+const nsatChartRef = ref(null)
+function resetNsatLayout() {
+  nsatSlidingWindow.value = false
+  nextTick(() => nsatChartRef.value?.fitOverview())
 }
 
 // 明确选择实时 40 历元或可缩放的全局概览。
@@ -1020,60 +1054,96 @@ onUnmounted(() => {
   border-radius: 8px;
   overflow: hidden;
   box-shadow: 0 2px 12px 0 var(--app-shadow);
+  container-type: inline-size;
 }
 
 .snr-content {
   flex: 1;
   display: flex;
   flex-direction: column;
+  min-height: 0;
   overflow: hidden;
-  padding: 15px;
-  gap: 12px;
+  padding: 0;
+  gap: 0;
 }
 
 .view-controls {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
-  gap: 12px;
+  width: 100%;
+  height: 50px;
+  min-width: 0;
+  padding: 0 12px;
+  gap: 0;
   flex-shrink: 0;
+  flex-wrap: nowrap;
+  background-color: var(--app-surface-muted);
+  border-bottom: 1px solid var(--app-border);
 }
 
 .solver-signal-hint {
   flex: none;
+  padding: 8px 12px 0;
   color: var(--app-text-secondary);
   font-size: 12px;
   line-height: 1.4;
 }
 
 .view-select {
-  width: 130px;
+  width: 100px;
+  margin-right: 12px;
   flex-shrink: 0;
 }
 
 .constellation-filter {
   width: 140px;
+  margin-right: 8px;
+  flex-shrink: 0;
+}
+
+.persat-select {
+  margin-right: 8px;
+  min-width: 0;
 }
 
 .nsat-controls {
   display: flex;
+  flex: 0 0 auto;
   align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
+  gap: 6px;
   margin-left: auto;
   min-width: 0;
 }
 
-.nsat-clear-btn {
+.nsat-controls .control-btn + .control-btn {
+  margin-left: 0;
+}
+
+.control-btn {
+  height: 28px;
+  min-height: 28px;
+  box-sizing: border-box;
+  padding: 6px 12px;
+  background-color: var(--app-surface-raised);
+  color: var(--app-text-secondary);
+  border: 1px solid var(--app-border);
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: all 0.2s ease;
+  line-height: 1;
   display: flex;
   align-items: center;
-  background-color: transparent;
-  border: none;
 }
 
 .nsat-window-switch {
   display: inline-flex;
   flex-shrink: 0;
+  margin-right: 8px;
+}
+
+.nsat-window-switch :deep(.el-button) {
+  height: 28px;
 }
 
 .snr-table-container {
@@ -1235,6 +1305,42 @@ onUnmounted(() => {
 
 :deep(.el-table__row:hover) {
   background-color: var(--app-hover);
+}
+
+@container (max-width: 800px) {
+  .view-controls {
+    padding: 0 8px;
+  }
+
+  .view-select {
+    width: 86px;
+    margin-right: 8px;
+  }
+
+  .control-btn-label {
+    display: none;
+  }
+
+  .nsat-controls {
+    gap: 4px;
+  }
+
+  .nsat-controls .control-btn {
+    width: 28px;
+    padding: 0;
+    justify-content: center;
+  }
+}
+
+@container (max-width: 320px) {
+  .view-select {
+    width: 72px;
+    margin-right: 4px;
+  }
+
+  .nsat-controls {
+    gap: 2px;
+  }
 }
 
 /* 全屏模式下表格样式优化 */

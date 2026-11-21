@@ -8,6 +8,8 @@ export interface SerialPortOptions {
   dataBits: 5 | 6 | 7 | 8
   stopBits: 1 | 1.5 | 2
   parity: 'none' | 'even' | 'odd'
+  rts?: boolean
+  dtr?: boolean
 }
 
 export interface SerialPortCallbacks {
@@ -52,8 +54,16 @@ export class SerialPortService {
       this.currentCallbacks = callbacks
 
       port.once('open', () => {
-        settled = true
-        resolve(`串口${options.path}打开成功`)
+        void this.applySignalLevels(port, options)
+          .then(() => {
+            settled = true
+            resolve(`串口${options.path}打开成功`)
+          })
+          .catch((error: unknown) => {
+            settled = true
+            void this.closeCurrentPort().catch(() => undefined)
+            reject(error)
+          })
       })
       port.on('data', (chunk: Uint8Array) => {
         for (const listener of this.rawDataListeners) listener(chunk)
@@ -131,10 +141,20 @@ export class SerialPortService {
   public async restoreConnection(options: SerialPortOptions): Promise<void> {
     if (this.currentPort?.isOpen) {
       await this.updateBaudRate(options.baudRate)
+      await this.applySignalLevels(this.currentPort, options)
       return
     }
     if (!this.currentCallbacks) throw new Error('串口回调已不可用，无法恢复连接')
     await this.open(options, this.currentCallbacks)
+  }
+
+  private async applySignalLevels(port: SerialPort, options: SerialPortOptions): Promise<void> {
+    await new Promise<void>((resolve, reject) => {
+      port.set({ dtr: options.dtr ?? true, rts: options.rts ?? false }, (error) =>
+        error ? reject(error) : resolve(),
+      )
+    })
+    this.currentOptions = { ...options }
   }
 
   public onRawData(listener: (data: Uint8Array) => void): () => void {

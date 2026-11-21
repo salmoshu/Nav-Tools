@@ -8,6 +8,7 @@
     @mouseleave="handleMouseLeave"
     @mousedown="handleMouseDown"
     @dblclick="fitOverview"
+    @contextmenu.prevent
   >
     <canvas ref="plotCanvasRef" class="satellite-count-plot"></canvas>
     <canvas ref="axisCanvasRef" class="satellite-count-axis"></canvas>
@@ -66,11 +67,14 @@ import {
   createInitialSatelliteCountViewport,
   fitSatelliteCountViewport,
   panSatelliteCountViewport,
+  panTimeSeriesRange,
+  TIME_SERIES_WHEEL_ZOOM_IN_FACTOR,
+  TIME_SERIES_WHEEL_ZOOM_OUT_FACTOR,
   updateSatelliteCountViewportOnData,
   zoomSatelliteCountViewport,
   type SatelliteCountViewport,
 } from '@/core/gnss/SatelliteCountViewport'
-import { createSatelliteTimeSeriesRenderer } from '@/core/render/createSatelliteTimeSeriesRenderer'
+import { CanvasSatelliteTimeSeriesRenderer } from '@/core/render/SatelliteTimeSeriesRenderer'
 import type {
   SatelliteRendererKind,
   SatelliteSeriesColor,
@@ -111,10 +115,23 @@ let renderFrame: number | null = null
 let overviewRenderTimer: ReturnType<typeof setTimeout> | null = null
 let lastOverviewRenderAt = 0
 let renderedYMax = 5
+let renderedYMin = 0
 let previousLength = 0
 let isDragging = false
+/** 右键 x 伸缩拖拽（锚定按下点历元，向右拖放大）——与速度图同款 */
+let isXZoomDragging = false
+let xZoomAnchor = 0
 let dragStartX = 0
+let dragStartY = 0
 let dragStartViewport: SatelliteCountViewport = { start: 0, end: 0 }
+let dragStartRange = { min: 0, max: 5 }
+/** 滚轮/拖拽产生的 y 轴手动范围（锚定光标值伸缩）；null=自动范围，dblclick 复位 */
+let yRangeOverride: { min: number; max: number } | null = null
+
+function currentYRange(): { min: number; max: number } {
+  if (yRangeOverride && yRangeOverride.max > yRangeOverride.min) return yRangeOverride
+  return { min: 0, max: renderedYMax }
+}
 
 const layout = {
   left: 56,
@@ -124,6 +141,10 @@ const layout = {
 }
 
 const OVERVIEW_RENDER_INTERVAL_MS = 1_000
+
+/** x 视口越界余量（与速度图 GnssMetricTimeSeries 一致）：允许视口两端越出数据
+ * 边缘半个窗宽，左右端点因此能继续拖到画面中部，不会在数据边缘卡死。 */
+const X_EDGE_OVERSCAN_RATIO = 0.5
 
 // 星座颜色与星空图（GnssSky.constellationColors）保持一致，
 // 同一星座在两个视图中的曲线/散点颜色统一；OTHER 收容 SBS/IRN 等其余系统，
@@ -266,14 +287,15 @@ function resizeLayers(): void {
 function initRenderer(): void {
   if (!plotCanvasRef.value) return
   renderer?.dispose()
-  renderer = createSatelliteTimeSeriesRenderer(plotCanvasRef.value)
+  renderer = new CanvasSatelliteTimeSeriesRenderer()
+  renderer.init(plotCanvasRef.value)
   rendererKind.value = renderer.kind
 
   for (const series of constellationSeries) {
     renderer.addSeries(series.id, hexToRgba(series.color))
   }
   renderer.addSeries('TOTAL', hexToRgba(chartTheme.value.text))
-  renderer.setLineWidth(2.2)
+  renderer.setLineWidth(4.4)
   applySeriesVisibility()
   resizeLayers()
 }
@@ -289,7 +311,7 @@ function renderChart(): void {
     renderer.clear()
     renderer.render()
     renderedYMax = 5
-    drawAxes(renderedYMax)
+    drawAxes(0, 5)
     return
   }
 
@@ -306,7 +328,7 @@ function renderChart(): void {
     renderer.clear()
     renderer.render()
     renderedYMax = 5
-    drawAxes(renderedYMax)
+    drawAxes(0, 5)
     return
   }
   const end = endExclusive - 1
@@ -337,15 +359,23 @@ function renderChart(): void {
   }
   renderer.setSeriesData('TOTAL', new Float32Array(total.points), new Uint32Array(total.segments))
   renderer.setSeriesColor('TOTAL', hexToRgba(chartTheme.value.text))
-  renderedYMax = yMax
+  // 手动 y 范围（滚轮/拖拽）优先；卫星数非负，下限钳到 0
+  let yMin = 0
+  let yMaxFinal = yMax
+  if (yRangeOverride && yRangeOverride.max > yRangeOverride.min) {
+    yMin = Math.max(0, yRangeOverride.min)
+    yMaxFinal = Math.max(yMin + 1e-6, yRangeOverride.max)
+  }
+  renderedYMin = yMin
+  renderedYMax = yMaxFinal
   renderer.setViewport(
     viewport.value.start - 0.5,
     Math.max(viewport.value.start + 0.5, viewport.value.end - 0.5),
-    0,
-    yMax,
+    yMin,
+    yMaxFinal,
   )
   renderer.render()
-  drawAxes(yMax)
+  drawAxes(yMin, yMaxFinal)
 }
 
 function scheduleRender(immediate = true): void {
@@ -372,7 +402,7 @@ function scheduleRender(immediate = true): void {
   renderFrame = requestAnimationFrame(renderChart)
 }
 
-function drawAxes(yMax: number): void {
+function drawAxes(yMin: number, yMax: number): void {
   const canvas = axisCanvasRef.value
   const context = axisContext
   const store = currentHistory()
@@ -402,7 +432,7 @@ function drawAxes(yMax: number): void {
     context.fillStyle = colors.textMuted
     context.textAlign = 'right'
     context.textBaseline = 'middle'
-    context.fillText(String(Math.round(yMax * ratio)), layout.left - 8, y)
+    context.fillText(String(Math.round(yMin + (yMax - yMin) * ratio)), layout.left - 8, y)
   }
 
   context.setLineDash([])
@@ -489,43 +519,105 @@ function drawAxes(yMax: number): void {
 function fitOverview(): void {
   if (props.slidingWindow) return
   viewport.value = fitSatelliteCountViewport(currentHistory().length)
+  yRangeOverride = null
+  renderedYMin = 0
   hoverSample.value = null
   hoverIndex.value = null
   scheduleRender()
 }
 
+/** 滚轮 y 伸缩的跨度限制：最小 1 颗卫星、最大 1000，防止无限伸缩 */
+const Y_ZOOM_MIN_SPAN = 1
+const Y_ZOOM_MAX_SPAN = 1000
+
+/** 滚轮：本图 y 轴伸缩，锚定光标处的数值（与速度图同款），跨度钳制在限值内 */
 function handleWheel(event: WheelEvent): void {
-  if (props.slidingWindow || currentHistory().length < 2) return
+  if (props.slidingWindow || currentHistory().length === 0) return
   const container = containerRef.value
   if (!container) return
   const rect = container.getBoundingClientRect()
-  const plotWidth = currentPlotSize().width
-  const localX = event.clientX - rect.left - layout.left
-  const ratio = Math.max(0, Math.min(1, localX / plotWidth))
-  const anchor = viewport.value.start + ratio * (viewport.value.end - viewport.value.start)
-  viewport.value = zoomSatelliteCountViewport(
-    viewport.value,
-    anchor,
-    event.deltaY > 0 ? 1.25 : 0.8,
-    currentHistory().length,
-  )
+  const localY = event.clientY - rect.top - layout.top
+  const { height } = currentPlotSize()
+  const ratio = Math.max(0, Math.min(1, 1 - localY / Math.max(1, height)))
+  const range = currentYRange()
+  const anchorValue = range.min + ratio * (range.max - range.min)
+  const factor =
+    event.deltaY > 0 ? TIME_SERIES_WHEEL_ZOOM_OUT_FACTOR : TIME_SERIES_WHEEL_ZOOM_IN_FACTOR
+  let min = anchorValue - (anchorValue - range.min) * factor
+  let max = anchorValue + (range.max - anchorValue) * factor
+  const span = max - min
+  const clampedSpan = Math.min(Y_ZOOM_MAX_SPAN, Math.max(Y_ZOOM_MIN_SPAN, span))
+  if (clampedSpan !== span) {
+    // 超限时以锚点为心收放/放大到限值，保持锚定语义
+    const scale = clampedSpan / span
+    min = anchorValue - (anchorValue - min) * scale
+    max = anchorValue + (max - anchorValue) * scale
+  }
+  yRangeOverride = { min, max }
   hoverSample.value = null
   hoverIndex.value = null
   scheduleRender()
 }
 
+/** 左键平移（x + y）/ 右键 x 伸缩按下：记录起点，右键额外记录锚点历元 */
 function handleMouseDown(event: MouseEvent): void {
-  if (event.button !== 0 || props.slidingWindow) return
+  if (props.slidingWindow) return
+  if (event.button === 2) {
+    const store = currentHistory()
+    const container = containerRef.value
+    if (!container || store.length < 2) return
+    const rect = container.getBoundingClientRect()
+    const localX = event.clientX - rect.left - layout.left
+    const ratio = Math.max(0, Math.min(1, localX / currentPlotSize().width))
+    isXZoomDragging = true
+    dragStartX = event.clientX
+    dragStartViewport = { ...viewport.value }
+    xZoomAnchor =
+      dragStartViewport.start + ratio * (dragStartViewport.end - dragStartViewport.start)
+    return
+  }
+  if (event.button !== 0) return
   isDragging = true
   dragStartX = event.clientX
+  dragStartY = event.clientY
   dragStartViewport = { ...viewport.value }
+  dragStartRange = currentYRange()
 }
 
 function handleWindowMouseMove(event: MouseEvent): void {
+  if (isXZoomDragging) {
+    const store = currentHistory()
+    if (store.length < 2) return
+    // 向右拖放大（时间窗变窄），向左拖缩小；以按下点为锚（与速度图同款）
+    const dx = event.clientX - dragStartX
+    const factor = Math.pow(2, -dx / 160)
+    viewport.value = zoomSatelliteCountViewport(
+      dragStartViewport,
+      xZoomAnchor,
+      factor,
+      store.length,
+      undefined,
+      X_EDGE_OVERSCAN_RATIO,
+    )
+    hoverSample.value = null
+    hoverIndex.value = null
+    scheduleRender()
+    return
+  }
   if (!isDragging) return
   const span = dragStartViewport.end - dragStartViewport.start
   const delta = -((event.clientX - dragStartX) / currentPlotSize().width) * span
-  viewport.value = panSatelliteCountViewport(dragStartViewport, delta, currentHistory().length)
+  const deltaY =
+    ((event.clientY - dragStartY) / currentPlotSize().height) *
+    Math.max(Number.EPSILON, dragStartRange.max - dragStartRange.min)
+  yRangeOverride = panTimeSeriesRange(dragStartRange, deltaY, 0)
+  viewport.value = panSatelliteCountViewport(
+    dragStartViewport,
+    delta,
+    currentHistory().length,
+    undefined,
+    X_EDGE_OVERSCAN_RATIO,
+  )
   hoverSample.value = null
   hoverIndex.value = null
   scheduleRender()
@@ -533,6 +625,7 @@ function handleWindowMouseMove(event: MouseEvent): void {
 
 function handleWindowMouseUp(): void {
   isDragging = false
+  isXZoomDragging = false
 }
 
 function handleMouseMove(event: MouseEvent): void {
@@ -571,7 +664,7 @@ function handleMouseMove(event: MouseEvent): void {
     left: `${Math.min(container.clientWidth - 190, x + layout.left + 14)}px`,
     top: `${Math.max(8, y + layout.top - 24)}px`,
   }
-  drawAxes(renderedYMax)
+  drawAxes(renderedYMin, renderedYMax)
 }
 
 function handleMouseLeave(): void {
@@ -597,6 +690,9 @@ watch([satelliteEpochHistory, satelliteCountHistory], () => {
         previousLength,
         nextLength,
         props.slidingWindow ? 'live' : 'overview',
+        undefined,
+        undefined,
+        X_EDGE_OVERSCAN_RATIO,
       )
   previousLength = nextLength
   scheduleRender(false)
@@ -682,6 +778,9 @@ onUnmounted(() => {
   renderer = null
   axisContext = null
 })
+
+// 供父组件（GnssSignal 重置布局按钮）触发 x 全览 + y 自动范围
+defineExpose({ fitOverview })
 </script>
 
 <style scoped>
@@ -692,7 +791,11 @@ onUnmounted(() => {
   min-height: 0;
   overflow: hidden;
   user-select: none;
-  cursor: crosshair;
+  cursor: grab;
+}
+
+.satellite-count-chart:active {
+  cursor: grabbing;
 }
 
 .satellite-count-plot,

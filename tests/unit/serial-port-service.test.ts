@@ -6,6 +6,7 @@ vi.mock('serialport', () => ({
 }))
 
 import { SerialPortService } from '../../electron/main/services/SerialPortService'
+import { SerialPort } from 'serialport'
 
 interface FakePort {
   isOpen: boolean
@@ -66,5 +67,58 @@ describe('SerialPortService.send', () => {
   it('sends ascii data as utf8 buffer', async () => {
     await service.send('hello', 'ascii')
     expect(port.write.mock.calls[0][0]).toEqual(Buffer.from('hello', 'utf8'))
+  })
+})
+
+describe('SerialPortService signal levels', () => {
+  function mockPort(baudRate: number): { set: ReturnType<typeof vi.fn> } {
+    const port = {
+      isOpen: true,
+      baudRate,
+      on: vi.fn(),
+      once: vi.fn((event: string, callback: () => void) => {
+        if (event === 'open') callback()
+      }),
+      set: vi.fn((_options: unknown, callback: (error?: Error | null) => void) => callback(null)),
+    }
+    vi.mocked(SerialPort).mockImplementation(() => port as unknown as SerialPort)
+    return port
+  }
+
+  const callbacks = { onData: vi.fn(), onDisconnected: vi.fn() }
+
+  it('applies configured RTS and DTR after opening the port', async () => {
+    const service = new SerialPortService()
+    const port = mockPort(12800)
+    await service.open(
+      {
+        path: 'COM4',
+        baudRate: 12800,
+        dataBits: 8,
+        stopBits: 1,
+        parity: 'none',
+        rts: true,
+        dtr: false,
+      },
+      callbacks,
+    )
+
+    expect(port.set).toHaveBeenCalledWith({ dtr: false, rts: true }, expect.any(Function))
+    expect(service.getConnectionInfo()).toMatchObject({
+      baudRate: 12800,
+      rts: true,
+      dtr: false,
+    })
+  })
+
+  it('preserves legacy signal defaults when options do not include them', async () => {
+    const service = new SerialPortService()
+    const port = mockPort(115200)
+    await service.open(
+      { path: 'COM5', baudRate: 115200, dataBits: 8, stopBits: 1, parity: 'none' },
+      callbacks,
+    )
+
+    expect(port.set).toHaveBeenCalledWith({ dtr: true, rts: false }, expect.any(Function))
   })
 })

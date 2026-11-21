@@ -57,10 +57,7 @@
             :h="item.h"
             :i="item.i"
             :minW="item.minW || 4"
-            :minH="
-              item.collapsed ? COLLAPSED_PANEL_ROWS : item.minH || DEFAULT_PANEL_MIN_HEIGHT_ROWS
-            "
-            :is-resizable="!item.collapsed"
+            :minH="item.minH || DEFAULT_PANEL_MIN_HEIGHT_ROWS"
             :maxW="item.maxW || 12"
             :maxH="item.maxH || 12"
             :class="{ 'pure-content-grid-item': pureContentItems.includes(item.i) }"
@@ -74,7 +71,6 @@
                 shadow="never"
                 :class="{
                   'full-screen-card': fullScreenItem === item.i,
-                  'collapsed-card': item.collapsed && fullScreenItem !== item.i,
                   'pure-content-card':
                     pureContentItems.includes(item.i) && fullScreenItem !== item.i,
                 }"
@@ -82,11 +78,8 @@
                 <template v-if="fullScreenItem !== item.i" #header>
                   <div
                     class="card-header"
-                    :title="
-                      t(item.collapsed ? 'app.dashboard.expandHint' : 'app.dashboard.collapseHint')
-                    "
-                    :aria-expanded="!item.collapsed"
-                    @dblclick.stop="togglePanelCollapse(item)"
+                    :title="t('app.dashboard.maximizeHint')"
+                    @dblclick.stop="toggleCardFullScreen(item.i)"
                   >
                     <button
                       class="title panel-settings-entry"
@@ -203,10 +196,8 @@ import PanelActionsMenu from './PanelActionsMenu.vue'
 import emitter from '@/hooks/useMitt'
 import { useLayoutManager } from '@/composables/useLayoutManager'
 import {
-  COLLAPSED_PANEL_ROWS,
   DEFAULT_PANEL_MIN_HEIGHT_ROWS,
   expandPanel,
-  togglePanelCollapsed,
 } from '@/core/layout/PanelCollapse'
 import type { LayoutItem } from '@/composables/useLayoutManager'
 import {
@@ -346,7 +337,7 @@ const openComponentSettings = (item: LayoutItem) => {
 const handlePanelTitleDoubleClick = (item: LayoutItem) => {
   if (panelSettingsTimer) clearTimeout(panelSettingsTimer)
   panelSettingsTimer = undefined
-  togglePanelCollapse(item)
+  toggleCardFullScreen(item.i)
 }
 
 /**
@@ -435,11 +426,6 @@ function togglePureContent(item: LayoutItem) {
   ElMessage({ message: t('app.dashboard.pureContentHint'), type: 'info', duration: 2000 })
 }
 
-const togglePanelCollapse = (item: LayoutItem) => {
-  if (fullScreenItem.value !== null) return
-  togglePanelCollapsed(item)
-  void nextTick(() => window.dispatchEvent(new Event('resize')))
-}
 const isGridResizing = ref(false)
 const gridLayoutRef = ref<InstanceType<typeof GridLayout> | null>(null)
 
@@ -921,20 +907,6 @@ onUnmounted(() => {
   box-shadow: none;
   overflow: hidden;
   transition: all 0.3s ease;
-}
-
-.collapsed-card :deep(.el-card__body) {
-  display: none;
-}
-
-.collapsed-card :deep(.el-card__header) {
-  border-bottom: 0;
-  border-radius: inherit;
-}
-
-.collapsed-card .card-header {
-  border-bottom: 0;
-  border-radius: inherit;
 }
 
 /* 全屏卡片样式增强 */

@@ -62,7 +62,7 @@ test('uses readable table typography and a refined satellite-count view', async 
 
   await page.locator('.view-select').click()
   const viewOptions = page.locator('.el-select-dropdown:visible .el-select-dropdown__item')
-  await expect(viewOptions.first()).toHaveText('Bar Chart View')
+  await expect(viewOptions.first()).toHaveText('Satellite Count')
   await viewOptions.filter({ hasText: 'Satellite Count' }).click()
   const chart = page.locator('.satellite-count-chart')
   await expect(chart).toBeVisible()

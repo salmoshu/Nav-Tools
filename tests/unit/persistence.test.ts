@@ -595,6 +595,21 @@ describe('DataSourceStorage', () => {
     })
   })
 
+  it('persists serial control lines and preserves legacy defaults', () => {
+    const memory = new MemoryStorage()
+    const storage = new DataSourceStorage(new JsonStorage(memory))
+    const settings = storage.load()
+    storage.save({ ...settings, serial: { ...settings.serial, rts: true, dtr: false } })
+
+    expect(storage.load().serial).toMatchObject({ rts: true, dtr: false })
+    const legacy = new MemoryStorage()
+    legacy.setItem(DATA_SOURCE_SETTINGS_KEY, JSON.stringify({ serial: { port: 'COM1' } }))
+    expect(new DataSourceStorage(new JsonStorage(legacy)).load().serial).toMatchObject({
+      rts: false,
+      dtr: true,
+    })
+  })
+
   it('defaults the active source to file when nothing is stored', () => {
     const memory = new MemoryStorage()
 

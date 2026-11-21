@@ -77,7 +77,7 @@ const detail = computed(() => {
 }
 
 .gnssraw-loading-track {
-  width: 120px;
+  width: 240px;
   height: 4px;
   overflow: hidden;
   background: var(--app-surface-muted);

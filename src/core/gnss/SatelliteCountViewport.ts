@@ -180,3 +180,21 @@ export function updateSatelliteCountViewportOnData(
 
   return clampSatelliteCountViewport(viewport, safeNextLength, minVisibleEpochs, overscanRatio)
 }
+
+export const TIME_SERIES_WHEEL_ZOOM_OUT_FACTOR = 1.15
+export const TIME_SERIES_WHEEL_ZOOM_IN_FACTOR = 1 / TIME_SERIES_WHEEL_ZOOM_OUT_FACTOR
+
+export interface TimeSeriesRange {
+  min: number
+  max: number
+}
+
+export function panTimeSeriesRange(
+  range: TimeSeriesRange,
+  delta: number,
+  minimum = Number.NEGATIVE_INFINITY,
+): TimeSeriesRange {
+  const span = Math.max(Number.EPSILON, range.max - range.min)
+  const min = Math.max(minimum, range.min + delta)
+  return { min, max: min + span }
+}

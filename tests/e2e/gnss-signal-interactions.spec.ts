@@ -58,9 +58,10 @@ test('orders Bar Chart above Table View and restores it after restart', async ({
   await openSignals(page)
   await page.locator('.view-select').click()
   const options = page.locator('.el-select-dropdown:visible .el-select-dropdown__item')
-  await expect(options.nth(0)).toHaveText('Bar Chart View')
-  await expect(options.nth(1)).toHaveText('Table View')
-  await options.nth(0).click()
+  await expect(options.nth(0)).toHaveText('Satellite Count')
+  await expect(options.nth(1)).toHaveText('Bar Chart View')
+  await expect(options.nth(2)).toHaveText('Table View')
+  await options.nth(1).click()
   await expect(page.locator('.signal-bar-wrapper')).toBeVisible()
 
   await page.reload()
@@ -128,4 +129,102 @@ test('thickens per-satellite lines and supports right-drag zoom, wheel zoom and 
     { start: 0, end: 100 },
   ])
   await page.screenshot({ path: 'test-results/gnss-per-satellite-interactions.png' })
+})
+
+async function nsatState(page: Page) {
+  return page.locator('.satellite-count-chart').evaluate((element) => {
+    const state = Reflect.get(element, '__vueParentComponent')?.setupState
+    const unwrap = (value: unknown) =>
+      value && typeof value === 'object' && 'value' in value ? Reflect.get(value, 'value') : value
+    return {
+      viewport: unwrap(state?.viewport),
+      range: unwrap(state?.yRangeOverride),
+      renderedRange: { min: state?.renderedYMin, max: state?.renderedYMax },
+      renderer: element.getAttribute('data-renderer'),
+    }
+  })
+}
+
+test('keeps satellite-count dragging free of zoom and doubles line width without gaps', async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    const getContext = HTMLCanvasElement.prototype.getContext
+    HTMLCanvasElement.prototype.getContext = function (type: string, ...args: unknown[]) {
+      if (type === 'webgl' || type === 'webgl2') return null
+      return getContext.call(this, type, ...args)
+    } as typeof getContext
+    Reflect.set(window, '__nsatStrokeWidths', [])
+    const clearRect = CanvasRenderingContext2D.prototype.clearRect
+    CanvasRenderingContext2D.prototype.clearRect = function (...args: unknown[]) {
+      if (this.canvas.classList.contains('satellite-count-plot')) {
+        Reflect.set(window, '__nsatStrokeWidths', [])
+      }
+      clearRect.apply(this, args)
+    }
+    const stroke = CanvasRenderingContext2D.prototype.stroke
+    CanvasRenderingContext2D.prototype.stroke = function () {
+      if (this.canvas.classList.contains('satellite-count-plot')) {
+        const widths = Reflect.get(window, '__nsatStrokeWidths') as Array<{
+          width: number
+          color: string
+        }>
+        widths.push({ width: this.lineWidth, color: String(this.strokeStyle) })
+      }
+      stroke.call(this)
+    }
+  })
+  await openSignals(page)
+  for (let second = 0; second < 5; second += 1) {
+    await page.evaluate(
+      async (epoch) => {
+        const { useNmea } = await import('/src/composables/gnss/useNmea.ts')
+        useNmea().processRawData(epoch)
+      },
+      signalEpoch(second, 45 + second),
+    )
+  }
+  const chart = page.locator('.satellite-count-chart')
+  await expect(chart).toHaveAttribute('data-renderer', 'canvas')
+  await expect
+    .poll(() => page.evaluate(() => Reflect.get(window, '__nsatStrokeWidths').length))
+    .toBeGreaterThan(3)
+  const widths = await page.evaluate(() => Reflect.get(window, '__nsatStrokeWidths'))
+  expect(widths).toHaveLength(7)
+  expect(new Set(widths.map((line) => line.color)).size).toBe(7)
+  for (const line of widths) expect(line.width).toBeCloseTo(4.4, 6)
+
+  const initial = await nsatState(page)
+  const bounds = (await chart.boundingBox())!
+  const x = bounds.x + bounds.width * 0.6
+  const y = bounds.y + bounds.height * 0.6
+  await page.mouse.move(x, y)
+  await page.mouse.down()
+  await page.mouse.move(x, y - 80, { steps: 8 })
+  await page.mouse.up()
+  const panned = await nsatState(page)
+  expect(panned.viewport).toEqual(initial.viewport)
+  expect(panned.range?.min).toBe(0)
+  expect(panned.range?.max - panned.range?.min).toBeCloseTo(
+    initial.renderedRange.max - initial.renderedRange.min,
+    8,
+  )
+
+  await chart.hover({ position: { x: bounds.width * 0.6, y: bounds.height * 0.6 } })
+  await page.mouse.wheel(0, -120)
+  await expect.poll(async () => (await nsatState(page)).range).not.toBeNull()
+  const zoomed = await nsatState(page)
+  expect(
+    (zoomed.range?.max - zoomed.range?.min) / (panned.range?.max - panned.range?.min),
+  ).toBeCloseTo(1 / 1.15, 6)
+  expect(zoomed.viewport).toEqual(initial.viewport)
+
+  await page.getByRole('button', { name: 'Reset Layout', exact: true }).click()
+  await expect.poll(async () => (await nsatState(page)).range).toBeNull()
+  expect((await nsatState(page)).viewport).toEqual(initial.viewport)
+  await expect(page.locator('.view-controls')).toHaveCSS('height', '50px')
+  await expect(page.locator('.nsat-reset-btn')).toHaveClass(/control-btn/)
+  await expect(page.locator('.nsat-reset-btn')).toHaveCSS('height', '28px')
+  await expect(page.locator('.nsat-clear-btn')).toHaveClass(/control-btn/)
+  await page.screenshot({ path: 'test-results/gnss-nsat-controls.png' })
 })

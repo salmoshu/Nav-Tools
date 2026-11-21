@@ -121,6 +121,8 @@ export default {
     parityPlaceholder: 'Select parity',
     advanced: 'Advanced Options',
     showAdvanced: 'Show full serial parameters',
+    controlLines: 'Control Lines',
+    rtsDtrHint: 'Apply RTS and DTR signal levels after the serial port opens',
     networkTab: 'Network',
     networkTabShort: 'Network',
     mcapSource: 'LiDAR recording (MCAP)',
@@ -271,8 +273,7 @@ export default {
     },
   },
   dashboard: {
-    collapseHint: 'Double-click the header to collapse',
-    expandHint: 'Double-click the header to expand',
+    maximizeHint: 'Double-click the header to maximize (double-click again or press Esc to exit)',
     detach: 'Detach',
     shortcutWindow: 'Open in standalone window (keep card)',
     createShortcut: 'Create shortcut',

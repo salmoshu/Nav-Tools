@@ -16,6 +16,8 @@ export interface DataSourceSettings {
     dataBits: string
     stopBits: string
     parity: string
+    rts: boolean
+    dtr: boolean
     advanced: boolean
     parser: TextDataParser
     format: DataFormat
@@ -54,6 +56,8 @@ export function createDefaultDataSourceSettings(): DataSourceSettings {
       dataBits: '8',
       stopBits: '1',
       parity: 'none',
+      rts: false,
+      dtr: true,
       advanced: false,
       parser: 'raw',
       format: 'auto',
@@ -104,7 +108,11 @@ function parserValue(value: unknown, fallback: TextDataParser): TextDataParser {
 function formatValue(value: unknown, parser: unknown, source: 'file' | 'stream'): DataFormat {
   if (isDataFormat(value)) return value
   // Old GNSS file parsers were also written by automatic detection, so re-detect each file.
-  if (source === 'file' && (parser === 'raw' || parser === 'nmea' || parser === 'rtklib-pos' || parser === undefined)) return 'auto'
+  if (
+    source === 'file' &&
+    (parser === 'raw' || parser === 'nmea' || parser === 'rtklib-pos' || parser === undefined)
+  )
+    return 'auto'
   if (isDataFormat(parser)) return parser
   return source === 'file' ? 'auto' : 'raw'
 }
@@ -146,6 +154,8 @@ function normalizeSettings(value: unknown): DataSourceSettings {
       dataBits: stringValue(serial.dataBits, defaults.serial.dataBits),
       stopBits: stringValue(serial.stopBits, defaults.serial.stopBits),
       parity: stringValue(serial.parity, defaults.serial.parity),
+      rts: typeof serial.rts === 'boolean' ? serial.rts : defaults.serial.rts,
+      dtr: typeof serial.dtr === 'boolean' ? serial.dtr : defaults.serial.dtr,
       advanced: typeof serial.advanced === 'boolean' ? serial.advanced : defaults.serial.advanced,
       parser: parserValue(serial.parser, defaults.serial.parser),
       format: formatValue(serial.format, serial.parser, 'stream'),
