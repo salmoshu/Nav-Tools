@@ -381,6 +381,72 @@ test('uses the same layout for live processing with only supported categories an
   await expect(latitude).toBeDisabled()
 })
 
+test('synchronizes basic real-time controls from an rtkrcv configuration file', async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    localStorage.setItem(
+      'nav-tools:gnsslib-rtknavi-v1',
+      JSON.stringify({
+        options: { mode: 2, baseConfigPath: '/data/single.conf' },
+        inputs: [
+          {
+            type: 'file',
+            enabled: true,
+            path: '/data/rover.rtcm3',
+            format: 'rtcm3',
+            timeTag: false,
+            replaySpeed: 1,
+          },
+        ],
+      }),
+    )
+  })
+  const panel = await optionsPanel(page, 'realtime')
+  await page.evaluate(() =>
+    Reflect.set(window.electronAPI, 'rtkPostReadConfig', async () =>
+      [
+        'pos1-posmode=single',
+        'pos1-frequency=l1+l2',
+        'pos1-elmask=17.5',
+        'pos1-navsys=9',
+        'pos2-armode=off',
+        'ant2-postype=llh',
+      ].join('\n'),
+    ),
+  )
+
+  await panel.getByRole('button', { name: 'Reload configuration file' }).click()
+
+  await expect(panel.locator('.base-config-status')).toContainText(
+    'Configuration values synchronized',
+  )
+  await selectSolverCategory(panel, 'common')
+  await expect(panel.locator('[data-option="mode"] .el-select')).toHaveText('Single')
+  await expect(panel.locator('[data-option="frequency"] .el-select')).toHaveText('L1 + L2')
+  await expect(panel.locator('[data-option="elevationMaskDeg"] input')).toHaveValue('17.5')
+  const options = await page.evaluate(async () => {
+    const { useRtkNavi } = await import('/src/composables/useRtkNavi.ts')
+    const value = useRtkNavi().settings.options
+    return {
+      mode: value.mode,
+      frequency: value.frequency,
+      elevationMaskDeg: value.elevationMaskDeg,
+      ambiguityResolution: value.ambiguityResolution,
+      constellations: [...value.constellations],
+      basePositionMode: value.basePositionMode,
+    }
+  })
+  expect(options).toEqual({
+    mode: 0,
+    frequency: 2,
+    elevationMaskDeg: 17.5,
+    ambiguityResolution: 'off',
+    constellations: ['G', 'E'],
+    basePositionMode: 'llh',
+  })
+})
+
 test('imports legacy base config parameters while preserving explicit real-time edits', async ({
   page,
 }) => {
@@ -412,7 +478,9 @@ test('imports legacy base config parameters while preserving explicit real-time 
   )
   const config = panel.locator('.base-config-row input')
   await panel.getByRole('button', { name: 'Reload configuration file' }).click()
-  await expect(panel.locator('.base-config-status')).toContainText('Advanced parameters loaded')
+  await expect(panel.locator('.base-config-status')).toContainText(
+    'Configuration values synchronized',
+  )
   await selectSolverCategory(panel, 'ambiguity')
   // Single positioning hides ambiguity controls; switch to kinematic to inspect them.
   await selectSolverCategory(panel, 'common')
@@ -432,7 +500,9 @@ test('imports legacy base config parameters while preserving explicit real-time 
   expect(saved.advancedOptionOverrides).toEqual(['ratioThreshold'])
   await config.fill('/data/updated.conf')
   await config.press('Enter')
-  await expect(panel.locator('.base-config-status')).toContainText('Advanced parameters loaded')
+  await expect(panel.locator('.base-config-status')).toContainText(
+    'Configuration values synchronized',
+  )
   await selectSolverCategory(panel, 'ambiguity')
   await expect(ratio).toHaveValue('3.00')
   await panel.getByRole('button', { name: 'Restore advanced values from file' }).click()
@@ -457,7 +527,9 @@ test('waits for a pending configuration read and cancels startup when stopped', 
   await panel.getByRole('button', { name: 'Start', exact: true }).click()
   await panel.getByRole('button', { name: 'Stop', exact: true }).click()
   await page.evaluate(() => Reflect.get(window, '__resolveLiveConfig')('pos2-arthres=6\n'))
-  await expect(panel.locator('.base-config-status')).toContainText('Advanced parameters loaded')
+  await expect(panel.locator('.base-config-status')).toContainText(
+    'Configuration values synchronized',
+  )
   await expect(panel.getByRole('button', { name: 'Start', exact: true })).toBeVisible()
   expect(await page.evaluate(() => Reflect.get(window, '__solverLiveRequest'))).toBeUndefined()
   expect(await page.evaluate(() => Reflect.get(window, '__liveConfigReads'))).toBe(1)

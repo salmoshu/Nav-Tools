@@ -79,14 +79,31 @@
         :aria-labelledby="`${viewId}-processing-tab`"
       >
         <section class="form-section">
-          <div class="section-title">{{ t('gnssRaw.rtkpost.engine') }}</div>
           <div class="file-row">
-            <label>rnx2rtkp</label>
+            <label :for="`${viewId}-engine`">{{ t('gnssRaw.rtkpost.engine') }}</label>
+            <el-select
+              :id="`${viewId}-engine`"
+              v-model="store.settings.engine"
+              :disabled="store.running.value"
+            >
+              <el-option value="rnx2rtkp" label="RNX2RTKP" />
+              <el-option value="starrtk" label="StarRTK" />
+            </el-select>
+          </div>
+          <div class="file-row">
+            <label :for="`${viewId}-executable`">{{ t('gnssRaw.rtkpost.executable') }}</label>
             <el-input
-              v-model="store.settings.executablePath"
+              :id="`${viewId}-executable`"
+              v-model="store.engineFiles.value.executablePath"
               spellcheck="false"
               :disabled="store.running.value"
-              :placeholder="t('gnssRaw.rtkpost.executablePlaceholder')"
+              :placeholder="
+                t(
+                  store.isStarRtk.value
+                    ? 'gnssRaw.rtkpost.starRtkExecutable'
+                    : 'gnssRaw.rtkpost.executablePlaceholder',
+                )
+              "
               clearable
             />
             <el-button :disabled="store.running.value" @click="chooseExecutable"
@@ -102,7 +119,7 @@
               spellcheck="false"
               :disabled="store.running.value"
               placeholder="RINEX OBS"
-              @change="store.suggestOutput()"
+              @change="store.suggestOutput(true)"
             />
             <el-button :disabled="store.running.value" @click="chooseRover"
               ><el-icon><FolderOpened /></el-icon
@@ -127,20 +144,22 @@
           </div>
           <div v-for="(_, index) in store.settings.navPaths" :key="index" class="file-row">
             <label>
-              {{ t('gnssRaw.rtkpost.navFile') }}
+              {{ store.isStarRtk.value ? 'RINEX NAV' : t('gnssRaw.rtkpost.navFile') }}
               {{ store.settings.navPaths.length > 1 ? index + 1 : '' }}
             </label>
             <el-input
               v-model="store.settings.navPaths[index]"
               spellcheck="false"
               :disabled="store.running.value"
-              placeholder="NAV / CLK / SP3 / FCB / IONEX / SBAS"
+              :placeholder="
+                store.isStarRtk.value ? 'RINEX NAV' : 'NAV / CLK / SP3 / FCB / IONEX / SBAS'
+              "
             />
             <el-button :disabled="store.running.value" @click="chooseNav(index)"
               ><el-icon><FolderOpened /></el-icon
             ></el-button>
             <el-button
-              v-if="store.settings.navPaths.length > 1"
+              v-if="!store.isStarRtk.value && store.settings.navPaths.length > 1"
               class="remove-nav"
               text
               :disabled="store.running.value"
@@ -150,6 +169,7 @@
             </el-button>
           </div>
           <el-button
+            v-if="!store.isStarRtk.value"
             class="add-nav"
             text
             type="primary"
@@ -158,7 +178,11 @@
           >
             + {{ t('gnssRaw.rtkpost.addNav') }}
           </el-button>
-          <div class="field-hint nav-hint">{{ t('gnssRaw.rtkpost.navHint') }}</div>
+          <div class="field-hint nav-hint">
+            {{
+              t(store.isStarRtk.value ? 'gnssRaw.rtkpost.starRtkInputs' : 'gnssRaw.rtkpost.navHint')
+            }}
+          </div>
 
           <div class="observation-time-section">
             <div class="observation-time-heading">
@@ -211,10 +235,6 @@
                   ><strong>{{ selectedTimeLabel(1) }}</strong>
                 </div>
               </div>
-              <div class="observation-time-limits">
-                <span>{{ formatTimeLabel(store.observationSpan.value.start) }}</span>
-                <span>{{ formatTimeLabel(store.observationSpan.value.end) }}</span>
-              </div>
               <div
                 v-if="store.timeSelectionError.value"
                 class="observation-time-error"
@@ -266,7 +286,7 @@
               v-model="store.settings.outputPath"
               spellcheck="false"
               :disabled="store.running.value"
-              placeholder=".pos"
+              :placeholder="store.activeOptions.value.outputFormat === 'nmea' ? '.nmea' : '.pos'"
             />
             <el-button :disabled="store.running.value" @click="chooseOutput"
               ><el-icon><FolderOpened /></el-icon
@@ -282,85 +302,106 @@
         role="tabpanel"
         :aria-labelledby="`${viewId}-options-tab`"
       >
-        <section class="config-file-panel">
-          <div class="file-row config-file-row">
-            <label :for="`${viewId}-config-file`">{{ t('gnssRaw.rtkpost.configFile') }}</label>
-            <el-input
-              :id="`${viewId}-config-file`"
-              v-model="store.draftConfigPath.value"
-              spellcheck="false"
-              :disabled="
-                store.running.value ||
-                store.configSaving.value ||
-                store.configStatus.value === 'loading'
-              "
-              :placeholder="t('gnssRaw.rtkpost.configOptional')"
-              clearable
-              @change="loadConfig"
-              @clear="clearConfig"
-            />
-            <el-button
-              :disabled="
-                store.running.value ||
-                store.configSaving.value ||
-                store.configStatus.value === 'loading'
-              "
-              @click="chooseConfig"
-              ><el-icon><FolderOpened /></el-icon
-            ></el-button>
-          </div>
-          <div
-            class="config-status"
-            :class="`is-${store.configStatus.value}`"
-            :title="store.configDetail.value || t('gnssRaw.rtkpost.configHint')"
-            role="status"
-            aria-live="polite"
-          >
-            {{ configSummary }}
-          </div>
-        </section>
-        <GnssSolverOptions
-          mode="post"
-          :options="store.draftOptions"
-          :modified-keys="store.manualModifiedKeys.value"
-          :disabled="
-            store.running.value ||
-            store.configSaving.value ||
-            store.configStatus.value === 'loading'
-          "
-          @change="updateOption"
-        />
-        <footer class="options-actions">
-          <span>{{ t('gnssRaw.rtkpost.optionsDraftHint') }}</span>
-          <div>
-            <el-button
-              :disabled="
-                store.running.value ||
-                store.configSaving.value ||
-                store.configStatus.value === 'loading' ||
-                (!store.hasPendingOptions.value && store.configStatus.value !== 'error')
-              "
-              @click="store.cancelOptions()"
-              >{{ t('gnssRaw.rtkpost.optionsDiscard') }}</el-button
+        <template v-if="store.isStarRtk.value">
+          <div class="file-row">
+            <label :for="`${viewId}-star-output`">{{ t('gnssRaw.rtkpost.outputFormat') }}</label>
+            <el-select
+              :id="`${viewId}-star-output`"
+              v-model="store.settings.starRtk.outputFormat"
+              :disabled="store.running.value"
             >
-            <el-button
-              :disabled="store.running.value || store.configStatus.value === 'loading'"
-              :loading="store.configSaving.value"
-              @click="saveOptions"
-              >{{ t('gnssRaw.rtkpost.optionsSave') }}</el-button
-            >
-            <el-button
-              type="primary"
-              :disabled="
-                store.running.value ||
-                store.configSaving.value ||
-                store.configStatus.value === 'loading'
-              "
-              @click="confirmOptions"
-              >{{ t('gnssRaw.rtkpost.optionsConfirm') }}</el-button
-            >
+              <el-option value="llh" label="POS (LLH / GPST)" />
+              <el-option value="nmea" label="NMEA (RMC / GGA)" />
+            </el-select>
           </div>
-        </footer>
+          <StarRtkOptions
+            v-model="store.settings.starRtk.processing"
+            :disabled="store.running.value"
+            :apply-config="store.applyStarRtkConfig"
+            :export-config="store.exportStarRtkConfig"
+          />
+        </template>
+        <template v-else>
+          <section class="config-file-panel">
+            <div class="file-row config-file-row">
+              <label :for="`${viewId}-config-file`">{{ t('gnssRaw.rtkpost.configFile') }}</label>
+              <el-input
+                :id="`${viewId}-config-file`"
+                v-model="store.draftConfigPath.value"
+                spellcheck="false"
+                :disabled="
+                  store.running.value ||
+                  store.configSaving.value ||
+                  store.configStatus.value === 'loading'
+                "
+                :placeholder="t('gnssRaw.rtkpost.configOptional')"
+                clearable
+                @change="loadConfig"
+                @clear="clearConfig"
+              />
+              <el-button
+                :disabled="
+                  store.running.value ||
+                  store.configSaving.value ||
+                  store.configStatus.value === 'loading'
+                "
+                @click="chooseConfig"
+                ><el-icon><FolderOpened /></el-icon
+              ></el-button>
+            </div>
+            <div
+              class="config-status"
+              :class="`is-${store.configStatus.value}`"
+              :title="store.configDetail.value || t('gnssRaw.rtkpost.configHint')"
+              role="status"
+              aria-live="polite"
+            >
+              {{ configSummary }}
+            </div>
+          </section>
+          <GnssSolverOptions
+            mode="post"
+            :options="store.draftOptions"
+            :modified-keys="store.manualModifiedKeys.value"
+            :disabled="
+              store.running.value ||
+              store.configSaving.value ||
+              store.configStatus.value === 'loading'
+            "
+            @change="updateOption"
+          />
+          <footer class="options-actions">
+            <span>{{ t('gnssRaw.rtkpost.optionsDraftHint') }}</span>
+            <div>
+              <el-button
+                :disabled="
+                  store.running.value ||
+                  store.configSaving.value ||
+                  store.configStatus.value === 'loading' ||
+                  (!store.hasPendingOptions.value && store.configStatus.value !== 'error')
+                "
+                @click="store.cancelOptions()"
+                >{{ t('gnssRaw.rtkpost.optionsDiscard') }}</el-button
+              >
+              <el-button
+                :disabled="store.running.value || store.configStatus.value === 'loading'"
+                :loading="store.configSaving.value"
+                @click="saveOptions"
+                >{{ t('gnssRaw.rtkpost.optionsSave') }}</el-button
+              >
+              <el-button
+                type="primary"
+                :disabled="
+                  store.running.value ||
+                  store.configSaving.value ||
+                  store.configStatus.value === 'loading'
+                "
+                @click="confirmOptions"
+                >{{ t('gnssRaw.rtkpost.optionsConfirm') }}</el-button
+              >
+            </div>
+          </footer>
+        </template>
       </section>
 
       <section
@@ -424,7 +465,9 @@ import { FolderOpened } from '@element-plus/icons-vue'
 import { t } from '@/i18n'
 import { useRtkPost } from '@/composables/useRtkPost'
 import { formatRtkPostTime, parseCalendarTime } from '@/core/gnsslib/RtkPostProgress'
+import { isStarRtkExecutable } from '@/core/gnsslib/StarRtkConfig'
 import GnssSolverOptions from './GnssSolverOptions.vue'
+import StarRtkOptions from './StarRtkOptions.vue'
 import type { SolverOptionKey, SolverOptionValue } from '@/core/gnsslib/GnssSolverOptions'
 
 const store = useRtkPost()
@@ -452,7 +495,8 @@ const configSummary = computed(() => {
 })
 
 const relativeMode = computed(
-  () => store.settings.options.mode >= 1 && store.settings.options.mode <= 6,
+  () =>
+    store.isStarRtk.value || (store.settings.options.mode >= 1 && store.settings.options.mode <= 6),
 )
 const timeRangeDuration = computed(() => {
   const span = store.observationSpan.value
@@ -532,7 +576,7 @@ const progressStatus = computed(() => {
 })
 
 watch(
-  () => store.settings.options.outputFormat,
+  () => store.activeOptions.value.outputFormat,
   () => store.suggestOutput(),
 )
 
@@ -557,7 +601,7 @@ async function chooseRover(): Promise<void> {
   const path = await chooseFile('rover-obs', obsFilters())
   if (path) {
     store.settings.roverObsPath = path
-    store.suggestOutput()
+    store.suggestOutput(true)
   }
 }
 
@@ -567,10 +611,20 @@ async function chooseBase(): Promise<void> {
 }
 
 async function chooseNav(index: number): Promise<void> {
+  const starRtk = store.isStarRtk.value
   const path = await chooseFile('nav', [
     {
-      name: 'NAV / CLK / SP3',
-      extensions: ['nav', 'rnx', 'n', 'p', 'g', 'h', 'q', 'sp3', 'eph', 'clk'],
+      name: starRtk ? 'RINEX NAV' : 'NAV / CLK / SP3',
+      extensions: [
+        'nav',
+        'rnx',
+        'n',
+        'p',
+        'g',
+        'h',
+        'q',
+        ...(starRtk ? [] : ['sp3', 'eph', 'clk']),
+      ],
     },
     { name: t('gnssRaw.rtkpost.allFiles'), extensions: ['*'] },
   ])
@@ -578,11 +632,18 @@ async function chooseNav(index: number): Promise<void> {
 }
 
 async function chooseExecutable(): Promise<void> {
-  const path = await chooseFile('executable', [
-    { name: 'rnx2rtkp', extensions: ['exe'] },
+  const engine = store.settings.engine
+  const files = store.engineFiles.value
+  const path = await chooseFile(engine === 'starrtk' ? 'starrtk-executable' : 'executable', [
+    { name: engine === 'starrtk' ? 'StarRTK' : 'rnx2rtkp', extensions: ['exe'] },
     { name: t('gnssRaw.rtkpost.allFiles'), extensions: ['*'] },
   ])
-  if (path) store.settings.executablePath = path
+  if (path && isStarRtkExecutable(path)) {
+    store.settings.engine = 'starrtk'
+    store.settings.starRtk.executablePath = path
+  } else if (path) {
+    files.executablePath = path
+  }
 }
 
 async function chooseConfig(): Promise<void> {
@@ -618,7 +679,7 @@ async function chooseOutput(): Promise<void> {
   }
   const path = await api({
     defaultPath: store.settings.outputPath,
-    outputFormat: store.settings.options.outputFormat,
+    outputFormat: store.activeOptions.value.outputFormat,
   })
   if (path) store.settings.outputPath = path
 }
@@ -662,7 +723,12 @@ async function cancel(): Promise<void> {
 
 function obsFilters(): { name: string; extensions: string[] }[] {
   return [
-    { name: 'RINEX OBS', extensions: ['obs', 'rnx', 'crx', 'o', 'd', 'gz', 'z'] },
+    {
+      name: 'RINEX OBS',
+      extensions: store.isStarRtk.value
+        ? ['obs', 'rnx', 'o']
+        : ['obs', 'rnx', 'crx', 'o', 'd', 'gz', 'z'],
+    },
     { name: t('gnssRaw.rtkpost.allFiles'), extensions: ['*'] },
   ]
 }
@@ -827,8 +893,7 @@ function formatBytes(bytes: number): string {
 }
 .observation-time-heading,
 .observation-time-heading > div,
-.observation-time-selected,
-.observation-time-limits {
+.observation-time-selected {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -846,8 +911,7 @@ function formatBytes(bytes: number): string {
   margin-left: 0;
 }
 .observation-time-heading span,
-.observation-time-hint,
-.observation-time-limits {
+.observation-time-hint {
   color: var(--el-text-color-secondary);
 }
 .observation-time-slider {
@@ -868,11 +932,6 @@ function formatBytes(bytes: number): string {
 }
 .observation-time-selected strong {
   font-weight: 600;
-}
-.observation-time-limits {
-  margin-top: 6px;
-  font-size: 11px;
-  font-variant-numeric: tabular-nums;
 }
 .observation-time-hint,
 .observation-time-error {

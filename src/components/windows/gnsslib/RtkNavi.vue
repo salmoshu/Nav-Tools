@@ -148,14 +148,31 @@
         :aria-labelledby="`${viewId}-configuration-tab`"
       >
         <section v-show="!props.embedded || props.view !== 'options'" class="config-section">
-          <div class="section-title">{{ t('gnssLib.rtknavi.engine') }}</div>
           <div class="file-row">
-            <label>rtkrcv</label>
+            <label :for="`${viewId}-engine`">{{ t('gnssLib.starRtk.realtimeEngine') }}</label>
+            <el-select
+              :id="`${viewId}-engine`"
+              v-model="store.settings.engine"
+              :disabled="store.running.value"
+            >
+              <el-option value="rtkrcv" label="rtkrcv" />
+              <el-option value="starrtk" label="StarRTK" />
+            </el-select>
+          </div>
+          <div class="file-row">
+            <label :for="`${viewId}-executable`">{{ t('gnssRaw.rtkpost.executable') }}</label>
             <el-input
-              v-model="store.settings.executablePath"
+              :id="`${viewId}-executable`"
+              v-model="store.engineSettings.value.executablePath"
               spellcheck="false"
               :disabled="store.running.value"
-              :placeholder="t('gnssLib.rtknavi.executablePlaceholder')"
+              :placeholder="
+                t(
+                  store.isStarRtk.value
+                    ? 'gnssRaw.rtkpost.starRtkExecutable'
+                    : 'gnssLib.rtknavi.executablePlaceholder',
+                )
+              "
               clearable
             />
             <el-button :disabled="store.running.value" @click="chooseExecutable"
@@ -166,7 +183,7 @@
           <div class="file-row">
             <label>.pos</label>
             <el-input
-              v-model="store.settings.outputPath"
+              v-model="store.engineSettings.value.outputPath"
               spellcheck="false"
               :disabled="store.running.value"
             />
@@ -181,7 +198,7 @@
           {{ t('gnssLib.rtknavi.inputs') }}
         </div>
         <section
-          v-for="(stream, index) in store.settings.inputs"
+          v-for="(stream, index) in store.engineSettings.value.inputs"
           v-show="!props.embedded || props.view !== 'options'"
           :key="index"
           class="config-section stream-section"
@@ -189,6 +206,7 @@
           <div class="stream-heading">
             <strong>{{ t(`gnssLib.rtknavi.${inputNames[index]}`) }}</strong>
             <el-switch
+              v-if="!store.isStarRtk.value"
               v-model="stream.enabled"
               :disabled="store.running.value || index === 0"
               :aria-label="t('gnssLib.rtknavi.enabled')"
@@ -207,7 +225,11 @@
             </label>
             <label>
               <span>{{ t('gnssLib.rtknavi.format') }}</span>
-              <el-select v-model="stream.format" :disabled="store.running.value || !stream.enabled">
+              <el-select
+                v-if="!store.isStarRtk.value"
+                v-model="stream.format"
+                :disabled="store.running.value || !stream.enabled"
+              >
                 <el-option
                   v-for="format in inputFormats"
                   :key="format"
@@ -215,6 +237,7 @@
                   :value="format"
                 />
               </el-select>
+              <strong v-else>RTCM3</strong>
             </label>
           </div>
           <div class="file-row stream-path">
@@ -261,65 +284,75 @@
           v-show="!props.embedded || props.view === 'options'"
           class="config-section navi-options"
         >
-          <div class="navi-options-config" :title="t('gnssLib.rtknavi.baseConfigHint')">
-            <div class="file-row base-config-row">
-              <label :for="`${viewId}-base-config`">{{ t('gnssLib.rtknavi.baseConfig') }}</label>
-              <el-input
-                :id="`${viewId}-base-config`"
-                v-model="store.settings.options.baseConfigPath"
-                spellcheck="false"
-                :disabled="store.running.value || store.configStatus.value === 'loading'"
-                placeholder="rtkrcv.conf"
-                clearable
-                @change="store.loadBaseConfig()"
-              />
-              <el-button
-                :disabled="store.running.value || store.configStatus.value === 'loading'"
-                @click="chooseBaseConfig"
-                ><el-icon><FolderOpened /></el-icon
-              ></el-button>
-              <el-button
-                :disabled="
-                  store.running.value ||
-                  store.configStatus.value === 'loading' ||
-                  !store.settings.options.baseConfigPath
-                "
-                :title="t('gnssLib.rtknavi.configReload')"
-                :aria-label="t('gnssLib.rtknavi.configReload')"
-                @click="store.loadBaseConfig()"
-                ><el-icon><Refresh /></el-icon
-              ></el-button>
-            </div>
-            <div
-              v-if="store.configStatus.value !== 'idle'"
-              class="field-hint base-config-status"
-              :class="{ 'is-error': store.configStatus.value === 'error' }"
-              role="status"
-            >
-              {{
-                store.configStatus.value === 'loading'
-                  ? t('gnssLib.rtknavi.configLoading')
-                  : store.configDetail.value
-              }}
-              <el-button
-                v-if="
-                  store.settings.options.baseConfigPath &&
-                  store.settings.advancedOptionOverrides.length
-                "
-                link
-                type="primary"
-                :disabled="store.running.value || store.configStatus.value === 'loading'"
-                @click="store.restoreBaseConfig()"
-                >{{ t('gnssLib.rtknavi.configResetOverrides') }}</el-button
-              >
-            </div>
-          </div>
-          <GnssSolverOptions
-            mode="realtime"
-            :options="store.settings.options"
-            :disabled="store.running.value || store.configStatus.value === 'loading'"
-            @change="updateOption"
+          <StarRtkOptions
+            v-if="store.isStarRtk.value"
+            v-model="store.settings.starRtk.processing"
+            v-model:timing="store.settings.starRtk.timing"
+            :disabled="store.running.value"
+            :apply-config="store.applyStarRtkConfig"
+            :export-config="store.exportStarRtkConfig"
           />
+          <template v-else>
+            <div class="navi-options-config" :title="t('gnssLib.rtknavi.baseConfigHint')">
+              <div class="file-row base-config-row">
+                <label :for="`${viewId}-base-config`">{{ t('gnssLib.rtknavi.baseConfig') }}</label>
+                <el-input
+                  :id="`${viewId}-base-config`"
+                  v-model="store.settings.options.baseConfigPath"
+                  spellcheck="false"
+                  :disabled="store.running.value || store.configStatus.value === 'loading'"
+                  placeholder="rtkrcv.conf"
+                  clearable
+                  @change="store.loadBaseConfig()"
+                />
+                <el-button
+                  :disabled="store.running.value || store.configStatus.value === 'loading'"
+                  @click="chooseBaseConfig"
+                  ><el-icon><FolderOpened /></el-icon
+                ></el-button>
+                <el-button
+                  :disabled="
+                    store.running.value ||
+                    store.configStatus.value === 'loading' ||
+                    !store.settings.options.baseConfigPath
+                  "
+                  :title="t('gnssLib.rtknavi.configReload')"
+                  :aria-label="t('gnssLib.rtknavi.configReload')"
+                  @click="store.loadBaseConfig()"
+                  ><el-icon><Refresh /></el-icon
+                ></el-button>
+              </div>
+              <div
+                v-if="store.configStatus.value !== 'idle'"
+                class="field-hint base-config-status"
+                :class="{ 'is-error': store.configStatus.value === 'error' }"
+                role="status"
+              >
+                {{
+                  store.configStatus.value === 'loading'
+                    ? t('gnssLib.rtknavi.configLoading')
+                    : store.configDetail.value
+                }}
+                <el-button
+                  v-if="
+                    store.settings.options.baseConfigPath &&
+                    store.settings.advancedOptionOverrides.length
+                  "
+                  link
+                  type="primary"
+                  :disabled="store.running.value || store.configStatus.value === 'loading'"
+                  @click="store.restoreBaseConfig()"
+                  >{{ t('gnssLib.rtknavi.configResetOverrides') }}</el-button
+                >
+              </div>
+            </div>
+            <GnssSolverOptions
+              mode="realtime"
+              :options="store.settings.options"
+              :disabled="store.running.value || store.configStatus.value === 'loading'"
+              @change="updateOption"
+            />
+          </template>
         </section>
       </section>
 
@@ -343,8 +376,10 @@ import { FolderOpened, Refresh } from '@element-plus/icons-vue'
 import { t } from '@/i18n'
 import { useRtkNavi } from '@/composables/useRtkNavi'
 import type { RtkNaviStreamType } from '@/core/gnsslib/RtkNavi'
+import { isStarRtkExecutable } from '@/core/gnsslib/StarRtkConfig'
 import type { SolverOptionKey, SolverOptionValue } from '@/core/gnsslib/GnssSolverOptions'
 import GnssSolverOptions from './GnssSolverOptions.vue'
+import StarRtkOptions from './StarRtkOptions.vue'
 
 const store = useRtkNavi()
 const props = defineProps<{ embedded?: boolean; view?: string }>()
@@ -384,7 +419,8 @@ const inputFormats = [
 ]
 
 const currentOutputPath = computed(
-  () => store.status.value.outputPath || store.settings.outputPath || 'rtknavi-current.pos',
+  () =>
+    store.status.value.outputPath || store.engineSettings.value.outputPath || 'rtknavi-current.pos',
 )
 const statusText = computed(() => t(`gnssLib.rtknavi.${store.status.value.state}`))
 const qualityText = computed(() => {
@@ -428,7 +464,7 @@ const trackScale = computed(() => trackGeometry.value.scale)
 
 onMounted(() => {
   void store.refreshStatus()
-  if (store.settings.options.baseConfigPath) void store.loadBaseConfig()
+  if (!store.isStarRtk.value && store.settings.options.baseConfigPath) void store.loadBaseConfig()
 })
 
 function qualityCount(quality: number): string {
@@ -469,19 +505,32 @@ function streamHint(type: RtkNaviStreamType): string {
 }
 
 async function chooseExecutable(): Promise<void> {
-  const path = await chooseFile('executable', [
-    { name: 'rtkrcv', extensions: ['exe'] },
+  const starRtk = store.isStarRtk.value
+  const files = store.engineSettings.value
+  const path = await chooseFile(starRtk ? 'starrtk-executable' : 'executable', [
+    { name: starRtk ? 'StarRTK' : 'rtkrcv', extensions: ['exe'] },
     { name: t('gnssLib.rtknavi.allFiles'), extensions: ['*'] },
   ])
-  if (path) store.settings.executablePath = path
+  if (path && isStarRtkExecutable(path)) {
+    store.settings.engine = 'starrtk'
+    store.settings.starRtk.executablePath = path
+  } else if (path) {
+    files.executablePath = path
+  }
 }
 
 async function chooseInputFile(index: number): Promise<void> {
+  const files = store.engineSettings.value
   const path = await chooseFile(`input-${index + 1}`, [
-    { name: 'GNSS Data', extensions: ['rtcm', 'rtcm2', 'rtcm3', 'ubx', 'bin', 'log', 'sp3'] },
+    {
+      name: store.isStarRtk.value ? 'RTCM3' : 'GNSS Data',
+      extensions: store.isStarRtk.value
+        ? ['rtcm', 'rtcm3', 'bin', 'log']
+        : ['rtcm', 'rtcm2', 'rtcm3', 'ubx', 'bin', 'log', 'sp3'],
+    },
     { name: t('gnssLib.rtknavi.allFiles'), extensions: ['*'] },
   ])
-  if (path) store.settings.inputs[index].path = path
+  if (path) files.inputs[index].path = path
 }
 
 async function chooseBaseConfig(): Promise<void> {
@@ -501,8 +550,9 @@ async function chooseOutput(): Promise<void> {
     ElMessage.info(t('gnssLib.rtknavi.desktopOnly'))
     return
   }
-  const path = await api(store.settings.outputPath || undefined)
-  if (path) store.settings.outputPath = path
+  const files = store.engineSettings.value
+  const path = await api(files.outputPath || undefined)
+  if (path) files.outputPath = path
 }
 
 async function chooseFile(

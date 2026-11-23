@@ -1,6 +1,6 @@
 # Open-GNSS 接入与同步
 
-Nav-Tools 的 GNSS-Lib 使用 [Open-GNSS](https://github.com/salmoshu/Open-GNSS) 的 `rnx2rtkp` 进行后处理，使用 `rtkrcv` 进行实时定位。GNSS-Raw 使用同一项目的 WebAssembly 解码器处理 RTCM3、NMEA 与 RINEX 数据。
+Nav-Tools 的 GNSS-Lib 使用 `rnx2rtkp` 进行后处理，使用 `rtkrcv` 进行实时解算。两个模式也都可以选择 StarRTK。`rnx2rtkp`、`rtkrcv` 和 GNSS-Raw 的 WebAssembly 解码器均来自 [Open-GNSS](https://github.com/salmoshu/Open-GNSS)。
 
 ## 名称与依赖
 
@@ -43,7 +43,13 @@ Open-GNSS 当前默认的 Linux 实时引擎编译配置启用 GPS、Galileo、B
 
 更名后已有的可执行文件路径仍可继续使用。
 
-后处理的「处理时间范围」时间轴会读取 Rover OBS 的首尾历元。相对定位模式选择 Base OBS 后，时间轴使用两者的重叠时段；单点和 PPP 模式使用 Rover 时段。拖动两端可截取时段，选择「全部时段」可恢复完整范围；同一路径的文件重新生成后可点击「刷新」。时间以 GPST 显示，并传递给 `rnx2rtkp -ts/-te`。载入配置中的起止时间也会反映到时间轴。若两站时段不重叠，执行按钮会禁用；无法自动读取时间时请刷新或检查观测文件。普通 RINEX 和 gzip 压缩的观测文件支持读取时间范围。
+在后处理或实时解算的「输入」页选择 StarRTK，然后选择本机的 `StarRTK.exe`（Windows）或 `StarRTK`（Linux）。文件选择器也会识别这两个文件名并切换引擎。请使用 `StarRTK --help` 中列有 `--config` 的版本。
+
+- 后处理使用未压缩的流动站 OBS、基站 OBS 和一份覆盖观测时段的 RINEX NAV。「处理选项」可选 POS（RTKLIB LLH/GPST）或 NMEA（UTC RMC/GGA）。
+- 实时解算使用流动站和基站两路 RTCM3，可选网络、串口或文件回放。带 `.tag` 的文件可启用时间标签并设置回放倍速。工作区逐历元读取 POS 供轨迹和回放使用。
+- 选择 StarRTK 时，「处理选项」显示站点模式、定权、频点、模糊度解算模式、PAR、Fix-and-Hold 和 Ratio 参数。可载入或保存 YAML。实时 YAML 还包含输入流、读取周期和最大基站数据龄期。
+
+使用 `rnx2rtkp` 时，「处理时间范围」时间轴会读取 Rover OBS 的首尾历元。相对定位模式选择 Base OBS 后，时间轴使用两者的重叠时段；单点和 PPP 模式使用 Rover 时段。拖动两端可截取时段，选择「全部时段」可恢复完整范围；同一路径的文件重新生成后可点击「刷新」。时间以 GPST 显示，并传递给 `rnx2rtkp -ts/-te`。载入配置中的起止时间也会反映到时间轴。若两站时段不重叠，执行按钮会禁用；无法自动读取时间时请刷新或检查观测文件。普通 RINEX 和 gzip 压缩的观测文件支持读取时间范围。
 
 ## 统一解算工作区
 

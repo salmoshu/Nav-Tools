@@ -56,6 +56,7 @@ test('merges legacy engine entries and imports complete post-processing results 
   await expect.poll(async () => (await solverSnapshot(page)).positions).toBe(1205)
   await expect.poll(async () => (await solverSnapshot(page)).messages).toBe(1206)
   expect((await solverSnapshot(page)).points).toBe(1205)
+  await page.getByRole('button', { name: 'Show or hide position status' }).click()
   await expect(page.locator('.deviation-status-card')).toContainText('Fixed')
   await expect(page.locator('.flow-console-virtual')).not.toContainText('receiver-only-record')
   expect(
@@ -98,6 +99,7 @@ test('loads NMEA selected by a config file into messages and Deviation with LLH 
   })
   await expect(panel.locator('.solver-statusbar .solver-state.success')).toBeVisible()
   await expect.poll(async () => (await solverSnapshot(page)).positions).toBe(3)
+  await page.getByRole('button', { name: 'Show or hide position status' }).click()
   await expect(page.locator('.deviation-status-card')).toContainText('Single')
   await expect(page.locator('.flow-console-virtual')).toContainText('$GPGGA')
 })
@@ -277,6 +279,7 @@ test('keeps the empty Deviation status concise in normal and pure-content modes'
   page,
 }) => {
   await openSolver(page)
+  await page.getByRole('button', { name: 'Show or hide position status' }).click()
   const status = page.locator('.deviation-status-card')
   await expect(status.locator('.status-card-summary')).toHaveText('No positioning data')
   await expect(status.locator('.status-card-heading')).toHaveCount(0)

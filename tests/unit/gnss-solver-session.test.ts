@@ -28,6 +28,8 @@ describe('GNSS solver session', () => {
     expect(session.display.data.deviationPoints.value).toHaveLength(1205)
     expect(session.display.data.deviationPoints.value[0]).toEqual([0, 0, 4])
     expect(session.display.data.deviationPoints.value[1][2]).toBe(5)
+    expect(session.display.signals?.satelliteCountEpochHistory.value.getValue('QUALITY', 0)).toBe(4)
+    expect(session.display.signals?.satelliteCountEpochHistory.value.getValue('QUALITY', 1)).toBe(5)
     expect(session.display.data.positionEpochHistory.value.getValue('U', 1204)).toBeCloseTo(
       1.204,
       3,

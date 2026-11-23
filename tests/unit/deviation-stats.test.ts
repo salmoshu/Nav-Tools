@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { computeDeviationStats } from '@/core/deviation/DeviationStats'
+import { computeDeviationStats, computeVerticalStats } from '@/core/deviation/DeviationStats'
 
 describe('computeDeviationStats', () => {
   it('returns null for empty input or all-invalid coordinates', () => {
@@ -58,5 +58,14 @@ describe('computeDeviationStats', () => {
     expect(stats!.count).toBe(2)
     expect(stats!.qualityCounts.get(0)).toBe(1)
     expect(stats!.qualityCounts.get(4)).toBe(1)
+  })
+
+  it('computes U statistics and ignores missing vertical values', () => {
+    expect(computeVerticalStats([1, null, 3, undefined, Number.NaN])).toEqual({
+      aveU: 2,
+      stdU: 1,
+      rmsU: Math.sqrt(5),
+    })
+    expect(computeVerticalStats([null, undefined, Number.NaN])).toBeNull()
   })
 })

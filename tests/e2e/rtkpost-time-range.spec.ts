@@ -95,8 +95,10 @@ test('applies imported time bounds to the timeline only after confirmation', asy
   const timeline = panel.locator('.observation-time-section')
   await expect(timeline).toContainText('Rover and base overlap')
   await page.evaluate(() =>
-    Reflect.set(window.electronAPI, 'rtkPostReadConfig', async () =>
-      'pos1-posmode=single\npos1-ts=2024/07/30 00:03:00\npos1-te=2024/07/30 00:07:00\n',
+    Reflect.set(
+      window.electronAPI,
+      'rtkPostReadConfig',
+      async () => 'pos1-posmode=single\npos1-ts=2024/07/30 00:03:00\npos1-te=2024/07/30 00:07:00\n',
     ),
   )
   await panel.getByRole('tab', { name: 'Options', exact: true }).click()
@@ -153,7 +155,11 @@ test('ignores a late observation read after the rover is changed', async ({ page
   await page.getByRole('option', { name: 'Single', exact: true }).click()
   await panel.getByRole('button', { name: 'Confirm', exact: true }).click()
   await panel.getByRole('tab', { name: 'Inputs', exact: true }).click()
-  await panel.locator('.file-row').filter({ hasText: 'RINEX OBS: Rover' }).locator('input').fill('/data/stale.obs')
+  await panel
+    .locator('.file-row')
+    .filter({ hasText: 'RINEX OBS: Rover' })
+    .locator('input')
+    .fill('/data/stale.obs')
   await page.waitForTimeout(350)
   await panel
     .locator('.file-row')
@@ -180,7 +186,47 @@ test('refreshes files at the same path without discarding a valid selection', as
     }))
   })
   await timeline.getByRole('button', { name: 'Refresh', exact: true }).click()
-  await expect(timeline.locator('.observation-time-limits')).toContainText('00:09:00')
+  await expect(timeline.locator('.observation-time-limits')).toHaveCount(0)
   await expect(timeline.locator('.observation-time-selected')).toContainText('00:02:00.001')
   await expect(timeline.locator('.observation-time-selected')).toContainText('00:08:00')
+})
+
+test('provides the observation time range for StarRTK and uses the RNX2RTKP label', async ({
+  page,
+}) => {
+  const panel = await openSolver(page)
+  const engineRow = panel.locator('.file-row').filter({ hasText: 'Processing engine' })
+  await engineRow.locator('.el-select').click()
+  await expect(page.getByRole('option', { name: 'RNX2RTKP', exact: true })).toBeVisible()
+  await page.getByRole('option', { name: 'StarRTK', exact: true }).click()
+  await panel
+    .locator('.file-row')
+    .filter({ hasText: 'Executable' })
+    .locator('input')
+    .fill('/tools/StarRTK')
+  await panel
+    .locator('.file-row')
+    .filter({ hasText: 'RINEX NAV' })
+    .locator('input')
+    .fill('/data/rover.nav')
+
+  const timeline = panel.locator('.observation-time-section')
+  await expect(timeline).toContainText('Rover and base overlap')
+  await expect(timeline.locator('.observation-time-limits')).toHaveCount(0)
+  await expect(timeline.locator('.observation-time-selected')).toContainText('2024-07-30 00:02:00')
+  await expect(timeline.locator('.observation-time-selected')).toContainText('2024-07-30 00:08:00')
+  const handles = timeline.getByRole('slider')
+  await handles.nth(0).focus()
+  await page.keyboard.press('ArrowRight')
+  await handles.nth(1).focus()
+  await page.keyboard.press('ArrowLeft')
+  await expect(timeline.locator('.observation-time-selected')).toContainText('00:02:00.001')
+  await expect(timeline.locator('.observation-time-selected')).toContainText('00:07:59.999')
+
+  await panel.getByRole('button', { name: 'Execute', exact: true }).click()
+  await expect.poll(() => page.evaluate(() => Reflect.get(window, '__solverPostCalls'))).toBe(1)
+  const request = await page.evaluate(() => Reflect.get(window, '__solverPostRequest'))
+  expect(request.engine).toBe('starrtk')
+  expect(request.options.startTime).toBe('2024-07-30T00:02:00.001')
+  expect(request.options.endTime).toBe('2024-07-30T00:07:59.999')
 })

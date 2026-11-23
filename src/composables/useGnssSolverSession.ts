@@ -60,7 +60,7 @@ export function createGnssSolverSession() {
     valuePrecision: 'float64',
   })
   const speedEpochHistory = shallowRef(new NumericEpochStore(['SPEED', 'QUALITY']))
-  const satelliteCountEpochHistory = shallowRef(new NumericEpochStore(['SATS_USED']))
+  const satelliteCountEpochHistory = shallowRef(new NumericEpochStore(['SATS_USED', 'QUALITY']))
   const satelliteCountSource = ref<'gga' | 'rtklib-pos'>('gga')
   // Solver results contain solution records, not receiver satellite snapshots.
   // Keep these stores isolated even when the receiver workspace has GSV data.
@@ -185,19 +185,19 @@ export function createGnssSolverSession() {
     qualityCounts.value[solution.quality] = (qualityCounts.value[solution.quality] ?? 0) + 1
     latest.value = solution
     currentSolution.value = solution
+    const quality =
+      ({ 1: 4, 2: 5, 3: 2, 4: 2, 5: 1, 6: 1, 7: 6 } as Record<number, number>)[solution.quality] ??
+      0
     satelliteCountSource.value = source
     satelliteCountEpochHistory.value.append(
       solution.time,
-      { SATS_USED: satelliteCount },
+      { SATS_USED: satelliteCount, QUALITY: quality },
       { replaceLast: true },
     )
     if (solution.quality === 0) return
     origin ??= [solution.latitude, solution.longitude, solution.height]
     const east = (solution.longitude - origin[1]) * 111320 * Math.cos((origin[0] * Math.PI) / 180)
     const north = (solution.latitude - origin[0]) * 110574
-    const quality =
-      ({ 1: 4, 2: 5, 3: 2, 4: 2, 5: 1, 6: 1, 7: 6 } as Record<number, number>)[solution.quality] ??
-      0
     positionEpochHistory.value.append(solution.time, {
       E: east,
       N: north,

@@ -311,6 +311,8 @@ describe('NMEA GNSS status extraction', () => {
     expect(nmea.satelliteCountEpochHistory.value.length).toBe(2)
     expect(nmea.satelliteCountEpochHistory.value.getValue('SATS_USED', 0)).toBe(37)
     expect(nmea.satelliteCountEpochHistory.value.getValue('SATS_USED', 1)).toBe(29)
+    expect(nmea.satelliteCountEpochHistory.value.getValue('QUALITY', 0)).toBe(4)
+    expect(nmea.satelliteCountEpochHistory.value.getValue('QUALITY', 1)).toBe(4)
     expect(nmea.satelliteEpochHistory.value.length).toBe(0)
   })
 
@@ -324,6 +326,7 @@ describe('NMEA GNSS status extraction', () => {
     expect(nmea.hasGsvData.value).toBe(false)
     expect(nmea.satelliteCountEpochHistory.value.length).toBe(1)
     expect(nmea.satelliteCountEpochHistory.value.getValue('SATS_USED', 0)).toBe(5)
+    expect(nmea.satelliteCountEpochHistory.value.getValue('QUALITY', 0)).toBe(5)
 
     const gsv = withChecksum('$GPGSV,1,1,01,07,30,180,38')
     const secondGga = withChecksum(

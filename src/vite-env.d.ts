@@ -104,6 +104,10 @@ interface Window {
     ) => Promise<import('./core/gnsslib/RtkPost').RtkPostRunResult>
     rtkPostCancel: (runId: string) => Promise<boolean>
     rtkPostReadConfig: (path: string) => Promise<string>
+    starRtkReadConfig: (
+      path: string,
+    ) => Promise<import('./core/gnsslib/StarRtkConfig').StarRtkConfiguration>
+    starRtkChooseDirectory: () => Promise<string | null>
     rtkPostSaveConfig: (
       request: import('./core/gnsslib/RtkPost').RtkPostSaveConfigRequest,
     ) => Promise<string | null>

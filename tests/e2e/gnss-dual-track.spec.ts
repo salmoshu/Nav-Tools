@@ -207,6 +207,7 @@ test('keeps the current track as main and loads only a reference for Main minus 
   await expect(page.getByTestId('show-track-main')).toHaveText('Main')
   await expect(page.getByTestId('show-track-reference')).toHaveText('Ref')
   await expect(page.getByTestId('comparison-stats-select')).toContainText('Main − Ref')
+  await page.getByRole('button', { name: 'Show or hide position status' }).click()
   await expect(page.locator('.status-card-metrics')).toContainText('U 1.0000 m')
   await expect(page.locator('.tracking-switch')).not.toHaveClass(/is-disabled/)
   const notification = page.locator('.reference-track-notification')
@@ -249,11 +250,13 @@ test('keeps the current track as main and loads only a reference for Main minus 
     'background-color',
     'rgb(0, 64, 128)',
   )
-  await expect(page.locator('.status-card-stat').first()).toContainText('Samples')
-  await expect(page.locator('.status-card-stat').first()).toContainText('3')
+  if ((await page.locator('.tracking-switch input').getAttribute('aria-checked')) === 'true') {
+    await page.locator('.tracking-switch').click()
+  }
+  await expect(page.getByTestId('deviation-bottom-status')).toContainText('N = 3')
   await page.getByTestId('comparison-stats-select').click()
   await page.getByRole('option', { name: 'Main', exact: true }).click()
-  await expect(page.locator('.status-card-stat').first()).toContainText('4')
+  await expect(page.getByTestId('deviation-bottom-status')).toContainText('N = 4')
   await expect(page.locator('.status-card-indicator')).toHaveCSS(
     'background-color',
     'rgb(0, 128, 0)',
@@ -404,7 +407,9 @@ test('overlays reference ENU and derived speed on the metric views', async ({ pa
   await page.getByRole('option', { name: 'Position', exact: true }).click()
   await expect(page.locator('.position-chart-grid .metric-reference-label')).toHaveCount(0)
   await expect(page.locator('.position-chart-grid .metric-heading').first()).toHaveText('East (E)m')
-  await expect(page.locator('.position-chart-grid .metric-heading').first().locator(':scope > i')).toHaveCount(1)
+  await expect(
+    page.locator('.position-chart-grid .metric-heading').first().locator(':scope > i'),
+  ).toHaveCount(1)
   await expect(page.locator('.tracking-switch')).not.toHaveClass(/is-disabled/)
   await expect
     .poll(() =>
@@ -571,7 +576,6 @@ test('uses icon-only toolbar buttons without overflow at narrow widths', async (
   await expect(page.getByTestId('load-reference-track').locator('.el-icon')).toBeVisible()
 })
 
-
 test('tracks and selects the same epoch across dual-track deviation, position and speed views', async ({
   page,
 }) => {
@@ -633,6 +637,7 @@ test('tracks and selects the same epoch across dual-track deviation, position an
   await expectDifferenceHint(position, 'm')
   await expect(page.locator('.position-chart-grid .metric-reference-label')).toHaveCount(0)
   await expect(page.locator('.comparison-floating')).toBeVisible()
+  await page.getByRole('button', { name: 'Show or hide position status' }).click()
   await expect(page.getByTestId('deviation-status-card')).toBeVisible()
   await expect(page.getByTestId('show-track-difference')).toBeHidden()
   await expect(page.getByTestId('show-track-main')).toHaveText('Main')
@@ -725,7 +730,9 @@ test('tracks and selects the same epoch across dual-track deviation, position an
       const comparison = compareTracks(main, reference)!
       const point = comparison.trackB[index]
       const matrix = Reflect.get(window, '__comparisonViewportTransform') as number[]
-      const bounds = document.querySelector<HTMLCanvasElement>('.comparison-chart')!.getBoundingClientRect()
+      const bounds = document
+        .querySelector<HTMLCanvasElement>('.comparison-chart')!
+        .getBoundingClientRect()
       return {
         timeMs: point.timeMs,
         x: bounds.left + ((point.east * matrix[0] + matrix[6] + 1) / 2) * bounds.width,
@@ -773,8 +780,7 @@ test('tracks and selects the same epoch across dual-track deviation, position an
   for (const expected of selectedMarkers.expected) {
     expect(
       selectedMarkers.markers.some(
-        (marker) =>
-          Math.abs(marker.x - expected.x) < 1 && Math.abs(marker.y - expected.y) < 1,
+        (marker) => Math.abs(marker.x - expected.x) < 1 && Math.abs(marker.y - expected.y) < 1,
       ),
     ).toBe(true)
   }

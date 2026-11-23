@@ -9,6 +9,7 @@ import * as readline from 'node:readline'
 import type { WebContents } from 'electron'
 import {
   buildRtkPostArgs,
+  buildStarRtkPostConfig,
   RtkPostSolutionParser,
   type RtkPostRunRequest,
   type RtkPostRunResult,
@@ -17,10 +18,13 @@ import {
 } from '../../../src/core/gnsslib/RtkPost'
 import { mergeRtkPostConfig } from '../../../src/core/gnsslib/RtkPostConfig'
 import {
+  intersectObservationSpans,
   RtkPostLogDecoder,
   RtkPostProgressTracker,
+  type RtkPostTimeSpan,
 } from '../../../src/core/gnsslib/RtkPostProgress'
 import { readRinexObservationSpan } from './RinexObservationSpan'
+import { filterStarRtkSolutionText } from '../../../src/core/gnsslib/StarRtkTimeFilter'
 
 import { gnssSolverTasks } from './GnssSolverTasks'
 const MAX_LOG_CHARS = 200_000
@@ -29,6 +33,7 @@ interface RtkPostJob {
   runId: string
   child: ChildProcessWithoutNullStreams
   cancelled: boolean
+  publishing?: boolean
 }
 
 export class RtkPostService {
@@ -148,21 +153,58 @@ export class RtkPostService {
     }
 
     const request = normalizePaths(rawRequest)
+    const starRtk = request.engine === 'starrtk'
+    const engineName = starRtk ? 'StarRTK' : 'rnx2rtkp'
     buildRtkPostArgs(request)
+    if (starRtk) {
+      await fs.mkdir(path.dirname(request.outputPath), { recursive: true })
+      const traceDirectory = request.starRtkProcessing?.trace_directory
+      if (traceDirectory) await fs.mkdir(traceDirectory, { recursive: true })
+    }
     const previousOutput = await this.validateFiles(request)
     let cleanup = async (): Promise<void> => undefined
     try {
-      const effectiveConfig = await writeEffectiveRtkPostConfig(request)
-      cleanup = effectiveConfig.cleanup
-      request.configPath = effectiveConfig.path
-      const args = buildRtkPostArgs(request)
+      let nativeOutputPath = request.outputPath
+      let starConfigPath: string | undefined
+      if (starRtk) {
+        const directory = await fs.mkdtemp(path.join(path.dirname(request.outputPath), '.starrtk-'))
+        const yamlPath = path.join(directory, 'starrtk.yaml')
+        nativeOutputPath = path.join(
+          directory,
+          request.options.outputFormat === 'nmea' ? 'solution.nmea' : 'solution.pos',
+        )
+        cleanup = async () => {
+          await fs.rm(nativeOutputPath, { force: true }).catch(() => undefined)
+          await fs.rm(yamlPath, { force: true }).catch(() => undefined)
+          await fs.rmdir(directory).catch(() => undefined)
+        }
+        if (request.starRtkProcessing !== undefined) {
+          starConfigPath = yamlPath
+          await fs.writeFile(yamlPath, buildStarRtkPostConfig(request, nativeOutputPath), 'utf8')
+        }
+      } else {
+        const effectiveConfig = await writeEffectiveRtkPostConfig(request)
+        cleanup = effectiveConfig.cleanup
+        request.configPath = effectiveConfig.path
+      }
+      const args = starConfigPath
+        ? ['post', '--config', starConfigPath]
+        : buildRtkPostArgs({ ...request, outputPath: nativeOutputPath })
       // The timeline already supplies both bounds; avoid scanning compressed
       // observations a second time merely to initialize the progress tracker.
-      const observationSpan =
-        request.options.startTime.trim() && request.options.endTime.trim()
-          ? undefined
-          : await readRinexObservationSpan(request.roverObsPath).catch(() => undefined)
-      const tracker = new RtkPostProgressTracker(observationSpan, request.options)
+      let observationSpan: RtkPostTimeSpan | undefined
+      if (starRtk) {
+        const [rover, base] = await Promise.all([
+          readRinexObservationSpan(request.roverObsPath).catch(() => undefined),
+          readRinexObservationSpan(request.baseObsPath).catch(() => undefined),
+        ])
+        observationSpan = rover && base ? intersectObservationSpans(rover, base) : undefined
+      } else if (!request.options.startTime.trim() || !request.options.endTime.trim()) {
+        observationSpan = await readRinexObservationSpan(request.roverObsPath).catch(
+          () => undefined,
+        )
+      }
+      const tracker = new RtkPostProgressTracker(observationSpan, request.options, request.engine)
       const executable =
         request.executablePath || (process.platform === 'win32' ? 'rnx2rtkp.exe' : 'rnx2rtkp')
       if (sender.isDestroyed() || gnssSolverTasks.isCancelled('post', sender.id, request.runId)) {
@@ -177,7 +219,7 @@ export class RtkPostService {
 
       return await new Promise<RtkPostRunResult>((resolve) => {
         const child = this.spawnProcess(executable, args, {
-          cwd: path.dirname(request.outputPath),
+          cwd: path.dirname(nativeOutputPath),
           windowsHide: true,
           shell: false,
         })
@@ -213,7 +255,7 @@ export class RtkPostService {
           if (!lines.length) return
           const logLines: string[] = []
           for (const line of lines) {
-            if (/\b(?:error|fatal)\s*:/i.test(line)) {
+            if (/\b(?:error|fatal)\s*:/i.test(line) || (starRtk && /^StarRTK:/.test(line))) {
               // These optional correction files can be absent while a valid solution is produced.
               const optional =
                 /^error\s*:\s*(?:no erp data|no sat ant pcv|no rec ant pcv|no geoid data)\b/i.test(
@@ -246,20 +288,40 @@ export class RtkPostService {
           if (latestProgress) sendProgress(latestProgress)
           let cancelled = job.cancelled
           let solution: RtkPostSolutionSummary | undefined
-          let error = spawnError ? `无法启动 rnx2rtkp: ${spawnError.message}` : undefined
+          let error = spawnError ? `无法启动 ${engineName}: ${spawnError.message}` : undefined
           if (!cancelled && !error && diagnostics.length) {
             error = diagnostics.join('\n')
           }
           if (code === 0 && !cancelled && !error) {
             sendProgress({ ...latestProgress, phase: 'validating', percentage: 99 })
             try {
-              solution = await inspectSolution(request.outputPath, request, previousOutput)
+              if (starRtk && (request.options.startTime.trim() || request.options.endTime.trim())) {
+                const source = await fs.readFile(nativeOutputPath, 'utf8')
+                const filtered = filterStarRtkSolutionText(
+                  source,
+                  request.options.outputFormat === 'nmea' ? 'nmea' : 'llh',
+                  request.options.startTime,
+                  request.options.endTime,
+                )
+                if (filtered !== source) await fs.writeFile(nativeOutputPath, filtered, 'utf8')
+              }
+              solution = await inspectSolution(
+                nativeOutputPath,
+                request,
+                starRtk ? undefined : previousOutput,
+                engineName,
+              )
+              if (starRtk && !job.cancelled) {
+                job.publishing = true
+                await fs.rename(nativeOutputPath, request.outputPath)
+              }
             } catch (inspectError) {
+              solution = undefined
               error = inspectError instanceof Error ? inspectError.message : String(inspectError)
               if (warnings.length) error += `\n${warnings.join('\n')}`
             }
           } else if (!cancelled && !error) {
-            error = `rnx2rtkp 执行失败（退出码 ${code ?? '未知'}）`
+            error = `${engineName} 执行失败（退出码 ${code ?? '未知'}）`
           }
           cancelled = job.cancelled
           if (cancelled) {
@@ -299,8 +361,9 @@ export class RtkPostService {
   }
 
   public cancel(senderId: number, runId: string): boolean {
-    const pending = gnssSolverTasks.cancel('post', senderId, runId)
     const job = this.jobs.get(senderId)
+    if (job?.runId === runId && job.publishing) return false
+    const pending = gnssSolverTasks.cancel('post', senderId, runId)
     if (!job || job.runId !== runId) return Boolean(pending)
     job.cancelled = true
     job.child.kill()
@@ -310,23 +373,25 @@ export class RtkPostService {
   private async validateFiles(
     request: RtkPostRunRequest,
   ): Promise<import('node:fs').Stats | undefined> {
-    if (request.executablePath) await requireFile(request.executablePath, 'rnx2rtkp 可执行文件')
-    const relative = request.options.mode >= 1 && request.options.mode <= 6
+    const starRtk = request.engine === 'starrtk'
+    const engineName = starRtk ? 'StarRTK' : 'rnx2rtkp'
+    if (request.executablePath)
+      await requireFile(request.executablePath, `${engineName} 可执行文件`)
+    const relative = starRtk || (request.options.mode >= 1 && request.options.mode <= 6)
     const inputs = [
       request.roverObsPath,
       ...(relative ? [request.baseObsPath] : []),
       ...request.navPaths.filter((item) => item),
     ]
     for (const input of inputs) await requireFile(input, '输入文件')
-    if (request.configPath) await requireFile(request.configPath, '配置文件')
+    const configPath = starRtk ? '' : request.configPath
+    if (configPath) await requireFile(configPath, '配置文件')
 
     const protectedPaths = new Set(
-      [...inputs, request.configPath, request.executablePath]
-        .filter((item) => item)
-        .map(comparablePath),
+      [...inputs, configPath, request.executablePath].filter((item) => item).map(comparablePath),
     )
     if (protectedPaths.has(comparablePath(request.outputPath))) {
-      throw new Error('输出文件不能覆盖输入文件、配置文件或 rnx2rtkp 可执行文件')
+      throw new Error(`输出文件不能覆盖输入文件、配置文件或 ${engineName} 可执行文件`)
     }
     const outputDirectory = path.dirname(request.outputPath)
     const directoryStat = await statOrThrow(outputDirectory, '输出目录')
@@ -345,9 +410,10 @@ async function inspectSolution(
   outputPath: string,
   request: RtkPostRunRequest,
   previousOutput: import('node:fs').Stats | undefined,
+  engineName: string,
 ): Promise<RtkPostSolutionSummary> {
-  const stat = await statOrThrow(outputPath, 'rnx2rtkp 输出文件')
-  if (!stat.isFile()) throw new Error('rnx2rtkp 未生成解决方案文件')
+  const stat = await statOrThrow(outputPath, `${engineName} 输出文件`)
+  if (!stat.isFile()) throw new Error(`${engineName} 未生成解决方案文件`)
   if (
     previousOutput &&
     stat.mtimeMs === previousOutput.mtimeMs &&
@@ -358,16 +424,26 @@ async function inspectSolution(
     throw new Error('rnx2rtkp 未更新输出文件；现有文件是此前的结果。请检查输入数据与处理选项。')
   }
   const parser = new RtkPostSolutionParser(request.options.outputFormat, request.options.timeFormat)
+  const expectedNmea =
+    request.engine === 'starrtk' ? request.options.outputFormat === 'nmea' : undefined
   const input = createReadStream(outputPath, { encoding: 'utf8' })
   const lines = readline.createInterface({ input, crlfDelay: Infinity })
   try {
-    for await (const line of lines) parser.addLine(line)
+    for await (const line of lines) {
+      if (expectedNmea !== undefined && expectedNmea !== line.trimStart().startsWith('$')) continue
+      parser.addLine(line)
+    }
   } finally {
     lines.close()
     input.destroy()
   }
   const solution = parser.finish(stat.size)
   if (solution.epochs === 0) {
+    if (expectedNmea) {
+      throw new Error(
+        'StarRTK 未生成可读取的 NMEA 历元，请使用支持 .nmea 输出的 StarRTK 并检查观测数据。',
+      )
+    }
     throw new Error('输出文件中没有可识别的定位历元，请检查导航文件、观测时间范围与处理选项。')
   }
   return solution
@@ -399,6 +475,15 @@ function normalizePaths(request: RtkPostRunRequest): RtkPostRunRequest {
   const absolute = (value: string): string => path.resolve(value.trim())
   return {
     ...request,
+    starRtkProcessing: request.starRtkProcessing && {
+      ...request.starRtkProcessing,
+      trace_directory: request.starRtkProcessing.trace_directory?.trim()
+        ? path.resolve(
+            path.dirname(absolute(request.outputPath)),
+            request.starRtkProcessing.trace_directory,
+          )
+        : '',
+    },
     executablePath: request.executablePath?.trim() ? absolute(request.executablePath) : '',
     roverObsPath: absolute(request.roverObsPath),
     baseObsPath: request.baseObsPath?.trim() ? absolute(request.baseObsPath) : '',

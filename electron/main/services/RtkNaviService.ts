@@ -63,11 +63,13 @@ export class RtkNaviService {
     if (typeof rawRequest.runId !== 'string' || !/^[\w-]{1,80}$/.test(rawRequest.runId)) {
       throw new Error('RTKNAVI 任务标识无效')
     }
-    if (!Array.isArray(rawRequest.inputs) || rawRequest.inputs.length !== 3) {
+    const starRtk = rawRequest.engine === 'starrtk'
+    if (!Array.isArray(rawRequest.inputs) || rawRequest.inputs.length !== (starRtk ? 2 : 3)) {
       throw new Error('RTKNAVI 必须配置三路输入')
     }
 
     const request = this.normalizePaths(rawRequest)
+    const engineName = starRtk ? 'StarRTK' : 'rtkrcv'
     const outputPath =
       request.outputPath || path.join(this.workspace, 'results', `${request.runId}.pos`)
     if (!request.outputPath) await fs.mkdir(path.dirname(outputPath), { recursive: true })
@@ -78,12 +80,13 @@ export class RtkNaviService {
     if (cancelled()) return { runId: request.runId, state: 'stopped', outputPath }
     await fs.mkdir(this.workspace, { recursive: true })
     const runDirectory = await fs.mkdtemp(path.join(this.workspace, 'run-'))
-    const configPath = path.join(runDirectory, 'rtkrcv.conf')
+    const configPath = path.join(runDirectory, starRtk ? 'starrtk.yaml' : 'rtkrcv.conf')
 
     try {
-      const baseConfig = request.options.baseConfigPath
-        ? await fs.readFile(request.options.baseConfigPath, 'utf8')
-        : ''
+      const baseConfig =
+        !starRtk && request.options.baseConfigPath
+          ? await fs.readFile(request.options.baseConfigPath, 'utf8')
+          : ''
       const generatedConfig = buildRtkNaviConfig(request, outputPath, baseConfig)
       await fs.writeFile(
         configPath,
@@ -100,7 +103,8 @@ export class RtkNaviService {
       }
       const executable =
         request.executablePath || (process.platform === 'win32' ? 'rtkrcv.exe' : 'rtkrcv')
-      const child = this.spawnProcess(executable, ['-nc', '-o', configPath], {
+      const args = starRtk ? ['realtime', '--config', configPath] : ['-nc', '-o', configPath]
+      const child = this.spawnProcess(executable, args, {
         cwd: runDirectory,
         windowsHide: true,
         shell: false,
@@ -134,10 +138,14 @@ export class RtkNaviService {
       child.stdout.setEncoding('utf8')
       child.stderr.setEncoding('utf8')
       child.stdout.on('data', appendLog)
-      child.stderr.on('data', appendLog)
+      let nativeError = ''
+      child.stderr.on('data', (chunk: string) => {
+        if (starRtk) nativeError = (nativeError + chunk).slice(-4096)
+        appendLog(chunk)
+      })
       child.stdin.on('error', () => undefined)
       child.on('error', (error) => {
-        appendLog(`\n无法启动 rtkrcv: ${error.message}\n`)
+        appendLog(`\n无法启动 ${engineName}: ${error.message}\n`)
         void finish(
           sender,
           job,
@@ -148,7 +156,9 @@ export class RtkNaviService {
       })
       child.on('close', (code) => {
         const error =
-          job.stopping || code === 0 ? undefined : `rtkrcv 已退出（退出码 ${code ?? '未知'}）`
+          job.stopping || code === 0
+            ? undefined
+            : nativeError.trim() || `${engineName} 已退出（退出码 ${code ?? '未知'}）`
         void finish(sender, job, removeDestroyedListener, () => this.jobs.delete(sender.id), error)
       })
       watchSolution(sender, job, appendLog)
@@ -192,12 +202,22 @@ export class RtkNaviService {
   }
 
   private normalizePaths(request: RtkNaviStartRequest): RtkNaviStartRequest {
+    const outputPath = request.outputPath?.trim() ? path.resolve(request.outputPath.trim()) : ''
     return {
       ...request,
       executablePath: request.executablePath?.trim()
         ? path.resolve(request.executablePath.trim())
         : '',
-      outputPath: request.outputPath?.trim() ? path.resolve(request.outputPath.trim()) : '',
+      outputPath,
+      starRtkProcessing: request.starRtkProcessing && {
+        ...request.starRtkProcessing,
+        trace_directory: request.starRtkProcessing.trace_directory?.trim()
+          ? path.resolve(
+              outputPath ? path.dirname(outputPath) : this.workspace,
+              request.starRtkProcessing.trace_directory,
+            )
+          : '',
+      },
       inputs: request.inputs.map((stream) => ({
         ...stream,
         path:
@@ -215,21 +235,29 @@ export class RtkNaviService {
   }
 
   private async validateFiles(request: RtkNaviStartRequest, outputPath: string): Promise<void> {
-    if (request.executablePath) await requireFile(request.executablePath, 'rtkrcv 可执行文件')
+    const starRtk = request.engine === 'starrtk'
+    const engineName = starRtk ? 'StarRTK' : 'rtkrcv'
+    if (request.executablePath)
+      await requireFile(request.executablePath, `${engineName} 可执行文件`)
     const protectedPaths: string[] = []
     for (const stream of request.inputs) {
       if (stream.enabled && stream.type === 'file') {
         await requireFile(stream.path, '输入文件')
         protectedPaths.push(stream.path)
+        if (starRtk && stream.timeTag) {
+          const tagFile = `${stream.path}.tag`
+          await requireFile(tagFile, 'RTCM3 回放时间标签文件')
+          protectedPaths.push(tagFile)
+        }
       }
     }
-    if (request.options.baseConfigPath) {
+    if (!starRtk && request.options.baseConfigPath) {
       await requireFile(request.options.baseConfigPath, '处理配置文件')
       protectedPaths.push(request.options.baseConfigPath)
     }
     if (request.executablePath) protectedPaths.push(request.executablePath)
     if (protectedPaths.some((item) => comparablePath(item) === comparablePath(outputPath))) {
-      throw new Error('解决方案输出不能覆盖输入文件、处理配置或 rtkrcv 可执行文件')
+      throw new Error(`解决方案输出不能覆盖输入文件、处理配置或 ${engineName} 可执行文件`)
     }
     const directory = path.dirname(outputPath)
     const stat = await statOrThrow(directory, '输出目录')

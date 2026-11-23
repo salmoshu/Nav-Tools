@@ -1,5 +1,21 @@
 # Nav-Tools 更新日志
 
+## v1.9.4
+
+- GNSS Solver 新增 StarRTK 后处理与实时解算配置，支持 YAML 载入/保存、诊断目录选择、频点与模糊度参数；参数页采用与 RNX2RTKP 一致的搜索、分类和折叠布局。
+- StarRTK 后处理支持观测时间范围选择，输出仅保留所选历元；Rover 路径、输入文件和输出目录在引擎切换及 Options 加载配置时保持不变。
+- RNX2RTKP 实时配置载入同步定位模式等公共参数；Rover 文件变更时自动生成同目录解决方案，自动创建缺失的输出与诊断目录。
+- GNSS Deviation 新增 Sat Num 整数卫星数曲线，点颜色与解状态一致；新增 rtkplot 风格底部状态栏，支持当前历元、整体质量分布及鼠标位置的经纬度/历元信息。
+- Position Status 默认关闭，采用紧凑半透明样式，统计内容对齐 rtkplot Show Statistics，包含 AVE/STD/RMS 的 E/N/U/2D 指标。
+- 修复消息组件清空后接收新消息，复制时仍夹带旧消息的问题；清空时同步清除原生选区并重建虚拟列表。
+
+- Added StarRTK post-processing and real-time solver configuration with YAML load/save, diagnostics directory selection, frequency and ambiguity options, and an RNX2RTKP-style searchable, categorized, collapsible options layout.
+- Added observation time-range selection for StarRTK post-processing, limiting published solutions to the selected epochs. Rover, input, and output paths now remain unchanged when switching engines or loading options.
+- RNX2RTKP real-time configuration loading now synchronizes common settings such as positioning mode. Changing Rover files generates solutions in the same directory, while missing output and diagnostics directories are created automatically.
+- GNSS Deviation adds an integer Sat Num curve with solution-quality colors and an rtkplot-style bottom status bar covering current epochs, quality summaries, and cursor latitude/longitude or epoch information.
+- Position Status is hidden by default and uses a compact translucent style. Its statistics now match rtkplot Show Statistics with AVE/STD/RMS for E/N/U/2D.
+- Fixed cleared messages reappearing when newly received messages are selected and copied. Clearing the console now also clears the native selection and rebuilds the virtual list.
+
 ## v1.9.3
 
 - 应用 Header 在应用名左侧显示与应用选择器一致的应用图标（含强调色）。

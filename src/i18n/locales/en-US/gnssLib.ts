@@ -1,4 +1,44 @@
 export default {
+  starRtk: {
+    loadYaml: 'Load YAML',
+    saveYaml: 'Save YAML',
+    yamlLoaded: 'StarRTK configuration loaded',
+    yamlSaved: 'StarRTK configuration saved',
+    base_static: 'Static base',
+    rover_static: 'Static rover',
+    single_epoch: 'Single-epoch positioning',
+    combine_frequencies: 'Combined mode',
+    widelane_assist: 'Wide-lane assist (experimental, off by default)',
+    frequencyHint:
+      'Available auxiliary frequencies contribute to the solution; satellites without them retain their primary-frequency observations.',
+    widelaneHint:
+      'WL assist requires both combined mode and wide-lane assist. A failed WL search does not block the narrow-lane search.',
+    weighting: 'Observation weighting',
+    elevation: 'Satellite elevation',
+    signal_strength: 'Signal strength',
+    trace_directory: 'Diagnostics directory',
+    chooseTraceDirectory: 'Choose diagnostics directory',
+    cycle_ms: 'Read cycle (ms)',
+    max_base_age_s: 'Maximum base age (s)',
+    frequency: 'Frequency {slot}',
+    realtimeEngine: 'Real-time engine',
+    ambiguityResolution: 'Ambiguity resolution',
+    ambiguity_mode: 'Ambiguity resolution mode',
+    partial_ambiguity: 'Partial ambiguity resolution (PAR)',
+    continuous: 'Continuous',
+    instantaneous: 'Instantaneous',
+    fixAndHold: 'Fix and hold',
+    fixHoldOptions: 'Fix-and-hold options',
+    min_fixed_epochs: 'Consecutive fixed epochs before hold',
+    min_satellites: 'Minimum fixed satellites to hold',
+    min_elevation_deg: 'Minimum hold elevation (°)',
+    variance_cycles: 'Hold pseudo-measurement variance (cycles²)',
+    ratioOptions: 'Ratio options',
+    adaptiveRatio: 'Adapt ratio by ambiguity count',
+    ratioNominal: 'Nominal ratio threshold',
+    ratioMinimum: 'Minimum ratio threshold',
+    ratioMaximum: 'Maximum ratio threshold',
+  },
   solver: {
     mode: 'Solver mode',
     post: 'Post-processing',
@@ -10,8 +50,7 @@ export default {
     messageChannel: 'Message channel',
     solutionMessages: 'Solution records',
     logMessages: 'Engine log',
-    desktopOnly:
-      'GNSS solving requires the Electron desktop app and local rnx2rtkp / rtkrcv engines.',
+    desktopOnly: 'GNSS solving requires the Electron desktop app and a local solver.',
     noViewData:
       'The output file was generated but contains no drawable positioning epochs. Check the output format and reference coordinates.',
     resultHint:
@@ -26,7 +65,8 @@ export default {
     stateError: 'Failed',
     openInGnss: 'Inspect in GNSS',
     handoffUnavailable: 'Application handoff is available only in the desktop main window.',
-    handoffTargetUnavailable: 'The target application is unavailable, or a compatible target must be selected explicitly.',
+    handoffTargetUnavailable:
+      'The target application is unavailable, or a compatible target must be selected explicitly.',
     handoffNoRecords: 'The current output has no complete solution epochs to inspect.',
     handoffSuccess: 'Solution loaded in GNSS.',
     handoffFailed: 'Cannot open GNSS: {message}',
@@ -88,10 +128,10 @@ export default {
     constellations: 'Navigation systems',
     baseConfig: 'Base config file',
     baseConfigHint:
-      'Optional rtkrcv.conf. Basic controls take precedence; advanced values are loaded from the file unless edited here.',
+      'Optional rtkrcv.conf. Loading synchronizes basic and advanced values from the file; manual edits to advanced values take precedence.',
     configLoading: 'Loading real-time processing configuration…',
     configLoaded:
-      'Advanced parameters loaded from the base configuration; manual edits take precedence.',
+      'Configuration values synchronized; manual edits to advanced parameters take precedence.',
     configReadError: 'Unable to read the real-time processing configuration.',
     configReload: 'Reload configuration file',
     configResetOverrides: 'Restore advanced values from file',

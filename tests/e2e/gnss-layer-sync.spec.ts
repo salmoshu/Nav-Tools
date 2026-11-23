@@ -82,6 +82,7 @@ test.beforeEach(async ({ page }) => {
   await page.goto(`/#card/${payload}`)
   await expect(page.locator('.deviation-container')).toBeVisible()
   await inject(page, gga(0))
+  await page.getByRole('button', { name: 'Show or hide position status' }).click()
   await expect(page.locator('.status-card-summary')).toHaveText('Fixed')
 })
 
@@ -114,7 +115,14 @@ test('preserves map zoom through live updates and restores it on the grid', asyn
   await expect.poll(async () => (await scaleReadout(page)).width).not.toBe(initial.width)
   const zoomed = await scaleReadout(page)
   await inject(page, gga(1, 31.00001))
-  await expect(page.locator('.status-card-stat').first()).toContainText('2')
+  await expect
+    .poll(() =>
+      page.evaluate(async () => {
+        const { useNmea } = await import('/src/composables/gnss/useNmea.ts')
+        return useNmea().positionEpochHistory.value.length
+      }),
+    )
+    .toBe(2)
   await expect.poll(async () => (await scaleReadout(page)).label).toBe(zoomed.label)
   await expect
     .poll(async () => Math.abs((await scaleReadout(page)).width - zoomed.width))
@@ -148,7 +156,14 @@ test('keeps a dragged tracking offset through live updates and a layer switch', 
     .toBeLessThan(2)
   const dragged = (await currentMarker(page, 'map'))!
   await inject(page, gga(1, 31.0006))
-  await expect(page.locator('.status-card-stat').first()).toContainText('2')
+  await expect
+    .poll(() =>
+      page.evaluate(async () => {
+        const { useNmea } = await import('/src/composables/gnss/useNmea.ts')
+        return useNmea().positionEpochHistory.value.length
+      }),
+    )
+    .toBe(2)
   await expect
     .poll(async () => Math.abs((await currentMarker(page, 'map'))!.x - dragged.x))
     .toBeLessThan(2)

@@ -125,9 +125,11 @@ describe('GNSS signal satellite-count view', () => {
     expect(chart).toContain('...visibleConstellationSeries.value')
     expect(chart).toContain("extractSeries('SATS_USED'")
     expect(nmea).toContain('hasGsvData.value = true')
-    expect(nmea).toContain("commitSatelliteCountEpoch(timeParts, data.satellites, 'gga')")
     expect(nmea).toContain(
-      "commitSatelliteCountEpoch(solution.time, solution.satellites, 'rtklib-pos')",
+      "commitSatelliteCountEpoch(timeParts, data.satellites, 'gga', parseInt(data.quality) || 0)",
+    )
+    expect(nmea).toContain(
+      "commitSatelliteCountEpoch(solution.time, solution.satellites, 'rtklib-pos', quality)",
     )
     expect(chart).toContain("satelliteCountSource.value === 'rtklib-pos'")
   })

@@ -84,17 +84,24 @@ test('deviation keeps only the current Float status in small windows and restore
     },
     [signalEpoch(0, 45, 4), signalEpoch(1, 45, 5)],
   )
+  await expect(page.locator('.deviation-status-card')).toHaveCount(0)
+  await page.getByRole('button', { name: 'Show or hide position status' }).click()
   const card = page.locator('.deviation-status-card')
   await expect(card.locator('.status-card-summary')).toHaveText('Float')
   await expect(card.locator('.status-card-metric')).toHaveCount(3)
-  const fixedRow = card.locator('[data-quality="4"]')
-  const floatRow = card.locator('[data-quality="5"]')
-  await expect(fixedRow).toHaveText('Fixed1 / 50.0%')
-  await expect(floatRow).toHaveText('Float1 / 50.0%')
-  await expect(fixedRow.locator('span')).toHaveCSS('color', 'rgb(0, 128, 0)')
-  await expect(fixedRow.locator('strong')).toHaveCSS('color', 'rgb(0, 128, 0)')
-  await expect(floatRow.locator('span')).toHaveCSS('color', 'rgb(255, 165, 0)')
-  await expect(floatRow.locator('strong')).toHaveCSS('color', 'rgb(255, 165, 0)')
+  await expect(card.locator('.status-card-metric').nth(0)).toContainText('U')
+  await expect(card.locator('[data-quality]')).toHaveCount(0)
+  const bottom = page.getByTestId('deviation-bottom-status')
+  await expect(bottom).toContainText('E =')
+  await expect(bottom.locator('[data-quality="5"]')).toHaveText('5: Float')
+  await page.locator('.tracking-switch').click()
+  const fixedRow = bottom.locator('[data-quality="4"]')
+  const floatRow = bottom.locator('[data-quality="5"]')
+  await expect(fixedRow).toHaveText('4: 1 (50.00%)')
+  await expect(floatRow).toHaveText('5: 1 (50.00%)')
+  await expect(bottom).toContainText('N = 2')
+  await expect(fixedRow).toHaveCSS('color', 'rgb(0, 128, 0)')
+  await expect(floatRow).toHaveCSS('color', 'rgb(255, 165, 0)')
 
   for (const size of [
     { width: 500, height: 420 },
@@ -266,4 +273,46 @@ test('signal bars show grouped horizontal labels, current and peak values, and k
   })
   await expect(page.locator('.persat-chart-wrapper')).toBeVisible()
   expect(errors).toEqual([])
+})
+
+test('shows rtkplot-style cursor coordinates and epoch time in the bottom status bar', async ({
+  page,
+}) => {
+  const payload = encodeURIComponent(
+    JSON.stringify({
+      componentName: 'GnssDeviation',
+      windowId: 'gnss-deviation',
+      title: 'Deviation',
+    }),
+  )
+  await page.setViewportSize({ width: 1000, height: 720 })
+  await page.goto(`/#card/${payload}`)
+  await page.evaluate(
+    async (epochs) => {
+      const { useNmea } = await import('/src/composables/gnss/useNmea.ts')
+      for (const epoch of epochs) useNmea().processRawData(epoch)
+    },
+    [signalEpoch(0, 45, 4), signalEpoch(1, 45, 4)],
+  )
+  const bottom = page.getByTestId('deviation-bottom-status')
+  await expect(bottom.locator('.bottom-status-cursor')).toHaveCount(0)
+  const canvas = page.locator('.deviation-container canvas.chart')
+  const bounds = await canvas.boundingBox()
+  await page.mouse.move(bounds!.x + bounds!.width / 2, bounds!.y + bounds!.height / 2)
+  await expect(bottom.locator('.bottom-status-cursor')).toContainText('48.117300')
+  await expect(bottom.locator('.bottom-status-cursor')).toContainText('11.51666667°E')
+  await page.mouse.move(0, 0)
+  await expect(bottom.locator('.bottom-status-cursor')).toHaveCount(0)
+
+  await page.locator('.view-switch').click()
+  await page.getByRole('option', { name: 'Position', exact: true }).click()
+  const metric = page.locator('.position-chart-grid .metric-chart').first()
+  const metricBounds = await metric.boundingBox()
+  await page.mouse.move(
+    metricBounds!.x + metricBounds!.width / 2,
+    metricBounds!.y + metricBounds!.height / 2,
+  )
+  await expect(bottom.locator('.bottom-status-cursor')).toContainText('12:35:')
+  await page.mouse.move(0, 0)
+  await expect(bottom.locator('.bottom-status-cursor')).toHaveCount(0)
 })

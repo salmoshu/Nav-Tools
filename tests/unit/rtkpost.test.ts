@@ -135,6 +135,19 @@ describe('RTKPOST command line', () => {
   it('derives .pos and .nmea output names from rover observations', () => {
     expect(defaultRtkPostOutputPath('C:\\data\\rover.obs', 'llh')).toBe('C:\\data\\rover.pos')
     expect(defaultRtkPostOutputPath('/data/rover.obs.gz', 'nmea')).toBe('/data/rover.nmea')
+    expect(defaultRtkPostOutputPath('/data/rover.obs', 'nmea', 'starrtk')).toBe(
+      '/data/rover.starrtk.nmea',
+    )
+  })
+
+  it('requires StarRTK, a base observation, and exactly one navigation file', () => {
+    const request = { ...settings(), engine: 'starrtk' as const }
+    expect(() => buildRtkPostArgs(request)).toThrow('StarRTK 可执行文件')
+    request.executablePath = '/tools/StarRTK'
+    expect(() => buildRtkPostArgs({ ...request, baseObsPath: '' })).toThrow('基站 RINEX OBS')
+    expect(() =>
+      buildRtkPostArgs({ ...request, navPaths: ['/data/one.nav', '/data/two.nav'] }),
+    ).toThrow('StarRTK 需要一个 RINEX NAV 文件')
   })
 })
 

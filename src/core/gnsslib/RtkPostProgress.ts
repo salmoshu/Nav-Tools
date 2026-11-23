@@ -1,4 +1,5 @@
-import type { RtkPostOptions, RtkPostProgress } from './RtkPost'
+import type { RtkPostEngine, RtkPostOptions, RtkPostProgress } from './RtkPost'
+import { towToCalendarTime } from './RtkSolution'
 
 export interface RtkPostTimeSpan {
   start: number
@@ -31,7 +32,16 @@ export class RtkPostProgressTracker {
   private readonly direction: number
   private readonly span: RtkPostTimeSpan | undefined
 
-  public constructor(span: RtkPostTimeSpan | undefined, options: RtkPostOptions) {
+  public constructor(
+    span: RtkPostTimeSpan | undefined,
+    options: RtkPostOptions,
+    private readonly engine: RtkPostEngine = 'rnx2rtkp',
+  ) {
+    if (engine === 'starrtk') {
+      this.direction = 0
+      this.span = span
+      return
+    }
     this.direction = options.mode === 0 ? 0 : options.solutionType
     const start = span?.start ?? parseCalendarTime(options.startTime)
     const end = span?.end ?? parseCalendarTime(options.endTime)
@@ -45,11 +55,12 @@ export class RtkPostProgressTracker {
   }
 
   public update(line: string): RtkPostProgress | null {
-    const match = line.match(
-      /^processing\s*:\s*(\d{4}\/\d{2}\/\d{2}\s+\d{2}:\d{2}:\d{2}(?:\.\d+)?)/i,
-    )
-    if (!match) return null
-    const time = parseCalendarTime(match[1])
+    const processingTime =
+      this.engine === 'starrtk'
+        ? starRtkProcessingTime(line)
+        : line.match(/^processing\s*:\s*(\d{4}\/\d{2}\/\d{2}\s+\d{2}:\d{2}:\d{2}(?:\.\d+)?)/i)?.[1]
+    if (!processingTime) return null
+    const time = parseCalendarTime(processingTime)
     if (time === undefined) return null
     if (this.direction === 2 && this.previousTime !== undefined && time < this.previousTime) {
       this.backwardPass = true
@@ -59,7 +70,7 @@ export class RtkPostProgressTracker {
       return {
         phase: 'processing',
         percentage: null,
-        processingTime: match[1],
+        processingTime,
         processingMessage: line,
       }
     const fraction = Math.max(
@@ -76,10 +87,15 @@ export class RtkPostProgressTracker {
     return {
       phase: 'processing',
       percentage: this.percentage,
-      processingTime: match[1],
+      processingTime,
       processingMessage: line,
     }
   }
+}
+
+function starRtkProcessingTime(line: string): string | null {
+  const epoch = /^Time:\s+\d+\s+\d+\s+[\d.]+\s+(\d+)\s+([\d.]+),/.exec(line)
+  return epoch ? towToCalendarTime(Number(epoch[1]), Number(epoch[2])) : null
 }
 
 /** Read bounded head/tail samples, supporting both RINEX 2 and RINEX 3 epochs. */

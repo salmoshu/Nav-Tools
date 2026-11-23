@@ -1,10 +1,12 @@
 import { BrowserWindow, dialog, ipcMain } from 'electron'
+import * as path from 'node:path'
 import type {
   RtkPostObservationSpans,
   RtkPostRunRequest,
   RtkPostSaveConfigRequest,
 } from '../../src/core/gnsslib/RtkPost'
-import { showScopedSaveDialog } from './dialogs'
+import { parseStarRtkConfig } from '../../src/core/gnsslib/StarRtkConfig'
+import { chooseOpenDirectory, showScopedSaveDialog } from './dialogs'
 import { RtkPostService } from './services/RtkPostService'
 import { gnssSolverTasks } from './services/GnssSolverTasks'
 import { readRinexObservationSpan } from './services/RinexObservationSpan'
@@ -60,17 +62,66 @@ export function registerRtkPostIpc(service = new RtkPostService()): void {
   ipcMain.handle('rtkpost-read-config', async (_event, filePath: unknown) => {
     return service.readConfig(typeof filePath === 'string' ? filePath : '')
   })
+  ipcMain.handle('starrtk-read-config', async (_event, filePath: unknown) => {
+    if (typeof filePath !== 'string' || !filePath.trim())
+      throw new Error('请选择 StarRTK YAML 文件')
+    const config = parseStarRtkConfig(await service.readConfig(filePath))
+    const directory = path.dirname(path.resolve(filePath))
+    const resolveFile = (value: string) => (value ? path.resolve(directory, value) : '')
+    config.processing.trace_directory = resolveFile(config.processing.trace_directory)
+    if (config.post) {
+      for (const key of [
+        'base_observations',
+        'rover_observations',
+        'navigation',
+        'solution_file',
+      ] as const) {
+        const value = config.post[key]
+        if (value !== undefined) config.post[key] = resolveFile(value)
+      }
+    }
+    if (config.realtime) {
+      if (config.realtime.solution_file !== undefined) {
+        config.realtime.solution_file = resolveFile(config.realtime.solution_file)
+      }
+      for (const stream of [config.realtime.rover, config.realtime.base]) {
+        if (stream?.type !== 'file') continue
+        const [file, ...flags] = stream.path.split('::')
+        stream.path = [resolveFile(file), ...flags].join('::')
+      }
+    }
+    return config
+  })
+  ipcMain.handle('starrtk-choose-trace-directory', async (event) => {
+    const target = BrowserWindow.fromWebContents(event.sender)
+    return chooseOpenDirectory(target, 'starrtk-trace-directory')
+  })
   ipcMain.handle('rtkpost-save-config', async (event, request: RtkPostSaveConfigRequest) => {
     if (!request || typeof request.content !== 'string' || !Array.isArray(request.protectedPaths)) {
       throw new Error('配置文件保存请求无效')
     }
     const target = BrowserWindow.fromWebContents(event.sender)
-    const result = await showScopedSaveDialog(target, 'gnssraw-rtkpost-config', {
-      title: '保存后处理配置文件',
-      defaultPath: typeof request.defaultPath === 'string' ? request.defaultPath : 'rtkpost.conf',
-      filters: [{ name: 'RTKLIB 配置文件', extensions: ['conf'] }],
-      properties: ['createDirectory', 'showOverwriteConfirmation'],
-    })
+    const yaml = request.format === 'yaml'
+    if (yaml) parseStarRtkConfig(request.content)
+    const result = await showScopedSaveDialog(
+      target,
+      yaml ? 'starrtk-config' : 'gnssraw-rtkpost-config',
+      {
+        title: yaml ? '保存 StarRTK 配置文件' : '保存后处理配置文件',
+        defaultPath:
+          typeof request.defaultPath === 'string'
+            ? request.defaultPath
+            : yaml
+              ? 'starrtk.yaml'
+              : 'rtkpost.conf',
+        filters: [
+          yaml
+            ? { name: 'StarRTK YAML', extensions: ['yaml', 'yml'] }
+            : { name: 'RTKLIB 配置文件', extensions: ['conf'] },
+        ],
+        properties: ['createDirectory', 'showOverwriteConfirmation'],
+      },
+    )
     if (result.canceled || !result.filePath) return null
     const exists = await service.inspectConfigTarget(result.filePath, request.protectedPaths)
     if (exists) {

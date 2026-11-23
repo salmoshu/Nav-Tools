@@ -94,6 +94,7 @@
     <!-- 虚拟滚动消息列表 -->
     <div class="console-content-virtual" ref="consoleContent" @mousedown="sortMessageRows">
       <RecycleScroller
+        :key="scrollerGeneration"
         ref="scrollerRef"
         class="scroller"
         :items="filteredMessages"
@@ -301,6 +302,7 @@ const consoleRoot = ref<HTMLDivElement | null>(null)
 const consoleContent = ref<HTMLDivElement | null>(null)
 const searchInput = ref<InstanceType<typeof HTMLInputElement> | null>(null)
 const scrollerRef = ref<InstanceType<typeof RecycleScroller> | null>(null)
+const scrollerGeneration = ref(0)
 
 // 搜索状态
 const showSearchBox = ref(false)
@@ -508,7 +510,9 @@ const toggleSearch = () => {
 }
 
 const clearConsole = () => {
+  window.getSelection()?.removeAllRanges()
   clearMessages()
+  scrollerGeneration.value += 1
 }
 
 const saveConsoleData = () => {

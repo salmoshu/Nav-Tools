@@ -68,6 +68,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   rtkPostCancel: (runId: string) => ipcRenderer.invoke('rtkpost-cancel', runId),
   rtkPostReadConfig: (path: string) =>
     ipcRenderer.invoke('rtkpost-read-config', path) as Promise<string>,
+  starRtkReadConfig: (path: string) => ipcRenderer.invoke('starrtk-read-config', path),
+  starRtkChooseDirectory: () =>
+    ipcRenderer.invoke('starrtk-choose-trace-directory') as Promise<string | null>,
   rtkPostSaveConfig: (request: import('../../src/core/gnsslib/RtkPost').RtkPostSaveConfigRequest) =>
     ipcRenderer.invoke('rtkpost-save-config', request) as Promise<string | null>,
   rtkPostObservationSpans: (request: { roverPath: string; basePath?: string }) =>

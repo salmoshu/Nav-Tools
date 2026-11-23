@@ -48,6 +48,7 @@ export default {
     deviationView: 'Deviation',
     positionView: 'Position',
     speedView: 'Speed',
+    satNum: 'Sat Num',
     speed: 'Ground speed',
     tracking: 'Track',
     size: 'Size',

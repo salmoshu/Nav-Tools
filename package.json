@@ -1,6 +1,6 @@
 {
   "name": "nav-tools",
-  "version": "1.9.3",
+  "version": "1.9.4",
   "main": "dist-electron/main/index.js",
   "description": "Nav-Tools is a desktop-grade visualization workbench built with Electron & Vue3, tailored for roboticists.",
   "author": "Winchell.Hu <winchell.hu@outlook.com>",
@@ -98,6 +98,7 @@
     "three": "^0.186.0",
     "vue-i18n": "^9.14.5",
     "vue-virtual-scroller": "2.0.0-beta.8",
-    "vuedraggable": "^4.1.0"
+    "vuedraggable": "^4.1.0",
+    "yaml": "2.9.1"
   }
 }

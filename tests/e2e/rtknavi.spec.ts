@@ -17,6 +17,7 @@ test('publishes all live epochs to messages and Deviation and waits for final da
   })
   await expect.poll(async () => (await solverSnapshot(page)).positions).toBe(600)
   await expect(panel.locator('.summary-value').first()).toHaveText('600')
+  await page.getByRole('button', { name: 'Show or hide position status' }).click()
   await expect(page.locator('.deviation-status-card')).toContainText('Float')
   const messages = page.locator('.flow-console-virtual')
   await expect(messages.locator('.console-input-bar')).toHaveCount(0)
@@ -68,6 +69,7 @@ test('recovers the live file after reload without duplicating overlapping event 
   await expect(panel.locator('.solver-state.running')).toBeVisible()
   expect((await solverSnapshot(page)).runId).toBe(runId)
   await expect.poll(async () => (await solverSnapshot(page)).positions).toBe(610)
+  await page.getByRole('button', { name: 'Show or hide position status' }).click()
   await expect(page.locator('.deviation-status-card')).toContainText('Float')
   await expect(panel.getByRole('radio', { name: 'Post-processing', exact: true })).toBeDisabled()
   await page.evaluate(() => Reflect.get(window, '__solverEmitLive')(610, 3))
@@ -80,13 +82,10 @@ test('recovers the live file after reload without duplicating overlapping event 
 
 test('keeps a stopped NTRIP solver run available on the toolbar timeline', async ({ page }) => {
   const panel = await openSolver(page, 'realtime')
-  await page.evaluate(async () => {
-    const path = '/src/composables/useRtkNavi.ts'
-    const { useRtkNavi } = await import(/* @vite-ignore */ path)
-    const settings = useRtkNavi().settings
-    settings.inputs[0].type = 'ntripcli'
-    settings.inputs[0].path = 'demo:demo@localhost:2101/test'
-  })
+  const rover = panel.locator('.stream-section').first()
+  await rover.locator('.stream-grid .el-select').first().click()
+  await page.getByRole('option', { name: 'NTRIP client', exact: true }).click()
+  await rover.locator('.stream-path input').fill('demo:demo@localhost:2101/test')
   await panel.getByRole('button', { name: 'Start', exact: true }).click()
   await expect(panel.locator('.solver-state.running')).toBeVisible()
   await page.evaluate(() => Reflect.get(window, '__solverEmitLive')(0, 6))

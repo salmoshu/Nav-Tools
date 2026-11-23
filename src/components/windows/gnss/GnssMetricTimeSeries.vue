@@ -61,14 +61,14 @@
         <span class="metric-tooltip-label">
           <i :style="{ backgroundColor: headingColor }"></i>{{ primaryLabel }}
         </span>
-        <span>{{ hoverValue.toFixed(3) }} {{ unit }}</span>
+        <span>{{ hoverValue.toFixed(valueDecimals) }} {{ unit }}</span>
       </div>
       <div v-if="referencePoints.length > 0" class="metric-tooltip-reference">
         <span class="metric-tooltip-label">
           <i :style="{ backgroundColor: referenceColor }"></i>{{ referenceLabel }}
         </span>
         <span
-          >{{ hoverReferenceValue === null ? '—' : hoverReferenceValue.toFixed(3) }}
+          >{{ hoverReferenceValue === null ? '—' : hoverReferenceValue.toFixed(valueDecimals) }}
           {{ unit }}</span
         >
       </div>
@@ -76,7 +76,7 @@
         <span class="metric-tooltip-label">
           <i :style="{ backgroundColor: differenceColor }"></i>{{ differenceLabel }}
         </span>
-        <span>{{ hoverDifferenceValue.toFixed(3) }} {{ unit }}</span>
+        <span>{{ hoverDifferenceValue.toFixed(valueDecimals) }} {{ unit }}</span>
       </div>
     </div>
   </div>
@@ -121,7 +121,7 @@ import type {
 } from '@/core/render/SatelliteTimeSeriesRenderer'
 import { FIX_STATUS_QUALITIES, fixStatusColor, normalizeFixStatusQuality } from './fixStatusColors'
 
-type MetricField = 'E' | 'N' | 'U' | 'SPEED'
+type MetricField = 'E' | 'N' | 'U' | 'SPEED' | 'SATS_USED'
 
 /**
  * x 视口跨图表联动：左键平移与右键 x 伸缩经模块级广播通道（metricViewportSync）
@@ -147,6 +147,8 @@ const props = withDefaults(
     tracking?: boolean
     /** 尺寸（5~20，偏差图同款滑杆）：映射为点直径 */
     pointSize?: number
+    valueDecimals?: number
+    axisDecimals?: number
     /** 同源图表只在最下方显示共享时间滚动条。 */
     xScrollbar?: boolean
     sourceOverride?: NumericEpochStore | null
@@ -169,6 +171,8 @@ const props = withDefaults(
   {
     tracking: false,
     pointSize: 10,
+    valueDecimals: 3,
+    axisDecimals: 2,
     xScrollbar: true,
     sourceOverride: null,
     referencePoints: () => [],
@@ -191,6 +195,7 @@ const props = withDefaults(
 const emit = defineEmits<{
   (event: 'toggle-expand'): void
   (event: 'select-epoch', timeMs: number): void
+  (event: 'cursor-position', timeLabel: string | null): void
 }>()
 
 const scopedDisplay = inject(gnssDisplayContext, null)
@@ -611,7 +616,7 @@ function drawAxes(): void {
     context.textAlign = 'right'
     context.textBaseline = 'middle'
     const value = renderedRange.min + ratio * (renderedRange.max - renderedRange.min)
-    context.fillText(value.toFixed(2), layout.left - 7, y)
+    context.fillText(value.toFixed(props.axisDecimals), layout.left - 7, y)
   }
 
   context.strokeStyle = colors.border
@@ -964,10 +969,16 @@ function metricIndexAtClientX(clientX: number): number {
 }
 
 function handleMouseMove(event: MouseEvent): void {
-  if (isDragging) return
+  if (isDragging) {
+    emit('cursor-position', null)
+    return
+  }
   const container = containerRef.value
   const store = sourceStore.value
-  if (!container || store.length === 0) return
+  if (!container || store.length === 0) {
+    emit('cursor-position', null)
+    return
+  }
   const rect = container.getBoundingClientRect()
   const { width, height } = plotSize()
   const x = event.clientX - rect.left - layout.left
@@ -977,7 +988,10 @@ function handleMouseMove(event: MouseEvent): void {
     return
   }
   const index = metricIndexAtClientX(event.clientX)
-  if (index < 0) return
+  if (index < 0) {
+    emit('cursor-position', null)
+    return
+  }
   const timeMs = store.getTimestamp(index)
   const reference = findNearestMetricOverlaySample(
     orderedReferencePoints.value,
@@ -993,6 +1007,7 @@ function handleMouseMove(event: MouseEvent): void {
       ? hoverValue.value - hoverReferenceValue.value
       : null
   hoverTime.value = store.formatTime(index)
+  emit('cursor-position', hoverTime.value)
   tooltipStyle.value = {
     left: `${Math.max(8, Math.min(container.clientWidth - 190, x + layout.left + 10))}px`,
     top: `${Math.max(8, y + layout.top - 18)}px`,
@@ -1078,6 +1093,7 @@ function clearHover(): void {
   hoverReferenceValue.value = null
   hoverDifferenceValue.value = null
   hoverTime.value = ''
+  emit('cursor-position', null)
 }
 
 watch([sourceStore, sourceLength], () => {

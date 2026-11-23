@@ -1,9 +1,16 @@
 import { validateNmeaChecksum } from '../data/NmeaStreamParser'
 import { RtkSolutionParser, nmeaQualityToRtkQuality } from './RtkSolution'
 import type { RtkPostTimeSpan } from './RtkPostProgress'
+import {
+  starRtkProcessing,
+  stringifyStarRtkConfig,
+  type StarRtkProcessingOptions,
+} from './StarRtkConfig'
 
 export type RtkPostConstellation = 'G' | 'R' | 'E' | 'J' | 'C' | 'I'
+export type RtkPostEngine = 'rnx2rtkp' | 'starrtk'
 export type RtkPostOutputFormat = 'llh' | 'xyz' | 'enu' | 'nmea'
+export type StarRtkOutputFormat = 'llh' | 'nmea'
 export type RtkPostTimeFormat = 'tow' | 'hms'
 
 export interface RtkPostOptions {
@@ -72,6 +79,8 @@ export interface RtkPostOptions {
 }
 
 export interface RtkPostSettings {
+  engine?: RtkPostEngine
+  starRtkProcessing?: StarRtkProcessingOptions
   executablePath: string
   roverObsPath: string
   baseObsPath: string
@@ -90,6 +99,7 @@ export interface RtkPostSaveConfigRequest {
   defaultPath: string
   content: string
   protectedPaths: string[]
+  format?: 'yaml'
 }
 
 export interface RtkPostObservationSpans {
@@ -98,6 +108,7 @@ export interface RtkPostObservationSpans {
 }
 
 export interface RtkPostSolutionSummary {
+  format?: 'rtklib-pos' | 'nmea'
   epochs: number
   fixed: number
   float: number
@@ -221,19 +232,35 @@ export function createDefaultRtkPostSettings(): RtkPostSettings {
 export function defaultRtkPostOutputPath(
   roverObsPath: string,
   outputFormat: RtkPostOutputFormat,
+  engine: RtkPostEngine = 'rnx2rtkp',
 ): string {
   const source = roverObsPath.trim().replace(/[?#].*$/, '')
   if (!source) return ''
   const withoutCompression = source.replace(/\.(?:gz|z)$/i, '')
   const extension = withoutCompression.match(/\.[^./\\]+$/)?.[0] ?? ''
   const base = extension ? withoutCompression.slice(0, -extension.length) : withoutCompression
-  return `${base}.${outputFormat === 'nmea' ? 'nmea' : 'pos'}`
+  return `${base}${engine === 'starrtk' ? '.starrtk' : ''}.${outputFormat === 'nmea' ? 'nmea' : 'pos'}`
 }
 
 export function buildRtkPostArgs(request: RtkPostRunRequest | RtkPostSettings): string[] {
   const rover = requiredPath(request.roverObsPath, '流动站 RINEX OBS')
   const output = requiredPath(request.outputPath, '解决方案输出')
   const options = request.options
+  if (request.engine === 'starrtk') {
+    requiredPath(request.executablePath, ' StarRTK 可执行文件')
+    const base = requiredPath(request.baseObsPath, '基站 RINEX OBS')
+    const navigation = Array.isArray(request.navPaths)
+      ? request.navPaths.map(optionalPath).filter(Boolean)
+      : []
+    if (navigation.length !== 1) throw new Error('StarRTK 需要一个 RINEX NAV 文件')
+    if (options?.outputFormat !== 'llh' && options?.outputFormat !== 'nmea') {
+      throw new Error('StarRTK 支持 POS (LLH) 或 NMEA 输出')
+    }
+    return ['post', base, rover, navigation[0], output]
+  }
+  if (request.engine !== undefined && request.engine !== 'rnx2rtkp') {
+    throw new Error('后处理引擎无效')
+  }
   if (!options || !Number.isInteger(options.mode) || options.mode < 0 || options.mode > 9) {
     throw new Error('定位模式无效')
   }
@@ -300,6 +327,22 @@ export function buildRtkPostArgs(request: RtkPostRunRequest | RtkPostSettings): 
   return args
 }
 
+export function buildStarRtkPostConfig(
+  request: RtkPostSettings,
+  outputPath = request.outputPath,
+): string {
+  return stringifyStarRtkConfig({
+    processing: starRtkProcessing(request.starRtkProcessing),
+    post: {
+      base_observations: request.baseObsPath.trim() || undefined,
+      rover_observations: request.roverObsPath.trim() || undefined,
+      navigation: request.navPaths.find((file) => file.trim())?.trim(),
+      solution_file: outputPath.trim() || undefined,
+      solution_format: request.options.outputFormat === 'nmea' ? 'nmea' : 'pos',
+    },
+  })
+}
+
 export class RtkPostSolutionParser {
   private readonly coordinateParser: RtkSolutionParser
   private readonly headerLines: string[] = []
@@ -335,6 +378,7 @@ export class RtkPostSolutionParser {
     }
     const quality = this.readQuality(trimmed)
     if (quality === null) return
+    this.summary.format ??= trimmed.startsWith('$') ? 'nmea' : 'rtklib-pos'
     this.summary.epochs++
     if (quality === 1) this.summary.fixed++
     else if (quality === 2) this.summary.float++

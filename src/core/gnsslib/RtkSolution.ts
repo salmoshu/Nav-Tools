@@ -184,7 +184,7 @@ function normalizeCalendarTime(date: string, time: string): string | null {
   return `${String(year).padStart(4, '0')}/${String(month).padStart(2, '0')}/${String(day).padStart(2, '0')} ${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:${second.toFixed(3).padStart(6, '0')}`
 }
 
-function towToCalendarTime(week: number, tow: number): string | null {
+export function towToCalendarTime(week: number, tow: number): string | null {
   if (!Number.isInteger(week) || week < 0 || !Number.isFinite(tow) || tow < 0 || tow >= 604800) {
     return null
   }

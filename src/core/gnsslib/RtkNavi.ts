@@ -6,8 +6,17 @@ import {
   type RtkNaviAdvancedOptions,
 } from './RtkNaviAdvancedOptions'
 import { serializeRtkPostConfigOption } from './RtkPostConfig'
+import {
+  starRtkProcessing,
+  starRtkTiming,
+  stringifyStarRtkConfig,
+  type StarRtkProcessingOptions,
+  type StarRtkStream,
+  type StarRtkTimingOptions,
+} from './StarRtkConfig'
 
 export type RtkNaviStreamType = 'serial' | 'file' | 'tcpsvr' | 'tcpcli' | 'ntripcli'
+export type RtkNaviEngine = 'rtkrcv' | 'starrtk'
 export type RtkNaviInputFormat =
   | 'rtcm2'
   | 'rtcm3'
@@ -46,6 +55,9 @@ export interface RtkNaviOptions extends RtkNaviAdvancedOptions {
 }
 
 export interface RtkNaviSettings {
+  engine?: RtkNaviEngine
+  starRtkProcessing?: StarRtkProcessingOptions
+  starRtkTiming?: StarRtkTimingOptions
   executablePath: string
   outputPath: string
   inputs: RtkNaviInputStream[]
@@ -135,6 +147,20 @@ export function buildRtkNaviConfig(
   outputPath: string,
   baseConfig?: string,
 ): string {
+  if (request.engine === 'starrtk') {
+    if (!request.executablePath.trim()) throw new Error('请设置 StarRTK 可执行文件路径')
+    if (
+      request.inputs.length !== 2 ||
+      request.inputs.some(
+        (input) => !input.enabled || input.format !== 'rtcm3' || !input.path.trim(),
+      )
+    ) {
+      throw new Error('StarRTK 需要流动站和基站两路 RTCM3 输入')
+    }
+    return buildStarRtkRealtimeConfig(request, outputPath)
+  }
+  if (request.engine !== undefined && request.engine !== 'rtkrcv')
+    throw new Error('实时解算引擎无效')
   if (!Array.isArray(request.inputs) || request.inputs.length !== 3) {
     throw new Error('RTKNAVI 必须配置流动站、基站和改正数三路输入')
   }
@@ -253,6 +279,55 @@ export function buildRtkNaviConfig(
     lines.push(`${configKeys[0]} =${value}`)
   }
   return `${lines.join('\n')}\n`
+}
+
+const STAR_RTK_STREAM_TYPES: Record<RtkNaviStreamType, string> = {
+  serial: 'serial',
+  file: 'file',
+  tcpsvr: 'tcp_server',
+  tcpcli: 'tcp_client',
+  ntripcli: 'ntrip_client',
+}
+
+export function buildStarRtkRealtimeConfig(
+  request: RtkNaviSettings,
+  outputPath = request.outputPath,
+): string {
+  const stream = (input: RtkNaviInputStream | undefined): StarRtkStream | undefined => {
+    if (!input?.path.trim()) return undefined
+    if (!Object.hasOwn(STAR_RTK_STREAM_TYPES, input.type)) throw new Error('StarRTK 输入流类型无效')
+    return { type: STAR_RTK_STREAM_TYPES[input.type], path: buildRtkNaviStreamPath(input) }
+  }
+  return stringifyStarRtkConfig({
+    processing: starRtkProcessing(request.starRtkProcessing),
+    realtime: {
+      ...starRtkTiming(request.starRtkTiming),
+      rover: stream(request.inputs[0]),
+      base: stream(request.inputs[1]),
+      solution_file: outputPath.trim() || undefined,
+      solution_format: 'pos',
+    },
+  })
+}
+
+export function inputFromStarRtkStream(stream: StarRtkStream): RtkNaviInputStream {
+  const type = (Object.keys(STAR_RTK_STREAM_TYPES) as RtkNaviStreamType[]).find(
+    (key) => STAR_RTK_STREAM_TYPES[key] === stream.type,
+  )
+  if (!type) throw new Error(`Nav-Tools 不支持 StarRTK 流类型 ${stream.type}`)
+  const input = createInput(type, true)
+  if (type !== 'file') return { ...input, path: stream.path }
+  const [path, ...flags] = stream.path.split('::')
+  if (flags.some((flag) => flag !== 'T' && !/^x\d+(?:\.\d+)?$/.test(flag))) {
+    throw new Error('RTCM3 回放文件支持 ::T 和 ::x 倍速选项')
+  }
+  const speed = flags.find((flag) => flag.startsWith('x'))
+  return {
+    ...input,
+    path,
+    timeTag: flags.includes('T'),
+    replaySpeed: speed ? Number(speed.slice(1)) : 1,
+  }
 }
 
 export function parseRtkNaviSolutionLine(line: string): RtkNaviSolution | null {

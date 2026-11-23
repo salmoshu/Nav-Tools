@@ -1,7 +1,7 @@
 // @vitest-environment node
 
 import { EventEmitter } from 'node:events'
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import type { ChildProcessWithoutNullStreams } from 'node:child_process'
 import { spawn } from 'node:child_process'
 import os from 'node:os'
@@ -17,6 +17,7 @@ import {
   createDefaultRtkPostSettings,
   type RtkPostRunRequest,
 } from '../../src/core/gnsslib/RtkPost'
+import { parseStarRtkConfig, starRtkProcessing } from '../../src/core/gnsslib/StarRtkConfig'
 
 const directories: string[] = []
 
@@ -190,6 +191,103 @@ describe('RtkPostService', () => {
     const result = await running
     expect(child.kill).toHaveBeenCalledOnce()
     expect(result).toMatchObject({ ok: false, cancelled: true, exitCode: null })
+  })
+
+  it('keeps an existing result when an older StarRTK writes POS for an NMEA request', async () => {
+    const { request } = await createFixture()
+    request.engine = 'starrtk'
+    request.options.outputFormat = 'nmea'
+    request.outputPath = path.join(path.dirname(request.outputPath), 'output.nmea')
+    await writeFile(request.outputPath, 'previous result')
+    const child = fakeChild()
+    const spawnMock = vi.fn().mockReturnValue(child)
+    const service = new RtkPostService(spawnMock as unknown as typeof spawn)
+    const running = service.run(fakeSender(), request)
+    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledOnce())
+
+    const [, args] = spawnMock.mock.calls[0]
+    expect(args.slice(0, 4)).toEqual([
+      'post',
+      request.baseObsPath,
+      request.roverObsPath,
+      request.navPaths[0],
+    ])
+    const nativeOutput = args[4]
+    expect(nativeOutput).not.toBe(request.outputPath)
+    expect(path.extname(nativeOutput)).toBe('.nmea')
+    await writeFile(nativeOutput, validSolution)
+    child.emit('close', 0)
+
+    const result = await running
+    expect(result.ok).toBe(false)
+    expect(result.error).toContain('支持 .nmea 输出的 StarRTK')
+    expect(await readFile(request.outputPath, 'utf8')).toBe('previous result')
+    await expect(readFile(nativeOutput, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' })
+  })
+
+  it('prepares missing StarRTK output and diagnostics directories from YAML settings', async () => {
+    const { request } = await createFixture()
+    const root = path.dirname(request.outputPath)
+    const traceDirectory = path.join(root, 'missing', 'diagnostics')
+    request.engine = 'starrtk'
+    request.starRtkProcessing = starRtkProcessing({ trace_directory: traceDirectory })
+    request.outputPath = path.join(root, 'missing', 'output', 'rover.optimized.pos')
+    const child = fakeChild()
+    const spawnMock = vi.fn().mockReturnValue(child)
+    const service = new RtkPostService(spawnMock as unknown as typeof spawn)
+    const running = service.run(fakeSender(), request)
+    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledOnce())
+
+    const [, args] = spawnMock.mock.calls[0]
+    expect(args.slice(0, 2)).toEqual(['post', '--config'])
+    const config = parseStarRtkConfig(await readFile(args[2], 'utf8'))
+    expect(config.processing.trace_directory).toBe(traceDirectory)
+    expect((await stat(traceDirectory)).isDirectory()).toBe(true)
+    expect((await stat(path.dirname(request.outputPath))).isDirectory()).toBe(true)
+    const nativeOutput = config.post?.solution_file
+    expect(nativeOutput).toBeTruthy()
+    expect(nativeOutput).not.toBe(request.outputPath)
+    await writeFile(nativeOutput!, validSolution)
+    child.emit('close', 0)
+
+    expect((await running).ok).toBe(true)
+    expect(await readFile(request.outputPath, 'utf8')).toBe(validSolution)
+  })
+
+  it('filters StarRTK output to the selected observation interval before publishing', async () => {
+    const { request } = await createFixture()
+    request.engine = 'starrtk'
+    request.starRtkProcessing = starRtkProcessing()
+    request.options.startTime = '2024-07-30T00:00:01'
+    request.options.endTime = '2024-07-30T00:00:02'
+    const child = fakeChild()
+    const spawnMock = vi.fn().mockReturnValue(child)
+    const service = new RtkPostService(spawnMock as unknown as typeof spawn)
+    const running = service.run(fakeSender(), request)
+    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledOnce())
+
+    const [, args] = spawnMock.mock.calls[0]
+    const config = parseStarRtkConfig(await readFile(args[2], 'utf8'))
+    const nativeOutput = config.post!.solution_file!
+    const output = [
+      '% GPST latitude longitude height Q ns',
+      '2024/07/30 00:00:00.000 31.0 121.0 10.0 1 12',
+      '2024/07/30 00:00:01.000 31.0 121.0 10.0 1 12',
+      '2024/07/30 00:00:02.000 31.0 121.0 10.0 2 12',
+      '2024/07/30 00:00:03.000 31.0 121.0 10.0 1 12',
+      '',
+    ].join('\n')
+    await writeFile(nativeOutput, output)
+    child.emit('close', 0)
+
+    const result = await running
+    expect(result.ok).toBe(true)
+    expect(result.solution).toMatchObject({ epochs: 2, fixed: 1, float: 1 })
+    const published = await readFile(request.outputPath, 'utf8')
+    expect(published).not.toContain('00:00:00.000')
+    expect(published).toContain('00:00:01.000')
+    expect(published).toContain('00:00:02.000')
+    expect(published).not.toContain('00:00:03.000')
   })
 
   it('refuses to overwrite an input file', async () => {

@@ -7,15 +7,19 @@ import path from 'node:path'
 import type { WebContents } from 'electron'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { RtkPostService } from '../../electron/main/services/RtkPostService'
+import { validateNmeaChecksum } from '../../src/core/data/NmeaStreamParser'
 import { parseRtkPostConfig } from '../../src/core/gnsslib/RtkPostConfig'
 import {
   createDefaultRtkPostSettings,
   type RtkPostRunRequest,
 } from '../../src/core/gnsslib/RtkPost'
+import { defaultStarRtkProcessing } from '../../src/core/gnsslib/StarRtkConfig'
 
 // Opt in with an existing native build and the Open-GNSS tests/fixtures/rinex directory.
 const executable = process.env.RNX2RTKP_TEST_EXECUTABLE
 const fixtures = process.env.RNX2RTKP_TEST_FIXTURES
+const starExecutable = process.env.STARRTK_TEST_EXECUTABLE
+const starDataset = process.env.STARRTK_TEST_DATASET
 const directories: string[] = []
 
 afterEach(async () => {
@@ -117,6 +121,52 @@ describe.skipIf(!executable || !fixtures)('RTKPOST native engine integration', (
     expect(result.ok, result.error ?? result.log).toBe(true)
     expect(result.solution!.epochs).toBeGreaterThan(0)
   })
+})
+
+describe.skipIf(!starExecutable || !starDataset)('StarRTK native post-processing', () => {
+  it.each(['llh', 'nmea'] as const)(
+    'publishes the %s result for the StarRTK sample',
+    async (format) => {
+      const directory = await mkdtemp(path.join(os.tmpdir(), 'nav-tools-native-rtkpost-'))
+      directories.push(directory)
+      const request: RtkPostRunRequest = {
+        ...createDefaultRtkPostSettings(),
+        engine: 'starrtk',
+        starRtkProcessing: defaultStarRtkProcessing(),
+        runId: 'starrtk-native',
+        executablePath: starExecutable!,
+        baseObsPath: path.join(starDataset!, '202404231726.base.obs'),
+        roverObsPath: path.join(starDataset!, '202404231726.rover.obs'),
+        navPaths: [path.join(starDataset!, '202404231726.rover.nav')],
+        outputPath: path.join(directory, format === 'nmea' ? 'solution.nmea' : 'solution.pos'),
+      }
+      request.options.outputFormat = format
+      await writeFile(request.outputPath, 'previous result')
+
+      const result = await new RtkPostService().run(sender(), request)
+      expect(result.ok, result.error ?? result.log).toBe(true)
+      expect(result.solution).toMatchObject({
+        format: format === 'nmea' ? 'nmea' : 'rtklib-pos',
+        epochs: 813,
+        fixed: 813,
+      })
+      expect(result.progress?.processingTime).toBe('2024/04/23 09:50:23.000')
+
+      const text = await readFile(request.outputPath, 'utf8')
+      if (format === 'nmea') {
+        const lines = text.trimEnd().split('\r\n')
+        expect(lines).toHaveLength(1626)
+        expect(lines.every(validateNmeaChecksum)).toBe(true)
+        expect(lines[0]).toMatch(/^\$..RMC,093633\.00,A,/)
+        expect(lines[1]).toMatch(/^\$..GGA,093633\.00,(?:[^,]+,){4}4,/)
+        expect(Number(lines[1].split(',')[7])).toBeGreaterThan(13)
+      } else {
+        expect(text).toContain('GPST')
+        expect(text).toContain('2024/04/23 09:36:51.000')
+      }
+    },
+    30_000,
+  )
 })
 
 async function createRequest(): Promise<RtkPostRunRequest> {

@@ -150,10 +150,13 @@ export default {
     options: 'Options',
     processing: 'Processing',
     workspace: 'Post-processing workspace',
-    desktopOnly:
-      'RTKPOST runs a local rnx2rtkp executable and is available only in the Electron desktop app',
-    engine: 'Processing engine (leave empty to search PATH)',
-    executablePlaceholder: 'Select the rnx2rtkp executable built from Open-GNSS',
+    desktopOnly: 'Post-processing requires a local solver and runs in the Electron desktop app',
+    engine: 'Processing engine',
+    executable: 'Executable',
+    executablePlaceholder: 'Select the rnx2rtkp executable or leave blank to search PATH',
+    starRtkExecutable: 'Select the StarRTK executable',
+    starRtkInputs:
+      'Use uncompressed base OBS, rover OBS, and one RINEX NAV file. StarRTK processes all overlapping epochs.',
     inputs: 'Input files',
     roverObs: 'RINEX OBS: Rover',
     baseObs: 'RINEX OBS: Base station',

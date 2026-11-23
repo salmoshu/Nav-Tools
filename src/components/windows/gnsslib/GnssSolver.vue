@@ -236,14 +236,14 @@ async function execute(): Promise<void> {
 async function openInGnss(): Promise<void> {
   if (!canOpenInGnss.value) return
   const mode = solver.session.mode.value
+  const postFormat =
+    solver.post.result.value?.solution?.format ??
+    (solver.post.activeOptions.value.outputFormat === 'nmea' ? 'nmea' : 'rtklib-pos')
   await handoff.openSolutionInGnss({
     outputPath: solver.outputPath.value,
     runId: solver.session.runId.value,
     kind: mode === 'realtime' ? 'realtime-snapshot' : 'completed-result',
-    format:
-      mode === 'post' && solver.post.settings.options.outputFormat === 'nmea'
-        ? 'nmea'
-        : 'rtklib-pos',
+    format: mode === 'post' ? postFormat : 'rtklib-pos',
   })
 }
 

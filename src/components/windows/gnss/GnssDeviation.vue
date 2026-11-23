@@ -6,6 +6,7 @@
           <el-option :label="t('gnss.deviation.deviationView')" value="deviation" />
           <el-option :label="t('gnss.deviation.positionView')" value="position" />
           <el-option :label="t('gnss.deviation.speedView')" value="speed" />
+          <el-option :label="t('gnss.deviation.satNum')" value="satnum" />
         </el-select>
         <!-- track/尺寸/reset/清除 三个视图共用：偏差图作用于轨迹渲染，
              位置/速度图作用于点直径与 x 视口跟随 -->
@@ -263,57 +264,25 @@
         </div>
 
         <div v-if="!statusCardCompact && currentStats" class="status-card-body">
-          <div class="status-card-stats">
-            <div class="status-card-stat-grid">
-              <div class="status-card-stat">
-                <span>{{
-                  isDifferenceStats
-                    ? t('gnss.deviation.matchedSampleCount')
-                    : t('gnss.deviation.sampleCount')
-                }}</span>
-                <strong>{{ currentStats.count.toLocaleString() }}</strong>
-              </div>
-              <div
-                v-for="row in qualityRows"
-                :key="row.quality"
-                class="status-card-stat status-card-quality"
-                :style="{ color: fixStatusColor(row.quality) }"
-                :data-quality="row.quality"
-              >
-                <span>{{ numberToQuality(row.quality) }}</span>
-                <strong>{{ row.count.toLocaleString() }} / {{ row.ratio }}%</strong>
-              </div>
+          <div class="status-card-metrics">
+            <div class="status-card-metric">
+              <span>AVE</span>
+              <span>E {{ formatStatMeters(currentStats.aveE) }}</span>
+              <span>N {{ formatStatMeters(currentStats.aveN) }}</span>
+              <span>U {{ formatStatMeters(currentVerticalStats?.aveU) }}</span>
             </div>
-            <div class="status-card-metrics">
-              <div class="status-card-metric">
-                <span>AVE</span>
-                <span>E {{ formatStatMeters(currentStats.aveE) }}</span>
-                <span>N {{ formatStatMeters(currentStats.aveN) }}</span>
-                <span v-if="differenceStats && isDifferenceStats"
-                  >U {{ formatStatMeters(differenceStats.meanUp) }}</span
-                >
-              </div>
-              <div class="status-card-metric">
-                <span>STD</span>
-                <span>E {{ formatStatMeters(currentStats.stdE) }}</span>
-                <span>N {{ formatStatMeters(currentStats.stdN) }}</span>
-                <span v-if="differenceStats && isDifferenceStats"
-                  >U {{ formatStatMeters(differenceStats.stdUp) }}</span
-                >
-              </div>
-              <div class="status-card-metric status-card-metric-rms">
-                <span>RMS</span>
-                <span>E {{ formatStatMeters(currentStats.rmsE) }}</span>
-                <span>N {{ formatStatMeters(currentStats.rmsN) }}</span>
-                <span v-if="differenceStats && isDifferenceStats"
-                  >U {{ formatStatMeters(differenceStats.rmsUp) }}</span
-                >
-                <span>2D {{ formatStatMeters(currentStats.rms2dDoubled) }}</span>
-              </div>
-              <div v-if="differenceStats && isDifferenceStats" class="status-card-metric">
-                <span>MAX</span>
-                <span>2D {{ formatStatMeters(differenceStats.maxHorizontal) }}</span>
-              </div>
+            <div class="status-card-metric">
+              <span>STD</span>
+              <span>E {{ formatStatMeters(currentStats.stdE) }}</span>
+              <span>N {{ formatStatMeters(currentStats.stdN) }}</span>
+              <span>U {{ formatStatMeters(currentVerticalStats?.stdU) }}</span>
+            </div>
+            <div class="status-card-metric status-card-metric-rms">
+              <span>RMS</span>
+              <span>E {{ formatStatMeters(currentStats.rmsE) }}</span>
+              <span>N {{ formatStatMeters(currentStats.rmsN) }}</span>
+              <span>U {{ formatStatMeters(currentVerticalStats?.rmsU) }}</span>
+              <span>2D {{ formatStatMeters(currentStats.rms2dDoubled) }}</span>
             </div>
           </div>
         </div>
@@ -340,6 +309,7 @@
         :expand-label="t('gnss.deviation.expandAxis')"
         :collapse-label="t('gnss.deviation.collapseAxis')"
         v-bind="metricReferenceBindings.E"
+        @cursor-position="handleMetricCursor"
         @toggle-expand="toggleAxisExpand('E')"
       />
       <GnssMetricTimeSeries
@@ -357,6 +327,7 @@
         :expand-label="t('gnss.deviation.expandAxis')"
         :collapse-label="t('gnss.deviation.collapseAxis')"
         v-bind="metricReferenceBindings.N"
+        @cursor-position="handleMetricCursor"
         @toggle-expand="toggleAxisExpand('N')"
       />
       <!-- 最下方的 U 图提供共享时间滚动条，经视口广播同步 E/N/U。 -->
@@ -374,6 +345,7 @@
         :expand-label="t('gnss.deviation.expandAxis')"
         :collapse-label="t('gnss.deviation.collapseAxis')"
         v-bind="metricReferenceBindings.U"
+        @cursor-position="handleMetricCursor"
         @toggle-expand="toggleAxisExpand('U')"
       />
     </div>
@@ -387,8 +359,46 @@
         :tracking="isTracking"
         :point-size="pointSize"
         v-bind="metricReferenceBindings.SPEED"
+        @cursor-position="handleMetricCursor"
       />
     </div>
+    <div v-show="currentView === 'satnum'" class="sat-num-chart-container" data-testid="sat-num-chart">
+      <GnssMetricTimeSeries
+        ref="satNumSeriesRef"
+        field="SATS_USED"
+        :label="t('gnss.deviation.satNum')"
+        unit=""
+        :value-decimals="0"
+        :axis-decimals="0"
+        :active="currentView === 'satnum'"
+        :tracking="isTracking"
+        :point-size="pointSize"
+        :source-override="satelliteCountEpochHistory"
+        @cursor-position="handleMetricCursor"
+      />
+    </div>
+    <footer class="deviation-bottom-status" data-testid="deviation-bottom-status">
+      <span class="bottom-status-message">{{ statusBarMessage }}</span>
+      <span v-if="cursorStatusMessage" class="bottom-status-cursor">{{ cursorStatusMessage }}</span>
+      <div class="bottom-status-legend">
+        <span
+          v-if="isTracking && currentQuality !== null"
+          class="bottom-status-current-quality"
+          :style="{ color: currentQualityColor }"
+          :data-quality="currentQuality"
+          >{{ currentQuality }}: {{ numberToQuality(currentQuality) }}</span
+        >
+        <template v-else-if="!isTracking">
+          <span
+            v-for="row in statusBarQualityRows"
+            :key="row.quality"
+            :style="{ color: fixStatusColor(row.quality) }"
+            :data-quality="row.quality"
+            >{{ row.quality }}: {{ row.count }} ({{ row.ratio }}%)</span
+          >
+        </template>
+      </div>
+    </footer>
   </div>
 </template>
 
@@ -420,7 +430,6 @@ import { createMultiSeriesTrajectoryRenderer } from '@/core/render/createMultiSe
 import type { MultiSeriesTrajectoryRenderer } from '@/core/render/MultiSeriesTrajectoryRenderer'
 import {
   compareTracks,
-  computeTrackDifferenceStats,
   parseTrackFile,
   readPrimaryTrackEpochs,
   toDeviationPoints,
@@ -443,7 +452,11 @@ import {
   fitDeviationPointsAroundCenter,
   GNSS_MIN_VISIBLE_SPAN_METERS,
 } from '@/core/deviation/DeviationViewport'
-import { computeDeviationStats, type DeviationStats } from '@/core/deviation/DeviationStats'
+import {
+  computeDeviationStats,
+  computeVerticalStats,
+  type DeviationStats,
+} from '@/core/deviation/DeviationStats'
 import { findPositionEpoch } from '@/core/gnss/EpochSelection'
 
 const scopedDisplay = inject(gnssDisplayContext, null)
@@ -457,6 +470,7 @@ const {
   statusEpochHistory,
   clearData,
 } = scopedDisplay?.data ?? useNmea()
+const { satelliteCountEpochHistory } = scopedDisplay?.signals ?? useNmea()
 const fileTimeline = scopedDisplay?.timeline ?? useFileTimeline()
 const { chartTheme, resolvedTheme } = useTheme()
 
@@ -486,6 +500,7 @@ const pointSize = ref(DEFAULT_POINT_SIZE)
 const tooltipVisible = ref(false)
 const tooltipText = ref('')
 const tooltipStyle = ref<Record<string, string>>({})
+const cursorStatusMessage = ref('')
 
 const viewport = ref({
   xMin: -10,
@@ -509,7 +524,7 @@ let themeRefreshFrame: number | null = null
 
 let resizeObserver: ResizeObserver | null = null
 let resizeFrame: number | null = null
-const statusCardVisible = ref(true)
+const statusCardVisible = ref(false)
 const statusCardCompact = ref(false)
 const mapLayerReady = ref(false)
 const mapLayerRef = ref<InstanceType<typeof GnssMap> | null>(null)
@@ -521,13 +536,14 @@ let stopWatch: (() => void) | null = null
 let stopThemeWatch: (() => void) | null = null
 let stopTimelineWatch: (() => void) | null = null
 
-type DeviationView = 'deviation' | 'position' | 'speed'
+type DeviationView = 'deviation' | 'position' | 'speed' | 'satnum'
 type DeviationLayer = 'grid' | 'map'
 
 const currentView = usePersistentSelection<DeviationView>('gnss-deviation:view', 'deviation', [
   'deviation',
   'position',
   'speed',
+  'satnum',
 ])
 const layerMode = ref<DeviationLayer>('grid')
 const expandedAxis = ref<PositionAxis | null>(null)
@@ -684,9 +700,6 @@ const comparisonSeriesPoints = computed<
   reference: toDeviationPoints(comparison.value?.trackB ?? []),
   difference: toDeviationPoints(comparison.value?.differences ?? []),
 }))
-const differenceStats = computed(() =>
-  computeTrackDifferenceStats(comparison.value?.differences ?? []),
-)
 const isDifferenceStats = computed(
   () => comparisonActive.value && comparisonStatsKey.value === 'difference',
 )
@@ -944,6 +957,7 @@ const eSeriesRef = ref<InstanceType<typeof GnssMetricTimeSeries> | null>(null)
 const nSeriesRef = ref<InstanceType<typeof GnssMetricTimeSeries> | null>(null)
 const uSeriesRef = ref<InstanceType<typeof GnssMetricTimeSeries> | null>(null)
 const speedSeriesRef = ref<InstanceType<typeof GnssMetricTimeSeries> | null>(null)
+const satNumSeriesRef = ref<InstanceType<typeof GnssMetricTimeSeries> | null>(null)
 
 /** 工具栏「重置布局」：偏差图重置轨迹视口；位置/速度图重置各轴（fit/居中/清手动范围） */
 function resetLayout(): void {
@@ -960,6 +974,7 @@ function resetLayout(): void {
   nSeriesRef.value?.resetLayout()
   uSeriesRef.value?.resetLayout()
   speedSeriesRef.value?.resetLayout()
+  satNumSeriesRef.value?.resetLayout()
 }
 
 function selectLayer(layer: DeviationLayer): void {
@@ -1048,6 +1063,7 @@ watch(
 )
 
 watch(currentView, (view) => {
+  cursorStatusMessage.value = ''
   if (view !== 'deviation') {
     cancelScheduledNmeaUpdate()
   } else {
@@ -1248,7 +1264,126 @@ const qualityRows = computed(() => {
     .map(([quality, count]) => ({
       quality,
       count,
-      ratio: ((count / stats.count) * 100).toFixed(1),
+      ratio: ((count / stats.count) * 100).toFixed(2),
+    }))
+})
+
+const currentVerticalStats = computed(() => {
+  if (comparisonActive.value) {
+    const points =
+      comparisonStatsKey.value === 'main'
+        ? (comparison.value?.trackA ?? [])
+        : comparisonStatsKey.value === 'reference'
+          ? (comparison.value?.trackB ?? [])
+          : (comparison.value?.differences ?? [])
+    return computeVerticalStats(points.map((point) => point.up))
+  }
+  const history = positionEpochHistory.value
+  return computeVerticalStats(
+    Array.from({ length: history.length }, (_, index) => history.getValue('U', index)),
+  )
+})
+
+function timelineMetricEpoch(store: NumericEpochStore, field: string) {
+  if (store.length === 0) return undefined
+  const index = fileTimeline.active.value
+    ? store.findNearestElapsedTime(fileTimeline.elapsedFor(store))
+    : store.length - 1
+  if (index < 0) return undefined
+  return {
+    timeLabel: store.formatTime(index),
+    value: store.getValue(field, index),
+    quality: store.getValue('QUALITY', index) ?? 0,
+  }
+}
+
+const currentSatNumEpoch = computed(() =>
+  timelineMetricEpoch(satelliteCountEpochHistory.value, 'SATS_USED'),
+)
+const currentSpeedEpoch = computed(() =>
+  timelineMetricEpoch(fallbackSpeedSource.value ?? speedEpochHistory.value, 'SPEED'),
+)
+const statusTimelineTimeMs = computed(() => {
+  if (comparisonActive.value) return comparisonTargetTimeMs.value
+  if (!fileTimeline.active.value) return null
+  const history = positionEpochHistory.value
+  const elapsed = history.length
+    ? fileTimeline.elapsedFor(history)
+    : fileTimeline.elapsedMilliseconds.value
+  const first = mainTrackEpochs.value[0]
+  return first ? first.timeMs + elapsed : null
+})
+const currentTrackEpoch = computed(() => {
+  const points = comparisonActive.value
+    ? comparisonStatsKey.value === 'main'
+      ? (comparison.value?.trackA ?? [])
+      : comparisonStatsKey.value === 'reference'
+        ? (comparison.value?.trackB ?? [])
+        : (comparison.value?.differences ?? [])
+    : (comparison.value?.trackA ?? [])
+  if (points.length === 0) return undefined
+  const target = statusTimelineTimeMs.value
+  if (target === null) return points.at(-1)
+  const index = findNearestTimeIndex(
+    points.map((point) => point.timeMs),
+    target,
+  )
+  return index >= 0 ? points[index] : undefined
+})
+const currentQuality = computed(() => {
+  if (currentView.value === 'satnum') return currentSatNumEpoch.value?.quality ?? null
+  if (currentView.value === 'speed') return currentSpeedEpoch.value?.quality ?? null
+  return currentTrackEpoch.value?.quality ?? null
+})
+const currentQualityColor = computed(() =>
+  currentQuality.value === null
+    ? 'var(--app-text-muted)'
+    : comparisonActive.value
+      ? comparisonPointColor(comparisonStatsKey.value, currentQuality.value)
+      : fixStatusColor(currentQuality.value),
+)
+const statusBarMessage = computed(() => {
+  if (!isTracking.value) {
+    if (currentView.value === 'satnum') {
+      const store = satelliteCountEpochHistory.value
+      if (store.length === 0) return t('gnss.deviation.statusUnavailable')
+      return `[1] ${store.formatTime(0)} - ${store.formatTime(store.length - 1)} : N = ${store.length}`
+    }
+    const points = mainTrackEpochs.value
+    if (points.length === 0) return t('gnss.deviation.statusUnavailable')
+    return `[1] ${points[0].timeLabel} - ${points.at(-1)!.timeLabel} : N = ${currentStats.value?.count ?? points.length}`
+  }
+  if (currentView.value === 'satnum') {
+    const epoch = currentSatNumEpoch.value
+    return epoch
+      ? `[1] ${epoch.timeLabel} : NS = ${epoch.value ?? '—'}, Q = `
+      : t('gnss.deviation.statusUnavailable')
+  }
+  if (currentView.value === 'speed') {
+    const epoch = currentSpeedEpoch.value
+    return epoch
+      ? `[1] ${epoch.timeLabel} : SPEED = ${epoch.value === null ? '—' : epoch.value.toFixed(3)} km/h, Q = `
+      : t('gnss.deviation.statusUnavailable')
+  }
+  const epoch = currentTrackEpoch.value
+  return epoch
+    ? `[1] ${epoch.timeLabel} : E = ${formatStatMeters(epoch.east)}, N = ${formatStatMeters(epoch.north)}, U = ${formatStatMeters(epoch.up)}, Q = `
+    : t('gnss.deviation.statusUnavailable')
+})
+const statusBarQualityRows = computed(() => {
+  if (currentView.value !== 'satnum') return qualityRows.value
+  const store = satelliteCountEpochHistory.value
+  const counts = new Map<number, number>()
+  for (let index = 0; index < store.length; index += 1) {
+    const quality = store.getValue('QUALITY', index) ?? 0
+    counts.set(quality, (counts.get(quality) ?? 0) + 1)
+  }
+  return [...counts.entries()]
+    .sort((left, right) => left[0] - right[0])
+    .map(([quality, count]) => ({
+      quality,
+      count,
+      ratio: ((count / store.length) * 100).toFixed(2),
     }))
 })
 
@@ -1293,7 +1428,7 @@ function drawStatsOverlay(): void {
   if (stats && !compact) {
     lines.push({ text: `N = ${stats.count.toLocaleString()}` })
     for (const [quality, count] of [...stats.qualityCounts.entries()].sort((a, b) => a[0] - b[0])) {
-      const ratio = ((count / stats.count) * 100).toFixed(1)
+      const ratio = ((count / stats.count) * 100).toFixed(2)
       lines.push({ text: `${numberToQuality(quality)} ${count} (${ratio}%)` })
     }
     lines.push({
@@ -1763,6 +1898,42 @@ function handleWheel(e: WheelEvent): void {
   }
 }
 
+function updateDeviationCursor(x: number, y: number): void {
+  if (currentView.value !== 'deviation' || layerMode.value !== 'grid') {
+    cursorStatusMessage.value = ''
+    return
+  }
+  const canvas = comparisonActive.value ? comparisonCanvasRef.value : canvasRef.value
+  const rect = canvas?.getBoundingClientRect()
+  if (!rect || x < 0 || y < 0 || x > rect.width || y > rect.height) {
+    cursorStatusMessage.value = ''
+    return
+  }
+  const { xMin, xMax, yMin, yMax } = viewport.value
+  const east = xMin + (x / rect.width) * (xMax - xMin)
+  const north = yMax - (y / rect.height) * (yMax - yMin)
+  const reference =
+    comparison.value?.trackA[0] ?? comparison.value?.trackB[0] ?? mainTrackEpochs.value[0]
+  const firstLatitude = reference?.latitude ?? currentData.value.firstLatitude
+  const firstLongitude = reference?.longitude ?? currentData.value.firstLongitude
+  if (
+    firstLatitude === null ||
+    firstLongitude === null ||
+    firstLatitude === undefined ||
+    firstLongitude === undefined
+  ) {
+    cursorStatusMessage.value = `E: ${east.toFixed(4)} m, N: ${north.toFixed(4)} m`
+    return
+  }
+  const latitude = firstLatitude + north / 110574
+  const longitude = firstLongitude + east / (111320 * Math.cos((firstLatitude * Math.PI) / 180))
+  cursorStatusMessage.value = `${Math.abs(latitude).toFixed(8)}°${latitude < 0 ? 'S' : 'N'}, ${Math.abs(longitude).toFixed(8)}°${longitude < 0 ? 'W' : 'E'}`
+}
+
+function handleMetricCursor(timeLabel: string | null): void {
+  cursorStatusMessage.value = timeLabel ?? ''
+}
+
 function handleMouseMove(e: MouseEvent): void {
   if (isDragging) {
     hideTooltip()
@@ -1773,6 +1944,7 @@ function handleMouseMove(e: MouseEvent): void {
   const rect = canvas.getBoundingClientRect()
   const x = e.clientX - rect.left
   const y = e.clientY - rect.top
+  updateDeviationCursor(x, y)
   const picked = comparisonActive.value
     ? comparisonRenderer?.pickPoint(x, y)
     : renderer?.pickPoint(x, y)
@@ -1798,6 +1970,7 @@ function handleMouseMove(e: MouseEvent): void {
 
 function hideTooltip(): void {
   tooltipVisible.value = false
+  cursorStatusMessage.value = ''
 }
 
 function handleComparisonClick(event: MouseEvent): void {
@@ -2242,18 +2415,18 @@ onUnmounted(() => {
 
 .deviation-status-card {
   position: absolute;
-  top: 14px;
+  top: 12px;
   /* 给 Position 三轴右侧的最大化按钮保留完整点击区域。 */
   right: 52px;
   z-index: 20;
-  width: min(250px, calc(100% - 28px));
+  width: min(236px, calc(100% - 28px));
   overflow: hidden;
   color: var(--app-text);
-  background: color-mix(in srgb, var(--app-surface-raised) 94%, transparent);
-  border: 1px solid color-mix(in srgb, var(--app-border) 86%, transparent);
-  border-radius: 12px;
-  box-shadow: 0 10px 28px rgb(0 0 0 / 18%);
-  backdrop-filter: blur(12px);
+  background: color-mix(in srgb, var(--app-surface-raised) 76%, transparent);
+  border: 1px solid color-mix(in srgb, var(--app-border) 62%, transparent);
+  border-radius: 10px;
+  box-shadow: 0 6px 20px rgb(0 0 0 / 14%);
+  backdrop-filter: blur(16px) saturate(125%);
 }
 
 .deviation-status-card.is-comparison {
@@ -2275,10 +2448,10 @@ onUnmounted(() => {
 .status-card-header {
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: 7px;
   width: 100%;
-  min-height: 42px;
-  padding: 9px 12px;
+  min-height: 34px;
+  padding: 6px 10px;
   box-sizing: border-box;
 }
 
@@ -2329,18 +2502,18 @@ onUnmounted(() => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
-  flex: 0 0 22px;
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
   padding: 0;
   color: var(--app-text-muted);
-  font-size: 14px;
+  font-size: 13px;
   line-height: 1;
   text-align: center;
   cursor: pointer;
   background: transparent;
   border: 0;
-  border-radius: 6px;
+  border-radius: 5px;
 }
 
 .status-card-close:hover {
@@ -2350,12 +2523,11 @@ onUnmounted(() => {
 
 .status-card-body {
   max-height: min(56vh, 420px);
-  padding: 10px 12px 12px;
+  padding: 7px 10px 9px;
   overflow: auto;
   border-top: 1px solid color-mix(in srgb, var(--app-border) 70%, transparent);
 }
 
-.status-card-stat,
 .status-card-metric {
   display: flex;
   align-items: baseline;
@@ -2363,39 +2535,11 @@ onUnmounted(() => {
   gap: 8px;
 }
 
-.status-card-stats {
-  display: grid;
-  gap: 10px;
-  font-size: 11px;
-}
-
-.status-card-stat-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 6px;
-}
-
-.status-card-stat {
-  min-width: 0;
-  padding: 7px 8px;
-  color: var(--app-text-muted);
-  background: color-mix(in srgb, var(--app-surface-muted) 72%, transparent);
-  border-radius: 7px;
-}
-
-.status-card-stat strong {
-  color: var(--app-text);
-  font-size: 11px;
-}
-
-.status-card-quality strong {
-  color: inherit;
-}
-
 .status-card-metrics {
   display: grid;
-  gap: 5px;
+  gap: 4px;
   padding-top: 2px;
+  font-size: 10.5px;
 }
 
 .status-card-metric {
@@ -2565,13 +2709,67 @@ onUnmounted(() => {
   min-height: 0;
 }
 
-.speed-chart-container {
+.speed-chart-container,
+.sat-num-chart-container {
   flex: 1;
   min-height: 0;
   width: 100%;
   padding: 10px;
   box-sizing: border-box;
   overflow: hidden;
+}
+
+.deviation-bottom-status {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 29px;
+  padding: 4px 12px;
+  overflow: hidden;
+  color: var(--app-text-secondary);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.4;
+  background: color-mix(in srgb, var(--app-surface-muted) 88%, transparent);
+  border-top: 1px solid color-mix(in srgb, var(--app-border) 72%, transparent);
+  backdrop-filter: blur(10px);
+}
+.bottom-status-message {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bottom-status-cursor {
+  flex: 0 0 auto;
+  padding-left: 10px;
+  color: var(--app-text);
+  font-weight: 500;
+  white-space: nowrap;
+  border-left: 1px solid color-mix(in srgb, var(--app-border) 64%, transparent);
+}
+.bottom-status-legend {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 5px;
+  align-items: center;
+  margin-left: auto;
+  overflow-x: auto;
+  white-space: nowrap;
+  scrollbar-width: none;
+}
+.bottom-status-legend > span {
+  padding: 1px 5px;
+  background: color-mix(in srgb, var(--app-surface-raised) 66%, transparent);
+  border: 1px solid color-mix(in srgb, var(--app-border) 48%, transparent);
+  border-radius: 5px;
+}
+.bottom-status-legend::-webkit-scrollbar {
+  display: none;
+}
+.bottom-status-current-quality {
+  font-weight: 600;
 }
 
 .view-switch {

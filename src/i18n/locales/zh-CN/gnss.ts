@@ -47,6 +47,7 @@ export default {
     deviationView: '偏差图',
     positionView: '位置图',
     speedView: '速度图',
+    satNum: 'Sat Num',
     speed: '地面速度',
     tracking: '跟踪',
     size: '尺寸',

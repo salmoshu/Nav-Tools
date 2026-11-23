@@ -186,7 +186,7 @@ function createSolver() {
       await realtime.refreshStatus()
       return
     }
-    const options = post.settings.options
+    const options = post.activeOptions.value
     session.begin(task.runId, 'post', {
       format: options.outputFormat === 'nmea' ? 'llh' : options.outputFormat,
       timeFormat: options.timeFormat,
@@ -212,7 +212,7 @@ function createSolver() {
       return
     const runId = crypto.randomUUID()
     const runMode = mode.value
-    const options = post.settings.options
+    const options = post.activeOptions.value
     session.begin(
       runId,
       runMode,

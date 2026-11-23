@@ -15,6 +15,7 @@ import {
   type RtkNaviStartRequest,
 } from '../../src/core/gnsslib/RtkNavi'
 import { parseRtkPostConfig } from '../../src/core/gnsslib/RtkPostConfig'
+import { defaultStarRtkProcessing, parseStarRtkConfig } from '../../src/core/gnsslib/StarRtkConfig'
 
 const directories: string[] = []
 
@@ -34,6 +35,55 @@ afterEach(async () => {
 })
 
 describe('RtkNaviService', () => {
+  it('starts StarRTK with a YAML file and streams its POS records', async () => {
+    const { workspace, request } = await createFixture()
+    const base = path.join(workspace, 'base.rtcm3')
+    const rover = request.inputs[0].path
+    await Promise.all(
+      [base, `${base}.tag`, `${rover}.tag`].map((file) => writeFile(file, 'fixture')),
+    )
+    request.engine = 'starrtk'
+    request.inputs = [rover, base].map((path) => ({
+      enabled: true,
+      type: 'file',
+      format: 'rtcm3',
+      path,
+      timeTag: true,
+      replaySpeed: 10,
+    }))
+    request.starRtkProcessing = { ...defaultStarRtkProcessing(), single_epoch: true }
+    request.starRtkTiming = { cycle_ms: 20, max_base_age_s: 0.5 }
+    const child = fakeChild()
+    const spawnMock = vi.fn().mockReturnValue(child)
+    const sender = fakeSender()
+    const service = new RtkNaviService(workspace, spawnMock as unknown as typeof spawn)
+    try {
+      await expect(service.start(sender, request)).resolves.toMatchObject({ state: 'running' })
+      const [, args] = spawnMock.mock.calls[0]
+      expect(args.slice(0, 2)).toEqual(['realtime', '--config'])
+      const config = parseStarRtkConfig(await readFile(args[2], 'utf8'))
+      expect(config).toMatchObject({
+        processing: { single_epoch: true },
+        realtime: {
+          rover: { type: 'file', path: `${rover}::T::x10` },
+          base: { type: 'file', path: `${base}::T::x10` },
+          cycle_ms: 20,
+          max_base_age_s: 0.5,
+          solution_format: 'pos',
+        },
+      })
+      await writeFile(request.outputPath, '2023/05/15 09:16:19.000 31.0 121.0 10.0 1 12\n')
+      await vi.waitFor(() => {
+        expect(sender.send).toHaveBeenCalledWith(
+          'rtknavi-solution',
+          expect.objectContaining({ epochs: 1 }),
+        )
+      })
+    } finally {
+      await service.stop(sender.id)
+    }
+  })
+
   it('passes edited advanced values to rtkrcv without replacing unedited base config values', async () => {
     const fixture = await createFixture()
     const configPath = path.join(fixture.workspace, 'custom.conf')

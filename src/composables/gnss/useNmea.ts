@@ -29,7 +29,7 @@ const satelliteSnrData = shallowRef<SatelliteSnrData[]>([])
 const hasGsvData = ref(false)
 const satelliteCountSource = ref<'gga' | 'rtklib-pos'>('gga')
 const satelliteEpochHistory = shallowRef(new SatelliteEpochStore())
-const satelliteCountEpochHistory = shallowRef(new NumericEpochStore(['SATS_USED']))
+const satelliteCountEpochHistory = shallowRef(new NumericEpochStore(['SATS_USED', 'QUALITY']))
 const satelliteDetailEpochHistory = new SatelliteDetailEpochStore()
 const snrHistory = shallowRef(new SnrHistoryStore())
 const positionEpochHistory = shallowRef(new NumericEpochStore(['E', 'N', 'U', 'QUALITY']))
@@ -599,6 +599,7 @@ function commitSatelliteCountEpoch(
   epochTime: string,
   rawSatellitesUsed: string | number,
   source: 'gga' | 'rtklib-pos',
+  quality: number,
 ): void {
   if (!epochTime.trim()) return
   const hasValue = typeof rawSatellitesUsed === 'number' || rawSatellitesUsed.trim().length > 0
@@ -608,7 +609,7 @@ function commitSatelliteCountEpoch(
   satelliteCountSource.value = source
   satelliteCountEpochHistory.value.append(
     epochTime,
-    { SATS_USED: satellitesUsed },
+    { SATS_USED: satellitesUsed, QUALITY: quality },
     { replaceLast: true },
   )
   satelliteCountEpochHistoryDirty = true
@@ -937,7 +938,7 @@ export function useNmea() {
     // GSV blocks in the supported receiver stream precede their matching GGA.
     // Commit here so every GGA epoch gets one speed-independent satellite snapshot.
     commitSatelliteEpoch(timeParts)
-    commitSatelliteCountEpoch(timeParts, data.satellites, 'gga')
+    commitSatelliteCountEpoch(timeParts, data.satellites, 'gga', parseInt(data.quality) || 0)
     addGgaData(data)
 
     gnssStore.status.utcTime = data.time
@@ -977,7 +978,7 @@ export function useNmea() {
   function appendRtkSolution(solution: RtkSolution): void {
     const gnssStore = useGnssStore()
     const quality = rtkSolutionQualityToGnssQuality(solution.quality)
-    commitSatelliteCountEpoch(solution.time, solution.satellites, 'rtklib-pos')
+    commitSatelliteCountEpoch(solution.time, solution.satellites, 'rtklib-pos', quality)
     if (!Number.isFinite(solution.latitude) || !Number.isFinite(solution.longitude) ||
         !Number.isFinite(solution.height) || Math.abs(solution.latitude) > 90 ||
         Math.abs(solution.longitude) > 180) return

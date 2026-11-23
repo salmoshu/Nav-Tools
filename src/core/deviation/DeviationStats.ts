@@ -1,5 +1,5 @@
 // GNSS 偏差轨迹统计（rtkplot drawTrackStatistics 同源口径）：
-// AVE/STD/RMS（E、N）与 2D RMS（2×水平 RMS），以及定位解质量分布。
+// AVE/STD/RMS（E、N、U）与 2D RMS（2×水平 RMS），以及定位解质量分布。
 // 纯函数，供偏差图叠加信息层与单测复用。
 
 /** 偏差点 [E, N, quality] */
@@ -20,7 +20,9 @@ export interface DeviationStats {
   qualityCounts: ReadonlyMap<number, number>
 }
 
-export function computeDeviationStats(points: readonly DeviationStatPoint[]): DeviationStats | null {
+export function computeDeviationStats(
+  points: readonly DeviationStatPoint[],
+): DeviationStats | null {
   const qualityCounts = new Map<number, number>()
   let count = 0
   let sumE = 0
@@ -59,5 +61,26 @@ export function computeDeviationStats(points: readonly DeviationStatPoint[]): De
     rmsN: Math.sqrt(sumSqN / count),
     rms2dDoubled: 2 * Math.sqrt(sumSq2d / count),
     qualityCounts,
+  }
+}
+export interface VerticalStats {
+  aveU: number
+  stdU: number
+  rmsU: number
+}
+
+export function computeVerticalStats(
+  values: readonly (number | null | undefined)[],
+): VerticalStats | null {
+  const valid = values.filter(
+    (value): value is number => value !== null && value !== undefined && Number.isFinite(value),
+  )
+  if (valid.length === 0) return null
+  const aveU = valid.reduce((sum, value) => sum + value, 0) / valid.length
+  const variance = valid.reduce((sum, value) => sum + (value - aveU) ** 2, 0) / valid.length
+  return {
+    aveU,
+    stdU: Math.sqrt(Math.max(0, variance)),
+    rmsU: Math.sqrt(valid.reduce((sum, value) => sum + value * value, 0) / valid.length),
   }
 }
