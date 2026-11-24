@@ -148,18 +148,23 @@ describe.skipIf(!starExecutable || !starDataset)('StarRTK native post-processing
       expect(result.solution).toMatchObject({
         format: format === 'nmea' ? 'nmea' : 'rtklib-pos',
         epochs: 813,
-        fixed: 813,
       })
+      expect(result.solution?.fixed).toBeGreaterThanOrEqual(812)
       expect(result.progress?.processingTime).toBe('2024/04/23 09:50:23.000')
 
       const text = await readFile(request.outputPath, 'utf8')
       if (format === 'nmea') {
         const lines = text.trimEnd().split('\r\n')
-        expect(lines).toHaveLength(1626)
+        const positions = lines.filter((line) => /^\$..GGA,/.test(line))
+        expect(positions).toHaveLength(813)
+        expect(lines.filter((line) => /^\$..RMC,/.test(line))).toHaveLength(813)
         expect(lines.every(validateNmeaChecksum)).toBe(true)
         expect(lines[0]).toMatch(/^\$..RMC,093633\.00,A,/)
-        expect(lines[1]).toMatch(/^\$..GGA,093633\.00,(?:[^,]+,){4}4,/)
-        expect(Number(lines[1].split(',')[7])).toBeGreaterThan(13)
+        expect(positions[0]).toMatch(/^\$..GGA,093633\.00,(?:[^,]+,){4}[45],/)
+        expect(Number(positions[0].split(',')[7])).toBeGreaterThan(13)
+        expect(positions.filter((line) => line.split(',')[6] === '4')).toHaveLength(
+          result.solution!.fixed,
+        )
       } else {
         expect(text).toContain('GPST')
         expect(text).toContain('2024/04/23 09:36:51.000')

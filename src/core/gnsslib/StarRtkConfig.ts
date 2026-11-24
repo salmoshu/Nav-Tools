@@ -1,6 +1,6 @@
 import { parse, stringify } from 'yaml'
 
-export const STAR_RTK_SYSTEMS = ['gps', 'beidou', 'glonass', 'galileo'] as const
+export const STAR_RTK_SYSTEMS = ['gps', 'beidou', 'glonass', 'galileo', 'qzss'] as const
 export type StarRtkSystem = (typeof STAR_RTK_SYSTEMS)[number]
 export type StarRtkAmbiguityMode = 'continuous' | 'instantaneous' | 'fix_and_hold'
 
@@ -27,6 +27,11 @@ export interface StarRtkMotionPriorOptions {
   enabled: boolean
 }
 
+export interface StarRtkFloatHoldOptions {
+  enabled: boolean
+  max_duration_s: number
+}
+
 export interface StarRtkResidualGateOptions {
   enabled: boolean
   phase_sigma: number
@@ -41,6 +46,13 @@ export interface StarRtkArRetryOptions {
   validate_candidates: boolean
 }
 
+export interface StarRtkDgnssOptions {
+  enabled: boolean
+  max_float_rms_m: number
+  max_dgnss_rms_m: number
+  min_satellites: number
+}
+
 export const STAR_RTK_SWITCHES = [
   'base_static',
   'rover_static',
@@ -48,6 +60,7 @@ export const STAR_RTK_SWITCHES = [
   'combine_frequencies',
   'widelane_assist',
   'partial_ambiguity',
+  'degraded_guard',
 ] as const
 
 export interface StarRtkProcessingOptions {
@@ -59,12 +72,15 @@ export interface StarRtkProcessingOptions {
   weighting: 'elevation' | 'signal_strength'
   ambiguity_mode: StarRtkAmbiguityMode
   partial_ambiguity: boolean
+  degraded_guard: boolean
   fix_hold: StarRtkFixHoldOptions
   ratio: StarRtkRatioOptions
   cycle_slip: StarRtkCycleSlipOptions
   motion_prior: StarRtkMotionPriorOptions
+  float_hold: StarRtkFloatHoldOptions
   residual_gate: StarRtkResidualGateOptions
   ar_retry: StarRtkArRetryOptions
+  dgnss: StarRtkDgnssOptions
   frequencies: Record<StarRtkSystem, [boolean, boolean, boolean]>
   trace_directory: string
 }
@@ -102,6 +118,7 @@ export function defaultStarRtkProcessing(): StarRtkProcessingOptions {
     weighting: 'elevation',
     ambiguity_mode: 'fix_and_hold',
     partial_ambiguity: true,
+    degraded_guard: false,
     fix_hold: {
       min_fixed_epochs: 1,
       min_satellites: 5,
@@ -121,6 +138,10 @@ export function defaultStarRtkProcessing(): StarRtkProcessingOptions {
     motion_prior: {
       enabled: false,
     },
+    float_hold: {
+      enabled: true,
+      max_duration_s: 5,
+    },
     residual_gate: {
       enabled: false,
       phase_sigma: 5,
@@ -133,11 +154,18 @@ export function defaultStarRtkProcessing(): StarRtkProcessingOptions {
       max_spp_deviation_m: 5,
       validate_candidates: false,
     },
+    dgnss: {
+      enabled: false,
+      max_float_rms_m: 0.3,
+      max_dgnss_rms_m: 5,
+      min_satellites: 5,
+    },
     frequencies: {
       gps: [true, false, false],
       beidou: [true, false, false],
       glonass: [false, false, false],
       galileo: [true, false, false],
+      qzss: [true, false, false],
     },
     trace_directory: '',
   }
@@ -215,6 +243,9 @@ export function starRtkProcessing(value?: unknown): StarRtkProcessingOptions {
     }
     options.frequencies[system] = [row[0], row[1], row[2]]
   }
+  if (frequencies.qzss === undefined) {
+    options.frequencies.qzss = [...options.frequencies.gps]
+  }
   if (!STAR_RTK_SYSTEMS.some((system) => options.frequencies[system].some(Boolean))) {
     throw new Error('StarRTK 至少需要启用一个频点')
   }
@@ -286,6 +317,14 @@ function solutionFormat(value: unknown): 'pos' | 'nmea' | undefined {
 }
 
 export function stringifyStarRtkConfig(config: StarRtkConfiguration): string {
+  const { qzss, ...frequencies } = config.processing.frequencies
+  if (qzss.every((enabled, slot) => enabled === frequencies.gps[slot])) {
+    // Omission preserves the GPS-derived selection in both new and older executables.
+    return stringify(
+      { ...config, processing: { ...config.processing, frequencies } },
+      { lineWidth: 0 },
+    )
+  }
   return stringify(config, { lineWidth: 0 })
 }
 
@@ -314,6 +353,23 @@ function readAdvancedOptions(
       motionPrior.enabled,
       'processing.motion_prior.enabled',
     )
+  }
+
+  const floatHold = mapping(input.float_hold, 'processing.float_hold', [
+    'enabled',
+    'max_duration_s',
+  ])
+  if (floatHold.enabled !== undefined) {
+    options.float_hold.enabled = booleanOption(floatHold.enabled, 'processing.float_hold.enabled')
+  }
+  if (floatHold.max_duration_s !== undefined) {
+    options.float_hold.max_duration_s = numberOption(
+      floatHold.max_duration_s,
+      'processing.float_hold.max_duration_s',
+    )
+  }
+  if (options.float_hold.max_duration_s <= 0 || options.float_hold.max_duration_s > 60) {
+    throw new Error('processing.float_hold.max_duration_s 必须在 (0, 60] 秒之间')
   }
 
   const residualGate = mapping(input.residual_gate, 'processing.residual_gate', [
@@ -364,6 +420,36 @@ function readAdvancedOptions(
     options.ar_retry.max_spp_deviation_m <= 0
   ) {
     throw new Error('processing.ar_retry 包含无效的重试次数或位置门限')
+  }
+
+  const dgnss = mapping(input.dgnss, 'processing.dgnss', [
+    'enabled',
+    'max_float_rms_m',
+    'max_dgnss_rms_m',
+    'min_satellites',
+  ])
+  if (dgnss.enabled !== undefined) {
+    options.dgnss.enabled = booleanOption(dgnss.enabled, 'processing.dgnss.enabled')
+  }
+  for (const key of ['max_float_rms_m', 'max_dgnss_rms_m', 'min_satellites'] as const) {
+    if (dgnss[key] !== undefined) {
+      options.dgnss[key] = numberOption(dgnss[key], `processing.dgnss.${key}`)
+    }
+  }
+  if (
+    options.dgnss.max_float_rms_m <= 0 ||
+    options.dgnss.max_float_rms_m > 20 ||
+    options.dgnss.max_dgnss_rms_m <= 0 ||
+    options.dgnss.max_dgnss_rms_m > 100
+  ) {
+    throw new Error('processing.dgnss RMS 门限必须大于零且不超过 20/100 米')
+  }
+  if (
+    !Number.isInteger(options.dgnss.min_satellites) ||
+    options.dgnss.min_satellites < 5 ||
+    options.dgnss.min_satellites > 64
+  ) {
+    throw new Error('processing.dgnss.min_satellites 必须是 5–64 的整数')
   }
 }
 

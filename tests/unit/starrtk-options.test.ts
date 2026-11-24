@@ -171,6 +171,7 @@ describe('StarRtkOptions ambiguity controls', () => {
     mounted = { app, host }
     expect(host.querySelector('[data-testid="starrtk-partial_ambiguity"]')).not.toBeNull()
     expect(host.querySelector('[data-testid="starrtk-widelane_assist"]')).not.toBeNull()
+    expect(host.querySelector('[data-testid="starrtk-degraded_guard"]')).not.toBeNull()
     host.querySelector<HTMLButtonElement>('[data-category="ambiguity"]')!.click()
     await nextTick()
 
@@ -178,6 +179,20 @@ describe('StarRtkOptions ambiguity controls', () => {
     expect(host.querySelector('[data-testid="starrtk-adaptive-ratio"]')).not.toBeNull()
     expect(host.querySelector('[data-testid="starrtk-min-fixed-epochs"]')).not.toBeNull()
     expect(host.querySelector('[data-testid="starrtk-variance-cycles"]')).not.toBeNull()
+    expect(host.querySelector('[data-testid="starrtk-float-hold"]')).not.toBeNull()
+    expect(host.querySelector('[data-testid="starrtk-float-hold-duration"]')).not.toBeNull()
+    expect(host.querySelector('[data-testid="starrtk-cycle-slip"]')).not.toBeNull()
+    expect(host.querySelector('[data-testid="starrtk-cycle-slip-lock-flags"]')).not.toBeNull()
+    expect(host.querySelector('[data-testid="starrtk-motion-prior"]')).not.toBeNull()
+    expect(host.querySelector('[data-testid="starrtk-residual-gate"]')).not.toBeNull()
+    expect(host.querySelector('[data-testid="starrtk-residual-phase-sigma"]')).not.toBeNull()
+    expect(host.querySelector('[data-testid="starrtk-ar-retry"]')).not.toBeNull()
+    expect(host.querySelector('[data-testid="starrtk-ar-retry-max-trials"]')).not.toBeNull()
+    expect(host.querySelector('[data-testid="starrtk-ar-retry-validate"]')).not.toBeNull()
+    expect(host.querySelector('[data-testid="starrtk-dgnss"]')).not.toBeNull()
+    expect(host.querySelector('[data-testid="starrtk-dgnss-max-float-rms"]')).not.toBeNull()
+    expect(host.querySelector('[data-testid="starrtk-dgnss-max-rms"]')).not.toBeNull()
+    expect(host.querySelector('[data-testid="starrtk-dgnss-min-satellites"]')).not.toBeNull()
 
     processing.ambiguity_mode = 'continuous'
     await nextTick()
@@ -188,12 +203,16 @@ describe('StarRtkOptions ambiguity controls', () => {
   })
 })
 
-describe('StarRTK 1.1.6 configuration compatibility', () => {
+describe('StarRTK 1.1.7 configuration compatibility', () => {
   it('round-trips optional dual-frequency and recovery options through YAML', () => {
     const config = parseStarRtkConfig(`
 processing:
   combine_frequencies: true
   widelane_assist: true
+  degraded_guard: true
+  float_hold:
+    enabled: true
+    max_duration_s: 3.5
   frequencies:
     gps: [true, false, true]
     beidou: [true, false, true]
@@ -216,6 +235,8 @@ processing:
     validate_candidates: true
 `)
     expect(config.processing.widelane_assist).toBe(true)
+    expect(config.processing.degraded_guard).toBe(true)
+    expect(config.processing.float_hold).toEqual({ enabled: true, max_duration_s: 3.5 })
     expect(config.processing.frequencies.beidou).toEqual([true, false, true])
     expect(config.processing.cycle_slip).toEqual({ enabled: true, use_lock_flags: true })
     expect(config.processing.motion_prior).toEqual({ enabled: true })
@@ -240,6 +261,8 @@ processing:
   it('uses safe defaults for the new processing groups', () => {
     const options = defaultStarRtkProcessing()
     expect(options.widelane_assist).toBe(false)
+    expect(options.degraded_guard).toBe(false)
+    expect(options.float_hold).toEqual({ enabled: true, max_duration_s: 5 })
     expect(options.cycle_slip).toEqual({ enabled: false, use_lock_flags: true })
     expect(options.motion_prior).toEqual({ enabled: false })
     expect(options.residual_gate).toEqual({ enabled: false, phase_sigma: 5, code_sigma: 4 })
@@ -250,6 +273,12 @@ processing:
       max_spp_deviation_m: 5,
       validate_candidates: false,
     })
+    expect(options.dgnss).toEqual({
+      enabled: false,
+      max_float_rms_m: 0.3,
+      max_dgnss_rms_m: 5,
+      min_satellites: 5,
+    })
   })
 
   it('rejects invalid advanced options', () => {
@@ -258,6 +287,8 @@ processing:
       'use_lock_flags',
     )
     expect(() => starRtkProcessing({ motion_prior: { enabled: 1 } })).toThrow('motion_prior')
+    expect(() => starRtkProcessing({ float_hold: { max_duration_s: 0 } })).toThrow('float_hold')
+    expect(() => starRtkProcessing({ float_hold: { max_duration_s: 61 } })).toThrow('float_hold')
     expect(() => starRtkProcessing({ residual_gate: { phase_sigma: 0 } })).toThrow('residual_gate')
     expect(() => starRtkProcessing({ ar_retry: { max_trials: 0 } })).toThrow('ar_retry')
     expect(() => starRtkProcessing({ ar_retry: { max_trials: 65 } })).toThrow('ar_retry')
@@ -275,5 +306,131 @@ processing:
     expect(isStarRtkExecutable('/opt/starrtk/StarRTK_v1.1.6_linux')).toBe(true)
     expect(isStarRtkExecutable('NotStarRTK.exe')).toBe(false)
     expect(isStarRtkExecutable('StarRTK.exe.backup')).toBe(false)
+  })
+})
+
+describe('StarRTK 1.1.10 QZSS configuration', () => {
+  it('inherits the GPS row when loading existing configurations', () => {
+    const config = parseStarRtkConfig('processing:\n  frequencies:\n    gps: [true, false, true]')
+    expect(config.processing.frequencies.qzss).toEqual([true, false, true])
+    expect(config.processing.frequencies.qzss).not.toBe(config.processing.frequencies.gps)
+    expect(stringifyStarRtkConfig(config)).not.toContain('qzss:')
+  })
+
+  it('round-trips an independent QZSS row with GPS and the other systems disabled', () => {
+    const config = parseStarRtkConfig(`
+processing:
+  frequencies:
+    gps: [false, false, false]
+    beidou: [false, false, false]
+    glonass: [false, false, false]
+    galileo: [false, false, false]
+    qzss: [true, true, false]
+`)
+    const yaml = stringifyStarRtkConfig(config)
+    expect(yaml).toContain('qzss:')
+    expect(parseStarRtkConfig(yaml)).toEqual(config)
+  })
+})
+
+describe('StarRTK 1.1.9 DGNSS fallback configuration', () => {
+  it('round-trips DGNSS fallback options through YAML', () => {
+    const config = parseStarRtkConfig(`
+processing:
+  dgnss:
+    enabled: true
+    max_float_rms_m: 0.25
+    max_dgnss_rms_m: 4.5
+    min_satellites: 7
+`)
+    expect(config.processing.dgnss).toEqual({
+      enabled: true,
+      max_float_rms_m: 0.25,
+      max_dgnss_rms_m: 4.5,
+      min_satellites: 7,
+    })
+    const output = stringifyStarRtkConfig(config)
+    expect(output).toContain('dgnss:')
+    expect(output).toContain('max_float_rms_m: 0.25')
+    expect(parseStarRtkConfig(output)).toEqual(config)
+  })
+
+  it('accepts the full StarRTK 1.1.9 processing key set', () => {
+    const config = parseStarRtkConfig(`
+processing:
+  base_static: true
+  rover_static: false
+  single_epoch: false
+  combine_frequencies: true
+  widelane_assist: false
+  partial_ambiguity: true
+  degraded_guard: true
+  weighting: signal_strength
+  ambiguity_mode: fix_and_hold
+  fix_hold:
+    min_fixed_epochs: 2
+    min_satellites: 6
+    min_elevation_deg: 12
+    variance_cycles: 0.000001
+  ratio:
+    adaptive: true
+    nominal: 3.2
+    minimum: 1.4
+    maximum: 4
+  ar_retry:
+    enabled: true
+    max_trials: 6
+    max_correction_m: 1.5
+    max_spp_deviation_m: 6
+    validate_candidates: true
+  cycle_slip:
+    enabled: true
+    use_lock_flags: false
+  motion_prior:
+    enabled: true
+  float_hold:
+    enabled: true
+    max_duration_s: 8
+  residual_gate:
+    enabled: true
+    phase_sigma: 4.5
+    code_sigma: 6
+  dgnss:
+    enabled: true
+    max_float_rms_m: 0.35
+    max_dgnss_rms_m: 6
+    min_satellites: 8
+  frequencies:
+    gps: [true, true, false]
+    beidou: [true, false, false]
+    glonass: [true, false, false]
+    galileo: [true, false, false]
+  trace_directory: C:/starrtk-logs
+`)
+    expect(config.processing).toMatchObject({
+      weighting: 'signal_strength',
+      degraded_guard: true,
+      float_hold: { enabled: true, max_duration_s: 8 },
+      dgnss: {
+        enabled: true,
+        max_float_rms_m: 0.35,
+        max_dgnss_rms_m: 6,
+        min_satellites: 8,
+      },
+      trace_directory: 'C:/starrtk-logs',
+    })
+    expect(parseStarRtkConfig(stringifyStarRtkConfig(config))).toEqual(config)
+  })
+
+  it('rejects invalid DGNSS limits and unknown keys', () => {
+    expect(() => starRtkProcessing({ dgnss: { enabled: 1 } })).toThrow('dgnss')
+    expect(() => starRtkProcessing({ dgnss: { max_float_rms_m: 0 } })).toThrow('dgnss')
+    expect(() => starRtkProcessing({ dgnss: { max_float_rms_m: 21 } })).toThrow('dgnss')
+    expect(() => starRtkProcessing({ dgnss: { max_dgnss_rms_m: 0 } })).toThrow('dgnss')
+    expect(() => starRtkProcessing({ dgnss: { max_dgnss_rms_m: 101 } })).toThrow('dgnss')
+    expect(() => starRtkProcessing({ dgnss: { min_satellites: 4 } })).toThrow('dgnss')
+    expect(() => starRtkProcessing({ dgnss: { min_satellites: 65 } })).toThrow('dgnss')
+    expect(() => starRtkProcessing({ dgnss: { min_satellites: 5.5 } })).toThrow('dgnss')
+    expect(() => starRtkProcessing({ dgnss: { unknown: true } })).toThrow('未知键')
   })
 })

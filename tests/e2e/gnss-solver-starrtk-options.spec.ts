@@ -34,6 +34,7 @@ processing:
     beidou: [true, true, false]
     glonass: [true, false, true]
     galileo: [false, false, true]
+    qzss: [true, false, false]
   trace_directory: C:/yaml/diagnostics
 post:
   base_observations: C:/changed/base.obs
@@ -46,6 +47,9 @@ post:
     window.electronAPI.starRtkReadConfig = async () => config
   })
   await panel.getByRole('button', { name: 'Load YAML', exact: true }).click()
+  await selectStarCategory(panel, 'common', 'Common')
+  await expect(panel.getByRole('checkbox', { name: 'QZSS Frequency 1' })).toBeChecked()
+  await expect(panel.getByRole('checkbox', { name: 'GPS Frequency 1' })).not.toBeChecked()
   await selectStarCategory(panel, 'output', 'Output & diagnostics')
   await expect(panel.getByTestId('starrtk-trace-directory')).toHaveValue('C:/yaml/diagnostics')
 
@@ -82,6 +86,7 @@ processing:
     beidou: [true, false, false]
     glonass: [false, false, false]
     galileo: [true, false, false]
+    qzss: [true, true, false]
   trace_directory: C:/yaml/realtime-log
 realtime:
   rover: { type: file, path: "C:/changed/rover.rtcm3::T::x20" }
@@ -98,6 +103,8 @@ realtime:
   await selectStarCategory(panel, 'output', 'Output & diagnostics')
   await expect(panel.getByTestId('starrtk-trace-directory')).toHaveValue('C:/yaml/realtime-log')
   await selectStarCategory(panel, 'common', 'Common')
+  await expect(panel.getByRole('checkbox', { name: 'QZSS Frequency 1' })).toBeChecked()
+  await expect(panel.getByRole('checkbox', { name: 'GPS Frequency 1' })).not.toBeChecked()
   await expect(
     panel
       .locator('.options-field-grid > label')

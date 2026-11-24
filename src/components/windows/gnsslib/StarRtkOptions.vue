@@ -151,7 +151,10 @@
                 </tr>
               </tbody>
             </table>
-            <p class="star-frequency-hint">{{ t('gnssLib.starRtk.frequencyHint') }}</p>
+            <p class="star-frequency-hint">
+              {{ t('gnssLib.starRtk.frequencyHint') }}
+              {{ t('gnssLib.starRtk.qzssFrequencyHint') }}
+            </p>
             <p
               v-if="processing.combine_frequencies || processing.widelane_assist"
               class="star-frequency-hint"
@@ -232,6 +235,25 @@
                 />
               </label>
             </template>
+            <label v-show="matches('float_hold')">
+              <span>{{ t('gnssLib.starRtk.float_hold') }}</span>
+              <el-switch
+                v-model="processing.float_hold.enabled"
+                :disabled="disabled"
+                data-testid="starrtk-float-hold"
+              />
+            </label>
+            <label v-show="matches('max_duration_s')">
+              <span>{{ t('gnssLib.starRtk.max_duration_s') }}</span>
+              <el-input-number
+                v-model="processing.float_hold.max_duration_s"
+                :disabled="disabled || !processing.float_hold.enabled"
+                :min="0.1"
+                :max="60"
+                :step="0.5"
+                data-testid="starrtk-float-hold-duration"
+              />
+            </label>
           </div>
         </section>
 
@@ -287,6 +309,199 @@
                 data-testid="starrtk-ratio-maximum"
               />
             </label>
+          </div>
+        </section>
+
+        <section v-if="groupVisible('fix-recovery')" class="options-group">
+          <button
+            class="options-group-toggle"
+            type="button"
+            :aria-expanded="isGroupOpen('fix-recovery')"
+            @click="toggleGroup('fix-recovery')"
+          >
+            <el-icon :class="{ expanded: isGroupOpen('fix-recovery') }"><ArrowRight /></el-icon>
+            <span>{{ t('gnssLib.starRtk.fixRecovery') }}</span>
+          </button>
+          <div v-if="isGroupOpen('fix-recovery')" class="options-field-grid">
+            <label v-show="matches('cycle_slip')">
+              <span>{{ t('gnssLib.starRtk.cycle_slip') }}</span>
+              <el-switch
+                v-model="processing.cycle_slip.enabled"
+                :disabled="disabled"
+                data-testid="starrtk-cycle-slip"
+              />
+            </label>
+            <label v-show="matches('use_lock_flags')">
+              <span>{{ t('gnssLib.starRtk.use_lock_flags') }}</span>
+              <el-switch
+                v-model="processing.cycle_slip.use_lock_flags"
+                :disabled="disabled || !processing.cycle_slip.enabled"
+                data-testid="starrtk-cycle-slip-lock-flags"
+              />
+            </label>
+            <label v-show="matches('motion_prior')">
+              <span>{{ t('gnssLib.starRtk.motion_prior') }}</span>
+              <el-switch
+                v-model="processing.motion_prior.enabled"
+                :disabled="disabled"
+                data-testid="starrtk-motion-prior"
+              />
+            </label>
+            <label v-show="matches('residual_gate')">
+              <span>{{ t('gnssLib.starRtk.residual_gate') }}</span>
+              <el-switch
+                v-model="processing.residual_gate.enabled"
+                :disabled="disabled"
+                data-testid="starrtk-residual-gate"
+              />
+            </label>
+            <label v-show="matches('phase_sigma')">
+              <span>{{ t('gnssLib.starRtk.phase_sigma') }}</span>
+              <el-input-number
+                v-model="processing.residual_gate.phase_sigma"
+                :disabled="disabled || !processing.residual_gate.enabled"
+                :min="0.1"
+                :step="0.5"
+                :precision="2"
+                data-testid="starrtk-residual-phase-sigma"
+              />
+            </label>
+            <label v-show="matches('code_sigma')">
+              <span>{{ t('gnssLib.starRtk.code_sigma') }}</span>
+              <el-input-number
+                v-model="processing.residual_gate.code_sigma"
+                :disabled="disabled || !processing.residual_gate.enabled"
+                :min="0.1"
+                :step="0.5"
+                :precision="2"
+                data-testid="starrtk-residual-code-sigma"
+              />
+            </label>
+          </div>
+        </section>
+
+        <section v-if="groupVisible('ar-retry')" class="options-group">
+          <button
+            class="options-group-toggle"
+            type="button"
+            :aria-expanded="isGroupOpen('ar-retry')"
+            @click="toggleGroup('ar-retry')"
+          >
+            <el-icon :class="{ expanded: isGroupOpen('ar-retry') }"><ArrowRight /></el-icon>
+            <span>{{ t('gnssLib.starRtk.arRetry') }}</span>
+          </button>
+          <div v-if="isGroupOpen('ar-retry')" class="options-field-grid">
+            <label v-show="matches('ar_retry')">
+              <span>{{ t('gnssLib.starRtk.ar_retry') }}</span>
+              <el-switch
+                v-model="processing.ar_retry.enabled"
+                :disabled="disabled"
+                data-testid="starrtk-ar-retry"
+              />
+            </label>
+            <label v-show="matches('max_trials')">
+              <span>{{ t('gnssLib.starRtk.max_trials') }}</span>
+              <el-input-number
+                v-model="processing.ar_retry.max_trials"
+                :disabled="disabled || !processing.ar_retry.enabled"
+                :min="1"
+                :max="64"
+                :step="1"
+                :precision="0"
+                data-testid="starrtk-ar-retry-max-trials"
+              />
+            </label>
+            <label v-show="matches('max_correction_m')">
+              <span>{{ t('gnssLib.starRtk.max_correction_m') }}</span>
+              <el-input-number
+                v-model="processing.ar_retry.max_correction_m"
+                :disabled="disabled || !processing.ar_retry.enabled"
+                :min="0.01"
+                :step="0.1"
+                :precision="2"
+                data-testid="starrtk-ar-retry-max-correction"
+              />
+            </label>
+            <label v-show="matches('max_spp_deviation_m')">
+              <span>{{ t('gnssLib.starRtk.max_spp_deviation_m') }}</span>
+              <el-input-number
+                v-model="processing.ar_retry.max_spp_deviation_m"
+                :disabled="disabled || !processing.ar_retry.enabled"
+                :min="0.01"
+                :step="0.5"
+                :precision="2"
+                data-testid="starrtk-ar-retry-max-spp-deviation"
+              />
+            </label>
+            <label v-show="matches('validate_candidates')">
+              <span>{{ t('gnssLib.starRtk.validate_candidates') }}</span>
+              <el-switch
+                v-model="processing.ar_retry.validate_candidates"
+                :disabled="disabled || !processing.ar_retry.enabled"
+                data-testid="starrtk-ar-retry-validate"
+              />
+            </label>
+          </div>
+        </section>
+
+        <section v-if="groupVisible('dgnss-fallback')" class="options-group">
+          <button
+            class="options-group-toggle"
+            type="button"
+            :aria-expanded="isGroupOpen('dgnss-fallback')"
+            @click="toggleGroup('dgnss-fallback')"
+          >
+            <el-icon :class="{ expanded: isGroupOpen('dgnss-fallback') }"><ArrowRight /></el-icon>
+            <span>{{ t('gnssLib.starRtk.dgnssFallback') }}</span>
+          </button>
+          <div v-if="isGroupOpen('dgnss-fallback')">
+            <div class="options-field-grid">
+              <label v-show="matches('dgnss')">
+                <span>{{ t('gnssLib.starRtk.dgnss') }}</span>
+                <el-switch
+                  v-model="processing.dgnss.enabled"
+                  :disabled="disabled"
+                  data-testid="starrtk-dgnss"
+                />
+              </label>
+              <label v-show="matches('max_float_rms_m')">
+                <span>{{ t('gnssLib.starRtk.max_float_rms_m') }}</span>
+                <el-input-number
+                  v-model="processing.dgnss.max_float_rms_m"
+                  :disabled="disabled || !processing.dgnss.enabled"
+                  :min="0.01"
+                  :max="20"
+                  :step="0.05"
+                  :precision="2"
+                  data-testid="starrtk-dgnss-max-float-rms"
+                />
+              </label>
+              <label v-show="matches('max_dgnss_rms_m')">
+                <span>{{ t('gnssLib.starRtk.max_dgnss_rms_m') }}</span>
+                <el-input-number
+                  v-model="processing.dgnss.max_dgnss_rms_m"
+                  :disabled="disabled || !processing.dgnss.enabled"
+                  :min="0.1"
+                  :max="100"
+                  :step="0.1"
+                  :precision="1"
+                  data-testid="starrtk-dgnss-max-rms"
+                />
+              </label>
+              <label v-show="matches('dgnssMinSatellites')">
+                <span>{{ t('gnssLib.starRtk.dgnssMinSatellites') }}</span>
+                <el-input-number
+                  v-model="processing.dgnss.min_satellites"
+                  :disabled="disabled || !processing.dgnss.enabled"
+                  :min="5"
+                  :max="64"
+                  :step="1"
+                  :precision="0"
+                  data-testid="starrtk-dgnss-min-satellites"
+                />
+              </label>
+            </div>
+            <p class="star-frequency-hint">{{ t('gnssLib.starRtk.dgnssHint') }}</p>
           </div>
         </section>
 
@@ -360,30 +575,54 @@ type StarGroup =
   | 'common-frequencies'
   | 'ambiguity-resolution'
   | 'ambiguity-ratio'
+  | 'fix-recovery'
+  | 'ar-retry'
+  | 'dgnss-fallback'
   | 'output-diagnostics'
 const activeCategory = ref<StarCategory>('common')
 const query = ref('')
 const collapsedGroups = ref(new Set<StarGroup>())
 const searching = computed(() => !!query.value.trim())
-const satellites = { gps: 'GPS', beidou: 'BeiDou', glonass: 'GLONASS', galileo: 'Galileo' }
+const satellites = { gps: 'GPS', beidou: 'BeiDou', glonass: 'GLONASS', galileo: 'Galileo', qzss: 'QZSS' }
 const groupCategories: Record<StarGroup, StarCategory> = {
   'common-processing': 'common',
   'common-frequencies': 'common',
   'ambiguity-resolution': 'ambiguity',
   'ambiguity-ratio': 'ambiguity',
+  'fix-recovery': 'ambiguity',
+  'ar-retry': 'ambiguity',
+  'dgnss-fallback': 'ambiguity',
   'output-diagnostics': 'output',
 }
 const groupTerms: Record<StarGroup, string[]> = {
   'common-processing': [...STAR_RTK_SWITCHES, 'weighting', 'cycle_ms', 'max_base_age_s'],
-  'common-frequencies': ['frequencies'],
+  'common-frequencies': ['frequencies', 'qzss'],
   'ambiguity-resolution': [
     'ambiguity_mode',
     'min_fixed_epochs',
     'min_satellites',
     'min_elevation_deg',
     'variance_cycles',
+    'float_hold',
+    'max_duration_s',
   ],
   'ambiguity-ratio': ['adaptiveRatio', 'ratioNominal', 'ratioMinimum', 'ratioMaximum'],
+  'fix-recovery': [
+    'cycle_slip',
+    'use_lock_flags',
+    'motion_prior',
+    'residual_gate',
+    'phase_sigma',
+    'code_sigma',
+  ],
+  'ar-retry': [
+    'ar_retry',
+    'max_trials',
+    'max_correction_m',
+    'max_spp_deviation_m',
+    'validate_candidates',
+  ],
+  'dgnss-fallback': ['dgnss', 'max_float_rms_m', 'max_dgnss_rms_m', 'dgnssMinSatellites'],
   'output-diagnostics': ['trace_directory'],
 }
 const searchableFields = Object.values(groupTerms).flat()

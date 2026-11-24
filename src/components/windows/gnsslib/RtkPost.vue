@@ -311,7 +311,7 @@
               :disabled="store.running.value"
             >
               <el-option value="llh" label="POS (LLH / GPST)" />
-              <el-option value="nmea" label="NMEA (RMC / GGA)" />
+              <el-option value="nmea" label="NMEA" />
             </el-select>
           </div>
           <StarRtkOptions
