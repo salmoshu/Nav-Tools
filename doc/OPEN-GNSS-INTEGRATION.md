@@ -6,9 +6,15 @@ Nav-Tools 的 GNSS-Lib 使用 `rnx2rtkp` 进行后处理，使用 `rtkrcv` 进�
 
 项目已从 Robo-GNSS 更名为 Open-GNSS，WASM 包名同步为 `open-gnss-wasm`。`package.json` 使用 `file:vendor/open-gnss-wasm-*.tgz` 依赖，Worker 从 `open-gnss-wasm` 导入解码器；导出的 API 保持一致。
 
-数据接入的“自动识别”按文件内容判断 RTCM3、RINEX、NMEA、RTKLIB POS、JSON、CSV 和 MCAP，并在格式下方显示结果。设置页的“自动识别格式”可为每个应用独立选择允许识别的格式；GNSS 默认启用 NMEA/POS，GNSS-Raw 默认启用 RTCM3/RINEX。用户也可手动指定格式。CSV 证据不足时提示可能的格式，需手动确认。
+数据接入的“自动识别”按文件内容判断 RTCM3、RINEX、NMEA、RTKLIB POS、JSON、CSV 和 MCAP，并在格式下方显示结果。设置页的“自动识别格式”可为每个应用独立选择允许识别的格式。GNSS 默认启用 NMEA/POS/RTCM3，GNSS-Raw 默认启用 RTCM3/RINEX。用户也可手动指定格式。CSV 证据不足时提示可能的格式，需手动确认。
 
 拖入、文件选择及最近文件使用相同检测规则，RTCM/RINEX 的通用后缀与无后缀文件也可识别。串口与 TCP/UDP 输入使用跨包检测；RTCM3 使用原始字节传给 GNSS-Raw 的增量解码器。未知二进制数据展示前 64 KiB 的十六进制预览。
+
+## GNSS 的 RTCM3 单点定位
+
+普通 GNSS 的 RTCM3 数据源固定使用 Open-GNSS 伪距单点定位。实时流需要接收机观测和有效广播星历。录制文件先扫描星历，再计算轨迹，可随文件加入 RINEX NAV 补充广播星历。录制时间可通过同名 `.tag` 或 RTCM 1013 获取。也可在文件数据源中手动填入录制起始时间。没有时间标记时使用文件修改时间。
+
+WASM 按历元生成 GGA、RMC、GSV 和 GSA，消息窗口显示生成的 NMEA。Signals 和 Sky Plot 的卫星范围可切换为全部卫星或参与解算。普通 NMEA 数据也可通过 GSV 和 GSA 使用该功能。
 
 ## 同步 WASM
 

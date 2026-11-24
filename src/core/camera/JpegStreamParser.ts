@@ -29,7 +29,11 @@ export class JpegStreamParser {
 
     if (this.buffered.length > this.maxBufferedBytes) {
       const latestStart = this.buffered.lastIndexOf(JPEG_START)
-      this.buffered = latestStart >= 0 ? this.buffered.subarray(latestStart) : Buffer.alloc(0)
+      const keep = latestStart >= 0 && this.buffered.length - latestStart <= this.maxBufferedBytes
+      // Retain a possible split marker while dropping the oversized partial frame.
+      this.buffered = keep
+        ? Buffer.from(this.buffered.subarray(latestStart))
+        : Buffer.from(this.buffered.subarray(this.buffered.length - 1))
     }
 
     return frames

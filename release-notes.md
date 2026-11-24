@@ -1,5 +1,17 @@
 # Nav-Tools 更新日志
 
+## v1.9.5
+
+- GNSS 从实时 RTCM3 和录制文件自动运行 Open-GNSS 单点定位，输出 GGA、RMC、GSV、GSA，支持时间轴回放。Signals 和 Sky Plot 支持分别查看全部卫星和参与解算的卫星。
+- 相机标定记录用米显示误差，悬浮时保持固定合格列背景不透明。视频只保留最新待显示帧，暂停即清空画面，长时间断帧后更新连接状态。
+- GNSS Deviation 的 Sat Num 默认显示完整范围。Signals 窄窗工具栏自动换行，卫星总数使用琥珀色。Sky Plot 悬浮提示使用紧凑排版。
+- 终端新建标签图标垂直居中。缩短数据格式识别提示，文件连接卡片通过配置入口打开文件。组件标题的无数据提示根据组件实际可用的数据判断。
+
+- GNSS uses Open-GNSS single-point positioning for RTCM3 streams and files, producing GGA, RMC, GSV and GSA and supporting timeline replay. Signals and Sky Plot can display all satellites or satellites used in the fix.
+- Camera calibration errors are shown in metres and the sticky Accepted column stays opaque on hover. Video keeps only the latest waiting frame, clears immediately on pause and reports a stalled stream.
+- Deviation opens Sat Num with the full data range. Signals controls wrap in narrow panels, the satellite total uses amber and Sky Plot has compact tooltips.
+- Centered the terminal tab add icon, shortened the format detection message and removed Connect from file cards. Panel data hints now follow the data available to each panel.
+
 ## v1.9.4
 
 - GNSS Solver 新增 StarRTK 后处理与实时解算配置，支持 YAML 载入/保存、诊断目录选择、频点与模糊度参数；参数页采用与 RNX2RTKP 一致的搜索、分类和折叠布局。

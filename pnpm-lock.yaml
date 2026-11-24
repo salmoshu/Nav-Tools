@@ -75,8 +75,8 @@ importers:
         specifier: ^1.1.0
         version: 1.1.0
       open-gnss-wasm:
-        specifier: file:vendor/open-gnss-wasm-0.1.1.tgz
-        version: file:vendor/open-gnss-wasm-0.1.1.tgz
+        specifier: file:vendor/open-gnss-wasm-1.1.0.tgz
+        version: file:vendor/open-gnss-wasm-1.1.0.tgz
       pinia:
         specifier: ^3.0.3
         version: 3.0.3(typescript@5.9.2)(vue@3.5.18(typescript@5.9.2))
@@ -2723,9 +2723,9 @@ packages:
     resolution: {integrity: sha512-kbpaSSGJTWdAY5KPVeMOKXSrPtr8C8C7wodJbcsd51jRnmD+GZu8Y0VoU6Dm5Z4vWr0Ig/1NKuWRKf7j5aaYSg==}
     engines: {node: '>=6'}
 
-  open-gnss-wasm@file:vendor/open-gnss-wasm-0.1.1.tgz:
-    resolution: {integrity: sha512-z2c3RN4+In2k8+t/+uvUiDzWr+6W8EkYC+m1lNuEfiiSNutxb8T7KCZysUxWkCGk8nyhjF2C6P3PnfTaNJXNFw==, tarball: file:vendor/open-gnss-wasm-0.1.1.tgz}
-    version: 0.1.1
+  open-gnss-wasm@file:vendor/open-gnss-wasm-1.1.0.tgz:
+    resolution: {integrity: sha512-s/icn/Mc7UwFfzsLFD1fiV55Df5GwixslUgvsHi4ymeioD0bAA6nxuk01JfJ8cnbPkx/3oOGo2NCo9zvIWl/GA==, tarball: file:vendor/open-gnss-wasm-1.1.0.tgz}
+    version: 1.1.0
 
   open@10.2.0:
     resolution: {integrity: sha512-YgBpdJHPyQ2UE5x+hlSXcnejzAvD0b22U2OuAP+8OnlJT+PjWPxtgmGqKKc+RgTM63U9gN0YzrYc71R2WT/hTA==}
@@ -6473,7 +6473,7 @@ snapshots:
     dependencies:
       mimic-fn: 2.1.0
 
-  open-gnss-wasm@file:vendor/open-gnss-wasm-0.1.1.tgz: {}
+  open-gnss-wasm@file:vendor/open-gnss-wasm-1.1.0.tgz: {}
 
   open@10.2.0:
     dependencies:

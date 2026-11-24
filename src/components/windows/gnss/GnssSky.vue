@@ -62,6 +62,14 @@
           <span>{{ t('gnss.sky.satSize') }}: {{ satelliteSize }}px</span>
           <el-slider v-model="satelliteSize" :min="10" :max="40" :step="1" size="small" />
         </div>
+        <div class="control-group">
+          <span class="control-label">{{ t('gnss.signal.satelliteScope') }}</span>
+          <el-select v-model="satelliteScope" :aria-label="t('gnss.signal.satelliteScope')"
+            class="constellation-select">
+            <el-option :label="t('gnss.signal.allSatellites')" value="all" />
+            <el-option :label="t('gnss.signal.usedSatellites')" value="used" />
+          </el-select>
+        </div>
 
         <div class="elevation-limit-control">
           <span>{{ t('gnss.sky.elevLimit') }}: {{ elevationLimit }}°</span>
@@ -168,6 +176,7 @@ const constellationFilter = usePersistentSelection('gnss-sky:constellation', 'al
   'BEIDOU',
   'QZSS',
 ])
+const satelliteScope = usePersistentSelection('gnss-sky:satellite-scope', 'all', ['all', 'used'])
 // 图例点击隐藏的星座集合（叠加在星座下拉筛选之上，下拉选具体星座时清空）
 const hiddenConstellations = ref(new Set())
 const satelliteSize = ref(25)
@@ -316,37 +325,28 @@ function initChart() {
         hideDelay: 0,
         enterable: false,
         transitionDuration: 0,
+        confine: true,
+        textStyle: { color: colors.text, fontSize: 12 },
         formatter: function (params) {
           const data = params.data
           const prefix = constellationPrefixes[data.constellation] || 'U'
           const color = constellationColors[data.constellation] || '#757575'
           return `
-            <div style="background-color: ${colors.surface}; border: 1px solid ${colors.border}; border-radius: 8px; padding: 12px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.24); min-width: 100px; text-align: left; color: ${colors.text};">
-              <div style="font-size: 16px; font-weight: bold; color: ${colors.text}; margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px solid ${colors.border};">
-                <div style="display: flex; align-items: center; margin-bottom: 5px;">
-                  <div style="width: 10px; height: 10px; border-radius: 50%; background-color: ${color}; margin-right: 8px;"></div>
-                  <span style="color: ${colors.text};">${data.constellation}</span>
-                  <span style="color: ${colors.textMuted};">(${prefix}${data.prn})</span>
-                </div>
-              </div>
-              <div style="display: flex; margin-bottom: 5px;">
-                <span style="font-weight: 500; width: 68px; color: ${colors.textMuted};">${t('gnss.sky.tooltipElevation')}:</span>
-                <span style="color: ${colors.text};">${data.elevation}°</span>
-              </div>
-              <div style="display: flex; margin-bottom: 5px;">
-                <span style="font-weight: 500; width: 68px; color: ${colors.textMuted};">${t('gnss.sky.tooltipAzimuth')}:</span>
-                <span style="color: ${colors.text};">${data.azimuth}°</span>
-              </div>
-              <div style="display: flex;">
-                <span style="font-weight: 500; width: 68px; color: ${colors.textMuted};">${t('gnss.sky.tooltipSnr')}:</span>
-                <span style="color: ${colors.text};">${data.snr} dB</span>
-              </div>
+            <div style="display:flex; align-items:center; gap:6px; margin-bottom:5px; font-weight:600;">
+              <span style="width:7px;height:7px;border-radius:50%;background:${color}"></span>
+              ${prefix}${data.prn} <span style="color:${colors.textMuted};font-weight:400">${data.constellation}</span>
+            </div>
+            <div style="display:grid;grid-template-columns:auto auto;gap:2px 12px;line-height:1.45;font-variant-numeric:tabular-nums">
+              <span style="color:${colors.textMuted}">${t('gnss.sky.tooltipElevation')}</span><span>${data.elevation}°</span>
+              <span style="color:${colors.textMuted}">${t('gnss.sky.tooltipAzimuth')}</span><span>${data.azimuth}°</span>
+              <span style="color:${colors.textMuted}">${t('gnss.sky.tooltipSnr')}</span><span>${data.snr} dB-Hz</span>
             </div>
           `
         },
-        backgroundColor: 'transparent',
-        borderWidth: 0,
-        padding: 0,
+        backgroundColor: colors.surface,
+        borderColor: colors.border,
+        borderWidth: 1,
+        padding: [6, 9],
       },
       legend: {
         data: [
@@ -564,7 +564,9 @@ function updateChartData() {
   if (document.hidden) return
 
   // 过滤数据
-  let filteredData = [...satelliteSnrData.value]
+  let filteredData = satelliteSnrData.value.filter(
+    (satellite) => satellite.positionKnown !== false && (satelliteScope.value === 'all' || satellite.usedInFix),
+  )
 
   // 按星座过滤
   if (constellationFilter.value !== 'all') {
@@ -657,7 +659,7 @@ watch(viewMode, () => {
 })
 
 // 监听卫星数据变化
-watch(satelliteSnrData, () => {
+watch([satelliteSnrData, satelliteScope], () => {
   scheduleDataUpdate()
 })
 

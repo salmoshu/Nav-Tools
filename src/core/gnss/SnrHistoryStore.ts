@@ -9,7 +9,7 @@
  */
 
 export interface SnrHistorySample {
-  prn: string
+  prn: string | number
   constellation: string
   snr: number
 }

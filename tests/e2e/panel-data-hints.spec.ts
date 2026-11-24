@@ -82,8 +82,10 @@ test('shows no-data hints per panel and clears them when compatible data arrives
   await dropText(page, '{"time":1,"speed":2}\n{"time":2,"speed":3}\n', 'records.log')
   await expect(hint(page, 'plot')).toHaveCount(0)
   await expect(hint(page, 'raw-messages')).toHaveCount(0)
-  await expect(hint(page, 'sky-plot')).toBeVisible({ timeout: 6000 })
-  await expect(hint(page, 'gnss-deviation')).toBeVisible({ timeout: 6000 })
+  // The GNSS plots retain their data when the new file feeds the record panels.
+  await page.waitForTimeout(3500)
+  await expect(hint(page, 'sky-plot')).toHaveCount(0)
+  await expect(hint(page, 'gnss-deviation')).toHaveCount(0)
   await expect(hint(page, 'camera-video')).toHaveCount(0)
   await expect(hint(page, 'motor-parameters')).toHaveCount(0)
 })

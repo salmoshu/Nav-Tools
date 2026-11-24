@@ -9,6 +9,12 @@
           <el-option :label="t('gnss.signal.perSatView')" value="persat" />
         </el-select>
 
+        <el-select v-if="!scopedDisplay" v-show="currentView !== 'persat'" v-model="satelliteScope"
+          size="small" class="satellite-scope-select" :aria-label="t('gnss.signal.satelliteScope')">
+          <el-option :label="t('gnss.signal.allSatellites')" value="all" />
+          <el-option :label="t('gnss.signal.usedSatellites')" value="used" />
+        </el-select>
+
         <el-select
           v-show="currentView === 'chart'"
           v-model="constellationFilter"
@@ -230,6 +236,7 @@
         v-show="currentView === 'nsat'"
         :active="currentView === 'nsat'"
         :sliding-window="nsatSlidingWindow"
+        :used-only="!scopedDisplay && satelliteScope === 'used'"
         class="nsat-chart-container"
       />
     </div>
@@ -264,6 +271,7 @@ const currentView = usePersistentSelection('gnss-signal:view', 'nsat', [
   'persat',
 ])
 const constellationFilter = ref('all')
+const satelliteScope = usePersistentSelection('gnss-signal:satellite-scope', 'all', ['all', 'used'])
 
 // 图表相关
 const chartRef = ref(null)
@@ -317,7 +325,10 @@ const constellationPrefixes = {
 // 获取卫星数据（useNmea 已按 constellation-prn 去重，这里只做星座+PRN 排序，
 // 避免每次更新都做时间戳解析排序和 Map 去重的重复开销）
 function getLatestSatelliteData() {
-  return [...satelliteSnrData.value].sort((a, b) => {
+  const satellites = !scopedDisplay && satelliteScope.value === 'used'
+    ? satelliteSnrData.value.filter((satellite) => satellite.usedInFix)
+    : satelliteSnrData.value
+  return [...satellites].sort((a, b) => {
     // 首先按星座升序排序
     if (a.constellation !== b.constellation) {
       return a.constellation.localeCompare(b.constellation)
@@ -930,7 +941,7 @@ watch(satelliteSnrData, () => {
 })
 
 // 监听星座过滤变化
-watch(constellationFilter, () => {
+watch([constellationFilter, satelliteScope], () => {
   updateChart()
 })
 
@@ -1071,12 +1082,13 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   width: 100%;
-  height: 50px;
+  box-sizing: border-box;
+  min-height: 50px;
   min-width: 0;
-  padding: 0 12px;
-  gap: 0;
+  padding: 6px 12px;
+  gap: 4px 8px;
   flex-shrink: 0;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   background-color: var(--app-surface-muted);
   border-bottom: 1px solid var(--app-border);
 }
@@ -1091,7 +1103,12 @@ onUnmounted(() => {
 
 .view-select {
   width: 100px;
-  margin-right: 12px;
+  flex-shrink: 0;
+}
+
+.satellite-scope-select {
+  width: 118px;
+  max-width: 100%;
   flex-shrink: 0;
 }
 
@@ -1139,7 +1156,6 @@ onUnmounted(() => {
 .nsat-window-switch {
   display: inline-flex;
   flex-shrink: 0;
-  margin-right: 8px;
 }
 
 .nsat-window-switch :deep(.el-button) {

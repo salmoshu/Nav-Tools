@@ -58,6 +58,7 @@ describe('GNSS signal SNR bar chart view', () => {
 describe('GNSS signal satellite-count view', () => {
   const parent = readFileSync('src/components/windows/gnss/GnssSignal.vue', 'utf8')
   const chart = readFileSync('src/components/windows/gnss/SatelliteCountChart.vue', 'utf8')
+    .replace(/\r\n/g, '\n')
 
   it('keeps the NSat selector and delegates rendering to the WebGL component', () => {
     expect(parent).toContain('value="nsat"')

@@ -6,24 +6,21 @@ describe('SatelliteEpochAssembler', () => {
     const assembler = new SatelliteEpochAssembler()
     assembler.addGsv({
       source: 'GP',
-      constellation: 'GPS',
       totalMessages: 2,
       messageNumber: 1,
-      satelliteIds: [1, 2, 3, 4],
+      satellites: [1, 2, 3, 4].map((prn) => ({ prn, constellation: 'GPS' })),
     })
     assembler.addGsv({
       source: 'GP',
-      constellation: 'GPS',
       totalMessages: 2,
       messageNumber: 2,
-      satelliteIds: [5],
+      satellites: [5].map((prn) => ({ prn, constellation: 'GPS' })),
     })
     assembler.addGsv({
       source: 'GA',
-      constellation: 'GALILEO',
       totalMessages: 1,
       messageNumber: 1,
-      satelliteIds: [3, 8, 15],
+      satellites: [3, 8, 15].map((prn) => ({ prn, constellation: 'GALILEO' })),
     })
 
     const sample = assembler.commit('091214.30')
@@ -38,19 +35,17 @@ describe('SatelliteEpochAssembler', () => {
     const assembler = new SatelliteEpochAssembler()
     assembler.addGsv({
       source: 'GP',
-      constellation: 'GPS',
       totalMessages: 1,
       messageNumber: 1,
-      satelliteIds: [1, 2, 3],
+      satellites: [1, 2, 3].map((prn) => ({ prn, constellation: 'GPS' })),
     })
     expect(assembler.commit('091214.30').counts.GPS).toBe(3)
 
     assembler.addGsv({
       source: 'GP',
-      constellation: 'GPS',
       totalMessages: 1,
       messageNumber: 1,
-      satelliteIds: [1],
+      satellites: [1].map((prn) => ({ prn, constellation: 'GPS' })),
     })
     const next = assembler.commit('091214.40')
     expect(next.counts.GPS).toBe(1)
@@ -61,10 +56,9 @@ describe('SatelliteEpochAssembler', () => {
     const assembler = new SatelliteEpochAssembler()
     assembler.addGsv({
       source: 'GB',
-      constellation: 'BEIDOU',
       totalMessages: 2,
       messageNumber: 1,
-      satelliteIds: [1, 2, 3, 4],
+      satellites: [1, 2, 3, 4].map((prn) => ({ prn, constellation: 'BEIDOU' })),
     })
 
     const sample = assembler.commit('091214.50')
@@ -81,25 +75,22 @@ describe('SatelliteEpochAssembler', () => {
     // GPS cycle: complete (messages 1 and 2 both received)
     assembler.addGsv({
       source: 'GP',
-      constellation: 'GPS',
       totalMessages: 2,
       messageNumber: 1,
-      satelliteIds: [1, 2, 3, 4],
+      satellites: [1, 2, 3, 4].map((prn) => ({ prn, constellation: 'GPS' })),
     })
     assembler.addGsv({
       source: 'GP',
-      constellation: 'GPS',
       totalMessages: 2,
       messageNumber: 2,
-      satelliteIds: [5],
+      satellites: [5].map((prn) => ({ prn, constellation: 'GPS' })),
     })
     // BEIDOU cycle: partial (only message 1 of 2 received)
     assembler.addGsv({
       source: 'GB',
-      constellation: 'BEIDOU',
       totalMessages: 2,
       messageNumber: 1,
-      satelliteIds: [11, 12, 13, 14],
+      satellites: [11, 12, 13, 14].map((prn) => ({ prn, constellation: 'BEIDOU' })),
     })
 
     const sample = assembler.commit('091214.60')

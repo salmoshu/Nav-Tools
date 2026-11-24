@@ -4,7 +4,7 @@ import { defaultFormatsForPanels } from '@/core/panels/PanelDataContract'
 
 const STORAGE_KEY = 'nav-tools:auto-format-settings'
 const defaults: Record<string, DetectableFormat[]> = {
-  gnss: ['nmea', 'rtklib-pos'],
+  gnss: ['nmea', 'rtklib-pos', 'rtcm3'],
   gnssraw: ['rtcm3', 'rinex'],
   gnsslib: ['nmea', 'rtklib-pos'],
   lidar: ['mcap'],

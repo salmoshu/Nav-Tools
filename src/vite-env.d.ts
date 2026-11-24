@@ -34,6 +34,7 @@ interface Window {
     ) => Promise<void>
     stopWindowResize: () => Promise<void>
     startCameraStream: (url: string) => Promise<{ ok: boolean; message?: string }>
+    acknowledgeCameraStreamFrame?: (frameId: number) => void
     stopCameraStream: () => Promise<void>
     stopCameraStreamSession?: (ownerWindowId: number) => Promise<boolean>
     sendCameraCommand: (request: {
@@ -98,6 +99,8 @@ interface Window {
     lidarMcapReadFile: (path: string) => Promise<{ data: ArrayBuffer; size: number }>
     lidarMcapListFamily: (path: string) => Promise<string[]>
     gnssRawReadFile: (path: string) => Promise<{ data: ArrayBuffer; size: number }>
+    gnssSppFileInfo: (path: string) => Promise<{ size: number; lastModified: number; tag?: ArrayBuffer }>
+    gnssSppFileRead: (path: string, offset: number, length: number) => Promise<ArrayBuffer>
     dataFormatReadHead: (path: string) => Promise<ArrayBuffer>
     rtkPostRun: (
       request: import('./core/gnsslib/RtkPost').RtkPostRunRequest,

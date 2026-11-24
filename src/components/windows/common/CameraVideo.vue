@@ -17,6 +17,8 @@
           :alt="t('common.video.liveVideoAlt')"
           class="video-frame"
           draggable="false"
+          @load="acknowledgeFrame"
+          @error="acknowledgeFrame"
         />
       </div>
 
@@ -221,6 +223,9 @@ const showCameraSourceDialog = ref(false)
 const status = ref<StreamStatus>('idle')
 const statusMessage = ref(t('common.video.waitingToPlay'))
 const frameUrl = ref('')
+let frameId: number | undefined
+let streamRevision = 0
+let stopTask: Promise<void> | undefined
 const inssegState = ref<CameraCalibrationSnapshot | null>(null)
 const bboxFresh = ref(false)
 const BBOX_STALE_MS = 1500
@@ -471,9 +476,13 @@ const placeholderHint = computed(() => {
 function revokeFrameUrl() {
   if (frameUrl.value) URL.revokeObjectURL(frameUrl.value)
   frameUrl.value = ''
+  frameId = undefined
 }
 
 async function startStream() {
+  const revision = ++streamRevision
+  if (stopTask) await stopTask
+  if (revision !== streamRevision) return
   clearReconnectTimer()
   const url = normalizeRtspUrl(streamUrl.value)
   if (!url) {
@@ -494,6 +503,7 @@ async function startStream() {
     ok: false,
     message: error instanceof Error ? error.message : String(error),
   }))
+  if (revision !== streamRevision) return
   if (!result.ok) {
     status.value = 'error'
     statusMessage.value = result.message || t('common.video.errStartStream')
@@ -530,32 +540,55 @@ function saveCameraSourceSettings() {
 }
 
 async function pauseStream() {
+  ++streamRevision
   clearReconnectTimer()
-  await window.electronAPI?.stopCameraStream?.()
-  await releaseVideoObservation()
   revokeFrameUrl()
   status.value = 'stopped'
   statusMessage.value = t('common.video.paused')
+  const task = window.electronAPI?.stopCameraStream?.().catch(() => undefined)
+  stopTask = task
+  void releaseVideoObservation()
+  await task
+  if (stopTask === task) stopTask = undefined
 }
 
-const frameListener = (_event: unknown, data: ArrayBuffer | Uint8Array) => {
-  const source = data instanceof Uint8Array ? data : new Uint8Array(data)
-  const bytes = new Uint8Array(source.byteLength)
-  bytes.set(source)
+function acknowledgeFrame(event: Event) {
+  if ((event.currentTarget as HTMLImageElement).src !== frameUrl.value || frameId === undefined) return
+  window.electronAPI?.acknowledgeCameraStreamFrame?.(frameId)
+  frameId = undefined
+}
+
+const frameListener = (_event: unknown, frame: { frameId: number; bytes: Uint8Array }) => {
+  if (!frame || !Number.isSafeInteger(frame.frameId) || !(frame.bytes instanceof Uint8Array)) return
+  if (stopTask || !isActive.value) {
+    window.electronAPI?.acknowledgeCameraStreamFrame?.(frame.frameId)
+    return
+  }
+  const { buffer, byteOffset, byteLength } = frame.bytes
+  const bytes = buffer instanceof ArrayBuffer
+    ? new Uint8Array(buffer, byteOffset, byteLength)
+    : Uint8Array.from(frame.bytes)
   const nextUrl = URL.createObjectURL(new Blob([bytes], { type: 'image/jpeg' }))
   if (frameUrl.value) URL.revokeObjectURL(frameUrl.value)
   frameUrl.value = nextUrl
+  frameId = frame.frameId
   status.value = 'playing'
   statusMessage.value = t('common.video.live')
 }
 
 const statusListener = (_event: unknown, payload: StreamStatusPayload) => {
   if (!payload || typeof payload !== 'object') return
+  if (stopTask && payload.status !== 'stopped') return
+  if ((payload.status === 'playing' || payload.status === 'error') && !isActive.value) return
   if (payload.status) status.value = payload.status
   if (payload.message) statusMessage.value = payload.message
   if (payload.status === 'error') {
     revokeFrameUrl()
     scheduleReconnect()
+  } else if (payload.status === 'stopped') {
+    clearReconnectTimer()
+    revokeFrameUrl()
+    void releaseVideoObservation()
   }
 }
 
@@ -578,6 +611,7 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  ++streamRevision
   inssegListenerActive = false
   clearReconnectTimer()
   clearBboxFreshTimer()

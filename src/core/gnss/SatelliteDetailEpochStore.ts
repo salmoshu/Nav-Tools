@@ -1,12 +1,14 @@
 import { NumericEpochStore } from './NumericEpochStore'
 
 export interface SatelliteDetailSample {
-  prn: string
+  prn: string | number
   elevation: number
   azimuth: number
   snr: number
   constellation: string
   timestamp: string
+  usedInFix?: boolean
+  positionKnown?: boolean
 }
 
 interface DetailChunk {
@@ -15,6 +17,7 @@ interface DetailChunk {
   elevations: Float32Array
   azimuths: Float32Array
   snrs: Float32Array
+  flags: Uint8Array
 }
 
 const DETAIL_CHUNK_SIZE = 4096
@@ -61,7 +64,7 @@ export class SatelliteDetailEpochStore {
       const normalized = details
       let signature = ''
       for (const detail of normalized) {
-        signature += `${detail.constellation}:${detail.prn}:${Number(detail.elevation) || 0}:${Number(detail.azimuth) || 0}:${Number(detail.snr) || 0}|`
+        signature += `${detail.constellation}:${detail.prn}:${Number(detail.elevation) || 0}:${Number(detail.azimuth) || 0}:${Number(detail.snr) || 0}:${Boolean(detail.usedInFix)}:${detail.positionKnown !== false}|`
       }
 
       if (this.lastSnapshotId < 0 || signature !== this.lastSignature) {
@@ -121,6 +124,8 @@ export class SatelliteDetailEpochStore {
         azimuth: chunk.azimuths[local],
         snr: chunk.snrs[local],
         timestamp,
+        ...(chunk.flags[local] & 1 ? { usedInFix: true } : {}),
+        ...(chunk.flags[local] & 2 ? { positionKnown: false } : {}),
       })
     }
     return snapshot
@@ -135,6 +140,7 @@ export class SatelliteDetailEpochStore {
         elevations: new Float32Array(DETAIL_CHUNK_SIZE),
         azimuths: new Float32Array(DETAIL_CHUNK_SIZE),
         snrs: new Float32Array(DETAIL_CHUNK_SIZE),
+        flags: new Uint8Array(DETAIL_CHUNK_SIZE),
       })
     }
     const chunk = this.detailChunks[chunkIndex]
@@ -144,6 +150,7 @@ export class SatelliteDetailEpochStore {
     chunk.elevations[local] = Number(detail.elevation) || 0
     chunk.azimuths[local] = Number(detail.azimuth) || 0
     chunk.snrs[local] = Number(detail.snr) || 0
+    chunk.flags[local] = (detail.usedInFix ? 1 : 0) | (detail.positionKnown === false ? 2 : 0)
     this.detailCount += 1
   }
 

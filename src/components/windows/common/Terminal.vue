@@ -1520,6 +1520,10 @@ function withTimeout<T>(
   background: var(--app-surface-muted);
 }
 .terminal-tab-add {
+  display: inline-grid;
+  place-items: center;
+  align-self: center;
+  line-height: 1;
   width: 29px;
   height: 27px;
   flex: 0 0 29px;

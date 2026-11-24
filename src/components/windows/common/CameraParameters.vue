@@ -244,7 +244,7 @@
 
                 <div class="cal-target-groups">
                   <div
-                    v-for="(target, index) in calForm.targets"
+                    v-for="(target, index) in activeTargets"
                     :key="index"
                     class="cal-target-group"
                   >
@@ -536,7 +536,7 @@
                   width="90"
                 />
                 <el-table-column
-                  v-for="(target, index) in calForm.targets"
+                  v-for="(target, index) in activeTargets"
                   :key="index"
                   :label="t('common.camera.calibration.historyDistance', { n: index + 1 })"
                   width="120"
@@ -544,13 +544,13 @@
                   <template #default="{ row }">{{ row.distances[index]?.toFixed(3) }} m</template>
                 </el-table-column>
                 <el-table-column
-                  v-for="(target, index) in calForm.targets"
+                  v-for="(target, index) in activeTargets"
                   :key="`e${index}`"
                   :label="t('common.camera.calibration.historyError', { n: index + 1 })"
                   width="110"
                 >
                   <template #default="{ row }">{{
-                    formatErrorCm(row.errorsCm[index] ?? 0)
+                    formatErrorM(row.errorsCm[index])
                   }}</template>
                 </el-table-column>
                 <el-table-column :label="t('common.camera.calibration.historyRemark')" width="130">
@@ -924,10 +924,13 @@ async function sendCommand() {
 
 // ---------- 自动标定 ----------
 const calState = ref<CameraCalibrationSnapshot | null>(null)
-// structuredClone 深拷贝：DEFAULT 的 targets 数组是冻结对象，reactive 无法代理冻结属性
-const calForm = reactive<CameraCalibrationConfig>(structuredClone(DEFAULT_CALIBRATION_CONFIG))
+const calForm = reactive({
+  ...DEFAULT_CALIBRATION_CONFIG,
+  targets: savedSettings.calibrationTargets.targets,
+})
 const calDurationS = ref(Math.round(DEFAULT_CALIBRATION_CONFIG.maxDurationMs / 1000))
-const targetCount = ref(calForm.targets.length)
+const targetCount = ref(savedSettings.calibrationTargets.targetCount)
+const activeTargets = computed(() => calForm.targets.slice(0, targetCount.value))
 const showAzimuthDial = ref(false)
 const activeDialTarget = ref(0)
 const azimuthDialTitle = computed(
@@ -941,13 +944,14 @@ function openAzimuthDial(index: number): void {
 }
 
 watch(targetCount, (count) => {
-  const targets = calForm.targets
-  while (targets.length < count) {
-    targets.push({ ...DEFAULT_CALIBRATION_CONFIG.targets[1] })
-  }
-  if (targets.length > count) targets.splice(count)
   if (activeDialTarget.value >= count) showAzimuthDial.value = false
 })
+
+watch(
+  [targetCount, () => calForm.targets],
+  ([count, targets]) => parametersStorage.saveCalibrationTargets({ targetCount: count, targets }),
+  { deep: true, flush: 'sync' },
+)
 
 const observing = computed(() => calState.value?.observing === true)
 const calRunning = computed(() =>
@@ -1142,7 +1146,7 @@ async function startCalibration() {
   }
   const config: CameraCalibrationConfig = {
     ...calForm,
-    targets: calForm.targets.map((target) => ({ ...target })),
+    targets: activeTargets.value.map((target) => ({ ...target })),
     maxDurationMs: calDurationS.value * 1000,
   }
   try {
@@ -1206,7 +1210,7 @@ function validateCalibrationForm(): string | undefined {
       return t(`common.camera.${label}`)
     }
   }
-  for (const [index, target] of calForm.targets.entries()) {
+  for (const [index, target] of activeTargets.value.entries()) {
     for (const [key, label] of CAL_TARGET_FIELDS) {
       const value = target[key]
       if (typeof value !== 'number' || !Number.isFinite(value)) {
@@ -1248,9 +1252,10 @@ function formatOffset(offset: number | null): string {
   return offset === null ? '—' : offset.toFixed(2)
 }
 
-function formatErrorCm(value: number): string {
-  const sign = value > 0 ? '+' : ''
-  return `${sign}${value.toFixed(1)} cm`
+function formatErrorM(valueCm?: number): string {
+  if (valueCm === undefined) return '—'
+  const sign = valueCm > 0 ? '+' : ''
+  return `${sign}${(valueCm / 100).toFixed(3)} m`
 }
 
 const calStateListener = (_event: unknown, state: CameraCalibrationSnapshot) => {
@@ -1989,6 +1994,7 @@ onUnmounted(() => {
   overflow-wrap: anywhere;
 }
 .cal-history {
+  --el-table-row-hover-bg-color: color-mix(in srgb, var(--app-surface) 93%, var(--app-text));
   width: 100%;
   min-width: 0;
   border: 1px solid var(--app-border);
@@ -2000,8 +2006,9 @@ onUnmounted(() => {
   background: var(--app-surface);
   box-shadow: -1px 0 0 var(--app-border);
 }
-.cal-history :deep(.el-table__row:hover .el-table-fixed-column--right) {
-  background: var(--app-hover);
+.cal-history :deep(.el-table__body .el-table__row:hover > .el-table-fixed-column--right),
+.cal-history :deep(.el-table__body .el-table__row.hover-row > .el-table-fixed-column--right) {
+  background: var(--el-table-row-hover-bg-color);
 }
 .cal-history :deep(.el-table__body .cell) {
   overflow: hidden;

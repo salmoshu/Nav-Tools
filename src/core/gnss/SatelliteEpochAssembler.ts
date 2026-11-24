@@ -19,17 +19,15 @@ export interface SatelliteEpochSample {
 
 export interface GsvEpochFragment {
   source: string
-  constellation: string
   totalMessages: number
   messageNumber: number
-  satelliteIds: readonly (string | number)[]
+  satellites: readonly { prn: string | number; constellation: string }[]
 }
 
 interface PendingGsvCycle {
-  constellation: SatelliteEpochConstellation
   totalMessages: number
   receivedMessages: Set<number>
-  satelliteIds: Set<string>
+  satellites: Map<string, SatelliteEpochConstellation>
 }
 
 export class SatelliteEpochAssembler {
@@ -40,7 +38,7 @@ export class SatelliteEpochAssembler {
     const messageNumber = Math.trunc(fragment.messageNumber)
     if (totalMessages < 1 || messageNumber < 1 || messageNumber > totalMessages) return
 
-    const source = fragment.source || fragment.constellation || 'UNKNOWN'
+    const source = fragment.source
     let cycle = this.cycles.get(source)
     if (
       messageNumber === 1 ||
@@ -49,18 +47,18 @@ export class SatelliteEpochAssembler {
       cycle.receivedMessages.has(messageNumber)
     ) {
       cycle = {
-        constellation: normalizeConstellation(fragment.constellation),
         totalMessages,
         receivedMessages: new Set<number>(),
-        satelliteIds: new Set<string>(),
+        satellites: new Map(),
       }
       this.cycles.set(source, cycle)
     }
 
     cycle.receivedMessages.add(messageNumber)
-    for (const satelliteId of fragment.satelliteIds) {
-      const normalized = String(satelliteId).trim()
-      if (normalized) cycle.satelliteIds.add(normalized)
+    for (const satellite of fragment.satellites) {
+      const prn = String(satellite.prn).trim()
+      const constellation = normalizeConstellation(satellite.constellation)
+      if (prn) cycle.satellites.set(`${constellation}:${prn}`, constellation)
     }
   }
 
@@ -74,8 +72,13 @@ export class SatelliteEpochAssembler {
     // complete epoch, otherwise the chart would mistake partial data for a full one.
     const complete = allCycles.length > 0 && allCycles.every(isComplete)
     if (complete) {
+      const counted = new Set<string>()
       for (const cycle of allCycles) {
-        counts[cycle.constellation] += cycle.satelliteIds.size
+        for (const [id, constellation] of cycle.satellites) {
+          if (counted.has(id)) continue
+          counted.add(id)
+          counts[constellation]++
+        }
       }
     }
     this.cycles.clear()

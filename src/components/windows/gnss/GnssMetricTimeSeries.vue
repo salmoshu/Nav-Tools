@@ -285,6 +285,7 @@ let renderFrame: number | null = null
 let renderTimer: ReturnType<typeof setTimeout> | null = null
 let lastRenderAt = 0
 let previousLength = 0
+let fitSatelliteCountOnUpdate = true
 let renderedRange = { min: -1, max: 1 }
 /** 用户滚轮产生的 y 轴手动范围（锚定光标值伸缩）；dblclick 重置回自动范围 */
 let yRangeOverride: { min: number; max: number } | null = null
@@ -327,6 +328,10 @@ function trackingTargetIndex(): number {
 /** 跟踪视口同时容纳主、参考当前点；只有单轨迹才沿用原来的边界钳制。 */
 function applyTrackingViewport(): void {
   const store = sourceStore.value
+  if (props.field === 'SATS_USED' && fitSatelliteCountOnUpdate) {
+    viewport.value = fitSatelliteCountViewport(store.length)
+    return
+  }
   const target = trackingTargetIndex()
   if (target < 0) return
   const currentSpan =
@@ -751,6 +756,11 @@ function preserveCurrentYAxis(): void {
 function resetLayout(): void {
   trackOffset = 0
   yRangeOverride = null
+  if (props.field === 'SATS_USED') {
+    fitSatelliteCountOnUpdate = true
+    fitAll()
+    return
+  }
   if (props.tracking) {
     applyTrackingViewport()
     scheduleRender()
@@ -811,6 +821,7 @@ function handleMouseDown(event: MouseEvent): void {
 /** 应用新 x 视口并广播给同源图表（E/N/U 联动）；跟踪模式下记录用户拖拽偏移 */
 function applyViewport(next: SatelliteCountViewport, synchronize = true): void {
   viewport.value = next
+  if (synchronize && props.field === 'SATS_USED') fitSatelliteCountOnUpdate = false
   if (props.tracking) {
     trackOffset = (next.start + next.end) / 2 - (trackingTargetIndex() + 0.5)
   }
@@ -1096,8 +1107,9 @@ function clearHover(): void {
   emit('cursor-position', null)
 }
 
-watch([sourceStore, sourceLength], () => {
+watch([sourceStore, sourceLength], ([store], [previousStore]) => {
   const nextLength = sourceStore.value.length
+  if (store !== previousStore || nextLength < previousLength) fitSatelliteCountOnUpdate = true
   if (props.tracking && nextLength > 0) {
     previousLength = nextLength
     applyTrackingViewport()
@@ -1189,6 +1201,7 @@ watch([fileTimeline.active, fileTimeline.mode, fileTimeline.elapsedMilliseconds]
 
 onMounted(() => {
   previousLength = sourceStore.value.length
+  if (props.field === 'SATS_USED') viewport.value = fitSatelliteCountViewport(previousLength)
   axisContext = axisCanvasRef.value?.getContext('2d') ?? null
   if (plotCanvasRef.value) {
     renderer = createSatelliteTimeSeriesRenderer(plotCanvasRef.value)

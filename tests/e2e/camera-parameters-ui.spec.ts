@@ -250,6 +250,7 @@ test('preserves camera inputs across tabs and displays background task states at
 })
 
 test('keeps the calibration history table at its latest row while running', async ({ page }) => {
+  await page.setViewportSize({ width: 560, height: 840 })
   const history = Array.from({ length: 12 }, (_, index) => ({
     offset: -20 + index * 0.1,
     distances: [2 + index * 0.001],
@@ -312,6 +313,16 @@ test('keeps the calibration history table at its latest row while running', asyn
       scroller.evaluate((el) => Math.abs(el.scrollHeight - el.scrollTop - el.clientHeight) <= 1),
     )
     .toBe(true)
+  await expect(rows.last()).toContainText('+0.012 m')
+  const accepted = rows.last().locator('.el-table-fixed-column--right')
+  await accepted.hover()
+  expect(await accepted.evaluate((cell) => {
+    const context = document.createElement('canvas').getContext('2d')!
+    context.clearRect(0, 0, 1, 1)
+    context.fillStyle = getComputedStyle(cell).backgroundColor
+    context.fillRect(0, 0, 1, 1)
+    return context.getImageData(0, 0, 1, 1).data[3]
+  })).toBe(255)
 })
 
 test('keeps the default English interface usable in a narrow panel', async ({ page }) => {
@@ -519,6 +530,53 @@ test('shows calibration start failures in an error dialog', async ({ page }) => 
   const dialog = page.getByRole('dialog', { name: '标定失败', exact: true })
   await expect(dialog).toBeVisible()
   await expect(dialog).toContainText('模拟标定启动失败')
+})
+
+test('remembers both calibration angle ranges across reloads and target count changes', async ({
+  page,
+}) => {
+  await mockScriptSelection(page, [])
+  await page.goto(
+    `/#card/${encodeURIComponent(JSON.stringify({ componentName: 'CameraParameters', title: '相机参数' }))}`,
+  )
+
+  const calibration = page.getByRole('tab', { name: '自动标定', exact: true })
+  const targets = page.locator('.cal-target-group')
+  const from = (index: number) => targets.nth(index).getByLabel('角度 From (°)', { exact: true })
+  const to = (index: number) => targets.nth(index).getByLabel('角度 To (°)', { exact: true })
+
+  await calibration.click()
+  await from(0).fill('-20')
+  await to(0).fill('0')
+  await from(1).fill('0')
+  await to(1).fill('20')
+  await to(1).blur()
+
+  await page.getByRole('tab', { name: '手动命令', exact: true }).click()
+  await page.getByRole('textbox', { name: '子命令内容', exact: true }).fill('0.55,62.292,-20')
+  await page.reload()
+  await expect(page.getByRole('textbox', { name: '子命令内容', exact: true })).toHaveValue(
+    '0.55,62.292,-20',
+  )
+  await calibration.click()
+  await expect(from(0)).toHaveValue('-20.0')
+  await expect(to(0)).toHaveValue('0.0')
+  await expect(from(1)).toHaveValue('0.0')
+  await expect(to(1)).toHaveValue('20.0')
+
+  const count = page.getByRole('combobox', { name: '目标数目' })
+  await count.press('Enter')
+  await page.getByRole('option', { name: '单目标', exact: true }).click()
+  await expect(targets).toHaveCount(1)
+  await page.reload()
+  await calibration.click()
+  await expect(targets).toHaveCount(1)
+  await expect(from(0)).toHaveValue('-20.0')
+  await expect(to(0)).toHaveValue('0.0')
+  await count.press('Enter')
+  await page.getByRole('option', { name: '双目标', exact: true }).click()
+  await expect(from(1)).toHaveValue('0.0')
+  await expect(to(1)).toHaveValue('20.0')
 })
 
 test('remembers independent content for each camera sub-command', async ({ page }) => {

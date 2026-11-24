@@ -348,6 +348,30 @@ describe('NMEA GNSS status extraction', () => {
     expect(nmea.hasGsvData.value).toBe(false)
   })
 
+  it('counts and labels QZSS independently across dedicated and mixed GSV messages', () => {
+    const nmea = useNmea()
+    const sentences = [
+      '$GPGSV,1,1,02,03,40,083,46,195,35,120,39,1',
+      '$GQGSV,1,1,02,03,35,120,40,10,24,309,38,0',
+      '$GNGSV,1,1,01,194,21,222,43',
+      '$GPGGA,091214.30,3110.7353943,N,12124.3158362,E,4,04,1.0,5.754,M,10.841,M,,',
+    ]
+    nmea.processRawData(sentences.map(withChecksum).join('\r\n') + '\r\n')
+
+    expect(nmea.satelliteEpochHistory.value.getSample(0)).toMatchObject({
+      counts: { GPS: 1, QZSS: 3 },
+      total: 4,
+      complete: true,
+    })
+    expect(nmea.satelliteSnrData.value).toEqual(expect.arrayContaining([
+      expect.objectContaining({ prn: 3, constellation: 'GPS' }),
+      expect.objectContaining({ prn: 3, constellation: 'QZSS', snr: 40 }),
+      expect.objectContaining({ prn: 10, constellation: 'QZSS', snr: 38 }),
+      expect.objectContaining({ prn: 2, constellation: 'QZSS', snr: 43 }),
+    ]))
+    expect(useGnssStore().status.satsVisible).toBe('4')
+  })
+
   it('records every fractional-second GGA epoch from complete GSV cycles', () => {
     const { processRawData, satelliteEpochHistory } = useNmea()
     const lines = [

@@ -1,5 +1,13 @@
 export default {
   noGnssEpochs: '文件中没有找到可用的 GNSS 历元',
+  sppNoObservations: '没有找到 RTCM3 观测历元',
+  sppFileSolved: 'SPP 已解算 {count} 个历元',
+  sppFileNoFix: 'SPP 未出解，请检查录制时间和广播星历。',
+  sppCaptureTime: '录制起始时间',
+  sppCaptureTimeHint: '可选，默认使用 RTCM 时间标记或文件修改时间。',
+  sppFix: '软件单点解',
+  sppWaitingEphemeris: 'SPP 等待星历',
+  sppNoFix: 'SPP 等待有效定位',
   noTextRecords: '文件中没有可回放的数据行',
   timelineIndexing: '正在建立索引',
   timelinePlay: '播放',

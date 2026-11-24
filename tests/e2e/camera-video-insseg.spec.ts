@@ -106,7 +106,7 @@ test('starts observation with video and shows person fields or an empty connecti
   await expect.poll(() => page.evaluate(() => Reflect.get(window, '__observeCalls').length)).toBe(1)
   await page.evaluate(() => {
     const emit = Reflect.get(window, '__emitCamera') as (channel: string, data: unknown) => void
-    emit('camera-stream-frame', Uint8Array.from([0xff, 0xd8, 0xff, 0xd9]))
+    emit('camera-stream-frame', { frameId: 1, bytes: Uint8Array.from([0xff, 0xd8, 0xff, 0xd9]) })
   })
 
   const stage = page.locator('.video-stage')
@@ -132,7 +132,7 @@ test('starts observation with video and shows person fields or an empty connecti
   await expect.poll(() => page.evaluate(() => Reflect.get(window, '__observeCalls').length)).toBe(2)
   await page.evaluate(() => {
     const emit = Reflect.get(window, '__emitCamera') as (channel: string, data: unknown) => void
-    emit('camera-stream-frame', Uint8Array.from([0xff, 0xd8, 0xff, 0xd9]))
+    emit('camera-stream-frame', { frameId: 2, bytes: Uint8Array.from([0xff, 0xd8, 0xff, 0xd9]) })
   })
 
   await page.evaluate((state) => {
@@ -252,5 +252,12 @@ test('starts observation with video and shows person fields or an empty connecti
   await page.getByRole('button', { name: '暂停', exact: true }).click()
   await expect.poll(() => page.evaluate(() => Reflect.get(window, '__closeCalls').length)).toBe(1)
   await expect(overlay).toHaveCount(0)
+  await page.evaluate(() => {
+    const emit = Reflect.get(window, '__emitCamera') as (channel: string, data: unknown) => void
+    emit('camera-stream-status', { status: 'playing', message: 'Late video status' })
+    emit('camera-stream-frame', { frameId: 3, bytes: Uint8Array.from([0xff, 0xd8, 0xff, 0xd9]) })
+  })
+  await expect(page.locator('.video-frame')).toHaveCount(0)
+  await expect(page.getByRole('button', { name: '播放', exact: true })).toBeEnabled()
   expect(errors).toEqual([])
 })

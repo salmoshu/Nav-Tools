@@ -38,6 +38,9 @@ import { useDataSourceManager } from '@/composables/useDataSourceManager'
 import type { TextDataParser } from '@/core/data/DataSourceStorage'
 import { createRecordRegex } from '@/core/data/TextRecordParser'
 import { detectGnssTextParser } from '@/core/data/GnssTextFormat'
+import { isRnxFileName, rtcmBasename } from '@/core/gnssraw/RtcmFileAccess'
+import { solveRtcmSppFile } from '@/core/gnss/RtcmSppFile'
+import { RtcmSppSession, type SppBatch } from '@/core/gnss/RtcmSppSession'
 import { detectDataFormat, DETECTABLE_FORMATS, FORMAT_LABELS, isTextFormat, type DataFormat, type DetectableFormat, type FormatDetection } from '@/core/data/DataFormat'
 import { useAutoFormatSettings } from '@/composables/useAutoFormatSettings'
 import { FilePlaybackService } from '@/core/file/FilePlaybackService'
@@ -87,6 +90,19 @@ const {
   currentApplicationId,
 } = useApplicationSelector()
 const autoFormatSettings = useAutoFormatSettings()
+const rtcmSppStatus = ref<SppBatch['status']>()
+const rtcmSppCaptureTime = ref('')
+const useRtcmSppHere = () => currentApplicationId.value === 'gnss'
+
+function isSppCompanion(name: string): boolean {
+  return /\.tag$/i.test(name) || isRnxFileName(name)
+}
+
+function sppSelectionIndex(names: string[], kinds: DataFormat[]): number {
+  if (!useRtcmSppHere()) return -1
+  const index = names.findIndex((name, i) => kinds[i] === 'rtcm3' && !isSppCompanion(name))
+  return index >= 0 && names.every((name, i) => i === index || isSppCompanion(name)) ? index : -1
+}
 const detectedFormats = reactive<Record<'file' | 'serial' | 'network', FormatDetection | undefined>>({
   file: undefined, serial: undefined, network: undefined,
 })
@@ -182,6 +198,7 @@ const networkLoop = toRef(dataSourceSettings.network, 'loop')
 
 // 文件配置
 const filePath = toRef(dataSourceSettings.file, 'path')
+watch(filePath, () => { rtcmSppCaptureTime.value = '' })
 const fileTimeTag = toRef(dataSourceSettings.file, 'timeTag')
 const fileReplaySpeed = toRef(dataSourceSettings.file, 'replaySpeed')
 const fileStartOffset = toRef(dataSourceSettings.file, 'startOffset')
@@ -195,6 +212,7 @@ const selectedFile = computed(() => selectedFiles.value[0] ?? null)
 const selectedFilePath = ref('')
 // 文件输入按扩展名自适应分发：.mcap 走 LiDAR 时间轴，以下文本类型走文本解析器
 const fileIsMcap = computed(() => effectiveFormat('file') === 'mcap')
+const fileIsRtcmSpp = computed(() => useRtcmSppHere() && effectiveFormat('file') === 'rtcm3')
 // 输入路径是板上轮转分片(part_N.mcap)时,确认后自动补齐同目录整族分片
 const fileIsMcapPartSlice = computed(
   () => mcapPartIndex(mcapBasename(filePath.value)) !== undefined,
@@ -267,6 +285,7 @@ const activeDataParser = computed<TextDataParser>(() => {
   const type = globalDevice.value.type
   if (type === 'serial' || type === 'network' || type === 'file') {
     const format = effectiveFormat(type)
+    if (format === 'rtcm3' && useRtcmSppHere()) return 'nmea'
     return isTextFormat(format) ? format : 'raw'
   }
   return 'raw'
@@ -289,7 +308,7 @@ function liveGnssContext(): { key: string; parser: 'nmea' | 'rtklib-pos' } | und
   const parser = configured === 'rtklib-pos' ? 'rtklib-pos' : 'nmea'
   const key = JSON.stringify([
     device.type, device.path, device.baudRate, device.dataBits, device.stopBits,
-    device.parity, device.protocol, device.host, device.port, parser,
+    device.parity, device.protocol, device.host, device.port, effectiveFormat(device.type), parser,
   ])
   return { key, parser }
 }
@@ -303,7 +322,10 @@ function beginLiveGnssHistory(): void {
 }
 
 function stopLiveGnssHistory(): void {
-  void gnssLiveHistory.stop().catch((error) => {
+  const stopped = sppStreamDrain
+    ? sppStreamDrain.then(() => sppStream ? false : gnssLiveHistory.stop())
+    : gnssLiveHistory.stop()
+  void stopped.catch((error) => {
     ElMessage({
       message: t('data.dataLoadFailed', {
         error: error instanceof Error ? error.message : String(error),
@@ -322,8 +344,53 @@ let streamDecodedQueue: string[] = []
 let streamDecoder = new TextDecoder()
 let streamRawSeen = false
 let streamProbeFinished = false
-let streamRtcm = false
+let streamRtcm: 'raw' | 'spp' | undefined
+let sppStream: RtcmSppSession | undefined
+let sppStreamDrain: Promise<void> | undefined
 let streamProbeTimer: ReturnType<typeof setTimeout> | undefined
+
+function consumeSppBatch(session: RtcmSppSession, batch: SppBatch): void {
+  if (sppStream !== session) return
+  if (batch.status) rtcmSppStatus.value = batch.status
+  if (!batch.nmea) return
+  if (globalDevice.value.connected === true) routeIncomingData(batch.nmea)
+  else {
+    gnssLiveHistory.append(batch.nmea)
+    addGnssData(batch.nmea)
+    addFlowConsole(batch.nmea)
+  }
+}
+
+function failSppStream(session: RtcmSppSession, error: unknown): void {
+  if (sppStream !== session) return
+  sppStream = undefined
+  session.close()
+  ElMessage.error(t('data.dataLoadFailed', { error: String(error) }))
+}
+
+function beginRtcmStream(source: 'serial' | 'network'): void {
+  if (!useRtcmSppHere()) {
+    streamRtcm = 'raw'
+    useGnssRaw().startStream(globalDevice.value.path ?? source)
+    return
+  }
+  streamRtcm = 'spp'
+  rtcmSppStatus.value = undefined
+  const session = new RtcmSppSession()
+  sppStream = session
+  beginLiveGnssHistory()
+  void session.request({ type: 'start' }).catch((error) => failSppStream(session, error))
+}
+
+function appendRtcmStream(bytes: Uint8Array): void {
+  if (streamRtcm === 'raw') useGnssRaw().appendStream(bytes)
+  const session = sppStream
+  if (streamRtcm !== 'spp' || !session) return
+  void session.request({ type: 'push', bytes: new Uint8Array(bytes).buffer })
+    .then((batch) => consumeSppBatch(session, batch))
+    .catch((error) => failSppStream(session, error))
+}
+
 function clearStreamProbeTimer(): void {
   if (streamProbeTimer !== undefined) clearTimeout(streamProbeTimer)
   streamProbeTimer = undefined
@@ -339,7 +406,11 @@ function beginStreamDetection(source: 'serial' | 'network'): void {
   streamDecoder = new TextDecoder()
   streamRawSeen = false
   streamProbeFinished = false
-  streamRtcm = false
+  const previousSpp = sppStream
+  sppStream = undefined
+  sppStreamDrain = undefined
+  previousSpp?.close()
+  streamRtcm = undefined
   if (dataSourceSettings[source].format === 'auto' && previous && (previous.format === 'nmea' || previous.format === 'rtklib-pos')) {
     const context = liveGnssContext()
     if (context && gnssLiveHistory.matches(context.key)) {
@@ -355,24 +426,35 @@ function beginStreamDetection(source: 'serial' | 'network'): void {
   detectedFormats[source] = undefined
   formatAttempted[source] = false
   if (dataSourceSettings[source].format === 'rtcm3') {
-    useGnssRaw().startStream(globalDevice.value.path ?? source)
-    streamRtcm = true
+    beginRtcmStream(source)
     streamProbeFinished = true
     formatAttempted[source] = true
   }
 }
 function finishStreamDetection(): void {
   clearStreamProbeTimer()
-  if (streamRtcm) useGnssRaw().stopStream()
+  if (streamRtcm === 'raw') useGnssRaw().stopStream()
+  else if (streamRtcm === 'spp' && sppStream) {
+    const session = sppStream
+    const task = session.request({ type: 'finish' })
+      .then((batch) => consumeSppBatch(session, batch))
+      .catch((error) => failSppStream(session, error))
+      .finally(() => {
+        if (sppStream === session) sppStream = undefined
+        if (sppStreamDrain === task) sppStreamDrain = undefined
+        session.close()
+      })
+    sppStreamDrain = task
+  }
   else for (const pending of streamPendingText) routeIncomingData(pending.display, pending.decoded)
   streamProbe = []
   streamPendingText = []
-  streamRtcm = false
+  streamRtcm = undefined
   streamProbeFinished = true
 }
 function inspectStreamBytes(source: 'serial' | 'network', bytes: Uint8Array): void {
   if (globalDevice.value.type !== source || globalDevice.value.connected !== true) return
-  if (streamRtcm) { useGnssRaw().appendStream(bytes); return }
+  if (streamRtcm) { appendRtcmStream(bytes); return }
   if (streamProbeFinished || dataSourceSettings[source].format !== 'auto') return
   if (streamProbeTimer === undefined) streamProbeTimer = setTimeout(() => {
     streamProbeTimer = undefined
@@ -400,9 +482,8 @@ function inspectStreamBytes(source: 'serial' | 'network', bytes: Uint8Array): vo
   streamProbeFinished = true
   clearStreamProbeTimer()
   if (result?.format === 'rtcm3' && !result.disabled) {
-    streamRtcm = true
-    useGnssRaw().startStream(globalDevice.value.path ?? source)
-    for (const part of streamProbe) useGnssRaw().appendStream(part)
+    beginRtcmStream(source)
+    for (const part of streamProbe) appendRtcmStream(part)
     streamPendingText = []
   } else {
     beginLiveGnssHistory()
@@ -427,14 +508,20 @@ ipc.on('source-data-bytes', (_event, source, data) => {
   if ((source !== 'serial' && source !== 'network') || !(data instanceof Uint8Array)) return
   if (globalDevice.value.type !== source || globalDevice.value.connected !== true) return
   streamRawSeen = true
-  streamDecodedQueue.push(streamDecoder.decode(data, { stream: true }))
+  if (!streamRtcm) streamDecodedQueue.push(streamDecoder.decode(data, { stream: true }))
   inspectStreamBytes(source, data)
 })
 watch(
   () => `${currentApplication.value?.id ?? ''}:${allowedFormats().join(',')}`,
   () => {
     const source = globalDevice.value.type
-    if ((source !== 'serial' && source !== 'network') || globalDevice.value.connected !== true || dataSourceSettings[source].format !== 'auto') return
+    if ((source !== 'serial' && source !== 'network') || globalDevice.value.connected !== true) return
+    if (streamRtcm && (streamRtcm === 'spp') !== useRtcmSppHere()) {
+      finishStreamDetection()
+      beginStreamDetection(source)
+      return
+    }
+    if (dataSourceSettings[source].format !== 'auto') return
     const result = detectedFormats[source]
     if (result && !result.candidate && !result.disabled && allowedFormats().includes(result.format)) return
     if (!streamProbeFinished) return
@@ -832,14 +919,15 @@ async function loadGnssTimelineSource(
   timelineMode: FileTimelineMode,
   readSource: GnssTimelineReader,
   notify = true,
+  parser?: 'nmea' | 'rtklib-pos',
 ): Promise<void> {
   gnssLiveHistory.discard()
   const streamPlot = isWindowActive('plot')
   const configuredParser = activeDataParser.value
   // 每个文件都重新识别，避免上次自动保存的格式锁定后续文件。
-  const autoDetectParser = dataSourceSettings.file.format === 'auto'
+  const autoDetectParser = !parser && dataSourceSettings.file.format === 'auto'
   const fallbackParser = configuredParser === 'rtklib-pos' ? 'rtklib-pos' : 'nmea'
-  let parserOverride: TextDataParser | undefined = autoDetectParser ? undefined : configuredParser
+  let parserOverride: TextDataParser | undefined = parser ?? (autoDetectParser ? undefined : configuredParser)
   let pendingDetectionText = ''
   const routeAuxiliaryText = (text: string) => {
     if (streamPlot) addFlowData(text)
@@ -1326,6 +1414,67 @@ export function useDevice() {
     }
   }
 
+  const loadRtcmSppSelection = async (
+    path: string,
+    inputs: Array<File | string>,
+    timelineMode: FileTimelineMode,
+  ): Promise<void> => {
+    if (fileInputLoading.value) return
+    fileInputLoading.value = true
+    const captureTimeS = filePath.value === path ? Date.parse(rtcmSppCaptureTime.value) / 1000 : NaN
+    const [primary = path, ...companions] = inputs
+    const nameOf = (item: File | string) => typeof item === 'string' ? rtcmBasename(item) : item.name
+    const name = nameOf(primary)
+    const tag = companions.find((item) => nameOf(item).toLowerCase() === `${name.toLowerCase()}.tag`)
+    const navigation = companions.filter((item) => isRnxFileName(nameOf(item)))
+    try {
+      if (globalDevice.value.type === 'serial' || globalDevice.value.type === 'network')
+        await closeCurrDevice()
+      const ending = sppStream
+      sppStream = undefined
+      ending?.close()
+      await filePlaybackService.stop()
+      rtcmSppStatus.value = undefined
+      dataSourceSettings.activeSource = 'file'
+      globalDevice.value = { type: 'file', path, connected: false }
+      filePath.value = path
+      saveDataSourceSettings()
+      let fixes = 0
+      let sizeBytes = 0
+      await loadGnssTimelineSource(timelineMode, async (onChunk, onProgress) => {
+        const result = await solveRtcmSppFile({
+          data: typeof primary !== 'string' && typeof window.electronAPI?.gnssSppFileInfo === 'function'
+            ? window.electronAPI.getPathForFile(primary) || primary
+            : primary,
+          tag,
+          navigation,
+          captureTimeS: Number.isFinite(captureTimeS) ? captureTimeS : undefined,
+        }, onChunk, onProgress)
+        if (!result.epochs) throw new Error(t('data.sppNoObservations'))
+        fixes = result.fixes
+        sizeBytes = result.sizeBytes
+      }, false, 'nmea')
+      rtcmSppStatus.value = fixes ? 'fix' : 'no-fix'
+      if (fixes) ElMessage.success(t('data.sppFileSolved', { count: fixes }))
+      else ElMessage.warning(t('data.sppFileNoFix'))
+      recentInputFilesStore.record({
+        path,
+        name,
+        paths: inputs.length > 1 && inputs.every((item) => typeof item === 'string')
+          ? inputs as string[]
+          : undefined,
+        sizeBytes,
+      })
+    } catch (error) {
+      fileTimeline.clearTimeline()
+      ElMessage.error(t('data.dataLoadFailed', {
+        error: error instanceof Error ? error.message : String(error),
+      }))
+    } finally {
+      fileInputLoading.value = false
+    }
+  }
+
   const handleDrop = async (event: DragEvent) => {
     if (!isFileDrag(event)) return
     event.preventDefault()
@@ -1340,6 +1489,19 @@ export function useDevice() {
         const detected = inspectFormat(bytes, file.name, mode)
         return { file, bytes, detected, format: mode === 'auto' ? (detected?.candidate || detected?.disabled ? 'raw' : detected?.format ?? 'raw') : mode }
       }))
+      const sppIndex = sppSelectionIndex(files.map((file) => file.name), inspected.map((item) => item.format))
+      if (sppIndex >= 0) {
+        const primary = files[sppIndex]
+        const path = window.electronAPI?.getPathForFile(primary) || primary.name
+        const inputs = [primary, ...files.filter((_, index) => index !== sppIndex)]
+        selectedFiles.value = inputs
+        selectedPaths.value = []
+        selectedFilePath.value = path
+        detectedFormats.file = inspected[sppIndex].detected
+        formatAttempted.file = true
+        await loadRtcmSppSelection(path, inputs, 'loaded')
+        return
+      }
       // LiDAR MCAP 录像优先分发（避免被文本分支误吞）；一次拖入多个分片时合并为单会话加载
       const mcapFiles = inspected.filter((item) => item.format === 'mcap').map((item) => item.file)
       // GNSS-Raw 文件（RTCM 单文件 / RINEX obs+nav 组合）按名字识别，合并一次加载
@@ -1641,7 +1803,7 @@ export function useDevice() {
       fileInput.accept = acceptGnssText
         ? ''
         : '.txt,.csv,.dat,.log,.nmea,.pos,.mcap,.rtcm3,.rtcm,.rtc,.rt3,.rnx,.obs,.nav,.glo'
-      fileInput.multiple = !solutionParserSelected
+      fileInput.multiple = !solutionParserSelected || useRtcmSppHere()
       fileInput.style.display = 'none'
       document.body.appendChild(fileInput)
       fileInput.onchange = async () => {
@@ -1651,14 +1813,15 @@ export function useDevice() {
         const kinds = await detectSelectionKinds(files, [])
         const allMcap = kinds.every((kind) => kind === 'mcap')
         const allRnx = kinds.every((kind) => kind === 'rinex')
-        if (files.length > 1 && !allMcap && !allRnx) {
+        const sppIndex = sppSelectionIndex(files.map((file) => file.name), kinds)
+        if (files.length > 1 && !allMcap && !allRnx && sppIndex < 0) {
           ElMessage.warning(t('app.toolbar.fileSelectionMixed'))
           return
         }
-        const file = files[0]
+        const file = files[Math.max(0, sppIndex)]
         filePath.value = window.electronAPI?.getPathForFile(file) || file.name
         selectedFilePath.value = filePath.value
-        selectedFiles.value = files
+        selectedFiles.value = [file, ...files.filter((item) => item !== file)]
         selectedPaths.value = []
         void detectSelectedFile(file, filePath.value)
       }
@@ -1672,7 +1835,7 @@ export function useDevice() {
       scope: 'data-access-file',
       filters: acceptGnssText
         ? [
-            { name: 'NMEA / RTKLIB POS / Text', extensions: ['*'] },
+            { name: 'NMEA / RTKLIB POS / RTCM3', extensions: ['*'] },
             { name: 'All Files', extensions: ['*'] },
           ]
         : [
@@ -1705,20 +1868,22 @@ export function useDevice() {
             },
             { name: 'All Files', extensions: ['*'] },
           ],
-      multi: !solutionParserSelected,
+      multi: !solutionParserSelected || useRtcmSppHere(),
     })) as string[] | null
     if (!paths || paths.length === 0) return
     const kinds = await detectSelectionKinds([], paths)
     const allMcap = kinds.every((kind) => kind === 'mcap')
     const allRnx = kinds.every((kind) => kind === 'rinex')
-    if (paths.length > 1 && !allMcap && !allRnx) {
+    const sppIndex = sppSelectionIndex(paths, kinds)
+    if (paths.length > 1 && !allMcap && !allRnx && sppIndex < 0) {
       ElMessage.warning(t('app.toolbar.fileSelectionMixed'))
       return
     }
-    filePath.value = paths[0]
-    selectedFilePath.value = paths[0]
-    selectedPaths.value = paths
-    void detectSelectedFile(undefined, paths[0])
+    const primary = paths[Math.max(0, sppIndex)]
+    filePath.value = primary
+    selectedFilePath.value = primary
+    selectedPaths.value = [primary, ...paths.filter((path) => path !== primary)]
+    void detectSelectedFile(undefined, primary)
   }
 
   // 添加一个响应式变量来存储选择的文件对象
@@ -2186,6 +2351,14 @@ export function useDevice() {
       const files = selectedFilePath.value === path ? selectedFiles.value : []
       const pathList = selectedFilePath.value === path ? selectedPaths.value : []
       const format = effectiveFormat('file')
+      if (format === 'rtcm3' && useRtcmSppHere() && path) {
+        const recent = recentInputFilesStore.list().find((item) => item.path === path)
+        const inputs = files.length ? files : pathList.length ? pathList : recent?.paths ?? [path]
+        dataSourceChangesCommitted = true
+        showInputDialog.value = false
+        await loadRtcmSppSelection(path, inputs, fileTimeTag.value ? 'replay' : 'loaded')
+        return
+      }
       const isGnssRaw = format === 'rtcm3' || format === 'rinex'
       if (isGnssRaw) {
         // 立即关闭弹框、后台解码：加载进度由各 GNSS-Raw 面板的进度条展示，
@@ -2281,6 +2454,9 @@ export function useDevice() {
     serialAdvanced,
     filePath,
     fileIsMcap,
+    fileIsRtcmSpp,
+    rtcmSppStatus,
+    rtcmSppCaptureTime,
     fileIsMcapPartSlice,
     fileInputLoading,
     selectedFileCount,

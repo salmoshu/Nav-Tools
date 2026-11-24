@@ -1,6 +1,6 @@
 import type { SatelliteDetailSample } from './SatelliteDetailEpochStore'
 
-export type SignalBarSample = Omit<SatelliteDetailSample, 'prn'> & { prn: string | number }
+export type SignalBarSample = SatelliteDetailSample
 
 /** 星座配色与 GnssSky 星空图保持一致；柱状图在此基础上叠加渐变质感。 */
 export const SIGNAL_CONSTELLATIONS: Record<string, { prefix: string; color: string }> = {

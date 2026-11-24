@@ -14,6 +14,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   startWindowResize: (edge: string) => ipcRenderer.invoke('window-resize-start', edge),
   stopWindowResize: () => ipcRenderer.invoke('window-resize-stop'),
   startCameraStream: (url: string) => ipcRenderer.invoke('camera-stream-start', url),
+  acknowledgeCameraStreamFrame: (frameId: number) => ipcRenderer.send('camera-stream-frame-rendered', frameId),
   stopCameraStream: () => ipcRenderer.invoke('camera-stream-stop'),
   stopCameraStreamSession: (ownerWindowId: number) =>
     ipcRenderer.invoke('camera-stream-stop-session', ownerWindowId),
@@ -62,6 +63,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   lidarMcapListFamily: (path: string) =>
     ipcRenderer.invoke('lidar-mcap-list-family', path) as Promise<string[]>,
   gnssRawReadFile: (path: string) => ipcRenderer.invoke('gnssraw-read-file', path),
+  gnssSppFileInfo: (path: string) => ipcRenderer.invoke('gnss-spp-file-info', path),
+  gnssSppFileRead: (path: string, offset: number, length: number) =>
+    ipcRenderer.invoke('gnss-spp-file-read', path, offset, length),
   dataFormatReadHead: (path: string) => ipcRenderer.invoke('data-format-read-head', path),
   rtkPostRun: (request: import('../../src/core/gnsslib/RtkPost').RtkPostRunRequest) =>
     ipcRenderer.invoke('rtkpost-run', request),

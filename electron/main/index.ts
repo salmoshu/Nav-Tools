@@ -298,14 +298,19 @@ ipcMain.handle('window-resize-stop', (event) => {
 })
 
 ipcMain.handle('camera-stream-start', (event, url: unknown) => {
-  if (!cameraStreamOwners.has(event.sender.id)) {
-    cameraStreamOwners.add(event.sender.id)
+  const ownerId = event.sender.id
+  if (!cameraStreamOwners.has(ownerId)) {
+    cameraStreamOwners.add(ownerId)
     event.sender.once('destroyed', () => {
-      cameraStreamService.stop(event.sender.id)
-      cameraStreamOwners.delete(event.sender.id)
+      cameraStreamService.stop(ownerId)
+      cameraStreamOwners.delete(ownerId)
     })
   }
-  return cameraStreamService.start(event.sender.id, url, event.sender)
+  return cameraStreamService.start(ownerId, url, event.sender)
+})
+
+ipcMain.on('camera-stream-frame-rendered', (event, frameId: unknown) => {
+  cameraStreamService.acknowledgeFrame(event.sender.id, frameId)
 })
 
 ipcMain.handle('camera-stream-stop', (event) => {

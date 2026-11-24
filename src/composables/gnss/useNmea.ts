@@ -25,7 +25,7 @@ const nmeaData = shallowRef<NmeaData[]>([])
 const ggaData = shallowRef<GgaData[]>([])
 const deviationPoints = shallowRef<Array<[number, number, number]>>([])
 const mapTrackPoints = shallowRef<Array<[number, number, number]>>([])
-const satelliteSnrData = shallowRef<SatelliteSnrData[]>([])
+const satelliteSnrData = shallowRef<SatelliteDetailSample[]>([])
 const hasGsvData = ref(false)
 const satelliteCountSource = ref<'gga' | 'rtklib-pos'>('gga')
 const satelliteEpochHistory = shallowRef(new SatelliteEpochStore())
@@ -58,8 +58,12 @@ const statusEpochHistory = shallowRef(
     { valuePrecision: 'float64' },
   ),
 )
-const latestSatelliteData = new Map<string, SatelliteSnrData>()
-const pendingSatelliteDetails = new Map<string, SatelliteSnrData>()
+const latestSatelliteData = new Map<string, SatelliteDetailSample>()
+const pendingSatelliteDetails = new Map<string, SatelliteDetailSample>()
+const pendingUsedSatellites = new Set<string>()
+const pendingUnscopedUsedPrns = new Set<number>()
+let latestUsedSatellites = new Set<string>()
+let pendingGsa = false
 const satelliteEpochAssembler = new SatelliteEpochAssembler()
 const utcTime = [0, 0, 0, 0, 0, 0]
 let firstLLh: [number | null, number | null, number | null] | null = null
@@ -568,28 +572,46 @@ function timeArrToString(time: number[]): string {
   return `20${pad2(time[0])}/${pad2(time[1])}/${pad2(time[2])} ${pad2(time[3])}:${pad2(time[4])}:${seconds}`
 }
 
-function addSatelliteSnrData(data: SatelliteSnrData) {
+function addSatelliteSnrData(data: SatelliteDetailSample) {
+  const key = `${data.constellation}-${data.prn}`
   const item = {
-    prn: data.prn,
-    elevation: parseFloat(String(data.elevation)) || 0,
-    azimuth: parseFloat(String(data.azimuth)) || 0,
-    snr: parseFloat(String(data.snr)) || 0,
-    constellation: data.constellation,
-    timestamp: new Date().toISOString()
+    ...data,
+    ...(latestUsedSatellites.has(key) ? { usedInFix: true } : {}),
   }
-  latestSatelliteData.set(`${item.constellation}-${item.prn}`, item)
-  pendingSatelliteDetails.set(`${item.constellation}-${item.prn}`, item)
+  latestSatelliteData.set(key, item)
+  pendingSatelliteDetails.set(key, item)
   satelliteDataDirty = true
   publishPendingData()
 }
 
 function commitSatelliteEpoch(rawGgaTime: string): void {
-  satelliteEpochHistory.value.append(satelliteEpochAssembler.commit(rawGgaTime))
-  const details =
-    pendingSatelliteDetails.size > 0 ? [...pendingSatelliteDetails.values()] : undefined
+  const sample = satelliteEpochAssembler.commit(rawGgaTime)
+  satelliteEpochHistory.value.append(sample)
+  if (sample.complete) useGnssStore().status.satsVisible = String(sample.total)
+  if (pendingGsa) {
+    latestUsedSatellites = new Set(pendingUsedSatellites)
+    for (const prn of pendingUnscopedUsedPrns) {
+      const matching = [...pendingSatelliteDetails].filter(([, sat]) => Number(sat.prn) === prn)
+      if (matching.length === 1) latestUsedSatellites.add(matching[0][0])
+    }
+    for (const [key, satellite] of latestSatelliteData) {
+      const usedInFix = latestUsedSatellites.has(key)
+      if (Boolean(satellite.usedInFix) === usedInFix) continue
+      const updated = { ...satellite, usedInFix }
+      latestSatelliteData.set(key, updated)
+      if (pendingSatelliteDetails.has(key)) pendingSatelliteDetails.set(key, updated)
+      satelliteDataDirty = true
+    }
+  }
+  const details = pendingSatelliteDetails.size > 0
+    ? [...pendingSatelliteDetails.values()]
+    : pendingGsa ? [...latestSatelliteData.values()] : undefined
   satelliteDetailEpochHistory.append(rawGgaTime, details)
   snrHistory.value.appendEpoch(rawGgaTime, details ?? [])
   pendingSatelliteDetails.clear()
+  pendingUsedSatellites.clear()
+  pendingUnscopedUsedPrns.clear()
+  pendingGsa = false
   satelliteEpochHistoryDirty = true
   snrHistoryDirty = true
   publishPendingData()
@@ -723,19 +745,6 @@ interface VtgData {
   mode: string
 }
 
-// GSV语句结构
-interface GsvData {
-  totalMessages: string
-  messageNumber: string
-  satellitesInView: string
-  satellites: Array<{
-    prn: string
-    elevation: string
-    azimuth: string
-    snr: string
-  }>
-}
-
 // GST语句结构（定位误差统计）
 interface GstData {
   time: string
@@ -749,15 +758,6 @@ interface GstData {
 }
 
 // 添加卫星SNR数据接口
-interface SatelliteSnrData extends SatelliteDetailSample {
-  prn: string
-  elevation: number
-  azimuth: number
-  snr: number
-  constellation: string // GPS, GLONASS, BEIDOU, GALILEO等
-  timestamp: string
-}
-
 const currentData = ref<NmeaData>({
   time: null,
   firstLatitude: null,
@@ -1027,66 +1027,40 @@ export function useNmea() {
   function parseGsv(sentence: string): Partial<NmeaData> {
     hasGsvData.value = true
     const gnssStore = useGnssStore()
-    const parts = sentence.split(',')
+    const parts = sentence.split('*', 1)[0].split(',')
     if (parts.length < 8) return {}
-    
-    const data: GsvData = {
-      totalMessages: parts[1],
-      messageNumber: parts[2],
-      satellitesInView: parts[3],
-      satellites: []
-    }
-    
-    // 从语句头部提取星座类型
-    const talkerId = sentence.substring(1, 3) // 获取GP, GL, GA, GB, GQ等
-    const constellation = getConstellationFromTalkerId(talkerId)
-    
-    // 解析卫星数据（每颗卫星4个字段）
-    for (let i = 4; i < parts.length - 1; i += 4) {
-      if (i + 3 < parts.length) {
-        let prn:any
-        const elevation = parts[i + 1]
-        const azimuth = parts[i + 2]
-        const snr = parts[i + 3]?.split('*')[0] || ''
 
-        if (constellation === 'GLONASS') {
-          prn = parseInt(parts[i]) - 64
-        } else {
-          prn = parseInt(parts[i])
-        }
-        
-        if (prn) {
-          data.satellites.push({
-            prn,
-            elevation,
-            azimuth,
-            snr
-          })
-          
-          addSatelliteSnrData({
-            prn,
-            elevation: parseFloat(elevation) || 0,
-            azimuth: parseFloat(azimuth) || 0,
-            snr: parseFloat(snr) || 0,
-            constellation,
-            timestamp: new Date().toISOString()
-          })
-        }
+    const [, totalMessages, messageNumber, satellitesInView] = parts
+    const talker = sentence.substring(1, 3)
+    const signal = (parts.length - 4) % 4 === 1 ? parts[parts.length - 1] : ''
+    const satellites: SatelliteDetailSample[] = []
+    const timestamp = new Date().toISOString()
+    for (let i = 4; i + 3 < parts.length; i += 4) {
+      const identity = nmeaSatelliteIdentity(talker, Number(parts[i]))
+      if (!identity) continue
+      const satellite = {
+        ...identity,
+        elevation: Number(parts[i + 1]) || 0,
+        azimuth: Number(parts[i + 2]) || 0,
+        snr: Number(parts[i + 3]) || 0,
+        timestamp,
+        ...(parts[i + 1] === '' || parts[i + 2] === '' ? { positionKnown: false } : {}),
       }
+      satellites.push(satellite)
+      addSatelliteSnrData(satellite)
     }
 
     satelliteEpochAssembler.addGsv({
-      source: talkerId,
-      constellation,
-      totalMessages: Number(data.totalMessages),
-      messageNumber: Number(data.messageNumber),
-      satelliteIds: data.satellites.map(satellite => satellite.prn),
+      source: `${talker}:${signal}`,
+      totalMessages: Number(totalMessages),
+      messageNumber: Number(messageNumber),
+      satellites,
     })
-    
-    gnssStore.status.satsVisible = data.satellitesInView
-    
+
+    gnssStore.status.satsVisible = satellitesInView
+
     return {
-      satellites: parseInt(data.satellitesInView) || null,
+      satellites: Number(satellitesInView) || null,
       raw: sentence
     }
   }
@@ -1211,15 +1185,27 @@ export function useNmea() {
 
   function parseGsa(sentence: string): Partial<NmeaData> {
     const gnssStore = useGnssStore()
-    const parts = sentence.split(',')
-    if (parts.length < 14) return {}
+    const parts = sentence.split('*', 1)[0].split(',')
+    if (parts.length < 18) return {}
     const data: GsaData = {
       mode: parts[1],
       fixType: parts[2],
-      selectedSatellites: parts.slice(3, 14).filter(Boolean),
+      selectedSatellites: parts.slice(3, 15).filter(Boolean),
       pdop: parts[15],
       hdop: parts[16],
       vdop: parts[17],
+    }
+    pendingGsa = true
+    const talker = sentence.substring(1, 3)
+    const systemTalkers: Record<string, string> = { 1: 'GP', 2: 'GL', 3: 'GA', 4: 'GB', 5: 'GQ', 6: 'GI' }
+    const systemTalker = talker === 'GN' ? systemTalkers[parts[18]] ?? talker : talker
+    if (Number(data.fixType) >= 2) {
+      for (const id of data.selectedSatellites) {
+        const identity = nmeaSatelliteIdentity(systemTalker, Number(id))
+        if (!identity) continue
+        if (identity.constellation === 'UNKNOWN') pendingUnscopedUsedPrns.add(identity.prn)
+        else pendingUsedSatellites.add(`${identity.constellation}-${identity.prn}`)
+      }
     }
     gnssStore.status.PDOP = data.pdop
     gnssStore.status.HDOP = data.hdop
@@ -1293,7 +1279,8 @@ export function useNmea() {
       // firstLLh 被钉成 null 后再也不会重新初始化，下面的空值检查会把
       // 之后的所有有效历元整批丢弃——偏差图/地图轨迹全空
       // （rs-2.txt 样本实测复现：开头 8 条空句 + 678 条有效历元全军覆没）
-      if (!newData.latitude || !newData.longitude) {
+      if (newData.latitude === null || newData.longitude === null ||
+          !Number.isFinite(newData.latitude) || !Number.isFinite(newData.longitude)) {
         return NmeaType.UNKNOWN;
       }
 
@@ -1304,7 +1291,7 @@ export function useNmea() {
       newData.firstLatitude = firstLLh[0];
       newData.firstLongitude = firstLLh[1];
 
-      if (!newData || !newData.latitude || !newData.longitude || !newData.firstLatitude || !newData.firstLongitude) {
+      if (newData.firstLatitude === null || newData.firstLongitude === null) {
         return NmeaType.UNKNOWN;
       }
 
@@ -1397,6 +1384,10 @@ export function useNmea() {
     timelineMapIndex = -1
     latestSatelliteData.clear()
     pendingSatelliteDetails.clear()
+    pendingUsedSatellites.clear()
+    pendingUnscopedUsedPrns.clear()
+    latestUsedSatellites.clear()
+    pendingGsa = false
     hasGsvData.value = false
     satelliteCountSource.value = 'gga'
     satelliteEpochAssembler.clear()
@@ -1496,6 +1487,20 @@ export function useNmea() {
   }
   
   // 根据Talker ID判断星座类型
+  function nmeaSatelliteIdentity(talker: string, rawPrn: number) {
+    if (!Number.isInteger(rawPrn) || rawPrn < 1) return undefined
+    if (['GQ', 'GP', 'GN'].includes(talker) && rawPrn >= 193 && rawPrn <= 202)
+      return { constellation: 'QZSS', prn: rawPrn - 192 }
+    if (talker === 'GP' && rawPrn >= 33 && rawPrn <= 64)
+      return { constellation: 'SBAS', prn: rawPrn }
+    if (talker === 'GN' && rawPrn >= 65 && rawPrn <= 96)
+      return { constellation: 'GLONASS', prn: rawPrn - 64 }
+    const constellation = getConstellationFromTalkerId(talker)
+    const prn = constellation === 'GLONASS' && rawPrn > 64 ? rawPrn - 64 : rawPrn
+    if (constellation === 'QZSS' && prn > 10) return undefined
+    return { constellation, prn }
+  }
+
   function getConstellationFromTalkerId(talkerId: string): string {
     switch (talkerId) {
       case 'GP':
@@ -1505,29 +1510,19 @@ export function useNmea() {
       case 'GA':
         return 'GALILEO'
       case 'GB':
+      case 'BD':
         return 'BEIDOU'
       case 'GQ':
         return 'QZSS'
+      case 'GI':
+        return 'NAVIC'
+      case 'GS':
+        return 'SBAS'
       default:
         return 'UNKNOWN'
     }
   }
   
-  // 根据PRN号判断星座类型（保留作为备用）
-  function getConstellationFromPrn(prn: string): string {
-    const prnNum = parseInt(prn)
-    if (isNaN(prnNum)) return 'UNKNOWN'
-    
-    if (prnNum >= 1 && prnNum <= 32) return 'GPS'
-    if (prnNum >= 65 && prnNum <= 96) return 'GLO'
-    if (prnNum >= 33 && prnNum <= 64) return 'SBS' // WAAS, EGNOS, etc.
-    if (prnNum >= 193 && prnNum <= 200) return 'QZS'
-    if (prnNum >= 201 && prnNum <= 235) return 'BDS'
-    if (prnNum >= 301 && prnNum <= 336) return 'GAL'
-    
-    return 'UNKNOWN'
-  }
-
     return {
       nmeaData,
       deviationPoints,

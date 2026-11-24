@@ -100,4 +100,12 @@ describe('camera panels', () => {
       Uint8Array.from([0xff, 0xd8, 4, 0xff, 0xd9]),
     ])
   })
+
+  it('drops an oversized incomplete frame before accepting the next JPEG', () => {
+    const parser = new JpegStreamParser(6)
+    parser.push(Buffer.from([0xff, 0xd8, 1, 2, 3, 4, 5, 0xff]))
+    expect(parser.push(Buffer.from([0xd8, 9, 0xff, 0xd9]))).toEqual([
+      Uint8Array.from([0xff, 0xd8, 9, 0xff, 0xd9]),
+    ])
+  })
 })

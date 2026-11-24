@@ -84,15 +84,17 @@ import type {
 const props = defineProps<{
   active: boolean
   slidingWindow: boolean
+  usedOnly?: boolean
 }>()
 
 const scopedDisplay = inject(gnssDisplayContext, null)
 const {
   satelliteEpochHistory,
   satelliteCountEpochHistory: satelliteCountHistory,
-  hasGsvData,
+  hasGsvData: hasReportedSatellites,
   satelliteCountSource,
 } = scopedDisplay?.signals ?? useNmea()
+const hasGsvData = computed(() => hasReportedSatellites.value && !props.usedOnly)
 const fileTimeline = scopedDisplay?.timeline ?? useFileTimeline()
 const { chartTheme, resolvedTheme } = useTheme()
 
@@ -177,12 +179,14 @@ const tooltipConstellationSeries = computed(() => {
   return constellationSeries.filter((series) => (sample.counts[series.id] ?? 0) > 0)
 })
 
+const totalSeriesColor = computed(() => resolvedTheme.value === 'dark' ? '#f6bd60' : '#ac5c18')
+
 const displaySeries = computed(() => [
   ...visibleConstellationSeries.value,
   {
     id: 'TOTAL',
     label: hasGsvData.value ? t('gnss.signal.total') : fallbackSeriesLabel.value,
-    color: chartTheme.value.text,
+    color: totalSeriesColor.value,
   },
 ])
 
@@ -294,7 +298,7 @@ function initRenderer(): void {
   for (const series of constellationSeries) {
     renderer.addSeries(series.id, hexToRgba(series.color))
   }
-  renderer.addSeries('TOTAL', hexToRgba(chartTheme.value.text))
+  renderer.addSeries('TOTAL', hexToRgba(totalSeriesColor.value))
   renderer.setLineWidth(4.4)
   applySeriesVisibility()
   resizeLayers()
@@ -358,7 +362,7 @@ function renderChart(): void {
     yMax = niceYMax(satelliteCountHistory.value.getRange('SATS_USED', start, end)?.max ?? 0)
   }
   renderer.setSeriesData('TOTAL', new Float32Array(total.points), new Uint32Array(total.segments))
-  renderer.setSeriesColor('TOTAL', hexToRgba(chartTheme.value.text))
+  renderer.setSeriesColor('TOTAL', hexToRgba(totalSeriesColor.value))
   // 手动 y 范围（滚轮/拖拽）优先；卫星数非负，下限钳到 0
   let yMin = 0
   let yMaxFinal = yMax

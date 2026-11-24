@@ -7,7 +7,33 @@ import * as path from 'node:path'
 
 const MAX_RTCM_BYTES = 2 * 1024 * 1024 * 1024
 
+async function readRange(filePath: string, offset: number, length: number): Promise<ArrayBuffer> {
+  const file = await fsPromises.open(filePath, 'r')
+  try {
+    const buffer = new Uint8Array(length)
+    const { bytesRead } = await file.read(buffer, 0, length, offset)
+    return buffer.buffer.slice(0, bytesRead)
+  } finally {
+    await file.close()
+  }
+}
+
 export function registerGnssRawIpc(): void {
+  ipcMain.handle('gnss-spp-file-info', async (_event, rawPath: unknown) => {
+    if (typeof rawPath !== 'string' || !rawPath.trim()) throw new Error('文件路径无效')
+    const filePath = path.resolve(rawPath)
+    const stat = await fsPromises.stat(filePath)
+    if (!stat.isFile()) throw new Error(`不是文件: ${filePath}`)
+    const tag = await readRange(`${filePath}.tag`, 0, 76).catch(() => undefined)
+    return { size: stat.size, lastModified: stat.mtimeMs, tag }
+  })
+  ipcMain.handle('gnss-spp-file-read', (_event, rawPath: unknown, offset: unknown, length: unknown) => {
+    if (typeof rawPath !== 'string' || !rawPath.trim() ||
+        typeof offset !== 'number' || !Number.isSafeInteger(offset) || offset < 0 ||
+        typeof length !== 'number' || !Number.isInteger(length) || length < 1 || length > 256 * 1024)
+      throw new Error('RTCM 文件读取范围无效')
+    return readRange(path.resolve(rawPath), offset, length)
+  })
   ipcMain.handle('data-format-read-head', async (_event, rawPath: unknown) => {
     if (typeof rawPath !== 'string' || !rawPath.trim()) throw new Error('文件路径无效')
     const file = await fsPromises.open(path.resolve(rawPath), 'r')

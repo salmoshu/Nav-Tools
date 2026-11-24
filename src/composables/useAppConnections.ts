@@ -296,11 +296,6 @@ export function useAppConnections(ctx: AppConnectionsContext): {
     await device.handleInputSubmit()
   }
 
-  async function connectFileSource(): Promise<void> {
-    device.activeTab.value = 'file'
-    await device.handleInputSubmit()
-  }
-
   function actionLabel(status: AppConnectionStatus): string {
     return status === 'connecting'
       ? t('app.toolbar.appConnConnecting')
@@ -385,7 +380,10 @@ export function useAppConnections(ctx: AppConnectionsContext): {
         endpoint,
         status: mainStatus,
         busy: mainStatus === 'connecting',
-        action: () => void toggleMainSource(source),
+        action:
+          source === 'file' && mainStatus !== 'connected'
+            ? undefined
+            : () => void toggleMainSource(source),
         actionLabel: actionLabel(mainStatus),
         configAction: () => ctx.gotoTab(source),
         configActionLabel: t('app.toolbar.appConnGotoConfig'),
@@ -490,7 +488,7 @@ export function useAppConnections(ctx: AppConnectionsContext): {
               mcap.reset()
               device.closeCurrDevice()
             }
-          : () => void connectFileSource(),
+          : undefined,
         actionLabel: actionLabel(status),
         configAction: () => ctx.gotoTab('file'),
         configActionLabel: t('app.toolbar.appConnGotoConfig'),
@@ -519,7 +517,7 @@ export function useAppConnections(ctx: AppConnectionsContext): {
               gnssRaw.reset()
               device.closeCurrDevice()
             }
-          : () => void connectFileSource(),
+          : undefined,
         actionLabel: actionLabel(status),
         configAction: () => ctx.gotoTab('file'),
         configActionLabel: t('app.toolbar.appConnGotoConfig'),

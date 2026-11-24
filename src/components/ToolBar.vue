@@ -235,6 +235,11 @@
                   t('app.toolbar.mcapPartFamilyHint')
                 }}</span>
               </div>
+              <label v-if="fileIsRtcmSpp" class="input-group compact-input-group">
+                <span class="input-label">{{ t('data.sppCaptureTime') }}</span>
+                <el-input v-model="rtcmSppCaptureTime" type="datetime-local"
+                  :title="t('data.sppCaptureTimeHint')" />
+              </label>
               <template v-if="true">
                 <template v-if="!fileIsMcap">
                   <div class="input-group compact-input-group">
@@ -264,14 +269,14 @@
                       />
                       <span class="input-unit">{{ t('app.toolbar.second') }}</span>
                     </div>
-                    <div class="input-group compact-input-group">
+                    <div v-if="!fileIsRtcmSpp" class="input-group compact-input-group">
                       <span class="input-label">{{ t('app.toolbar.posFormat') }}</span>
                       <el-select v-model="filePositionBytes" :teleported="false">
                         <el-option :label="t('app.toolbar.bytes', { v: 4 })" :value="4" />
                         <el-option :label="t('app.toolbar.bytes', { v: 8 })" :value="8" />
                       </el-select>
                     </div>
-                    <div class="input-group compact-input-group">
+                    <div v-if="!fileIsRtcmSpp" class="input-group compact-input-group">
                       <span class="input-label">{{ t('app.toolbar.sampleInterval') }}</span>
                       <el-input-number
                         v-model="fileSampleInterval"
@@ -928,6 +933,9 @@ const {
   selectFilePath,
   filePath,
   fileIsMcap,
+  fileIsRtcmSpp,
+  rtcmSppCaptureTime,
+  rtcmSppStatus,
   fileInputLoading,
   selectedFileCount,
   fileIsMcapPartSlice,
@@ -1011,6 +1019,11 @@ const formatDetectionLabel = computed(() =>
             : 'data.formatDetected',
         { format: FORMAT_LABELS[sourceDetectedFormat.value.format] },
       )
+      + (sourceDetectedFormat.value.format === 'rtcm3' && rtcmSppStatus.value
+        ? ` · ${t(rtcmSppStatus.value === 'fix' ? 'data.sppFix'
+          : rtcmSppStatus.value === 'waiting-ephemeris' ? 'data.sppWaitingEphemeris'
+          : 'data.sppNoFix')}`
+        : '')
     : t(sourceFormatAttempted.value ? 'data.formatUnknown' : 'data.formatPending'),
 )
 const formatDetectionTone = computed(() => {

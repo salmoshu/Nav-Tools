@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 
 const mapSource = readFileSync('src/components/windows/gnss/GnssMap.vue', 'utf8')
 const deviationSource = readFileSync('src/components/windows/gnss/GnssDeviation.vue', 'utf8')
+  .replace(/\r\n/g, '\n')
 
 describe('GNSS default tracking', () => {
   it('starts Map tracking enabled and does not disable it for file timelines', () => {

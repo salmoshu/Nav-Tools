@@ -18,7 +18,8 @@ interface CameraStreamSession {
   transport: RtspTransport
   errorOutput: string
   receivedFrame: boolean
-  stopping: boolean
+  pendingFrame?: Uint8Array
+  inFlightFrameId?: number
   watchdog?: ReturnType<typeof setTimeout>
 }
 
@@ -29,6 +30,7 @@ export interface CameraStreamStartResult {
 
 export class CameraStreamService {
   private readonly sessions = new Map<number, CameraStreamSession>()
+  private nextFrameId = 0
 
   // 与 VLC 一致:先尝试 UDP,失败或超时未收到视频帧再回退 TCP
   private static readonly transports: readonly RtspTransport[] = ['udp', 'tcp']
@@ -88,27 +90,27 @@ export class CameraStreamService {
       transport,
       errorOutput: '',
       receivedFrame: false,
-      stopping: false,
     }
     this.sessions.set(id, session)
     this.sendStatus(session, 'connecting', '正在连接相机…')
 
     // 看门狗:UDP 可能出现 SETUP 成功但 RTP 包被网络吞掉的情况,超时未收到帧则回退
     session.watchdog = setTimeout(() => {
-      if (this.sessions.get(id) !== session || session.receivedFrame) return
-      this.retryOrFail(id, session, transportIndex, '连接超时:未收到视频帧')
+      if (this.sessions.get(id) !== session) return
+      this.retryOrFail(id, session, transportIndex, '连接超时：未收到视频帧')
     }, CameraStreamService.frameWatchdogMs)
 
     process.stdout?.on('data', (chunk: Buffer) => {
       if (this.sessions.get(id) !== session || target.isDestroyed()) return
-      for (const frame of session.parser.push(chunk)) {
-        if (!session.receivedFrame) {
-          session.receivedFrame = true
-          if (session.watchdog) clearTimeout(session.watchdog)
-          this.sendStatus(session, 'playing', '直播中')
-        }
-        target.send('camera-stream-frame', frame)
+      const latest = session.parser.push(chunk).at(-1)
+      if (!latest) return
+      session.watchdog?.refresh()
+      if (!session.receivedFrame) {
+        session.receivedFrame = true
+        this.sendStatus(session, 'playing', '直播中')
       }
+      session.pendingFrame = latest
+      this.sendLatestFrame(session)
     })
 
     process.stderr?.on('data', (chunk: Buffer) => {
@@ -125,12 +127,6 @@ export class CameraStreamService {
     process.on('close', (code) => {
       if (this.sessions.get(id) !== session) return
       if (session.watchdog) clearTimeout(session.watchdog)
-      if (session.stopping) {
-        this.sessions.delete(id)
-        this.sendStatus(session, 'stopped', '已停止')
-        return
-      }
-
       const detail = cleanFfmpegError(session.errorOutput)
       this.retryOrFail(
         id,
@@ -148,16 +144,33 @@ export class CameraStreamService {
     message: string,
   ): void {
     this.sessions.delete(id)
+    clearTimeout(session.watchdog)
     if (!session.process.killed) session.process.kill()
 
     const nextIndex = transportIndex + 1
-    if (!session.receivedFrame && nextIndex < CameraStreamService.transports.length) {
+    if (!session.target.isDestroyed() && !session.receivedFrame && nextIndex < CameraStreamService.transports.length) {
       this.attempt(id, session.url, session.target, nextIndex)
       return
     }
 
     const transport = session.transport.toUpperCase()
     this.sendStatus(session, 'error', `${message}（已尝试 ${transport} 传输）`)
+  }
+
+  public acknowledgeFrame(id: number, frameId: unknown): void {
+    const session = this.sessions.get(id)
+    if (!session || typeof frameId !== 'number' || session.inFlightFrameId !== frameId) return
+    session.inFlightFrameId = undefined
+    this.sendLatestFrame(session)
+  }
+
+  private sendLatestFrame(session: CameraStreamSession): void {
+    if (session.inFlightFrameId !== undefined || !session.pendingFrame || session.target.isDestroyed()) return
+    const frameId = ++this.nextFrameId
+    const bytes = session.pendingFrame
+    session.pendingFrame = undefined
+    session.inFlightFrameId = frameId
+    session.target.send('camera-stream-frame', { frameId, bytes })
   }
 
   /** 当前运行中的 RTSP 会话列表(供数据接入连接总览展示) */
@@ -178,7 +191,8 @@ export class CameraStreamService {
     if (!session) return
 
     this.sessions.delete(id)
-    session.stopping = true
+    clearTimeout(session.watchdog)
+    session.pendingFrame = undefined
     session.parser.reset()
     if (!session.process.killed) {
       try {
