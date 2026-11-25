@@ -126,6 +126,7 @@
           :active="currentView === 'deviation' && layerMode === 'map'"
           :view-sync="mapViewState"
           :show-toolbar="false"
+          cache-visible-tiles
           @view-change="handleMapViewChange"
         />
       </div>
@@ -373,7 +374,6 @@
         :active="currentView === 'satnum'"
         :tracking="isTracking"
         :point-size="pointSize"
-        :source-override="satelliteCountEpochHistory"
         @cursor-position="handleMetricCursor"
       />
     </div>

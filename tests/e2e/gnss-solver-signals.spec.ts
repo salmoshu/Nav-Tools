@@ -70,7 +70,7 @@ test('shows the GGA satellite counts from the solver and follows its timeline', 
   await expect(signals.locator('.signal-bar-empty')).toBeVisible()
   await expect(signals.locator('.solver-signal-hint')).toContainText('Per-satellite signal details')
   await signals.locator('.view-select').click()
-  await page.getByRole('option', { name: 'Satellite Count', exact: true }).click()
+  await page.getByRole('option', { name: 'Sat Num', exact: true }).click()
   await signals.getByRole('button', { name: 'Clear', exact: true }).click()
   await expect(signals.locator('.legend-current')).toHaveCount(0)
   const globalSatellites = await page.evaluate(async () => {

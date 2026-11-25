@@ -1,22 +1,40 @@
 import type { SatelliteDetailSample } from './SatelliteDetailEpochStore'
+import { SKY_CONSTELLATION_COLORS } from './ConstellationColors'
 
 export type SignalBarSample = SatelliteDetailSample
 
-/** 星座配色与 GnssSky 星空图保持一致；柱状图在此基础上叠加渐变质感。 */
+/** Satellite prefixes and muted colors for the satellite-count curves. */
 export const SIGNAL_CONSTELLATIONS: Record<string, { prefix: string; color: string }> = {
-  GPS: { prefix: 'G', color: '#BADC7E' },
-  GLONASS: { prefix: 'R', color: '#9DA007' },
-  GALILEO: { prefix: 'E', color: '#82C3E5' },
-  BEIDOU: { prefix: 'C', color: '#FF8A80' },
-  QZSS: { prefix: 'J', color: '#AF52DE' },
-  OTHER: { prefix: 'U', color: '#757575' },
+  GPS: { prefix: 'G', color: '#4C7467' },
+  GLONASS: { prefix: 'R', color: '#77694F' },
+  GALILEO: { prefix: 'E', color: '#53708B' },
+  BEIDOU: { prefix: 'C', color: '#8A606A' },
+  QZSS: { prefix: 'J', color: '#706486' },
+  SBAS: { prefix: 'S', color: '#697284' },
+  NAVIC: { prefix: 'I', color: '#496E75' },
+  OTHER: { prefix: 'U', color: '#66717C' },
 }
+
+// A light charcoal tint keeps the column colors close to the Sky Plot palette.
+const skyColorWeight = 0.84
+const charcoalChannel = 54
+const barColors = Object.fromEntries(
+  Object.entries(SKY_CONSTELLATION_COLORS).map(([constellation, color]) => {
+    const channels = [1, 3, 5].map((offset) => {
+      const channel = Number.parseInt(color.slice(offset, offset + 2), 16)
+      return Math.round(channel * skyColorWeight + charcoalChannel * (1 - skyColorWeight))
+    })
+    const fill = `#${channels.map((channel) => channel.toString(16).padStart(2, '0')).join('')}`
+    return [constellation, fill]
+  }),
+)
 
 export interface SignalBar {
   label: string
   value: number
   peak: number
   color: string
+  labelColor: string
   sample: SignalBarSample
 }
 
@@ -49,12 +67,13 @@ export function buildSignalBarLayout(
   let maximum = 0
   for (const sample of sorted) {
     const style = SIGNAL_CONSTELLATIONS[sample.constellation] ?? SIGNAL_CONSTELLATIONS.OTHER
+    const color = barColors[sample.constellation] ?? barColors.UNKNOWN
     let group = groups.at(-1)
     if (!group || group.constellation !== sample.constellation) {
       if (slots.length) slots.push(null)
       group = {
         constellation: sample.constellation,
-        color: style.color,
+        color,
         first: slots.length,
         last: slots.length,
         count: 0,
@@ -69,7 +88,8 @@ export function buildSignalBarLayout(
       label: `${style.prefix}${String(sample.prn).padStart(2, '0')}`,
       value,
       peak,
-      color: style.color,
+      color,
+      labelColor: '#ffffff',
       sample,
     })
     group.last = slots.length - 1

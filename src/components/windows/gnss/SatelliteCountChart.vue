@@ -24,7 +24,7 @@
         }"
         role="button"
         tabindex="0"
-        :aria-pressed="hiddenSeries.has(series.id)"
+        :aria-pressed="!hiddenSeries.has(series.id)"
         :title="t('gnss.signal.legendToggle')"
         @click="toggleSeries(series.id)"
         @keydown.enter.prevent="toggleSeries(series.id)"
@@ -63,6 +63,7 @@ import { gnssDisplayContext } from '@/composables/gnss/GnssDisplayContext'
 import { useFileTimeline } from '@/composables/useFileTimeline'
 import { useTheme } from '@/composables/useTheme'
 import { t } from '@/i18n'
+import { SIGNAL_CONSTELLATIONS } from '@/core/gnss/SignalBarLayout'
 import {
   createInitialSatelliteCountViewport,
   fitSatelliteCountViewport,
@@ -148,17 +149,9 @@ const OVERVIEW_RENDER_INTERVAL_MS = 1_000
  * 边缘半个窗宽，左右端点因此能继续拖到画面中部，不会在数据边缘卡死。 */
 const X_EDGE_OVERSCAN_RATIO = 0.5
 
-// 星座颜色与星空图（GnssSky.constellationColors）保持一致，
-// 同一星座在两个视图中的曲线/散点颜色统一；OTHER 收容 SBS/IRN 等其余系统，
-// 取星空图 UNKNOWN 灰。
-const constellationSeries = [
-  { id: 'GPS', label: 'GPS', color: '#BADC7E' },
-  { id: 'GLONASS', label: 'GLONASS', color: '#9DA007' },
-  { id: 'BEIDOU', label: 'BEIDOU', color: '#FF8A80' },
-  { id: 'GALILEO', label: 'GALILEO', color: '#82C3E5' },
-  { id: 'QZSS', label: 'QZSS', color: '#AF52DE' },
-  { id: 'OTHER', label: 'OTHER', color: '#757575' },
-] as const
+const constellationSeries = (['GPS', 'GLONASS', 'BEIDOU', 'GALILEO', 'QZSS', 'OTHER'] as const).map((id) => ({
+  id, label: id, color: SIGNAL_CONSTELLATIONS[id].color,
+}))
 
 const fallbackSeriesLabel = computed(
   () =>
@@ -179,15 +172,15 @@ const tooltipConstellationSeries = computed(() => {
   return constellationSeries.filter((series) => (sample.counts[series.id] ?? 0) > 0)
 })
 
-const totalSeriesColor = computed(() => resolvedTheme.value === 'dark' ? '#f6bd60' : '#ac5c18')
+const totalSeriesColor = computed(() => resolvedTheme.value === 'dark' ? '#8DAEDB' : '#42699E')
 
 const displaySeries = computed(() => [
-  ...visibleConstellationSeries.value,
   {
     id: 'TOTAL',
     label: hasGsvData.value ? t('gnss.signal.total') : fallbackSeriesLabel.value,
     color: totalSeriesColor.value,
   },
+  ...visibleConstellationSeries.value,
 ])
 
 /** 图例点击隐藏的系列；渲染器 setSeriesVisible 按系列显隐，TOTAL 同样可切 */
@@ -237,7 +230,7 @@ const viewport = ref<SatelliteCountViewport>(
     : fitSatelliteCountViewport(currentHistory().length),
 )
 
-function hexToRgba(color: string): SatelliteSeriesColor {
+function hexToRgba(color: string, alpha = 1): SatelliteSeriesColor {
   const value = color.replace('#', '')
   const normalized =
     value.length === 3
@@ -250,7 +243,7 @@ function hexToRgba(color: string): SatelliteSeriesColor {
     parseInt(normalized.slice(0, 2), 16) / 255,
     parseInt(normalized.slice(2, 4), 16) / 255,
     parseInt(normalized.slice(4, 6), 16) / 255,
-    1,
+    alpha,
   ]
 }
 
@@ -299,7 +292,7 @@ function initRenderer(): void {
     renderer.addSeries(series.id, hexToRgba(series.color))
   }
   renderer.addSeries('TOTAL', hexToRgba(totalSeriesColor.value))
-  renderer.setLineWidth(4.4)
+  renderer.setLineWidth(1.85)
   applySeriesVisibility()
   resizeLayers()
 }
@@ -350,7 +343,7 @@ function renderChart(): void {
         new Float32Array(extracted.points),
         new Uint32Array(extracted.segments),
       )
-      renderer.setSeriesColor(series.id, hexToRgba(series.color))
+      renderer.setSeriesColor(series.id, hexToRgba(series.color, resolvedTheme.value === 'dark' ? 0.83 : 0.62))
     }
     total = gsvStore.extractSeries('TOTAL', start, end, maxPoints)
     yMax = niceYMax(gsvStore.getRangeMax('TOTAL', start, end))

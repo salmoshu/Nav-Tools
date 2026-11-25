@@ -11,6 +11,30 @@ function gga(epoch: number): string {
   return `$${body}*${checksum}\r\n`
 }
 
+test('Deviation requests persistently cached viewport tiles before there is a GNSS fix', async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(window, 'ipcRenderer', {
+      value: { on() {}, off() {}, send() {}, invoke: () => Promise.resolve(undefined) },
+    })
+    localStorage.setItem('nav-tools:locale', 'en-US')
+  })
+  const payload = encodeURIComponent(
+    JSON.stringify({
+      componentName: 'GnssDeviation',
+      windowId: 'gnss-deviation',
+      title: 'Deviation',
+    }),
+  )
+  await page.goto(`/#card/${payload}`)
+  await page.getByRole('button', { name: 'Map', exact: true }).click()
+  await expect(page.locator('img.leaflet-tile').first()).toHaveAttribute(
+    'src',
+    /^nav-tiles:\/\/tiles\/\d+\/\d+\/\d+\.png\?cache=viewport$/,
+  )
+})
+
 test('synchronizes cache corridors during a continuous 10 Hz GNSS stream and clears pending updates', async ({
   page,
 }) => {

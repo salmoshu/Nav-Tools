@@ -12,9 +12,11 @@ Nav-Tools 的 GNSS-Lib 使用 `rnx2rtkp` 进行后处理，使用 `rtkrcv` 进�
 
 ## GNSS 的 RTCM3 单点定位
 
-普通 GNSS 的 RTCM3 数据源固定使用 Open-GNSS 伪距单点定位。实时流需要接收机观测和有效广播星历。录制文件先扫描星历，再计算轨迹，可随文件加入 RINEX NAV 补充广播星历。录制时间可通过同名 `.tag` 或 RTCM 1013 获取。也可在文件数据源中手动填入录制起始时间。没有时间标记时使用文件修改时间。
+普通 GNSS 的 RTCM3 流和文件固定使用 Open-GNSS EKF 单点定位。首个有效历元使用最小二乘初始化，后续历元使用 EKF。遇到时标倒退、间隔达到 60 秒或滤波失败时尝试重新用最小二乘求解。每次接入数据源建立独立的滤波状态。
 
-WASM 按历元生成 GGA、RMC、GSV 和 GSA，消息窗口显示生成的 NMEA。Signals 和 Sky Plot 的卫星范围可切换为全部卫星或参与解算。普通 NMEA 数据也可通过 GSV 和 GSA 使用该功能。
+实时流需要接收机观测和有效广播星历。录制文件先扫描星历，再计算轨迹，可随文件加入 RINEX NAV 补充广播星历。录制时间可通过同名 `.tag` 或 RTCM 1013 获取。也可在文件数据源中手动填入录制起始时间。没有时间标记时使用文件修改时间。
+
+WASM 按历元生成 GGA、RMC、分信号 GSV 和 GSA，消息窗口显示生成的 NMEA。Signals 从同一历元读取 RTCM3 的观测码、载波频率和原始精度 C/N₀，表格、逐星曲线和回放都保留多频数据。普通 NMEA 输入也会保留有效 GSV Signal ID 对应的观测。Signals 和 Sky Plot 的 `All` / `Used` 按卫星筛选，Sat Num 按星座和 PRN 去重。
 
 ## 同步 WASM
 

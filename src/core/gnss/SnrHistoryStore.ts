@@ -1,3 +1,5 @@
+import type { SatelliteSignalSample } from './SatelliteDetailEpochStore'
+
 /**
  * Framework-independent rolling history of per-satellite SNR samples.
  *
@@ -12,6 +14,7 @@ export interface SnrHistorySample {
   prn: string | number
   constellation: string
   snr: number
+  signals?: readonly SatelliteSignalSample[]
 }
 
 export interface SnrHistoryPoint {
@@ -29,6 +32,10 @@ export function snrHistoryKey(constellation: string, prn: string | number): stri
   return `${constellation}-${prn}`
 }
 
+export function signalHistoryKey(satelliteKey: string, signalId: string): string {
+  return `${satelliteKey}/${signalId}`
+}
+
 /** Compact/colon/datetime epoch time -> `HH:MM:SS` axis label. */
 export function formatSnrEpochLabel(time: string): string {
   const source = String(time).trim()
@@ -43,6 +50,7 @@ export class SnrHistoryStore {
   private readonly capacity: number
   private epochTimes: string[] = []
   private readonly seriesByKey = new Map<string, (number | null)[]>()
+  private readonly signalTracks = new Map<string, SatelliteSignalSample>()
 
   constructor(capacity = SNR_HISTORY_DEFAULT_CAPACITY) {
     this.capacity = Math.max(1, Math.trunc(capacity))
@@ -55,7 +63,7 @@ export class SnrHistoryStore {
 
   /** Satellite keys with retained samples, sorted by constellation then PRN. */
   public get keys(): string[] {
-    return [...this.seriesByKey.keys()].sort((a, b) => {
+    return [...this.seriesByKey.keys()].filter((key) => !this.signalTracks.has(key)).sort((a, b) => {
       const [constellationA, prnA] = a.split('-')
       const [constellationB, prnB] = b.split('-')
       if (constellationA !== constellationB) return constellationA.localeCompare(constellationB)
@@ -78,6 +86,11 @@ export class SnrHistoryStore {
     return this.epochTimes.map((time, index) => ({ time, snr: series[index] }))
   }
 
+  public getSignalTracks(satelliteKey: string): SatelliteSignalSample[] {
+    const prefix = `${satelliteKey}/`
+    return [...this.signalTracks].flatMap(([key, signal]) => key.startsWith(prefix) ? [signal] : [])
+  }
+
   /**
    * Commit one epoch of satellite samples. Re-committing the same logical time
    * replaces the previous snapshot of that epoch (mirrors the epoch stores fed
@@ -96,12 +109,12 @@ export class SnrHistoryStore {
     const index = this.epochTimes.length - 1
     for (const sample of samples) {
       const key = snrHistoryKey(sample.constellation, sample.prn)
-      let series = this.seriesByKey.get(key)
-      if (!series) {
-        series = new Array<number | null>(this.epochTimes.length).fill(null)
-        this.seriesByKey.set(key, series)
+      this.writeSample(key, index, Number(sample.snr) || 0)
+      for (const signal of sample.signals ?? []) {
+        const signalKey = signalHistoryKey(key, signal.id)
+        this.signalTracks.set(signalKey, signal)
+        this.writeSample(signalKey, index, signal.snr > 0 ? signal.snr : null)
       }
-      series[index] = Number(sample.snr) || 0
     }
     if (this.epochTimes.length > this.capacity) this.trim()
   }
@@ -109,6 +122,16 @@ export class SnrHistoryStore {
   public clear(): void {
     this.epochTimes = []
     this.seriesByKey.clear()
+    this.signalTracks.clear()
+  }
+
+  private writeSample(key: string, index: number, value: number | null): void {
+    let series = this.seriesByKey.get(key)
+    if (!series) {
+      series = new Array<number | null>(this.epochTimes.length).fill(null)
+      this.seriesByKey.set(key, series)
+    }
+    series[index] = value
   }
 
   private trim(): void {
@@ -117,7 +140,10 @@ export class SnrHistoryStore {
     for (const [key, series] of this.seriesByKey) {
       series.splice(0, overflow)
       // Drop satellites that no longer have any sample inside the window.
-      if (!series.some((value) => value !== null)) this.seriesByKey.delete(key)
+      if (!series.some((value) => value !== null)) {
+        this.seriesByKey.delete(key)
+        this.signalTracks.delete(key)
+      }
     }
   }
 }

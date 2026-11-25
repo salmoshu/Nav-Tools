@@ -22,6 +22,11 @@ export const AUTO_TILE_CACHE_LOW_WATER_BYTES = Math.floor(AUTO_TILE_CACHE_MAX_BY
 
 const META_SUFFIX = '.meta.json'
 const USER_AGENT_SUFFIX = '(https://www.openstreetmap.org/copyright)'
+const CACHE_TOUCH_INTERVAL_MS = 60_000
+
+interface TileRequestPolicy {
+  cacheVisible: boolean
+}
 
 interface AutoTileMetadata {
   version: 1
@@ -77,7 +82,10 @@ export class OfflineTileService {
   private readonly cachedTiles = new Map<string, CachedTile>()
   private totalCacheBytes = 0
   private cleanupPromise: Promise<void> | null = null
-  private readonly inFlight = new Map<string, Promise<Response>>()
+  private readonly inFlight = new Map<
+    string,
+    { policy: TileRequestPolicy; response: Promise<Response> }
+  >()
 
   public registerPrivilegedScheme(): void {
     protocol.registerSchemesAsPrivileged([
@@ -110,8 +118,30 @@ export class OfflineTileService {
   }
 
   private async handleRequest(request: Request): Promise<Response> {
-    const tile = this.parseTileRequest(request.url)
-    if (!tile) return new Response('Bad Request', { status: 400 })
+    const parsed = this.parseTileRequest(request.url)
+    if (!parsed) return new Response('Bad Request', { status: 400 })
+    const { tile, cacheVisible } = parsed
+    const key = tileKey(tile)
+    const inFlight = this.inFlight.get(key)
+    if (inFlight) {
+      inFlight.policy.cacheVisible ||= cacheVisible
+      return (await inFlight.response).clone()
+    }
+    const policy = { cacheVisible }
+    const response = this.loadTile(tile, key, policy)
+    this.inFlight.set(key, { policy, response })
+    try {
+      return (await response).clone()
+    } finally {
+      this.inFlight.delete(key)
+    }
+  }
+
+  private async loadTile(
+    tile: TileCoordinate,
+    key: string,
+    policy: TileRequestPolicy,
+  ): Promise<Response> {
     const manualPath = path.join(
       this.getTilesDir(),
       String(tile.z),
@@ -125,31 +155,25 @@ export class OfflineTileService {
       // Hand-maintained offline tiles are independent from automatic cache files.
     }
 
-    await this.ensureLoaded()
-    const key = tileKey(tile)
-    const cached = await this.readCachedTile(this.cachedTiles.get(key))
+    // Read the requested tile before scanning the cache. A warm viewport need
+    // not wait for unrelated tiles to be indexed after a desktop restart.
+    const cached = await this.readCachedTile(tile, key)
     if (cached && this.isFresh(cached.metadata)) {
-      cached.metadata.lastUsedAt = Date.now()
-      void this.persistMetadata(cached)
-      return this.readCachedResponse(cached)
+      const now = Date.now()
+      const response = await this.readCachedResponse(cached)
+      if (response.ok && now - cached.metadata.lastUsedAt >= CACHE_TOUCH_INTERVAL_MS) {
+        cached.metadata.lastUsedAt = now
+        await this.persistMetadata(cached)
+      }
+      if (response.ok) return response
+      return this.fetchOnlineTile(tile, undefined, policy)
     }
-
-    const inFlight = this.inFlight.get(key)
-    if (inFlight) return (await inFlight).clone()
-    const requestPromise = this.fetchOnlineTile(
-      tile,
-      cached,
-      tileIntersectsTrackCorridor(tile, this.trackPoints, this.trackCorridorRadiusMetres),
-    )
-    this.inFlight.set(key, requestPromise)
-    try {
-      return (await requestPromise).clone()
-    } finally {
-      this.inFlight.delete(key)
-    }
+    return this.fetchOnlineTile(tile, cached, policy)
   }
 
-  private parseTileRequest(requestUrl: string): TileCoordinate | undefined {
+  private parseTileRequest(
+    requestUrl: string,
+  ): { tile: TileCoordinate; cacheVisible: boolean } | undefined {
     let url: URL
     try {
       url = new URL(requestUrl)
@@ -160,7 +184,9 @@ export class OfflineTileService {
     const match = /^\/(\d+)\/(\d+)\/(\d+)\.png$/.exec(url.pathname)
     if (!match) return undefined
     const tile = { z: Number(match[1]), x: Number(match[2]), y: Number(match[3]) }
-    return tileBounds(tile) ? tile : undefined
+    return tileBounds(tile)
+      ? { tile, cacheVisible: url.searchParams.get('cache') === 'viewport' }
+      : undefined
   }
 
   private getAppVersion(): string {
@@ -174,13 +200,12 @@ export class OfflineTileService {
   private async fetchOnlineTile(
     tile: TileCoordinate,
     existing: CachedTile | undefined,
-    allowCache: boolean,
+    policy: TileRequestPolicy,
   ): Promise<Response> {
     const headers: Record<string, string> = {
       'User-Agent': `Nav-Tools/${this.getAppVersion()} ${USER_AGENT_SUFFIX}`,
-      Referer: 'https://www.openstreetmap.org/',
     }
-    if (allowCache && existing) {
+    if (existing) {
       if (existing.metadata.etag) headers['If-None-Match'] = existing.metadata.etag
       if (existing.metadata.lastModified)
         headers['If-Modified-Since'] = existing.metadata.lastModified
@@ -211,7 +236,9 @@ export class OfflineTileService {
     try {
       bytes = new Uint8Array(await response.arrayBuffer())
     } catch {
-      return existing ? this.readCachedResponse(existing) : response
+      return existing
+        ? this.readCachedResponse(existing)
+        : new Response('', { status: 502, statusText: 'Tile Download Failed' })
     }
     if (!isImageResponse(response, bytes)) {
       return existing
@@ -225,6 +252,10 @@ export class OfflineTileService {
     }
 
     const freshness = tileCacheFreshness(response.headers, Date.now())
+    const allowCache =
+      existing !== undefined ||
+      policy.cacheVisible ||
+      tileIntersectsTrackCorridor(tile, this.trackPoints, this.trackCorridorRadiusMetres)
     if (allowCache && !freshness.noStore)
       await this.storeCachedTile(tile, bytes, response, freshness.expiresAt)
     return responseFromBytes(
@@ -268,50 +299,63 @@ export class OfflineTileService {
       if (!match) continue
       const tile = { z: Number(match[1]), x: Number(match[2]), y: Number(match[3]) }
       if (!tileBounds(tile)) continue
-      let stat
-      try {
-        stat = await fs.stat(entryPath)
-      } catch {
-        continue
-      }
-      const key = tileKey(tile)
-      const metadataPath = `${entryPath}${META_SUFFIX}`
-      let metadata: AutoTileMetadata
-      try {
-        metadata = JSON.parse(await fs.readFile(metadataPath, 'utf8')) as AutoTileMetadata
-      } catch {
-        metadata = {
-          version: 1,
-          key,
-          size: stat.size,
-          lastUsedAt: stat.mtimeMs,
-          expiresAt: 0,
-          contentType: 'image/png',
-        }
-      }
-      metadata.key = key
-      metadata.size = stat.size
-      if (!Number.isFinite(metadata.lastUsedAt) || metadata.lastUsedAt < 0)
-        metadata.lastUsedAt = stat.mtimeMs
-      if (!Number.isFinite(metadata.expiresAt)) metadata.expiresAt = 0
-      const cached: CachedTile = { tile, key, filePath: entryPath, metadataPath, metadata }
-      this.cachedTiles.set(key, cached)
-      this.totalCacheBytes += stat.size
+      const cached = await this.loadCachedTile(tile, entryPath)
+      if (!cached || this.cachedTiles.has(cached.key)) continue
+      this.cachedTiles.set(cached.key, cached)
+      this.totalCacheBytes += cached.metadata.size
     }
+  }
+
+  private autoCachePath(tile: TileCoordinate): string {
+    return path.join(this.getAutoCacheDir(), String(tile.z), String(tile.x), `${tile.y}.png`)
+  }
+
+  private async loadCachedTile(
+    tile: TileCoordinate,
+    filePath = this.autoCachePath(tile),
+  ): Promise<CachedTile | undefined> {
+    const stat = await fs.stat(filePath).catch(() => undefined)
+    if (!stat?.isFile()) return undefined
+    const key = tileKey(tile)
+    const metadataPath = `${filePath}${META_SUFFIX}`
+    let saved: Partial<AutoTileMetadata> | null = null
+    try {
+      saved = JSON.parse(await fs.readFile(metadataPath, 'utf8'))
+    } catch {
+      // Treat a tile without readable metadata as stale.
+    }
+    const metadata: AutoTileMetadata = {
+      version: 1,
+      key,
+      size: stat.size,
+      lastUsedAt:
+        typeof saved?.lastUsedAt === 'number' && Number.isFinite(saved.lastUsedAt)
+          ? saved.lastUsedAt
+          : stat.mtimeMs,
+      expiresAt:
+        typeof saved?.expiresAt === 'number' && Number.isFinite(saved.expiresAt)
+          ? saved.expiresAt
+          : 0,
+      contentType: typeof saved?.contentType === 'string' ? saved.contentType : 'image/png',
+      etag: typeof saved?.etag === 'string' ? saved.etag : undefined,
+      lastModified: typeof saved?.lastModified === 'string' ? saved.lastModified : undefined,
+    }
+    const indexed = this.cachedTiles.get(key)
+    return indexed ?? { tile, key, filePath, metadataPath, metadata }
   }
 
   private isFresh(metadata: AutoTileMetadata): boolean {
     return metadata.expiresAt > Date.now()
   }
 
-  private async readCachedTile(cached: CachedTile | undefined): Promise<CachedTile | undefined> {
-    if (!cached) return undefined
+  private async readCachedTile(tile: TileCoordinate, key: string): Promise<CachedTile | undefined> {
+    const cached = this.cachedTiles.get(key)
+    if (!cached) return this.loadCachedTile(tile)
     try {
       await fs.access(cached.filePath)
       return cached
     } catch {
-      this.cachedTiles.delete(cached.key)
-      this.totalCacheBytes = Math.max(0, this.totalCacheBytes - cached.metadata.size)
+      this.forgetCachedTile(cached)
       return undefined
     }
   }
@@ -323,10 +367,15 @@ export class OfflineTileService {
         headers: { 'Content-Type': cached.metadata.contentType || 'image/png' },
       })
     } catch {
-      this.cachedTiles.delete(cached.key)
-      this.totalCacheBytes = Math.max(0, this.totalCacheBytes - cached.metadata.size)
+      this.forgetCachedTile(cached)
       return new Response('', { status: 503, statusText: 'Cached Tile Unavailable' })
     }
+  }
+
+  private forgetCachedTile(cached: CachedTile): void {
+    if (this.cachedTiles.get(cached.key) !== cached) return
+    this.cachedTiles.delete(cached.key)
+    this.totalCacheBytes = Math.max(0, this.totalCacheBytes - cached.metadata.size)
   }
 
   private async storeCachedTile(
@@ -335,12 +384,8 @@ export class OfflineTileService {
     response: Response,
     expiresAt: number,
   ): Promise<void> {
-    const filePath = path.join(
-      this.getAutoCacheDir(),
-      String(tile.z),
-      String(tile.x),
-      `${tile.y}.png`,
-    )
+    await this.ensureLoaded()
+    const filePath = this.autoCachePath(tile)
     const metadataPath = `${filePath}${META_SUFFIX}`
     const key = tileKey(tile)
     const previous = this.cachedTiles.get(key)

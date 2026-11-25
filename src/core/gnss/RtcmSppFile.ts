@@ -1,4 +1,4 @@
-import { RtcmSppSession, type SppBatch } from './RtcmSppSession'
+import { RtcmSppSession, type SppBatch, type SppObservations } from './RtcmSppSession'
 
 interface BinarySource {
   size: number
@@ -44,7 +44,7 @@ async function binarySource(file: File | string): Promise<BinarySource> {
 
 export async function solveRtcmSppFile(
   input: SppFileInput,
-  onNmea: (text: string) => void,
+  onNmea: (text: string, observations: SppObservations) => void,
   onProgress: (percent: number) => void,
 ): Promise<Pick<SppBatch, 'epochs' | 'fixes'> & { sizeBytes: number }> {
   const source = await binarySource(input.data)
@@ -75,7 +75,7 @@ export async function solveRtcmSppFile(
   function append(batch: SppBatch): void {
     epochs += batch.epochs
     fixes += batch.fixes
-    if (batch.nmea) onNmea(batch.nmea)
+    if (batch.nmea) onNmea(batch.nmea, batch.observations)
   }
 
   try {

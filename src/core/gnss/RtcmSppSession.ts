@@ -1,10 +1,16 @@
+import type { SppSatellite } from 'open-gnss-wasm'
+
 export type SppCommand =
   | { type: 'start'; captureTimeS?: number; scan?: boolean }
   | { type: 'push' | 'navigation'; bytes: ArrayBuffer }
   | { type: 'replay' | 'finish' }
 
+/** Observation arrays in the same order as the complete NMEA epochs in a batch. */
+export type SppObservations = readonly (readonly SppSatellite[])[]
+
 export interface SppBatch {
   nmea: string
+  observations: SppSatellite[][]
   epochs: number
   fixes: number
   captureTimeS: number

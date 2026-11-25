@@ -40,7 +40,7 @@ import { createRecordRegex } from '@/core/data/TextRecordParser'
 import { detectGnssTextParser } from '@/core/data/GnssTextFormat'
 import { isRnxFileName, rtcmBasename } from '@/core/gnssraw/RtcmFileAccess'
 import { solveRtcmSppFile } from '@/core/gnss/RtcmSppFile'
-import { RtcmSppSession, type SppBatch } from '@/core/gnss/RtcmSppSession'
+import { RtcmSppSession, type SppBatch, type SppObservations } from '@/core/gnss/RtcmSppSession'
 import { detectDataFormat, DETECTABLE_FORMATS, FORMAT_LABELS, isTextFormat, type DataFormat, type DetectableFormat, type FormatDetection } from '@/core/data/DataFormat'
 import { useAutoFormatSettings } from '@/composables/useAutoFormatSettings'
 import { FilePlaybackService } from '@/core/file/FilePlaybackService'
@@ -137,7 +137,8 @@ const gnssLiveHistory = createGnssLiveHistory({
 })
 const logRecordingService = new LogRecordingService(ipc)
 const dataRouter = new IncomingDataRouter({
-  appendGnss: appendGnssDataByParser,
+  appendGnss: (data, observations) =>
+    appendGnssDataByParser(data, observations ? 'nmea' : activeDataParser.value, observations),
   appendRaw: addFlowConsole,
   appendPlot: (data) =>
     addFlowData(
@@ -295,9 +296,13 @@ function isGnssSolutionParser(parser: TextDataParser): boolean {
   return parser === 'nmea' || parser === 'rtklib-pos'
 }
 
-function appendGnssDataByParser(data: string, parser = activeDataParser.value): void {
+function appendGnssDataByParser(
+  data: string,
+  parser = activeDataParser.value,
+  observations?: SppObservations,
+): void {
   if (parser === 'rtklib-pos') addRtkLibPosData(data)
-  else addGnssData(data)
+  else addGnssData(data, observations)
 }
 
 function liveGnssContext(): { key: string; parser: 'nmea' | 'rtklib-pos' } | undefined {
@@ -353,10 +358,10 @@ function consumeSppBatch(session: RtcmSppSession, batch: SppBatch): void {
   if (sppStream !== session) return
   if (batch.status) rtcmSppStatus.value = batch.status
   if (!batch.nmea) return
-  if (globalDevice.value.connected === true) routeIncomingData(batch.nmea)
+  if (globalDevice.value.connected === true) routeIncomingData(batch.nmea, batch.nmea, batch.observations)
   else {
     gnssLiveHistory.append(batch.nmea)
-    addGnssData(batch.nmea)
+    addGnssData(batch.nmea, batch.observations)
     addFlowConsole(batch.nmea)
   }
 }
@@ -688,7 +693,7 @@ function openNetworkDevice(): void {
     })
 }
 
-function routeIncomingData(data: string, decodedData = data): void {
+function routeIncomingData(data: string, decodedData = data, observations?: SppObservations): void {
   if (globalDevice.value.connected !== true) return
   if (globalDevice.value.type === 'serial' || globalDevice.value.type === 'network') {
     const context = liveGnssContext()
@@ -707,23 +712,25 @@ function routeIncomingData(data: string, decodedData = data): void {
     displayFormat: flowDisplayFormat.value === 'hex' ? 'hex' : 'ascii',
     dataParser: activeDataParser.value,
     gnssData: decodedData,
+    observations,
   })
   // 只有持有已配置设备的渲染进程（即主窗口）才把原始数据广播给独立窗口
   if (globalDevice.value.connected !== null) {
-    ipc.send('broadcast-incoming-data', data)
+    ipc.send('broadcast-incoming-data', data, observations)
   }
 }
 
 /**
  * 将数据路由到指定独立窗口（用于 detached card window）
  */
-export function routeDataToWindow(data: string, windowId: string): void {
+export function routeDataToWindow(data: string, windowId: string, observations?: SppObservations): void {
   const windowDefinition = getWindowsByIds([windowId])[0]
   dataRouter.route(data, {
     activeDataModes: [windowDefinition?.funcMode ?? 'general'],
     activeWindowIds: [windowId],
     displayFormat: 'ascii',
     dataParser: activeDataParser.value,
+    observations,
   })
 }
 
@@ -911,7 +918,7 @@ function yieldFileImport(): Promise<void> {
 }
 
 type GnssTimelineReader = (
-  onChunk: (chunk: string) => void,
+  onChunk: (chunk: string, observations?: SppObservations) => void,
   onProgress: (progress: number) => void,
 ) => Promise<void>
 
@@ -933,7 +940,7 @@ async function loadGnssTimelineSource(
     if (streamPlot) addFlowData(text)
     addFileReplayData(text)
   }
-  const appendChunk = (chunk: string) => {
+  const appendChunk = (chunk: string, observations?: SppObservations) => {
     if (!chunk) return
     if (autoDetectParser && !parserOverride) {
       pendingDetectionText += chunk
@@ -948,7 +955,7 @@ async function loadGnssTimelineSource(
       appendGnssDataByParser(pendingDetectionText, parserOverride)
       pendingDetectionText = ''
     } else {
-      appendGnssDataByParser(chunk, parserOverride)
+      appendGnssDataByParser(chunk, parserOverride, observations)
     }
     routeAuxiliaryText(chunk)
   }

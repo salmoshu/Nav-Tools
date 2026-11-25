@@ -144,7 +144,7 @@ export function tileCacheFreshness(
     directives.set(name, valueParts.join('=').replace(/^"|"$/g, '') || true)
   }
   if (directives.has('no-store')) return { noStore: true, expiresAt: now }
-  if (directives.has('no-cache') || directives.has('must-revalidate')) {
+  if (directives.has('no-cache')) {
     return { noStore: false, expiresAt: now }
   }
   const maxAge = directives.get('s-maxage') ?? directives.get('max-age')

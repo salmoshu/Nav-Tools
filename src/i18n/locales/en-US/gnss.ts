@@ -6,20 +6,23 @@ export default {
     solverSatelliteDetails:
       'The solver workspace displays satellites used from GGA or POS. Per-satellite signal details are not yet connected.',
     recentPeak: 'Recent peak',
-    recentPeakHint: 'Maximum C/N₀ in the retained per-satellite history',
-    satCount: 'Satellite Count',
+    recentPeakHint: 'Maximum C/N₀ in the recent history for the displayed signal or band',
+    satCount: 'Sat Num',
     satelliteScope: 'Satellites to display',
-    allSatellites: 'All satellites',
-    usedSatellites: 'Used in fix',
+    allSatellites: 'All',
+    usedSatellites: 'Used',
     selectConstellation: 'Select constellation',
     allConstellations: 'All constellations',
+    frequencyBand: 'Frequency band',
+    strongestSignal: 'Strongest',
+    bandEmpty: 'No observations for this band',
     nsatWindowOnTitle: 'Showing latest 40 epochs; click to view all',
     nsatWindowOffTitle: 'Showing all epochs; click to view latest 40 only',
     slidingWindow40: 'Sliding (40)',
     all: 'All',
     clear: 'Clear',
     colConstellation: 'Constellation',
-    colSnr: 'Signal Strength (SNR)',
+    colSnr: 'C/N₀ (dB-Hz)',
     colElevation: 'Elevation',
     colAzimuth: 'Azimuth',
     colUpdateTime: 'Updated',
@@ -104,7 +107,7 @@ export default {
     offlineDesc1:
       'This app uses online maps by default. You can also prepare a local raster tile set in advance so the map prioritizes them when offline or on a weak network; areas not covered will automatically fall back to online maps.',
     offlineAutoCache:
-      'The desktop build automatically caches image tiles you view when they intersect the 1 km corridor around a valid GNSS track; without a valid track, tiles are never cached automatically. Server freshness rules are respected and the automatic cache is limited to 1 GiB.',
+      'On desktop, Deviation caches viewed tiles even without a GNSS fix. The standalone map caches viewed tiles within 1 km of a valid track. Both reuse cached tiles after a restart and share a cache limited to 1 GiB.',
     offlineStepsTitle: 'Steps:',
     offlineStep1A: 'Create a folder named',
     offlineStep1Strong: 'local data directory',
@@ -115,7 +118,7 @@ export default {
     offlineStep3:
       'Re-enter this page (or restart the app), and the corresponding area will prioritize offline tiles.',
     offlineDesc2:
-      'Tiles can be downloaded from public tile sources (e.g., OpenStreetMap) using QGIS, MOBAC (Mobile Atlas Creator), or scripts for the required area and zoom levels. Please comply with each source’s terms of use and avoid bulk scraping of online services.',
+      'For a local tile set, use a self-hosted tile server or a source that explicitly permits offline use.',
     offlineDesc3Prefix:
       'If you cannot find the data directory, click the button below to copy its exact path:',
     offlineCopyDir: 'Copy directory path',

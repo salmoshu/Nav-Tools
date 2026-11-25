@@ -1,5 +1,17 @@
 # Nav-Tools 更新日志
 
+## v1.9.6
+
+- GNSS 内置 RTCM3 单点定位升级为 Open-GNSS EKF，改进多频观测解析和 NMEA 输出。
+- Signals 支持多频信号显示，星座下拉框只列出现有观测中的星座，卫星数目移到视图列表第三项。柱状图沿用 Sky Plot 的星座色，柱内文字统一用白色。
+- Signals 表格的 Constellation 表头保持单行，仰角和方位角用随数值变化的图标辅助阅读。
+- Deviation 的 Sat Num 首次进入和重置时按曲线数据自动铺满，Y 轴手动缩放范围限制为 -80 到 +80。地图模式自动在磁盘缓存已浏览的瓦片，重启后可以复用，无需先收到定位数据。
+
+- GNSS upgrades its built-in RTCM3 single-point positioning to the Open-GNSS EKF and improves multi-frequency observations and NMEA output.
+- Signals displays multiple frequency bands, lists detected constellations only, and puts Sat Num third in the view menu. The bars use colors based on the Sky Plot palette with white in-bar labels.
+- The Signals table keeps the Constellation heading on one line and shows elevation and azimuth indicators that reflect their values.
+- Deviation fits the Sat Num curve on first entry and reset, with manual Y-axis zoom limited to -80 through +80. Its map saves viewed tiles to disk for reuse after a restart, even when no position fix is available.
+
 ## v1.9.5
 
 - GNSS 从实时 RTCM3 和录制文件自动运行 Open-GNSS 单点定位，输出 GGA、RMC、GSV、GSA，支持时间轴回放。Signals 和 Sky Plot 支持分别查看全部卫星和参与解算的卫星。

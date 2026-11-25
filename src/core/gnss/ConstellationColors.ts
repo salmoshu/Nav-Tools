@@ -1,0 +1,8 @@
+export const SKY_CONSTELLATION_COLORS = {
+  GPS: '#BADC7E',
+  GLONASS: '#9DA007',
+  GALILEO: '#82C3E5',
+  BEIDOU: '#FF8A80',
+  QZSS: '#AF52DE',
+  UNKNOWN: '#757575',
+} as const

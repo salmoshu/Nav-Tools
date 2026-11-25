@@ -1,4 +1,6 @@
 import { ref, shallowRef, triggerRef, computed } from 'vue'
+import { describeNmeaSignal, nmeaSatelliteNumber, SYS } from 'open-gnss-wasm/signals.js'
+import type { SppSatellite } from 'open-gnss-wasm'
 import { useGnssStore } from '@/stores/gnss'
 import { NmeaStreamParser, validateNmeaChecksum } from '@/core/data/NmeaStreamParser'
 import {
@@ -10,7 +12,9 @@ import { recordingClockDifference } from '@/core/gnss/EpochSelection'
 import {
   SatelliteDetailEpochStore,
   type SatelliteDetailSample,
+  type SatelliteSignalSample,
 } from '@/core/gnss/SatelliteDetailEpochStore'
+import type { SppObservations } from '@/core/gnss/RtcmSppSession'
 import { SnrHistoryStore } from '@/core/gnss/SnrHistoryStore'
 import { RtkSolutionParser, type RtkSolution } from '@/core/gnsslib/RtkSolution'
 import { t } from '@/i18n'
@@ -20,6 +24,7 @@ import { t } from '@/i18n'
 const MAX_NMEA_DATA = 12 * 3600
 const HISTORY_TRIM_SIZE = 3600
 const SATELLITE_TTL_MS = 3000
+const satelliteSystems = ['OTHER', 'GPS', 'GLONASS', 'GALILEO', 'BEIDOU', 'QZSS', 'SBAS', 'NAVIC']
 const TIMELINE_INCREMENTAL_POINT_LIMIT = 1024
 const nmeaData = shallowRef<NmeaData[]>([])
 const ggaData = shallowRef<GgaData[]>([])
@@ -31,6 +36,8 @@ const satelliteCountSource = ref<'gga' | 'rtklib-pos'>('gga')
 const satelliteEpochHistory = shallowRef(new SatelliteEpochStore())
 const satelliteCountEpochHistory = shallowRef(new NumericEpochStore(['SATS_USED', 'QUALITY']))
 const satelliteDetailEpochHistory = new SatelliteDetailEpochStore()
+const satelliteDetailEpochIndex = ref(-1)
+const snrHistoryStartIndex = ref(0)
 const snrHistory = shallowRef(new SnrHistoryStore())
 const positionEpochHistory = shallowRef(new NumericEpochStore(['E', 'N', 'U', 'QUALITY']))
 const speedEpochHistory = shallowRef(new NumericEpochStore(['SPEED', 'QUALITY']))
@@ -555,6 +562,7 @@ function applyTimelineEpoch(index: number): void {
     relativeTimelineElapsed(satelliteDetailEpochHistory, elapsedMilliseconds),
   )
   if (satelliteIndex >= 0) {
+    satelliteDetailEpochIndex.value = satelliteIndex
     satelliteSnrData.value = satelliteDetailEpochHistory.getSnapshot(satelliteIndex)
   }
 }
@@ -574,8 +582,20 @@ function timeArrToString(time: number[]): string {
 
 function addSatelliteSnrData(data: SatelliteDetailSample) {
   const key = `${data.constellation}-${data.prn}`
+  const previous = pendingSatelliteDetails.get(key)
+  let readings = previous?.signals
+  if (data.signals) {
+    const signals = new Map((readings ?? []).map((signal) => [signal.id, signal]))
+    for (const signal of data.signals) signals.set(signal.id, signal)
+    readings = [...signals.values()]
+  }
+  const previousAngles = data.positionKnown === false && previous && previous.positionKnown !== false
+    ? { elevation: previous.elevation, azimuth: previous.azimuth, positionKnown: true }
+    : {}
   const item = {
     ...data,
+    ...previousAngles,
+    ...(readings?.length ? { signals: readings, snr: Math.max(data.snr, ...readings.map(({ snr }) => snr)) } : {}),
     ...(latestUsedSatellites.has(key) ? { usedInFix: true } : {}),
   }
   latestSatelliteData.set(key, item)
@@ -584,11 +604,41 @@ function addSatelliteSnrData(data: SatelliteDetailSample) {
   publishPendingData()
 }
 
-function commitSatelliteEpoch(rawGgaTime: string): void {
+function applySppObservations(observations: readonly SppSatellite[]): void {
+  const timestamp = new Date().toISOString()
+  const details: SatelliteDetailSample[] = []
+  latestSatelliteData.clear()
+  pendingSatelliteDetails.clear()
+  latestUsedSatellites.clear()
+  for (const satellite of observations) {
+    const { sys, prn, used, elevation, azimuth, positionKnown } = satellite
+    const constellation = satelliteSystems[sys] ?? 'OTHER'
+    const satelliteNumber = sys === SYS.GLO ? prn : nmeaSatelliteNumber(sys, prn)
+    const signals = satellite.signals.map(({ code, band, label, frequencyHz, snr }) => ({
+      id: `rtcm:${code}`, code, band, label, frequencyHz, snr,
+    }))
+    const detail: SatelliteDetailSample = {
+      constellation, prn: satelliteNumber, elevation, azimuth, positionKnown,
+      timestamp, usedInFix: used, signals, snr: Math.max(0, ...signals.map(({ snr }) => snr)),
+    }
+    const key = `${constellation}-${satelliteNumber}`
+    latestSatelliteData.set(key, detail)
+    pendingSatelliteDetails.set(key, detail)
+    if (used) latestUsedSatellites.add(key)
+    details.push(detail)
+  }
+  satelliteEpochAssembler.clear()
+  satelliteEpochAssembler.addGsv({ source: 'rtcm3', totalMessages: 1, messageNumber: 1, satellites: details })
+  hasGsvData.value = true
+  satelliteDataDirty = true
+}
+
+function commitSatelliteEpoch(rawGgaTime: string, observations?: readonly SppSatellite[]): void {
+  if (observations) applySppObservations(observations)
   const sample = satelliteEpochAssembler.commit(rawGgaTime)
   satelliteEpochHistory.value.append(sample)
   if (sample.complete) useGnssStore().status.satsVisible = String(sample.total)
-  if (pendingGsa) {
+  if (pendingGsa && !observations) {
     latestUsedSatellites = new Set(pendingUsedSatellites)
     for (const prn of pendingUnscopedUsedPrns) {
       const matching = [...pendingSatelliteDetails].filter(([, sat]) => Number(sat.prn) === prn)
@@ -650,6 +700,7 @@ function clearSatelliteEpochHistory(): void {
   triggerRef(satelliteEpochHistory)
   snrHistoryDirty = false
   snrHistory.value.clear()
+  snrHistoryStartIndex.value = satelliteDetailEpochHistory.length
   triggerRef(snrHistory)
 }
 
@@ -891,7 +942,7 @@ export function useNmea() {
 
 
   // 解析GGA语句
-  function parseGga(sentence: string): Partial<NmeaData> {
+  function parseGga(sentence: string, observations?: readonly SppSatellite[]): Partial<NmeaData> {
     const gnssStore = useGnssStore()
 
     const parts = sentence.split(',')
@@ -937,7 +988,7 @@ export function useNmea() {
 
     // GSV blocks in the supported receiver stream precede their matching GGA.
     // Commit here so every GGA epoch gets one speed-independent satellite snapshot.
-    commitSatelliteEpoch(timeParts)
+    commitSatelliteEpoch(timeParts, observations)
     commitSatelliteCountEpoch(timeParts, data.satellites, 'gga', parseInt(data.quality) || 0)
     addGgaData(data)
 
@@ -1032,17 +1083,30 @@ export function useNmea() {
 
     const [, totalMessages, messageNumber, satellitesInView] = parts
     const talker = sentence.substring(1, 3)
-    const signal = (parts.length - 4) % 4 === 1 ? parts[parts.length - 1] : ''
+    const signal = (parts.length - 4) % 4 === 1 ? parts[parts.length - 1].trim().toUpperCase() : ''
     const satellites: SatelliteDetailSample[] = []
     const timestamp = new Date().toISOString()
     for (let i = 4; i + 3 < parts.length; i += 4) {
       const identity = nmeaSatelliteIdentity(talker, Number(parts[i]))
       if (!identity) continue
-      const satellite = {
+      const value = Number(parts[i + 3])
+      const snr = Number.isFinite(value) ? Math.max(0, value) : 0
+      let reading: SatelliteSignalSample | undefined
+      if (/^[1-9A-F]$/.test(signal)) {
+        const description = describeNmeaSignal(satelliteSystems.indexOf(identity.constellation), signal)
+        reading = {
+          id: `nmea:${signal}`,
+          label: description?.label ?? `Signal ${signal}`,
+          band: description?.band,
+          snr,
+        }
+      }
+      const satellite: SatelliteDetailSample = {
         ...identity,
         elevation: Number(parts[i + 1]) || 0,
         azimuth: Number(parts[i + 2]) || 0,
-        snr: Number(parts[i + 3]) || 0,
+        snr,
+        ...(reading ? { signals: [reading] } : {}),
         timestamp,
         ...(parts[i + 1] === '' || parts[i + 2] === '' ? { positionKnown: false } : {}),
       }
@@ -1253,7 +1317,7 @@ export function useNmea() {
   }
 
   // 主解析函数
-  function parseNmeaInternal(sentence: string): NmeaType {
+  function parseNmeaInternal(sentence: string, observations?: readonly SppSatellite[]): NmeaType {
     if (!sentence || !sentence.startsWith('$')) {
       // return { ...currentData.value, raw: sentence }
       return NmeaType.UNKNOWN
@@ -1268,7 +1332,7 @@ export function useNmea() {
     let parsedData: Partial<NmeaData> = {}
 
     if (sentence.includes('GGA')) {
-      parsedData = parseGga(sentence)
+      parsedData = parseGga(sentence, observations)
       const newData = {
         ...currentData.value,
         ...parsedData,
@@ -1392,6 +1456,8 @@ export function useNmea() {
     satelliteCountSource.value = 'gga'
     satelliteEpochAssembler.clear()
     satelliteDetailEpochHistory.clear()
+    satelliteDetailEpochIndex.value = -1
+    snrHistoryStartIndex.value = 0
     utcTime.fill(0)
     streamParser.clear()
     rtkSolutionParser.reset()
@@ -1460,9 +1526,17 @@ export function useNmea() {
   }
 
   // 添加处理原始数据的函数
-  function processRawData(rawData: string): void {
+  function processRawData(rawData: string, observations?: SppObservations): void {
     runInBatch(() => {
-      for (const sentence of streamParser.push(rawData)) parseNmeaInternal(sentence.trim())
+      let index = 0
+      for (const sentence of streamParser.push(rawData)) {
+        const line = sentence.trim()
+        const satellites = observations?.[index]
+        const type = line.slice(3, 6)
+        // The complete SPP epoch supplies these same observations at full precision.
+        if (satellites && type === 'GSV') continue
+        parseNmeaInternal(line, type === 'GGA' ? observations?.[index++] : undefined)
+      }
     })
   }
 
@@ -1538,6 +1612,8 @@ export function useNmea() {
       satelliteEpochHistory,
       satelliteCountEpochHistory,
       satelliteDetailEpochHistory,
+      satelliteDetailEpochIndex,
+      snrHistoryStartIndex,
       snrHistory, // 逐星 SNR 滚动历史（实时面板逐星视图）
       positionEpochHistory,
       speedEpochHistory,

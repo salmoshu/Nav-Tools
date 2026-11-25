@@ -138,6 +138,7 @@ const props = withDefaults(
     tracking?: boolean
     pointSize?: number
     viewSync?: GnssMapViewSync | null
+    cacheVisibleTiles?: boolean
   }>(),
   { showToolbar: true, active: true, pointSize: undefined, viewSync: undefined },
 )
@@ -169,7 +170,7 @@ const TRACK_LINE_COLOR = '#c0c0c0'
 const TRACK_LINE_WEIGHT = 1
 // Electron 下走自定义协议（本地离线瓦片优先，缺失回退在线），浏览器环境直接用在线 OSM
 const ELECTRON_TILE_URL = 'nav-tiles://tiles/{z}/{x}/{y}.png'
-const WEB_TILE_URL = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
+const WEB_TILE_URL = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'
 
 const isElectron = typeof window !== 'undefined' && !!window.ipcRenderer
 
@@ -227,7 +228,10 @@ const MAP_TILE_TRACK_SYNC_DELAY_MS = 250
 let mapTileTrackSyncTimer: ReturnType<typeof setTimeout> | null = null
 let pendingMapTileTrack: readonly SourceTrackPoint[] | null = null
 
-const tileUrl = computed(() => (isElectron ? ELECTRON_TILE_URL : WEB_TILE_URL))
+const tileUrl = computed(() => {
+  if (!isElectron) return WEB_TILE_URL
+  return props.cacheVisibleTiles ? `${ELECTRON_TILE_URL}?cache=viewport` : ELECTRON_TILE_URL
+})
 
 function isValidPosition(longitude: number | string, latitude: number | string): boolean {
   if (!Number.isFinite(longitude) || !Number.isFinite(latitude)) return false
@@ -812,7 +816,7 @@ function syncTrackSource() {
 }
 
 function sendMapTileTrack(source: readonly SourceTrackPoint[], immediate = false): void {
-  if (!isElectron || !window.ipcRenderer?.send) return
+  if (props.cacheVisibleTiles || !isElectron || !window.ipcRenderer?.send) return
   pendingMapTileTrack = source
   if (immediate) {
     if (mapTileTrackSyncTimer !== null) clearTimeout(mapTileTrackSyncTimer)

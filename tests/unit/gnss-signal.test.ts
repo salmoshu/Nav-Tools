@@ -94,28 +94,18 @@ describe('GNSS signal satellite-count view', () => {
 
   it('draws six constellation lines and the total as overlapping series', () => {
     for (const constellation of ['GPS', 'GLONASS', 'BEIDOU', 'GALILEO', 'QZSS', 'OTHER']) {
-      expect(chart).toContain(`id: '${constellation}'`)
+      expect(chart).toContain(`'${constellation}'`)
     }
     expect(chart).toContain("renderer.addSeries('TOTAL'")
     expect(chart).toContain('visibleConstellationSeries')
     expect(chart).toContain('(sample.counts[series.id] ?? 0) > 0')
   })
 
-  it('matches the sky-plot constellation colors', () => {
-    // 星座曲线颜色与星空图 GnssSky.constellationColors 保持一致（OTHER 取 UNKNOWN 灰）
-    const sky = readFileSync('src/components/windows/gnss/GnssSky.vue', 'utf8')
-    for (const [id, color] of [
-      ['GPS', '#BADC7E'],
-      ['GLONASS', '#9DA007'],
-      ['GALILEO', '#82C3E5'],
-      ['BEIDOU', '#FF8A80'],
-      ['QZSS', '#AF52DE'],
-    ] as const) {
-      expect(sky).toContain(`${id}: '${color}'`)
-      expect(chart).toContain(`{ id: '${id}', label: '${id}', color: '${color}' }`)
-    }
-    expect(sky).toContain("UNKNOWN: '#757575'")
-    expect(chart).toContain("{ id: 'OTHER', label: 'OTHER', color: '#757575' }")
+  it('uses muted constellation colors and emphasizes the total', () => {
+    expect(chart).toContain('SIGNAL_CONSTELLATIONS[id].color')
+    expect(chart).toContain('hexToRgba(series.color,')
+    expect(chart).toContain('hexToRgba(totalSeriesColor.value)')
+    expect(chart).toContain('renderer.setLineWidth(1.85)')
   })
 
   it('falls back to the GGA satellites-used total only when GSV is absent', () => {
@@ -173,27 +163,18 @@ describe('GNSS signal satellite-count view', () => {
     expect(parent).toContain('nsatChartRef.value?.fitOverview()')
   })
 
-  it('orders the satellite-count option first and calms the bar chart hover', () => {
-    // 视图下拉：卫星数目排第一位
-    expect(parent.indexOf('value="nsat"')).toBeLessThan(parent.indexOf('value="chart"'))
-    expect(parent.indexOf('value="nsat"')).toBeLessThan(parent.indexOf('value="table"'))
+  it('orders the satellite-count option third and calms the bar chart hover', () => {
+    expect(parent.indexOf('value="chart"')).toBeLessThan(parent.indexOf('value="table"'))
+    expect(parent.indexOf('value="table"')).toBeLessThan(parent.indexOf('value="nsat"'))
+    expect(parent.indexOf('value="nsat"')).toBeLessThan(parent.indexOf('value="persat"'))
     // 柱状图：关闭轴指示阴影带 + 不淡化同系列柱子，消除悬停切换闪烁
     expect(parent).toContain('axisPointer: { show: false }')
     expect(parent).toContain("emphasis: { focus: 'none'")
   })
 
-  it('colors the bar chart with the sky-plot constellation palette', () => {
-    // 柱状图/tooltip/逐星曲线的星座色与星空图一致（QZSS 补齐，OTHER 取灰）
-    for (const [id, color] of [
-      ['GPS', '#BADC7E'],
-      ['GLONASS', '#9DA007'],
-      ['BEIDOU', '#FF8A80'],
-      ['GALILEO', '#82C3E5'],
-      ['QZSS', '#AF52DE'],
-      ['OTHER', '#757575'],
-    ] as const) {
-      expect(parent).toContain(`${id}: '${color}'`)
-    }
+  it('uses the muted palette for the bar chart without a bright gradient', () => {
+    expect(parent).toContain('color: slot.color')
+    expect(parent).not.toContain('LinearGradient')
   })
 
   it('renders every recent epoch and applies LOD only to large viewports', () => {

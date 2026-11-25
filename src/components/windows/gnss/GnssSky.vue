@@ -149,6 +149,7 @@ import * as echarts from 'echarts'
 import { useNmea } from '@/composables/gnss/useNmea'
 import { useTheme } from '@/composables/useTheme'
 import { usePersistentSelection } from '@/composables/usePersistentSelection'
+import { SKY_CONSTELLATION_COLORS as constellationColors } from '@/core/gnss/ConstellationColors'
 import { t } from '@/i18n'
 
 // 获取卫星数据
@@ -261,16 +262,6 @@ const constellationPrefixes = {
   UNKNOWN: 'U',
 }
 
-// 星座颜色映射
-const constellationColors = {
-  GPS: '#BADC7E',
-  GLONASS: '#9DA007',
-  GALILEO: '#82C3E5',
-  BEIDOU: '#FF8A80',
-  QZSS: '#AF52DE',
-  UNKNOWN: '#757575',
-}
-
 // 设置ResizeObserver监控容器尺寸变化
 function setupResizeObserver() {
   if (!containerRef.value || !chartRef.value) return
@@ -330,7 +321,7 @@ function initChart() {
         formatter: function (params) {
           const data = params.data
           const prefix = constellationPrefixes[data.constellation] || 'U'
-          const color = constellationColors[data.constellation] || '#757575'
+          const color = constellationColors[data.constellation] ?? constellationColors.UNKNOWN
           return `
             <div style="display:flex; align-items:center; gap:6px; margin-bottom:5px; font-weight:600;">
               <span style="width:7px;height:7px;border-radius:50%;background:${color}"></span>
@@ -519,7 +510,7 @@ function buildSeriesOption(polarData, colors) {
     itemStyle: {
       ...(isConstellation && {
         color: function (params) {
-          return constellationColors[params.data.constellation] || '#757575'
+          return constellationColors[params.data.constellation] ?? constellationColors.UNKNOWN
         },
       }),
       borderColor: colors.background,

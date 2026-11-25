@@ -4,6 +4,9 @@ import { crc24q } from '../../src/core/gnssraw/RtcmFileAccess'
 
 // Same small observation and broadcast-navigation capture as Open-GNSS's decoder tests.
 const capture = [...readFileSync('tests/fixtures/gnss-spp.rtcm3')]
+const multipleBands = [...readFileSync('tests/fixtures/gnss-spp-multifrequency.rtcm3')]
+// Final GGA latitude from the reference EKF run, in decimal degrees.
+const finalEkfLatitude = 35 + 9.6526074 / 60
 
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
@@ -46,10 +49,12 @@ test('imports raw RTCM3 into GNSS, emits NMEA and filters used satellites', asyn
     const nmea = useNmea()
     return {
       positionEpochs: nmea.positionEpochHistory.value.length,
+      latitude: nmea.latestGgaPosition.value?.latitude,
       types: nmea.satelliteSnrData.value.map((sat) => sat.usedInFix === true),
     }
   })
   expect(result.positionEpochs).toBe(3)
+  expect(result.latitude).toBeCloseTo(finalEkfLatitude, 6)
   expect(result.types.filter(Boolean).length).toBeGreaterThan(0)
   expect(result.types).toContain(false)
 
@@ -58,7 +63,7 @@ test('imports raw RTCM3 into GNSS, emits NMEA and filters used satellites', asyn
   const rows = signals.locator('.el-table__body tbody tr')
   await expect(rows).toHaveCount(result.types.length)
   await signals.locator('.satellite-scope-select').click()
-  await page.getByRole('option', { name: 'Used in fix', exact: true }).click()
+  await page.getByRole('option', { name: 'Used', exact: true }).click()
   await expect(rows).toHaveCount(result.types.filter(Boolean).length)
 })
 
@@ -81,14 +86,90 @@ test('detects the binary network stream and flushes its final SPP epoch on disco
     const emit = Reflect.get(window, '__emitSppBytes') as (bytes: Uint8Array) => void
     for (let i = 0; i < bytes.length; i += 83) emit(new Uint8Array(bytes.slice(i, i + 83)))
   }, [...reference, ...capture])
-  const epochs = () => page.evaluate(async () => {
-    const { useNmea } = await import('/src/composables/gnss/useNmea.ts')
-    return useNmea().positionEpochHistory.value.length
-  })
-  await expect.poll(epochs).toBe(2)
+  const snapshot = () =>
+    page.evaluate(async () => {
+      const { useNmea } = await import('/src/composables/gnss/useNmea.ts')
+      const nmea = useNmea()
+      return {
+        epochs: nmea.positionEpochHistory.value.length,
+        latitude: nmea.latestGgaPosition.value?.latitude,
+        bands: nmea.satelliteSnrData.value.find((satellite) => Number(satellite.prn) === 3)
+          ?.signals?.map(({ band }) => band),
+      }
+    })
+  await expect.poll(async () => (await snapshot()).epochs).toBe(2)
+  expect((await snapshot()).bands).toEqual(['L1', 'L2'])
   await page.evaluate(async () => {
     const { useDevice } = await import('/src/hooks/useDevice.ts')
     await useDevice().closeCurrDevice()
   })
-  await expect.poll(epochs).toBe(3)
+  await expect.poll(async () => (await snapshot()).epochs).toBe(3)
+  expect((await snapshot()).latitude).toBeCloseTo(finalEkfLatitude, 6)
+})
+
+test('shows precise bands and angle diagrams from an RTCM3 replay epoch', async ({ page }) => {
+  const signals = page.locator('.snr-container')
+  await page.evaluate(async (bytes) => {
+    const { useDevice } = await import('/src/hooks/useDevice.ts')
+    const { useNmea } = await import('/src/composables/gnss/useNmea.ts')
+    const { useFileTimeline } = await import('/src/composables/useFileTimeline.ts')
+    const transfer = new DataTransfer()
+    transfer.items.add(new File([new Uint8Array(bytes)], 'dual-band.rtcm3', {
+      lastModified: Date.UTC(2020, 5, 25),
+    }))
+    await useDevice().handleDrop(new DragEvent('drop', { dataTransfer: transfer }))
+    useFileTimeline().seekEpoch(useNmea().statusEpochHistory.value, 0)
+  }, multipleBands)
+  await expect(signals.locator('.view-select')).toContainText('Sat Num')
+  await expect(signals.locator('.satellite-scope-select')).toContainText('All')
+  await signals.locator('.view-select').click()
+  await page.getByRole('option', { name: 'Table View', exact: true }).click()
+
+  const row = signals.getByRole('row').filter({ has: page.getByRole('cell', { name: '5', exact: true }) })
+  await expect(row.locator('.signal-reading')).toHaveText([/L1 C\/A\s*48\.25/, /L2 P\(Y\)\s*51\.75/])
+  const otherRow = signals.getByRole('row').filter({ has: page.getByRole('cell', { name: '7', exact: true }) })
+  const elevationSector = row.locator('.sat-angle-diagram--elevation .sat-angle-sector')
+  await expect(elevationSector).toHaveCSS('width', '16px')
+  await expect(elevationSector).toHaveCSS('height', '16px')
+  await expect(elevationSector).toHaveCSS('border-top-right-radius', '100%')
+  await expect(elevationSector).toHaveCSS('border-bottom-right-radius', '0px')
+  for (const kind of ['elevation', 'azimuth']) {
+    const selector = `.sat-angle-diagram--${kind} .sat-angle-sector`
+    const sector = row.locator(selector)
+    const otherSector = otherRow.locator(selector)
+    await expect(sector).toBeVisible()
+    await expect(sector).toHaveCSS('background-image', /^conic-gradient/)
+    await expect(otherSector).toHaveCSS('background-image', /^conic-gradient/)
+    await expect(row.locator(`.sat-angle-diagram--${kind} .sat-angle-ray`))
+      .not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)')
+    const fill = await sector.evaluate((element) => getComputedStyle(element).backgroundImage)
+    await expect(otherSector).not.toHaveCSS('background-image', fill)
+  }
+
+  await signals.locator('.view-select').click()
+  await page.getByRole('option', { name: 'Bar Chart View', exact: true }).click()
+  await signals.locator('.signal-band-select').click()
+  await page.getByRole('option', { name: 'L2', exact: true }).click()
+  const bar = () => page.evaluate(() => {
+    const chart = document.querySelector('.signal-bar-chart') as HTMLElement & {
+      __vueParentComponent?: { setupState?: { chartInstance?: { getOption(): any } } }
+    }
+    const option = chart.__vueParentComponent?.setupState?.chartInstance?.getOption()
+    return option?.series[0].data.find((sample) => Number(sample.prn) === 5)?.value
+  })
+  await expect.poll(bar).toBe(51.75)
+
+  await signals.locator('.view-select').click()
+  await page.getByRole('option', { name: 'Per-Satellite', exact: true }).click()
+  await signals.locator('.persat-select').click()
+  await page.getByRole('option', { name: 'G5 · GPS', exact: true }).click()
+  const lines = () => page.evaluate(() => {
+    const chart = document.querySelector('.persat-chart') as HTMLElement & {
+      __vueParentComponent?: { setupState?: { perSatChartInstance?: { getOption(): any } } }
+    }
+    return chart.__vueParentComponent?.setupState?.perSatChartInstance?.getOption()?.series.map(
+      (series) => [series.name, series.data],
+    )
+  })
+  await expect.poll(lines).toEqual([['G5 · L1 C/A (1C)', [48.25]], ['G5 · L2 P(Y) (2W)', [51.75]]])
 })

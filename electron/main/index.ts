@@ -722,12 +722,12 @@ ipcMain.on('close-card-window', (event) => {
 })
 
 // 主窗口收到的实时数据广播给所有独立卡片窗口
-ipcMain.on('broadcast-incoming-data', (_event, data: unknown) => {
+ipcMain.on('broadcast-incoming-data', (_event, data: unknown, observations: unknown) => {
   if (typeof data !== 'string') return
   for (const windowId of detachedPanels.keys()) {
     const target = BrowserWindow.fromId(windowId)
     if (target && !target.isDestroyed()) {
-      target.webContents.send('incoming-data', data)
+      target.webContents.send('incoming-data', data, Array.isArray(observations) ? observations : undefined)
     }
   }
 })

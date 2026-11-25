@@ -1,5 +1,15 @@
 import { NumericEpochStore } from './NumericEpochStore'
 
+export interface SatelliteSignalSample {
+  id: string
+  label: string
+  band?: string
+  code?: string
+  frequencyHz?: number
+  /** C/N₀ in dB-Hz. Zero represents an untracked signal. */
+  snr: number
+}
+
 export interface SatelliteDetailSample {
   prn: string | number
   elevation: number
@@ -9,6 +19,7 @@ export interface SatelliteDetailSample {
   timestamp: string
   usedInFix?: boolean
   positionKnown?: boolean
+  signals?: readonly SatelliteSignalSample[]
 }
 
 interface DetailChunk {
@@ -18,6 +29,13 @@ interface DetailChunk {
   azimuths: Float32Array
   snrs: Float32Array
   flags: Uint8Array
+  signalOffsets: Uint32Array
+  signalCounts: Uint8Array
+}
+
+interface SignalChunk {
+  descriptionIds: Uint16Array
+  snrs: Float32Array
 }
 
 const DETAIL_CHUNK_SIZE = 4096
@@ -36,9 +54,13 @@ export class SatelliteDetailEpochStore {
   private readonly snapshotLengths: number[] = []
   private readonly snapshotTimestamps: string[] = []
   private readonly detailChunks: DetailChunk[] = []
+  private readonly signalChunks: SignalChunk[] = []
+  private readonly descriptionIds = new Map<string, number>()
+  private readonly signalDescriptions: Omit<SatelliteSignalSample, 'snr'>[] = []
   private readonly stringIds = new Map<string, number>()
   private readonly strings: string[] = []
   private detailCount = 0
+  private signalCount = 0
   private lastSignature = ''
   private lastSnapshotId = -1
 
@@ -65,6 +87,9 @@ export class SatelliteDetailEpochStore {
       let signature = ''
       for (const detail of normalized) {
         signature += `${detail.constellation}:${detail.prn}:${Number(detail.elevation) || 0}:${Number(detail.azimuth) || 0}:${Number(detail.snr) || 0}:${Boolean(detail.usedInFix)}:${detail.positionKnown !== false}|`
+        for (const signal of detail.signals ?? []) {
+          signature += `${signal.id}:${signal.frequencyHz ?? 0}:${signal.snr};`
+        }
       }
 
       if (this.lastSnapshotId < 0 || signature !== this.lastSignature) {
@@ -86,9 +111,13 @@ export class SatelliteDetailEpochStore {
     this.snapshotLengths.length = 0
     this.snapshotTimestamps.length = 0
     this.detailChunks.length = 0
+    this.signalChunks.length = 0
+    this.descriptionIds.clear()
+    this.signalDescriptions.length = 0
     this.stringIds.clear()
     this.strings.length = 0
     this.detailCount = 0
+    this.signalCount = 0
     this.lastSignature = ''
     this.lastSnapshotId = -1
   }
@@ -117,6 +146,7 @@ export class SatelliteDetailEpochStore {
     for (let index = offset; index < offset + length; index += 1) {
       const chunk = this.detailChunks[Math.floor(index / DETAIL_CHUNK_SIZE)]
       const local = index % DETAIL_CHUNK_SIZE
+      const signals = this.readSignals(chunk.signalOffsets[local], chunk.signalCounts[local])
       snapshot.push({
         prn: this.strings[chunk.prnIds[local]] ?? '',
         constellation: this.strings[chunk.constellationIds[local]] ?? 'OTHER',
@@ -126,6 +156,7 @@ export class SatelliteDetailEpochStore {
         timestamp,
         ...(chunk.flags[local] & 1 ? { usedInFix: true } : {}),
         ...(chunk.flags[local] & 2 ? { positionKnown: false } : {}),
+        ...(signals.length ? { signals } : {}),
       })
     }
     return snapshot
@@ -141,6 +172,8 @@ export class SatelliteDetailEpochStore {
         azimuths: new Float32Array(DETAIL_CHUNK_SIZE),
         snrs: new Float32Array(DETAIL_CHUNK_SIZE),
         flags: new Uint8Array(DETAIL_CHUNK_SIZE),
+        signalOffsets: new Uint32Array(DETAIL_CHUNK_SIZE),
+        signalCounts: new Uint8Array(DETAIL_CHUNK_SIZE),
       })
     }
     const chunk = this.detailChunks[chunkIndex]
@@ -151,7 +184,41 @@ export class SatelliteDetailEpochStore {
     chunk.azimuths[local] = Number(detail.azimuth) || 0
     chunk.snrs[local] = Number(detail.snr) || 0
     chunk.flags[local] = (detail.usedInFix ? 1 : 0) | (detail.positionKnown === false ? 2 : 0)
+    chunk.signalOffsets[local] = this.signalCount
+    chunk.signalCounts[local] = detail.signals?.length ?? 0
+    for (const signal of detail.signals ?? []) this.appendSignal(signal)
     this.detailCount += 1
+  }
+
+  private appendSignal(signal: SatelliteSignalSample): void {
+    const key = `${signal.id}|${signal.label}|${signal.band ?? ''}|${signal.code ?? ''}|${signal.frequencyHz ?? 0}`
+    let descriptionId = this.descriptionIds.get(key)
+    if (descriptionId === undefined) {
+      descriptionId = this.signalDescriptions.length
+      if (descriptionId > 0xffff) throw new RangeError('satellite signal description table exhausted')
+      const { snr, ...description } = signal
+      this.signalDescriptions.push(description)
+      this.descriptionIds.set(key, descriptionId)
+    }
+    const chunkIndex = Math.floor(this.signalCount / DETAIL_CHUNK_SIZE)
+    const local = this.signalCount % DETAIL_CHUNK_SIZE
+    const chunk = (this.signalChunks[chunkIndex] ??= {
+      descriptionIds: new Uint16Array(DETAIL_CHUNK_SIZE),
+      snrs: new Float32Array(DETAIL_CHUNK_SIZE),
+    })
+    chunk.descriptionIds[local] = descriptionId
+    chunk.snrs[local] = signal.snr
+    this.signalCount++
+  }
+
+  private readSignals(offset: number, count: number): SatelliteSignalSample[] {
+    const signals: SatelliteSignalSample[] = []
+    for (let index = offset; index < offset + count; index++) {
+      const chunk = this.signalChunks[Math.floor(index / DETAIL_CHUNK_SIZE)]
+      const local = index % DETAIL_CHUNK_SIZE
+      signals.push({ ...this.signalDescriptions[chunk.descriptionIds[local]], snr: chunk.snrs[local] })
+    }
+    return signals
   }
 
   private intern(value: string): number {

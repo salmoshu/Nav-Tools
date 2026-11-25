@@ -5,9 +5,9 @@ function nmea(body: string): string {
   return `$${body}*${checksum.toString(16).toUpperCase().padStart(2, '0')}\r\n`
 }
 
-function signalEpoch(second: number, snr: number): string {
+function signalEpoch(second: number, snr: number, talkers = ['GP', 'GA', 'GB']): string {
   const lines: string[] = []
-  for (const talker of ['GP', 'GA', 'GB']) {
+  for (const talker of talkers) {
     for (let part = 1; part <= 2; part += 1) {
       const fields = Array.from({ length: 4 }, (_, index) => [
         String((part - 1) * 4 + index + 1).padStart(2, '0'),
@@ -54,14 +54,12 @@ async function perSatOption(page: Page) {
   })
 }
 
-test('orders Bar Chart above Table View and restores it after restart', async ({ page }) => {
+test('puts Sat Num third and restores the selected view after restart', async ({ page }) => {
   await openSignals(page)
   await page.locator('.view-select').click()
   const options = page.locator('.el-select-dropdown:visible .el-select-dropdown__item')
-  await expect(options.nth(0)).toHaveText('Satellite Count')
-  await expect(options.nth(1)).toHaveText('Bar Chart View')
-  await expect(options.nth(2)).toHaveText('Table View')
-  await options.nth(1).click()
+  await expect(options).toHaveText(['Bar Chart View', 'Table View', 'Sat Num', 'Per-Satellite'])
+  await options.first().click()
   await expect(page.locator('.signal-bar-wrapper')).toBeVisible()
 
   await page.reload()
@@ -71,6 +69,55 @@ test('orders Bar Chart above Table View and restores it after restart', async ({
     JSON.parse(localStorage.getItem('nav-tools:view-selections:v1')!),
   )
   expect(stored['gnss-signal:view']).toBe('chart')
+})
+
+test('offers only detected constellations and keeps the table heading on one line', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 550, height: 610 })
+  await openSignals(page)
+  await page.locator('.view-select').click()
+  await page.getByRole('option', { name: 'Bar Chart View', exact: true }).click()
+
+  const filter = page.locator('.constellation-filter')
+  const options = page.locator('.el-select-dropdown:visible .el-select-dropdown__item')
+  await filter.click()
+  await expect(options).toHaveText(['All constellations'])
+  await options.first().click()
+
+  await page.evaluate(
+    async (epoch) => {
+      const { useNmea } = await import('/src/composables/gnss/useNmea.ts')
+      useNmea().processRawData(epoch)
+    },
+    signalEpoch(0, 48, ['GP', 'GA']),
+  )
+  await filter.click()
+  await expect(options).toHaveText(['All constellations', 'GPS', 'GALILEO'])
+  await options.filter({ hasText: 'GPS' }).click()
+
+  await page.locator('.view-select').click()
+  await page.getByRole('option', { name: 'Table View', exact: true }).click()
+  const heading = page.locator('.constellation-column-header .cell')
+  await expect(heading).toHaveText('Constellation')
+  expect(
+    await heading.evaluate((cell) => {
+      const label = [...cell.childNodes].find(
+        (child) => child.textContent?.trim() === 'Constellation',
+      )!
+      const range = document.createRange()
+      range.selectNodeContents(label)
+      return { lines: range.getClientRects().length, clipped: cell.scrollWidth > cell.clientWidth }
+    }),
+  ).toEqual({ lines: 1, clipped: false })
+
+  await page.evaluate(async () => {
+    const { useNmea } = await import('/src/composables/gnss/useNmea.ts')
+    useNmea().clearData()
+  })
+  await page.locator('.view-select').click()
+  await page.getByRole('option', { name: 'Bar Chart View', exact: true }).click()
+  await expect(filter).toContainText('All constellations')
 })
 
 test('thickens per-satellite lines and supports right-drag zoom, wheel zoom and reset', async ({
@@ -145,7 +192,7 @@ async function nsatState(page: Page) {
   })
 }
 
-test('keeps satellite-count dragging free of zoom and doubles line width without gaps', async ({
+test('keeps satellite-count dragging free of zoom and draws thin continuous traces', async ({
   page,
 }) => {
   await page.addInitScript(() => {
@@ -192,7 +239,7 @@ test('keeps satellite-count dragging free of zoom and doubles line width without
   const widths = await page.evaluate(() => Reflect.get(window, '__nsatStrokeWidths'))
   expect(widths).toHaveLength(7)
   expect(new Set(widths.map((line) => line.color)).size).toBe(7)
-  for (const line of widths) expect(line.width).toBeCloseTo(4.4, 6)
+  for (const line of widths) expect(line.width).toBeCloseTo(1.85, 6)
 
   const initial = await nsatState(page)
   const bounds = (await chart.boundingBox())!

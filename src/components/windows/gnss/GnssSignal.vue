@@ -3,9 +3,9 @@
     <div class="snr-content">
       <div class="view-controls">
         <el-select v-model="currentView" size="small" class="view-select">
-          <el-option :label="t('gnss.signal.satCount')" value="nsat" />
           <el-option :label="t('gnss.signal.chartView')" value="chart" />
           <el-option :label="t('gnss.signal.tableView')" value="table" />
+          <el-option :label="t('gnss.signal.satCount')" value="nsat" />
           <el-option :label="t('gnss.signal.perSatView')" value="persat" />
         </el-select>
 
@@ -23,12 +23,19 @@
           class="constellation-filter"
         >
           <el-option :label="t('gnss.signal.allConstellations')" value="all" />
-          <el-option label="GPS" value="GPS" />
-          <el-option label="GLONASS" value="GLONASS" />
-          <el-option label="BEIDOU" value="BEIDOU" />
-          <el-option label="GALILEO" value="GALILEO" />
-          <el-option label="QZSS" value="QZSS" />
-          <el-option label="OTHER" value="OTHER" />
+          <el-option v-for="{ text, value } in constellationFilters" :key="value" :label="text" :value="value" />
+        </el-select>
+
+        <el-select
+          v-if="frequencyBands.length"
+          v-show="currentView === 'chart'"
+          v-model="frequencyBand"
+          :aria-label="t('gnss.signal.frequencyBand')"
+          size="small"
+          class="signal-band-select"
+        >
+          <el-option :label="t('gnss.signal.strongestSignal')" value="strongest" />
+          <el-option v-for="band in frequencyBands" :key="band" :label="band" :value="band" />
         </el-select>
 
         <el-select
@@ -110,6 +117,7 @@
       <div v-show="currentView === 'table'" class="snr-table-container">
         <el-table
           :data="filteredSatelliteData"
+          :row-key="row => snrHistoryKey(row.constellation, row.prn)"
           style="width: 100%"
           height="100%"
           stripe
@@ -121,7 +129,8 @@
           <el-table-column
             prop="constellation"
             :label="t('gnss.signal.colConstellation')"
-            width="100"
+            width="152"
+            label-class-name="constellation-column-header"
             sortable
             :filters="constellationFilters"
             :filter-method="filterConstellation"
@@ -136,9 +145,20 @@
 
           <el-table-column prop="prn" label="PRN" min-width="80" sortable />
 
-          <el-table-column prop="snr" :label="t('gnss.signal.colSnr')" min-width="150" sortable>
+          <el-table-column prop="snr" :label="t('gnss.signal.colSnr')" min-width="178" sortable>
             <template #default="{ row }">
-              <div class="snr-cell">
+              <div v-if="row.signals?.length" class="signal-readings">
+                <span
+                  v-for="signal in row.signals"
+                  :key="signal.id"
+                  class="signal-reading"
+                  :title="signalDescription(signal)"
+                >
+                  <span>{{ signal.label }}</span>
+                  <strong>{{ formatCn0(signal.snr) }}</strong>
+                </span>
+              </div>
+              <div v-else class="snr-cell">
                 <el-progress
                   :percentage="Math.min(row.snr, 60) * (100 / 60)"
                   :color="getSnrColor(row.snr)"
@@ -147,7 +167,7 @@
                   style="width: 100px; margin-right: 10px"
                 />
                 <span :style="{ color: getSnrColor(row.snr) }" class="snr-value">
-                  {{ row.snr }} dB
+                  {{ formatCn0(row.snr) }}
                 </span>
               </div>
             </template>
@@ -156,19 +176,23 @@
           <el-table-column
             prop="elevation"
             :label="t('gnss.signal.colElevation')"
-            min-width="100"
+            min-width="106"
             sortable
           >
-            <template #default="{ row }"> {{ row.elevation }}° </template>
+            <template #default="{ row }">
+              <SatelliteAngleIndicator kind="elevation" :value="row.elevation" :known="row.positionKnown" />
+            </template>
           </el-table-column>
 
           <el-table-column
             prop="azimuth"
             :label="t('gnss.signal.colAzimuth')"
-            min-width="100"
+            min-width="106"
             sortable
           >
-            <template #default="{ row }"> {{ row.azimuth }}° </template>
+            <template #default="{ row }">
+              <SatelliteAngleIndicator kind="azimuth" :value="row.azimuth" :known="row.positionKnown" />
+            </template>
           </el-table-column>
 
           <el-table-column
@@ -201,7 +225,9 @@
             :style="{ minWidth: `${Math.max(260, barLayout.slots.length * 38 + 64)}px` }"
           ></div>
         </div>
-        <div v-if="!chartData.length" class="signal-bar-empty">{{ t('gnss.signal.barEmpty') }}</div>
+        <div v-if="!chartData.length" class="signal-bar-empty">
+          {{ t(frequencyBand === 'strongest' ? 'gnss.signal.barEmpty' : 'gnss.signal.bandEmpty') }}
+        </div>
         <div class="signal-bar-legend">
           <span
             v-for="group in barLayout.groups"
@@ -249,28 +275,37 @@ import * as echarts from 'echarts'
 import { Delete, RefreshLeft, Timer } from '@element-plus/icons-vue'
 import { useNmea } from '@/composables/gnss/useNmea'
 import { gnssDisplayContext } from '@/composables/gnss/GnssDisplayContext'
-import { snrHistoryKey, formatSnrEpochLabel } from '@/core/gnss/SnrHistoryStore'
+import { useFileTimeline } from '@/composables/useFileTimeline'
+import {
+  SnrHistoryStore, SNR_HISTORY_DEFAULT_CAPACITY, snrHistoryKey, signalHistoryKey, formatSnrEpochLabel,
+} from '@/core/gnss/SnrHistoryStore'
 import { assignSnrSeriesColors } from '@/core/gnss/SnrSeriesColors'
-import { buildSignalBarLayout } from '@/core/gnss/SignalBarLayout'
+import { buildSignalBarLayout, SIGNAL_CONSTELLATIONS } from '@/core/gnss/SignalBarLayout'
+import { SKY_CONSTELLATION_COLORS as constellationColors } from '@/core/gnss/ConstellationColors'
 import { useTheme } from '@/composables/useTheme'
 import { usePersistentSelection } from '@/composables/usePersistentSelection'
 import { t } from '@/i18n'
 import SatelliteCountChart from './SatelliteCountChart.vue'
+import SatelliteAngleIndicator from './SatelliteAngleIndicator.vue'
 
 // 初始化NMEA解析器与主题
 const scopedDisplay = inject(gnssDisplayContext, null)
+const nmea = useNmea()
+const { satelliteDetailEpochHistory, satelliteDetailEpochIndex, snrHistoryStartIndex } = nmea
 const { satelliteSnrData, snrHistory, clearSatelliteEpochHistory, clearSatelliteCountHistory } =
-  scopedDisplay?.signals ?? useNmea()
+  scopedDisplay?.signals ?? nmea
+const fileTimeline = scopedDisplay?.timeline ?? useFileTimeline()
 const { chartTheme, resolvedTheme } = useTheme()
 
 // 视图状态
 const currentView = usePersistentSelection('gnss-signal:view', 'nsat', [
-  'nsat',
-  'table',
   'chart',
+  'table',
+  'nsat',
   'persat',
 ])
 const constellationFilter = ref('all')
+const frequencyBand = ref('strongest')
 const satelliteScope = usePersistentSelection('gnss-signal:satellite-scope', 'all', ['all', 'used'])
 
 // 图表相关
@@ -292,24 +327,21 @@ let perSatUpdateTimer = null
 // 默认展示全部历元；用户也可明确切换到最新 40 个历元。
 const nsatSlidingWindow = ref(false)
 
-// 星座过滤选项
-const constellationFilters = [
-  { text: 'GPS', value: 'GPS' },
-  { text: 'GLONASS', value: 'GLONASS' },
-  { text: 'BEIDOU', value: 'BEIDOU' },
-  { text: 'GALILEO', value: 'GALILEO' },
-  { text: 'OTHER', value: 'OTHER' },
-]
-
-// 星座颜色映射（用于柱状图/tooltip/逐星曲线），与星空图 GnssSky.constellationColors 一致
-const constellationColors = {
-  GPS: '#BADC7E',
-  GLONASS: '#9DA007',
-  BEIDOU: '#FF8A80',
-  GALILEO: '#82C3E5',
-  QZSS: '#AF52DE',
-  OTHER: '#757575',
-}
+// Keep the menu based on detected satellites, independent of the selected band or scope.
+const constellationFilters = computed(() => {
+  const detected = new Set(satelliteSnrData.value.map((satellite) => satellite.constellation))
+  return Object.keys(SIGNAL_CONSTELLATIONS)
+    .filter((value) => detected.has(value))
+    .map((value) => ({ text: value, value }))
+})
+watch(constellationFilters, (filters) => {
+  if (
+    constellationFilter.value !== 'all' &&
+    !filters.some(({ value }) => value === constellationFilter.value)
+  ) {
+    constellationFilter.value = 'all'
+  }
+})
 
 // 星座标识映射（用于柱状图 X 轴标签，如 G20、C12）
 const constellationPrefixes = {
@@ -318,6 +350,8 @@ const constellationPrefixes = {
   GALILEO: 'E',
   BEIDOU: 'C',
   QZSS: 'J',
+  SBAS: 'S',
+  NAVIC: 'I',
   OTHER: 'U',
   UNKNOWN: 'U',
 }
@@ -343,20 +377,60 @@ const filteredSatelliteData = computed(() => {
   return getLatestSatelliteData()
 })
 
-// 柱状图使用的数据：按星座过滤后仍保持排序
-const chartData = computed(() => {
-  let data = getLatestSatelliteData()
-  if (constellationFilter.value !== 'all') {
-    data = data.filter((sat) => sat.constellation === constellationFilter.value)
+const constellationSamples = computed(() => {
+  const samples = filteredSatelliteData.value
+  return constellationFilter.value === 'all'
+    ? samples
+    : samples.filter((sat) => sat.constellation === constellationFilter.value)
+})
+
+function bandOf(signal) {
+  return signal.band ?? signal.label
+}
+
+const frequencyBands = computed(() => {
+  const bands = new Set(constellationSamples.value.flatMap((sat) => (sat.signals ?? []).map(bandOf)))
+  if (frequencyBand.value !== 'strongest') bands.add(frequencyBand.value)
+  return [...bands].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
+})
+
+const chartData = computed(() => frequencyBand.value === 'strongest'
+  ? constellationSamples.value
+  : constellationSamples.value.flatMap((sat) => {
+      const signals = (sat.signals ?? []).filter((signal) => bandOf(signal) === frequencyBand.value)
+      return signals.length ? [{ ...sat, signals, snr: Math.max(...signals.map(({ snr }) => snr)) }] : []
+    }),
+)
+
+const signalHistory = computed(() => {
+  if (scopedDisplay || !fileTimeline.active.value ||
+      (currentView.value !== 'chart' && currentView.value !== 'persat')) return snrHistory.value
+  const history = new SnrHistoryStore()
+  const cursor = satelliteDetailEpochIndex.value
+  const first = Math.max(snrHistoryStartIndex.value, cursor - SNR_HISTORY_DEFAULT_CAPACITY + 1)
+  const selected = new Set(currentView.value === 'chart'
+    ? constellationSamples.value.map((sat) => snrHistoryKey(sat.constellation, sat.prn))
+    : selectedSatKeys.value)
+  if (selected.size === 0) return history
+  for (let index = first; index <= cursor; index++) {
+    const time = new Date(satelliteDetailEpochHistory.getTimestamp(index)).toISOString()
+    const samples = satelliteDetailEpochHistory.getSnapshot(index).filter(
+      (sat) => selected.has(snrHistoryKey(sat.constellation, sat.prn)),
+    )
+    history.appendEpoch(time, samples)
   }
-  return data
+  return history
 })
 
 const barLayout = computed(() => {
+  const history = signalHistory.value
   const peaks = new Map()
   for (const sat of chartData.value) {
     const key = snrHistoryKey(sat.constellation, sat.prn)
-    peaks.set(key, Math.max(0, ...snrHistory.value.getSeries(key).map((point) => point.snr ?? 0)))
+    const tracks = frequencyBand.value === 'strongest' ? [key] : history.getSignalTracks(key)
+      .filter((signal) => bandOf(signal) === frequencyBand.value)
+      .map((signal) => signalHistoryKey(key, signal.id))
+    peaks.set(key, Math.max(0, ...tracks.flatMap((track) => history.getSeries(track).map((point) => point.snr ?? 0))))
   }
   return buildSignalBarLayout(chartData.value, peaks)
 })
@@ -364,6 +438,7 @@ const barLayout = computed(() => {
 // 逐星可选卫星：滚动历史 ∪ 当前快照（刚出现、历史尚未累积的卫星也能预选）
 const perSatOptions = computed(() => {
   const keys = new Set(snrHistory.value.keys)
+  if (fileTimeline.active.value) for (const key of selectedSatKeys.value) keys.add(key)
   for (const sat of satelliteSnrData.value) {
     keys.add(snrHistoryKey(sat.constellation, sat.prn))
   }
@@ -385,19 +460,12 @@ const perSatOptions = computed(() => {
 })
 
 // 逐星折线颜色：默认星座色，同星座多选时按亮度错开（对齐 GNSS-Raw 逐星视图）
-const perSatColors = computed(() =>
-  assignSnrSeriesColors(
-    selectedSatKeys.value,
-    (key) => constellationColors[key.split('-')[0]] || '#757575',
-  ),
-)
-
 // 空态：未选卫星或历史尚未累积
 const perSatEmpty = computed(
-  () => selectedSatKeys.value.length === 0 || snrHistory.value.length === 0,
+  () => selectedSatKeys.value.length === 0 || signalHistory.value.length === 0,
 )
 const perSatEmptyTitle = computed(() =>
-  snrHistory.value.length === 0
+  signalHistory.value.length === 0 && selectedSatKeys.value.length !== 0
     ? t('gnss.signal.perSatNoHistory')
     : t('gnss.signal.perSatEmptyTitle'),
 )
@@ -406,6 +474,16 @@ const perSatEmptyTitle = computed(() =>
 function perSatSeriesName(key) {
   const [constellation, prn] = key.split('-')
   return `${constellationPrefixes[constellation] || 'U'}${prn}`
+}
+
+function formatCn0(value) {
+  return value > 0 ? String(Number(value.toFixed(3))) : '—'
+}
+
+function signalDescription(signal) {
+  const code = signal.code ?? (signal.id.startsWith('nmea:') ? `ID ${signal.id.slice(5)}` : '')
+  return [signal.label, code, signal.frequencyHz > 0 ? `${signal.frequencyHz / 1e6} MHz` : '']
+    .filter(Boolean).join(' · ')
 }
 
 // 获取星座标签类型
@@ -564,7 +642,13 @@ function updateChart() {
           const data = param?.data
           if (!data || data.prn === undefined) return ''
           const escape = echarts.format.encodeHTML
-          return `<b>${escape(param.name)}</b> · ${escape(data.constellation)}<br/>C/N₀: <b>${data.value} dB-Hz</b><br/>${t('gnss.signal.recentPeak')}: ${data.peak} dB-Hz<br/>${t('gnss.signal.tooltipElevation')}: ${data.elevation}° · ${t('gnss.signal.tooltipAzimuth')}: ${data.azimuth}°`
+          const signals = (data.signals ?? []).map((signal) =>
+            `${escape(signalDescription(signal))} · ${formatCn0(signal.snr)} dB-Hz`,
+          )
+          const readings = [`C/N₀ · ${formatCn0(data.value)} dB-Hz`, ...signals].join('<br/>')
+          const angles = data.positionKnown === false ? '' :
+            `<br/>${t('gnss.signal.tooltipElevation')} ${Number(data.elevation.toFixed(1))}° · ${t('gnss.signal.tooltipAzimuth')} ${Number(data.azimuth.toFixed(1))}°`
+          return `<b>${escape(param.name)}</b> · ${escape(data.constellation)}<br/>${readings}<br/>${t('gnss.signal.recentPeak')} · ${formatCn0(data.peak)} dB-Hz${angles}`
         },
       },
       grid: { left: 38, right: 14, top: 34, bottom: 27 },
@@ -622,15 +706,12 @@ function updateChart() {
                   value: slot.value,
                   peak: slot.peak,
                   itemStyle: {
-                    color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-                      { offset: 0, color: `${slot.color}C0` },
-                      { offset: 1, color: slot.color },
-                    ]),
+                    color: slot.color,
                     borderRadius: [2, 2, 0, 0],
                   },
                   label: {
                     position: slot.value < 14 ? 'top' : 'inside',
-                    color: slot.value < 14 ? colors.textMuted : '#ffffff',
+                    color: slot.value < 14 ? colors.textMuted : slot.labelColor,
                     formatter: () => (slot.value > 0 ? String(Math.round(slot.value)) : '—'),
                   },
                 }
@@ -644,7 +725,7 @@ function updateChart() {
                 name: group.constellation,
                 xAxis: group.first,
                 itemStyle: { color: `${group.color}08` },
-                label: { color: group.color },
+                label: { color: colors.textMuted },
               },
               { xAxis: group.last },
             ]),
@@ -668,7 +749,7 @@ function updateChart() {
           },
           data: layout.slots.flatMap((slot, index) =>
             slot && slot.peak > 0
-              ? [{ value: [index, slot.peak], itemStyle: { color: slot.color } }]
+              ? [{ value: [index, slot.peak], itemStyle: { color: colors.textMuted } }]
               : [],
           ),
           z: 4,
@@ -723,9 +804,10 @@ function initPerSatChart() {
         backgroundColor: colors.surface,
         borderColor: colors.border,
         textStyle: { color: colors.text },
-        valueFormatter: (value) => (typeof value === 'number' ? `${value} dB` : '—'),
+        valueFormatter: (value) => (typeof value === 'number' ? `${formatCn0(value)} dB-Hz` : '—'),
       },
       legend: {
+        type: 'scroll',
         top: 2,
         textStyle: { color: colors.text, fontSize: 11 },
       },
@@ -778,7 +860,7 @@ function initPerSatChart() {
         type: 'value',
         min: 0,
         max: 60,
-        name: 'SNR (dB)',
+        name: 'C/N₀ (dB-Hz)',
         nameTextStyle: {
           color: colors.text,
           padding: [0, 0, 0, 40],
@@ -805,17 +887,30 @@ function initPerSatChart() {
   })
 }
 
-// 更新逐星折线图：每条选中卫星一条 SNR 逐历元折线
+// Each tracked signal of a selected satellite gets its own C/N₀ series.
 function updatePerSatChart() {
   if (!perSatChartInstance.value) return
   if (document.hidden) return
 
-  const history = snrHistory.value
+  const history = signalHistory.value
   const labels = history.getEpochTimes().map((time) => formatSnrEpochLabel(time))
-  const series = selectedSatKeys.value.map((key) => ({
-    name: perSatSeriesName(key),
+  const tracks = selectedSatKeys.value.flatMap((satelliteKey) => {
+    const signals = history.getSignalTracks(satelliteKey)
+    const satelliteName = perSatSeriesName(satelliteKey)
+    const constellation = satelliteKey.split('-')[0]
+    return signals.length ? signals.map((signal) => ({
+      key: signalHistoryKey(satelliteKey, signal.id),
+      name: `${satelliteName} · ${signal.label}${signal.code ? ` (${signal.code})` : ''}`,
+      constellation,
+    })) : [{ key: satelliteKey, name: satelliteName, constellation }]
+  })
+  const baseColors = new Map(tracks.map(({ key, constellation }) => [key, constellationColors[constellation] ?? constellationColors.UNKNOWN]))
+  const colors = assignSnrSeriesColors(tracks.map(({ key }) => key), (key) => baseColors.get(key))
+  const series = tracks.map(({ key, name }) => ({
+    id: key,
+    name,
     type: 'line',
-    color: perSatColors.value.get(key),
+    color: colors.get(key),
     showSymbol: true,
     symbol: 'circle',
     symbolSize: 5,
@@ -829,7 +924,7 @@ function updatePerSatChart() {
   perSatChartInstance.value.setOption({
     xAxis: { data: labels },
     series,
-  })
+  }, { replaceMerge: ['series'] })
 }
 
 let perSatZoomDrag = null
@@ -938,10 +1033,11 @@ function setNsatSlidingWindow(enabled) {
 // 监听数据变化
 watch(satelliteSnrData, () => {
   scheduleDataUpdate()
+  schedulePerSatUpdate()
 })
 
 // 监听星座过滤变化
-watch([constellationFilter, satelliteScope], () => {
+watch([constellationFilter, satelliteScope, frequencyBand], () => {
   updateChart()
 })
 
@@ -1107,20 +1203,52 @@ onUnmounted(() => {
 }
 
 .satellite-scope-select {
-  width: 118px;
+  width: 76px;
   max-width: 100%;
   flex-shrink: 0;
 }
 
 .constellation-filter {
   width: 140px;
-  margin-right: 8px;
+  flex-shrink: 0;
+}
+
+.signal-band-select {
+  width: 108px;
+  max-width: 100%;
   flex-shrink: 0;
 }
 
 .persat-select {
   margin-right: 8px;
   min-width: 0;
+}
+
+.signal-readings {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px 5px;
+  padding-block: 2px;
+}
+
+.signal-reading {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  padding: 1px 5px;
+  border: 1px solid var(--app-border);
+  border-radius: 4px;
+  background: var(--app-surface-muted);
+  color: var(--app-text-secondary);
+  font-size: 11px;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+
+.signal-reading strong {
+  color: var(--app-text);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
 
 .nsat-controls {
@@ -1313,6 +1441,10 @@ onUnmounted(() => {
 
 .snr-table-container :deep(.el-table__cell .cell) {
   line-height: 20px;
+}
+
+.snr-table-container :deep(.constellation-column-header .cell) {
+  white-space: nowrap;
 }
 
 :deep(.el-table__header-wrapper) {

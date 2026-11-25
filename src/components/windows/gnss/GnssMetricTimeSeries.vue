@@ -83,7 +83,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, inject, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, inject, onMounted, onUnmounted, ref, watch } from 'vue'
 import { gnssDisplayContext } from '@/composables/gnss/GnssDisplayContext'
 import { useNmea } from '@/composables/gnss/useNmea'
 import { useFileTimeline } from '@/composables/useFileTimeline'
@@ -151,7 +151,6 @@ const props = withDefaults(
     axisDecimals?: number
     /** 同源图表只在最下方显示共享时间滚动条。 */
     xScrollbar?: boolean
-    sourceOverride?: NumericEpochStore | null
     referencePoints?: readonly MetricOverlaySample[]
     referenceTimeOffset?: number
     referenceColor?: string
@@ -174,7 +173,6 @@ const props = withDefaults(
     valueDecimals: 3,
     axisDecimals: 2,
     xScrollbar: true,
-    sourceOverride: null,
     referencePoints: () => [],
     referenceTimeOffset: 0,
     referenceColor: '#004080',
@@ -199,15 +197,15 @@ const emit = defineEmits<{
 }>()
 
 const scopedDisplay = inject(gnssDisplayContext, null)
-const { positionEpochHistory, speedEpochHistory } = scopedDisplay?.data ?? useNmea()
+const nmea = useNmea()
+const { positionEpochHistory, speedEpochHistory } = scopedDisplay?.data ?? nmea
+const { satelliteCountEpochHistory } = scopedDisplay?.signals ?? nmea
 const fileTimeline = scopedDisplay?.timeline ?? useFileTimeline()
 const { chartTheme, resolvedTheme } = useTheme()
 
 function getPrimarySourceStore(): NumericEpochStore {
-  return (
-    props.sourceOverride ??
-    (props.field === 'SPEED' ? speedEpochHistory.value : positionEpochHistory.value)
-  )
+  if (props.field === 'SATS_USED') return satelliteCountEpochHistory.value
+  return props.field === 'SPEED' ? speedEpochHistory.value : positionEpochHistory.value
 }
 
 const primarySourceStore = computed(getPrimarySourceStore)
@@ -277,6 +275,8 @@ interface ChartLayout {
 let layout: ChartLayout = { left: 54, right: 14, top: 38, bottom: 34 }
 const X_EDGE_OVERSCAN_RATIO = 0.5
 const OVERVIEW_RENDER_INTERVAL_MS = 1_000
+const SAT_NUM_Y_ZOOM_LIMIT = { min: -80, max: 80 }
+const SAT_NUM_MIN_Y_SPAN = 2
 
 let renderer: SatelliteTimeSeriesRenderer | null = null
 let axisContext: CanvasRenderingContext2D | null = null
@@ -285,6 +285,7 @@ let renderFrame: number | null = null
 let renderTimer: ReturnType<typeof setTimeout> | null = null
 let lastRenderAt = 0
 let previousLength = 0
+let satelliteCountHasBeenShown = false
 let fitSatelliteCountOnUpdate = true
 let renderedRange = { min: -1, max: 1 }
 /** 用户滚轮产生的 y 轴手动范围（锚定光标值伸缩）；dblclick 重置回自动范围 */
@@ -458,11 +459,25 @@ function paddedRange(range: { min: number; max: number } | null): {
   return { min: range.min - padding, max: range.max + padding }
 }
 
+function limitYRange(range: { min: number; max: number }): { min: number; max: number } {
+  if (props.field !== 'SATS_USED') return range
+  const span = Math.min(
+    SAT_NUM_Y_ZOOM_LIMIT.max - SAT_NUM_Y_ZOOM_LIMIT.min,
+    Math.max(SAT_NUM_MIN_Y_SPAN, range.max - range.min),
+  )
+  const min = Math.max(
+    SAT_NUM_Y_ZOOM_LIMIT.min,
+    Math.min(SAT_NUM_Y_ZOOM_LIMIT.max - span, (range.min + range.max - span) / 2),
+  )
+  return { min, max: min + span }
+}
+
 function resizeLayers(): void {
   const container = containerRef.value
   const plotCanvas = plotCanvasRef.value
   const axisCanvas = axisCanvasRef.value
   if (!container || !plotCanvas || !axisCanvas || !renderer) return
+  if (!container.clientWidth || !container.clientHeight) return
 
   updateLayout(container.clientHeight)
   container.style.setProperty('--metric-heading-top', `${Math.max(4, layout.top - 28)}px`)
@@ -479,6 +494,11 @@ function resizeLayers(): void {
   axisCanvas.height = Math.max(1, Math.round(container.clientHeight * dpr))
   axisCanvas.style.width = `${container.clientWidth}px`
   axisCanvas.style.height = `${container.clientHeight}px`
+  if (props.field === 'SATS_USED' && props.active && !satelliteCountHasBeenShown) {
+    satelliteCountHasBeenShown = true
+    resetLayout()
+    return
+  }
   scheduleRender()
 }
 
@@ -491,7 +511,7 @@ function renderChart(): void {
   if (store.length === 0) {
     renderer.clear()
     renderer.render()
-    renderedRange = { min: -1, max: 1 }
+    renderedRange = paddedRange(null)
     yRangeOverride = null
     headingColor.value = fixStatusColor(0)
     drawAxes()
@@ -507,7 +527,7 @@ function renderChart(): void {
   if (end < start) {
     renderer.clear()
     renderer.render()
-    renderedRange = { min: -1, max: 1 }
+    renderedRange = paddedRange(null)
     drawAxes()
     return
   }
@@ -608,7 +628,11 @@ function drawAxes(): void {
   context.font = '11px sans-serif'
   context.lineWidth = 1
 
-  const yTickCount = plotHeight < 80 ? 3 : 6
+  const maxYTicks = plotHeight < 80 ? 3 : 6
+  const yTickCount =
+    props.field === 'SATS_USED'
+      ? Math.min(maxYTicks, Math.max(1, Math.floor(renderedRange.max - renderedRange.min)))
+      : maxYTicks
   for (let tick = 0; tick <= yTickCount; tick += 1) {
     const ratio = tick / yTickCount
     const y = layout.top + plotHeight * (1 - ratio)
@@ -775,19 +799,20 @@ defineExpose({ resetLayout })
 function handleWheel(event: WheelEvent): void {
   const store = sourceStore.value
   const container = containerRef.value
-  if (!container || store.length === 0) return
+  if (!container || store.length === 0 || event.deltaY === 0) return
   const rect = container.getBoundingClientRect()
   const localY = event.clientY - rect.top - layout.top
   const { height } = plotSize()
   const ratio = Math.max(0, Math.min(1, 1 - localY / Math.max(1, height)))
-  const span = renderedRange.max - renderedRange.min
-  const anchorValue = renderedRange.min + ratio * span
+  const range = yRangeOverride ?? renderedRange
+  const span = range.max - range.min
+  const anchorValue = range.min + ratio * span
   const factor =
     event.deltaY > 0 ? TIME_SERIES_WHEEL_ZOOM_OUT_FACTOR : TIME_SERIES_WHEEL_ZOOM_IN_FACTOR
-  yRangeOverride = {
-    min: anchorValue - (anchorValue - renderedRange.min) * factor,
-    max: anchorValue + (renderedRange.max - anchorValue) * factor,
-  }
+  yRangeOverride = limitYRange({
+    min: anchorValue - (anchorValue - range.min) * factor,
+    max: anchorValue + (range.max - anchorValue) * factor,
+  })
   clearHover()
   scheduleRender()
 }
@@ -871,10 +896,10 @@ function handleWindowMouseMove(event: MouseEvent): void {
   const deltaY =
     ((event.clientY - dragStartY) / plotSize().height) *
     Math.max(Number.EPSILON, dragStartRange.max - dragStartRange.min)
-  yRangeOverride = {
+  yRangeOverride = limitYRange({
     min: dragStartRange.min + deltaY,
     max: dragStartRange.max + deltaY,
-  }
+  })
   applyViewport(
     panSatelliteCountViewport(
       dragStartViewport,
@@ -1182,12 +1207,11 @@ watch(
   () => props.active,
   (active) => {
     if (!active) return
-    nextTick(() => {
-      resizeLayers()
-      if (props.tracking) applyTrackingViewport()
-      scheduleRender()
-    })
+    resizeLayers()
+    if (props.tracking) applyTrackingViewport()
+    scheduleRender()
   },
+  { flush: 'post' },
 )
 
 watch(resolvedTheme, () => scheduleRender())

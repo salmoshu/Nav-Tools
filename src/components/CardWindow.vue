@@ -82,9 +82,13 @@ onMounted(async () => {
 })
 
 // 接收主窗口广播的实时数据并路由到当前独立窗口的组件
-const incomingDataListener = (_event: unknown, data: unknown) => {
+const incomingDataListener = (
+  _event: unknown,
+  data: unknown,
+  observations?: Parameters<typeof routeDataToWindow>[2],
+) => {
   if (typeof data === 'string' && cardWindowId.value) {
-    routeDataToWindow(data, cardWindowId.value)
+    routeDataToWindow(data, cardWindowId.value, observations)
   }
 }
 window.ipcRenderer?.on('incoming-data', incomingDataListener)

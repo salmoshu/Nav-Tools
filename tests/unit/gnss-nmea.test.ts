@@ -429,6 +429,28 @@ describe('NMEA GNSS status extraction', () => {
     expect(nmea.satelliteSnrData.value.map((item) => item.prn)).toEqual(['7'])
   })
 
+  it('keeps NMEA signal IDs and their C/N₀ through history and counts each satellite once', () => {
+    const nmea = useNmea()
+    const gga = (time: string) =>
+      `$GPGGA,${time},3110.7353943,N,12124.3158362,E,1,01,1.0,5.754,M,10.841,M,,`
+    nmea.processRawData([
+      '$GPGSV,1,1,01,05,45,120,41,1',
+      '$GPGSV,1,1,01,05,,,50,4',
+      gga('091214'),
+      '$GPGSV,1,1,01,05,46,122,49,4',
+      gga('091215'),
+    ].map(withChecksum).join('\n') + '\n')
+
+    expect(nmea.satelliteEpochHistory.value.getSample(0).total).toBe(1)
+    expect(nmea.satelliteSnrData.value[0].signals?.map(({ id }) => id)).toEqual(['nmea:4'])
+    nmea.applyTimelineEpoch(0)
+    const [satellite] = nmea.satelliteSnrData.value
+    expect(satellite).toMatchObject({ elevation: 45, azimuth: 120, snr: 50 })
+    expect(satellite.signals?.map(({ band, snr }) => [band, snr])).toEqual([['L1', 41], ['L2', 50]])
+    expect(nmea.snrHistory.value.getSeries('GPS-5/nmea:1').map(({ snr }) => snr)).toEqual([41, null])
+    expect(nmea.snrHistory.value.getSeries('GPS-5/nmea:4').map(({ snr }) => snr)).toEqual([50, 49])
+  })
+
   it('aligns satellite snapshots when the first GGA follows midnight and the first RMC precedes it', () => {
     const nmea = useNmea()
     nmea.processRawData(

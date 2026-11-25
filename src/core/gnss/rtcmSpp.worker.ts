@@ -9,7 +9,7 @@ async function process(command: SppCommand): Promise<SppBatch> {
   if (command.type === 'start') {
     if (decoder) decoder.reset()
     else decoder = await RtcmDecoder.create()
-    decoder.startSpp(command)
+    decoder.startSpp({ captureTimeS: command.captureTimeS, scan: command.scan, ekf: true })
   } else {
     if (!decoder) throw new Error('RTCM3 SPP session has not started')
     switch (command.type) {
@@ -27,10 +27,13 @@ async function process(command: SppCommand): Promise<SppBatch> {
         break
     }
   }
-  const batch: SppBatch = { nmea: '', epochs: 0, fixes: 0, captureTimeS: decoder.captureTimeS() }
+  const batch: SppBatch = {
+    nmea: '', observations: [], epochs: 0, fixes: 0, captureTimeS: decoder.captureTimeS(),
+  }
   for (const event of events) {
     if (event.kind !== 'spp') continue
     batch.nmea += event.nmea
+    batch.observations.push(event.satellites)
     batch.epochs++
     if (event.status === 'fix') batch.fixes++
     batch.status = event.status
