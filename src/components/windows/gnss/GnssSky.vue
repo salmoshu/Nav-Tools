@@ -892,7 +892,7 @@ onUnmounted(() => {
 .controls {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--ui-space-xl);
   width: 100%;
 }
 
@@ -928,19 +928,19 @@ onUnmounted(() => {
 .constellation-legend {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--ui-space-md);
 }
 
 .legend-items {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 6px 10px;
+  gap: var(--ui-space-sm) var(--ui-space-md);
 }
 
 .legend-item {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--ui-space-sm);
   font-size: 12px;
   color: var(--app-text);
   cursor: pointer;
@@ -966,7 +966,7 @@ onUnmounted(() => {
 .mode-hint {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--ui-space-sm);
 }
 
 .gradient-bar {
@@ -1077,7 +1077,7 @@ onUnmounted(() => {
 
 @container (max-width: 520px) {
   .controls {
-    gap: 12px;
+    gap: var(--ui-space-lg);
   }
 }
 </style>

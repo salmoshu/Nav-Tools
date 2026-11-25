@@ -18,6 +18,8 @@ Nav-Tools 的 GNSS-Lib 使用 `rnx2rtkp` 进行后处理，使用 `rtkrcv` 进�
 
 WASM 按历元生成 GGA、RMC、分信号 GSV 和 GSA，消息窗口显示生成的 NMEA。Signals 从同一历元读取 RTCM3 的观测码、载波频率和原始精度 C/N₀，表格、逐星曲线和回放都保留多频数据。普通 NMEA 输入也会保留有效 GSV Signal ID 对应的观测。Signals 和 Sky Plot 的 `All` / `Used` 按卫星筛选，Sat Num 按星座和 PRN 去重。
 
+GNSS 中的「消息」保留原始 RTCM3 十六进制帧，SPP 生成的 NMEA 则用于定位、轨迹和卫星组件。下拉框提供 Raw、Packet 和 Message 三种视图。Packet 按顺序查看帧，Message 按协议和类型分组，可在表格和树形之间切换，并查看最新记录、校验结果和逐星观测。没有专用解码器的类型仍可查看原始帧。
+
 ## 同步 WASM
 
 在 Open-GNSS 的 `wasm` 目录构建解码器后，再从 Nav-Tools 根目录同步：
@@ -51,11 +53,15 @@ Open-GNSS 当前默认的 Linux 实时引擎编译配置启用 GPS、Galileo、B
 
 更名后已有的可执行文件路径仍可继续使用。
 
+后处理模式还支持 RTKLIB-EX 2.5.1。在「输入」页选择 RTKLIB-EX，再选择其 Windows `rnx2rtkp.exe`，并保留同目录下的 `librtklib.dll`。两个引擎的可执行文件名称相同，不要混用。RTKLIB-EX 的「选项」页按原生参数分组，可搜索、加载和保存独立的 `.conf`。执行时使用这份配置，不会套用 OpenGNSS 的选项。选择 `pos1-posmode=single` 时只需要流动站 OBS 和导航文件。RTKLIB-EX 在此工作区只用于后处理。
+
 在后处理或实时解算的「输入」页选择 StarRTK，然后选择本机的 `StarRTK.exe`（Windows）或 `StarRTK`（Linux）。文件选择器也会识别这两个文件名并切换引擎。请使用 `StarRTK --help` 中列有 `--config` 的版本。
 
-- 后处理使用未压缩的流动站 OBS、基站 OBS 和一份覆盖观测时段的 RINEX NAV。「处理选项」可选 POS（RTKLIB LLH/GPST）或 NMEA（UTC RMC/GGA）。
-- 实时解算使用流动站和基站两路 RTCM3，可选网络、串口或文件回放。带 `.tag` 的文件可启用时间标签并设置回放倍速。工作区逐历元读取 POS 供轨迹和回放使用。
-- 选择 StarRTK 时，「处理选项」显示站点模式、定权、频点、模糊度解算模式、PAR、Fix-and-Hold 和 Ratio 参数。可载入或保存 YAML。实时 YAML 还包含输入流、读取周期和最大基站数据龄期。
+- 在「处理选项 → 定位与站点 → 定位模式」选择 SPP、RTD 或 RTK。SPP 只需流动站，RTD 用双站伪距差分，RTK 用双站载波相位且为默认选项。SPP 和 RTD 需要支持 `positioning_mode` 的 StarRTK 1.1.11 构建。
+- 后处理使用未压缩的 RINEX OBS 和一份覆盖观测时段的 RINEX NAV。切换到 SPP 后隐藏基站 OBS，时间轴使用流动站时段。RTD 和 RTK 则使用双站重叠时段。
+- 实时解算使用 RTCM3，可选网络、串口或文件回放。SPP 只显示流动站，RTD 和 RTK 显示流动站及基站。带 `.tag` 的文件可启用时间标签并设置回放倍速。
+- 两种工作方式都可选 POS（RTKLIB LLH/GPST）或 NMEA（UTC）。StarRTK 参数分为定位与站点、观测与频点、模糊度固定、质量控制、滤波与连续性、输出与诊断。RTD 的最少卫星数和最大三维位置 RMS 在「质量控制」，SPP 滤波在「滤波与连续性」。不适用的选项随模式隐藏，已有设置会保留。
+- 可载入旧平铺 YAML 或新分组 YAML。「保存 YAML」按界面分类导出，搜索可定位新旧配置键。Nav-Tools 启动解算器时仍生成平铺 YAML，继续兼容旧 EXE 支持的选项。如果把分组 YAML 直接交给 StarRTK 命令行，请使用支持该格式的构建。
 
 使用 `rnx2rtkp` 时，「处理时间范围」时间轴会读取 Rover OBS 的首尾历元。相对定位模式选择 Base OBS 后，时间轴使用两者的重叠时段；单点和 PPP 模式使用 Rover 时段。拖动两端可截取时段，选择「全部时段」可恢复完整范围；同一路径的文件重新生成后可点击「刷新」。时间以 GPST 显示，并传递给 `rnx2rtkp -ts/-te`。载入配置中的起止时间也会反映到时间轴。若两站时段不重叠，执行按钮会禁用；无法自动读取时间时请刷新或检查观测文件。普通 RINEX 和 gzip 压缩的观测文件支持读取时间范围。
 

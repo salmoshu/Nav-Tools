@@ -5,11 +5,11 @@ import { SnrHistoryStore } from '@/core/gnss/SnrHistoryStore'
 import type { SatelliteDetailSample } from '@/core/gnss/SatelliteDetailEpochStore'
 import {
   RtkSolutionParser,
-  nmeaQualityToRtkQuality,
+  NmeaRtkSolutionParser,
   type RtkSolution,
   type RtkSolutionParserOptions,
 } from '@/core/gnsslib/RtkSolution'
-import { NmeaStreamParser, validateNmeaChecksum } from '@/core/data/NmeaStreamParser'
+import { NmeaStreamParser } from '@/core/data/NmeaStreamParser'
 import { createFileTimeline } from './useFileTimeline'
 import { useConsole, type ConsoleState } from './flow/useConsole'
 import type { GnssDisplayContext } from './gnss/GnssDisplayContext'
@@ -101,8 +101,8 @@ export function createGnssSolverSession() {
   const messageClock = new NumericEpochStore(['ROW'])
   let messageElapsed = 0
   let buffer = ''
-  let nmeaDate = ''
   const nmeaParser = new NmeaStreamParser()
+  const nmeaPositions = new NmeaRtkSolutionParser()
 
   function clearSatelliteCountHistory(): void {
     satelliteCountEpochHistory.value.clear()
@@ -165,8 +165,8 @@ export function createGnssSolverSession() {
       return messageElapsed
     })
     buffer = ''
-    nmeaDate = ''
     nmeaParser.clear()
+    nmeaPositions.reset()
   }
 
   function appendSolution(
@@ -301,32 +301,14 @@ export function createGnssSolverSession() {
     timeline.setPlaybackSpeed(speed)
   }
 
-  function parseNmea(sentence: string): void {
-    if (!validateNmeaChecksum(sentence)) return
-    const fields = sentence.split('*')[0].split(',')
-    if (/^\$..RMC$/.test(fields[0]) && /^\d{6}$/.test(fields[9] ?? '')) {
-      const date = fields[9]
-      nmeaDate = `${Number(date.slice(4)) < 80 ? '20' : '19'}${date.slice(4)}/${date.slice(2, 4)}/${date.slice(0, 2)}`
-    }
-    if (!/^\$..GGA$/.test(fields[0]) || !nmeaDate || !fields[2] || !fields[4]) return
-    const coordinate = (text: string, direction: string) =>
-      (Math.floor(Number(text) / 100) + (Number(text) % 100) / 60) *
-      (direction === 'S' || direction === 'W' ? -1 : 1)
-    const clock = fields[1]
-    const quality = nmeaQualityToRtkQuality(Number(fields[6]))
-    const countText = fields[7]?.trim() ?? ''
-    const satelliteCount = /^\d+$/.test(countText) ? Number(countText) : null
-    const solution = new RtkSolutionParser().addLine(
-      `${nmeaDate} ${clock.slice(0, 2)}:${clock.slice(2, 4)}:${clock.slice(4)} ${coordinate(fields[2], fields[3])} ${coordinate(fields[4], fields[5])} ${Number(fields[9]) + Number(fields[11] || 0)} ${quality} ${satelliteCount ?? 0}`,
-    )
-    if (solution) appendSolution({ ...solution, raw: sentence }, 'gga', satelliteCount)
-  }
-
   function append(text: string, id = runId.value): void {
     if (!text || id !== runId.value) return
     solutionConsole.addFileReplayData(text)
     // Inspect the actual stream: a config file can override the requested output format.
-    for (const line of nmeaParser.push(text)) parseNmea(line)
+    for (const line of nmeaParser.push(text)) {
+      const result = nmeaPositions.addLine(line)
+      if (result) appendSolution(result.solution, 'gga', result.satelliteCount)
+    }
     const lines = (buffer + text).split(/\r\n|[\r\n]/)
     buffer = lines.pop() ?? ''
     for (const line of lines) {
@@ -410,8 +392,8 @@ export function createGnssSolverSession() {
       solutionConsole.clearMessages()
       logConsole.clearMessages()
       buffer = ''
-      nmeaDate = ''
       nmeaParser.clear()
+      nmeaPositions.reset()
       parser = new RtkSolutionParser()
       messageParser = new RtkSolutionParser()
       messageClock.clear()

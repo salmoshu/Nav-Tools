@@ -393,7 +393,7 @@ onUnmounted(() => {
 .scene-toolbar {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--ui-space-md);
   padding: 6px 10px;
   border-bottom: 1px solid var(--app-border);
   background: var(--app-surface-muted);
@@ -403,7 +403,7 @@ onUnmounted(() => {
 .scene-hud {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--ui-space-sm);
   margin-left: auto;
   flex-wrap: wrap;
 }
@@ -435,7 +435,7 @@ onUnmounted(() => {
 .planner-diagnostics {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px 16px;
+  gap: var(--ui-space-xs) var(--ui-space-xl);
   padding: 4px 10px;
   max-height: 180px;
   overflow: auto;
@@ -527,7 +527,7 @@ onUnmounted(() => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: var(--ui-space-sm);
   color: var(--app-text-secondary);
   pointer-events: none;
 }
@@ -543,7 +543,7 @@ onUnmounted(() => {
   left: 10px;
   z-index: 5;
   display: flex;
-  gap: 18px;
+  gap: var(--ui-space-xl);
   padding: 12px;
   background: var(--app-surface);
   border: 1px solid var(--app-border);
@@ -555,7 +555,7 @@ onUnmounted(() => {
 .config-section {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--ui-space-xs);
   min-width: 150px;
 }
 
@@ -569,7 +569,7 @@ onUnmounted(() => {
 .config-row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--ui-space-md);
   margin: 4px 0;
 }
 
@@ -584,7 +584,7 @@ onUnmounted(() => {
   bottom: 8px;
   right: 10px;
   display: flex;
-  gap: 10px;
+  gap: var(--ui-space-md);
   font-size: 11px;
   color: var(--app-text-secondary);
   background: color-mix(in srgb, var(--app-surface) 78%, transparent);

@@ -46,24 +46,34 @@ export async function solveRtcmSppFile(
   input: SppFileInput,
   onNmea: (text: string, observations: SppObservations) => void,
   onProgress: (percent: number) => void,
+  onRtcmBytes?: (bytes: Uint8Array) => void,
 ): Promise<Pick<SppBatch, 'epochs' | 'fixes'> & { sizeBytes: number }> {
   const source = await binarySource(input.data)
-  const companionTag = input.tag ? await binarySource(input.tag) : undefined
-  const taggedTime = captureTimeFromTag(
-    companionTag ? await companionTag.read(0, TAG_HEADER_BYTES) : source.tag,
-  )
-  const referenceTime = input.captureTimeS || taggedTime || source.lastModified / 1000
-  const session = new RtcmSppSession()
+  let session: RtcmSppSession | undefined
+  let monitoredBytes = 0
   let epochs = 0
   let fixes = 0
 
-  async function scanOrSolve(solve: boolean): Promise<number> {
+  async function readChunk(offset: number): Promise<ArrayBuffer> {
+    const bytes = await source.read(offset, Math.min(CHUNK_BYTES, source.size - offset))
+    if (!bytes.byteLength) throw new Error('RTCM3 file changed during import')
+    return bytes
+  }
+
+  async function scanOrSolve(
+    worker: RtcmSppSession,
+    solve: boolean,
+    collectRawMessages = false,
+  ): Promise<number> {
     let embeddedTime = 0
     for (let offset = 0; offset < source.size;) {
-      const bytes = await source.read(offset, Math.min(CHUNK_BYTES, source.size - offset))
-      if (!bytes.byteLength) throw new Error('RTCM3 file changed during import')
+      const bytes = await readChunk(offset)
       offset += bytes.byteLength
-      const batch = await session.request({ type: 'push', bytes })
+      if (collectRawMessages && onRtcmBytes) {
+        onRtcmBytes(new Uint8Array(bytes))
+        monitoredBytes = offset
+      }
+      const batch = await worker.request({ type: 'push', bytes })
       embeddedTime ||= batch.captureTimeS
       if (solve) append(batch)
       const fraction = offset / source.size
@@ -79,12 +89,18 @@ export async function solveRtcmSppFile(
   }
 
   try {
+    const companionTag = input.tag ? await binarySource(input.tag) : undefined
+    const taggedTime = captureTimeFromTag(
+      companionTag ? await companionTag.read(0, TAG_HEADER_BYTES) : source.tag,
+    )
+    const referenceTime = input.captureTimeS || taggedTime || source.lastModified / 1000
+    session = new RtcmSppSession()
     await session.request({ type: 'start', captureTimeS: referenceTime, scan: true })
-    const embeddedTime = await scanOrSolve(false)
+    const embeddedTime = await scanOrSolve(session, false, true)
     if (!input.captureTimeS && !taggedTime && embeddedTime &&
         Math.abs(embeddedTime - referenceTime) > 12 * 60 * 60) {
       await session.request({ type: 'start', captureTimeS: embeddedTime, scan: true })
-      await scanOrSolve(false)
+      await scanOrSolve(session, false)
     }
     for (const navigation of input.navigation ?? []) {
       const bytes = typeof navigation === 'string'
@@ -93,10 +109,24 @@ export async function solveRtcmSppFile(
       await session.request({ type: 'navigation', bytes })
     }
     await session.request({ type: 'replay' })
-    await scanOrSolve(true)
+    await scanOrSolve(session, true)
     append(await session.request({ type: 'finish' }))
     return { epochs, fixes, sizeBytes: source.size }
+  } catch (error) {
+    // An unavailable solver or bad companion file must not prevent the
+    // Messages panel from reading the original file. Continue without SPP.
+    try {
+      while (onRtcmBytes && monitoredBytes < source.size) {
+        const bytes = await readChunk(monitoredBytes)
+        onRtcmBytes(new Uint8Array(bytes))
+        monitoredBytes += bytes.byteLength
+        onProgress((monitoredBytes / source.size) * 100)
+      }
+    } catch {
+      // Report the original import error if the source cannot be read either.
+    }
+    throw error
   } finally {
-    session.close()
+    session?.close()
   }
 }

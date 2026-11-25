@@ -449,7 +449,7 @@ function errorMessage(error: unknown): string {
 }
 .sftp-actions {
   display: flex;
-  gap: 6px;
+  gap: var(--ui-space-sm);
   padding: 6px;
 }
 .sftp-table {
@@ -459,7 +459,7 @@ function errorMessage(error: unknown): string {
 .transfer-status {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 100px;
-  gap: 8px;
+  gap: var(--ui-space-md);
   align-items: center;
   padding: 5px 8px;
   font-size: 11px;

@@ -146,7 +146,7 @@ watch(selectedKey, rebuild)
 .toolbar {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--ui-space-lg);
   padding-bottom: 6px;
 }
 .drift {

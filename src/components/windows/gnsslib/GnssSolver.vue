@@ -274,7 +274,7 @@ function switchTab(event: KeyboardEvent): void {
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: var(--ui-space-md);
   height: 100%;
   min-height: 0;
   overflow: hidden;
@@ -289,7 +289,7 @@ function switchTab(event: KeyboardEvent): void {
   flex: none;
   flex-wrap: wrap;
   align-items: center;
-  gap: 10px;
+  gap: var(--ui-space-md);
   padding: 8px 10px;
   border: 1px solid var(--app-border);
   border-radius: 9px;
@@ -343,7 +343,7 @@ function switchTab(event: KeyboardEvent): void {
   display: flex;
   flex: none;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--ui-space-sm);
   margin: 0 -12px -12px;
   padding: 9px 12px 10px;
   border-top: 1px solid var(--app-border);
@@ -355,7 +355,7 @@ function switchTab(event: KeyboardEvent): void {
   display: flex;
   flex-wrap: wrap;
   justify-content: space-between;
-  gap: 4px 12px;
+  gap: var(--ui-space-xs) var(--ui-space-lg);
   font-size: 10px;
 }
 

@@ -199,7 +199,7 @@ async function importConfig(): Promise<void> {
 .mode-row {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--ui-space-lg);
   margin-bottom: 14px;
   padding: 10px 12px;
   border: 1px solid var(--app-border);
@@ -214,7 +214,7 @@ async function importConfig(): Promise<void> {
 .chart-config-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
+  gap: var(--ui-space-lg);
   margin-top: 18px;
 }
 
@@ -239,7 +239,7 @@ async function importConfig(): Promise<void> {
   display: grid;
   grid-template-columns: minmax(130px, 1fr) 32px auto;
   align-items: center;
-  gap: 8px;
+  gap: var(--ui-space-md);
   margin-bottom: 8px;
 }
 
@@ -252,14 +252,14 @@ async function importConfig(): Promise<void> {
   width: 100%;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: var(--ui-space-lg);
 }
 
 .config-dialog-footer__secondary,
 .config-dialog-footer__primary {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--ui-space-md);
 }
 
 .config-dialog-footer .el-button + .el-button {
@@ -270,7 +270,7 @@ async function importConfig(): Promise<void> {
   .mode-row {
     align-items: stretch;
     flex-direction: column;
-    gap: 8px;
+    gap: var(--ui-space-md);
   }
 
   .mode-row > span {

@@ -11,8 +11,8 @@ function coordinate(value: number, longitude = false): string {
   return `${String(degrees).padStart(longitude ? 3 : 2, '0')}${minutes.toFixed(7).padStart(10, '0')}`
 }
 
-function nmeaTrack(): string {
-  return Array.from({ length: 3 }, (_, index) => {
+function nmeaTrack(count = 3): string {
+  return Array.from({ length: count }, (_, index) => {
     const time = `03000${index}.00`
     const latitude = coordinate(39.98 + index * 0.00001)
     const longitude = coordinate(116.47 + index * 0.00001, true)
@@ -39,7 +39,7 @@ function mainTrack(): string {
   ).join('\n')
 }
 
-async function openDeviation(page: Page, withMainTrack = true): Promise<void> {
+async function openDeviation(page: Page, mainTrackSource: boolean | string = true): Promise<void> {
   await page.addInitScript(() => {
     localStorage.setItem('nav-tools:locale', 'en-US')
     const clearRect = CanvasRenderingContext2D.prototype.clearRect
@@ -145,10 +145,12 @@ async function openDeviation(page: Page, withMainTrack = true): Promise<void> {
   await page.goto(`/#card/${payload}`)
   await expect(page.locator('.deviation-container')).toBeVisible()
   await page.evaluate(
-    async ({ withMainTrack }) => {
+    async (source) => {
       const { useNmea } = await import('/src/composables/gnss/useNmea.ts')
       const store = useNmea()
-      if (withMainTrack) {
+      if (typeof source === 'string') {
+        store.processRawData(`${source}\n`)
+      } else if (source) {
         const rows = Array.from(
           { length: 4 },
           (_, index) =>
@@ -163,7 +165,7 @@ async function openDeviation(page: Page, withMainTrack = true): Promise<void> {
         longitude: store.currentData.value.longitude,
       })
     },
-    { withMainTrack },
+    mainTrackSource,
   )
   await expect(page.locator('.comparison-panel')).toHaveCount(0)
   await expect(page.locator('.comparison-floating')).toHaveCount(0)
@@ -250,7 +252,7 @@ test('keeps the current track as main and loads only a reference for Main minus 
     'background-color',
     'rgb(0, 64, 128)',
   )
-  if ((await page.locator('.tracking-switch input').getAttribute('aria-checked')) === 'true') {
+  if ((await page.locator('.tracking-switch').getAttribute('aria-pressed')) === 'true') {
     await page.locator('.tracking-switch').click()
   }
   await expect(page.getByTestId('deviation-bottom-status')).toContainText('N = 3')
@@ -335,7 +337,7 @@ test('shows complete reference-only position and speed views without a main trac
     buffer: Buffer.from(posTrack()),
   })
   await expect(page.locator('.comparison-match-info')).toHaveText('Waiting for main track')
-  await expect(page.locator('.tracking-switch')).not.toHaveClass(/is-checked/)
+  await expect(page.locator('.tracking-switch')).toHaveAttribute('aria-pressed', 'false')
 
   await page.locator('.view-switch').click()
   await page.getByRole('option', { name: 'Position', exact: true }).click()
@@ -547,9 +549,11 @@ test('pans the visible comparison canvas without losing the tracks', async ({ pa
   expect(afterTransform[7]).not.toBe(beforeTransform[7])
 })
 
-test('uses icon-only toolbar buttons without overflow at narrow widths', async ({ page }) => {
+test('uses icon-only toolbar buttons without overflow at wide and narrow widths', async ({
+  page,
+}) => {
   await openDeviation(page)
-  for (const width of [760, 560, 360, 280, 240]) {
+  for (const width of [980, 760, 560, 360, 280, 240]) {
     await page.locator('.deviation-container').evaluate((element, nextWidth) => {
       ;(element as HTMLElement).style.width = `${nextWidth}px`
     }, width)
@@ -560,17 +564,14 @@ test('uses icon-only toolbar buttons without overflow at narrow widths', async (
           scroll: element.scrollWidth,
         })),
       )
-      .toEqual({ client: width - 16, scroll: width - 16 })
+      .toEqual({ client: width - (width > 800 ? 24 : 16), scroll: width - (width > 800 ? 24 : 16) })
     const layout = await page.locator('.controls').evaluate((element) => ({
-      labelsVisible: [...element.querySelectorAll('.status-toggle-copy, .control-btn-label')].some(
-        (label) => getComputedStyle(label).display !== 'none',
-      ),
-      buttonWidths: [...element.querySelectorAll('.right-buttons .control-btn')].map(
-        (button) => button.getBoundingClientRect().width,
-      ),
+      buttons: [...element.querySelectorAll('.right-buttons .control-btn')].map((button) => {
+        const { width, height } = button.getBoundingClientRect()
+        return { width, height, text: button.textContent?.trim() }
+      }),
     }))
-    expect(layout.labelsVisible).toBe(false)
-    expect(layout.buttonWidths).toEqual([28, 28, 28, 28])
+    expect(layout.buttons).toEqual(Array(4).fill({ width: 28, height: 28, text: '' }))
   }
   await expect(page.locator('.tracking-switch')).toBeHidden()
   await expect(page.getByTestId('load-reference-track').locator('.el-icon')).toBeVisible()
@@ -579,7 +580,7 @@ test('uses icon-only toolbar buttons without overflow at narrow widths', async (
 test('tracks and selects the same epoch across dual-track deviation, position and speed views', async ({
   page,
 }) => {
-  await openDeviation(page)
+  await openDeviation(page, nmeaTrack(4))
   const referenceText = Array.from(
     { length: 4 },
     (_, index) =>
@@ -604,15 +605,15 @@ test('tracks and selects the same epoch across dual-track deviation, position an
     })
   })
   await page.locator('.tracking-switch').click()
-  await expect(page.getByRole('switch')).toBeChecked()
+  await expect(page.locator('.tracking-switch')).toHaveAttribute('aria-pressed', 'true')
 
   const selectView = async (name: 'Deviation' | 'Position' | 'Speed') => {
     await page.locator('.view-switch').click()
     await page.getByRole('option', { name, exact: true }).click()
   }
-  const hoverChart = async (chart: ReturnType<Page['locator']>) => {
+  const hoverChart = async (chart: ReturnType<Page['locator']>, horizontalRatio = 0.5) => {
     const bounds = (await chart.locator('.metric-plot').boundingBox())!
-    await page.mouse.move(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2)
+    await page.mouse.move(bounds.x + bounds.width * horizontalRatio, bounds.y + bounds.height / 2)
     await expect(chart.locator('.metric-tooltip')).toBeVisible()
   }
   const expectDifferenceHint = async (chart: ReturnType<Page['locator']>, unit: string) => {
@@ -664,7 +665,8 @@ test('tracks and selects the same epoch across dual-track deviation, position an
 
   await selectView('Speed')
   const speed = page.locator('.speed-chart-container .metric-chart')
-  await hoverChart(speed)
+  // The reference POS derives speed between fixes. Hover past the first fix.
+  await hoverChart(speed, 0.85)
   await expectDifferenceHint(speed, 'km/h')
   await expect(page.locator('.speed-chart-container .metric-reference-label')).toHaveCount(0)
   await expect(page.locator('.comparison-floating')).toBeVisible()

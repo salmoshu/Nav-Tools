@@ -153,12 +153,12 @@ watch(
   display: flex;
   flex-wrap: wrap;
   align-content: flex-start;
-  gap: 6px;
+  gap: var(--ui-space-sm);
   overflow: clip;
 }
 
 .panel-list--compact {
-  gap: 4px;
+  gap: var(--ui-space-xs);
 }
 
 .panel-list--compact .panel-chip {
@@ -170,7 +170,7 @@ watch(
   display: inline-flex;
   flex: none;
   align-items: center;
-  gap: 4px;
+  gap: var(--ui-space-xs);
   padding: 3px 7px;
   border: 1px solid var(--app-border);
   border-radius: 4px;
@@ -203,14 +203,14 @@ watch(
   display: flex;
   max-height: 260px;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--ui-space-tight);
   overflow-y: auto;
 }
 
 .panel-overflow-popper .panel-overflow__item {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--ui-space-sm);
   padding: 6px 8px;
   border: none;
   border-radius: 6px;

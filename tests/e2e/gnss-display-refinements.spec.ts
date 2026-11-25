@@ -82,24 +82,34 @@ test('deviation keeps only the current Float status in small windows and restore
       const { useNmea } = await import('/src/composables/gnss/useNmea.ts')
       for (const epoch of epochs) useNmea().processRawData(epoch)
     },
-    [signalEpoch(0, 45, 4), signalEpoch(1, 45, 5)],
+    [signalEpoch(0, 45, 1), signalEpoch(1, 45, 4), signalEpoch(2, 45, 5)],
   )
   await expect(page.locator('.deviation-status-card')).toHaveCount(0)
   await page.getByRole('button', { name: 'Show or hide position status' }).click()
   const card = page.locator('.deviation-status-card')
   await expect(card.locator('.status-card-summary')).toHaveText('Float')
   await expect(card.locator('.status-card-metric')).toHaveCount(3)
+  const rms = card.locator('.status-card-metric-rms')
+  await expect(rms.locator('span').last()).toHaveText(/^2D /)
+  expect(
+    await rms.evaluate(
+      (row) =>
+        row.lastElementChild!.getBoundingClientRect().right <=
+        row.getBoundingClientRect().right + 1,
+    ),
+  ).toBe(true)
   await expect(card.locator('.status-card-metric').nth(0)).toContainText('U')
   await expect(card.locator('[data-quality]')).toHaveCount(0)
   const bottom = page.getByTestId('deviation-bottom-status')
   await expect(bottom).toContainText('E =')
-  await expect(bottom.locator('[data-quality="5"]')).toHaveText('5: Float')
+  await expect(bottom.locator('[data-quality="5"]')).toHaveText('Float')
   await page.locator('.tracking-switch').click()
   const fixedRow = bottom.locator('[data-quality="4"]')
   const floatRow = bottom.locator('[data-quality="5"]')
-  await expect(fixedRow).toHaveText('4: 1 (50.00%)')
-  await expect(floatRow).toHaveText('5: 1 (50.00%)')
-  await expect(bottom).toContainText('N = 2')
+  await expect(bottom.locator('[data-quality="1"]')).toHaveText('Single:1 (33.33%)')
+  await expect(fixedRow).toHaveText('Fix:1 (33.33%)')
+  await expect(floatRow).toHaveText('Float:1 (33.33%)')
+  await expect(bottom).toContainText('N = 3')
   await expect(fixedRow).toHaveCSS('color', 'rgb(0, 128, 0)')
   await expect(floatRow).toHaveCSS('color', 'rgb(255, 165, 0)')
 
@@ -125,7 +135,7 @@ test('deviation keeps only the current Float status in small windows and restore
       expect(button.height).toBe(28)
     }
     for (let index = 1; index < bounds.length; index += 1) {
-      expect(bounds[index].x - bounds[index - 1].x - bounds[index - 1].width).toBe(4)
+      expect(bounds[index].x - bounds[index - 1].x - bounds[index - 1].width).toBe(6)
     }
     await expect(card.locator('.status-card-heading > span:last-child')).toBeHidden()
     await expect(card.locator('.status-card-indicator')).toBeVisible()
@@ -225,6 +235,19 @@ test('signal bars show grouped horizontal labels, current and peak values, and k
     )
   }
   await expect(page.locator('.signal-bar-group')).toHaveCount(3)
+  async function expectLegendInsets() {
+    const insets = await page.locator('.signal-bar-wrapper').evaluate((panel) => {
+      const bounds = panel.getBoundingClientRect()
+      return {
+        left: panel.querySelector('.signal-bar-group')!.getBoundingClientRect().left - bounds.left,
+        right:
+          bounds.right - panel.querySelector('.signal-peak-key')!.getBoundingClientRect().right,
+      }
+    })
+    expect(insets.left).toBeGreaterThanOrEqual(11)
+    expect(insets.right).toBeGreaterThanOrEqual(11)
+  }
+  await expectLegendInsets()
   await expect
     .poll(() => page.evaluate(() => Reflect.get(window, '__signalText').includes('G01')))
     .toBe(true)
@@ -245,6 +268,7 @@ test('signal bars show grouped horizontal labels, current and peak values, and k
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
   await page.screenshot({ path: 'test-results/gnss-signal-bars-dark.png' })
   await page.setViewportSize({ width: 420, height: 420 })
+  await expectLegendInsets()
   await expect
     .poll(() =>
       page
@@ -253,8 +277,10 @@ test('signal bars show grouped horizontal labels, current and peak values, and k
     )
     .toBe(true)
   await page.screenshot({ path: 'test-results/gnss-signal-bars-narrow.png' })
-  await page.locator('.constellation-filter').click()
-  await page.getByRole('option', { name: 'GPS', exact: true }).click()
+  const chartFilters = page.getByRole('button', { name: 'Chart filters', exact: true })
+  await chartFilters.click()
+  await page.getByRole('radio', { name: 'GPS', exact: true }).check()
+  await chartFilters.click()
   await expect(page.locator('.signal-bar-group')).toHaveCount(1)
   const chart = page.locator('.signal-bar-chart')
   await expect

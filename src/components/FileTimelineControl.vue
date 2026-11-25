@@ -4,6 +4,7 @@ import { ArrowLeft, ArrowRight, Clock, Close, VideoPause, VideoPlay } from '@ele
 import { ElIcon } from 'element-plus'
 import { useFileTimeline, type FileTimeline } from '@/composables/useFileTimeline'
 import { t } from '@/i18n'
+import FileProgressTrack from './FileProgressTrack.vue'
 
 const props = withDefaults(
   defineProps<{
@@ -160,14 +161,7 @@ watch(active, (visible) => {
     @wheel.stop
   >
     <div v-if="indexing" class="timeline-indexing" :title="t('data.timelineIndexing')">
-      <span>{{
-        isVertical
-          ? `${Math.round(indexingProgress)}%`
-          : `${t('data.timelineIndexing')} ${Math.round(indexingProgress)}%`
-      }}</span>
-      <span class="indexing-track">
-        <span class="indexing-fill" :style="{ width: `${indexingProgress}%` }"></span>
-      </span>
+      <FileProgressTrack :value="indexingProgress" :label="t('data.timelineIndexing')" :compact="isVertical" />
     </div>
 
     <template v-else-if="!isVertical">
@@ -348,7 +342,7 @@ watch(active, (visible) => {
 }
 
 .timeline-panel--horizontal {
-  gap: 6px;
+  gap: var(--ui-space-sm);
   padding: 4px 7px;
   border: 1px solid color-mix(in srgb, var(--el-color-primary) 14%, var(--app-border));
   border-radius: 8px;
@@ -503,36 +497,19 @@ watch(active, (visible) => {
 }
 
 .timeline-indexing {
-  gap: 6px;
+  gap: var(--ui-space-sm);
   padding: 2px 6px;
   color: var(--app-text-secondary);
   white-space: nowrap;
 }
 
-.indexing-track {
-  width: 240px;
-  height: 4px;
-  overflow: hidden;
-  background: var(--app-surface-muted);
-  border-radius: 999px;
-}
-
-.indexing-fill {
-  display: block;
-  height: 100%;
-  background: var(--el-color-primary);
-  transition: width 0.12s linear;
-}
-
 .file-timeline--vertical .timeline-indexing {
+  --file-progress-width: 24px;
+
   width: 30px;
   padding: 2px 0;
   flex-direction: column;
   font-size: 10px;
-}
-
-.file-timeline--vertical .indexing-track {
-  width: 24px;
 }
 
 .timeline-trigger {
@@ -546,7 +523,7 @@ watch(active, (visible) => {
   padding: 9px;
   flex-direction: column;
   align-items: stretch;
-  gap: 8px;
+  gap: var(--ui-space-md);
   background: var(--app-surface);
   border: 1px solid var(--app-border);
   border-radius: 8px;
@@ -554,7 +531,7 @@ watch(active, (visible) => {
 }
 
 .timeline-actions {
-  gap: 5px;
+  gap: var(--ui-space-xs);
 }
 
 .timeline-close {
@@ -568,6 +545,6 @@ watch(active, (visible) => {
 
 .timeline-details {
   justify-content: space-between;
-  gap: 8px;
+  gap: var(--ui-space-md);
 }
 </style>

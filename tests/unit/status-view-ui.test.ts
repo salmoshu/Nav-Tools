@@ -49,6 +49,6 @@ describe('Status View presentation', () => {
     const source = readFileSync('src/components/StatusBar.vue', 'utf8')
 
     expect(source).toMatch(/\.dialog-footer\s*\{[\s\S]*?display:\s*inline-flex/)
-    expect(source).toMatch(/\.dialog-footer\s*\{[\s\S]*?gap:\s*8px/)
+    expect(source).toMatch(/\.dialog-footer\s*\{[\s\S]*?gap:\s*var\(--ui-space-md\)/)
   })
 })

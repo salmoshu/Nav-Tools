@@ -41,6 +41,7 @@ import { detectGnssTextParser } from '@/core/data/GnssTextFormat'
 import { isRnxFileName, rtcmBasename } from '@/core/gnssraw/RtcmFileAccess'
 import { solveRtcmSppFile } from '@/core/gnss/RtcmSppFile'
 import { RtcmSppSession, type SppBatch, type SppObservations } from '@/core/gnss/RtcmSppSession'
+import { RtcmMessageStream, type RtcmConsoleMessage, type RtcmMessageRoute } from '@/core/gnss/RtcmMessages'
 import { detectDataFormat, DETECTABLE_FORMATS, FORMAT_LABELS, isTextFormat, type DataFormat, type DetectableFormat, type FormatDetection } from '@/core/data/DataFormat'
 import { useAutoFormatSettings } from '@/composables/useAutoFormatSettings'
 import { FilePlaybackService } from '@/core/file/FilePlaybackService'
@@ -72,6 +73,7 @@ const {
 const {
   addMessages: initFlowConsole,
   addMessage: addFlowConsole,
+  addRtcmMessages,
   beginFileReplayMessages,
   addFileReplayData,
   endFileReplayMessages,
@@ -90,7 +92,6 @@ const {
   currentApplicationId,
 } = useApplicationSelector()
 const autoFormatSettings = useAutoFormatSettings()
-const rtcmSppStatus = ref<SppBatch['status']>()
 const rtcmSppCaptureTime = ref('')
 const useRtcmSppHere = () => currentApplicationId.value === 'gnss'
 
@@ -292,6 +293,13 @@ const activeDataParser = computed<TextDataParser>(() => {
   return 'raw'
 })
 
+const activeMessageFormat = computed(() => {
+  const source = globalDevice.value.type
+  if (source && effectiveFormat(source) === 'rtcm3' && useRtcmSppHere()) return 'rtcm3'
+  const parser = activeDataParser.value
+  return parser === 'raw' || parser === 'rtklib-pos' ? 'none' : parser
+})
+
 function isGnssSolutionParser(parser: TextDataParser): boolean {
   return parser === 'nmea' || parser === 'rtklib-pos'
 }
@@ -305,24 +313,29 @@ function appendGnssDataByParser(
   else addGnssData(data, observations)
 }
 
-function liveGnssContext(): { key: string; parser: 'nmea' | 'rtklib-pos' } | undefined {
+function liveGnssContext(): {
+  key: string
+  parser: 'nmea' | 'rtklib-pos'
+  captureTextMessages: boolean
+} | undefined {
   const device = globalDevice.value
   if (device.type !== 'serial' && device.type !== 'network') return undefined
   const configured = activeDataParser.value
   if (!isGnssSolutionParser(configured)) return undefined
   const parser = configured === 'rtklib-pos' ? 'rtklib-pos' : 'nmea'
+  const format = effectiveFormat(device.type)
   const key = JSON.stringify([
     device.type, device.path, device.baudRate, device.dataBits, device.stopBits,
-    device.parity, device.protocol, device.host, device.port, effectiveFormat(device.type), parser,
+    device.parity, device.protocol, device.host, device.port, format, parser,
   ])
-  return { key, parser }
+  return { key, parser, captureTextMessages: format !== 'rtcm3' }
 }
 
 function beginLiveGnssHistory(): void {
   const type = globalDevice.value.type
   if ((type === 'serial' || type === 'network') && dataSourceSettings[type].format === 'auto' && !detectedFormats[type]) return
   const context = liveGnssContext()
-  if (context) gnssLiveHistory.start(context.key, context.parser)
+  if (context) gnssLiveHistory.start(context.key, context.parser, context.captureTextMessages)
   else gnssLiveHistory.discard()
 }
 
@@ -350,19 +363,19 @@ let streamDecoder = new TextDecoder()
 let streamRawSeen = false
 let streamProbeFinished = false
 let streamRtcm: 'raw' | 'spp' | undefined
+let streamRtcmMessages: RtcmMessageStream | undefined
 let sppStream: RtcmSppSession | undefined
 let sppStreamDrain: Promise<void> | undefined
 let streamProbeTimer: ReturnType<typeof setTimeout> | undefined
 
 function consumeSppBatch(session: RtcmSppSession, batch: SppBatch): void {
   if (sppStream !== session) return
-  if (batch.status) rtcmSppStatus.value = batch.status
   if (!batch.nmea) return
-  if (globalDevice.value.connected === true) routeIncomingData(batch.nmea, batch.nmea, batch.observations)
+  if (globalDevice.value.connected === true)
+    routeIncomingData(batch.nmea, batch.nmea, batch.observations, 'spp')
   else {
     gnssLiveHistory.append(batch.nmea)
     addGnssData(batch.nmea, batch.observations)
-    addFlowConsole(batch.nmea)
   }
 }
 
@@ -380,20 +393,31 @@ function beginRtcmStream(source: 'serial' | 'network'): void {
     return
   }
   streamRtcm = 'spp'
-  rtcmSppStatus.value = undefined
-  const session = new RtcmSppSession()
-  sppStream = session
+  streamRtcmMessages = new RtcmMessageStream()
   beginLiveGnssHistory()
-  void session.request({ type: 'start' }).catch((error) => failSppStream(session, error))
+  try {
+    const session = new RtcmSppSession()
+    sppStream = session
+    void session.request({ type: 'start' }).catch((error) => failSppStream(session, error))
+  } catch (error) {
+    ElMessage.error(t('data.dataLoadFailed', { error: String(error) }))
+  }
 }
 
 function appendRtcmStream(bytes: Uint8Array): void {
   if (streamRtcm === 'raw') useGnssRaw().appendStream(bytes)
+  if (streamRtcmMessages) routeLiveRtcmMessages(streamRtcmMessages.push(bytes))
   const session = sppStream
   if (streamRtcm !== 'spp' || !session) return
   void session.request({ type: 'push', bytes: new Uint8Array(bytes).buffer })
     .then((batch) => consumeSppBatch(session, batch))
     .catch((error) => failSppStream(session, error))
+}
+
+function routeLiveRtcmMessages(records: RtcmConsoleMessage[]): void {
+  if (records.length === 0) return
+  if (isWindowActive('raw-messages')) addRtcmMessages(records)
+  ipc.send('broadcast-incoming-data', '', undefined, records)
 }
 
 function clearStreamProbeTimer(): void {
@@ -416,6 +440,7 @@ function beginStreamDetection(source: 'serial' | 'network'): void {
   sppStreamDrain = undefined
   previousSpp?.close()
   streamRtcm = undefined
+  streamRtcmMessages = undefined
   if (dataSourceSettings[source].format === 'auto' && previous && (previous.format === 'nmea' || previous.format === 'rtklib-pos')) {
     const context = liveGnssContext()
     if (context && gnssLiveHistory.matches(context.key)) {
@@ -438,6 +463,8 @@ function beginStreamDetection(source: 'serial' | 'network'): void {
 }
 function finishStreamDetection(): void {
   clearStreamProbeTimer()
+  if (streamRtcmMessages) routeLiveRtcmMessages(streamRtcmMessages.finish())
+  streamRtcmMessages = undefined
   if (streamRtcm === 'raw') useGnssRaw().stopStream()
   else if (streamRtcm === 'spp' && sppStream) {
     const session = sppStream
@@ -553,9 +580,9 @@ watch(
 )
 
 watch(
-  [activeDataParser, activeRegexPattern],
-  ([parser, regexPattern]) => {
-    flowDataFormat.value = parser === 'raw' || parser === 'rtklib-pos' ? 'none' : parser
+  [activeMessageFormat, activeRegexPattern],
+  ([format, regexPattern]) => {
+    flowDataFormat.value = format
     flowRegexPattern.value = regexPattern
   },
   { immediate: true },
@@ -693,13 +720,18 @@ function openNetworkDevice(): void {
     })
 }
 
-function routeIncomingData(data: string, decodedData = data, observations?: SppObservations): void {
+function routeIncomingData(
+  data: string,
+  decodedData = data,
+  observations?: SppObservations,
+  route?: 'spp',
+): void {
   if (globalDevice.value.connected !== true) return
   if (globalDevice.value.type === 'serial' || globalDevice.value.type === 'network') {
     const context = liveGnssContext()
     if (context) {
       if (!gnssLiveHistory.receiving || !gnssLiveHistory.matches(context.key))
-        gnssLiveHistory.start(context.key, context.parser)
+        gnssLiveHistory.start(context.key, context.parser, context.captureTextMessages)
       gnssLiveHistory.append(decodedData)
     } else if (gnssLiveHistory.receiving) gnssLiveHistory.discard()
   }
@@ -713,24 +745,35 @@ function routeIncomingData(data: string, decodedData = data, observations?: SppO
     dataParser: activeDataParser.value,
     gnssData: decodedData,
     observations,
+    suppressRawMessages: route === 'spp',
   })
   // 只有持有已配置设备的渲染进程（即主窗口）才把原始数据广播给独立窗口
   if (globalDevice.value.connected !== null) {
-    ipc.send('broadcast-incoming-data', data, observations)
+    ipc.send('broadcast-incoming-data', data, observations, route)
   }
 }
 
 /**
  * 将数据路由到指定独立窗口（用于 detached card window）
  */
-export function routeDataToWindow(data: string, windowId: string, observations?: SppObservations): void {
+export function routeDataToWindow(
+  data: string,
+  windowId: string,
+  observations?: SppObservations,
+  route?: RtcmMessageRoute,
+): void {
   const windowDefinition = getWindowsByIds([windowId])[0]
+  if (Array.isArray(route)) {
+    if (windowDefinition?.id === 'raw-messages') addRtcmMessages(route)
+    return
+  }
   dataRouter.route(data, {
     activeDataModes: [windowDefinition?.funcMode ?? 'general'],
     activeWindowIds: [windowId],
     displayFormat: 'ascii',
     dataParser: activeDataParser.value,
     observations,
+    suppressRawMessages: route === 'spp',
   })
 }
 
@@ -927,6 +970,7 @@ async function loadGnssTimelineSource(
   readSource: GnssTimelineReader,
   notify = true,
   parser?: 'nmea' | 'rtklib-pos',
+  textMessages = true,
 ): Promise<void> {
   gnssLiveHistory.discard()
   const streamPlot = isWindowActive('plot')
@@ -938,7 +982,7 @@ async function loadGnssTimelineSource(
   let pendingDetectionText = ''
   const routeAuxiliaryText = (text: string) => {
     if (streamPlot) addFlowData(text)
-    addFileReplayData(text)
+    if (textMessages) addFileReplayData(text)
   }
   const appendChunk = (chunk: string, observations?: SppObservations) => {
     if (!chunk) return
@@ -966,7 +1010,7 @@ async function loadGnssTimelineSource(
   clearGnssData()
   clearFlowData()
   clearFlowConsole()
-  beginFileReplayMessages()
+  if (textMessages) beginFileReplayMessages()
   beginGnssBulkImport()
 
   try {
@@ -986,7 +1030,7 @@ async function loadGnssTimelineSource(
     }
     prepareTimelineProjection(timelineMode)
   } finally {
-    endFileReplayMessages()
+    if (textMessages) endFileReplayMessages()
     endGnssBulkImport()
   }
 
@@ -1441,27 +1485,43 @@ export function useDevice() {
       sppStream = undefined
       ending?.close()
       await filePlaybackService.stop()
-      rtcmSppStatus.value = undefined
       dataSourceSettings.activeSource = 'file'
       globalDevice.value = { type: 'file', path, connected: false }
       filePath.value = path
       saveDataSourceSettings()
       let fixes = 0
       let sizeBytes = 0
-      await loadGnssTimelineSource(timelineMode, async (onChunk, onProgress) => {
-        const result = await solveRtcmSppFile({
-          data: typeof primary !== 'string' && typeof window.electronAPI?.gnssSppFileInfo === 'function'
-            ? window.electronAPI.getPathForFile(primary) || primary
-            : primary,
-          tag,
-          navigation,
-          captureTimeS: Number.isFinite(captureTimeS) ? captureTimeS : undefined,
-        }, onChunk, onProgress)
-        if (!result.epochs) throw new Error(t('data.sppNoObservations'))
-        fixes = result.fixes
-        sizeBytes = result.sizeBytes
-      }, false, 'nmea')
-      rtcmSppStatus.value = fixes ? 'fix' : 'no-fix'
+      const rawMessages = isWindowActive('raw-messages') ? new RtcmMessageStream() : undefined
+      await loadGnssTimelineSource(
+        timelineMode,
+        async (onChunk, onProgress) => {
+          try {
+            const result = await solveRtcmSppFile(
+              {
+                data:
+                  typeof primary !== 'string' &&
+                  typeof window.electronAPI?.gnssSppFileInfo === 'function'
+                    ? window.electronAPI.getPathForFile(primary) || primary
+                    : primary,
+                tag,
+                navigation,
+                captureTimeS: Number.isFinite(captureTimeS) ? captureTimeS : undefined,
+              },
+              onChunk,
+              onProgress,
+              rawMessages ? (bytes) => addRtcmMessages(rawMessages.push(bytes)) : undefined,
+            )
+            if (!result.epochs) throw new Error(t('data.sppNoObservations'))
+            fixes = result.fixes
+            sizeBytes = result.sizeBytes
+          } finally {
+            if (rawMessages) addRtcmMessages(rawMessages.finish())
+          }
+        },
+        false,
+        'nmea',
+        false,
+      )
       if (fixes) ElMessage.success(t('data.sppFileSolved', { count: fixes }))
       else ElMessage.warning(t('data.sppFileNoFix'))
       recentInputFilesStore.record({
@@ -2462,7 +2522,6 @@ export function useDevice() {
     filePath,
     fileIsMcap,
     fileIsRtcmSpp,
-    rtcmSppStatus,
     rtcmSppCaptureTime,
     fileIsMcapPartSlice,
     fileInputLoading,

@@ -516,8 +516,10 @@ function handleUpgradeEvent(_event: unknown, value: IapUpgradeEvent): void {
   const previous = snapshot.value.phase
   snapshot.value = value.snapshot
   if (value.snapshot.phase === 'error' && previous !== 'error') {
-    ElMessageBox.alert(value.snapshot.error || t('common.iap.failed'), t('common.iap.failed'), {
-      type: 'error',
+    ElMessage.error({
+      message: value.snapshot.error || t('common.iap.failed'),
+      duration: 7000,
+      customClass: 'app-message-detail',
     })
   }
 }
@@ -544,7 +546,7 @@ onUnmounted(() => window.ipcRenderer?.off('iap-upgrade-event', handleUpgradeEven
 .iap-dialog-body {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--ui-space-lg);
 }
 .iap-section,
 .iap-log-section {
@@ -558,7 +560,7 @@ onUnmounted(() => window.ipcRenderer?.off('iap-upgrade-event', handleUpgradeEven
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: var(--ui-space-lg);
   margin-bottom: 10px;
 }
 .protocol-heading {
@@ -572,11 +574,11 @@ onUnmounted(() => window.ipcRenderer?.off('iap-upgrade-event', handleUpgradeEven
 .firmware-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: 8px;
+  gap: var(--ui-space-md);
 }
 .form-grid {
   display: grid;
-  gap: 0 12px;
+  gap: 0 var(--ui-space-lg);
 }
 .common-grid {
   grid-template-columns: repeat(5, minmax(110px, 1fr));
@@ -602,7 +604,7 @@ onUnmounted(() => window.ipcRenderer?.off('iap-upgrade-event', handleUpgradeEven
 }
 .stats-row {
   display: flex;
-  gap: 14px;
+  gap: var(--ui-space-lg);
   flex-wrap: wrap;
   margin-top: 8px;
   font-size: 12px;
@@ -615,7 +617,7 @@ onUnmounted(() => window.ipcRenderer?.off('iap-upgrade-event', handleUpgradeEven
 .iap-log-toggle {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--ui-space-sm);
   padding: 0;
   border: none;
   background: none;

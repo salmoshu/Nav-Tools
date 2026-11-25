@@ -474,7 +474,7 @@ function errorMessage(error: unknown): string {
 .file-tree-toolbar {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto auto;
-  gap: 2px;
+  gap: var(--ui-space-tight);
   align-items: center;
   padding: 6px;
   border-bottom: 1px solid var(--app-border);
@@ -497,7 +497,7 @@ function errorMessage(error: unknown): string {
 }
 .file-tree-status {
   display: grid;
-  gap: 4px;
+  gap: var(--ui-space-xs);
   padding: 6px 8px;
   color: var(--app-text-muted);
   font-size: 11px;
@@ -508,7 +508,7 @@ function errorMessage(error: unknown): string {
   align-items: center;
   min-width: 0;
   min-height: 14px;
-  gap: 6px;
+  gap: var(--ui-space-sm);
 }
 .file-tree-status__text {
   overflow: hidden;

@@ -10,7 +10,7 @@ test('opens the user application selector in the renderer', async ({ page }) => 
   await expect(page.getByText('GNSS', { exact: true })).toBeVisible()
   await expect(page.getByText('Flow', { exact: true })).toHaveCount(0)
   await expect(page.getByText('Camera', { exact: true })).toHaveCount(0)
-  await expect(page.locator('.application-card')).toHaveCount(4)
+  await expect(page.locator('.application-card')).toHaveCount(2)
   await page.getByRole('button', { name: '重置应用' }).click()
   await expect(page.locator('.selector-backdrop > .el-overlay.is-message-box')).toBeVisible()
   await expect(page.locator('.selector-backdrop > .el-overlay.is-message-box')).toHaveCSS(

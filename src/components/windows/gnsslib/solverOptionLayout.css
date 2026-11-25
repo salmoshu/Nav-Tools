@@ -1,0 +1,251 @@
+.solver-option-editor {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--ui-space-lg);
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  container: solver-options / inline-size;
+  text-align: left;
+}
+
+.options-toolbar {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ui-space-md);
+}
+
+.options-search {
+  flex: 1 1 160px;
+  min-width: 0;
+}
+
+.solver-config-actions {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  gap: var(--ui-space-sm);
+}
+
+.solver-config-actions :deep(.el-button) {
+  height: 28px;
+  margin: 0;
+  padding-inline: var(--ui-space-md);
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+.options-layout {
+  display: grid;
+  flex: 1;
+  grid-template-columns: minmax(138px, 24%) minmax(0, 1fr);
+  gap: var(--ui-space-lg);
+  min-height: 0;
+}
+
+.options-categories {
+  display: flex;
+  flex-direction: column;
+  align-self: start;
+  gap: var(--ui-space-xs);
+  min-width: 0;
+  max-height: 100%;
+  overflow: auto;
+  padding: var(--ui-space-xs);
+  border: 1px solid var(--app-border);
+  border-radius: 9px;
+  background: var(--app-surface-muted);
+}
+
+.options-category {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ui-space-sm);
+  min-height: 33px;
+  padding: var(--ui-space-sm) var(--ui-space-md);
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--app-text-secondary);
+  text-align: left;
+  font: inherit;
+  line-height: 1.35;
+  cursor: pointer;
+}
+
+.options-category:hover {
+  background: var(--app-hover);
+  color: var(--app-text);
+}
+
+.options-category:is(.is-active, [aria-selected='true']) {
+  border-color: color-mix(in srgb, var(--el-color-primary) 28%, var(--app-border));
+  background: var(--app-surface);
+  color: var(--el-color-primary);
+  font-weight: 600;
+}
+
+.options-category-picker {
+  display: none;
+}
+
+.options-form {
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  padding: var(--ui-space-lg);
+  border: 1px solid var(--app-border);
+  border-radius: 9px;
+  background: var(--app-surface);
+  scrollbar-width: thin;
+  scrollbar-color: var(--app-border-strong) transparent;
+}
+
+.options-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--ui-space-md);
+  margin-bottom: var(--ui-space-lg);
+}
+
+.options-heading h3 {
+  margin: 0;
+  color: var(--app-text);
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.options-clear {
+  flex: none;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--el-color-primary);
+  font: inherit;
+  cursor: pointer;
+}
+
+.options-empty {
+  color: var(--app-text-secondary);
+  line-height: 1.6;
+}
+
+.options-group + .options-group {
+  margin-top: var(--ui-space-xl);
+  padding-top: var(--ui-space-xl);
+  border-top: 1px solid var(--app-border);
+}
+
+.options-group-title,
+.options-group-toggle {
+  margin: 0 0 var(--ui-space-md);
+  color: var(--app-text-secondary);
+  font-size: 11px;
+  font-weight: 620;
+}
+
+.options-group-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--ui-space-sm);
+  width: 100%;
+  min-height: 24px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.options-group-toggle .el-icon {
+  transition: transform 0.15s;
+}
+
+.options-group-toggle .expanded {
+  transform: rotate(90deg);
+}
+
+.options-field-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--ui-space-lg) var(--ui-space-xl);
+}
+
+.option-field,
+.options-field-grid > label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-space-sm);
+  min-width: 0;
+  color: var(--app-text);
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.options-field-grid :deep(.el-input-number),
+.options-field-grid :deep(.el-select) {
+  width: 100%;
+}
+
+.options-field-grid :deep(.el-input-number .el-input__inner) {
+  text-align: left;
+  font-variant-numeric: tabular-nums;
+}
+
+.options-field-grid :deep(.el-switch) {
+  align-self: flex-start;
+}
+
+button:focus-visible {
+  outline: 2px solid var(--el-color-primary);
+  outline-offset: -2px;
+}
+
+@container solver-options (max-width: 640px) {
+  .options-layout {
+    display: flex;
+    flex-direction: column;
+    gap: var(--ui-space-md);
+  }
+
+  .options-categories {
+    display: none;
+  }
+
+  .options-category-picker {
+    display: block;
+    flex: none;
+  }
+
+  .options-category-picker .el-select {
+    width: 100%;
+  }
+
+  .options-form {
+    flex: 1;
+  }
+}
+
+@container solver-options (max-width: 440px) {
+  .options-field-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .options-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .options-toolbar .options-search {
+    flex-basis: auto;
+  }
+
+  .solver-config-actions :deep(.el-button) {
+    flex: 1;
+  }
+}

@@ -1,8 +1,9 @@
 <template>
-  <div class="solver-options">
+  <div class="solver-options solver-option-editor">
     <div class="options-toolbar">
       <el-input
         v-model="query"
+        size="small"
         class="options-search"
         :prefix-icon="Search"
         :placeholder="t('gnssRaw.solverOptions.search')"
@@ -409,30 +410,10 @@ watch([activeCategory, query, showModified], () => {
 </script>
 
 <style scoped>
-.solver-options {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  gap: 12px;
-  min-width: 0;
-  min-height: 0;
-  overflow: hidden;
-  container: solver-options / inline-size;
-  text-align: left;
-}
-.options-toolbar {
-  display: flex;
-  flex: none;
-  align-items: center;
-  gap: 10px;
-}
-.options-search {
-  flex: 1;
-  min-width: 0;
-}
 .options-modified {
   flex: none;
-  padding: 6px 10px;
+  height: 28px;
+  padding: 0 var(--ui-space-md);
   border: 1px solid var(--app-border);
   border-radius: 6px;
   background: var(--app-surface);
@@ -442,229 +423,79 @@ watch([activeCategory, query, showModified], () => {
   white-space: nowrap;
   cursor: pointer;
 }
+
 .options-modified[aria-pressed='true'] {
   border-color: var(--el-color-primary-light-5);
   background: var(--el-color-primary-light-9);
   color: var(--el-color-primary);
 }
+
 .options-modified:disabled {
   opacity: 0.6;
   cursor: default;
 }
-.options-layout {
-  display: grid;
-  flex: 1;
-  grid-template-columns: 142px minmax(0, 1fr);
-  gap: 20px;
-  min-height: 0;
-}
-.options-categories {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  overflow: auto;
-  padding-right: 12px;
-  border-right: 1px solid var(--app-border);
-}
-.options-category {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 10px 9px;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--app-text-secondary);
-  text-align: left;
-  font: inherit;
-  line-height: 1.4;
-  cursor: pointer;
-}
-.options-category:hover {
-  background: var(--app-surface-muted);
-  color: var(--app-text);
-}
-.options-category[aria-selected='true'] {
-  background: var(--el-color-primary-light-9);
-  color: var(--el-color-primary);
-  font-weight: 600;
-}
+
 .modified-count {
   flex: none;
   min-width: 17px;
-  padding: 1px 4px;
+  padding: 1px var(--ui-space-xs);
   border-radius: 5px;
   background: var(--app-surface-muted);
   font-size: 10px;
   font-variant-numeric: tabular-nums;
   text-align: center;
 }
-.options-category-picker {
-  display: none;
+
+.options-retained {
+  margin: 0 0 var(--ui-space-lg);
+  color: var(--app-text-secondary);
+  font-size: 11px;
+  line-height: 1.5;
 }
-.options-form {
-  min-width: 0;
-  min-height: 0;
-  overflow: auto;
-  padding: 0 5px 12px 0;
-  scrollbar-width: thin;
-  scrollbar-color: var(--app-border-strong) transparent;
-}
-.options-heading {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 16px;
-}
-.options-heading h3 {
-  margin: 0;
-  color: var(--app-text);
-  font-size: 14px;
-  font-weight: 600;
-}
-.options-clear,
+
 .options-retained button {
-  flex: none;
   padding: 0;
+  margin-inline-start: var(--ui-space-sm);
   border: 0;
   background: transparent;
   color: var(--el-color-primary);
   font: inherit;
   cursor: pointer;
 }
-.options-retained {
-  margin: -6px 0 16px;
-  color: var(--app-text-secondary);
-  font-size: 11px;
-  line-height: 1.5;
-}
-.options-retained button {
-  margin-left: 6px;
-}
-.options-group + .options-group {
-  margin-top: 22px;
-  padding-top: 18px;
-  border-top: 1px solid var(--app-border);
-}
-.options-group-title,
-.options-group-toggle {
-  margin: 0 0 12px;
-  color: var(--app-text-secondary);
-  font-size: 11px;
-  font-weight: 600;
-}
-.options-group-toggle {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  width: 100%;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  text-align: left;
-  cursor: pointer;
-}
-.options-group-toggle .el-icon {
-  transition: transform 0.15s;
-}
-.options-group-toggle .expanded {
-  transform: rotate(90deg);
-}
-.options-field-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px 20px;
-}
-.option-field {
-  display: flex;
-  flex-direction: column;
-  gap: 7px;
-  min-width: 0;
-}
-.option-field > label {
-  color: var(--app-text);
-  line-height: 1.5;
-  overflow-wrap: anywhere;
-}
+
 .option-field.is-wide {
   grid-column: 1 / -1;
 }
-.option-field :deep(.el-input-number),
-.option-field :deep(.el-select) {
-  width: 100%;
-}
-.option-field :deep(.el-input-number .el-input__inner) {
-  text-align: left;
-  font-variant-numeric: tabular-nums;
-}
+
 .option-field :deep(.el-checkbox-group) {
   display: flex;
   flex-wrap: wrap;
-  gap: 0 16px;
+  gap: var(--ui-space-xs) var(--ui-space-xl);
 }
+
 .option-field :deep(.el-checkbox) {
   margin-right: 0;
 }
-.option-field :deep(.el-switch) {
-  align-self: flex-start;
-}
+
 .option-modified-dot {
   display: inline-block;
   width: 5px;
   height: 5px;
-  margin-left: 3px;
+  margin-inline-start: var(--ui-space-xs);
   border-radius: 50%;
   background: var(--el-color-primary);
   vertical-align: middle;
 }
+
 .option-config-key,
 .option-inactive-reason {
   color: var(--app-text-secondary);
   font-size: 10px;
   overflow-wrap: anywhere;
 }
+
 .option-inactive-reason {
   line-height: 1.5;
 }
-.options-empty {
-  color: var(--app-text-secondary);
-  line-height: 1.7;
-}
-button:focus-visible {
-  outline: 2px solid var(--el-color-primary);
-  outline-offset: -2px;
-}
-@container solver-options (max-width: 640px) {
-  .options-layout {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-  }
-  .options-categories {
-    display: none;
-  }
-  .options-category-picker {
-    display: block;
-    flex: none;
-  }
-  .options-category-picker .el-select {
-    width: 100%;
-  }
-  .options-form {
-    flex: 1;
-  }
-}
-@container solver-options (max-width: 440px) {
-  .options-field-grid {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .options-toolbar {
-    gap: 6px;
-  }
-  .options-modified {
-    padding: 6px;
-  }
-}
 </style>
+<style scoped src="./solverOptionLayout.css"></style>

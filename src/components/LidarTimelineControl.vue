@@ -576,12 +576,12 @@ watch(ready, (visible) => {
 
 .timeline-triggers {
   flex-direction: column;
-  gap: 5px;
+  gap: var(--ui-space-xs);
 }
 
 .timeline-panel--horizontal {
   min-width: 0;
-  gap: 6px;
+  gap: var(--ui-space-sm);
   padding: 4px 7px;
   border: 1px solid color-mix(in srgb, #06b6d4 24%, var(--app-border));
   border-radius: 8px;
@@ -789,7 +789,7 @@ watch(ready, (visible) => {
   padding: 9px;
   flex-direction: column;
   align-items: stretch;
-  gap: 8px;
+  gap: var(--ui-space-md);
   background: var(--app-surface);
   border: 1px solid var(--app-border);
   border-radius: 8px;
@@ -797,7 +797,7 @@ watch(ready, (visible) => {
 }
 
 .timeline-actions {
-  gap: 5px;
+  gap: var(--ui-space-xs);
 }
 
 .timeline-close {
@@ -812,7 +812,7 @@ watch(ready, (visible) => {
 .timeline-details {
   justify-content: space-between;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--ui-space-md);
 }
 
 /* —— 诊断信息弹层 —— */
@@ -830,7 +830,7 @@ watch(ready, (visible) => {
 .info-header {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--ui-space-md);
   margin-bottom: 4px;
 }
 
@@ -859,7 +859,7 @@ watch(ready, (visible) => {
 
 .info-row {
   display: flex;
-  gap: 10px;
+  gap: var(--ui-space-md);
   font-size: 12px;
   padding: 2px 0;
 }

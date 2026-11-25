@@ -61,6 +61,40 @@ test('detects each file independently when alternating NMEA and RTKLIB POS conte
   }
 })
 
+test('matches the loading progress track to the file playback slider', async ({ page }) => {
+  await page.evaluate(async () => {
+    const { useFileTimeline } = await import('/src/composables/useFileTimeline.ts')
+    const timeline = useFileTimeline()
+    timeline.beginIndexing()
+    timeline.updateIndexingProgress(48)
+  })
+  const progress = page.locator('.file-timeline .file-progress-track')
+  await expect(progress).toBeVisible()
+  await expect(progress).toHaveAttribute('aria-valuenow', '48')
+  await expect(progress).toHaveCSS('height', '6px')
+  await expect(progress).toHaveCSS('background-image', /linear-gradient.*48%/)
+  const loading = await progress.boundingBox()
+  async function setPercent(value: number) {
+    await page.evaluate(async (percent) => {
+      const { useFileTimeline } = await import('/src/composables/useFileTimeline.ts')
+      useFileTimeline().updateIndexingProgress(percent)
+    }, value)
+    await expect(progress).toHaveAttribute('aria-valuenow', String(value))
+  }
+  await setPercent(99)
+  const before = await progress.boundingBox()
+  await setPercent(100)
+  const after = await progress.boundingBox()
+  expect(Math.abs(before!.x - after!.x)).toBeLessThan(1)
+  expect(Math.abs(before!.width - after!.width)).toBeLessThan(1)
+
+  await dropText(page, 'playback.nmea', nmeaEpoch(0) + nmeaEpoch(1))
+  const slider = page.locator('.file-timeline .timeline-slider:visible')
+  await expect(slider).toBeVisible()
+  const playback = await slider.boundingBox()
+  expect(Math.abs(loading!.width - playback!.width)).toBeLessThanOrEqual(4)
+})
+
 test('loads GNSS text with a non-standard suffix through the file dialog', async ({ page }) => {
   await page.getByTitle('Input', { exact: true }).click()
   const dialog = page.locator('.data-input-dialog')

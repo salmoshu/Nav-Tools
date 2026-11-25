@@ -1,5 +1,5 @@
 import { createPinia, setActivePinia } from 'pinia'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useNmea } from '@/composables/gnss/useNmea'
 import { useGnssStore } from '@/stores/gnss'
 import { useConsole } from '@/composables/flow/useConsole'
@@ -66,6 +66,27 @@ describe('stopped GNSS live history', () => {
     expect(useGnssStore().status.quality).toBe(5)
     expect(data.satelliteSnrData.value.map((item) => item.prn)).toEqual(['2'])
     expect(messages.filteredMessages.value[3].fileElapsedMilliseconds).toBe(1000)
+  })
+
+  it('builds the SPP position timeline without replacing or restoring cleared RTCM3 messages', async () => {
+    history.start('network:rtcm3', 'nmea', false)
+    const raw = 'D3 00 02 3E D0 00 00 00'
+    messages.addRtcmMessages([{ hex: raw, valid: true }])
+    history.append(packet(0))
+    data.processRawData(packet(0))
+    expect(await history.stop()).toBe(true)
+    expect(timeline.totalEpochs.value).toBe(1)
+    await vi.waitFor(() => {
+      expect(messages.filteredMessages.value.map((message) => message.raw)).toEqual([raw])
+    })
+
+    history.start('network:rtcm3', 'nmea', false)
+    messages.addRtcmMessages([{ hex: raw, valid: true }])
+    messages.clearMessages()
+    data.processRawData(packet(1))
+    expect(await history.stop()).toBe(true)
+    expect(timeline.totalEpochs.value).toBe(2)
+    expect(messages.totalCount.value).toBe(0)
   })
 
   it('leaves historical selection on reconnect, keeps the same source history and flushes a split packet', async () => {

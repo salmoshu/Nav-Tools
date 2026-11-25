@@ -356,7 +356,7 @@ watch(selectedKeys, rebuild)
 .toolbar {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--ui-space-md);
   margin-bottom: 6px;
 }
 .hint {

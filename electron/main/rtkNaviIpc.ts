@@ -14,13 +14,15 @@ export function registerRtkNaviIpc(
     return service.stop(event.sender.id, typeof runId === 'string' ? runId : undefined)
   })
   ipcMain.handle('rtknavi-status', (event) => service.status(event.sender.id))
-  ipcMain.handle('rtknavi-choose-output', async (event, defaultPath: unknown) => {
+  ipcMain.handle('rtknavi-choose-output', async (event, defaultPath: unknown, format: unknown) => {
     const target = BrowserWindow.fromWebContents(event.sender)
+    const extension = format === 'nmea' ? 'nmea' : 'pos'
     const result = await showScopedSaveDialog(target, 'gnsslib-rtknavi-output', {
       title: '保存实时 GNSS 解决方案',
-      defaultPath: typeof defaultPath === 'string' && defaultPath ? defaultPath : 'rtknavi.pos',
+      defaultPath:
+        typeof defaultPath === 'string' && defaultPath ? defaultPath : `rtknavi.${extension}`,
       filters: [
-        { name: 'RTKLIB 解决方案', extensions: ['pos'] },
+        { name: format === 'nmea' ? 'NMEA' : 'RTKLIB 解决方案', extensions: [extension] },
         { name: '所有文件', extensions: ['*'] },
       ],
     })

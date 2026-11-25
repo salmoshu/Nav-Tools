@@ -820,7 +820,7 @@ defineExpose({ fitOverview })
   display: flex;
   justify-content: flex-start;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: var(--ui-space-sm);
   color: var(--app-text-muted);
   font-size: 11px;
   pointer-events: none;
@@ -830,7 +830,7 @@ defineExpose({ fitOverview })
 .tooltip-name {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: var(--ui-space-xs);
 }
 
 .legend-item {

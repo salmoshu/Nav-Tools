@@ -6,11 +6,16 @@ import {
   type RtkNaviAdvancedOptions,
 } from './RtkNaviAdvancedOptions'
 import { serializeRtkPostConfigOption } from './RtkPostConfig'
+import { NmeaRtkSolutionParser } from './RtkSolution'
 import {
   starRtkProcessing,
+  starRtkRequiresBase,
+  starRtkSolutionFormat,
   starRtkTiming,
   stringifyStarRtkConfig,
+  type StarRtkConfigLayout,
   type StarRtkProcessingOptions,
+  type StarRtkSolutionFormat,
   type StarRtkStream,
   type StarRtkTimingOptions,
 } from './StarRtkConfig'
@@ -57,6 +62,7 @@ export interface RtkNaviOptions extends RtkNaviAdvancedOptions {
 export interface RtkNaviSettings {
   engine?: RtkNaviEngine
   starRtkProcessing?: StarRtkProcessingOptions
+  starRtkSolutionFormat?: StarRtkSolutionFormat
   starRtkTiming?: StarRtkTimingOptions
   executablePath: string
   outputPath: string
@@ -77,6 +83,7 @@ export interface RtkNaviStatus {
   state: RtkNaviRunState
   outputPath: string
   pid?: number
+  solutionFormat?: StarRtkSolutionFormat
   error?: string
 }
 
@@ -92,6 +99,7 @@ export interface RtkNaviSolution {
 }
 
 export interface RtkNaviSolutionEvent {
+  /** Each record contains one POS row or the NMEA sentences for one epoch. */
   records?: string[]
   runId: string
   epochs: number
@@ -142,6 +150,25 @@ export function buildRtkNaviStreamPath(stream: RtkNaviInputStream): string {
   }`
 }
 
+export function starRtkInputStreams(
+  request: Pick<RtkNaviSettings, 'inputs' | 'starRtkProcessing'>,
+): RtkNaviInputStream[] {
+  const relative = starRtkRequiresBase(request.starRtkProcessing)
+  const count = relative ? 2 : 1
+  if (
+    !Array.isArray(request.inputs) ||
+    request.inputs.length < count ||
+    request.inputs.length > 2
+  ) {
+    throw new Error(
+      relative
+        ? 'StarRTK 需要流动站和基站两路 RTCM3 输入'
+        : 'StarRTK SPP 需要一路流动站 RTCM3 输入',
+    )
+  }
+  return request.inputs.slice(0, count)
+}
+
 export function buildRtkNaviConfig(
   request: RtkNaviSettings,
   outputPath: string,
@@ -149,13 +176,13 @@ export function buildRtkNaviConfig(
 ): string {
   if (request.engine === 'starrtk') {
     if (!request.executablePath.trim()) throw new Error('请设置 StarRTK 可执行文件路径')
-    if (
-      request.inputs.length !== 2 ||
-      request.inputs.some(
-        (input) => !input.enabled || input.format !== 'rtcm3' || !input.path.trim(),
+    const inputs = starRtkInputStreams(request)
+    if (inputs.some((input) => !input.enabled || input.format !== 'rtcm3' || !input.path.trim())) {
+      throw new Error(
+        inputs.length === 2
+          ? 'StarRTK 需要流动站和基站两路 RTCM3 输入'
+          : 'StarRTK SPP 需要一路流动站 RTCM3 输入',
       )
-    ) {
-      throw new Error('StarRTK 需要流动站和基站两路 RTCM3 输入')
     }
     return buildStarRtkRealtimeConfig(request, outputPath)
   }
@@ -292,22 +319,27 @@ const STAR_RTK_STREAM_TYPES: Record<RtkNaviStreamType, string> = {
 export function buildStarRtkRealtimeConfig(
   request: RtkNaviSettings,
   outputPath = request.outputPath,
+  layout: StarRtkConfigLayout = 'flat',
 ): string {
+  const [rover, base] = starRtkInputStreams(request)
   const stream = (input: RtkNaviInputStream | undefined): StarRtkStream | undefined => {
     if (!input?.path.trim()) return undefined
     if (!Object.hasOwn(STAR_RTK_STREAM_TYPES, input.type)) throw new Error('StarRTK 输入流类型无效')
     return { type: STAR_RTK_STREAM_TYPES[input.type], path: buildRtkNaviStreamPath(input) }
   }
-  return stringifyStarRtkConfig({
-    processing: starRtkProcessing(request.starRtkProcessing),
-    realtime: {
-      ...starRtkTiming(request.starRtkTiming),
-      rover: stream(request.inputs[0]),
-      base: stream(request.inputs[1]),
-      solution_file: outputPath.trim() || undefined,
-      solution_format: 'pos',
+  return stringifyStarRtkConfig(
+    {
+      processing: starRtkProcessing(request.starRtkProcessing),
+      realtime: {
+        ...starRtkTiming(request.starRtkTiming),
+        rover: stream(rover),
+        base: stream(base),
+        solution_file: outputPath.trim() || undefined,
+        solution_format: starRtkSolutionFormat(request.starRtkSolutionFormat) ?? 'pos',
+      },
     },
-  })
+    layout,
+  )
 }
 
 export function inputFromStarRtkStream(stream: StarRtkStream): RtkNaviInputStream {
@@ -330,8 +362,16 @@ export function inputFromStarRtkStream(stream: StarRtkStream): RtkNaviInputStrea
   }
 }
 
-export function parseRtkNaviSolutionLine(line: string): RtkNaviSolution | null {
-  const fields = line.trim().split(/\s+/)
+export function parseRtkNaviSolutionRecord(record: string): RtkNaviSolution | null {
+  if (record.startsWith('$')) {
+    const parser = new NmeaRtkSolutionParser()
+    for (const line of record.split(/\r?\n/)) {
+      const result = parser.addLine(line)
+      if (result) return result.solution
+    }
+    return null
+  }
+  const fields = record.trim().split(/\s+/)
   if (fields.length < 7 || !/^\d{4}\/\d{2}\/\d{2}$/.test(fields[0])) return null
   const latitude = Number(fields[2])
   const longitude = Number(fields[3])

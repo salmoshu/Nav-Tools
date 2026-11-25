@@ -429,7 +429,7 @@ function sysColor(sys: number): string {
 .sampling {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px 16px;
+  gap: var(--ui-space-xs) var(--ui-space-xl);
   padding: 6px 2px;
   color: var(--el-text-color-secondary);
   font-variant-numeric: tabular-nums;

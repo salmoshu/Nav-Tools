@@ -27,13 +27,12 @@ class MemoryStorage implements StorageLike {
 }
 
 describe('panel and application persistence', () => {
-  it('seeds editable Serial, GNSS, Flow, Camera, LiDAR, GNSS-Raw, and GNSS-Lib applications on first launch', () => {
+  it('seeds editable Serial, GNSS, GNSS-Raw, GNSS-Lib, Camera, and LiDAR applications', () => {
     const memory = new MemoryStorage()
     const applications = new ApplicationStorage(new JsonStorage(memory)).loadApplications()
 
     expect(applications.map((application) => application.name)).toEqual([
       'Serial',
-      'Flow',
       'GNSS',
       'GNSS-Raw',
       'GNSS-Lib',
@@ -46,16 +45,11 @@ describe('panel and application persistence', () => {
       windowIds: ['raw-messages', 'motor-parameters', 'plot', 'flow-deviation'],
     })
     expect(applications[1]).toMatchObject({
-      id: 'motor',
-      icon: 'motor',
-      windowIds: ['plot', 'raw-messages', 'flow-deviation', 'motor-parameters'],
-    })
-    expect(applications[2]).toMatchObject({
       id: 'gnss',
       icon: 'position',
       windowIds: ['gnss-deviation', 'gnss-signals', 'sky-plot', 'raw-messages'],
     })
-    expect(applications[3]).toMatchObject({
+    expect(applications[2]).toMatchObject({
       id: 'gnssraw',
       icon: 'satellite',
       windowIds: [
@@ -67,17 +61,17 @@ describe('panel and application persistence', () => {
         'gnssraw-eph',
       ],
     })
-    expect(applications[4]).toMatchObject({
+    expect(applications[3]).toMatchObject({
       id: 'gnsslib',
       icon: 'satellite',
       windowIds: ['gnsslib-solver', 'raw-messages', 'gnss-deviation'],
     })
-    expect(applications[5]).toMatchObject({
+    expect(applications[4]).toMatchObject({
       id: 'camera',
       icon: 'camera',
       windowIds: ['camera-video', 'camera-parameters', 'raw-messages', 'terminal'],
     })
-    expect(applications[6]).toMatchObject({
+    expect(applications[5]).toMatchObject({
       id: 'lidar',
       icon: 'radar',
       windowIds: ['lidar-scene', 'lidar-scores', 'lidar-plot', 'lidar-inspector'],
@@ -254,7 +248,7 @@ describe('panel and application persistence', () => {
     expect(storage.loadApplications().map(({ id }) => id)).toEqual(['gnss'])
   })
 
-  it('renames Motor to Flow and adds deviation and parameters panels once when upgrading', () => {
+  it('removes the former Flow app and keeps its tools in Serial on upgrade', () => {
     const memory = new MemoryStorage()
     memory.setItem(
       'nav-tools:custom-applications',
@@ -279,7 +273,9 @@ describe('panel and application persistence', () => {
     )
     const storage = new ApplicationStorage(new JsonStorage(memory))
 
-    const [serialApplication, motorApplication] = storage.loadApplications()
+    const applications = storage.loadApplications()
+    const [serialApplication] = applications
+    expect(applications.some(({ id }) => id === 'motor')).toBe(false)
     // serial 迁移：按 消息→Hex报文→图表→偏差 重排并补挂 flow-deviation
     expect(serialApplication.windowIds).toEqual([
       'raw-messages',
@@ -287,25 +283,17 @@ describe('panel and application persistence', () => {
       'plot',
       'flow-deviation',
     ])
-    expect(motorApplication.name).toBe('Flow')
-    expect(motorApplication.description).toBe('Flow deviation, telemetry, and parameter workspace')
-    expect(motorApplication.windowIds).toEqual([
-      'plot',
-      'raw-messages',
-      'motor-parameters',
-      'flow-deviation',
-    ])
     storage.saveApplications([
       { ...serialApplication, windowIds: ['plot', 'raw-messages'] },
-      { ...motorApplication, name: 'Custom Flow', windowIds: ['plot'] },
+      { ...serialApplication, id: 'telemetry', name: 'Custom telemetry', windowIds: ['plot'] },
     ])
-    const [serialAgain, motorAgain] = storage.loadApplications()
+    const [serialAgain, custom] = storage.loadApplications()
     expect(serialAgain.windowIds).toEqual(['plot', 'raw-messages'])
-    expect(motorAgain.name).toBe('Custom Flow')
-    expect(motorAgain.windowIds).toEqual(['plot'])
+    expect(custom.name).toBe('Custom telemetry')
+    expect(custom.windowIds).toEqual(['plot'])
   })
 
-  it('resets saved applications back to Serial, Flow, GNSS, GNSS-Raw, GNSS-Lib, Camera, and LiDAR defaults', () => {
+  it('resets saved applications to the current catalog', () => {
     const memory = new MemoryStorage()
     const storage = new ApplicationStorage(new JsonStorage(memory))
     storage.saveApplications([
@@ -323,7 +311,6 @@ describe('panel and application persistence', () => {
 
     expect(applications.map((application) => application.id)).toEqual([
       'serial',
-      'motor',
       'gnss',
       'gnssraw',
       'gnsslib',
@@ -332,7 +319,6 @@ describe('panel and application persistence', () => {
     ])
     expect(storage.loadApplications().map((application) => application.id)).toEqual([
       'serial',
-      'motor',
       'gnss',
       'gnssraw',
       'gnsslib',
@@ -346,12 +332,11 @@ describe('panel and application persistence', () => {
     const storage = new ApplicationStorage(new JsonStorage(memory))
     const initial = storage.loadApplications()
 
-    const reordered = storage.reorderApplications(initial, 3, 0)
+    const reordered = storage.reorderApplications(initial, 2, 0)
 
     expect(reordered.map(({ id }) => id)).toEqual([
       'gnssraw',
       'serial',
-      'motor',
       'gnss',
       'gnsslib',
       'camera',
@@ -359,12 +344,11 @@ describe('panel and application persistence', () => {
     ])
     expect(
       new ApplicationStorage(new JsonStorage(memory)).loadApplications().map(({ id }) => id),
-    ).toEqual(['gnssraw', 'serial', 'motor', 'gnss', 'gnsslib', 'camera', 'lidar'])
+    ).toEqual(['gnssraw', 'serial', 'gnss', 'gnsslib', 'camera', 'lidar'])
 
-    const partial = storage.reorderApplications(reordered, 0, 2)
+    const partial = storage.reorderApplications(reordered, 0, 1)
     expect(partial.map(({ id }) => id)).toEqual([
       'serial',
-      'motor',
       'gnssraw',
       'gnss',
       'gnsslib',

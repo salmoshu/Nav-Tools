@@ -94,7 +94,7 @@
           <div class="section-title">{{ t('gnssLib.rtknavi.solution') }}</div>
           <div class="solution-grid">
             <div class="solution-item wide">
-              <span>GPST</span>
+              <span>{{ store.status.value.solutionFormat === 'nmea' ? 'UTC' : 'GPST' }}</span>
               <strong>{{ store.latestSolution.value.time }}</strong>
             </div>
             <div class="solution-item">
@@ -155,7 +155,7 @@
               v-model="store.settings.engine"
               :disabled="store.running.value"
             >
-              <el-option value="rtkrcv" label="rtkrcv" />
+              <el-option value="rtkrcv" label="OpenGNSS" />
               <el-option value="starrtk" label="StarRTK" />
             </el-select>
           </div>
@@ -181,8 +181,9 @@
           </div>
           <div class="section-title spaced">{{ t('gnssLib.rtknavi.output') }}</div>
           <div class="file-row">
-            <label>.pos</label>
+            <label :for="`${viewId}-output`">.{{ store.solutionFormat.value }}</label>
             <el-input
+              :id="`${viewId}-output`"
               v-model="store.engineSettings.value.outputPath"
               spellcheck="false"
               :disabled="store.running.value"
@@ -198,7 +199,7 @@
           {{ t('gnssLib.rtknavi.inputs') }}
         </div>
         <section
-          v-for="(stream, index) in store.engineSettings.value.inputs"
+          v-for="(stream, index) in store.activeInputs.value"
           v-show="!props.embedded || props.view !== 'options'"
           :key="index"
           class="config-section stream-section"
@@ -282,8 +283,24 @@
 
         <section
           v-show="!props.embedded || props.view === 'options'"
-          class="config-section navi-options"
+          class="config-section navi-options solver-config-workspace"
         >
+          <header class="solver-config-heading">
+            <strong>{{ store.isStarRtk.value ? 'StarRTK' : 'OpenGNSS' }}</strong>
+            <code>{{ store.isStarRtk.value ? 'YAML' : '.conf' }}</code>
+          </header>
+          <div v-if="store.isStarRtk.value" class="file-row solver-config-output">
+            <label :for="`${viewId}-star-output`">{{ t('gnssRaw.rtkpost.outputFormat') }}</label>
+            <el-select
+              :id="`${viewId}-star-output`"
+              :model-value="store.settings.starRtk.solutionFormat"
+              :disabled="store.running.value"
+              @update:model-value="store.updateStarRtkSolutionFormat"
+            >
+              <el-option value="pos" label="POS (LLH / GPST)" />
+              <el-option value="nmea" label="NMEA" />
+            </el-select>
+          </div>
           <StarRtkOptions
             v-if="store.isStarRtk.value"
             v-model="store.settings.starRtk.processing"
@@ -293,7 +310,10 @@
             :export-config="store.exportStarRtkConfig"
           />
           <template v-else>
-            <div class="navi-options-config" :title="t('gnssLib.rtknavi.baseConfigHint')">
+            <div
+              class="navi-options-config solver-config-source"
+              :title="t('gnssLib.rtknavi.baseConfigHint')"
+            >
               <div class="file-row base-config-row">
                 <label :for="`${viewId}-base-config`">{{ t('gnssLib.rtknavi.baseConfig') }}</label>
                 <el-input
@@ -307,6 +327,8 @@
                 />
                 <el-button
                   :disabled="store.running.value || store.configStatus.value === 'loading'"
+                  :title="t('gnssLib.configWorkspace.loadConf')"
+                  :aria-label="t('gnssLib.configWorkspace.loadConf')"
                   @click="chooseBaseConfig"
                   ><el-icon><FolderOpened /></el-icon
                 ></el-button>
@@ -420,7 +442,9 @@ const inputFormats = [
 
 const currentOutputPath = computed(
   () =>
-    store.status.value.outputPath || store.engineSettings.value.outputPath || 'rtknavi-current.pos',
+    store.status.value.outputPath ||
+    store.engineSettings.value.outputPath ||
+    `rtknavi-current.${store.solutionFormat.value}`,
 )
 const statusText = computed(() => t(`gnssLib.rtknavi.${store.status.value.state}`))
 const qualityText = computed(() => {
@@ -551,7 +575,7 @@ async function chooseOutput(): Promise<void> {
     return
   }
   const files = store.engineSettings.value
-  const path = await api(files.outputPath || undefined)
+  const path = await api(files.outputPath || undefined, store.solutionFormat.value)
   if (path) files.outputPath = path
 }
 
@@ -591,7 +615,7 @@ async function stop(): Promise<void> {
 .navi-options {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--ui-space-lg);
   box-sizing: border-box;
   height: 520px;
   min-height: 0;
@@ -635,7 +659,7 @@ async function stop(): Promise<void> {
 .run-toolbar {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--ui-space-md);
   margin-bottom: 8px;
 }
 .run-state {
@@ -657,7 +681,7 @@ async function stop(): Promise<void> {
 .monitor-heading {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--ui-space-md);
   margin-bottom: 8px;
 }
 .output-path {
@@ -674,7 +698,7 @@ async function stop(): Promise<void> {
 .summary-cards {
   display: grid;
   grid-template-columns: repeat(5, minmax(70px, 1fr));
-  gap: 6px;
+  gap: var(--ui-space-sm);
 }
 .summary-card {
   padding: 8px;
@@ -700,12 +724,12 @@ async function stop(): Promise<void> {
 .solution-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(140px, 1fr));
-  gap: 6px;
+  gap: var(--ui-space-sm);
 }
 .solution-item {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: var(--ui-space-tight);
   padding: 7px 9px;
   border: 1px solid var(--el-border-color-lighter);
   border-radius: 6px;
@@ -772,7 +796,7 @@ async function stop(): Promise<void> {
 .file-row {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--ui-space-sm);
   margin-bottom: 6px;
 }
 .file-row > label {
@@ -796,7 +820,7 @@ async function stop(): Promise<void> {
 .stream-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(150px, 1fr));
-  gap: 8px;
+  gap: var(--ui-space-md);
 }
 .stream-grid {
   margin-bottom: 8px;
@@ -804,7 +828,7 @@ async function stop(): Promise<void> {
 .stream-grid label {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--ui-space-xs);
 }
 .stream-grid label > span {
   color: var(--el-text-color-regular);
@@ -819,12 +843,12 @@ async function stop(): Promise<void> {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: var(--ui-space-lg);
 }
 .replay-row > label {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--ui-space-md);
 }
 .base-config-row {
   margin-top: 12px;

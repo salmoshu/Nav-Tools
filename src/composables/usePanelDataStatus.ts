@@ -1,6 +1,5 @@
 import { computed, onScopeDispose, ref, watch } from 'vue'
 import { useApplicationSelector } from '@/composables/useApplicationSelector'
-import { useConsole } from '@/composables/flow/useConsole'
 import { useFileTimeline } from '@/composables/useFileTimeline'
 import { useFlow } from '@/composables/flow/useFlow'
 import { useGnssRaw } from '@/composables/useGnssRaw'
@@ -15,7 +14,6 @@ export function usePanelDataStatus() {
   const device = useDevice()
   const { currentApplicationId, currentApplication } = useApplicationSelector()
   const { flowData } = useFlow()
-  const { totalCount } = useConsole(true)
   const nmea = useNmea()
   const gnssRaw = useGnssRaw()
   const mcap = useMcapPlayer()
@@ -31,7 +29,6 @@ export function usePanelDataStatus() {
 
   function hasContent(windowId: string): boolean {
     const pipeline = panelDataContract(windowId).pipeline
-    if (pipeline === 'raw') return totalCount.value > 0
     if (pipeline === 'records') {
       return (flowData.value.rawDataKeys?.length ?? 0) > 0 && (flowData.value.plotTime?.length ?? 0) > 0
     }
@@ -119,7 +116,9 @@ export function usePanelDataStatus() {
 
   function shouldShowNoData(windowId: string): boolean {
     const contract = panelDataContract(windowId)
-    if (contract.role === 'excluded') return false
+    // The message monitor displays the input itself. An empty monitor (e.g.
+    // after Clear) is not a failed conversion from the current source.
+    if (contract.role === 'excluded' || contract.pipeline === 'raw') return false
     if (isSolverWorkspace.value && SOLVER_SCOPED_PANEL_IDS.has(windowId)) return false
     const session = device.dataFormatSession.value
     if (!session.attempted || loading.value || !hintReady.value) return false

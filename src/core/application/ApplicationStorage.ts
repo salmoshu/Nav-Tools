@@ -4,12 +4,14 @@ import { JsonStorage } from '../storage/JsonStorage'
 const APPLICATIONS_KEY = 'nav-tools:custom-applications'
 const SELECTED_APPLICATION_KEY = 'nav-tools:selected-application'
 const ENABLED_DEFAULT_APPLICATIONS_KEY = 'nav-tools:enabled-default-applications'
+const ENABLED_DEFAULTS_V2_KEY = 'nav-tools:migration:enabled-defaults-v2'
 const CAMERA_DEFAULT_MIGRATION_KEY = 'nav-tools:migration:camera-default-v1'
 const CAMERA_PARAMETERS_MIGRATION_KEY = 'nav-tools:migration:camera-parameters-v1'
 const SERIAL_DEFAULT_MIGRATION_KEY = 'nav-tools:migration:serial-default-v1'
 const SERIAL_DEVIATION_MIGRATION_KEY = 'nav-tools:migration:serial-deviation-v1'
 const GNSS_MESSAGES_MIGRATION_KEY = 'nav-tools:migration:gnss-messages-v1'
-const FLOW_DEFAULT_MIGRATION_KEY = 'nav-tools:migration:flow-default-v1'
+// Legacy key also records migration of the Hex Message panel into Serial.
+const SERIAL_HEX_MIGRATION_KEY = 'nav-tools:migration:flow-default-v1'
 const CAMERA_TERMINAL_MIGRATION_KEY = 'nav-tools:migration:camera-terminal-v1'
 const CAMERA_MESSAGES_MIGRATION_KEY = 'nav-tools:migration:camera-messages-v1'
 const LIDAR_DEFAULT_MIGRATION_KEY = 'nav-tools:migration:lidar-default-v1'
@@ -22,12 +24,8 @@ const APPLICATION_SELECTOR_VIEW_KEY = 'nav-tools:application-selector-view'
 
 export type ApplicationSelectorViewMode = 'cards' | 'rows'
 
-export const DEFAULT_ENABLED_APPLICATION_IDS: readonly string[] = [
-  'serial',
-  'gnss',
-  'gnssraw',
-  'gnsslib',
-]
+export const DEFAULT_ENABLED_APPLICATION_IDS: readonly string[] = ['serial', 'gnss']
+const PREVIOUS_ENABLED_DEFAULT_IDS = ['serial', 'gnss', 'gnssraw', 'gnsslib']
 
 export const DEFAULT_APPLICATIONS: readonly UserApplication[] = [
   {
@@ -37,14 +35,6 @@ export const DEFAULT_APPLICATIONS: readonly UserApplication[] = [
     icon: 'connection',
     accent: '#8b5cf6',
     windowIds: ['raw-messages', 'motor-parameters', 'plot', 'flow-deviation'],
-  },
-  {
-    id: 'motor',
-    name: 'Flow',
-    description: 'Flow deviation, telemetry, and parameter workspace',
-    icon: 'motor',
-    accent: '#f97316',
-    windowIds: ['plot', 'raw-messages', 'flow-deviation', 'motor-parameters'],
   },
   {
     id: 'gnss',
@@ -106,7 +96,7 @@ export class ApplicationStorage {
       this.storage.writeRaw(CAMERA_PARAMETERS_MIGRATION_KEY, '1')
       this.storage.writeRaw(SERIAL_DEFAULT_MIGRATION_KEY, '1')
       this.storage.writeRaw(SERIAL_DEVIATION_MIGRATION_KEY, '1')
-      this.storage.writeRaw(FLOW_DEFAULT_MIGRATION_KEY, '1')
+      this.storage.writeRaw(SERIAL_HEX_MIGRATION_KEY, '1')
       this.storage.writeRaw(CAMERA_TERMINAL_MIGRATION_KEY, '1')
       this.storage.writeRaw(CAMERA_MESSAGES_MIGRATION_KEY, '1')
       this.storage.writeRaw(GNSSLIB_DEFAULT_MIGRATION_KEY, '1')
@@ -129,10 +119,13 @@ export class ApplicationStorage {
         this.storage.writeRaw('nav-tools:gnsslib-solver-mode', 'realtime')
       }
     }
-    const applications = stored.filter(isUserApplication).map((application) => ({
-      ...application,
-      windowIds: sanitizePanelIds(application.windowIds),
-    }))
+    const applications = stored
+      .filter(isUserApplication)
+      .filter(({ id }) => id !== 'motor')
+      .map((application) => ({
+        ...application,
+        windowIds: sanitizePanelIds(application.windowIds),
+      }))
     if (this.storage.readRaw(CAMERA_DEFAULT_MIGRATION_KEY) === null) {
       const cameraDefault = DEFAULT_APPLICATIONS.find((application) => application.id === 'camera')
       if (
@@ -172,26 +165,15 @@ export class ApplicationStorage {
       }
       this.storage.writeRaw(GNSS_MESSAGES_MIGRATION_KEY, '1')
     }
-    if (this.storage.readRaw(FLOW_DEFAULT_MIGRATION_KEY) === null) {
-      const flowDefault = DEFAULT_APPLICATIONS.find((application) => application.id === 'motor')
-      const motorApplication = applications.find((application) => application.id === 'motor')
-      if (motorApplication && flowDefault) {
-        if (motorApplication.name === 'Motor') {
-          motorApplication.name = flowDefault.name
-          motorApplication.description = flowDefault.description
-        }
-        if (!motorApplication.windowIds.includes('flow-deviation')) {
-          motorApplication.windowIds.push('flow-deviation')
-        }
-      }
+    if (this.storage.readRaw(SERIAL_HEX_MIGRATION_KEY) === null) {
       const serialApplication = applications.find((application) => application.id === 'serial')
       if (serialApplication && !serialApplication.windowIds.includes('motor-parameters')) {
         serialApplication.windowIds.push('motor-parameters')
       }
-      this.storage.writeRaw(FLOW_DEFAULT_MIGRATION_KEY, '1')
+      this.storage.writeRaw(SERIAL_HEX_MIGRATION_KEY, '1')
     }
     if (this.storage.readRaw(SERIAL_DEVIATION_MIGRATION_KEY) === null) {
-      // Serial 默认组件顺序调整为 消息 → Hex报文 → 图表 → 偏差（须排在 flow-default
+      // Serial 默认组件顺序调整为 消息 → Hex报文 → 图表 → 偏差（须排在
       // 迁移补挂 motor-parameters 之后执行）：已知面板按该序重排（用户删过的保持
       // 删除），flow-deviation 作为新默认补挂，自定义面板保持相对顺序跟在后面。
       const serialApplication = applications.find((application) => application.id === 'serial')
@@ -297,7 +279,7 @@ export class ApplicationStorage {
         ]
       this.storage.writeRaw(GNSSLIB_SOLVER_MIGRATION_KEY, '1')
     }
-    // 默认顺序调整（Serial/Flow/GNSS/GNSS-Raw/GNSS-Lib/Camera/LiDAR）：已有存储按默认
+    // 默认顺序调整（Serial/GNSS/GNSS-Raw/GNSS-Lib/Camera/LiDAR）：已有存储按默认
     // 顺序重排一次；不在默认表中的自定义应用保持在末尾且相对顺序稳定。
     // 迁移只跑一次，此后用户手动拖动的顺序不再被覆盖。
     if (this.storage.readRaw(APPLICATION_ORDER_MIGRATION_KEY) === null) {
@@ -329,7 +311,11 @@ export class ApplicationStorage {
       (value): value is string[] =>
         Array.isArray(value) && value.every((id) => typeof id === 'string'),
     )
-    return this.saveEnabledDefaultApplicationIds(stored)
+    const previousDefault =
+      this.storage.readRaw(ENABLED_DEFAULTS_V2_KEY) === null &&
+      stored.length === PREVIOUS_ENABLED_DEFAULT_IDS.length &&
+      PREVIOUS_ENABLED_DEFAULT_IDS.every((id) => stored.includes(id))
+    return this.saveEnabledDefaultApplicationIds(previousDefault ? DEFAULT_ENABLED_APPLICATION_IDS : stored)
   }
 
   public saveEnabledDefaultApplicationIds(ids: readonly string[]): string[] {
@@ -337,6 +323,7 @@ export class ApplicationStorage {
       (application) => application.id,
     )
     this.storage.write(ENABLED_DEFAULT_APPLICATIONS_KEY, enabled)
+    this.storage.writeRaw(ENABLED_DEFAULTS_V2_KEY, '1')
     return enabled
   }
 
@@ -373,7 +360,7 @@ export class ApplicationStorage {
     this.storage.writeRaw(SERIAL_DEFAULT_MIGRATION_KEY, '1')
     this.storage.writeRaw(SERIAL_DEVIATION_MIGRATION_KEY, '1')
     this.storage.writeRaw(GNSS_MESSAGES_MIGRATION_KEY, '1')
-    this.storage.writeRaw(FLOW_DEFAULT_MIGRATION_KEY, '1')
+    this.storage.writeRaw(SERIAL_HEX_MIGRATION_KEY, '1')
     this.storage.writeRaw(CAMERA_TERMINAL_MIGRATION_KEY, '1')
     this.storage.writeRaw(LIDAR_DEFAULT_MIGRATION_KEY, '1')
     this.storage.writeRaw(GNSSRAW_DEFAULT_MIGRATION_KEY, '1')

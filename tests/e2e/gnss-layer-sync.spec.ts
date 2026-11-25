@@ -16,9 +16,9 @@ async function inject(page: Page, sentence: string): Promise<void> {
 }
 
 async function enableTracking(page: Page): Promise<void> {
-  const tracking = page.getByRole('switch', { name: 'Track', exact: true })
-  if (!(await tracking.isChecked())) await page.locator('.tracking-switch .el-switch__core').click()
-  await expect(tracking).toBeChecked()
+  const tracking = page.getByRole('button', { name: 'Follow latest position', exact: true })
+  if ((await tracking.getAttribute('aria-pressed')) !== 'true') await tracking.click()
+  await expect(tracking).toHaveAttribute('aria-pressed', 'true')
 }
 
 async function scaleReadout(page: Page) {
@@ -191,8 +191,9 @@ test('keeps both layers aligned when resizing while the grid is hidden', async (
 
 test('holds the viewport fixed when tracking is disabled on the map', async ({ page }) => {
   await page.getByRole('button', { name: 'Map', exact: true }).click()
-  await page.locator('.tracking-switch .el-switch__core').click()
-  await expect(page.getByRole('switch')).not.toBeChecked()
+  const tracking = page.locator('.tracking-switch')
+  await tracking.click()
+  await expect(tracking).toHaveAttribute('aria-pressed', 'false')
   await inject(page, gga(1, 31.0006))
   await expect.poll(async () => (await currentMarker(page, 'map'))?.x).toBeGreaterThan(520)
   const map = (await currentMarker(page, 'map'))!
@@ -275,7 +276,7 @@ test('keeps the current fix in place while a live track backlog is rendered', as
     }
   })
   await page.getByRole('button', { name: 'Map', exact: true }).click()
-  await page.locator('.tracking-switch .el-switch__core').click()
+  await page.locator('.tracking-switch').click()
   const positions = await page.evaluate(
     async (data) => {
       const { useNmea } = await import('/src/composables/gnss/useNmea.ts')

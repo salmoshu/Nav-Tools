@@ -147,7 +147,7 @@ test('shows the complete loaded position and speed tracks with Track off by defa
   })
 
   const position = page.locator('.position-chart-grid .metric-chart').first()
-  await expect(page.getByRole('switch')).not.toBeChecked()
+  await expect(page.locator('.tracking-switch')).toHaveAttribute('aria-pressed', 'false')
   await expect(page.locator('.position-chart-grid .metric-x-scrollbar')).toHaveCount(0)
   await expect.poll(async () => (await xTicks(position)).at(0)).toBe('03:00:00.000')
   await expect.poll(async () => (await xTicks(position)).at(-1)).toBe('03:03:19.000')
@@ -164,7 +164,7 @@ test('shows the complete loaded position and speed tracks with Track off by defa
     const { useFileTimeline } = await import('/src/composables/useFileTimeline.ts')
     useFileTimeline().clearTimeline()
   })
-  await expect(page.getByRole('switch')).toBeChecked()
+  await expect(page.locator('.tracking-switch')).toHaveAttribute('aria-pressed', 'true')
 })
 
 test('double-clicks the trajectory size slider button to restore the default size', async ({
@@ -407,7 +407,7 @@ test('keeps Y independent during linked X zoom, diagonal pan and scrollbar dragg
   page,
 }) => {
   await page.locator('.tracking-switch').click()
-  await expect(page.getByRole('switch')).not.toBeChecked()
+  await expect(page.locator('.tracking-switch')).toHaveAttribute('aria-pressed', 'false')
   await page.getByRole('button', { name: 'Reset Layout' }).click()
   const charts = page.locator('.position-chart-grid .metric-chart')
   const east = charts.nth(0)

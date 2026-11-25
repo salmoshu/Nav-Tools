@@ -15,7 +15,7 @@
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: var(--ui-space-md);
   min-height: 42px;
   margin: -2px -2px 10px;
   padding: 4px 2px 10px;
@@ -41,7 +41,7 @@
 .navi-title {
   flex-direction: row;
   align-items: center;
-  gap: 8px;
+  gap: var(--ui-space-md);
 }
 
 .view-tabs {
@@ -84,7 +84,7 @@
 .gl-actions {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--ui-space-sm);
   margin-left: auto;
 }
 
@@ -109,7 +109,7 @@
 .run-state {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: var(--ui-space-xs);
   margin-right: 2px;
   padding: 4px 8px;
   border-radius: 999px;
@@ -169,6 +169,54 @@
   margin-top: 10px;
 }
 
+.solver-config-heading {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--ui-space-md);
+  padding: var(--ui-space-xs) 0 var(--ui-space-md);
+  border-bottom: 1px solid var(--app-border);
+  color: var(--app-text);
+  font-size: 13px;
+}
+
+.solver-config-heading strong {
+  font-weight: 650;
+}
+
+.solver-config-heading code {
+  padding: var(--ui-space-tight) var(--ui-space-xs);
+  border: 1px solid var(--app-border);
+  border-radius: 4px;
+  background-color: var(--app-surface-muted);
+  color: var(--app-text-secondary);
+  font-size: 10px;
+}
+
+.solver-config-source,
+.file-row.solver-config-output {
+  flex: none;
+  padding: var(--ui-space-sm) var(--ui-space-md);
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  background-color: var(--app-surface-muted);
+}
+
+.solver-config-file-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ui-space-md);
+}
+
+.solver-config-file-toolbar .file-row {
+  flex: 1 1 280px;
+}
+
+.solver-config-output .el-select {
+  max-width: 280px;
+}
+
 .section-title {
   margin: 0 0 10px;
   color: var(--app-text);
@@ -186,7 +234,7 @@
 .file-row {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--ui-space-xs);
   min-height: 34px;
   margin: 0;
   padding: 3px 0;
@@ -196,7 +244,7 @@
   display: inline-flex;
   flex: 0 0 132px;
   align-items: center;
-  gap: 4px;
+  gap: var(--ui-space-xs);
   color: var(--app-text-secondary);
   font-size: 11px;
   line-height: 1.35;
@@ -238,11 +286,15 @@
 .rtkpost :deep(.el-input__wrapper),
 .rtknavi :deep(.el-input__wrapper) {
   min-height: 30px;
-  padding: 1px 10px;
   border-radius: 6px;
   background: var(--app-surface);
   box-shadow: 0 0 0 1px var(--el-border-color) inset;
   transition: box-shadow var(--app-duration-fast) var(--app-ease-out);
+}
+
+.rtkpost :deep(.el-input__wrapper:not(.el-input-number .el-input__wrapper)),
+.rtknavi :deep(.el-input__wrapper:not(.el-input-number .el-input__wrapper)) {
+  padding: 1px 10px;
 }
 
 .rtkpost :deep(.el-input__wrapper:hover),
@@ -284,13 +336,13 @@
 .option-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(145px, 1fr));
-  gap: 10px;
+  gap: var(--ui-space-md);
 }
 
 .option-field {
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: var(--ui-space-xs);
   min-width: 0;
 }
 
@@ -310,7 +362,7 @@
 .constellation-field {
   display: flex;
   align-items: flex-start;
-  gap: 12px;
+  gap: var(--ui-space-lg);
   margin-top: 12px;
 }
 
@@ -324,7 +376,7 @@
 .constellation-field :deep(.el-checkbox-group) {
   display: flex;
   flex-wrap: wrap;
-  gap: 5px;
+  gap: var(--ui-space-xs);
 }
 
 .constellation-field :deep(.el-checkbox) {
@@ -363,7 +415,7 @@
 .run-status {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--ui-space-md);
   margin-top: 10px;
   padding: 7px 10px;
   border: 1px solid var(--app-border);
@@ -499,7 +551,7 @@
 .monitor-heading {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--ui-space-md);
 }
 
 .monitor-heading .el-button {
@@ -575,7 +627,7 @@
 .solution-item {
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: var(--ui-space-xs);
   min-width: 0;
   padding: 9px 10px;
   border: 0;
@@ -694,12 +746,12 @@
 }
 
 .stream-grid {
-  gap: 10px;
+  gap: var(--ui-space-md);
   margin-bottom: 10px;
 }
 
 .stream-grid label {
-  gap: 5px;
+  gap: var(--ui-space-xs);
 }
 
 .stream-path {
@@ -758,7 +810,7 @@
 
   .run-toolbar {
     top: -8px;
-    gap: 7px;
+    gap: var(--ui-space-md);
   }
 
   .gl-title strong {
@@ -782,7 +834,7 @@
 
   .file-row {
     flex-wrap: wrap;
-    gap: 5px;
+    gap: var(--ui-space-xs);
   }
 
   .file-row > label {
@@ -801,7 +853,7 @@
 
   .constellation-field {
     flex-direction: column;
-    gap: 5px;
+    gap: var(--ui-space-xs);
   }
 
   .constellation-field > span {

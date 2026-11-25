@@ -2,53 +2,59 @@
   <div ref="containerRef" class="gnss-map-container">
     <div v-if="props.showToolbar" class="toolbar">
       <!-- track/尺寸/重置布局/清除：与 GNSS Deviation 组件同款控件与命名 -->
-      <el-switch
-        v-model="isTracking"
-        inline-prompt
-        :active-text="t('gnss.deviation.tracking')"
-        :inactive-text="t('gnss.deviation.tracking')"
+      <el-button
+        size="small"
+        class="control-btn panel-icon-action"
+        :class="{ 'panel-icon-action--active': isTracking }"
+        :aria-pressed="isTracking"
         :aria-label="t('gnss.deviation.tracking')"
         :title="t('gnss.deviation.tracking')"
-      />
+        @click="isTracking = !isTracking"
+      >
+        <el-icon aria-hidden="true"><Aim /></el-icon>
+      </el-button>
       <div class="point-size-control">
-        <span class="size-label">{{ t('gnss.deviation.size') }}:</span>
+        <el-icon class="point-size-icon" :title="t('gnss.deviation.size')" aria-hidden="true">
+          <CircleDot />
+        </el-icon>
         <el-slider
           v-model="mapPointSize"
           :min="5"
           :max="20"
           :step="1"
           :show-tooltip="false"
+          :aria-label="t('gnss.deviation.size')"
           class="point-slider"
           @change="updatePointSize"
           @dblclick="resetPointSize"
         />
         <span class="size-value">{{ mapPointSize }}</span>
       </div>
-      <div class="toolbar-right">
+      <div class="toolbar-right panel-icon-actions">
         <el-button
           type="primary"
           size="small"
-          class="control-btn"
+          class="control-btn panel-icon-action"
           :title="t('gnss.deviation.resetLayout')"
           :aria-label="t('gnss.deviation.resetLayout')"
           @click="resetLayout"
         >
-          <el-icon><RefreshLeft /></el-icon>&nbsp;{{ t('gnss.deviation.resetLayout') }}
+          <el-icon aria-hidden="true"><RefreshLeft /></el-icon>
         </el-button>
         <el-button
           type="primary"
           size="small"
-          class="control-btn"
+          class="control-btn panel-icon-action"
           :title="t('gnss.deviation.clear')"
           :aria-label="t('gnss.deviation.clear')"
           @click="clearTrack"
         >
-          <el-icon><Delete /></el-icon>&nbsp;{{ t('gnss.deviation.clear') }}
+          <el-icon aria-hidden="true"><Delete /></el-icon>
         </el-button>
         <el-popover placement="bottom-start" :width="420" trigger="click">
           <template #reference>
-            <el-button size="small" circle class="info-btn">
-              <el-icon><InfoFilled /></el-icon>
+            <el-button size="small" circle class="info-btn panel-icon-action" :title="t('gnss.map.offlineTitle')" :aria-label="t('gnss.map.offlineTitle')">
+              <el-icon aria-hidden="true"><InfoFilled /></el-icon>
             </el-button>
           </template>
           <div class="offline-help">
@@ -99,7 +105,8 @@
 <script setup lang="ts">
 import { computed, inject, onMounted, onUnmounted, ref, watch } from 'vue'
 import { gnssDisplayContext } from '@/composables/gnss/GnssDisplayContext'
-import { InfoFilled, RefreshLeft, Delete } from '@element-plus/icons-vue'
+import { Aim, InfoFilled, RefreshLeft, Delete } from '@element-plus/icons-vue'
+import { CircleDot } from '@lucide/vue'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { useGnssStore } from '@/stores/gnss'
@@ -938,16 +945,14 @@ onUnmounted(() => {
   flex: 0 0 auto;
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--ui-space-md);
+  flex-wrap: wrap;
   padding: 8px 12px;
   border-bottom: 1px solid var(--app-border);
 }
 
 .toolbar-right {
   margin-left: auto;
-  display: flex;
-  align-items: center;
-  gap: 12px;
 }
 
 .control-btn {
@@ -967,16 +972,16 @@ onUnmounted(() => {
 .point-size-control {
   display: flex;
   align-items: center;
+  gap: var(--ui-space-sm);
 }
 
-.size-label {
-  margin-right: 5px;
-  font-size: 12px;
+.point-size-icon {
+  color: var(--app-text-secondary);
+  font-size: 14px;
 }
 
 .point-slider {
   width: 60px;
-  margin: 0 5px;
 }
 
 :deep(.el-slider) {

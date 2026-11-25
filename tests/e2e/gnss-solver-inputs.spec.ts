@@ -41,7 +41,7 @@ test('keeps input and output paths unchanged when switching between engines', as
   await output.fill('/custom/solution.pos')
   const engineRow = panel.locator('.file-row').filter({ hasText: 'Processing engine' })
 
-  for (const engine of ['StarRTK', 'RNX2RTKP'] as const) {
+  for (const engine of ['StarRTK', 'RTKLIB-EX', 'OpenGNSS'] as const) {
     await engineRow.locator('.el-select').click()
     await page.getByRole('option', { name: engine, exact: true }).click()
     await expect(rover).toHaveValue('/custom/rover.obs')

@@ -129,7 +129,7 @@ interface Window {
     ) => Promise<import('./core/gnsslib/RtkNavi').RtkNaviStatus>
     rtkNaviStop: (runId: string) => Promise<import('./core/gnsslib/RtkNavi').RtkNaviStatus>
     rtkNaviStatus: () => Promise<import('./core/gnsslib/RtkNavi').RtkNaviStatus>
-    rtkNaviChooseOutput: (defaultPath?: string) => Promise<string | null>
+    rtkNaviChooseOutput: (defaultPath?: string, format?: 'pos' | 'nmea') => Promise<string | null>
     appHandoffCreateSolutionSnapshot?: (
       request: import('./core/handoff/AppHandoff').AppHandoffSnapshotRequest,
     ) => Promise<import('./core/handoff/AppHandoff').AppHandoffSnapshotResult>

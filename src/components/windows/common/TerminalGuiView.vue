@@ -1817,7 +1817,7 @@ watch(scrollElement, (element, previous) => {
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--ui-space-md);
   padding: 10px 12px;
 }
 .gui-empty {
@@ -1826,7 +1826,7 @@ watch(scrollElement, (element, previous) => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: var(--ui-space-sm);
   color: color-mix(in srgb, var(--terminal-fg) 55%, transparent);
   text-align: center;
 }
@@ -1865,7 +1865,7 @@ watch(scrollElement, (element, previous) => {
   z-index: 1;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--ui-space-md);
   min-height: 30px;
   padding: 3px 8px;
   cursor: pointer;
@@ -1904,7 +1904,7 @@ watch(scrollElement, (element, previous) => {
   position: relative;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--ui-space-md);
   height: 4px;
   margin: 2px 8px 4px 24px;
 }
@@ -1970,7 +1970,7 @@ watch(scrollElement, (element, previous) => {
   display: flex;
   flex: none;
   align-items: center;
-  gap: 8px;
+  gap: var(--ui-space-md);
 }
 .command-block__exit-code {
   padding: 0 6px;
@@ -2064,7 +2064,7 @@ watch(scrollElement, (element, previous) => {
 .command-block__preview-header {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--ui-space-md);
   padding: 2px 8px;
 }
 .command-block__preview-path {
@@ -2108,7 +2108,7 @@ watch(scrollElement, (element, previous) => {
   flex: none;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--ui-space-md);
   padding: 7px 12px;
   border-top: 1px solid color-mix(in srgb, var(--terminal-fg) 10%, transparent);
   background: color-mix(in srgb, var(--terminal-fg) 4%, var(--terminal-bg));
@@ -2192,7 +2192,7 @@ watch(scrollElement, (element, previous) => {
   display: flex;
   flex: none;
   align-items: center;
-  gap: 8px;
+  gap: var(--ui-space-md);
   width: 100%;
   padding: 4px 8px;
   border: none;
@@ -2231,7 +2231,7 @@ watch(scrollElement, (element, previous) => {
 .completion__detail {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--ui-space-sm);
   width: 180px;
   flex: none;
   padding: 10px;

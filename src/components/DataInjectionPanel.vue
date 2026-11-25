@@ -462,7 +462,7 @@ defineExpose({ start, stop, active, starting, desktop })
   display: flex;
   align-items: center;
   width: 100%;
-  gap: 10px;
+  gap: var(--ui-space-md);
 }
 .source-tab-label > .el-icon {
   flex: none;
@@ -472,7 +472,7 @@ defineExpose({ start, stop, active, starting, desktop })
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 2px;
+  gap: var(--ui-space-tight);
   line-height: 1.2;
 }
 .source-tab-copy strong {
@@ -487,7 +487,7 @@ defineExpose({ start, stop, active, starting, desktop })
 .source-panel-heading {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: var(--ui-space-tight);
   margin: 2px 2px 13px;
 }
 .source-panel-heading strong {
@@ -505,7 +505,7 @@ defineExpose({ start, stop, active, starting, desktop })
 .input-group {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--ui-space-md);
   margin-bottom: 12px;
 }
 .input-group > label {
@@ -548,7 +548,7 @@ defineExpose({ start, stop, active, starting, desktop })
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: var(--ui-space-lg);
   padding-top: 12px;
   border-top: 1px solid var(--app-border);
 }
@@ -556,7 +556,7 @@ defineExpose({ start, stop, active, starting, desktop })
   display: flex;
   flex: 1 1 100%;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--ui-space-xs);
   color: var(--app-text-secondary);
   font-size: 12px;
   overflow-wrap: anywhere;

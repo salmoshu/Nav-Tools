@@ -11,6 +11,7 @@ export interface IncomingDataContext {
   dataParser: TextDataParser
   gnssData?: string
   observations?: SppObservations
+  suppressRawMessages?: boolean
 }
 
 export interface IncomingDataTargets {
@@ -35,7 +36,7 @@ export class IncomingDataRouter {
       else this.targets.appendGnss(gnssData)
     }
 
-    if (windows.has('raw-messages')) {
+    if (windows.has('raw-messages') && !context.suppressRawMessages) {
       if (isHexMotor) this.targets.appendRaw(`${data}\n${decodedData}`)
       else this.targets.appendRaw(data)
     }

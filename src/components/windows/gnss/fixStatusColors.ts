@@ -24,6 +24,22 @@ export function fixStatusColor(quality: number): string {
   return FIX_STATUS_COLORS[quality] ?? DEFAULT_FIX_STATUS_COLOR
 }
 
+const FIX_STATUS_SHORT_LABELS: Readonly<Record<number, string>> = {
+  0: 'Invalid',
+  1: 'Single',
+  2: 'DGNSS',
+  3: 'PPS',
+  4: 'Fix',
+  5: 'Float',
+  6: 'PPP',
+  7: 'Manual',
+  8: 'Simulation',
+}
+
+export function fixStatusShortLabel(quality: number): string {
+  return FIX_STATUS_SHORT_LABELS[quality] ?? 'Unknown'
+}
+
 // 供 canvas 渲染器使用的 0-1 归一化 RGB 分量
 export function fixStatusColorRgb01(quality: number): [number, number, number] {
   const hex = fixStatusColor(quality)

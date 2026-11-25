@@ -390,7 +390,7 @@ onUnmounted(() => window.removeEventListener('keydown', handleEscape, { capture:
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 16px;
+  gap: var(--ui-space-xl);
   padding: 24px 26px 18px;
   border-bottom: 1px solid var(--app-border);
   background: var(--app-surface);
@@ -416,7 +416,7 @@ onUnmounted(() => window.removeEventListener('keydown', handleEscape, { capture:
 .header-actions {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--ui-space-xs);
   flex-shrink: 0;
 }
 
@@ -424,7 +424,7 @@ onUnmounted(() => window.removeEventListener('keydown', handleEscape, { capture:
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
+  gap: var(--ui-space-md);
   padding: 56px 24px;
   text-align: center;
   overflow-y: auto;
@@ -449,7 +449,7 @@ onUnmounted(() => window.removeEventListener('keydown', handleEscape, { capture:
 .application-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 12px;
+  gap: var(--ui-space-lg);
   padding: 20px;
   min-height: 0;
   overflow-y: auto;
@@ -459,7 +459,7 @@ onUnmounted(() => window.removeEventListener('keydown', handleEscape, { capture:
   position: relative;
   display: grid;
   grid-template-columns: 44px minmax(0, 1fr) 32px;
-  gap: 14px;
+  gap: var(--ui-space-lg);
   min-height: 132px;
   padding: 16px;
   border: 1px solid var(--app-border);
@@ -526,7 +526,7 @@ onUnmounted(() => window.removeEventListener('keydown', handleEscape, { capture:
 .application-title-row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--ui-space-md);
 }
 
 .application-title-row h2 {
@@ -563,7 +563,7 @@ onUnmounted(() => window.removeEventListener('keydown', handleEscape, { capture:
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
+  gap: var(--ui-space-tight);
   color: var(--app-text-muted);
 }
 
@@ -578,7 +578,7 @@ onUnmounted(() => window.removeEventListener('keydown', handleEscape, { capture:
 .view-mode-switch {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: var(--ui-space-tight);
   margin-right: 6px;
   padding: 2px;
   border: 1px solid var(--app-border);
@@ -602,14 +602,14 @@ onUnmounted(() => window.removeEventListener('keydown', handleEscape, { capture:
 
 .application-grid--rows {
   grid-template-columns: minmax(0, 1fr);
-  gap: 8px;
+  gap: var(--ui-space-md);
   padding: 14px 20px;
 }
 
 .application-card--row {
   grid-template-columns: 36px minmax(0, 1fr) auto;
   align-items: center;
-  gap: 12px;
+  gap: var(--ui-space-lg);
   min-height: 0;
   padding: 10px 12px;
 }
@@ -628,7 +628,7 @@ onUnmounted(() => window.removeEventListener('keydown', handleEscape, { capture:
   display: grid;
   grid-template-columns: minmax(130px, 0.7fr) minmax(160px, 1.3fr);
   align-items: center;
-  column-gap: 8px;
+  column-gap: var(--ui-space-md);
 }
 
 .application-card--row .application-title-row h2 {
@@ -649,7 +649,7 @@ onUnmounted(() => window.removeEventListener('keydown', handleEscape, { capture:
 
 .application-card--row .application-actions {
   flex-direction: row;
-  gap: 3px;
+  gap: var(--ui-space-tight);
 }
 
 @media (max-width: 680px) {
@@ -665,7 +665,7 @@ onUnmounted(() => window.removeEventListener('keydown', handleEscape, { capture:
   .selector-header {
     align-items: stretch;
     flex-direction: column;
-    gap: 14px;
+    gap: var(--ui-space-lg);
     padding: 18px;
   }
 
@@ -682,7 +682,7 @@ onUnmounted(() => window.removeEventListener('keydown', handleEscape, { capture:
   .header-actions {
     width: 100%;
     flex-wrap: wrap;
-    gap: 8px;
+    gap: var(--ui-space-md);
   }
 
   .header-actions > .el-button {

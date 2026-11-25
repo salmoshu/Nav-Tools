@@ -6,53 +6,53 @@ test('settings cards control the selector and retain the selection after restart
   await page.addInitScript(() => localStorage.setItem('nav-tools:locale', 'en-US'))
   await page.goto('/')
   const cards = page.locator('.application-card')
-  await expect(cards).toHaveCount(4)
+  await expect(cards).toHaveCount(2)
   expect(
     await cards.evaluateAll((elements) =>
       elements.map((el) => el.getAttribute('data-application-id')),
     ),
-  ).toEqual(['serial', 'gnss', 'gnssraw', 'gnsslib'])
+  ).toEqual(['serial', 'gnss'])
 
   await page.getByRole('button', { name: 'Default Applications', exact: true }).click()
   const settings = page.locator('.settings-page')
-  await expect(settings.getByRole('checkbox')).toHaveCount(7)
+  await expect(settings.getByRole('checkbox')).toHaveCount(6)
   expect(await settings.getByRole('checkbox').allTextContents()).toEqual([
     expect.stringContaining('Serial'),
-    expect.stringContaining('Flow'),
     expect.stringContaining('GNSS'),
     expect.stringContaining('GNSS-Raw'),
     expect.stringContaining('GNSS-Lib'),
     expect.stringContaining('Camera'),
     expect.stringContaining('LiDAR'),
   ])
-  for (const name of ['Serial', 'GNSS', 'GNSS-Raw', 'GNSS-Lib']) {
+  for (const name of ['Serial', 'GNSS']) {
     await expect(settings.getByRole('checkbox', { name, exact: true })).toBeChecked()
   }
-  for (const name of ['Flow', 'Camera', 'LiDAR']) {
+  for (const name of ['GNSS-Raw', 'GNSS-Lib', 'Camera', 'LiDAR']) {
     await expect(settings.getByRole('checkbox', { name, exact: true })).not.toBeChecked()
   }
   await page.screenshot({ path: 'test-results/default-applications-settings.png' })
   await settings.getByRole('checkbox', { name: 'Camera', exact: true }).click()
   await settings.getByRole('checkbox', { name: 'LiDAR', exact: true }).click()
-  await settings.getByRole('checkbox', { name: 'Flow', exact: true }).click()
+  await settings.getByRole('checkbox', { name: 'GNSS-Raw', exact: true }).click()
+  await settings.getByRole('checkbox', { name: 'GNSS-Lib', exact: true }).click()
   await page.getByRole('button', { name: 'Back', exact: true }).click()
   await page.getByTitle(/^(选择应用|Select Application)$/).click()
-  await expect(cards).toHaveCount(7)
+  await expect(cards).toHaveCount(6)
   expect(
     await cards.evaluateAll((elements) =>
       elements.map((el) => el.getAttribute('data-application-id')),
     ),
-  ).toEqual(['serial', 'motor', 'gnss', 'gnssraw', 'gnsslib', 'camera', 'lidar'])
+  ).toEqual(['serial', 'gnss', 'gnssraw', 'gnsslib', 'camera', 'lidar'])
 
   await page.reload()
-  await expect(cards).toHaveCount(7)
+  await expect(cards).toHaveCount(6)
   await page.getByRole('button', { name: 'Default Applications', exact: true }).click()
   await expect(settings.getByRole('checkbox', { name: 'Camera', exact: true })).toBeChecked()
   await settings.getByRole('checkbox', { name: 'Camera', exact: true }).click()
   await page.getByRole('button', { name: 'Back', exact: true }).click()
   await page.getByTitle(/^(选择应用|Select Application)$/).click()
   await expect(page.locator('.application-card[data-application-id="camera"]')).toHaveCount(0)
-  await expect(cards).toHaveCount(6)
+  await expect(cards).toHaveCount(5)
 })
 
 test('an empty selector still provides access to default application settings', async ({

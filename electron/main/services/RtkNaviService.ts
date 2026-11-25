@@ -5,12 +5,17 @@ import * as path from 'node:path'
 import type { WebContents } from 'electron'
 import {
   buildRtkNaviConfig,
-  parseRtkNaviSolutionLine,
+  parseRtkNaviSolutionRecord,
+  starRtkInputStreams,
   type RtkNaviRunState,
   type RtkNaviSolution,
   type RtkNaviStartRequest,
   type RtkNaviStatus,
 } from '../../../src/core/gnsslib/RtkNavi'
+import {
+  starRtkSolutionFormat,
+  type StarRtkSolutionFormat,
+} from '../../../src/core/gnsslib/StarRtkConfig'
 import { gnssSolverTasks } from './GnssSolverTasks'
 
 interface RtkNaviJob {
@@ -18,6 +23,7 @@ interface RtkNaviJob {
   child: ChildProcessWithoutNullStreams
   runDirectory: string
   outputPath: string
+  solutionFormat: StarRtkSolutionFormat
   state: RtkNaviRunState
   finished: boolean
   stopping: boolean
@@ -64,14 +70,18 @@ export class RtkNaviService {
       throw new Error('RTKNAVI 任务标识无效')
     }
     const starRtk = rawRequest.engine === 'starrtk'
-    if (!Array.isArray(rawRequest.inputs) || rawRequest.inputs.length !== (starRtk ? 2 : 3)) {
+    const inputs = starRtk ? starRtkInputStreams(rawRequest) : rawRequest.inputs
+    if (!starRtk && (!Array.isArray(inputs) || inputs.length !== 3)) {
       throw new Error('RTKNAVI 必须配置三路输入')
     }
 
-    const request = this.normalizePaths(rawRequest)
+    const request = this.normalizePaths({ ...rawRequest, inputs })
     const engineName = starRtk ? 'StarRTK' : 'rtkrcv'
+    const solutionFormat =
+      (starRtk && starRtkSolutionFormat(request.starRtkSolutionFormat)) || 'pos'
     const outputPath =
-      request.outputPath || path.join(this.workspace, 'results', `${request.runId}.pos`)
+      request.outputPath ||
+      path.join(this.workspace, 'results', `${request.runId}.${solutionFormat}`)
     if (!request.outputPath) await fs.mkdir(path.dirname(outputPath), { recursive: true })
     buildRtkNaviConfig(request, outputPath)
     await this.validateFiles(request, outputPath)
@@ -114,6 +124,7 @@ export class RtkNaviService {
         child,
         runDirectory,
         outputPath,
+        solutionFormat,
         state: 'running',
         finished: false,
         stopping: false,
@@ -300,6 +311,7 @@ function watchSolution(
 ): void {
   let offset = 0
   let remainder = ''
+  let nmeaBlock: string[] = []
   let pending = Promise.resolve()
   const readAvailable = async (final = false): Promise<void> => {
     if (job.finished && !final) return
@@ -319,6 +331,7 @@ function watchSolution(
       if (stat.size < offset) {
         offset = 0
         remainder = ''
+        nmeaBlock = []
       }
       if (stat.size === offset && !(final && remainder)) return
       const text = stat.size > offset ? await readRange(job.outputPath, offset, stat.size) : ''
@@ -343,13 +356,24 @@ function watchSolution(
         records = []
       }
       for (const line of parts) {
-        const solution = parseRtkNaviSolutionLine(line)
+        let record = line
+        if (job.solutionFormat === 'nmea') {
+          if (!line.startsWith('$')) continue
+          const sentence = line.slice(3, 6)
+          // StarRTK writes RMC, then the satellite snapshot, then GGA for each epoch.
+          if (sentence === 'RMC') nmeaBlock = [line]
+          else if (nmeaBlock.length) nmeaBlock.push(line)
+          if (sentence !== 'GGA') continue
+          record = nmeaBlock.join('\n')
+          nmeaBlock = []
+        }
+        const solution = parseRtkNaviSolutionRecord(record)
         if (!solution) continue
         latest = solution
         job.latestSolution = solution
         job.epochs++
         job.qualityCounts[solution.quality] = (job.qualityCounts[solution.quality] ?? 0) + 1
-        records.push(line)
+        records.push(record)
         if (records.length >= 256) publish()
       }
       publish()
@@ -385,6 +409,7 @@ function statusOf(job: RtkNaviJob, error?: string): RtkNaviStatus {
     runId: job.runId,
     state: job.state,
     outputPath: job.outputPath,
+    solutionFormat: job.solutionFormat,
     pid: job.child.pid,
     error,
   }

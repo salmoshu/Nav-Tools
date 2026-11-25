@@ -2,7 +2,9 @@ import { ref, shallowRef, computed } from "vue";
 import type { Ref } from "vue";
 import { activeDataTransport } from '@/core/device/ActiveDataTransport'
 import { formatMessageContent } from '@/core/data/MessageFormat'
+import { identifyCsvMessageSchema, type CsvMessageSchema } from '@/core/data/MessageViewModel'
 import { useFileTimeline } from '@/composables/useFileTimeline'
+import type { RtcmConsoleMessage } from '@/core/gnss/RtcmMessages'
 import {
   DEFAULT_KEY_VALUE_REGEX,
   parseTextRecord,
@@ -13,7 +15,7 @@ import { RtkSolutionParser } from '@/core/gnsslib/RtkSolution'
 export interface ConsoleMessage {
   timestamp: string;
   raw: string;
-  dataType: "json" | "nmea" | "regex" | "csv" | "none";
+  dataType: "json" | "nmea" | "regex" | "csv" | "rtcm3" | "none";
   isValid: boolean;
   key: string;
   sourceFormat?: 'ascii' | 'hex';
@@ -51,7 +53,9 @@ export function findTimelineMessageIndex(
 // 控制台状态接口
 export interface ConsoleState {
   messages: Ref<ConsoleMessage[]>;
-  dataFormat: Ref<"none" | "json" | "nmea" | "regex" | "csv">;
+  csvSchema: Ref<CsvMessageSchema | null>;
+  positionHeaders: Ref<string[]>;
+  dataFormat: Ref<ConsoleMessage["dataType"]>;
   regexPattern: Ref<string>;
   displayFormat: Ref<'hex' | 'ascii'>;
   dataFilter: Ref<boolean>;
@@ -71,6 +75,7 @@ export interface ConsoleState {
   // 方法
   addMessage: (rawData: string) => void;
   addMessages: (rawData: string) => void;
+  addRtcmMessages: (records: readonly RtcmConsoleMessage[]) => void;
   beginFileReplayMessages: () => void;
   addFileReplayData: (rawData: string) => void;
   endFileReplayMessages: () => void;
@@ -103,7 +108,9 @@ export function useConsole(useGlobal: boolean = true, timeline = useFileTimeline
 
   // 状态管理
   const messages = shallowRef<ConsoleMessage[]>([]);
-  const dataFormat = ref<"none" | "json" | "nmea" | "regex" | "csv">("none");
+  const csvSchema = shallowRef<CsvMessageSchema | null>(null);
+  const positionHeaders = shallowRef<string[]>([]);
+  const dataFormat = ref<ConsoleMessage["dataType"]>("none");
   const regexPattern = ref(DEFAULT_KEY_VALUE_REGEX);
   const displayFormat = ref<'hex' | 'ascii'>('ascii')
   const dataFilter = ref(false);
@@ -114,6 +121,7 @@ export function useConsole(useGlobal: boolean = true, timeline = useFileTimeline
   const validJsonCount = ref(0);
   const validRegexCount = ref(0);
   const validCsvCount = ref(0);
+  const validRtcmCount = ref(0);
   const fileTimeline = timeline;
   const hasFileReplayMessages = ref(false);
   let fileReplayBuffer = '';
@@ -158,6 +166,7 @@ export function useConsole(useGlobal: boolean = true, timeline = useFileTimeline
         )
       : timelineMessages.value;
     return visibleMessages.map((message) => {
+      if (message.dataType === 'rtcm3') return message;
       const raw = formatMessageContent(
         message.raw,
         message.sourceFormat ?? 'ascii',
@@ -168,15 +177,14 @@ export function useConsole(useGlobal: boolean = true, timeline = useFileTimeline
   });
   const validMsgCount = computed(() => {
     if (!hasFileReplayMessages.value) {
-      return dataFormat.value === 'nmea'
-        ? validNmeaCount.value
-        : dataFormat.value === 'json'
-          ? validJsonCount.value
-        : dataFormat.value === 'regex'
-          ? validRegexCount.value
-          : dataFormat.value === 'csv'
-            ? validCsvCount.value
-            : 0;
+      switch (dataFormat.value) {
+        case 'nmea': return validNmeaCount.value;
+        case 'json': return validJsonCount.value;
+        case 'rtcm3': return validRtcmCount.value;
+        case 'regex': return validRegexCount.value;
+        case 'csv': return validCsvCount.value;
+        default: return 0;
+      }
     }
     return timelineMessages.value.filter(
       (message) => message.dataType === dataFormat.value && message.isValid,
@@ -191,6 +199,7 @@ export function useConsole(useGlobal: boolean = true, timeline = useFileTimeline
     if (message.dataType === 'json') validJsonCount.value += delta;
     if (message.dataType === 'regex') validRegexCount.value += delta;
     if (message.dataType === 'csv') validCsvCount.value += delta;
+    if (message.dataType === 'rtcm3') validRtcmCount.value += delta;
   };
 
   // 批量缓冲：消息先进入 pendingMessages，定时批量提交到 messages，
@@ -219,9 +228,22 @@ export function useConsole(useGlobal: boolean = true, timeline = useFileTimeline
   };
 
   const appendConsoleMessage = (message: ConsoleMessage) => {
+    const sourceFormat = message.sourceFormat ?? displayFormat.value;
+    if (!csvSchema.value && message.dataType === 'csv' && message.isValid) {
+      csvSchema.value = identifyCsvMessageSchema(
+        formatMessageContent(message.raw, sourceFormat, 'ascii'),
+        message.key,
+      );
+    }
+    if (
+      message.dataType === 'none' &&
+      /^\s*[%+].*(?:latitude\(|x-ecef\(|e-baseline\(|(?:ref|slave)\s+pos\s*:)/i.test(message.raw)
+    ) {
+      positionHeaders.value = [...positionHeaders.value.slice(-7), message.raw];
+    }
     pendingMessages.push({
       ...message,
-      sourceFormat: message.sourceFormat ?? displayFormat.value,
+      sourceFormat,
     });
     updateValidCount(message, 1);
     scheduleFlush();
@@ -232,6 +254,27 @@ export function useConsole(useGlobal: boolean = true, timeline = useFileTimeline
     if (excess <= 0) return;
     for (const message of messages.value.slice(0, excess)) updateValidCount(message, -1);
     messages.value = messages.value.slice(excess);
+  };
+
+  const addRtcmMessages = (records: readonly RtcmConsoleMessage[]) => {
+    if (records.length === 0 || isPaused.value) return;
+    dataFormat.value = 'rtcm3';
+    const now = new Date();
+    const timestamp = `${now.toLocaleTimeString()}.${String(now.getMilliseconds()).padStart(3, '0')}`;
+    for (const record of records) {
+      appendConsoleMessage({
+        timestamp,
+        raw: record.hex,
+        dataType: 'rtcm3',
+        sourceFormat: 'hex',
+        isValid: record.valid,
+        key: generateKey(timestamp),
+      });
+      if (pendingMessages.length >= maxMessages) {
+        if (flushTimer !== null) clearTimeout(flushTimer);
+        flushPendingMessages();
+      }
+    }
   };
 
   const calcNmeaChecksum = (sentence: string): string => {
@@ -625,10 +668,13 @@ export function useConsole(useGlobal: boolean = true, timeline = useFileTimeline
     }
     pendingMessages = [];
     messages.value = [];
+    csvSchema.value = null;
+    positionHeaders.value = [];
     validNmeaCount.value = 0;
     validJsonCount.value = 0;
     validRegexCount.value = 0;
     validCsvCount.value = 0;
+    validRtcmCount.value = 0;
     tempDataString = '';
     hasFileReplayMessages.value = false;
     fileReplayBuffer = '';
@@ -781,6 +827,8 @@ export function useConsole(useGlobal: boolean = true, timeline = useFileTimeline
 
   const instance: ConsoleState = {
     messages,
+    csvSchema,
+    positionHeaders,
     dataFormat,
     regexPattern,
     displayFormat,
@@ -799,6 +847,7 @@ export function useConsole(useGlobal: boolean = true, timeline = useFileTimeline
 
     addMessage,
     addMessages,
+    addRtcmMessages,
     beginFileReplayMessages,
     addFileReplayData,
     endFileReplayMessages,

@@ -16,6 +16,7 @@ import {
 } from '../../src/core/gnsslib/RtkNavi'
 import { parseRtkPostConfig } from '../../src/core/gnsslib/RtkPostConfig'
 import { defaultStarRtkProcessing, parseStarRtkConfig } from '../../src/core/gnsslib/StarRtkConfig'
+import { calculateNmeaChecksum } from '../../src/core/data/NmeaStreamParser'
 
 const directories: string[] = []
 
@@ -79,6 +80,96 @@ describe('RtkNaviService', () => {
           expect.objectContaining({ epochs: 1 }),
         )
       })
+    } finally {
+      await service.stop(sender.id)
+    }
+  })
+
+  it('starts StarRTK SPP with only the rover and ignores a saved base input', async () => {
+    const { workspace, request } = await createFixture()
+    request.engine = 'starrtk'
+    request.starRtkProcessing = { ...defaultStarRtkProcessing(), positioning_mode: 'spp' }
+    const rover = { ...request.inputs[0], timeTag: false }
+    request.inputs = [rover, { ...rover, path: path.join(workspace, 'missing-base.rtcm3') }]
+    const spawnMock = vi.fn().mockReturnValue(fakeChild())
+    const sender = fakeSender()
+    const service = new RtkNaviService(workspace, spawnMock as unknown as typeof spawn)
+    try {
+      await expect(service.start(sender, request)).resolves.toMatchObject({ state: 'running' })
+      const config = parseStarRtkConfig(await readFile(spawnMock.mock.calls[0][1][2], 'utf8'))
+      expect(config.processing.positioning_mode).toBe('spp')
+      expect(config.realtime?.rover).toEqual({ type: 'file', path: rover.path })
+      expect(config.realtime?.base).toBeUndefined()
+    } finally {
+      await service.stop(sender.id)
+    }
+  })
+
+  it('keeps StarRTK NMEA sentences together across reads and drains the final epoch', async () => {
+    const { workspace, request } = await createFixture()
+    request.engine = 'starrtk'
+    request.outputPath = ''
+    request.starRtkSolutionFormat = 'nmea'
+    request.inputs = [8881, 8882].map((port) => ({
+      enabled: true,
+      type: 'tcpcli',
+      format: 'rtcm3',
+      path: `127.0.0.1:${port}`,
+      timeTag: false,
+      replaySpeed: 1,
+    }))
+    const spawnMock = vi.fn().mockReturnValue(fakeChild())
+    const sender = fakeSender()
+    const service = new RtkNaviService(workspace, spawnMock as unknown as typeof spawn)
+    try {
+      const status = await service.start(sender, request)
+      expect(status.solutionFormat).toBe('nmea')
+      expect(status.outputPath).toBe(path.join(workspace, 'results', 'run-1.nmea'))
+      const config = parseStarRtkConfig(await readFile(spawnMock.mock.calls[0][1][2], 'utf8'))
+      expect(config.realtime).toMatchObject({
+        solution_file: status.outputPath,
+        solution_format: 'nmea',
+      })
+
+      const sentence = (body: string) => `${body}*${calculateNmeaChecksum(body)}`
+      const record = (clock: string, date: string, quality: number) => [
+        sentence(`$GPRMC,${clock},A,3100.0,S,12100.0,W,0,0,${date},,,A`),
+        sentence('$GQGSV,1,1,01,03,62,115,47,0'),
+        sentence(`$GPGGA,${clock},3100.0,S,12100.0,W,${quality},12,1.0,10.0,M,20.0,M,0.5,`),
+      ]
+      const first = record('235959.50', '300724', 4)
+      const last = record('000000.50', '310724', 5)
+      await writeFile(status.outputPath, [...first, last[0], ''].join('\r\n'))
+      await vi.waitFor(() =>
+        expect(sender.send).toHaveBeenCalledWith(
+          'rtknavi-solution',
+          expect.objectContaining({
+            epochs: 1,
+            records: [first.join('\n')],
+            solution: expect.objectContaining({ time: '2024/07/30 23:59:59.500', quality: 1 }),
+          }),
+        ),
+      )
+      await appendFile(status.outputPath, last.slice(1).join('\n'))
+      await service.stop(sender.id)
+      expect(sender.send).toHaveBeenCalledWith(
+        'rtknavi-solution',
+        expect.objectContaining({
+          epochs: 2,
+          qualityCounts: { 1: 1, 2: 1 },
+          records: [last.join('\n')],
+          solution: expect.objectContaining({
+            time: '2024/07/31 00:00:00.500',
+            latitude: -31,
+            longitude: -121,
+            height: 30,
+            quality: 2,
+            satellites: 12,
+            age: 0.5,
+            ratio: null,
+          }),
+        }),
+      )
     } finally {
       await service.stop(sender.id)
     }

@@ -28,7 +28,9 @@ describe('file timeline presentation', () => {
     )
     expect(messages).toContain('fileTimeline.elapsedMilliseconds.value')
     expect(messages).toContain('scrollToTimelineMessage()')
-    expect(messages).toContain('scrollerRef.value.scrollToItem(targetIndex)')
+    expect(messages).toContain(
+      'scrollerRef.value.scrollToItem(Math.max(0, targetIndex - headerOffset.value))',
+    )
   })
 
   it('exposes a replay speed select shared with the data input dialog', () => {

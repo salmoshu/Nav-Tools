@@ -25,7 +25,7 @@ defineProps<{
   display: flex;
   align-items: center;
   min-width: 0;
-  gap: 11px;
+  gap: var(--ui-space-lg);
   text-align: left;
 }
 
@@ -44,7 +44,7 @@ defineProps<{
   display: flex;
   min-width: 0;
   flex-direction: column;
-  gap: 3px;
+  gap: var(--ui-space-tight);
 }
 
 .app-dialog-heading strong {

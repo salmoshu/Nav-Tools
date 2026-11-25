@@ -86,9 +86,10 @@ const incomingDataListener = (
   _event: unknown,
   data: unknown,
   observations?: Parameters<typeof routeDataToWindow>[2],
+  route?: Parameters<typeof routeDataToWindow>[3],
 ) => {
   if (typeof data === 'string' && cardWindowId.value) {
-    routeDataToWindow(data, cardWindowId.value, observations)
+    routeDataToWindow(data, cardWindowId.value, observations, route)
   }
 }
 window.ipcRenderer?.on('incoming-data', incomingDataListener)
@@ -158,7 +159,7 @@ function closeWindow() {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: var(--ui-space-md);
   height: 100%;
   color: var(--app-text-muted);
 }

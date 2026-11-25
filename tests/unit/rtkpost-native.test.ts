@@ -18,6 +18,8 @@ import { defaultStarRtkProcessing } from '../../src/core/gnsslib/StarRtkConfig'
 // Opt in with an existing native build and the Open-GNSS tests/fixtures/rinex directory.
 const executable = process.env.RNX2RTKP_TEST_EXECUTABLE
 const fixtures = process.env.RNX2RTKP_TEST_FIXTURES
+const exExecutable = process.env.RTKLIB_EX_TEST_EXECUTABLE
+const exFixtures = process.env.RTKLIB_EX_TEST_FIXTURES
 const starExecutable = process.env.STARRTK_TEST_EXECUTABLE
 const starDataset = process.env.STARRTK_TEST_DATASET
 const directories: string[] = []
@@ -32,6 +34,37 @@ afterEach(async () => {
       throw new Error('Unexpected temporary test directory')
     await rm(target, { recursive: true, force: true })
   }
+})
+
+describe.skipIf(!exExecutable || !exFixtures)('RTKLIB-EX native engine integration', () => {
+  it('uses the native .conf to solve without a base station and produces valid NMEA', async () => {
+    const directory = await mkdtemp(path.join(os.tmpdir(), 'nav-tools-native-rtkpost-'))
+    directories.push(directory)
+    const configPath = path.join(directory, 'native.conf')
+    const outputPath = path.join(directory, 'solution.nmea')
+    await writeFile(configPath, 'pos1-posmode=single\npos1-navsys=1\nout-solformat=nmea\n')
+    const defaults = createDefaultRtkPostSettings()
+    const result = await new RtkPostService().run(sender(), {
+      ...defaults,
+      engine: 'rtklib-ex',
+      runId: 'native-ex',
+      executablePath: exExecutable!,
+      configPath,
+      roverObsPath: path.join(exFixtures!, '07590920.05o'),
+      navPaths: [path.join(exFixtures!, '30400920.05n')],
+      outputPath,
+      options: {
+        ...defaults.options,
+        startTime: '2005-04-02T00:00:30',
+        endTime: '2005-04-02T00:01:30',
+      },
+    })
+    expect(result.ok, result.error ?? result.log).toBe(true)
+    const gga = (await readFile(outputPath, 'utf8')).split(/\r?\n/).filter((line) => /^\$..GGA,/.test(line))
+    expect(gga.length).toBeGreaterThan(0)
+    expect(gga.every(validateNmeaChecksum)).toBe(true)
+    expect(result.solution).toMatchObject({ format: 'nmea', epochs: gga.length, single: gga.length })
+  })
 })
 
 describe.skipIf(!executable || !fixtures)('RTKPOST native engine integration', () => {
@@ -124,6 +157,35 @@ describe.skipIf(!executable || !fixtures)('RTKPOST native engine integration', (
 })
 
 describe.skipIf(!starExecutable || !starDataset)('StarRTK native post-processing', () => {
+  it.each([
+    ['spp', 'single'],
+    ['rtd', 'dgps'],
+  ] as const)(
+    'starts StarRTK %s and publishes only the selected solution quality',
+    async (mode, quality) => {
+      const directory = await mkdtemp(path.join(os.tmpdir(), 'nav-tools-native-rtkpost-'))
+      directories.push(directory)
+      const request: RtkPostRunRequest = {
+        ...createDefaultRtkPostSettings(),
+        engine: 'starrtk',
+        starRtkProcessing: { ...defaultStarRtkProcessing(), positioning_mode: mode },
+        runId: 'starrtk-mode',
+        executablePath: starExecutable!,
+        baseObsPath:
+          mode === 'spp'
+            ? path.join(directory, 'missing-base.obs')
+            : path.join(starDataset!, '202404231726.base.obs'),
+        roverObsPath: path.join(starDataset!, '202404231726.rover.obs'),
+        navPaths: [path.join(starDataset!, '202404231726.rover.nav')],
+        outputPath: path.join(directory, 'solution.pos'),
+      }
+      const result = await new RtkPostService().run(sender(), request)
+      expect(result.ok, result.error ?? result.log).toBe(true)
+      expect(result.solution).toMatchObject({ epochs: 813, fixed: 0, float: 0, [quality]: 813 })
+    },
+    30_000,
+  )
+
   it.each(['llh', 'nmea'] as const)(
     'publishes the %s result for the StarRTK sample',
     async (format) => {

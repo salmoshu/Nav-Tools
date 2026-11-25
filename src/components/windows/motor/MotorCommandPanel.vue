@@ -105,14 +105,14 @@ defineEmits<{
   display: flex;
   flex-wrap: wrap;
   align-content: flex-start;
-  gap: 12px;
+  gap: var(--ui-space-lg);
   padding: 12px;
 }
 
 .command-item {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--ui-space-md);
 }
 
 .frequency-input-wrapper,
@@ -120,7 +120,7 @@ defineEmits<{
 .multi-data-inputs {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--ui-space-sm);
 }
 
 .frequency-input-wrapper :deep(.el-input-number) {

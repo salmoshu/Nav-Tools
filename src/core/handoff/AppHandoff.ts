@@ -111,13 +111,6 @@ export const APP_HANDOFF_TARGETS: readonly AppHandoffTargetRegistration[] = [
     loader: 'text-replay',
   },
   {
-    applicationId: 'motor',
-    artifactKinds: RECORDING_KINDS,
-    roles: ['recording', 'source'],
-    formats: TEXT_FORMATS,
-    loader: 'text-replay',
-  },
-  {
     applicationId: 'gnssraw',
     artifactKinds: ['source-file', 'rinex-input'],
     roles: ['source', 'rover-observation', 'base-observation', 'navigation'],

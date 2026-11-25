@@ -87,8 +87,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('rtknavi-start', request),
   rtkNaviStop: (runId: string) => ipcRenderer.invoke('rtknavi-stop', runId),
   rtkNaviStatus: () => ipcRenderer.invoke('rtknavi-status'),
-  rtkNaviChooseOutput: (defaultPath?: string) =>
-    ipcRenderer.invoke('rtknavi-choose-output', defaultPath),
+  rtkNaviChooseOutput: (defaultPath?: string, format?: 'pos' | 'nmea') =>
+    ipcRenderer.invoke('rtknavi-choose-output', defaultPath, format),
   appHandoffCreateSolutionSnapshot: (
     request: import('../../src/core/handoff/AppHandoff').AppHandoffSnapshotRequest,
   ) =>

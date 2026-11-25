@@ -17,10 +17,11 @@ test('collapses composer labels at the default card width and restores them when
   const actions = page.locator('.composer-actions')
   const labels = actions.locator('.el-button > span > span')
   await expect(inputContainer).toBeVisible()
-  await expect(labels).toHaveCount(3)
+  await expect(labels).toHaveCount(2)
+  await expect(actions.locator('.newline-button')).toBeVisible()
+  await expect(actions.locator('.loop-send-button')).toHaveCount(0)
   await expect(labels.first()).toBeHidden()
   await expect(labels.nth(1)).toBeHidden()
-  await expect(labels.nth(2)).toBeHidden()
   const inputBox = await inputContainer.boundingBox()
   const actionsBox = await actions.boundingBox()
   expect(inputBox).not.toBeNull()
@@ -31,7 +32,6 @@ test('collapses composer labels at the default card width and restores them when
   await page.setViewportSize({ width: 1100, height: 800 })
   await expect(labels.first()).toBeVisible()
   await expect(labels.nth(1)).toBeVisible()
-  await expect(labels.nth(2)).toBeVisible()
 })
 
 test('collapses icon action labels by Dashboard card width and restores them when wider', async ({

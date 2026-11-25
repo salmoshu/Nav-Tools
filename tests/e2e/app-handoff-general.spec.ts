@@ -152,6 +152,10 @@ test('opens an existing RINEX file group in GNSS-Lib without running the solver'
       ]),
     )
     localStorage.setItem('nav-tools:selected-application', 'gnssraw')
+    localStorage.setItem(
+      'nav-tools:enabled-default-applications',
+      JSON.stringify(['gnssraw', 'gnsslib']),
+    )
   })
   await page.goto('/#app/gnssraw')
   await expect(page.locator('.gnssraw-frames')).toBeVisible()
@@ -261,7 +265,7 @@ test('opens a stopped recording in GNSS, returns and opens it again', async ({ p
   expect(errors).toEqual([])
 })
 
-test('projects a JSON recording into the Flow target instead of the source panels', async ({
+test('projects a JSON recording into Serial instead of the source panels', async ({
   page,
 }) => {
   const errors: string[] = []
@@ -274,16 +278,16 @@ test('projects a JSON recording into the Flow target instead of the source panel
       'nav-tools:custom-applications',
       JSON.stringify([
         {
-          id: 'serial',
-          name: 'Serial',
+          id: 'capture',
+          name: 'Capture',
           description: '',
           icon: 'serial',
           accent: '#64748b',
           windowIds: ['raw-messages'],
         },
         {
-          id: 'motor',
-          name: 'Flow',
+          id: 'serial',
+          name: 'Serial',
           description: '',
           icon: 'motor',
           accent: '#0ea5e9',
@@ -291,10 +295,10 @@ test('projects a JSON recording into the Flow target instead of the source panel
         },
       ]),
     )
-    localStorage.setItem('nav-tools:selected-application', 'serial')
+    localStorage.setItem('nav-tools:selected-application', 'capture')
     localStorage.setItem(
       'nav-tools:enabled-default-applications',
-      JSON.stringify(['serial', 'motor']),
+      JSON.stringify(['serial']),
     )
     localStorage.setItem(
       'nav-tools:data-source-settings',
@@ -307,7 +311,7 @@ test('projects a JSON recording into the Flow target instead of the source panel
       }),
     )
   })
-  await page.goto('/#app/serial')
+  await page.goto('/#app/capture')
   await page.evaluate(async () => {
     const { useDevice } = await import('/src/hooks/useDevice.ts')
     useDevice().globalDevice.value = {
@@ -321,9 +325,9 @@ test('projects a JSON recording into the Flow target instead of the source panel
   await page.locator('.log-record-button').click()
   await expect(page.locator('.log-record-button')).toHaveAttribute('aria-pressed', 'false')
   await page.locator('.handoff-open').click()
-  await page.getByRole('menuitem', { name: '在 Flow 中打开', exact: true }).click()
+  await page.getByRole('menuitem', { name: '在 Serial 中打开', exact: true }).click()
 
-  await expect(page.locator('.context-app-name')).toHaveText('Flow')
+  await expect(page.locator('.context-app-name')).toHaveText('Serial')
   await expect(page.locator('.flow-console-virtual')).toBeVisible()
   await expect
     .poll(() =>
@@ -342,6 +346,6 @@ test('projects a JSON recording into the Flow target instead of the source panel
       }),
     )
     .toEqual({ speed: [10, 12], epochs: 2, parser: 'json' })
-  await expect(page.locator('.handoff-return')).toHaveText('返回 Serial')
+  await expect(page.locator('.handoff-return')).toHaveText('返回 Capture')
   expect(errors).toEqual([])
 })

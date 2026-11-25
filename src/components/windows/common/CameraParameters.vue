@@ -735,7 +735,7 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import {
   Aim,
   Connection,
@@ -1002,11 +1002,12 @@ watch(
   },
 )
 
-async function reportCalibrationError(error: unknown) {
+function reportCalibrationError(error: unknown): void {
   const message = error instanceof Error ? error.message : String(error)
-  await ElMessageBox.alert(message, t('common.camera.calibration.phase.failed'), {
-    type: 'error',
-    customClass: 'app-message-box',
+  ElMessage.error({
+    message: `${t('common.camera.calibration.phase.failed')}\n${message}`,
+    customClass: 'app-message-detail',
+    duration: 7000,
   })
 }
 
@@ -1129,7 +1130,7 @@ async function observeLifecycle() {
       calState.value = await window.electronAPI.cameraCalibrationClose()
     } catch (error) {
       calibrationObservationLease = true
-      await reportCalibrationError(error)
+      reportCalibrationError(error)
     }
   }
 }
@@ -1156,7 +1157,7 @@ async function startCalibration() {
     await nextTick()
     scrollCalView()
   } catch (error) {
-    await reportCalibrationError(error)
+    reportCalibrationError(error)
   }
 }
 
@@ -1226,7 +1227,7 @@ async function stopCalibration() {
   try {
     calState.value = await window.electronAPI.cameraCalibrationStop()
   } catch (error) {
-    await reportCalibrationError(error)
+    reportCalibrationError(error)
   }
 }
 
@@ -1244,7 +1245,7 @@ async function restoreParams() {
     calState.value = await window.electronAPI.cameraCalibrationRestore()
     ElMessage.success(t('common.camera.calibration.restoreSent'))
   } catch (error) {
-    await reportCalibrationError(error)
+    reportCalibrationError(error)
   }
 }
 
@@ -1351,7 +1352,7 @@ async function runScript() {
       timeoutS: scriptTimeoutS.value,
     })
   } catch (error) {
-    await reportCalibrationError(error)
+    reportCalibrationError(error)
   } finally {
     scriptStarting.value = false
   }
@@ -1361,7 +1362,7 @@ async function stopScript() {
   try {
     await window.electronAPI?.cameraScriptStop?.()
   } catch (error) {
-    await reportCalibrationError(error)
+    reportCalibrationError(error)
   }
 }
 
@@ -1417,7 +1418,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: var(--ui-space-lg);
   padding: 10px 16px;
   border-bottom: 1px solid var(--app-border);
   background: var(--app-surface);
@@ -1426,7 +1427,7 @@ onUnmounted(() => {
 .camera-endpoint {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: var(--ui-space-md);
   min-width: 0;
   overflow: hidden;
   font:
@@ -1496,7 +1497,7 @@ onUnmounted(() => {
 .tab-label {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--ui-space-sm);
 }
 .activity-dot {
   width: 6px;
@@ -1529,7 +1530,7 @@ onUnmounted(() => {
 .section-heading {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--ui-space-md);
   padding: 16px;
   border-bottom: 1px solid var(--app-border);
 }
@@ -1576,7 +1577,7 @@ onUnmounted(() => {
   display: inline-flex;
   flex: 0 0 auto;
   align-items: center;
-  gap: 6px;
+  gap: var(--ui-space-sm);
   padding: 5px 8px;
   border-radius: 6px;
   font-size: 11px;
@@ -1624,7 +1625,7 @@ onUnmounted(() => {
 .connection-grid {
   display: grid;
   grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1.4fr);
-  gap: 12px;
+  gap: var(--ui-space-lg);
 }
 .connection-grid label,
 .cal-config label,
@@ -1634,7 +1635,7 @@ onUnmounted(() => {
   display: grid;
   align-content: start;
   min-width: 0;
-  gap: 7px;
+  gap: var(--ui-space-md);
   color: var(--app-text-secondary);
   font-size: 12px;
   line-height: 1.5;
@@ -1663,7 +1664,7 @@ onUnmounted(() => {
 .connection-note {
   display: flex;
   align-items: flex-start;
-  gap: 7px;
+  gap: var(--ui-space-md);
   margin: 0;
   padding: 0 16px 16px;
   color: var(--app-text-muted);
@@ -1679,7 +1680,7 @@ onUnmounted(() => {
 .calibration-body,
 .script-body {
   display: grid;
-  gap: 16px;
+  gap: var(--ui-space-xl);
   padding: 16px;
   min-width: 0;
 }
@@ -1687,7 +1688,7 @@ onUnmounted(() => {
   display: grid;
   grid-template-columns: 98px minmax(0, 1fr);
   align-items: center;
-  gap: 10px;
+  gap: var(--ui-space-md);
 }
 .sub-command-field {
   grid-template-columns: 98px minmax(0, 1fr) auto;
@@ -1700,7 +1701,7 @@ onUnmounted(() => {
 .format-switch {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: var(--ui-space-md);
   color: var(--app-text-secondary);
   font-size: 12px;
   white-space: nowrap;
@@ -1725,7 +1726,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--ui-space-md);
 }
 .command-actions {
   justify-content: space-between;
@@ -1748,7 +1749,7 @@ onUnmounted(() => {
 .inline-notice {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--ui-space-md);
   padding: 9px 11px;
   border-radius: 6px;
   color: var(--app-text-secondary);
@@ -1767,11 +1768,11 @@ onUnmounted(() => {
 
 .command-help {
   display: grid;
-  gap: 12px;
+  gap: var(--ui-space-lg);
 }
 .command-help p {
   display: grid;
-  gap: 6px;
+  gap: var(--ui-space-sm);
   margin: 0;
   padding: 14px;
   border: 1px solid var(--app-border);
@@ -1790,7 +1791,7 @@ onUnmounted(() => {
 
 .workflow-section {
   display: grid;
-  gap: 14px;
+  gap: var(--ui-space-lg);
   min-width: 0;
 }
 .workflow-section + .workflow-section {
@@ -1800,7 +1801,7 @@ onUnmounted(() => {
 .workflow-heading {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--ui-space-md);
 }
 .workflow-heading h3 {
   flex: 1;
@@ -1822,7 +1823,7 @@ onUnmounted(() => {
 .cal-source {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--ui-space-md);
   padding: 10px;
   border-radius: 7px;
   background: var(--app-surface-muted);
@@ -1880,7 +1881,7 @@ onUnmounted(() => {
 .cal-config {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 14px 12px;
+  gap: var(--ui-space-lg) var(--ui-space-lg);
 }
 .cal-ssh {
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1889,7 +1890,7 @@ onUnmounted(() => {
   display: flex;
   flex-wrap: wrap;
   align-items: end;
-  gap: 12px;
+  gap: var(--ui-space-lg);
 }
 .cal-target-count {
   width: 180px;
@@ -1897,12 +1898,12 @@ onUnmounted(() => {
 }
 .cal-target-groups {
   display: grid;
-  gap: 10px;
+  gap: var(--ui-space-md);
 }
 .cal-target-group {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px 12px;
+  gap: var(--ui-space-md) var(--ui-space-lg);
   padding: 12px;
   border: 1px solid var(--app-border);
   border-radius: 8px;
@@ -1919,7 +1920,7 @@ onUnmounted(() => {
   grid-column: span 2;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
   align-items: end;
-  gap: 10px;
+  gap: var(--ui-space-md);
   min-width: 0;
 }
 .cal-dial-toggle {
@@ -1952,14 +1953,14 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 12px;
+  gap: var(--ui-space-lg);
   padding: 12px;
   border-radius: 8px;
   background: var(--app-surface-muted);
 }
 .cal-params {
   display: grid;
-  gap: 5px;
+  gap: var(--ui-space-xs);
   color: var(--app-text-muted);
   font:
     11px/1.5 Consolas,
@@ -1969,7 +1970,7 @@ onUnmounted(() => {
 .cal-progress,
 .cal-recovery {
   display: grid;
-  gap: 8px;
+  gap: var(--ui-space-md);
   padding: 12px;
   border: 1px solid var(--app-border);
   border-radius: 8px;
@@ -1984,7 +1985,7 @@ onUnmounted(() => {
 .cal-progress-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px 16px;
+  gap: var(--ui-space-sm) var(--ui-space-xl);
   font-size: 12px;
 }
 .cal-reason {
@@ -2023,7 +2024,7 @@ onUnmounted(() => {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: 4px 8px;
+  gap: var(--ui-space-xs) var(--ui-space-md);
   color: var(--app-text-secondary);
   font-size: 12px;
   line-height: 1.6;
@@ -2046,7 +2047,7 @@ onUnmounted(() => {
 .script-connection {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--ui-space-md);
   color: var(--app-text-muted);
   font-size: 12px;
 }
@@ -2061,7 +2062,7 @@ onUnmounted(() => {
 .script-file {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--ui-space-lg);
   padding: 16px;
   border: 1px dashed var(--app-border-strong);
   border-radius: 9px;
@@ -2082,7 +2083,7 @@ onUnmounted(() => {
   display: grid;
   flex: 1;
   min-width: 0;
-  gap: 5px;
+  gap: var(--ui-space-xs);
 }
 .script-file-info strong {
   overflow: hidden;
@@ -2105,7 +2106,7 @@ onUnmounted(() => {
   align-items: end;
   justify-content: space-between;
   flex-wrap: wrap;
-  gap: 14px;
+  gap: var(--ui-space-lg);
 }
 .script-timeout :deep(.el-input-number) {
   width: 148px;
@@ -2134,7 +2135,7 @@ onUnmounted(() => {
   }
   .field-row {
     grid-template-columns: minmax(0, 1fr);
-    gap: 7px;
+    gap: var(--ui-space-md);
   }
   .sub-command-field {
     grid-template-columns: minmax(0, 1fr) auto;

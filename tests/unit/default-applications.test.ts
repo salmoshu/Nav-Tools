@@ -10,25 +10,21 @@ beforeEach(() => {
 })
 
 describe('default application preferences', () => {
-  it('uses the requested catalog order and enables only the four selected defaults', async () => {
+  it('uses the requested catalog order and enables only Serial and GNSS', async () => {
     const { useApplicationSelector } = await import('@/composables/useApplicationSelector')
     const state = useApplicationSelector()
 
     expect(DEFAULT_APPLICATIONS.map(({ id }) => id)).toEqual([
       'serial',
-      'motor',
       'gnss',
       'gnssraw',
       'gnsslib',
       'camera',
       'lidar',
     ])
-    expect(state.visibleApplications.value.map(({ id }) => id)).toEqual([
-      'serial',
-      'gnss',
-      'gnssraw',
-      'gnsslib',
-    ])
+    expect(state.visibleApplications.value.map(({ id }) => id)).toEqual(['serial', 'gnss'])
+    expect(state.isDefaultApplicationEnabled('gnssraw')).toBe(false)
+    expect(state.isDefaultApplicationEnabled('gnsslib')).toBe(false)
     expect(state.isDefaultApplicationEnabled('camera')).toBe(false)
     expect(state.isDefaultApplicationEnabled('lidar')).toBe(false)
   })
@@ -61,16 +57,10 @@ describe('default application preferences', () => {
     const { useApplicationSelector } = await import('@/composables/useApplicationSelector')
     const state = useApplicationSelector()
     state.reorderApplications(1, 0)
-    expect(state.visibleApplications.value.map(({ id }) => id)).toEqual([
-      'gnss',
-      'serial',
-      'gnssraw',
-      'gnsslib',
-    ])
+    expect(state.visibleApplications.value.map(({ id }) => id)).toEqual(['gnss', 'serial'])
     const saved = new ApplicationStorage(new JsonStorage(localStorage)).loadApplications()
     expect(saved.map(({ id }) => id)).toEqual([
       'gnss',
-      'motor',
       'serial',
       'gnssraw',
       'gnsslib',
@@ -86,13 +76,8 @@ describe('default application preferences', () => {
     state.saveApplicationOrder()
     vi.resetModules()
     const reloaded = (await import('@/composables/useApplicationSelector')).useApplicationSelector()
-    expect(reloaded.visibleApplications.value.map(({ id }) => id)).toEqual([
-      'gnsslib',
-      'gnssraw',
-      'gnss',
-      'serial',
-    ])
-    expect(reloaded.applications.value).toHaveLength(7)
+    expect(reloaded.visibleApplications.value.map(({ id }) => id)).toEqual(['gnss', 'serial'])
+    expect(reloaded.applications.value).toHaveLength(6)
     reloaded.setDefaultApplicationEnabled('camera', true)
     expect(reloaded.visibleApplications.value.find(({ id }) => id === 'camera')?.windowIds).toEqual(
       ['camera-video', 'camera-parameters', 'raw-messages', 'terminal'],
@@ -106,12 +91,7 @@ describe('default application preferences', () => {
     expect(state.isDefaultApplicationEnabled('gnss')).toBe(false)
     state.setDefaultApplicationEnabled('gnss', true)
     expect(state.isDefaultApplicationEnabled('gnss')).toBe(true)
-    expect(state.visibleApplications.value.map(({ id }) => id)).toEqual([
-      'serial',
-      'gnss',
-      'gnssraw',
-      'gnsslib',
-    ])
+    expect(state.visibleApplications.value.map(({ id }) => id)).toEqual(['serial', 'gnss'])
   })
 
   it('retains an explicitly empty selection and ignores unknown or repeated ids', () => {
@@ -125,12 +105,23 @@ describe('default application preferences', () => {
   it('falls back to the selected defaults if the saved preferences are malformed', () => {
     localStorage.setItem(enabledKey, '{broken')
     const storage = new ApplicationStorage(new JsonStorage(localStorage))
-    expect(storage.loadEnabledDefaultApplicationIds()).toEqual([
-      'serial',
-      'gnss',
-      'gnssraw',
-      'gnsslib',
-    ])
+    expect(storage.loadEnabledDefaultApplicationIds()).toEqual(['serial', 'gnss'])
+  })
+
+  it('migrates the old default selection once and allows users to enable those apps again', () => {
+    const oldDefaults = ['serial', 'gnss', 'gnssraw', 'gnsslib']
+    localStorage.setItem(enabledKey, JSON.stringify(oldDefaults))
+    const storage = new ApplicationStorage(new JsonStorage(localStorage))
+    expect(storage.loadEnabledDefaultApplicationIds()).toEqual(['serial', 'gnss'])
+
+    storage.saveEnabledDefaultApplicationIds(oldDefaults)
+    expect(storage.loadEnabledDefaultApplicationIds()).toEqual(oldDefaults)
+  })
+
+  it('preserves deliberate selections when removing Flow', () => {
+    localStorage.setItem(enabledKey, JSON.stringify(['motor', 'serial', 'gnsslib', 'camera']))
+    const storage = new ApplicationStorage(new JsonStorage(localStorage))
+    expect(storage.loadEnabledDefaultApplicationIds()).toEqual(['serial', 'gnsslib', 'camera'])
   })
 
   it('persists the selector view mode and falls back to cards for invalid values', async () => {

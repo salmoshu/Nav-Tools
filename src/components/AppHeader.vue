@@ -412,13 +412,13 @@ onUnmounted(() => {
   align-items: center;
   min-width: 0;
   padding-left: 10px;
-  gap: 7px;
+  gap: var(--ui-space-md);
 }
 
 .brand-settings-entry {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: var(--ui-space-md);
   padding: 0;
   border: 0;
   color: inherit;
@@ -443,7 +443,7 @@ onUnmounted(() => {
   flex: none;
   align-items: flex-end;
   height: 14px;
-  gap: 7px;
+  gap: var(--ui-space-md);
 }
 
 .brand-name {
@@ -471,7 +471,7 @@ onUnmounted(() => {
   display: inline-flex;
   flex: 1 1 auto;
   align-items: center;
-  gap: 6px;
+  gap: var(--ui-space-sm);
   max-width: none;
   margin-left: 8px;
   padding-left: 12px;
@@ -485,7 +485,7 @@ onUnmounted(() => {
   display: inline-flex;
   flex: none;
   align-items: center;
-  gap: 6px;
+  gap: var(--ui-space-sm);
   color: var(--app-text);
   font-size: 13px;
   font-weight: 600;
@@ -511,7 +511,7 @@ onUnmounted(() => {
   display: inline-flex;
   flex: none;
   align-items: center;
-  gap: 6px;
+  gap: var(--ui-space-sm);
   min-width: 0;
   padding: 0;
   border: 0;
@@ -551,7 +551,7 @@ onUnmounted(() => {
 .header-button.handoff-return {
   display: inline-flex;
   align-self: center;
-  gap: 5px;
+  gap: var(--ui-space-xs);
   width: auto;
   max-width: 190px;
   height: 28px;
@@ -627,7 +627,7 @@ onUnmounted(() => {
 
 @media (max-width: 420px) {
   .brand {
-    gap: 5px;
+    gap: var(--ui-space-xs);
     padding-left: 8px;
   }
 

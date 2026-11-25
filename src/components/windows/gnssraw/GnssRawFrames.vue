@@ -225,12 +225,12 @@ const station = computed(() => {
 .cards {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 6px;
+  gap: var(--ui-space-sm);
 }
 .source-bar {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--ui-space-md);
   margin-bottom: 8px;
   padding: 4px 8px;
   background: var(--el-fill-color-light);
@@ -254,7 +254,7 @@ const station = computed(() => {
   display: flex;
   flex: none;
   align-items: center;
-  gap: 6px;
+  gap: var(--ui-space-sm);
   margin-left: auto;
 }
 .source-actions .el-button + .el-button {

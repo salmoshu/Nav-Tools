@@ -260,7 +260,7 @@ const handleSave = async () => {
 .icon-options {
   display: grid;
   grid-template-columns: repeat(auto-fill, 40px);
-  gap: 7px;
+  gap: var(--ui-space-md);
   width: 100%;
   max-height: 142px;
   padding: 8px;
@@ -306,7 +306,7 @@ const handleSave = async () => {
   display: grid;
   grid-template-columns: 36px minmax(0, 1fr) auto;
   align-items: center;
-  gap: 10px;
+  gap: var(--ui-space-md);
   width: 100%;
   min-height: 56px;
   padding: 6px 2px;
@@ -341,7 +341,7 @@ const handleSave = async () => {
   min-width: 0;
   flex-direction: column;
   justify-content: center;
-  gap: 2px;
+  gap: var(--ui-space-tight);
   line-height: 1.35;
   text-align: left;
 }

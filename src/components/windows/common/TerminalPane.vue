@@ -1434,7 +1434,7 @@ function withTimeout<T>(
   z-index: 20;
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--ui-space-xs);
   padding: 4px 6px;
   border: 1px solid color-mix(in srgb, var(--terminal-fg) 18%, transparent);
   border-radius: 8px;
@@ -1487,7 +1487,7 @@ function withTimeout<T>(
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 9px;
+  gap: var(--ui-space-md);
   padding: 6px 10px;
   border-top: 1px solid color-mix(in srgb, var(--terminal-fg) 14%, transparent);
   color: var(--terminal-fg);
@@ -1520,7 +1520,7 @@ function withTimeout<T>(
   display: flex;
   min-width: 0;
   flex-direction: column;
-  gap: 3px;
+  gap: var(--ui-space-tight);
 }
 .session-disconnected__copy strong,
 .launcher-restore__copy strong {
@@ -1556,7 +1556,7 @@ function withTimeout<T>(
   flex: none;
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: var(--ui-space-md);
   /* 顶部留出 pane-header 浮层按钮行的高度,否则「切回终端视图」按钮被浮层挡住点不到 */
   padding: 36px 10px 5px;
   border-bottom: 1px solid color-mix(in srgb, var(--terminal-fg) 14%, var(--terminal-bg));
@@ -1598,12 +1598,12 @@ function withTimeout<T>(
   margin: auto;
   flex-direction: column;
   justify-content: center;
-  gap: 14px;
+  gap: var(--ui-space-lg);
 }
 .launcher-restore {
   display: flex;
   align-items: center;
-  gap: 11px;
+  gap: var(--ui-space-lg);
   padding: 11px 12px;
   border: 1px solid color-mix(in srgb, var(--el-color-warning) 30%, var(--app-border));
   border-radius: 10px;
@@ -1615,7 +1615,7 @@ function withTimeout<T>(
 .launcher-heading {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--ui-space-lg);
   padding-bottom: 2px;
   text-align: left;
 }
@@ -1637,7 +1637,7 @@ function withTimeout<T>(
   display: flex;
   min-width: 0;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--ui-space-tight);
 }
 .launcher-heading strong {
   font-size: 15px;
@@ -1653,7 +1653,7 @@ function withTimeout<T>(
 .launcher-cwd {
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: var(--ui-space-md);
   padding: 7px 10px;
   border: 1px solid var(--app-border);
   border-radius: 9px;
@@ -1663,7 +1663,7 @@ function withTimeout<T>(
 .session-config-fields {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--ui-space-lg);
 }
 .cwd-input {
   width: 100%;
@@ -1676,12 +1676,12 @@ function withTimeout<T>(
 .launcher-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 9px;
+  gap: var(--ui-space-md);
 }
 .launch-card {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--ui-space-md);
   min-width: 0;
   min-height: 58px;
   padding: 9px 11px;
@@ -1724,7 +1724,7 @@ function withTimeout<T>(
   min-width: 0;
   flex: 1;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--ui-space-tight);
 }
 .launch-card__copy strong {
   overflow: hidden;
@@ -1754,7 +1754,7 @@ function withTimeout<T>(
 .connecting {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--ui-space-md);
   padding: 10px 12px;
   border: 1px solid color-mix(in srgb, var(--el-color-primary) 22%, var(--app-border));
   border-radius: 9px;

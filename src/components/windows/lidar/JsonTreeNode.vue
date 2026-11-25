@@ -137,7 +137,7 @@ export default { name: 'JsonTreeNode' }
 .json-row {
   display: flex;
   align-items: baseline;
-  gap: 5px;
+  gap: var(--ui-space-xs);
   white-space: nowrap;
 }
 

@@ -22,8 +22,9 @@ describe('GNSS map track rendering', () => {
   })
 
   it('keeps the toolbar controls aligned with the deviation component naming', () => {
-    expect(source).toContain(`:active-text="t('gnss.deviation.tracking')"`)
-    expect(source).toContain(`{{ t('gnss.deviation.size') }}:`)
+    expect(source).toContain(`:aria-label="t('gnss.deviation.tracking')"`)
+    expect(source).toContain(`:aria-pressed="isTracking"`)
+    expect(source).toContain(`:aria-label="t('gnss.deviation.size')"`)
     expect(source).toContain(`t('gnss.deviation.resetLayout')`)
     expect(source).toContain(`t('gnss.deviation.clear')`)
     expect(source).not.toContain('gnss.map.follow')
@@ -35,11 +36,15 @@ describe('GNSS map track rendering', () => {
   it('updates bounded polyline chunks instead of rebuilding the whole track', () => {
     expect(source).toContain('TRACK_SEGMENT_POINTS = 200')
     expect(source).toContain('lastSegment.line.addLatLng(point.latlng)')
-    expect(source).toContain('for (const segment of touchedSegments) segment.line.setLatLngs(segment.latlngs)')
+    expect(source).toContain(
+      'for (const segment of touchedSegments) segment.line.setLatLngs(segment.latlngs)',
+    )
   })
 
   it('queues every precise GGA point and drains the queue across animation frames', () => {
-    expect(source).toContain('const { mapTrackPoints, mapPositionEpochHistory } = scopedDisplay?.data ?? useNmea()')
+    expect(source).toContain(
+      'const { mapTrackPoints, mapPositionEpochHistory } = scopedDisplay?.data ?? useNmea()',
+    )
     expect(source).toContain('pendingTrackPoints.push(source[index])')
     expect(source).toContain('requestAnimationFrame(renderPendingTrack)')
     expect(source).toContain('TRACK_RENDER_BUDGET_MS = 4')

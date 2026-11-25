@@ -2,10 +2,12 @@ import type { InssegParseResult, InssegTarget } from './CameraCalibrationTypes'
 
 const PREFIX = '$ESTAR,INSSEG,'
 const MAX_LINE = 16_384
+// 固件在检测框跨出画面边缘时会报告负坐标。
+const BBOX_COORDINATE = /^-?\d+$/
 const error = (message: string): InssegParseResult => ({ type: 'error', message })
 
-function integer(value: string | undefined): number {
-  if (!value || !/^\d+$/.test(value)) throw new Error('整数格式无效')
+function integer(value: string | undefined, format = /^\d+$/): number {
+  if (!value || !format.test(value)) throw new Error('整数格式无效')
   const result = Number(value)
   if (!Number.isSafeInteger(result)) throw new Error('整数超出范围')
   return result
@@ -40,10 +42,10 @@ export function parseInssegLine(line: string): InssegParseResult {
       const target: InssegTarget = {
         classId: integer(fields[cursor++]),
         trackId: integer(fields[cursor++]),
-        left: integer(fields[cursor++]),
-        top: integer(fields[cursor++]),
-        right: integer(fields[cursor++]),
-        bottom: integer(fields[cursor++]),
+        left: integer(fields[cursor++], BBOX_COORDINATE),
+        top: integer(fields[cursor++], BBOX_COORDINATE),
+        right: integer(fields[cursor++], BBOX_COORDINATE),
+        bottom: integer(fields[cursor++], BBOX_COORDINATE),
         distance: decimal(fields[cursor++]),
         azimuth: decimal(fields[cursor++]),
       }

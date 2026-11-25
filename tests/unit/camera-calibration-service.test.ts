@@ -253,9 +253,15 @@ const TWO_PEOPLE = sentence(
   'ESTAR,INSSEG,240601.120000.123,1,42,2,0,10,10,20,100,200,1.260,-5.000,0,11,200,20,300,200,2.030,5.000',
 )
 
-const TWO_PEOPLE_WITH_DISTRACTOR = sentence(
-  'ESTAR,INSSEG,240601.120000.124,2,43,3,0,10,10,20,100,200,1.260,-5.000,0,11,200,20,300,200,2.030,5.000,0,12,400,20,500,200,3.000,60.000',
-)
+function frameWithOptionalDistractor(index: number, distractorAzimuth?: number): string {
+  const targets = ['0,10,10,20,100,200,1.260,-20.000', '0,11,200,20,300,200,2.030,20.000']
+  if (distractorAzimuth !== undefined) {
+    targets.push(`0,12,400,-5,500,200,3.000,${distractorAzimuth}`)
+  }
+  return sentence(
+    `ESTAR,INSSEG,240601.120000.124,${index},43,${targets.length},${targets.join(',')}`,
+  )
+}
 
 function farFrame(index: number): string {
   return sentence(
@@ -325,28 +331,45 @@ describe('CameraCalibrationService 启动基线直发', () => {
     expect(host.writes).toEqual([])
   })
 
-  it('范围外人员不妨碍通过启动前人数检查', async () => {
+  it('范围外人员出现或消失时，正常启动、采样并通过复验', async () => {
     const host = new FakeHost()
     const service = await readyToStart(host)
     const base = calConfig()
     const filteredConfig = calConfig({
       targets: [
-        { ...base.targets[0], azimuthMinDeg: -10, azimuthMaxDeg: 0 },
-        { ...base.targets[1], azimuthMinDeg: 0, azimuthMaxDeg: 10 },
+        { ...base.targets[0], azimuthMinDeg: -20, azimuthMaxDeg: 0 },
+        { ...base.targets[1], azimuthMinDeg: 0, azimuthMaxDeg: 20 },
       ],
     })
     const promise = service.start(1, filteredConfig)
     await flushMicrotasks()
-    service.receive(TWO_PEOPLE_WITH_DISTRACTOR)
+    service.receive(frameWithOptionalDistractor(2, 20.1))
     const state = await promise
     expect(state.phase).toBe('sampling')
     expect(state.lastFrame?.targets).toHaveLength(3)
     expect(
       state.config?.targets.map((target) => [target.azimuthMinDeg, target.azimuthMaxDeg]),
     ).toEqual([
-      [-10, 0],
-      [0, 10],
+      [-20, 0],
+      [0, 20],
     ])
+
+    service.receive(frameWithOptionalDistractor(3, -20.1))
+    service.receive(frameWithOptionalDistractor(4))
+    service.receive(frameWithOptionalDistractor(5, 20.1))
+    expect(service.snapshot().phase).toBe('verifying')
+    service.receive(frameWithOptionalDistractor(6))
+    service.receive(frameWithOptionalDistractor(7, -20.1))
+    service.receive(frameWithOptionalDistractor(8))
+
+    expect(service.snapshot()).toMatchObject({
+      phase: 'succeeded',
+      invalidFrames: 0,
+      history: [
+        { distances: [1.26, 2.03], accepted: true, verification: false },
+        { distances: [1.26, 2.03], accepted: true, verification: true },
+      ],
+    })
     expect(host.writes).toEqual(['0.55,62.292,-21.5'])
   })
 

@@ -8,15 +8,14 @@ test('reorders applications with neighboring-card movement and persists the orde
   await page.addInitScript(() => {
     localStorage.setItem(
       'nav-tools:enabled-default-applications',
-      JSON.stringify(['serial', 'motor', 'gnss', 'gnssraw', 'camera', 'lidar', 'gnsslib']),
+      JSON.stringify(['serial', 'gnss', 'gnssraw', 'camera', 'lidar', 'gnsslib']),
     )
   })
   await page.goto('/')
   const cards = page.locator('.application-card')
-  await expect(cards).toHaveCount(7)
+  await expect(cards).toHaveCount(6)
   await expect(cards.locator('h2')).toHaveText([
     'Serial',
-    'Flow',
     'GNSS',
     'GNSS-Raw',
     'GNSS-Lib',
@@ -28,7 +27,6 @@ test('reorders applications with neighboring-card movement and persists the orde
   await expect(cards.locator('h2')).toHaveText([
     'Camera',
     'Serial',
-    'Flow',
     'GNSS',
     'GNSS-Raw',
     'GNSS-Lib',
@@ -41,13 +39,12 @@ test('reorders applications with neighboring-card movement and persists the orde
         return raw ? JSON.parse(raw).map((entry: { id: string }) => entry.id) : []
       }),
     )
-    .toEqual(['camera', 'serial', 'motor', 'gnss', 'gnssraw', 'gnsslib', 'lidar'])
+    .toEqual(['camera', 'serial', 'gnss', 'gnssraw', 'gnsslib', 'lidar'])
 
   await page.reload()
   await expect(page.locator('.application-card h2')).toHaveText([
     'Camera',
     'Serial',
-    'Flow',
     'GNSS',
     'GNSS-Raw',
     'GNSS-Lib',

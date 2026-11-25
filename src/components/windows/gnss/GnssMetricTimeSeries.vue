@@ -1357,7 +1357,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: var(--ui-space-sm);
   color: var(--app-text);
   font-size: 12px;
   line-height: 1;
@@ -1419,7 +1419,7 @@ onUnmounted(() => {
   display: flex;
   min-width: 165px;
   flex-direction: column;
-  gap: 5px;
+  gap: var(--ui-space-xs);
   padding: 7px 9px;
   border: 1px solid var(--app-border);
   border-radius: 6px;
@@ -1436,7 +1436,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: var(--ui-space-lg);
   white-space: nowrap;
 }
 
@@ -1448,7 +1448,7 @@ onUnmounted(() => {
 .metric-tooltip-label {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: var(--ui-space-xs);
 }
 
 .metric-tooltip-label i {

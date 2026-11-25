@@ -7,7 +7,8 @@ import { TextFileStreamService } from '@/core/file/TextFileStreamService'
 import { createBrowserIpcTransport } from '@/core/platform/IpcTransport'
 import { t } from '@/i18n'
 import type { RtkPostRunResult } from '@/core/gnsslib/RtkPost'
-import { parseRtkNaviSolutionLine, type RtkNaviStatus } from '@/core/gnsslib/RtkNavi'
+import { parseRtkNaviSolutionRecord, type RtkNaviStatus } from '@/core/gnsslib/RtkNavi'
+import type { StarRtkSolutionFormat } from '@/core/gnsslib/StarRtkConfig'
 
 function createSolver() {
   const post = useRtkPost()
@@ -86,14 +87,25 @@ function createSolver() {
     },
   )
 
-  async function readOutput(path: string, id: string, completeLinesOnly = false): Promise<void> {
+  async function readOutput(
+    path: string,
+    id: string,
+    liveFormat?: StarRtkSolutionFormat,
+  ): Promise<void> {
     const reader = new TextFileStreamService(createBrowserIpcTransport())
     let tail = ''
     await reader.read(path, {
       onChunk: (text) => {
-        if (!completeLinesOnly) return session.append(text, id)
+        if (!liveFormat) return session.append(text, id)
         const buffered = tail + text
-        const end = Math.max(buffered.lastIndexOf('\n'), buffered.lastIndexOf('\r')) + 1
+        let end = 0
+        if (liveFormat === 'nmea') {
+          for (const match of buffered.matchAll(/^\$[A-Z]{2}GGA,[^\r\n]*(?:\r\n|\n|\r)/gm)) {
+            end = match.index + match[0].length
+          }
+        } else {
+          end = Math.max(buffered.lastIndexOf('\n'), buffered.lastIndexOf('\r')) + 1
+        }
         session.append(buffered.slice(0, end), id)
         tail = buffered.slice(end)
       },
@@ -101,8 +113,8 @@ function createSolver() {
         loadingProgress.value = value
       },
     })
-    // A live file can end in a partially written record; its final event supplies that record.
-    if (!completeLinesOnly) session.append('\n', id)
+    // Live events supply any epoch that was incomplete when the file was read.
+    if (!liveFormat) session.append('\n', id)
   }
 
   async function completePost(result: RtkPostRunResult | null, id: string): Promise<void> {
@@ -152,7 +164,8 @@ function createSolver() {
     liveBacklog = []
     state.value = 'loading'
     try {
-      if (status.outputPath) await readOutput(status.outputPath, status.runId, true)
+      if (status.outputPath)
+        await readOutput(status.outputPath, status.runId, status.solutionFormat ?? 'pos')
     } catch (error) {
       // The engine may still be preparing its first output file.
       session.appendLog(`${error instanceof Error ? error.message : String(error)}\n`, status.runId)
@@ -160,9 +173,9 @@ function createSolver() {
       const lastTime = session.latest.value?.time ?? ''
       const records = liveBacklog ?? []
       liveBacklog = undefined
-      for (const line of records) {
-        const point = parseRtkNaviSolutionLine(line)
-        if (point && point.time > lastTime) session.append(`${line}\n`, status.runId)
+      for (const record of records) {
+        const point = parseRtkNaviSolutionRecord(record)
+        if (point && point.time > lastTime) session.append(`${record}\n`, status.runId)
       }
       const current = realtime.status.value
       state.value =

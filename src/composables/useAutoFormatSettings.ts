@@ -9,7 +9,6 @@ const defaults: Record<string, DetectableFormat[]> = {
   gnsslib: ['nmea', 'rtklib-pos'],
   lidar: ['mcap'],
   serial: ['nmea', 'rtklib-pos', 'json', 'csv'],
-  motor: ['nmea', 'rtklib-pos', 'json', 'csv'],
 }
 
 function readSettings(): Record<string, DetectableFormat[]> {

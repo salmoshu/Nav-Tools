@@ -980,7 +980,7 @@ onUnmounted(() => {
   top: 8px;
   right: 8px;
   display: flex;
-  gap: 6px;
+  gap: var(--ui-space-sm);
   padding: 4px;
   border: 1px solid var(--app-border);
   border-radius: 7px;
@@ -1077,7 +1077,7 @@ onUnmounted(() => {
 .title {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--ui-space-sm);
   font-family: 'Helvetica Neue', Arial, sans-serif;
   font-size: 13px;
   font-weight: 600;
@@ -1107,7 +1107,7 @@ onUnmounted(() => {
   display: inline-flex;
   flex: none;
   align-items: center;
-  gap: 4px;
+  gap: var(--ui-space-xs);
   margin-left: 8px;
   color: var(--el-color-warning);
   font-size: 10px;
@@ -1121,7 +1121,7 @@ onUnmounted(() => {
 
 .card-actions {
   display: flex;
-  gap: 20px;
+  gap: var(--ui-space-2xl);
   align-items: center;
 }
 

@@ -2,41 +2,93 @@
   <div class="snr-container">
     <div class="snr-content">
       <div class="view-controls">
-        <el-select v-model="currentView" size="small" class="view-select">
+        <el-select v-model="currentView" size="small" class="view-select panel-control-select">
           <el-option :label="t('gnss.signal.chartView')" value="chart" />
           <el-option :label="t('gnss.signal.tableView')" value="table" />
           <el-option :label="t('gnss.signal.satCount')" value="nsat" />
           <el-option :label="t('gnss.signal.perSatView')" value="persat" />
         </el-select>
 
-        <el-select v-if="!scopedDisplay" v-show="currentView !== 'persat'" v-model="satelliteScope"
-          size="small" class="satellite-scope-select" :aria-label="t('gnss.signal.satelliteScope')">
-          <el-option :label="t('gnss.signal.allSatellites')" value="all" />
-          <el-option :label="t('gnss.signal.usedSatellites')" value="used" />
+        <el-select
+          v-if="!scopedDisplay && currentView !== 'persat'"
+          v-model="satelliteScope"
+          size="small"
+          class="satellite-scope-select panel-control-select"
+          :aria-label="t('gnss.signal.satelliteScope')"
+        >
+          <el-option :label="t('gnss.signal.allSatellitesFull')" value="all" />
+          <el-option :label="t('gnss.signal.usedSatellitesFull')" value="used" />
         </el-select>
 
-        <el-select
-          v-show="currentView === 'chart'"
-          v-model="constellationFilter"
-          :placeholder="t('gnss.signal.selectConstellation')"
-          size="small"
-          class="constellation-filter"
+        <el-tooltip
+          v-if="currentView === 'chart'"
+          v-model:visible="chartFiltersOpen"
+          role="dialog"
+          effect="light"
+          trigger="click"
+          placement="bottom-start"
+          :aria-label="t('gnss.signal.chartFilters')"
+          :show-arrow="false"
+          :persistent="false"
+          @show="focusChartFilters"
         >
-          <el-option :label="t('gnss.signal.allConstellations')" value="all" />
-          <el-option v-for="{ text, value } in constellationFilters" :key="value" :label="text" :value="value" />
-        </el-select>
-
-        <el-select
-          v-if="frequencyBands.length"
-          v-show="currentView === 'chart'"
-          v-model="frequencyBand"
-          :aria-label="t('gnss.signal.frequencyBand')"
-          size="small"
-          class="signal-band-select"
-        >
-          <el-option :label="t('gnss.signal.strongestSignal')" value="strongest" />
-          <el-option v-for="band in frequencyBands" :key="band" :label="band" :value="band" />
-        </el-select>
+          <el-button
+            ref="chartFilterButton"
+            class="panel-icon-action chart-filters-button"
+            :class="{ 'panel-icon-action--active': chartFiltersOpen || activeChartFilters }"
+            size="small"
+            :aria-label="t('gnss.signal.chartFilters')"
+            :title="activeChartFilters ? t('gnss.signal.activeChartFilters', { count: activeChartFilters }) : t('gnss.signal.chartFilters')"
+            @keydown.esc.stop="closeChartFilters"
+          >
+            <el-icon aria-hidden="true"><Filter /></el-icon>
+            <span v-if="activeChartFilters" class="chart-filter-indicator" aria-hidden="true" />
+          </el-button>
+          <template #content>
+            <div
+              ref="chartFilterContent"
+              class="signal-chart-filters"
+              @keydown.esc.stop.prevent="closeChartFilters"
+            >
+              <fieldset class="chart-filter-field">
+                <legend>{{ t('gnss.signal.colConstellation') }}</legend>
+                <div class="chart-filter-options">
+                  <label
+                    v-for="{ text, value } in chartConstellationOptions"
+                    :key="value"
+                    class="chart-filter-choice"
+                  >
+                    <input
+                      v-model="constellationFilter"
+                      :name="`${chartFiltersId}-constellation`"
+                      :value="value"
+                      type="radio"
+                    />
+                    <span>{{ text }}</span>
+                  </label>
+                </div>
+              </fieldset>
+              <fieldset v-if="frequencyBands.length" class="chart-filter-field">
+                <legend>{{ t('gnss.signal.frequencyBand') }}</legend>
+                <div class="chart-filter-options">
+                  <label
+                    v-for="band in ['strongest', ...frequencyBands]"
+                    :key="band"
+                    class="chart-filter-choice"
+                  >
+                    <input
+                      v-model="frequencyBand"
+                      :name="`${chartFiltersId}-frequency`"
+                      :value="band"
+                      type="radio"
+                    />
+                    <span>{{ band === 'strongest' ? t('gnss.signal.strongestSignal') : band }}</span>
+                  </label>
+                </div>
+              </fieldset>
+            </div>
+          </template>
+        </el-tooltip>
 
         <el-select
           v-show="currentView === 'persat'"
@@ -48,7 +100,7 @@
           :multiple-limit="MAX_PER_SAT_SELECTION"
           :placeholder="t('gnss.signal.selectSatellites')"
           size="small"
-          class="persat-select"
+          class="persat-select panel-control-select"
         >
           <el-option
             v-for="option in perSatOptions"
@@ -88,24 +140,22 @@
           <el-button
             type="primary"
             size="small"
-            class="control-btn nsat-reset-btn"
+            class="control-btn nsat-reset-btn panel-icon-action"
             :aria-label="t('gnss.signal.resetLayout')"
             :title="t('gnss.signal.resetLayout')"
             @click="resetNsatLayout"
           >
-            <el-icon><RefreshLeft /></el-icon>
-            <span class="control-btn-label">{{ t('gnss.signal.resetLayout') }}</span>
+            <el-icon aria-hidden="true"><RefreshLeft /></el-icon>
           </el-button>
           <el-button
             type="primary"
             size="small"
-            class="control-btn nsat-clear-btn"
+            class="control-btn nsat-clear-btn panel-icon-action"
             :aria-label="t('gnss.signal.clear')"
             :title="t('gnss.signal.clear')"
             @click="clearNsatHistory"
           >
-            <el-icon><Delete /></el-icon>
-            <span class="control-btn-label">{{ t('gnss.signal.clear') }}</span>
+            <el-icon aria-hidden="true"><Delete /></el-icon>
           </el-button>
         </div>
       </div>
@@ -270,9 +320,9 @@
 </template>
 
 <script setup>
-import { computed, inject, ref, shallowRef, onMounted, onUnmounted, watch, nextTick } from 'vue'
+import { computed, inject, ref, shallowRef, onMounted, onUnmounted, useId, watch, nextTick } from 'vue'
 import * as echarts from 'echarts'
-import { Delete, RefreshLeft, Timer } from '@element-plus/icons-vue'
+import { Delete, Filter, RefreshLeft, Timer } from '@element-plus/icons-vue'
 import { useNmea } from '@/composables/gnss/useNmea'
 import { gnssDisplayContext } from '@/composables/gnss/GnssDisplayContext'
 import { useFileTimeline } from '@/composables/useFileTimeline'
@@ -307,6 +357,29 @@ const currentView = usePersistentSelection('gnss-signal:view', 'nsat', [
 const constellationFilter = ref('all')
 const frequencyBand = ref('strongest')
 const satelliteScope = usePersistentSelection('gnss-signal:satellite-scope', 'all', ['all', 'used'])
+const chartFiltersOpen = ref(false)
+const chartFiltersId = useId()
+const chartFilterButton = ref(null)
+const chartFilterContent = ref(null)
+const activeChartFilters = computed(
+  () => Number(constellationFilter.value !== 'all') + Number(frequencyBand.value !== 'strongest'),
+)
+
+function closeChartFilters() {
+  chartFiltersOpen.value = false
+  chartFilterButton.value?.ref?.focus()
+}
+
+function focusChartFilters() {
+  const content = chartFilterContent.value
+  if (content && !content.contains(document.activeElement)) {
+    content.querySelector('input:checked')?.focus({ preventScroll: true })
+  }
+}
+
+watch(currentView, () => {
+  chartFiltersOpen.value = false
+})
 
 // 图表相关
 const chartRef = ref(null)
@@ -334,6 +407,10 @@ const constellationFilters = computed(() => {
     .filter((value) => detected.has(value))
     .map((value) => ({ text: value, value }))
 })
+const chartConstellationOptions = computed(() => [
+  { text: t('gnss.signal.allConstellations'), value: 'all' },
+  ...constellationFilters.value,
+])
 watch(constellationFilters, (filters) => {
   if (
     constellationFilter.value !== 'all' &&
@@ -1182,7 +1259,7 @@ onUnmounted(() => {
   min-height: 50px;
   min-width: 0;
   padding: 6px 12px;
-  gap: 4px 8px;
+  gap: var(--ui-space-xs) var(--ui-space-md);
   flex-shrink: 0;
   flex-wrap: wrap;
   background-color: var(--app-surface-muted);
@@ -1198,43 +1275,113 @@ onUnmounted(() => {
 }
 
 .view-select {
-  width: 100px;
+  width: 116px;
+  max-width: 100%;
   flex-shrink: 0;
 }
 
 .satellite-scope-select {
-  width: 76px;
+  width: 128px;
   max-width: 100%;
   flex-shrink: 0;
 }
 
-.constellation-filter {
-  width: 140px;
-  flex-shrink: 0;
+.chart-filters-button {
+  position: relative;
 }
 
-.signal-band-select {
-  width: 108px;
-  max-width: 100%;
-  flex-shrink: 0;
+.chart-filter-indicator {
+  position: absolute;
+  inset-block-start: 4px;
+  inset-inline-end: 4px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.signal-chart-filters {
+  display: grid;
+  inline-size: 208px;
+  max-inline-size: calc(100vw - 40px);
+  gap: var(--ui-space-lg);
+}
+
+.chart-filter-field {
+  min-inline-size: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.chart-filter-field legend {
+  margin-block-end: var(--ui-space-xs);
+  padding: 0;
+  color: var(--app-text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.chart-filter-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ui-space-xs);
+}
+
+.chart-filter-choice {
+  position: relative;
+  cursor: pointer;
+}
+
+.chart-filter-choice input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  margin: 0;
+  cursor: inherit;
+}
+
+.chart-filter-choice span {
+  display: block;
+  box-sizing: border-box;
+  min-block-size: var(--panel-control-size);
+  padding: 5px var(--ui-space-md);
+  border: 1px solid var(--app-border);
+  border-radius: 5px;
+  background: var(--app-surface);
+  color: var(--app-text-secondary);
+}
+
+.chart-filter-choice:hover span {
+  background: var(--app-hover);
+}
+
+.chart-filter-choice input:checked + span {
+  border-color: var(--app-primary);
+  background: color-mix(in srgb, var(--app-primary) 10%, var(--app-surface));
+  color: var(--app-primary);
+}
+
+.chart-filter-choice input:focus-visible + span {
+  outline: 2px solid var(--app-primary);
+  outline-offset: 2px;
 }
 
 .persat-select {
-  margin-right: 8px;
   min-width: 0;
 }
 
 .signal-readings {
   display: flex;
   flex-wrap: wrap;
-  gap: 3px 5px;
+  gap: var(--ui-space-tight) var(--ui-space-xs);
   padding-block: 2px;
 }
 
 .signal-reading {
   display: inline-flex;
   align-items: baseline;
-  gap: 5px;
+  gap: var(--ui-space-xs);
   padding: 1px 5px;
   border: 1px solid var(--app-border);
   border-radius: 4px;
@@ -1255,7 +1402,7 @@ onUnmounted(() => {
   display: flex;
   flex: 0 0 auto;
   align-items: center;
-  gap: 6px;
+  gap: var(--ui-space-sm);
   margin-left: auto;
   min-width: 0;
 }
@@ -1312,7 +1459,7 @@ onUnmounted(() => {
   flex: 1;
   min-height: 0;
   min-width: 0;
-  gap: 8px;
+  gap: var(--ui-space-md);
 }
 .signal-bar-scroll {
   display: flex;
@@ -1339,15 +1486,17 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 8px 14px;
+  gap: var(--ui-space-md) var(--ui-space-lg);
   min-height: 20px;
+  box-sizing: border-box;
+  padding: var(--ui-space-xs) var(--ui-space-lg);
   color: var(--app-text-secondary);
   font-size: 10px;
 }
 .signal-bar-group {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: var(--ui-space-xs);
   font-weight: 500;
 }
 .signal-bar-group > i {
@@ -1363,8 +1512,9 @@ onUnmounted(() => {
 .signal-peak-key {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  margin-left: auto;
+  gap: var(--ui-space-xs);
+  margin-inline-start: auto;
+  white-space: nowrap;
   color: var(--app-text-muted);
 }
 .signal-peak-key > i {
@@ -1404,7 +1554,7 @@ onUnmounted(() => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: var(--ui-space-sm);
   pointer-events: none;
 }
 
@@ -1421,7 +1571,7 @@ onUnmounted(() => {
 .snr-cell {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--ui-space-md);
 }
 
 .snr-value {
@@ -1460,17 +1610,8 @@ onUnmounted(() => {
     padding: 0 8px;
   }
 
-  .view-select {
-    width: 86px;
-    margin-right: 8px;
-  }
-
-  .control-btn-label {
-    display: none;
-  }
-
   .nsat-controls {
-    gap: 4px;
+    gap: var(--ui-space-xs);
   }
 
   .nsat-controls .control-btn {
@@ -1481,13 +1622,8 @@ onUnmounted(() => {
 }
 
 @container (max-width: 320px) {
-  .view-select {
-    width: 72px;
-    margin-right: 4px;
-  }
-
   .nsat-controls {
-    gap: 2px;
+    gap: var(--ui-space-tight);
   }
 }
 

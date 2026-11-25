@@ -882,7 +882,7 @@ onUnmounted(() => {
   display: flex;
   min-width: 0;
   align-items: center;
-  gap: 9px;
+  gap: var(--ui-space-md);
 }
 
 .statusbar-title-icon {
@@ -903,7 +903,7 @@ onUnmounted(() => {
   min-width: 0;
   flex-direction: column;
   align-items: flex-start;
-  gap: 3px;
+  gap: var(--ui-space-tight);
 }
 
 .statusbar-title {
@@ -919,7 +919,7 @@ onUnmounted(() => {
 .statusbar-heading-copy small {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: var(--ui-space-xs);
   color: var(--app-text-muted);
   font-size: 9px;
   font-weight: 650;
@@ -945,7 +945,7 @@ onUnmounted(() => {
   min-height: 0;
   flex-direction: column;
   flex: 1;
-  gap: 7px;
+  gap: var(--ui-space-md);
   overflow-y: auto;
   scrollbar-gutter: stable;
   font-size: 12px;
@@ -960,7 +960,7 @@ onUnmounted(() => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 7px;
+  gap: var(--ui-space-md);
   padding: 18px 12px;
   color: var(--app-text-muted);
   text-align: center;
@@ -1068,7 +1068,7 @@ onUnmounted(() => {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
-  gap: 6px;
+  gap: var(--ui-space-sm);
   width: 100%;
 }
 
@@ -1116,7 +1116,7 @@ onUnmounted(() => {
   min-width: 0;
   grid-column: 1 / -1;
   align-items: center;
-  gap: 7px;
+  gap: var(--ui-space-md);
 }
 
 .status-field-icon {
@@ -1136,7 +1136,7 @@ onUnmounted(() => {
 .status-draggable {
   display: flex;
   flex-direction: column;
-  gap: 7px;
+  gap: var(--ui-space-md);
 }
 
 /* 排序拖拽：落点占位槽（仿 iOS 桌面挤压效果） */
@@ -1211,7 +1211,7 @@ onUnmounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 8px;
+  gap: var(--ui-space-md);
   padding: 10px;
   border: 1px dashed color-mix(in srgb, var(--el-color-primary) 40%, var(--app-border));
   border-radius: 9px;
@@ -1224,7 +1224,7 @@ onUnmounted(() => {
   min-width: 0;
   flex-direction: column;
   align-items: flex-start;
-  gap: 2px;
+  gap: var(--ui-space-tight);
 }
 
 .computed-section strong {
@@ -1254,7 +1254,7 @@ onUnmounted(() => {
 .dialog-content {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: var(--ui-space-xl);
 }
 
 .available-fields h4,
@@ -1268,7 +1268,7 @@ onUnmounted(() => {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 12px;
+  gap: var(--ui-space-lg);
   margin-bottom: 10px;
 }
 
@@ -1282,7 +1282,7 @@ onUnmounted(() => {
 .fields-list {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--ui-space-md);
   max-height: 132px;
   overflow-y: auto;
   padding: 10px;
@@ -1294,7 +1294,7 @@ onUnmounted(() => {
 .fields-empty {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--ui-space-md);
   padding: 11px 12px;
   border: 1px dashed var(--app-border);
   border-radius: 8px;
@@ -1381,7 +1381,7 @@ onUnmounted(() => {
 .dialog-footer {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--ui-space-md);
 }
 
 :deep(.monaco-editor .view-lines) {

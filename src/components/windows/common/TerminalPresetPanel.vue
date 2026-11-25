@@ -351,7 +351,7 @@ function errorMessage(error: unknown): string {
 .preset-item {
   display: flex;
   align-items: flex-start;
-  gap: 4px;
+  gap: var(--ui-space-xs);
   padding: 6px 6px 6px 10px;
   border-bottom: 1px solid var(--app-border);
 }
@@ -367,7 +367,7 @@ function errorMessage(error: unknown): string {
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: var(--ui-space-xs);
 }
 .preset-item__name {
   min-width: 0;

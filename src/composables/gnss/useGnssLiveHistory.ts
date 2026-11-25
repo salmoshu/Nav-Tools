@@ -23,6 +23,7 @@ export function createGnssLiveHistory(options: LiveHistoryOptions) {
     options.yieldToUi ?? (() => new Promise<void>((resolve) => setTimeout(resolve, 0)))
   let sourceKey = ''
   let parser: GnssParser = 'nmea'
+  let captureTextMessages = true
   let generation = -1
   let receiving = false
   let revision = 0
@@ -56,13 +57,14 @@ export function createGnssLiveHistory(options: LiveHistoryOptions) {
     resetText()
   }
 
-  function start(key: string, nextParser: GnssParser): void {
+  function start(key: string, nextParser: GnssParser, indexTextMessages = true): void {
     const fresh = sourceKey !== key || generation !== options.generation()
     revision++
     stopping = undefined
     receiving = true
     sourceKey = key
     parser = nextParser
+    captureTextMessages = indexTextMessages
     timeline.clearTimeline()
     if (fresh) {
       resetText()
@@ -78,7 +80,7 @@ export function createGnssLiveHistory(options: LiveHistoryOptions) {
   }
 
   function append(text: string): void {
-    if (!receiving || !text) return
+    if (!receiving || !captureTextMessages || !text) return
     observeClear()
     length += text.length
     if (tail.length + text.length <= 64 * 1024) {
@@ -104,12 +106,13 @@ export function createGnssLiveHistory(options: LiveHistoryOptions) {
     const runGeneration = generation
     if (parser === 'rtklib-pos') data.processRtkLibPosData('\n')
     else data.processRawData('\n')
-    if (!length || !data.statusEpochHistory.value.length) return Promise.resolve(false)
+    if (!data.statusEpochHistory.value.length || (captureTextMessages && !length))
+      return Promise.resolve(false)
 
     const source = [...chunks, tail]
     const total = length
     const valid = () => token === revision && runGeneration === options.generation()
-    const freeze = async (): Promise<boolean> => {
+    const indexMessages = async (): Promise<boolean> => {
       timeline.beginIndexing()
       messages.clearMessages()
       messages.beginFileReplayMessages()
@@ -153,6 +156,13 @@ export function createGnssLiveHistory(options: LiveHistoryOptions) {
       }
       if (!valid()) return false
       messages.endFileReplayMessages()
+      return true
+    }
+    const freeze = async (): Promise<boolean> => {
+      // RTCM3 already has its own raw monitor. Its SPP output drives the
+      // position timeline but must never replace the original message rows.
+      if (captureTextMessages && !(await indexMessages())) return false
+      if (!valid()) return false
       data.prepareTimelineProjection('loaded')
       data.rebuildMapTrackFromPositionHistory()
       data.rebuildDeviationFromPositionHistory()

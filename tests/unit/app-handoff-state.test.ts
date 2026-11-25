@@ -14,7 +14,7 @@ let mockCurrentApplicationId = ref('gnsslib')
 const mockApplications = ref([
   { id: 'gnsslib', name: 'GNSS-Lib' },
   { id: 'gnss', name: 'GNSS' },
-  { id: 'flow', name: 'Flow' },
+  { id: 'serial', name: 'Serial' },
 ])
 const mockLoad = vi.fn()
 const mockTextLoad = vi.fn()
@@ -220,7 +220,6 @@ describe('application handoff state', () => {
   })
 
   it('requires an explicit target when a recording has several compatible targets', async () => {
-    mockApplications.value.push({ id: 'serial', name: 'Serial' }, { id: 'motor', name: 'Flow' })
     mockCurrentApplicationId.value = 'gnsslib'
     const handoff = useAppHandoff()
     const navigate = vi.fn(async (applicationId: string) => {
@@ -235,7 +234,7 @@ describe('application handoff state', () => {
         {
           ...snapshot().artifact.files[0],
           role: 'recording' as const,
-          format: 'json' as const,
+          format: 'nmea' as const,
         },
       ],
     }
@@ -287,7 +286,6 @@ describe('application handoff state', () => {
   })
 
   it('can hand off the same stopped recording again after returning to its source', async () => {
-    mockApplications.value.push({ id: 'motor', name: 'Flow' })
     mockCurrentApplicationId.value = 'gnsslib'
     const handoff = useAppHandoff()
     const navigate = vi.fn(async (applicationId: string) => {
@@ -308,11 +306,11 @@ describe('application handoff state', () => {
     }
     mockRecording.value = recording
 
-    await expect(handoff.openRecordingIn('motor')).resolves.toBe(true)
+    await expect(handoff.openRecordingIn('serial')).resolves.toBe(true)
     await handoff.returnToSource()
     expect(mockCurrentApplicationId.value).toBe('gnsslib')
-    await expect(handoff.openRecordingIn('motor')).resolves.toBe(true)
-    expect(navigate.mock.calls.map(([target]) => target)).toEqual(['motor', 'gnsslib', 'motor'])
+    await expect(handoff.openRecordingIn('serial')).resolves.toBe(true)
+    expect(navigate.mock.calls.map(([target]) => target)).toEqual(['serial', 'gnsslib', 'serial'])
     expect(handoff.activeHandoff.value?.artifact).toEqual(recording)
     unregister()
   })

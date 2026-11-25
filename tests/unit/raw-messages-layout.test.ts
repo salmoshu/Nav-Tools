@@ -15,7 +15,7 @@ describe('RawMessages bottom composer layout', () => {
   })
 
   it('uses one compact spacing rule without Element Plus button margins', () => {
-    expect(source).toContain('gap: 6px')
+    expect(source).toContain('gap: var(--ui-space-sm)')
     expect(source).toContain(':deep(.el-button + .el-button)')
     expect(source).toContain('margin-left: 0')
     expect(source).not.toContain('style="flex: 1; margin-right: 8px;"')
@@ -28,7 +28,7 @@ describe('RawMessages bottom composer layout', () => {
       /\.composer-actions,\s*\.message-actions,\s*\.iap-actions\s*\{([^}]*)\}/,
     )?.[1]
     expect(shared).toBeDefined()
-    expect(shared).toContain('gap: 6px')
+    expect(shared).toContain('gap: var(--ui-space-sm)')
 
     // The composer-only override may adjust flex/justify, but never the gap.
     const composerOnly = source.match(/\.composer-actions\s*\{([^}]*)\}/)?.[1]

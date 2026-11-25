@@ -1956,7 +1956,7 @@ onUnmounted(() => {
 
 .left-buttons, .right-buttons {
   display: flex;
-  gap: 8px;
+  gap: var(--ui-space-md);
 }
 
 .config-content {
@@ -1980,7 +1980,7 @@ onUnmounted(() => {
   padding: 20px;
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: var(--ui-space-lg);
   min-height: 80px;
   align-items: flex-start;
 }
@@ -1989,14 +1989,14 @@ onUnmounted(() => {
   padding: 20px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--ui-space-lg);
   min-height: 80px;
 }
 
 .command-item {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--ui-space-md);
   justify-content: flex-start;
 }
 
@@ -2008,13 +2008,13 @@ onUnmounted(() => {
 .command-item .data-input-wrapper {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--ui-space-md);
 }
 
 .command-item .frequency-input-wrapper {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--ui-space-sm);
 }
 
 .command-item .el-input {
@@ -2157,7 +2157,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 18px;
+  gap: var(--ui-space-xl);
   margin-bottom: 16px;
   padding: 14px 16px;
   background-color: var(--app-surface-muted);
@@ -2172,7 +2172,7 @@ onUnmounted(() => {
 }
 
 .config-tool-copy {
-  gap: 11px;
+  gap: var(--ui-space-lg);
   min-width: 240px;
 }
 
@@ -2204,7 +2204,7 @@ onUnmounted(() => {
 
 .config-tool-actions {
   justify-content: flex-end;
-  gap: 8px;
+  gap: var(--ui-space-md);
   flex-wrap: wrap;
 }
 
@@ -2229,7 +2229,7 @@ onUnmounted(() => {
 
 .config-validation-list {
   display: grid;
-  gap: 3px;
+  gap: var(--ui-space-tight);
   margin-top: 5px;
   color: var(--app-text-secondary);
   font-size: 12px;
@@ -2245,7 +2245,7 @@ onUnmounted(() => {
 
 .message-fields-container {
   display: flex;
-  gap: 15px;
+  gap: var(--ui-space-xl);
   flex-wrap: wrap;
   align-items: flex-start;
   user-select: none;
@@ -2291,7 +2291,7 @@ onUnmounted(() => {
 .field-header {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--ui-space-md);
   margin-bottom: 12px;
   padding-bottom: 8px;
   border-bottom: 1px solid var(--app-border);
@@ -2323,7 +2323,7 @@ onUnmounted(() => {
 .field-config {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--ui-space-md);
   flex-wrap: wrap;
 }
 
@@ -2340,7 +2340,7 @@ onUnmounted(() => {
 .checksum-params {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--ui-space-sm);
   margin-left: 8px;
 }
 
@@ -2402,7 +2402,7 @@ onUnmounted(() => {
 .tab-label {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: var(--ui-space-xs);
 }
 
 .tab-label .el-tag {
@@ -2561,7 +2561,7 @@ onUnmounted(() => {
   display: flex;
   justify-content: flex-end;
   align-items: center;
-  gap: 10px;
+  gap: var(--ui-space-md);
   padding: 0;
 }
 
@@ -2646,7 +2646,7 @@ onUnmounted(() => {
 
 .message-preview {
   display: flex;
-  gap: 4px;
+  gap: var(--ui-space-xs);
   padding: 15px;
   background-color: var(--app-surface);
   border-radius: 6px;
@@ -2704,7 +2704,7 @@ onUnmounted(() => {
 .single-data-input {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--ui-space-md);
   flex-wrap: nowrap;
 }
 
@@ -2712,14 +2712,14 @@ onUnmounted(() => {
 .multi-data-inputs {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--ui-space-lg);
   flex-wrap: wrap;
 }
 
 .multi-input-item {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--ui-space-sm);
   flex-shrink: 0;
 }
 
@@ -2745,13 +2745,13 @@ onUnmounted(() => {
   .command-header {
     flex-direction: column;
     align-items: flex-start;
-    gap: 10px;
+    gap: var(--ui-space-md);
   }
   
   .command-item {
     flex-direction: column;
     align-items: flex-start;
-    gap: 8px;
+    gap: var(--ui-space-md);
   }
   
   .command-item .command-btn {
@@ -2766,7 +2766,7 @@ onUnmounted(() => {
   .multi-data-inputs {
     flex-direction: column;
     align-items: flex-start;
-    gap: 8px;
+    gap: var(--ui-space-md);
   }
   
   .multi-input-item {
@@ -2783,7 +2783,7 @@ onUnmounted(() => {
     width: 100%;
     flex-direction: column;
     align-items: flex-start;
-    gap: 6px;
+    gap: var(--ui-space-sm);
   }
   
   .single-data-input .el-input {

@@ -191,13 +191,13 @@ test('refreshes files at the same path without discarding a valid selection', as
   await expect(timeline.locator('.observation-time-selected')).toContainText('00:08:00')
 })
 
-test('provides the observation time range for StarRTK and uses the RNX2RTKP label', async ({
+test('provides the observation time range for StarRTK and uses the OpenGNSS label', async ({
   page,
 }) => {
   const panel = await openSolver(page)
   const engineRow = panel.locator('.file-row').filter({ hasText: 'Processing engine' })
   await engineRow.locator('.el-select').click()
-  await expect(page.getByRole('option', { name: 'RNX2RTKP', exact: true })).toBeVisible()
+  await expect(page.getByRole('option', { name: 'OpenGNSS', exact: true })).toBeVisible()
   await page.getByRole('option', { name: 'StarRTK', exact: true }).click()
   await panel
     .locator('.file-row')

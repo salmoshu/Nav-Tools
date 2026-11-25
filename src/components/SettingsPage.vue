@@ -513,7 +513,7 @@ function handleUpdaterPrefChange(
   padding: 0 16px;
   border-bottom: 1px solid var(--app-border);
   background: var(--app-surface);
-  gap: 12px;
+  gap: var(--ui-space-lg);
   box-sizing: border-box;
 }
 
@@ -577,7 +577,7 @@ function handleUpdaterPrefChange(
   min-height: 0;
   padding: 12px 8px;
   background: var(--app-surface);
-  gap: 2px;
+  gap: var(--ui-space-tight);
   overflow-y: auto;
   box-sizing: border-box;
 }
@@ -595,7 +595,7 @@ function handleUpdaterPrefChange(
   font: inherit;
   font-size: 13px;
   text-align: left;
-  gap: 8px;
+  gap: var(--ui-space-md);
   cursor: pointer;
   outline: none;
 }
@@ -644,7 +644,7 @@ function handleUpdaterPrefChange(
   border-radius: 6px;
   background: var(--app-surface);
   box-shadow: 0 1px 3px var(--app-shadow);
-  gap: 2px;
+  gap: var(--ui-space-tight);
   box-sizing: border-box;
 }
 
@@ -656,21 +656,21 @@ function handleUpdaterPrefChange(
 }
 
 .format-settings-card { margin-bottom: 10px; padding: 12px; }
-.format-settings-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-.format-settings-options { display: flex; flex-wrap: wrap; gap: 0 18px; margin-top: 6px; }
+.format-settings-heading { display: flex; align-items: center; justify-content: space-between; gap: var(--ui-space-md); }
+.format-settings-options { display: flex; flex-wrap: wrap; gap: 0 var(--ui-space-xl); margin-top: 6px; }
 .format-settings-options :deep(.el-checkbox) { margin-right: 0; }
 
 .default-application-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
-  gap: 12px;
+  gap: var(--ui-space-lg);
 }
 
 .default-application-card {
   display: grid;
   grid-template-columns: 36px minmax(0, 1fr) 18px;
   align-items: start;
-  gap: 12px;
+  gap: var(--ui-space-lg);
   min-width: 0;
   padding: 16px;
   border: 1px solid var(--app-border);
@@ -706,7 +706,7 @@ function handleUpdaterPrefChange(
   display: flex;
   min-width: 0;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--ui-space-sm);
 }
 
 .default-application-copy strong {
@@ -761,7 +761,7 @@ function handleUpdaterPrefChange(
   min-height: 42px;
   padding: 4px 8px;
   border-bottom: 1px solid color-mix(in srgb, var(--app-border) 65%, transparent);
-  gap: 12px;
+  gap: var(--ui-space-lg);
 }
 
 .shortcut-command-label {
@@ -775,7 +775,7 @@ function handleUpdaterPrefChange(
 .shortcut-bindings {
   display: flex;
   justify-content: flex-end;
-  gap: 6px;
+  gap: var(--ui-space-sm);
 }
 
 .shortcut-input {
@@ -813,7 +813,7 @@ function handleUpdaterPrefChange(
   align-items: center;
   justify-content: space-between;
   padding: 10px 8px 2px;
-  gap: 12px;
+  gap: var(--ui-space-lg);
 }
 
 .shortcut-footer-hint {
@@ -835,7 +835,7 @@ function handleUpdaterPrefChange(
   font: inherit;
   font-size: 13px;
   text-align: left;
-  gap: 8px;
+  gap: var(--ui-space-md);
   cursor: pointer;
   outline: none;
 }
@@ -875,7 +875,7 @@ function handleUpdaterPrefChange(
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: var(--ui-space-lg);
 }
 
 .version-current {
@@ -923,7 +923,7 @@ function handleUpdaterPrefChange(
   display: flex;
   align-items: center;
   font-size: 13px;
-  gap: 10px;
+  gap: var(--ui-space-md);
 }
 
 .version-pref-row + .version-pref-row {

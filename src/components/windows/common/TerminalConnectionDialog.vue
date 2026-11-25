@@ -416,7 +416,7 @@ watch(rememberCredentials, (enabled) => {
 .ssh-form {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: var(--ui-space-lg);
 }
 .profile-picker,
 .config-section {
@@ -428,14 +428,14 @@ watch(rememberCredentials, (enabled) => {
   display: grid;
   grid-template-columns: minmax(190px, 0.85fr) minmax(260px, 1.35fr);
   align-items: center;
-  gap: 18px;
+  gap: var(--ui-space-xl);
   padding: 12px 14px;
 }
 .profile-picker__copy {
   display: flex;
   min-width: 0;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--ui-space-tight);
 }
 .profile-picker__copy strong {
   color: var(--app-text);
@@ -457,7 +457,7 @@ watch(rememberCredentials, (enabled) => {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 12px;
+  gap: var(--ui-space-lg);
   margin-bottom: 12px;
 }
 .section-heading h3,
@@ -485,7 +485,7 @@ watch(rememberCredentials, (enabled) => {
 .ssh-grid {
   display: grid;
   grid-template-columns: repeat(6, minmax(0, 1fr));
-  gap: 0 14px;
+  gap: 0 var(--ui-space-lg);
 }
 .col-2 {
   grid-column: span 2;
@@ -538,18 +538,18 @@ watch(rememberCredentials, (enabled) => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: var(--ui-space-lg);
   margin-bottom: 12px;
 }
 .forward-toolbar > div {
   display: flex;
   flex: none;
-  gap: 6px;
+  gap: var(--ui-space-sm);
 }
 .forward-list {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: var(--ui-space-md);
 }
 .forward-rule {
   padding: 10px 12px 12px;
@@ -561,19 +561,19 @@ watch(rememberCredentials, (enabled) => {
   display: grid;
   grid-template-columns: auto minmax(120px, 1fr) 128px auto;
   align-items: center;
-  gap: 8px;
+  gap: var(--ui-space-md);
   margin-bottom: 10px;
 }
 .forward-rule__fields {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px;
+  gap: var(--ui-space-md);
 }
 .forward-rule__fields label {
   display: flex;
   min-width: 0;
   flex-direction: column;
-  gap: 5px;
+  gap: var(--ui-space-xs);
 }
 .forward-rule__fields label > span {
   color: var(--app-text-muted);
@@ -586,7 +586,7 @@ watch(rememberCredentials, (enabled) => {
   min-height: 64px;
   align-items: center;
   justify-content: center;
-  gap: 10px;
+  gap: var(--ui-space-md);
   border: 1px dashed var(--app-border-strong);
   border-radius: 8px;
   color: var(--app-text-muted);
@@ -618,7 +618,7 @@ watch(rememberCredentials, (enabled) => {
 .connection-progress {
   display: flex;
   align-items: center;
-  gap: 11px;
+  gap: var(--ui-space-lg);
   padding: 11px 13px;
   border: 1px solid color-mix(in srgb, var(--el-color-primary) 24%, var(--app-border));
   border-radius: 9px;
@@ -639,7 +639,7 @@ watch(rememberCredentials, (enabled) => {
   display: flex;
   min-width: 0;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--ui-space-tight);
 }
 .connection-progress strong {
   font-size: 12px;
@@ -656,13 +656,13 @@ watch(rememberCredentials, (enabled) => {
   width: 100%;
   align-items: center;
   justify-content: space-between;
-  gap: 18px;
+  gap: var(--ui-space-xl);
 }
 .dialog-footer__options {
   display: flex;
   min-width: 0;
   align-items: center;
-  gap: 12px;
+  gap: var(--ui-space-lg);
 }
 .dialog-footer__options :deep(.el-checkbox) {
   min-width: 0;
@@ -678,7 +678,7 @@ watch(rememberCredentials, (enabled) => {
 .dialog-footer__actions {
   display: flex;
   flex: none;
-  gap: 8px;
+  gap: var(--ui-space-md);
 }
 .dialog-footer__actions :deep(.el-button + .el-button) {
   margin-left: 0;
@@ -686,7 +686,7 @@ watch(rememberCredentials, (enabled) => {
 @media (max-width: 680px) {
   .profile-picker {
     grid-template-columns: 1fr;
-    gap: 9px;
+    gap: var(--ui-space-md);
   }
   .col-2,
   .col-3,

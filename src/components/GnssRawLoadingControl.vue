@@ -5,6 +5,7 @@ import { computed } from 'vue'
 import { t } from '@/i18n'
 import { useGnssRaw } from '@/composables/useGnssRaw'
 import { formatByteSize } from '@/core/lidar/timeFormat'
+import FileProgressTrack from './FileProgressTrack.vue'
 
 const props = withDefaults(
   defineProps<{
@@ -46,14 +47,7 @@ const detail = computed(() => {
     @wheel.stop
   >
     <span v-if="!isVertical" class="gnssraw-loading-name">{{ fileName }}</span>
-    <span>{{
-      isVertical
-        ? `${percent}%`
-        : `${t('gnssRaw.common.loading')}… ${percent}%`
-    }}</span>
-    <span class="gnssraw-loading-track">
-      <span class="gnssraw-loading-fill" :style="{ width: `${percent}%` }"></span>
-    </span>
+    <FileProgressTrack :value="percent" :label="t('gnssRaw.common.loading')" :compact="isVertical" />
   </div>
 </template>
 
@@ -61,7 +55,7 @@ const detail = computed(() => {
 .gnssraw-loading {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--ui-space-sm);
   padding: 2px 6px;
   color: var(--app-text-secondary);
   font-size: 12px;
@@ -76,29 +70,13 @@ const detail = computed(() => {
   text-overflow: ellipsis;
 }
 
-.gnssraw-loading-track {
-  width: 240px;
-  height: 4px;
-  overflow: hidden;
-  background: var(--app-surface-muted);
-  border-radius: 999px;
-}
-
-.gnssraw-loading-fill {
-  display: block;
-  height: 100%;
-  background: var(--el-color-primary);
-  transition: width 0.12s linear;
-}
-
 .gnssraw-loading--vertical {
+  --file-progress-width: 24px;
+
   width: 30px;
   padding: 2px 0;
   flex-direction: column;
   font-size: 10px;
 }
 
-.gnssraw-loading--vertical .gnssraw-loading-track {
-  width: 24px;
-}
 </style>

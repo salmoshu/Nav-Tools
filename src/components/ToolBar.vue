@@ -935,7 +935,6 @@ const {
   fileIsMcap,
   fileIsRtcmSpp,
   rtcmSppCaptureTime,
-  rtcmSppStatus,
   fileInputLoading,
   selectedFileCount,
   fileIsMcapPartSlice,
@@ -1019,11 +1018,6 @@ const formatDetectionLabel = computed(() =>
             : 'data.formatDetected',
         { format: FORMAT_LABELS[sourceDetectedFormat.value.format] },
       )
-      + (sourceDetectedFormat.value.format === 'rtcm3' && rtcmSppStatus.value
-        ? ` · ${t(rtcmSppStatus.value === 'fix' ? 'data.sppFix'
-          : rtcmSppStatus.value === 'waiting-ephemeris' ? 'data.sppWaitingEphemeris'
-          : 'data.sppNoFix')}`
-        : '')
     : t(sourceFormatAttempted.value ? 'data.formatUnknown' : 'data.formatPending'),
 )
 const formatDetectionTone = computed(() => {
@@ -1683,7 +1677,7 @@ onUnmounted(() => {
 .toolbar-content {
   display: flex;
   min-width: 0;
-  gap: 4px;
+  gap: var(--ui-space-xs);
   font-size: 12px;
   font-family: inherit;
   align-items: center;
@@ -1951,7 +1945,7 @@ onUnmounted(() => {
 .app-connections-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
+  gap: var(--ui-space-md);
 }
 
 .camera-ssh-config {
@@ -1966,7 +1960,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: var(--ui-space-lg);
   margin-bottom: 10px;
   color: var(--app-text);
   font-size: 12px;
@@ -1980,12 +1974,12 @@ onUnmounted(() => {
 .camera-ssh-config-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px 12px;
+  gap: var(--ui-space-md) var(--ui-space-lg);
 }
 
 .camera-ssh-config-grid label {
   display: grid;
-  gap: 5px;
+  gap: var(--ui-space-xs);
   min-width: 0;
   color: var(--app-text-secondary);
   font-size: 11px;
@@ -2028,7 +2022,7 @@ onUnmounted(() => {
 .app-connection-card {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--ui-space-xs);
   padding: 10px 12px;
   border: 1px solid var(--app-border);
   border-radius: 10px;
@@ -2050,7 +2044,7 @@ onUnmounted(() => {
 .app-connection-card-head {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: var(--ui-space-md);
   min-width: 0;
 }
 
@@ -2111,7 +2105,7 @@ onUnmounted(() => {
 .app-connection-foot {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--ui-space-md);
   min-height: 22px;
 }
 
@@ -2154,7 +2148,7 @@ onUnmounted(() => {
   .camera-ssh-config-heading {
     align-items: flex-start;
     flex-direction: column;
-    gap: 4px;
+    gap: var(--ui-space-xs);
   }
 }
 
@@ -2216,7 +2210,7 @@ onUnmounted(() => {
 .data-source-dialog-title {
   display: flex;
   align-items: center;
-  gap: 11px;
+  gap: var(--ui-space-lg);
 }
 
 .data-source-dialog-title > div,
@@ -2224,7 +2218,7 @@ onUnmounted(() => {
 .parser-copy {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: var(--ui-space-tight);
 }
 
 .data-source-dialog-title strong {
@@ -2296,7 +2290,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   width: 100%;
-  gap: 10px;
+  gap: var(--ui-space-md);
 }
 
 .source-tab-label > .el-icon {
@@ -2355,7 +2349,7 @@ onUnmounted(() => {
 .source-info-card {
   display: grid;
   grid-template-columns: minmax(80px, auto) 1fr;
-  gap: 8px 16px;
+  gap: var(--ui-space-md) var(--ui-space-xl);
   margin: 3px 0 14px 106px;
   padding: 12px 14px;
   border: 1px solid var(--app-border);
@@ -2393,7 +2387,7 @@ onUnmounted(() => {
   display: flex;
   align-items: stretch;
   flex-direction: column;
-  gap: 9px;
+  gap: var(--ui-space-md);
   margin-top: 2px;
   padding: 13px 0 12px;
   border-top: 1px solid var(--app-border);
@@ -2489,7 +2483,7 @@ onUnmounted(() => {
 .network-config-card .input-group {
   display: grid;
   grid-template-columns: 94px minmax(0, 1fr);
-  column-gap: 12px;
+  column-gap: var(--ui-space-lg);
   align-items: center;
 }
 
@@ -2661,7 +2655,7 @@ onUnmounted(() => {
   }
 
   .parser-card {
-    gap: 8px;
+    gap: var(--ui-space-md);
   }
 
   .regex-parser-config small {
@@ -2680,7 +2674,7 @@ onUnmounted(() => {
   .input-group {
     align-items: stretch;
     flex-direction: column;
-    gap: 6px;
+    gap: var(--ui-space-sm);
   }
 
   .parser-card .input-group .format-detected {
@@ -2727,7 +2721,7 @@ onUnmounted(() => {
 
   .source-tab-label {
     justify-content: center;
-    gap: 6px;
+    gap: var(--ui-space-sm);
   }
 
   .source-tab-copy small {
@@ -2832,7 +2826,7 @@ onUnmounted(() => {
 .recent-file-option {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--ui-space-md);
   width: 100%;
   box-sizing: border-box;
   height: auto;

@@ -10,12 +10,22 @@ import type { WebContents } from 'electron'
 import {
   buildRtkPostArgs,
   buildStarRtkPostConfig,
+  RTK_POST_ENGINE_LABELS,
+  rtkPostRequiresBase,
+  validateRtkPostSettings,
   RtkPostSolutionParser,
   type RtkPostRunRequest,
   type RtkPostRunResult,
   type RtkPostProgress,
   type RtkPostSolutionSummary,
 } from '../../../src/core/gnsslib/RtkPost'
+import {
+  buildRtkLibExConfig,
+  parseRtkLibExConfig,
+  rtkLibExOutputFormat,
+  rtkLibExPositionMode,
+  validateRtkLibExParameters,
+} from '../../../src/core/gnsslib/RtkLibExConfig'
 import { mergeRtkPostConfig } from '../../../src/core/gnsslib/RtkPostConfig'
 import {
   intersectObservationSpans,
@@ -154,8 +164,25 @@ export class RtkPostService {
 
     const request = normalizePaths(rawRequest)
     const starRtk = request.engine === 'starrtk'
-    const engineName = starRtk ? 'StarRTK' : 'rnx2rtkp'
-    buildRtkPostArgs(request)
+    const rtklibEx = request.engine === 'rtklib-ex'
+    const engineName = RTK_POST_ENGINE_LABELS[request.engine ?? 'rnx2rtkp']
+    const configDirectory = rtklibEx && request.configPath ? path.dirname(request.configPath) : ''
+    if (rtklibEx) {
+      const configured = request.rtklibExParameters
+      request.rtklibExParameters =
+        configured !== undefined
+          ? validateRtkLibExParameters(configured)
+          : parseRtkLibExConfig(
+              request.configContent ??
+                (request.configPath ? await fs.readFile(request.configPath, 'utf8') : ''),
+            )
+      request.options = {
+        ...request.options,
+        mode: rtkLibExPositionMode(request.rtklibExParameters),
+        outputFormat: rtkLibExOutputFormat(request.rtklibExParameters),
+      }
+    }
+    validateRtkPostSettings(request)
     if (starRtk) {
       await fs.mkdir(path.dirname(request.outputPath), { recursive: true })
       const traceDirectory = request.starRtkProcessing?.trace_directory
@@ -193,13 +220,13 @@ export class RtkPostService {
       // The timeline already supplies both bounds; avoid scanning compressed
       // observations a second time merely to initialize the progress tracker.
       let observationSpan: RtkPostTimeSpan | undefined
-      if (starRtk) {
+      if (starRtk && rtkPostRequiresBase(request)) {
         const [rover, base] = await Promise.all([
           readRinexObservationSpan(request.roverObsPath).catch(() => undefined),
           readRinexObservationSpan(request.baseObsPath).catch(() => undefined),
         ])
         observationSpan = rover && base ? intersectObservationSpans(rover, base) : undefined
-      } else if (!request.options.startTime.trim() || !request.options.endTime.trim()) {
+      } else if (starRtk || !request.options.startTime.trim() || !request.options.endTime.trim()) {
         observationSpan = await readRinexObservationSpan(request.roverObsPath).catch(
           () => undefined,
         )
@@ -219,7 +246,7 @@ export class RtkPostService {
 
       return await new Promise<RtkPostRunResult>((resolve) => {
         const child = this.spawnProcess(executable, args, {
-          cwd: path.dirname(nativeOutputPath),
+          cwd: configDirectory || path.dirname(nativeOutputPath),
           windowsHide: true,
           shell: false,
         })
@@ -374,10 +401,10 @@ export class RtkPostService {
     request: RtkPostRunRequest,
   ): Promise<import('node:fs').Stats | undefined> {
     const starRtk = request.engine === 'starrtk'
-    const engineName = starRtk ? 'StarRTK' : 'rnx2rtkp'
+    const engineName = RTK_POST_ENGINE_LABELS[request.engine ?? 'rnx2rtkp']
     if (request.executablePath)
       await requireFile(request.executablePath, `${engineName} 可执行文件`)
-    const relative = starRtk || (request.options.mode >= 1 && request.options.mode <= 6)
+    const relative = rtkPostRequiresBase(request)
     const inputs = [
       request.roverObsPath,
       ...(relative ? [request.baseObsPath] : []),
@@ -388,7 +415,9 @@ export class RtkPostService {
     if (configPath) await requireFile(configPath, '配置文件')
 
     const protectedPaths = new Set(
-      [...inputs, configPath, request.executablePath].filter((item) => item).map(comparablePath),
+      [...inputs, ...(starRtk ? [request.baseObsPath] : []), configPath, request.executablePath]
+        .filter((item) => item)
+        .map(comparablePath),
     )
     if (protectedPaths.has(comparablePath(request.outputPath))) {
       throw new Error(`输出文件不能覆盖输入文件、配置文件或 ${engineName} 可执行文件`)
@@ -452,13 +481,18 @@ async function inspectSolution(
 async function writeEffectiveRtkPostConfig(
   request: RtkPostRunRequest,
 ): Promise<{ path: string; cleanup: () => Promise<void> }> {
-  const source =
-    request.configContent ??
-    (request.configPath ? await fs.readFile(request.configPath, 'utf8') : '')
+  const content =
+    request.engine === 'rtklib-ex'
+      ? buildRtkLibExConfig(request.rtklibExParameters ?? {})
+      : mergeRtkPostConfig(
+          request.configContent ??
+            (request.configPath ? await fs.readFile(request.configPath, 'utf8') : ''),
+          request.options,
+        )
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'nav-tools-rtkpost-'))
   const configPath = path.join(directory, 'effective.conf')
   try {
-    await fs.writeFile(configPath, mergeRtkPostConfig(source, request.options), 'utf8')
+    await fs.writeFile(configPath, content, 'utf8')
   } catch (error) {
     await fs.rm(directory, { recursive: true, force: true }).catch(() => undefined)
     throw error

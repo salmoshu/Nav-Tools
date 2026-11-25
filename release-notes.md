@@ -1,5 +1,19 @@
 # Nav-Tools 更新日志
 
+## v1.9.7
+
+- 消息组件新增 Raw、Packet、Message 视图，可查看识别后的字段和表格。GNSS 的 RTCM3 文件和实时流在消息组件中保留原始帧，其他组件使用内置单点定位生成的 NMEA。
+- 消息工具栏按钮、格式入口和下拉框统一为 28 px 高。Deviation 和地图使用图标显示跟踪、参考轨迹和定位状态等操作，Deviation 底栏显示 Single、Float、Fix 等解状态。
+- Signals 的卫星范围显示完整名称，柱状图的星座和频段合并到一个筛选入口，启用筛选时有提示。
+- GNSS Solver 新增 RTKLIB-EX 后处理，OpenGNSS、RTKLIB-EX 和 StarRTK 使用统一的配置布局与字体，分别读写原生配置。定位引擎的选择可在重启后恢复。
+- 默认只启用 Serial 与 GNSS，独立 Flow 应用移除。非模态提醒移至右下角，文件加载和回放的进度条样式统一。
+
+- Messages adds Raw, Packet and Message views with decoded fields and tables. GNSS keeps original RTCM3 file and stream frames in Messages and feeds other compatible panels NMEA from its built-in single-point solver.
+- Message toolbar controls share a 28 px height. Deviation and Map use compact icons for actions such as tracking, loading a reference track and showing position status. Deviation names solution states such as Single, Float and Fix.
+- Signals shows full satellite-scope names and groups the bar chart's constellation and frequency filters behind one button with an active indicator.
+- GNSS Solver adds RTKLIB-EX post-processing and shares the configuration layout and typography across RTKLIB-EX, OpenGNSS and StarRTK. Native configuration formats stay separate and the selected engine is restored on restart.
+- Only Serial and GNSS are enabled by default, and the standalone Flow app is removed. Notifications appear at the bottom right and file loading uses the same progress styling as playback.
+
 ## v1.9.6
 
 - GNSS 内置 RTCM3 单点定位升级为 Open-GNSS EKF，改进多频观测解析和 NMEA 输出。

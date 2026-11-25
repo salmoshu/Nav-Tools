@@ -1,5 +1,6 @@
 import { createApp, defineComponent, h, nextTick, reactive, type App } from 'vue'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { parse as parseYaml } from 'yaml'
 import StarRtkOptions from '../../src/components/windows/gnsslib/StarRtkOptions.vue'
 import {
   defaultStarRtkProcessing,
@@ -169,30 +170,25 @@ describe('StarRtkOptions ambiguity controls', () => {
     }
     app.mount(host)
     mounted = { app, host }
-    expect(host.querySelector('[data-testid="starrtk-partial_ambiguity"]')).not.toBeNull()
+    const category = async (name: string) => {
+      host.querySelector<HTMLButtonElement>(`[data-category="${name}"]`)!.click()
+      await nextTick()
+    }
+    expect(host.querySelector('[data-testid="starrtk-positioning-mode"]')).not.toBeNull()
+    expect(host.querySelector('[data-testid="starrtk-partial_ambiguity"]')).toBeNull()
+    await category('observations')
     expect(host.querySelector('[data-testid="starrtk-widelane_assist"]')).not.toBeNull()
-    expect(host.querySelector('[data-testid="starrtk-degraded_guard"]')).not.toBeNull()
-    host.querySelector<HTMLButtonElement>('[data-category="ambiguity"]')!.click()
-    await nextTick()
+    expect(host.querySelector('[data-testid="starrtk-min-snr"]')).not.toBeNull()
 
+    await category('ambiguity')
+    expect(host.querySelector('[data-testid="starrtk-partial_ambiguity"]')).not.toBeNull()
     expect(host.querySelector('[data-testid="starrtk-ambiguity-mode"]')).not.toBeNull()
     expect(host.querySelector('[data-testid="starrtk-adaptive-ratio"]')).not.toBeNull()
     expect(host.querySelector('[data-testid="starrtk-min-fixed-epochs"]')).not.toBeNull()
     expect(host.querySelector('[data-testid="starrtk-variance-cycles"]')).not.toBeNull()
-    expect(host.querySelector('[data-testid="starrtk-float-hold"]')).not.toBeNull()
-    expect(host.querySelector('[data-testid="starrtk-float-hold-duration"]')).not.toBeNull()
-    expect(host.querySelector('[data-testid="starrtk-cycle-slip"]')).not.toBeNull()
-    expect(host.querySelector('[data-testid="starrtk-cycle-slip-lock-flags"]')).not.toBeNull()
-    expect(host.querySelector('[data-testid="starrtk-motion-prior"]')).not.toBeNull()
-    expect(host.querySelector('[data-testid="starrtk-residual-gate"]')).not.toBeNull()
-    expect(host.querySelector('[data-testid="starrtk-residual-phase-sigma"]')).not.toBeNull()
     expect(host.querySelector('[data-testid="starrtk-ar-retry"]')).not.toBeNull()
     expect(host.querySelector('[data-testid="starrtk-ar-retry-max-trials"]')).not.toBeNull()
     expect(host.querySelector('[data-testid="starrtk-ar-retry-validate"]')).not.toBeNull()
-    expect(host.querySelector('[data-testid="starrtk-dgnss"]')).not.toBeNull()
-    expect(host.querySelector('[data-testid="starrtk-dgnss-max-float-rms"]')).not.toBeNull()
-    expect(host.querySelector('[data-testid="starrtk-dgnss-max-rms"]')).not.toBeNull()
-    expect(host.querySelector('[data-testid="starrtk-dgnss-min-satellites"]')).not.toBeNull()
 
     processing.ambiguity_mode = 'continuous'
     await nextTick()
@@ -200,6 +196,84 @@ describe('StarRtkOptions ambiguity controls', () => {
     expect(host.querySelector('[data-testid="starrtk-variance-cycles"]')).toBeNull()
     expect(host.querySelector('[data-testid="starrtk-ambiguity-mode"]')).not.toBeNull()
     expect(host.querySelector('[data-testid="starrtk-adaptive-ratio"]')).not.toBeNull()
+
+    await category('quality_control')
+    expect(host.querySelector('[data-testid="starrtk-degraded_guard"]')).not.toBeNull()
+    expect(host.querySelector('[data-testid="starrtk-cycle-slip"]')).not.toBeNull()
+    expect(host.querySelector('[data-testid="starrtk-cycle-slip-lock-flags"]')).not.toBeNull()
+    expect(host.querySelector('[data-testid="starrtk-residual-gate"]')).not.toBeNull()
+    expect(host.querySelector('[data-testid="starrtk-residual-phase-sigma"]')).not.toBeNull()
+    expect(host.querySelector('[data-testid="starrtk-dgnss"]')).not.toBeNull()
+    expect(host.querySelector('[data-testid="starrtk-dgnss-max-float-rms"]')).not.toBeNull()
+    expect(host.querySelector('[data-testid="starrtk-dgnss-max-rms"]')).not.toBeNull()
+    expect(host.querySelector('[data-testid="starrtk-dgnss-min-satellites"]')).not.toBeNull()
+
+    await category('filtering')
+    expect(host.querySelector('[data-testid="starrtk-float-hold"]')).not.toBeNull()
+    expect(host.querySelector('[data-testid="starrtk-float-hold-duration"]')).not.toBeNull()
+    expect(host.querySelector('[data-testid="starrtk-motion-prior"]')).not.toBeNull()
+    expect(host.querySelector('[data-testid="starrtk-spp-filter"]')).not.toBeNull()
+  })
+})
+
+describe('StarRTK processing groups', () => {
+  it('round-trips grouped exports and preserves the flat executable format', () => {
+    const config = parseStarRtkConfig(`
+processing:
+  positioning_mode: RTD
+  min_snr_dbhz: 25
+  ar_retry: { enabled: true }
+  dgnss: { max_dgnss_rms_m: 2.5 }
+  spp_filter: { enabled: true, max_gap_s: 6 }
+  trace_directory: starlog
+post:
+  solution_format: nmea
+realtime:
+  cycle_ms: 50
+`)
+    const grouped = stringifyStarRtkConfig(config, 'grouped')
+    const raw = parseYaml(grouped)
+    expect(Object.keys(raw.processing)).toEqual([
+      'positioning',
+      'observations',
+      'ambiguity',
+      'quality_control',
+      'filtering',
+      'output',
+    ])
+    expect(raw.processing).toMatchObject({
+      positioning: { positioning_mode: 'rtd' },
+      observations: { min_snr_dbhz: 25 },
+      ambiguity: { ar_retry: { enabled: true } },
+      quality_control: { dgnss: { max_dgnss_rms_m: 2.5 } },
+      filtering: { spp_filter: { enabled: true, max_gap_s: 6 } },
+      output: { trace_directory: 'starlog' },
+    })
+    expect(parseStarRtkConfig(grouped)).toEqual(config)
+
+    const flat = stringifyStarRtkConfig(config)
+    expect(parseYaml(flat).processing).not.toHaveProperty('positioning')
+    expect(parseYaml(flat).processing).toHaveProperty('positioning_mode', 'rtd')
+    expect(parseStarRtkConfig(flat)).toEqual(config)
+  })
+
+  it('allows non-overlapping legacy keys but rejects duplicated or misplaced options', () => {
+    expect(
+      starRtkProcessing({
+        positioning: { positioning_mode: 'spp' },
+        min_snr_dbhz: 25,
+      }),
+    ).toMatchObject({ positioning_mode: 'spp', min_snr_dbhz: 25 })
+    expect(() =>
+      starRtkProcessing({ observations: { min_snr_dbhz: 25 }, min_snr_dbhz: 30 }),
+    ).toThrow('重复配置了 min_snr_dbhz')
+    expect(() => starRtkProcessing({ ambiguity: { weighting: 'elevation' } })).toThrow(
+      'processing.ambiguity 包含未知键 weighting',
+    )
+    expect(() => starRtkProcessing({ filtering: false })).toThrow('processing.filtering')
+    expect(() => starRtkProcessing({ filtering: { spp_filter: { max_gap_s: -1 } } })).toThrow(
+      'max_gap_s',
+    )
   })
 })
 
@@ -279,6 +353,79 @@ processing:
       max_dgnss_rms_m: 5,
       min_satellites: 5,
     })
+  })
+
+  it('round trips SPP filter settings and leaves default YAML compatible with older engines', () => {
+    const legacy = parseStarRtkConfig('processing: {}')
+    expect(legacy.processing.spp_filter.enabled).toBe(false)
+    expect(stringifyStarRtkConfig(legacy)).not.toContain('spp_filter:')
+    const config = parseStarRtkConfig(`
+processing:
+  spp_filter:
+    enabled: true
+    acceleration_noise_mps2: 0.8
+    min_position_sigma_m: 2.5
+    min_velocity_sigma_mps: 0.07
+    innovation_sigma: 3.2
+    max_gap_s: 6.5
+`)
+    expect(config.processing.spp_filter).toEqual({
+      enabled: true,
+      acceleration_noise_mps2: 0.8,
+      min_position_sigma_m: 2.5,
+      min_velocity_sigma_mps: 0.07,
+      innovation_sigma: 3.2,
+      max_gap_s: 6.5,
+    })
+    expect(parseStarRtkConfig(stringifyStarRtkConfig(config))).toEqual(config)
+    config.processing.spp_filter.enabled = false
+    expect(parseStarRtkConfig(stringifyStarRtkConfig(config))).toEqual(config)
+    expect(() => starRtkProcessing({ spp_filter: { max_gap_s: 0 } })).toThrow('max_gap_s')
+    expect(() => starRtkProcessing({ spp_filter: { min_position_sigma_m: Infinity } })).toThrow(
+      'min_position_sigma_m',
+    )
+    expect(() => starRtkProcessing({ spp_filter: { enabled: 'true' } })).toThrow(
+      'spp_filter.enabled',
+    )
+  })
+
+  it('round trips explicit positioning modes and keeps RTK as the omitted default', () => {
+    const defaults = parseStarRtkConfig('processing: {}')
+    expect(defaults.processing.positioning_mode).toBe('rtk')
+    expect(stringifyStarRtkConfig(defaults)).not.toContain('positioning_mode:')
+    for (const mode of ['spp', 'rtd']) {
+      const config = parseStarRtkConfig(`processing: { positioning_mode: ${mode.toUpperCase()} }`)
+      expect(config.processing.positioning_mode).toBe(mode)
+      expect(parseStarRtkConfig(stringifyStarRtkConfig(config))).toEqual(config)
+    }
+    expect(() => starRtkProcessing({ positioning_mode: 'ppp' })).toThrow('positioning_mode')
+    expect(() =>
+      starRtkProcessing({
+        positioning_mode: 'rtd',
+        frequencies: {
+          gps: [false, true, false],
+          beidou: [false, false, false],
+          galileo: [false, false, false],
+        },
+      }),
+    ).toThrow('主频')
+  })
+
+  it('round trips custom SNR limits including zero and omits the legacy default', () => {
+    const config = parseStarRtkConfig('processing: {}')
+    expect(config.processing.min_snr_dbhz).toBe(30)
+    expect(stringifyStarRtkConfig(config)).not.toContain('min_snr_dbhz:')
+
+    for (const limit of [0, 24, 100]) {
+      config.processing.min_snr_dbhz = limit
+      const yaml = stringifyStarRtkConfig(config)
+      expect(yaml).toContain(`min_snr_dbhz: ${limit}`)
+      expect(parseStarRtkConfig(yaml)).toEqual(config)
+    }
+
+    for (const invalid of [-1, 25.5, 101, '30']) {
+      expect(() => starRtkProcessing({ min_snr_dbhz: invalid })).toThrow('min_snr_dbhz')
+    }
   })
 
   it('rejects invalid advanced options', () => {

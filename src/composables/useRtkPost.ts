@@ -1,10 +1,12 @@
 import { computed, reactive, ref, watch } from 'vue'
 import {
-  buildRtkPostArgs,
   buildStarRtkPostConfig,
   createDefaultRtkPostSettings,
   DEFAULT_RTKPOST_OPTIONS,
+  RTK_POST_ENGINES,
   defaultRtkPostOutputPath,
+  rtkPostRequiresBase,
+  validateRtkPostSettings,
   type RtkPostEngine,
   type RtkPostLogEvent,
   type RtkPostOptions,
@@ -22,6 +24,13 @@ import {
   type StarRtkProcessingOptions,
 } from '@/core/gnsslib/StarRtkConfig'
 import { mergeRtkPostConfig, parseRtkPostConfig } from '@/core/gnsslib/RtkPostConfig'
+import {
+  buildRtkLibExConfig,
+  restoreRtkLibExParameters,
+  rtkLibExOutputFormat,
+  rtkLibExPositionMode,
+  type RtkLibExParameters,
+} from '@/core/gnsslib/RtkLibExConfig'
 import {
   copyPostOptions,
   equalPostOption,
@@ -51,6 +60,11 @@ interface RtkPostFormSettings extends RtkPostSettings {
     outputFormat: StarRtkOutputFormat
     processing: StarRtkProcessingOptions
   }
+  rtklibEx: {
+    executablePath: string
+    configPath: string
+    parameters: RtkLibExParameters
+  }
 }
 
 const STORAGE_KEY = 'nav-tools:gnssraw-rtkpost-v1'
@@ -58,9 +72,31 @@ const MANUAL_MARKERS_KEY = 'nav-tools:gnssraw-rtkpost-manual-v1'
 const storage = new JsonStorage(localStorage)
 const settings = reactive(loadSettings())
 const isStarRtk = computed(() => settings.engine === 'starrtk')
-const engineFiles = computed(() => (isStarRtk.value ? settings.starRtk : settings))
+const isRtkLibEx = computed(() => settings.engine === 'rtklib-ex')
+const isOpenGnss = computed(() => settings.engine === 'rnx2rtkp')
+const relativeMode = computed(() =>
+  rtkPostRequiresBase({
+    engine: settings.engine,
+    options: settings.options,
+    starRtkProcessing: settings.starRtk.processing,
+    rtklibExParameters: settings.rtklibEx.parameters,
+  }),
+)
+const engineFiles = computed(() =>
+  isStarRtk.value ? settings.starRtk : isRtkLibEx.value ? settings.rtklibEx : settings,
+)
 const activeOptions = computed<RtkPostOptions>(() => {
-  if (!isStarRtk.value) return settings.options
+  if (isOpenGnss.value) return settings.options
+  if (isRtkLibEx.value) {
+    const parameters = settings.rtklibEx.parameters
+    return {
+      ...DEFAULT_RTKPOST_OPTIONS,
+      mode: rtkLibExPositionMode(parameters),
+      outputFormat: rtkLibExOutputFormat(parameters),
+      startTime: settings.options.startTime,
+      endTime: settings.options.endTime,
+    }
+  }
   const outputFormat = settings.starRtk.outputFormat
   return {
     ...DEFAULT_RTKPOST_OPTIONS,
@@ -78,7 +114,7 @@ const committedManualBaselines = ref<PostManualBaselines>(
 const draftManualBaselines = reactive<PostManualBaselines>({ ...committedManualBaselines.value })
 const manualModifiedKeys = computed(() => Object.keys(draftManualBaselines) as EditablePostKey[])
 const hasPendingOptions = computed(() => {
-  if (isStarRtk.value) return false
+  if (!isOpenGnss.value) return false
   if (draftConfigPath.value.trim() !== settings.configPath.trim()) return true
   for (const key of Object.keys(settings.options) as Array<keyof RtkPostSettings['options']>) {
     if (!equalPostOption(draftOptions[key], settings.options[key])) return true
@@ -104,12 +140,21 @@ const running = computed(() => status.value === 'running')
 let activeRunId = ''
 const automaticOutputPaths: Record<RtkPostEngine, string> = {
   rnx2rtkp:
-    settings.outputPath === defaultRtkPostOutputPath(settings.roverObsPath, settings.options.outputFormat)
+    settings.outputPath ===
+    defaultRtkPostOutputPath(settings.roverObsPath, settings.options.outputFormat)
       ? settings.outputPath
       : '',
   starrtk:
     settings.outputPath ===
     defaultRtkPostOutputPath(settings.roverObsPath, settings.starRtk.outputFormat, 'starrtk')
+      ? settings.outputPath
+      : '',
+  'rtklib-ex':
+    settings.outputPath === defaultRtkPostOutputPath(
+      settings.roverObsPath,
+      rtkLibExOutputFormat(settings.rtklibEx.parameters),
+      'rtklib-ex',
+    )
       ? settings.outputPath
       : '',
 }
@@ -165,9 +210,9 @@ watch(
   () =>
     [
       settings.roverObsPath.trim(),
-      settings.options.mode >= 1 && settings.options.mode <= 6 ? settings.baseObsPath.trim() : '',
+      relativeMode.value ? settings.baseObsPath.trim() : '',
       observationRefresh.value,
-      isStarRtk.value,
+      settings.engine,
     ] as const,
   ([roverPath, basePath], previous, onCleanup) => {
     const revision = ++observationRevision
@@ -272,11 +317,12 @@ export function useRtkPost() {
       baseObsPath: settings.baseObsPath,
       navPaths: [...settings.navPaths],
       outputPath: settings.outputPath,
-      configPath: isStarRtk.value ? '' : settings.configPath,
+      configPath: isOpenGnss.value ? settings.configPath : isRtkLibEx.value ? settings.rtklibEx.configPath : '',
       options: copyPostOptions(activeOptions.value),
       ...(isStarRtk.value
         ? { starRtkProcessing: starRtkProcessing(settings.starRtk.processing) }
         : {}),
+      ...(isRtkLibEx.value ? { rtklibExParameters: { ...settings.rtklibEx.parameters } } : {}),
     }
   }
 
@@ -292,7 +338,7 @@ export function useRtkPost() {
     return {
       defaultPath: 'starrtk-post.yaml',
       format: 'yaml',
-      content: buildStarRtkPostConfig(request),
+      content: buildStarRtkPostConfig(request, request.outputPath, 'grouped'),
       protectedPaths: [
         request.executablePath,
         request.roverObsPath,
@@ -301,6 +347,25 @@ export function useRtkPost() {
         request.outputPath,
       ],
     }
+  }
+
+  async function saveRtkLibExConfig(): Promise<string | null> {
+    const save = window.electronAPI?.rtkPostSaveConfig
+    if (!save) throw new Error(t('gnssRaw.rtkpost.desktopOnly'))
+    const request = requestSettings()
+    const savedPath = await save({
+      defaultPath: settings.rtklibEx.configPath || 'rtklib-ex.conf',
+      content: buildRtkLibExConfig(settings.rtklibEx.parameters),
+      protectedPaths: [
+        request.executablePath,
+        request.roverObsPath,
+        request.baseObsPath,
+        ...request.navPaths,
+        request.outputPath,
+      ].filter((item) => item.trim()),
+    })
+    if (savedPath) settings.rtklibEx.configPath = savedPath
+    return savedPath
   }
 
   function restoreTask(runId: string): void {
@@ -323,7 +388,8 @@ export function useRtkPost() {
   }
   async function execute(requestRunId?: string): Promise<void> {
     if (running.value) return
-    if (hasPendingOptions.value || configSaving.value || configStatus.value === 'loading') {
+    if (hasPendingOptions.value || configSaving.value ||
+      (isOpenGnss.value && configStatus.value === 'loading')) {
       throw new Error(t('gnssRaw.rtkpost.optionsPending'))
     }
     const runId = requestRunId ?? crypto.randomUUID()
@@ -347,13 +413,13 @@ export function useRtkPost() {
         if (!runSettings.options.endTime.trim())
           runSettings.options.endTime = formatRtkPostTime(observationSpan.value.end)
       }
-      buildRtkPostArgs(runSettings)
+      validateRtkPostSettings(runSettings)
       const api = window.electronAPI?.rtkPostRun
       if (!api) throw new Error(t('gnssRaw.rtkpost.desktopOnly'))
       const runResult = await api({
         ...runSettings,
         runId,
-        ...(!isStarRtk.value && configContent !== undefined ? { configContent } : {}),
+        ...(isOpenGnss.value && configContent !== undefined ? { configContent } : {}),
       })
       if (activeRunId !== runId) return
       result.value = runResult
@@ -537,10 +603,14 @@ export function useRtkPost() {
   return {
     settings,
     isStarRtk,
+    isRtkLibEx,
+    isOpenGnss,
+    relativeMode,
     engineFiles,
     activeOptions,
     applyStarRtkConfig,
     exportStarRtkConfig,
+    saveRtkLibExConfig,
     status,
     running,
     errorText,
@@ -589,8 +659,8 @@ export function useRtkPost() {
       settings.outputPath = ''
       settings.options.startTime = ''
       settings.options.endTime = ''
-      automaticOutputPaths.rnx2rtkp = automaticOutputPaths.starrtk = ''
-      if (isStarRtk.value) suggestOutput()
+      automaticOutputPaths.rnx2rtkp = automaticOutputPaths.starrtk = automaticOutputPaths['rtklib-ex'] = ''
+      if (!isOpenGnss.value) suggestOutput()
       clearResult()
       handoffInputState.value = {
         missingRover: !rover,
@@ -608,16 +678,23 @@ function loadSettings(): RtkPostFormSettings {
   const saved = storage.read<Partial<RtkPostFormSettings> | null>(STORAGE_KEY, null)
   const stored = saved && typeof saved === 'object' ? saved : {}
   const starRtk = stored.starRtk
+  const rtklibEx = stored.rtklibEx
   const storedOptions: Partial<RtkPostSettings['options']> =
     stored.options && typeof stored.options === 'object' ? stored.options : {}
+  const savedEngine = RTK_POST_ENGINES.find((engine) => engine === stored.engine)
   return {
-    engine: stored.engine === 'starrtk' ? 'starrtk' : 'rnx2rtkp',
+    engine: savedEngine ?? 'rnx2rtkp',
     starRtk: {
       executablePath: stringValue(starRtk?.executablePath),
       navPaths: [stringValue(starRtk?.navPaths?.[0])],
       outputPath: stringValue(starRtk?.outputPath),
       outputFormat: starRtk?.outputFormat === 'nmea' ? 'nmea' : 'llh',
       processing: restoreStarRtkProcessing(starRtk?.processing),
+    },
+    rtklibEx: {
+      executablePath: stringValue(rtklibEx?.executablePath),
+      configPath: stringValue(rtklibEx?.configPath),
+      parameters: restoreRtkLibExParameters(rtklibEx?.parameters),
     },
     executablePath: stringValue(stored.executablePath),
     roverObsPath: stringValue(stored.roverObsPath),

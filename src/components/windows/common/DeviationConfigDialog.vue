@@ -98,7 +98,7 @@ function setValue(track: number, field: 'X' | 'Y' | 'Color', value: unknown): vo
 .chart-config-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
+  gap: var(--ui-space-lg);
 }
 
 .chart-config-section {
@@ -112,7 +112,7 @@ header,
 label {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--ui-space-md);
 }
 
 header {

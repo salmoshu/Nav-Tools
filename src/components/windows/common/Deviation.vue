@@ -6,10 +6,11 @@
           type="default"
           size="small"
           @click="showViewConfig"
-          class="control-btn config-btn"
+          class="control-btn config-btn panel-icon-action"
+          :aria-label="t('flow.config')"
+          :title="t('flow.config')"
         >
-          <el-icon><Setting /></el-icon>
-          <span class="config-text">&nbsp;{{ t('flow.config') }}</span>
+          <el-icon aria-hidden="true"><Setting /></el-icon>
         </el-button>
 
         <el-button
@@ -17,12 +18,12 @@
           size="small"
           :title="isTracking ? t('flow.disableTracking') : t('flow.enableTracking')"
           :aria-label="isTracking ? t('flow.disableTracking') : t('flow.enableTracking')"
-          class="tracking-button"
+          :aria-pressed="isTracking"
+          class="tracking-button panel-icon-action"
           :class="{ active: isTracking }"
           @click="toggleTracking"
         >
-          <el-icon><Aim /></el-icon>
-          <span class="tracking-text">&nbsp;{{ t('flow.tracking') }}</span>
+          <el-icon aria-hidden="true"><Aim /></el-icon>
         </el-button>
 
         <div class="point-size-control">
@@ -52,13 +53,14 @@
           </div>
         </div>
 
-        <div class="right-buttons">
+        <div class="right-buttons panel-icon-actions">
           <el-button
             type="text"
             size="small"
             @click="resetZoom"
-            class="zoom-btn"
-            style="margin: 0px 0px"
+            class="zoom-btn panel-icon-action"
+            :title="t('gnss.deviation.resetLayout')"
+            :aria-label="t('gnss.deviation.resetLayout')"
           >
             <el-icon><Refresh /></el-icon>
           </el-button>
@@ -66,8 +68,9 @@
             type="text"
             size="small"
             @click="clearTrack"
-            class="clear-btn"
-            style="margin: 0px 0px"
+            class="clear-btn panel-icon-action"
+            :title="t('gnss.deviation.clear')"
+            :aria-label="t('gnss.deviation.clear')"
           >
             <el-icon><Delete /></el-icon>
           </el-button>
@@ -1099,7 +1102,7 @@ onUnmounted(() => {
   justify-content: flex-start;
   width: 100%;
   position: relative;
-  gap: 8px;
+  gap: var(--ui-space-md);
 }
 
 .switch-label {
@@ -1215,7 +1218,7 @@ onUnmounted(() => {
 .legend-panel {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--ui-space-md);
   margin-left: 8px;
   flex-wrap: wrap;
 }
@@ -1223,7 +1226,7 @@ onUnmounted(() => {
 .legend-item {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--ui-space-xs);
   cursor: pointer;
   user-select: none;
   font-size: 12px;
@@ -1280,15 +1283,10 @@ onUnmounted(() => {
 }
 
 .right-buttons {
-  display: flex;
-  align-items: center;
   margin-left: auto;
-  gap: 4px;
 }
 
 @container (max-width: 680px) {
-  .config-text,
-  .tracking-text,
   .size-label {
     display: none;
   }
@@ -1302,7 +1300,7 @@ onUnmounted(() => {
   }
 
   .legend-panel {
-    gap: 6px;
+    gap: var(--ui-space-sm);
     margin-left: 4px;
   }
 }

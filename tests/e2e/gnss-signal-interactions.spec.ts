@@ -71,19 +71,44 @@ test('puts Sat Num third and restores the selected view after restart', async ({
   expect(stored['gnss-signal:view']).toBe('chart')
 })
 
-test('offers only detected constellations and keeps the table heading on one line', async ({
+test('keeps two primary selectors on the toolbar and offers only detected constellations in filters', async ({
   page,
 }) => {
-  await page.setViewportSize({ width: 550, height: 610 })
+  await page.setViewportSize({ width: 320, height: 610 })
   await openSignals(page)
   await page.locator('.view-select').click()
   await page.getByRole('option', { name: 'Bar Chart View', exact: true }).click()
 
-  const filter = page.locator('.constellation-filter')
-  const options = page.locator('.el-select-dropdown:visible .el-select-dropdown__item')
-  await filter.click()
+  const filter = page.getByRole('group', { name: 'Constellation', exact: true })
+  const filtersButton = page.getByRole('button', { name: 'Chart filters', exact: true })
+  const toolbar = page.locator('.view-controls')
+  await expect(toolbar.getByRole('combobox')).toHaveCount(2)
+  const scope = toolbar.locator('.satellite-scope-select')
+  await expect(scope).toContainText('All Satellites')
+  await scope.click()
+  await expect(page.getByRole('option', { name: 'Used Satellites', exact: true })).toBeVisible()
+  await page.getByRole('option', { name: 'All Satellites', exact: true }).click()
+  const layout = await toolbar.evaluate((element) => {
+    const controls = [
+      ...element.querySelectorAll('.view-select, .satellite-scope-select, .chart-filters-button'),
+    ]
+    return {
+      centers: new Set(
+        controls.map((control) => {
+          const box = control.getBoundingClientRect()
+          return Math.round(box.top + box.height / 2)
+        }),
+      ).size,
+      clipped: element.scrollWidth > element.clientWidth,
+    }
+  })
+  expect(layout).toEqual({ centers: 1, clipped: false })
+
+  await expect(filter).toBeHidden()
+  await filtersButton.press('Enter')
+  await expect(filtersButton).toHaveAttribute('aria-expanded', 'true')
+  const options = filter.locator('.chart-filter-choice')
   await expect(options).toHaveText(['All constellations'])
-  await options.first().click()
 
   await page.evaluate(
     async (epoch) => {
@@ -92,9 +117,13 @@ test('offers only detected constellations and keeps the table heading on one lin
     },
     signalEpoch(0, 48, ['GP', 'GA']),
   )
-  await filter.click()
   await expect(options).toHaveText(['All constellations', 'GPS', 'GALILEO'])
-  await options.filter({ hasText: 'GPS' }).click()
+  await filter.getByRole('radio', { name: 'GPS', exact: true }).check()
+  await expect(filtersButton.locator('.chart-filter-indicator')).toBeVisible()
+  await expect(filtersButton).toHaveAttribute('title', 'Chart filters (1 active)')
+  await page.keyboard.press('Escape')
+  await expect(filter).toBeHidden()
+  await expect(filtersButton).toBeFocused()
 
   await page.locator('.view-select').click()
   await page.getByRole('option', { name: 'Table View', exact: true }).click()
@@ -117,7 +146,9 @@ test('offers only detected constellations and keeps the table heading on one lin
   })
   await page.locator('.view-select').click()
   await page.getByRole('option', { name: 'Bar Chart View', exact: true }).click()
-  await expect(filter).toContainText('All constellations')
+  await filtersButton.click()
+  await expect(filter.getByRole('radio', { name: 'All constellations' })).toBeChecked()
+  await expect(filtersButton.locator('.chart-filter-indicator')).toHaveCount(0)
 })
 
 test('thickens per-satellite lines and supports right-drag zoom, wheel zoom and reset', async ({

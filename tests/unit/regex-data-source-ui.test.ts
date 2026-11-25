@@ -51,9 +51,8 @@ describe('regex data-source UI integration', () => {
       "activeDataParser.value === 'rtklib-pos' ? 'raw' : activeDataParser.value",
     )
     expect(device).toContain('flowRegexPattern.value = regexPattern')
-    expect(messages).toContain(
-      "activeDataParser.value === 'raw' || activeDataParser.value === 'rtklib-pos'",
-    )
+    expect(device).toContain('[activeMessageFormat, activeRegexPattern]')
+    expect(device).toContain('flowDataFormat.value = format')
   })
 
   it('renames the raw parser label to 无 and wires the parser-config highlight', () => {

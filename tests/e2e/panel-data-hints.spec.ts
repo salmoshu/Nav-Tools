@@ -73,6 +73,11 @@ test('shows no-data hints per panel and clears them when compatible data arrives
   await expect(hint(page, 'camera-video')).toHaveCount(0)
   await expect(hint(page, 'motor-parameters')).toHaveCount(0)
 
+  await page.locator('.flow-console-virtual').getByTitle('Clear console', { exact: true }).click()
+  await expect(page.locator('.flow-console-virtual')).toContainText('Total 0 messages')
+  await expect(hint(page, 'raw-messages')).toHaveCount(0)
+  await expect(hint(page, 'plot')).toHaveText('No valid data')
+
   await dropText(page, nmeaText, 'sample.log')
   await page.waitForTimeout(3500)
   await expect(hint(page, 'sky-plot')).toHaveCount(0)

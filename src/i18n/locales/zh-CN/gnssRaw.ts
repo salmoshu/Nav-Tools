@@ -149,10 +149,11 @@ export default {
     desktopOnly: '后处理需要本地解算引擎，仅可在 Electron 桌面端运行',
     engine: '后处理引擎',
     executable: '可执行文件',
-    executablePlaceholder: '选择 rnx2rtkp 可执行文件，留空时从 PATH 查找',
+    executablePlaceholder: '选择 OpenGNSS 的 rnx2rtkp，留空时从 PATH 查找',
     starRtkExecutable: '选择 StarRTK 可执行文件',
     starRtkInputs:
       '使用未压缩的基站 OBS、流动站 OBS 和一份 RINEX NAV。StarRTK 解算两站重叠的全部历元。',
+    starRtkSppInputs: 'SPP 使用未压缩的流动站 OBS 和一份 RINEX NAV，不需要基站观测。',
     inputs: '输入文件',
     roverObs: 'RINEX OBS：流动站',
     baseObs: 'RINEX OBS：基站',
@@ -277,7 +278,6 @@ export default {
     traceLevel: '调试跟踪级别',
     configFile: 'RTKLIB 配置文件',
     configOptional: '可选（.conf）',
-    configShortHint: '可载入 .conf 参数；当前表单值优先。',
     configHint:
       '选择 .conf 后将其参数载入表单；执行时保留其余配置行，并由当前表单覆盖同名参数。清空路径不会重置已载入的表单。',
     result: '结果',

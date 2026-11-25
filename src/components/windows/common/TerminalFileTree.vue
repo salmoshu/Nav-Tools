@@ -1043,7 +1043,7 @@ watch(
   display: flex;
   max-width: 320px;
   align-items: center;
-  gap: 6px;
+  gap: var(--ui-space-sm);
   padding: 5px 10px;
   border: 1px solid var(--el-color-primary);
   border-radius: 8px;

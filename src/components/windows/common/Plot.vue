@@ -4,8 +4,15 @@
       <div class="file-controls">
         <!-- 左侧按钮 -->
         <div class="left-buttons">
-          <el-button type="default" size="small" @click="showViewConfig" class="layout-btn">
-            <el-icon><Setting /></el-icon>&nbsp;{{ t('common.plot.configButton') }}
+          <el-button
+            type="default"
+            size="small"
+            class="layout-btn panel-icon-action"
+            :aria-label="t('common.plot.configButton')"
+            :title="t('common.plot.configButton')"
+            @click="showViewConfig"
+          >
+            <el-icon aria-hidden="true"><Setting /></el-icon>
           </el-button>
           <el-button :disabled="deviceConnected" type="default" size="small" @click="toggleSlideWindow">
             <el-icon v-if="enableWindow"><CircleClose /></el-icon>
@@ -15,15 +22,15 @@
         </div>
         
         <!-- 右侧按钮 -->
-        <div class="right-buttons">
-          <el-button type="text" size="small" @click="showMessageFormat" class="message-btn" style="margin: 0px 0px;">
-            <el-icon><Message /></el-icon>
+        <div class="right-buttons panel-icon-actions">
+          <el-button type="text" size="small" @click="showMessageFormat" class="message-btn panel-icon-action" :title="t('common.plot.dataFormatTitle')" :aria-label="t('common.plot.dataFormatTitle')">
+            <el-icon aria-hidden="true"><Message /></el-icon>
           </el-button>
-          <el-button type="text" size="small" style="margin: 0px 0px;">
-            <el-icon @click="refreshPlotData"><Refresh /></el-icon>
+          <el-button type="text" size="small" class="panel-icon-action" :title="t('common.plot.refreshPlot')" :aria-label="t('common.plot.refreshPlot')" @click="refreshPlotData">
+            <el-icon aria-hidden="true"><Refresh /></el-icon>
           </el-button>
-          <el-button type="text" size="small" @click="clearPlotData" style="margin: 0px 0px;">
-            <el-icon><Delete /></el-icon>
+          <el-button type="text" size="small" class="panel-icon-action" :title="t('common.plot.clearPlot')" :aria-label="t('common.plot.clearPlot')" @click="clearPlotData">
+            <el-icon aria-hidden="true"><Delete /></el-icon>
           </el-button>
         </div>
       </div>
@@ -1507,10 +1514,6 @@ watch(resolvedTheme, () => createChart())
   display: flex;
 }
 
-.right-buttons {
-  display: flex;
-}
-
 /* 示例代码样式 */
 .example-code {
   background-color: var(--app-surface-muted);
@@ -1542,7 +1545,7 @@ watch(resolvedTheme, () => createChart())
 .dialog-content > div {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--ui-space-md);
 }
 
 .dialog-content span {
@@ -1566,14 +1569,14 @@ watch(resolvedTheme, () => createChart())
 .source-selectors {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--ui-space-md);
 }
 
 /* 新增加的网格布局样式 */
 .chart-config-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 15px;
+  gap: var(--ui-space-xl);
   margin-bottom: 15px;
 }
 

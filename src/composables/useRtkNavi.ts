@@ -3,6 +3,7 @@ import {
   buildRtkNaviConfig,
   buildStarRtkRealtimeConfig,
   createDefaultRtkNaviSettings,
+  starRtkInputStreams,
   type RtkNaviEngine,
   type RtkNaviInputStream,
   type RtkNaviLogEvent,
@@ -18,6 +19,7 @@ import {
   starRtkTiming,
   type StarRtkConfiguration,
   type StarRtkProcessingOptions,
+  type StarRtkSolutionFormat,
   type StarRtkTimingOptions,
 } from '@/core/gnsslib/StarRtkConfig'
 import { JsonStorage } from '@/core/storage/JsonStorage'
@@ -37,6 +39,7 @@ interface RtkNaviFormSettings extends RtkNaviSettings {
     outputPath: string
     inputs: RtkNaviInputStream[]
     processing: StarRtkProcessingOptions
+    solutionFormat: StarRtkSolutionFormat
     timing: StarRtkTimingOptions
   }
 }
@@ -46,6 +49,15 @@ const storage = new JsonStorage(localStorage)
 const settings = reactive(loadSettings())
 const isStarRtk = computed(() => settings.engine === 'starrtk')
 const engineSettings = computed(() => (isStarRtk.value ? settings.starRtk : settings))
+const activeInputs = computed(() =>
+  isStarRtk.value
+    ? starRtkInputStreams({
+        inputs: settings.starRtk.inputs,
+        starRtkProcessing: settings.starRtk.processing,
+      })
+    : settings.inputs,
+)
+const solutionFormat = computed(() => (isStarRtk.value ? settings.starRtk.solutionFormat : 'pos'))
 const status = ref<RtkNaviStatus>({ runId: '', state: 'idle', outputPath: '' })
 const latestSolution = ref<RtkNaviSolution | null>(null)
 const solutions = ref<RtkNaviSolution[]>([])
@@ -90,27 +102,35 @@ export function useRtkNavi() {
       engine: settings.engine,
       executablePath: files.executablePath,
       outputPath: files.outputPath,
-      inputs: files.inputs.map((stream) => ({ ...stream })),
+      inputs: activeInputs.value.map((stream) => ({ ...stream })),
       options: { ...settings.options, constellations: [...settings.options.constellations] },
       advancedOptionOverrides: [...settings.advancedOptionOverrides],
       ...(isStarRtk.value
         ? {
             starRtkProcessing: starRtkProcessing(settings.starRtk.processing),
+            starRtkSolutionFormat: settings.starRtk.solutionFormat,
             starRtkTiming: starRtkTiming(settings.starRtk.timing),
           }
         : {}),
     }
   }
 
+  function updateStarRtkSolutionFormat(format: StarRtkSolutionFormat): void {
+    if (settings.starRtk.solutionFormat === format) return
+    settings.starRtk.solutionFormat = format
+    settings.starRtk.outputPath = settings.starRtk.outputPath.replace(
+      /\.(?:pos|nmea)$/i,
+      `.${format}`,
+    )
+  }
+
   function applyStarRtkConfig(config: StarRtkConfiguration): void {
     const live = config.realtime
-    if (live?.solution_format === 'nmea') {
-      throw new Error(
-        'Nav-Tools 实时解算工作区使用 POS 输出。请将 realtime.solution_format 设为 pos。',
-      )
-    }
     settings.starRtk.processing = config.processing
-    if (live) settings.starRtk.timing = starRtkTiming(live)
+    if (live) {
+      settings.starRtk.timing = starRtkTiming(live)
+      updateStarRtkSolutionFormat(live.solution_format ?? 'pos')
+    }
   }
 
   function exportStarRtkConfig(): RtkPostSaveConfigRequest {
@@ -123,7 +143,7 @@ export function useRtkNavi() {
     return {
       defaultPath: 'starrtk-realtime.yaml',
       format: 'yaml',
-      content: buildStarRtkRealtimeConfig(request),
+      content: buildStarRtkRealtimeConfig(request, request.outputPath, 'grouped'),
       protectedPaths: [request.executablePath, request.outputPath, ...inputPaths],
     }
   }
@@ -223,7 +243,8 @@ export function useRtkNavi() {
       if (!loaded) throw new Error(configDetail.value || t('gnssLib.rtknavi.configReadError'))
     }
     const runSettings = requestSettings()
-    buildRtkNaviConfig(runSettings, runSettings.outputPath || 'rtknavi-current.pos')
+    const format = runSettings.starRtkSolutionFormat ?? 'pos'
+    buildRtkNaviConfig(runSettings, runSettings.outputPath || `rtknavi-current.${format}`)
     const api = window.electronAPI?.rtkNaviStart
     if (!api) throw new Error('RTKNAVI 仅可在 Electron 桌面端运行')
     const runId = requestRunId ?? crypto.randomUUID()
@@ -234,7 +255,12 @@ export function useRtkNavi() {
     qualityCounts.value = {}
     logText.value = ''
     errorText.value = ''
-    status.value = { runId, state: 'running', outputPath: runSettings.outputPath }
+    status.value = {
+      runId,
+      state: 'running',
+      outputPath: runSettings.outputPath,
+      solutionFormat: format,
+    }
     try {
       const result = await api({ ...runSettings, runId })
       if (activeRunId === runId) status.value = result
@@ -277,6 +303,9 @@ export function useRtkNavi() {
     settings,
     isStarRtk,
     engineSettings,
+    activeInputs,
+    solutionFormat,
+    updateStarRtkSolutionFormat,
     applyStarRtkConfig,
     exportStarRtkConfig,
     status,
@@ -327,6 +356,7 @@ function loadSettings(): RtkNaviFormSettings {
         format: 'rtcm3',
       })),
       processing: restoreStarRtkProcessing(starRtk?.processing),
+      solutionFormat: starRtk?.solutionFormat === 'nmea' ? 'nmea' : 'pos',
       timing,
     },
     executablePath: typeof stored.executablePath === 'string' ? stored.executablePath : '',

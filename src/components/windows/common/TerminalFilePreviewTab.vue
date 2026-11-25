@@ -108,7 +108,7 @@ watch(
   display: flex;
   flex: none;
   align-items: center;
-  gap: 8px;
+  gap: var(--ui-space-md);
   padding: 4px 10px;
   border-bottom: 1px solid var(--app-border);
   background: var(--app-surface);

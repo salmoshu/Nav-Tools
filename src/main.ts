@@ -11,20 +11,18 @@ import { useDevice } from '@/hooks/useDevice'
 import 'vue-virtual-scroller/dist/vue-virtual-scroller.css'
 // Kimi 品牌令牌最后引入：与 EP 变量同优先级时靠后生效
 import './styles/kimi-tokens.css'
+import './styles/interaction-spacing.css'
 import VirtualScroller from 'vue-virtual-scroller'
 import { i18n } from './i18n'
 
 const app = createApp(App)
 const pinia = createPinia()
 const { removeCurrDevice } = useDevice()
-const APP_HEADER_HEIGHT = 38
-const MESSAGE_HEADER_GAP = 12
-const MESSAGE_TOP_OFFSET = APP_HEADER_HEIGHT + MESSAGE_HEADER_GAP
+const messageDefaults = { placement: 'bottom-right', offset: 50, showClose: true } as const
 
 // Command-style messages (ElMessage.error/success/...) use this singleton
 // instead of the plugin's injected configuration.
-messageConfig.offset = MESSAGE_TOP_OFFSET
-messageConfig.showClose = true
+Object.assign(messageConfig, messageDefaults)
 
 // 使用Pinia
 app.use(pinia)
@@ -34,10 +32,7 @@ app.use(VirtualScroller)
 
 // 使用ElementPlus
 app.use(ElementPlus, {
-  message: {
-    offset: MESSAGE_TOP_OFFSET,
-    showClose: true,
-  },
+  message: messageDefaults,
 })
 
 // 使用 vue-i18n（中英文）

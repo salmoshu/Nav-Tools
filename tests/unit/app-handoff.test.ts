@@ -63,10 +63,10 @@ describe('application handoff target registration', () => {
   })
 
   it.each([
-    ['nmea', ['gnss', 'serial', 'motor']],
-    ['rtklib-pos', ['gnss', 'serial', 'motor']],
-    ['json', ['serial', 'motor']],
-    ['csv', ['serial', 'motor']],
+    ['nmea', ['gnss', 'serial']],
+    ['rtklib-pos', ['gnss', 'serial']],
+    ['json', ['serial']],
+    ['csv', ['serial']],
   ] as const)('routes a %s recording to its compatible replay targets', (format, expected) => {
     const value = {
       ...artifact(),

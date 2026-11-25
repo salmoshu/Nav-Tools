@@ -1229,16 +1229,16 @@ async function handleHostKeyPrompt(_event: unknown, prompt: HostKeyPromptEvent):
 }
 
 function handleHostKeyMismatch(_event: unknown, event: HostKeyMismatchEvent): void {
-  void ElMessageBox.alert(
-    t('common.terminal.hostKeyMismatchMessage', {
+  ElMessage.error({
+    message: t('common.terminal.hostKeyMismatch') + '\n' + t('common.terminal.hostKeyMismatchMessage', {
       host: event.host,
       port: event.port,
       expected: event.expected,
       actual: event.actual,
     }),
-    t('common.terminal.hostKeyMismatch'),
-    { type: 'error', customClass: 'app-message-box' },
-  )
+    duration: 0,
+    customClass: 'app-message-detail',
+  })
 }
 
 function handleStatus(_event: unknown, event: TerminalStatusEvent): void {
@@ -1365,7 +1365,7 @@ function withTimeout<T>(
   flex: 1 1 180px;
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: var(--ui-space-md);
   padding: 0 7px 0 9px;
   border-right: 1px solid var(--app-border);
   outline: none;
@@ -1569,7 +1569,7 @@ function withTimeout<T>(
 }
 :global(.terminal-new-session-menu .el-dropdown-menu__item) {
   min-width: 180px;
-  gap: 8px;
+  gap: var(--ui-space-md);
 }
 :global(.terminal-tab-menu-layer) {
   position: fixed;
@@ -1590,7 +1590,7 @@ function withTimeout<T>(
   width: 100%;
   min-height: 36px;
   align-items: center;
-  gap: 8px;
+  gap: var(--ui-space-md);
   padding: 0 10px;
   border: none;
   border-radius: 10px;
@@ -1647,7 +1647,7 @@ function withTimeout<T>(
   display: flex;
   width: 100%;
   align-items: center;
-  gap: 10px;
+  gap: var(--ui-space-md);
   padding: 7px 10px;
   border: none;
   border-radius: 7px;

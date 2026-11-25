@@ -9,8 +9,7 @@ function sentence(body: string): string {
 async function fitGrid(page: Page) {
   const deviation = page.locator('.deviation-container')
   const tracking = deviation.locator('.tracking-switch')
-  if (await tracking.evaluate((element) => element.classList.contains('is-checked')))
-    await tracking.click()
+  if ((await tracking.getAttribute('aria-pressed')) === 'true') await tracking.click()
   await deviation.getByRole('button', { name: 'Reset Layout', exact: true }).click()
   const canvas = deviation.locator('canvas.chart')
   await canvas.scrollIntoViewIfNeeded()
@@ -72,7 +71,10 @@ for (const mode of ['loaded', 'replay'] as const) {
       'GPGGA,123501.00',
     )
     await expect(page.locator('.flow-console-virtual .timeline-current')).toBeInViewport()
-    await expect(page.locator('.snr-value')).toHaveText('38 dB')
+    await page.locator('.snr-container .view-select').click()
+    await page.getByRole('option', { name: 'Table View', exact: true }).click()
+    await expect(page.locator('.snr-value')).toBeVisible()
+    await expect(page.locator('.snr-value')).toHaveText('38')
     await expect(page.locator('.gnss-sky-container svg[baseProfile="full"]')).toContainText('G7')
     const snapshot = await page.evaluate(async () => {
       const gnssPath = '/src/stores/gnss.ts'
@@ -236,7 +238,7 @@ for (const source of ['serial', 'network'] as const) {
     await expect(page.locator('.flow-console-virtual .timeline-current')).toContainText(
       'GPGGA,123501.00',
     )
-    await expect(page.locator('.snr-value')).toHaveText('38 dB')
+    await expect(page.locator('.snr-value')).toHaveText('38')
     await expect(page.locator('.gnss-sky-container svg[baseProfile="full"]')).toContainText('G7')
     await page.locator('.file-timeline .timeline-button').first().click()
     expect(await connected()).toBe(false)
@@ -281,7 +283,7 @@ for (const source of ['serial', 'network'] as const) {
     await expect(page.locator('.flow-console-virtual .timeline-current')).toContainText(
       'GPGGA,123500.00',
     )
-    await expect(page.locator('.snr-value')).toHaveText('46 dB')
+    await expect(page.locator('.snr-value')).toHaveText('46')
     await expect(page.locator('.gnss-sky-container svg[baseProfile="full"]')).toContainText('G1')
     await page.evaluate(async () => {
       const path = '/src/hooks/useDevice.ts'

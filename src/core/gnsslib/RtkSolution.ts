@@ -1,3 +1,5 @@
+import { validateNmeaChecksum } from '../data/NmeaStreamParser'
+
 /**
  * Parser for the text solution formats emitted by Open-GNSS/RTKLIB.
  *
@@ -388,4 +390,71 @@ export function parseRtkSolutionLine(
   options: RtkSolutionParserOptions = {},
 ): RtkSolution | null {
   return new RtkSolutionParser(options).addLine(line)
+}
+
+export class NmeaRtkSolutionParser {
+  private date = ''
+
+  public reset(): void {
+    this.date = ''
+  }
+
+  public addLine(
+    sentence: string,
+  ): { solution: RtkSolution; satelliteCount: number | null } | null {
+    if (!/^\$[A-Z]{2}(RMC|GGA),/.test(sentence) || !validateNmeaChecksum(sentence)) return null
+    const fields = sentence.split('*')[0].split(',')
+    if (fields[0].endsWith('RMC')) {
+      const date = fields[9] ?? ''
+      if (/^\d{6}$/.test(date)) {
+        const year = Number(date.slice(4)) < 80 ? '20' : '19'
+        this.date = year + date.slice(4) + '/' + date.slice(2, 4) + '/' + date.slice(0, 2)
+      }
+      return null
+    }
+    if (!this.date || !fields[2] || !fields[4]) return null
+    const clock = fields[1]
+    const time = normalizeCalendarTime(
+      this.date,
+      clock.slice(0, 2) + ':' + clock.slice(2, 4) + ':' + clock.slice(4),
+    )
+    const latitude = nmeaCoordinate(fields[2], fields[3])
+    const longitude = nmeaCoordinate(fields[4], fields[5])
+    const height = Number(fields[9]) + Number(fields[11] || 0)
+    if (!(
+      time &&
+      Math.abs(latitude) <= 90 &&
+      Math.abs(longitude) <= 180 &&
+      Number.isFinite(height)
+    ))
+      return null
+    const satelliteCount = integer(fields[7])
+    return {
+      satelliteCount,
+      solution: {
+        time,
+        latitude,
+        longitude,
+        height,
+        quality: nmeaQualityToRtkQuality(Number(fields[6])),
+        satellites: satelliteCount ?? 0,
+        sdn: null,
+        sde: null,
+        sdu: null,
+        sdne: null,
+        sdeu: null,
+        sdun: null,
+        age: finite(fields[13]),
+        ratio: null,
+        format: 'llh',
+        raw: sentence,
+      },
+    }
+  }
+}
+
+function nmeaCoordinate(text: string, direction: string): number {
+  const value = Number(text)
+  const degrees = Math.floor(value / 100) + (value % 100) / 60
+  return direction === 'S' || direction === 'W' ? -degrees : degrees
 }

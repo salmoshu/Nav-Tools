@@ -14,7 +14,7 @@ test('supports persistent row view, reordering and a narrow viewport', async ({ 
 
   await page.getByRole('button', { name: '按行显示', exact: true }).click()
   await expect(page.locator('.application-grid--rows')).toBeVisible()
-  await expect(page.locator('.application-card--row')).toHaveCount(4)
+  await expect(page.locator('.application-card--row')).toHaveCount(2)
   await expect(page.locator('.application-card--row .application-copy').first()).toHaveCSS(
     'column-gap',
     '8px',
@@ -25,25 +25,25 @@ test('supports persistent row view, reordering and a narrow viewport', async ({ 
   )
 
   await page.locator('[data-application-id="gnss"]').focus()
-  await page.keyboard.press('Control+ArrowDown')
+  await page.keyboard.press('Control+ArrowUp')
   await expect
     .poll(async () =>
       page
         .locator('.application-card--row')
         .evaluateAll((cards) => cards.map((card) => (card as HTMLElement).dataset.applicationId)),
     )
-    .toEqual(['serial', 'gnssraw', 'gnss', 'gnsslib'])
+    .toEqual(['gnss', 'serial'])
 
-  const gnsslib = page.locator('[data-application-id="gnsslib"]')
+  const gnss = page.locator('[data-application-id="gnss"]')
   const serial = page.locator('[data-application-id="serial"]')
-  await gnsslib.dragTo(serial)
+  await serial.dragTo(gnss)
   await expect
     .poll(async () =>
       page
         .locator('.application-card--row')
         .evaluateAll((cards) => cards.map((card) => (card as HTMLElement).dataset.applicationId)),
     )
-    .toEqual(['gnsslib', 'serial', 'gnssraw', 'gnss'])
+    .toEqual(['serial', 'gnss'])
 
   await page.reload()
   await expect(page.locator('.application-grid--rows')).toBeVisible()
@@ -56,7 +56,7 @@ test('supports persistent row view, reordering and a narrow viewport', async ({ 
         .locator('.application-card--row')
         .evaluateAll((cards) => cards.map((card) => (card as HTMLElement).dataset.applicationId)),
     )
-    .toEqual(['gnsslib', 'serial', 'gnssraw', 'gnss'])
+    .toEqual(['serial', 'gnss'])
 
   await page.setViewportSize({ width: 390, height: 844 })
   await expect(page.locator('.selector-panel')).toBeVisible()

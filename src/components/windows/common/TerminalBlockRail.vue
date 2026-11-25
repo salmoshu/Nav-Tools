@@ -107,13 +107,13 @@ onMounted(async () => {
   border-left: 1px solid color-mix(in srgb, var(--terminal-fg) 12%, transparent);
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--ui-space-tight);
   scrollbar-width: thin;
 }
 .block-rail__entry {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--ui-space-sm);
   min-height: 24px;
   padding: 2px 6px;
   border: none;

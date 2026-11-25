@@ -153,10 +153,12 @@ export default {
     desktopOnly: 'Post-processing requires a local solver and runs in the Electron desktop app',
     engine: 'Processing engine',
     executable: 'Executable',
-    executablePlaceholder: 'Select the rnx2rtkp executable or leave blank to search PATH',
+    executablePlaceholder: 'Select OpenGNSS rnx2rtkp or leave blank to search PATH',
     starRtkExecutable: 'Select the StarRTK executable',
     starRtkInputs:
       'Use uncompressed base OBS, rover OBS, and one RINEX NAV file. StarRTK processes all overlapping epochs.',
+    starRtkSppInputs:
+      'SPP uses uncompressed rover OBS and one RINEX NAV file. No base OBS is needed.',
     inputs: 'Input files',
     roverObs: 'RINEX OBS: Rover',
     baseObs: 'RINEX OBS: Base station',
@@ -288,7 +290,6 @@ export default {
     traceLevel: 'Debug trace level',
     configFile: 'RTKLIB config file',
     configOptional: 'Optional (.conf)',
-    configShortHint: 'Load .conf parameters; current form values take priority.',
     configHint:
       'Load a .conf file into the form. Other entries are preserved at runtime, while current form values override matching options. Clearing the path does not reset the form.',
     result: 'Result',

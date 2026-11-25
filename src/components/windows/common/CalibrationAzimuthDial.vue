@@ -276,7 +276,7 @@ function onEdgeKeydown(edge: 'min' | 'max', event: KeyboardEvent): void {
   align-items: center;
   justify-content: center;
   flex-wrap: wrap;
-  gap: 8px 18px;
+  gap: var(--ui-space-md) var(--ui-space-xl);
   width: 100%;
   max-width: 480px;
   margin: 2px auto 0;
@@ -363,7 +363,7 @@ function onEdgeKeydown(edge: 'min' | 'max', event: KeyboardEvent): void {
   flex: 1 1 150px;
   min-width: 140px;
   max-width: 220px;
-  gap: 5px;
+  gap: var(--ui-space-xs);
 }
 
 .azimuth-dial-copy strong {

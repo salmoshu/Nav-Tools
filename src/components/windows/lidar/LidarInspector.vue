@@ -78,7 +78,7 @@ const messageTime = computed(() => {
 .inspector-toolbar {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--ui-space-md);
   padding: 6px 10px;
   border-bottom: 1px solid var(--app-border);
   background: var(--app-surface-muted);

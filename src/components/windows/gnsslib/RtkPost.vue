@@ -26,7 +26,7 @@
             store.timeRangeBlocked.value ||
             store.hasPendingOptions.value ||
             store.configSaving.value ||
-            store.configStatus.value === 'loading'
+            (store.isOpenGnss.value && store.configStatus.value === 'loading')
           "
           :title="store.hasPendingOptions.value ? t('gnssRaw.rtkpost.optionsPending') : undefined"
           @click="execute"
@@ -86,8 +86,12 @@
               v-model="store.settings.engine"
               :disabled="store.running.value"
             >
-              <el-option value="rnx2rtkp" label="RNX2RTKP" />
-              <el-option value="starrtk" label="StarRTK" />
+              <el-option
+                v-for="engine in RTK_POST_ENGINES"
+                :key="engine"
+                :value="engine"
+                :label="RTK_POST_ENGINE_LABELS[engine]"
+              />
             </el-select>
           </div>
           <div class="file-row">
@@ -101,7 +105,9 @@
                 t(
                   store.isStarRtk.value
                     ? 'gnssRaw.rtkpost.starRtkExecutable'
-                    : 'gnssRaw.rtkpost.executablePlaceholder',
+                    : store.isRtkLibEx.value
+                      ? 'gnssLib.rtklibEx.executable'
+                      : 'gnssRaw.rtkpost.executablePlaceholder',
                 )
               "
               clearable
@@ -125,7 +131,7 @@
               ><el-icon><FolderOpened /></el-icon
             ></el-button>
           </div>
-          <div class="file-row">
+          <div v-if="store.isOpenGnss.value || relativeMode" class="file-row">
             <label>
               {{ t('gnssRaw.rtkpost.baseObs') }}
               <span v-if="relativeMode" class="required">*</span>
@@ -180,7 +186,13 @@
           </el-button>
           <div class="field-hint nav-hint">
             {{
-              t(store.isStarRtk.value ? 'gnssRaw.rtkpost.starRtkInputs' : 'gnssRaw.rtkpost.navHint')
+              t(
+                !store.isStarRtk.value
+                  ? 'gnssRaw.rtkpost.navHint'
+                  : relativeMode
+                    ? 'gnssRaw.rtkpost.starRtkInputs'
+                    : 'gnssRaw.rtkpost.starRtkSppInputs',
+              )
             }}
           </div>
 
@@ -298,12 +310,16 @@
       <section
         v-show="activeView === 'options'"
         :id="`${viewId}-options-panel`"
-        class="workspace-page options-section"
+        class="workspace-page options-section solver-config-workspace"
         role="tabpanel"
         :aria-labelledby="`${viewId}-options-tab`"
       >
+        <header class="solver-config-heading">
+          <strong>{{ RTK_POST_ENGINE_LABELS[store.settings.engine] }}</strong>
+          <code>{{ store.isStarRtk.value ? 'YAML' : '.conf' }}</code>
+        </header>
         <template v-if="store.isStarRtk.value">
-          <div class="file-row">
+          <div class="file-row solver-config-output">
             <label :for="`${viewId}-star-output`">{{ t('gnssRaw.rtkpost.outputFormat') }}</label>
             <el-select
               :id="`${viewId}-star-output`"
@@ -321,35 +337,60 @@
             :export-config="store.exportStarRtkConfig"
           />
         </template>
+        <RtkLibExOptions
+          v-else-if="store.isRtkLibEx.value"
+          v-model="store.settings.rtklibEx.parameters"
+          v-model:config-path="store.settings.rtklibEx.configPath"
+          :disabled="store.running.value"
+          :save-config="store.saveRtkLibExConfig"
+        />
         <template v-else>
-          <section class="config-file-panel">
-            <div class="file-row config-file-row">
-              <label :for="`${viewId}-config-file`">{{ t('gnssRaw.rtkpost.configFile') }}</label>
-              <el-input
-                :id="`${viewId}-config-file`"
-                v-model="store.draftConfigPath.value"
-                spellcheck="false"
-                :disabled="
-                  store.running.value ||
-                  store.configSaving.value ||
-                  store.configStatus.value === 'loading'
-                "
-                :placeholder="t('gnssRaw.rtkpost.configOptional')"
-                clearable
-                @change="loadConfig"
-                @clear="clearConfig"
-              />
-              <el-button
-                :disabled="
-                  store.running.value ||
-                  store.configSaving.value ||
-                  store.configStatus.value === 'loading'
-                "
-                @click="chooseConfig"
-                ><el-icon><FolderOpened /></el-icon
-              ></el-button>
+          <section class="config-file-panel solver-config-source">
+            <div class="solver-config-file-toolbar">
+              <div class="file-row config-file-row">
+                <label :for="`${viewId}-config-file`">{{ t('gnssRaw.rtkpost.configFile') }}</label>
+                <el-input
+                  :id="`${viewId}-config-file`"
+                  v-model="store.draftConfigPath.value"
+                  spellcheck="false"
+                  :disabled="
+                    store.running.value ||
+                    store.configSaving.value ||
+                    store.configStatus.value === 'loading'
+                  "
+                  :placeholder="t('gnssRaw.rtkpost.configOptional')"
+                  clearable
+                  @change="loadConfig"
+                  @clear="clearConfig"
+                />
+              </div>
+              <div class="solver-config-actions">
+                <el-button
+                  size="small"
+                  :icon="FolderOpened"
+                  class="keep-action-label"
+                  :disabled="
+                    store.running.value ||
+                    store.configSaving.value ||
+                    store.configStatus.value === 'loading'
+                  "
+                  @click="chooseConfig"
+                  >{{ t('gnssLib.configWorkspace.loadConf') }}</el-button
+                >
+                <el-button
+                  size="small"
+                  :icon="Download"
+                  class="keep-action-label"
+                  :aria-label="t('gnssRaw.rtkpost.optionsSave')"
+                  :disabled="store.running.value || store.configStatus.value === 'loading'"
+                  :loading="store.configSaving.value"
+                  @click="saveOptions"
+                  >{{ t('gnssLib.configWorkspace.saveConf') }}</el-button
+                >
+              </div>
             </div>
             <div
+              v-if="configSummary"
               class="config-status"
               :class="`is-${store.configStatus.value}`"
               :title="store.configDetail.value || t('gnssRaw.rtkpost.configHint')"
@@ -371,7 +412,9 @@
             @change="updateOption"
           />
           <footer class="options-actions">
-            <span>{{ t('gnssRaw.rtkpost.optionsDraftHint') }}</span>
+            <span v-if="store.hasPendingOptions.value">{{
+              t('gnssRaw.rtkpost.optionsDraftHint')
+            }}</span>
             <div>
               <el-button
                 :disabled="
@@ -382,12 +425,6 @@
                 "
                 @click="store.cancelOptions()"
                 >{{ t('gnssRaw.rtkpost.optionsDiscard') }}</el-button
-              >
-              <el-button
-                :disabled="store.running.value || store.configStatus.value === 'loading'"
-                :loading="store.configSaving.value"
-                @click="saveOptions"
-                >{{ t('gnssRaw.rtkpost.optionsSave') }}</el-button
               >
               <el-button
                 type="primary"
@@ -461,13 +498,15 @@
 <script setup lang="ts">
 import { computed, ref, useId, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import { FolderOpened } from '@element-plus/icons-vue'
+import { Download, FolderOpened } from '@element-plus/icons-vue'
 import { t } from '@/i18n'
 import { useRtkPost } from '@/composables/useRtkPost'
 import { formatRtkPostTime, parseCalendarTime } from '@/core/gnsslib/RtkPostProgress'
 import { isStarRtkExecutable } from '@/core/gnsslib/StarRtkConfig'
 import GnssSolverOptions from './GnssSolverOptions.vue'
 import StarRtkOptions from './StarRtkOptions.vue'
+import RtkLibExOptions from './RtkLibExOptions.vue'
+import { RTK_POST_ENGINES, RTK_POST_ENGINE_LABELS } from '@/core/gnsslib/RtkPost'
 import type { SolverOptionKey, SolverOptionValue } from '@/core/gnsslib/GnssSolverOptions'
 
 const store = useRtkPost()
@@ -489,15 +528,14 @@ const views = computed(() => [
 const desktopAvailable = Boolean(window.electronAPI?.rtkPostRun)
 const configSummary = computed(() => {
   if (store.configStatus.value === 'loading') return t('gnssRaw.rtkpost.configLoading')
-  const detail = store.configDetail.value || t('gnssRaw.rtkpost.configShortHint')
+  const detail = store.configDetail.value
   const name = store.draftConfigPath.value.trim().split(/[\\/]/).at(-1)
-  return store.configStatus.value === 'ready' && name ? `${name} · ${detail}` : detail
+  return store.configStatus.value === 'ready' && name
+    ? [name, detail].filter(Boolean).join(' · ')
+    : detail
 })
 
-const relativeMode = computed(
-  () =>
-    store.isStarRtk.value || (store.settings.options.mode >= 1 && store.settings.options.mode <= 6),
-)
+const relativeMode = store.relativeMode
 const timeRangeDuration = computed(() => {
   const span = store.observationSpan.value
   return span ? Math.max(1, Math.round(span.end - span.start)) : 1
@@ -575,9 +613,8 @@ const progressStatus = computed(() => {
   return undefined
 })
 
-watch(
-  () => store.activeOptions.value.outputFormat,
-  () => store.suggestOutput(),
+watch([() => store.settings.engine, () => store.activeOptions.value.outputFormat], () =>
+  store.suggestOutput(),
 )
 
 function switchViewWithKeyboard(event: KeyboardEvent): void {
@@ -634,8 +671,9 @@ async function chooseNav(index: number): Promise<void> {
 async function chooseExecutable(): Promise<void> {
   const engine = store.settings.engine
   const files = store.engineFiles.value
-  const path = await chooseFile(engine === 'starrtk' ? 'starrtk-executable' : 'executable', [
-    { name: engine === 'starrtk' ? 'StarRTK' : 'rnx2rtkp', extensions: ['exe'] },
+  const scope = engine === 'rnx2rtkp' ? 'executable' : `${engine}-executable`
+  const path = await chooseFile(scope, [
+    { name: RTK_POST_ENGINE_LABELS[engine], extensions: ['exe'] },
     { name: t('gnssRaw.rtkpost.allFiles'), extensions: ['*'] },
   ])
   if (path && isStarRtkExecutable(path)) {
@@ -648,7 +686,7 @@ async function chooseExecutable(): Promise<void> {
 
 async function chooseConfig(): Promise<void> {
   const path = await chooseFile('config', [
-    { name: 'RTKLIB Options', extensions: ['conf'] },
+    { name: 'OpenGNSS Options', extensions: ['conf'] },
     { name: t('gnssRaw.rtkpost.allFiles'), extensions: ['*'] },
   ])
   if (path) {
@@ -776,7 +814,7 @@ function formatBytes(bytes: number): string {
 .run-toolbar {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--ui-space-md);
   margin-bottom: 8px;
 }
 .run-toolbar .el-button + .el-button {
@@ -806,12 +844,12 @@ function formatBytes(bytes: number): string {
 .rtkpost .options-section {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--ui-space-lg);
   margin-top: 0;
   overflow-y: auto;
   padding: 12px;
 }
-.rtkpost .options-section :deep(.solver-options) {
+.rtkpost .options-section :deep(.solver-option-editor) {
   flex: 1 0 250px;
   min-height: 250px;
 }
@@ -861,7 +899,7 @@ function formatBytes(bytes: number): string {
 .file-row {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--ui-space-sm);
   margin-bottom: 6px;
 }
 .file-row > label {
@@ -897,7 +935,7 @@ function formatBytes(bytes: number): string {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: var(--ui-space-md);
 }
 .observation-time-heading > div {
   justify-content: flex-start;
@@ -925,7 +963,7 @@ function formatBytes(bytes: number): string {
 .observation-time-selected > div {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px 8px;
+  gap: var(--ui-space-xs) var(--ui-space-md);
 }
 .observation-time-selected span {
   color: var(--el-text-color-secondary);
@@ -950,16 +988,12 @@ function formatBytes(bytes: number): string {
 .config-file-panel {
   flex: none;
   min-width: 0;
-  padding: 8px 10px;
-  border: 1px solid var(--app-border);
-  border-radius: 8px;
-  background: var(--app-surface-muted);
 }
 .config-file-row {
   margin: 0;
 }
 .config-status {
-  margin: 4px 0 0 136px;
+  margin: var(--ui-space-xs) 0 0;
   color: var(--app-text-secondary);
   font-size: 10px;
   line-height: 1.5;
@@ -979,7 +1013,7 @@ function formatBytes(bytes: number): string {
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 8px 12px;
+  gap: var(--ui-space-md) var(--ui-space-lg);
   padding-top: 8px;
   border-top: 1px solid var(--el-border-color-lighter);
 }
@@ -989,21 +1023,17 @@ function formatBytes(bytes: number): string {
 }
 .options-actions > div {
   display: flex;
+  margin-inline-start: auto;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: var(--ui-space-sm);
 }
 .options-actions :deep(.el-button + .el-button) {
   margin-left: 0;
 }
-@media (max-width: 480px) {
-  .config-status {
-    margin-left: 0;
-  }
-}
 .run-status {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--ui-space-md);
   margin-bottom: 10px;
   padding: 6px 10px;
   border-radius: 6px;
@@ -1041,7 +1071,7 @@ function formatBytes(bytes: number): string {
   display: flex;
   flex-wrap: wrap;
   justify-content: space-between;
-  gap: 4px 12px;
+  gap: var(--ui-space-xs) var(--ui-space-lg);
   margin-bottom: 8px;
   color: var(--app-text);
   font-size: 11px;
@@ -1078,7 +1108,7 @@ function formatBytes(bytes: number): string {
 .summary-cards {
   display: grid;
   grid-template-columns: repeat(5, minmax(70px, 1fr));
-  gap: 6px;
+  gap: var(--ui-space-sm);
 }
 .summary-card {
   padding: 7px 9px;
@@ -1146,3 +1176,4 @@ function formatBytes(bytes: number): string {
 }
 </style>
 <style scoped src="./gnssLib.css"></style>
+<style scoped src="./solverOptionLayout.css"></style>

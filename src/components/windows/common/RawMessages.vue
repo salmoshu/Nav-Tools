@@ -9,68 +9,137 @@
     <div class="console-header">
       <div class="console-controls">
         <!-- 左侧按钮组 -->
-        <div class="left-controls">
-          <el-select v-if="solverSession" v-model="solverSession.channel.value" class="solver-message-channel" size="small" :aria-label="t('gnssLib.solver.messageChannel')">
+        <div class="left-controls panel-icon-actions">
+          <el-select v-if="solverSession" v-model="solverSession.channel.value" class="solver-message-channel panel-control-select" size="small" :aria-label="t('gnssLib.solver.messageChannel')">
             <el-option :label="t('gnssLib.solver.solutionMessages')" value="solution" />
             <el-option :label="t('gnssLib.solver.logMessages')" value="log" />
           </el-select>
-          <div v-else class="data-parser-badge" :title="t('common.rawMessages.parserBadgeTitle')" @click="openParserConfig">
-            <el-icon><DataAnalysis /></el-icon>
-            <strong>{{ parserLabel(activeDataParser) }}</strong>
-          </div>
+          <button v-else type="button" class="data-parser-badge" :title="t('common.rawMessages.parserBadgeTitle')" @click="openParserConfig">
+            <el-icon aria-hidden="true"><DataAnalysis /></el-icon>
+            <strong>{{ dataFormat === 'rtcm3' ? 'RTCM3' : parserLabel(activeDataParser) }}</strong>
+          </button>
+          <el-select
+            class="message-view-select panel-control-select"
+            :model-value="activeView"
+            size="small"
+            :aria-label="t('common.rawMessages.viewMode')"
+            @update:model-value="setMessageViewMode"
+          >
+            <el-option value="raw" :label="t('common.rawMessages.rawView')" />
+            <el-option value="packet" :label="t('common.rawMessages.packetView')" :disabled="solverLog" />
+            <el-option value="message" :label="t('common.rawMessages.messageView')" :disabled="solverLog" />
+          </el-select>
           
-          <el-button v-if="!solverSession" @click="toggleFilter" :type="dataFilter ? 'success' : 'default'" size="small" :title="dataFilter ? t('common.rawMessages.filterOff') : t('common.rawMessages.filterOn')" :disabled="dataFormat === 'none'">
-            <el-icon><Filter /></el-icon>
-            &nbsp;{{ t('common.rawMessages.filter') }}
-          </el-button>
-          <el-button @click="toggleTimestamp" :type="dataTimestamp ? 'success' : 'default'" size="small" :title="dataTimestamp ? t('common.rawMessages.timestampOff') : t('common.rawMessages.timestampOn')">
-            <el-icon><Clock /></el-icon>
-            &nbsp;{{ t('common.rawMessages.time') }}
+          <el-button
+            v-if="!solverSession"
+            class="panel-icon-action"
+            size="small"
+            :type="dataFilter ? 'success' : 'default'"
+            :title="dataFilter ? t('common.rawMessages.filterOff') : t('common.rawMessages.filterOn')"
+            :aria-label="t('common.rawMessages.filter')"
+            :aria-pressed="dataFilter"
+            :disabled="dataFormat === 'none'"
+            @click="toggleFilter"
+          >
+            <el-icon aria-hidden="true"><Filter /></el-icon>
           </el-button>
           <el-button
+            class="panel-icon-action"
+            size="small"
+            :type="dataTimestamp ? 'success' : 'default'"
+            :title="dataTimestamp ? t('common.rawMessages.timestampOff') : t('common.rawMessages.timestampOn')"
+            :aria-label="t('common.rawMessages.time')"
+            :aria-pressed="dataTimestamp"
+            @click="toggleTimestamp"
+          >
+            <el-icon aria-hidden="true"><Clock /></el-icon>
+          </el-button>
+          <el-button
+            v-if="!messageView"
+            class="panel-icon-action"
             @click="handleAutoScroll"
             :type="dataAutoScroll ? 'success' : 'default'"
             size="small"
             :title="dataAutoScroll ? t('common.rawMessages.scrollManual') : t('common.rawMessages.scrollAuto')"
+            :aria-label="t('common.rawMessages.scrollToBottom')"
+            :aria-pressed="dataAutoScroll"
           >
-            <el-icon><Bottom /></el-icon>
-            &nbsp;{{ t('common.rawMessages.scrollToBottom') }}
+            <el-icon aria-hidden="true"><Bottom /></el-icon>
           </el-button>
 
-          <el-button @click="toggleDisplayFormat" :type="displayFormat === 'hex' ? 'success' : 'default'" size="small" :title="displayFormat==='hex' ? t('common.rawMessages.hexDisplay') : t('common.rawMessages.asciiDisplay')">
-            <el-icon><Coin /></el-icon>
-            &nbsp;{{ t('common.rawMessages.hexDisplay') }}
+          <el-button
+            v-if="dataFormat !== 'rtcm3' && activeView === 'raw'"
+            class="message-encoding-action"
+            size="small"
+            :type="displayFormat === 'hex' ? 'success' : 'default'"
+            :title="displayFormat === 'hex' ? t('common.rawMessages.asciiDisplay') : t('common.rawMessages.hexDisplay')"
+            :aria-pressed="displayFormat === 'hex'"
+            @click="toggleDisplayFormat"
+          >
+            HEX
           </el-button>
         </div>
         
         <!-- 右侧按钮组 -->
-        <div class="right-controls">
-          <el-button @click="toggleSearch" size="small" :type="showSearchBox ? 'primary' : 'text'" :title="showSearchBox ? t('common.rawMessages.searchClose') : t('common.rawMessages.searchOpen')">
-            <el-icon><Search /></el-icon>
+        <div class="right-controls panel-icon-actions">
+          <el-button
+            v-if="!messageView"
+            class="panel-icon-action"
+            size="small"
+            :type="showSearchBox ? 'primary' : 'text'"
+            :title="showSearchBox ? t('common.rawMessages.searchClose') : t('common.rawMessages.searchOpen')"
+            :aria-label="showSearchBox ? t('common.rawMessages.searchClose') : t('common.rawMessages.searchOpen')"
+            :aria-pressed="showSearchBox"
+            @click="toggleSearch"
+          >
+            <el-icon aria-hidden="true"><Search /></el-icon>
           </el-button>
-          <el-button @click="saveConsoleData" type="text" size="small" :disabled="totalCount === 0" style="margin: 0px 0px;" :title="t('common.rawMessages.saveFile')">
-            <el-icon><Document /></el-icon>
+          <el-button
+            class="panel-icon-action"
+            type="text"
+            size="small"
+            :disabled="totalCount === 0"
+            :title="t('common.rawMessages.saveFile')"
+            :aria-label="t('common.rawMessages.saveFile')"
+            @click="saveConsoleData"
+          >
+            <el-icon aria-hidden="true"><Document /></el-icon>
           </el-button>
-          <el-button @click="clearConsole" type="text" size="small" style="margin: 0px 0px;" :title="t('common.rawMessages.clearConsole')">
-            <el-icon><Delete /></el-icon>
+          <el-button
+            class="panel-icon-action"
+            type="text"
+            size="small"
+            :title="t('common.rawMessages.clearConsole')"
+            :aria-label="t('common.rawMessages.clearConsole')"
+            @click="clearConsole"
+          >
+            <el-icon aria-hidden="true"><Delete /></el-icon>
           </el-button>
-          <el-button @click="togglePause" size="small" style="margin: 0px 0px;" :type="isPaused ? 'text' : 'success'" :title="isPaused ? t('common.rawMessages.resumeReceive') : t('common.rawMessages.pauseReceive')">
-            <el-icon v-if="!isPaused"><VideoPause /></el-icon>
-            <el-icon v-else><VideoPlay /></el-icon>
+          <el-button
+            class="panel-icon-action"
+            size="small"
+            :type="isPaused ? 'text' : 'success'"
+            :title="isPaused ? t('common.rawMessages.resumeReceive') : t('common.rawMessages.pauseReceive')"
+            :aria-label="isPaused ? t('common.rawMessages.resumeReceive') : t('common.rawMessages.pauseReceive')"
+            :aria-pressed="isPaused"
+            @click="togglePause"
+          >
+            <el-icon v-if="!isPaused" aria-hidden="true"><VideoPause /></el-icon>
+            <el-icon v-else aria-hidden="true"><VideoPlay /></el-icon>
           </el-button>
         </div>
       </div>
     </div>
 
     <!-- 搜索框 -->
-    <div v-if="showSearchBox" class="search-bar">
+    <div v-if="showSearchBox && !messageView" class="search-bar">
       <div class="search-container">
         <el-input
           ref="searchInput"
           v-model="searchQuery"
           size="small"
           :placeholder="t('common.rawMessages.searchPlaceholder')"
-          style="width: 200px; margin-right: 5px;"
+          class="message-search-input"
           @input="performSearch"
           @keyup.enter="findNext"
         >
@@ -78,12 +147,28 @@
             <el-icon><Search /></el-icon>
           </template>
         </el-input>
-        <el-button @click="findPrev" type="text" size="small" style="color: var(--app-text-secondary); margin-right: -10px;">
-          <el-icon><ArrowUp /></el-icon>
-        </el-button>
-        <el-button @click="findNext" type="text" size="small" style="color: var(--app-text-secondary); margin-right: 5px;">
-          <el-icon><ArrowDown /></el-icon>
-        </el-button>
+        <div class="panel-icon-actions">
+          <el-button
+            class="panel-icon-action"
+            text
+            size="small"
+            :aria-label="t('common.rawMessages.previousMatch')"
+            :title="t('common.rawMessages.previousMatch')"
+            @click="findPrev"
+          >
+            <el-icon aria-hidden="true"><ArrowUp /></el-icon>
+          </el-button>
+          <el-button
+            class="panel-icon-action"
+            text
+            size="small"
+            :aria-label="t('common.rawMessages.nextMatch')"
+            :title="t('common.rawMessages.nextMatch')"
+            @click="findNext"
+          >
+            <el-icon aria-hidden="true"><ArrowDown /></el-icon>
+          </el-button>
+        </div>
         <span class="search-info-text" v-if="searchQuery && !isSearching">
           {{ t('common.rawMessages.searchResults', { count: searchResults.length, index: currentResultIndex + 1 }) }}
         </span>
@@ -93,32 +178,82 @@
 
     <!-- 虚拟滚动消息列表 -->
     <div class="console-content-virtual" ref="consoleContent" @mousedown="sortMessageRows">
+      <MessageBrowser
+        v-if="messageView"
+        :records="filteredMessages"
+        :format="recognizedFormat"
+        :encoding="displayFormat"
+        :valid-only="dataFilter"
+        :csv-header-key="csvSchema?.headerKey"
+        :csv-columns="csvColumns"
+        :regex="regexPattern"
+        :position-headers="positionHeaders"
+        :show-timestamp="dataTimestamp"
+      />
       <RecycleScroller
+        v-else
         :key="scrollerGeneration"
         ref="scrollerRef"
         class="scroller"
-        :items="filteredMessages"
+        :class="{ 'scroller--csv': csvView }"
+        :style="csvView ? csvLayoutStyle : undefined"
+        :items="visibleMessages"
         :item-size="25"
         key-field="key"
-        v-slot="{ item, index }"
       >
+        <template v-if="csvView && csvColumns.length" #before>
+          <div class="message-csv-header">
+            <span v-if="dataTimestamp">{{ t('common.rawMessages.receivedTime') }}</span>
+            <span v-for="(column, index) in csvColumns" :key="index" :title="column">{{ column }}</span>
+          </div>
+        </template>
+        <template #default="{ item, index }">
         <div
           class="message-line"
-          :class="getMessageClasses(item, index)"
-          :title="item.raw"
+          :class="[getMessageClasses(item, index), {
+            'message-line--formatted': packetView,
+            'message-line--csv': csvView,
+            'message-line--inspecting': selectedRecord?.key === item.key,
+          }]"
+          :title="!packetView ? item.raw : undefined"
         >
-          <span v-if="dataTimestamp" class="timestamp">{{ item.timestamp }}: </span>
-          <span
-            :class="[
-              (item.isValid && item.dataType === dataFormat) ? 'valid-message' : 'invalid-message',
-              'message-content'
-            ]"
-            v-html="highlightSearch(item.raw, searchQuery)"
+          <button
+            v-if="packetView"
+            class="formatted-message-item"
+            type="button"
+            :aria-expanded="selectedRecord?.key === item.key"
+            @click="selectedRecord = selectedRecord?.key === item.key ? null : item"
           >
-          </span>
+            <span v-if="dataTimestamp" class="timestamp">{{ item.timestamp.split(' [', 1)[0] }}</span>
+            <MessageRecordPreview
+              :text="textFor(item)"
+              :format="formatFor(item)"
+              :csv-columns="csvView ? csvColumns : undefined"
+              :regex="regexPattern"
+              :position-headers="positionHeaders"
+            />
+          </button>
+          <template v-else>
+            <span v-if="dataTimestamp" class="timestamp">{{ item.timestamp }}: </span>
+            <span
+              :class="[
+                (item.isValid && item.dataType === dataFormat) ? 'valid-message' : 'invalid-message',
+                'message-content'
+              ]"
+              v-html="highlightSearch(item.raw, searchQuery)"
+            ></span>
+          </template>
         </div>
+        </template>
       </RecycleScroller>
     </div>
+    <MessageInspectionPanel
+      v-if="packetView && selectedRecord"
+      :key="selectedRecord.key"
+      :inspection="selectedInspection"
+      :raw="selectedRecord.raw"
+      @close="selectedRecord = null"
+    />
 
     <!-- 消息输入框 -->
     <div v-if="!solverSession" class="console-input-bar">
@@ -267,7 +402,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, inject, watch, nextTick, onMounted, onUnmounted } from 'vue'
+import { ref, shallowRef, computed, inject, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { gnssSolverSessionKey } from '@/composables/useGnssSolverSession'
 import { 
   Filter, 
@@ -282,12 +417,11 @@ import {
   Edit,
   Position,
   Document,
-  Coin,
   DataAnalysis,
   UploadFilled,
 } from '@element-plus/icons-vue'
 import { SerialLoopSender } from '@/core/serial/SerialLoopSender'
-import { findTimelineMessageIndex, useConsole } from '@/composables/flow/useConsole'
+import { findTimelineMessageIndex, useConsole, type ConsoleMessage } from '@/composables/flow/useConsole'
 import { useFileTimeline } from '@/composables/useFileTimeline'
 import { useMessageSettings } from '@/composables/useMessageSettings'
 import { useDevice } from '@/hooks/useDevice'
@@ -296,6 +430,11 @@ import { RecycleScroller } from 'vue-virtual-scroller'
 import { parserLabel } from '@/composables/useDataSourceManager'
 import { t } from '@/i18n'
 import IapUpgradeDialog from './IapUpgradeDialog.vue'
+import MessageRecordPreview from './MessageRecordPreview.vue'
+import MessageInspectionPanel from './MessageInspectionPanel.vue'
+import MessageBrowser from './MessageBrowser.vue'
+import { inspectMessage, messageText, type InspectableMessageFormat } from '@/core/data/MessageViewModel'
+import { splitCsvLine } from '@/core/data/TextRecordParser'
 
 // DOM引用
 const consoleRoot = ref<HTMLDivElement | null>(null)
@@ -313,8 +452,12 @@ const isSearching = ref(false)
 const solverSession = inject(gnssSolverSessionKey, null)
 // Solver messages are isolated from receiver/serial messages.
 const {
+  messages,
   validMsgCount,
   dataFormat,
+  regexPattern,
+  csvSchema,
+  positionHeaders,
   displayFormat,
   dataFilter,
   dataTimestamp,
@@ -335,9 +478,74 @@ const {
 
 // 获取设备连接状态
 const { deviceConnected, activeDataParser, globalDevice } = useDevice()
+const { showMessageDividers, messageViewMode, setMessageViewMode } = useMessageSettings()
+const solverLog = computed(() => solverSession?.channel.value === 'log')
+const recognizedFormat = computed<InspectableMessageFormat | 'none'>(() => {
+  if (solverLog.value) return 'none'
+  if (dataFormat.value !== 'none') return dataFormat.value
+  if (solverSession?.display.signals?.satelliteCountSource?.value === 'rtklib-pos') return 'rtklib-pos'
+  if (!solverSession && activeDataParser.value === 'rtklib-pos') return 'rtklib-pos'
+  return messages.value.slice(0, 24).find((message) => message.dataType !== 'none' && message.isValid)?.dataType ?? 'none'
+})
+const activeView = computed(() => solverLog.value ? 'raw' : messageViewMode.value)
+const packetView = computed(() => activeView.value === 'packet')
+const messageView = computed(() => activeView.value === 'message')
+const csvView = computed(() => packetView.value && recognizedFormat.value === 'csv')
+const csvColumns = computed(() => {
+  if (activeView.value === 'raw' || recognizedFormat.value !== 'csv') return []
+  const schema = csvSchema.value
+  let count = schema?.columns.length ?? 0
+  // Extra columns on the first records get their own cells even when not
+  // named by the original header. The detail view is not column-limited.
+  for (const message of messages.value.slice(0, 24)) {
+    if (message.dataType === 'csv') {
+      const text = messageText(message.raw, 'csv', message.sourceFormat ?? 'ascii')
+      count = Math.max(count, splitCsvLine(text).length)
+    }
+  }
+  return Array.from({ length: Math.min(count, 64) }, (_, index) => {
+    const title = schema?.headerKey ? schema.columns[index] : undefined
+    return title || t('common.rawMessages.csvColumn', { number: index + 1 })
+  })
+})
+const csvLayoutStyle = computed(() => ({
+  '--message-csv-width': `${csvColumns.value.length * 110 + (dataTimestamp.value ? 103 : 0)}px`,
+  '--message-csv-grid': `${dataTimestamp.value ? '103px ' : ''}repeat(${Math.max(1, csvColumns.value.length)}, minmax(110px, 1fr))`,
+}))
+const headerOffset = computed(() =>
+  csvView.value && csvSchema.value?.headerKey && csvSchema.value.headerKey === filteredMessages.value[0]?.key ? 1 : 0,
+)
+const visibleMessages = computed(() =>
+  headerOffset.value ? filteredMessages.value.slice(headerOffset.value) : filteredMessages.value,
+)
+const selectedRecord = shallowRef<ConsoleMessage | null>(null)
+const selectedInspection = computed(() => {
+  const record = selectedRecord.value
+  return record && inspectMessage(textFor(record), formatFor(record), {
+    csvColumns: csvColumns.value,
+    regex: regexPattern.value,
+    positionHeaders: positionHeaders.value,
+  })
+})
+
+function formatFor(record: ConsoleMessage): InspectableMessageFormat | 'none' {
+  return record.dataType === 'none' ? recognizedFormat.value : record.dataType
+}
+
+function textFor(record: ConsoleMessage): string {
+  const format = formatFor(record)
+  return format === 'none' ? record.raw : messageText(record.raw, format, displayFormat.value)
+}
+
+watch([recognizedFormat, activeView, () => solverSession?.channel.value], () => {
+  selectedRecord.value = null
+})
+watch(totalCount, (count) => {
+  if (count === 0) selectedRecord.value = null
+}, { flush: 'sync' })
 const fileTimeline = solverSession?.display.timeline ?? useFileTimeline()
 const timelineMessageIndex = computed(() => {
-  if (!fileTimeline.active.value || fileTimeline.indexing.value || solverSession?.channel.value === 'log') return -1
+  if (!fileTimeline.active.value || fileTimeline.indexing.value || dataFormat.value === 'rtcm3' || solverSession?.channel.value === 'log') return -1
   const source = filteredMessages.value
   const index = findTimelineMessageIndex(source, fileTimeline.elapsedMilliseconds.value)
   const elapsed = source[index]?.fileElapsedMilliseconds
@@ -348,7 +556,6 @@ const timelineMessageIndex = computed(() => {
   return index
 })
 const timelineMessageKey = computed(() => filteredMessages.value[timelineMessageIndex.value]?.key ?? '')
-const { showMessageDividers } = useMessageSettings()
 
 // 点击解析徽标：打开数据接入弹框并短暂高亮数据格式配置
 // 注意：useDevice 状态非单例，必须经 emitter 由 ToolBar 自己的实例打开弹框
@@ -473,7 +680,7 @@ const scrollToIndexWithCenter = (index: number) => {
     const scroller = scrollerRef.value
     if (typeof scroller.scrollToItem === 'function') {
       // 尝试使用center选项，如果支持的话
-      scroller.scrollToItem(index)
+      scroller.scrollToItem(Math.max(0, index - headerOffset.value))
     }
   } catch (error) {
     console.warn('[搜索] 滚动失败:', error)
@@ -511,6 +718,7 @@ const toggleSearch = () => {
 
 const clearConsole = () => {
   window.getSelection()?.removeAllRanges()
+  selectedRecord.value = null
   clearMessages()
   scrollerGeneration.value += 1
 }
@@ -543,11 +751,14 @@ const getMessageClasses = (item: any, index?: number) => {
 }
 
 const highlightSearch = (text: string, query: string) => {
-  if (!query) return text
+  const html = (value: string) => value.replace(/[&<>]/g, (character) =>
+    character === '&' ? '&amp;' : character === '<' ? '&lt;' : '&gt;',
+  )
+  if (!query) return html(text)
   
   // 移除查询中的空格用于匹配
   const searchText = query.replace(/\s+/g, '')
-  if (!searchText) return text
+  if (!searchText) return html(text)
   
   // 在原始文本中查找匹配的字符序列，忽略中间的空格
   let lastIndex = 0
@@ -577,17 +788,17 @@ const highlightSearch = (text: string, query: string) => {
     // 如果完全匹配，高亮这部分内容
     if (matchCount === searchText.length) {
       const matchEnd = textIndex
-      highlightedText += text.slice(lastIndex, i)
-      highlightedText += `<mark>${text.slice(i, matchEnd)}</mark>`
+      highlightedText += html(text.slice(lastIndex, i))
+      highlightedText += `<mark>${html(text.slice(i, matchEnd))}</mark>`
       lastIndex = matchEnd
       i = matchEnd - 1
     }
   }
   
   // 添加剩余文本
-  highlightedText += text.slice(lastIndex)
+  highlightedText += html(text.slice(lastIndex))
   
-  return highlightedText || text
+  return highlightedText
 }
 
 // 监控消息速率
@@ -658,12 +869,12 @@ const handleSendMessage = () => {
 let scrollScheduled = false;
 const handleScrollToBottom = () => {
   if (scrollScheduled) return;
-  if (!scrollerRef.value || filteredMessages.value.length === 0) return;
+  if (!scrollerRef.value || visibleMessages.value.length === 0) return;
   scrollScheduled = true;
   requestAnimationFrame(() => {
     scrollScheduled = false;
     if (!scrollerRef.value) return;
-    scrollerRef.value.scrollToItem(filteredMessages.value.length - 1);
+    if (visibleMessages.value.length) scrollerRef.value.scrollToItem(visibleMessages.value.length - 1);
   });
 };
 
@@ -672,7 +883,7 @@ const scrollToTimelineMessage = () => {
 
   const targetIndex = timelineMessageIndex.value;
   if (targetIndex < 0) return;
-  scrollerRef.value.scrollToItem(targetIndex);
+  scrollerRef.value.scrollToItem(Math.max(0, targetIndex - headerOffset.value));
 };
 
 // 监听搜索查询变化
@@ -681,7 +892,7 @@ watch(searchQuery, () => {
 })
 
 // 监听消息变化，如果处于置底状态则保持置底
-watch(() => filteredMessages.value.length, () => {
+watch([() => visibleMessages.value.length, activeView], () => {
   if (dataAutoScroll.value && !isPaused.value) {
     nextTick(() => {
       handleScrollToBottom()
@@ -718,10 +929,7 @@ onMounted(() => {
     })
   }
 
-  dataFormat.value = solverSession ? 'none' :
-    activeDataParser.value === 'raw' || activeDataParser.value === 'rtklib-pos'
-      ? 'none'
-      : activeDataParser.value;
+  if (solverSession) dataFormat.value = 'none';
   
   // 添加滚动事件监听
   nextTick(() => {
@@ -772,7 +980,8 @@ onUnmounted(() => {
   padding: 8px 12px;
   background-color: var(--app-surface-muted);
   border-bottom: 1px solid var(--app-border);
-  height: 50px;
+  flex: none;
+  min-height: 50px;
   box-sizing: border-box;
 }
 
@@ -780,14 +989,28 @@ onUnmounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 10px;
+  flex-wrap: wrap;
+  gap: var(--ui-space-xs) var(--ui-space-md);
   width: 100%;
 }
 
 .left-controls, .right-controls {
   display: flex;
   align-items: center;
-  gap: 10px;
+  flex-wrap: wrap;
+  gap: var(--ui-space-sm);
+}
+
+.right-controls { margin-inline-start: auto; }
+
+.message-view-select {
+  flex: 0 0 88px;
+  width: 88px;
+}
+
+.console-controls .message-encoding-action {
+  min-block-size: var(--panel-control-size);
+  padding-inline: var(--ui-space-md);
 }
 
 .console-controls :deep(.el-button + .el-button) {
@@ -804,14 +1027,17 @@ onUnmounted(() => {
   display: inline-flex;
   flex: none;
   align-items: center;
-  gap: 5px;
-  padding: 5px 8px;
+  gap: var(--ui-space-xs);
+  box-sizing: border-box;
+  block-size: var(--panel-control-size);
+  padding: 0 var(--ui-space-md);
   border: 1px solid var(--app-border);
   border-radius: 5px;
   cursor: pointer;
   color: var(--app-text-muted);
   background: var(--app-surface);
-  font-size: 11px;
+  font: inherit;
+  font-size: 12px;
   white-space: nowrap;
 }
 
@@ -837,18 +1063,24 @@ onUnmounted(() => {
 .search-container {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--ui-space-md);
+  flex-wrap: wrap;
+}
+
+.message-search-input {
+  max-width: 100%;
+  width: 200px;
 }
 
 .search-info-text {
   color: #096dd9;
   font-size: 12px;
-  margin-left: 8px;
 }
 
 /* 控制台内容区域 - 浅色主题 */
 .console-content-virtual {
   flex: 1;
+  min-height: 0;
   overflow: hidden;
   background-color: var(--app-surface);
   position: relative;
@@ -863,6 +1095,87 @@ onUnmounted(() => {
   line-height: 1.5;
   padding: 12px;
   box-sizing: border-box;
+}
+
+.scroller--csv {
+  padding: 0;
+}
+
+.scroller--csv :deep(.vue-recycle-scroller__item-wrapper),
+.message-csv-header {
+  min-width: var(--message-csv-width);
+}
+
+.scroller--csv :deep(.vue-recycle-scroller__slot) {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.message-csv-header {
+  display: grid;
+  grid-template-columns: var(--message-csv-grid);
+  min-height: 25px;
+  border-bottom: 1px solid var(--app-border-strong);
+  background-color: var(--app-surface-muted);
+  color: var(--app-text-secondary);
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.message-csv-header span {
+  min-width: 0;
+  align-content: center;
+  overflow: hidden;
+  padding: 2px 8px;
+  border-inline-start: 1px solid var(--app-border);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.message-line.message-line--formatted {
+  padding: 0;
+}
+
+.message-line.message-line--csv {
+  border-inline-start: 0;
+}
+
+.formatted-message-item {
+  display: flex;
+  align-items: center;
+  gap: var(--ui-space-sm);
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  padding: 0 7px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.formatted-message-item .timestamp { flex: none; }
+
+.message-line--csv .formatted-message-item {
+  display: grid;
+  grid-template-columns: var(--message-csv-grid);
+  gap: 0;
+  padding: 0;
+}
+
+.message-line--csv .timestamp {
+  margin: 0;
+  padding: 0 8px;
+}
+
+.message-line.message-line--inspecting {
+  background: color-mix(in srgb, var(--el-color-primary) 13%, var(--app-surface));
+  box-shadow: inset 2px 0 var(--el-color-primary);
 }
 
 .message-line {
@@ -929,14 +1242,14 @@ onUnmounted(() => {
 
 .loop-send-settings {
   display: grid;
-  gap: 10px;
+  gap: var(--ui-space-md);
   font-size: 12px;
 }
 
 .loop-frequency-row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--ui-space-md);
 }
 
 .loop-frequency-row .el-input-number {
@@ -1000,7 +1313,7 @@ onUnmounted(() => {
   align-items: center;
   flex-wrap: wrap;
   width: 100%;
-  gap: 6px;
+  gap: var(--ui-space-sm);
 }
 
 .message-entry {
@@ -1008,7 +1321,7 @@ onUnmounted(() => {
   flex: 1 1 360px;
   align-items: center;
   min-width: min(100%, 260px);
-  gap: 6px;
+  gap: var(--ui-space-sm);
 }
 
 .format-select {
@@ -1028,7 +1341,7 @@ onUnmounted(() => {
   flex: 0 0 auto;
   align-items: center;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: var(--ui-space-sm);
 }
 
 .composer-actions {

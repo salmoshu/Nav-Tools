@@ -34,9 +34,7 @@ test.beforeEach(async ({ page }) => {
   })
 })
 
-test('fits Sat Num initially and on reset, with manual Y zoom bounded at ±80', async ({
-  page,
-}) => {
+test('fits Sat Num initially and on reset, with manual Y zoom bounded at ±80', async ({ page }) => {
   const payload = encodeURIComponent(
     JSON.stringify({
       componentName: 'GnssDeviation',
@@ -48,10 +46,9 @@ test('fits Sat Num initially and on reset, with manual Y zoom bounded at ±80', 
   await page.goto(`/#card/${payload}`)
   await expect(page.locator('.deviation-container')).toBeVisible()
   await page.locator('.tracking-switch').click()
-  await expect(page.getByRole('switch', { name: 'Track', exact: true })).toHaveAttribute(
-    'aria-checked',
-    'false',
-  )
+  await expect(
+    page.getByRole('button', { name: 'Follow latest position', exact: true }),
+  ).toHaveAttribute('aria-pressed', 'false')
   await page.evaluate(
     async (epochs) => {
       const { useNmea } = await import('/src/composables/gnss/useNmea.ts')

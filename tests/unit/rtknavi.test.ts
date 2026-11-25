@@ -3,7 +3,7 @@ import {
   buildRtkNaviConfig,
   buildRtkNaviStreamPath,
   createDefaultRtkNaviSettings,
-  parseRtkNaviSolutionLine,
+  parseRtkNaviSolutionRecord,
 } from '@/core/gnsslib/RtkNavi'
 import { RTKNAVI_ADVANCED_CONFIG } from '@/core/gnsslib/RtkNaviAdvancedOptions'
 import { parseRtkPostConfig } from '@/core/gnsslib/RtkPostConfig'
@@ -132,7 +132,7 @@ describe('RTKNAVI configuration', () => {
 describe('RTKNAVI solution parser', () => {
   it('parses LLH solutions with quality, satellites, age and ratio', () => {
     expect(
-      parseRtkNaviSolutionLine(
+      parseRtkNaviSolutionRecord(
         '2005/04/02 00:00:30.000 35.160874837 139.613834647 69.2997 1 7 0.1 0.2 0.3 0.4 0.5 0.6 1.50 2.80',
       ),
     ).toEqual({
@@ -148,7 +148,7 @@ describe('RTKNAVI solution parser', () => {
   })
 
   it('ignores headers and incomplete rows', () => {
-    expect(parseRtkNaviSolutionLine('% GPST latitude longitude height Q ns')).toBeNull()
-    expect(parseRtkNaviSolutionLine('2005/04/02 00:00:30.000 35.1')).toBeNull()
+    expect(parseRtkNaviSolutionRecord('% GPST latitude longitude height Q ns')).toBeNull()
+    expect(parseRtkNaviSolutionRecord('2005/04/02 00:00:30.000 35.1')).toBeNull()
   })
 })

@@ -127,7 +127,7 @@ const healthy = computed(() => {
 .cards {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 6px;
+  gap: var(--ui-space-sm);
 }
 .card {
   background: var(--el-fill-color-light);

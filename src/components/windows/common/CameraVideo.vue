@@ -640,7 +640,7 @@ onUnmounted(() => {
   display: flex;
   flex: 0 0 auto;
   align-items: center;
-  gap: 8px;
+  gap: var(--ui-space-md);
   padding: 10px;
   border-top: 1px solid var(--app-border);
   background: var(--app-surface-muted);
@@ -650,7 +650,7 @@ onUnmounted(() => {
   display: flex;
   flex: 0 0 auto;
   align-items: center;
-  gap: 6px;
+  gap: var(--ui-space-sm);
   color: var(--app-text-secondary);
   font-size: 12px;
   white-space: nowrap;
@@ -658,7 +658,7 @@ onUnmounted(() => {
 
 .camera-source-config {
   display: grid;
-  gap: 16px;
+  gap: var(--ui-space-xl);
 }
 
 .camera-source-config p {
@@ -670,7 +670,7 @@ onUnmounted(() => {
 
 .camera-source-config label {
   display: grid;
-  gap: 7px;
+  gap: var(--ui-space-md);
   color: var(--app-text-secondary);
   font-size: 12px;
 }
@@ -679,7 +679,7 @@ onUnmounted(() => {
   display: flex;
   flex: 1;
   align-items: center;
-  gap: 9px;
+  gap: var(--ui-space-md);
   min-width: 120px;
   min-height: 34px;
   padding: 5px 8px;
@@ -757,7 +757,7 @@ onUnmounted(() => {
   left: 10px;
   bottom: 10px;
   display: grid;
-  gap: 6px;
+  gap: var(--ui-space-sm);
   max-width: calc(100% - 20px);
   max-height: calc(100% - 64px);
   padding: 8px 10px;
@@ -776,7 +776,7 @@ onUnmounted(() => {
 
 .bbox-target {
   display: grid;
-  gap: 2px;
+  gap: var(--ui-space-tight);
 }
 
 .bbox-target + .bbox-target {
@@ -787,7 +787,7 @@ onUnmounted(() => {
 .bbox-target-identity {
   display: flex;
   flex-wrap: wrap;
-  gap: 2px 12px;
+  gap: var(--ui-space-tight) var(--ui-space-lg);
 }
 
 .bbox-measurement {
@@ -808,7 +808,7 @@ onUnmounted(() => {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 6px 10px;
+  gap: var(--ui-space-sm) var(--ui-space-md);
 }
 
 .bbox-config {
@@ -854,7 +854,7 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 9px;
+  gap: var(--ui-space-md);
   max-width: min(420px, 82%);
   color: #aab7c6;
 }
@@ -877,7 +877,7 @@ onUnmounted(() => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 10px;
+  gap: var(--ui-space-md);
   color: #e7edf3;
   background: rgba(10, 15, 21, 0.72);
   backdrop-filter: blur(2px);
@@ -889,7 +889,7 @@ onUnmounted(() => {
   bottom: 10px;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--ui-space-sm);
   max-width: calc(100% - 20px);
   padding: 5px 9px;
   border: 1px solid rgba(255, 255, 255, 0.12);

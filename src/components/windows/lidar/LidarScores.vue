@@ -135,7 +135,7 @@ function rowClass({ row }: { row: ScoreRow }): string {
 .scores-summary {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: var(--ui-space-sm);
   padding: 8px 10px;
   border-bottom: 1px solid var(--app-border);
   background: var(--app-surface-muted);
@@ -188,7 +188,7 @@ function rowClass({ row }: { row: ScoreRow }): string {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: var(--ui-space-md);
   color: var(--app-text-secondary);
   font-size: 13px;
 }

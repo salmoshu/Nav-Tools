@@ -1,0 +1,30 @@
+:root {
+  --ui-space-tight: 2px;
+  --ui-space-xs: 4px;
+  --ui-space-sm: 6px;
+  --ui-space-md: 8px;
+  --ui-space-lg: 12px;
+  --ui-space-xl: 16px;
+  --ui-space-2xl: 20px;
+  --ui-space-3xl: 24px;
+  --panel-control-size: 28px;
+}
+
+/* Flex toolbars with their own gap still zero this built-in sibling margin. */
+.el-button + .el-button {
+  margin-left: var(--ui-space-md);
+}
+
+.el-form-item {
+  margin-bottom: var(--ui-space-xl);
+}
+
+.panel-icon-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--ui-space-sm);
+}
+
+.panel-icon-actions > .el-button + .el-button {
+  margin-inline-start: 0;
+}

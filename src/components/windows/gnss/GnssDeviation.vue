@@ -2,7 +2,7 @@
   <div class="deviation-container">
     <div class="control-panel">
       <div class="controls">
-        <el-select v-model="currentView" size="small" class="view-switch">
+        <el-select v-model="currentView" size="small" class="view-switch panel-control-select">
           <el-option :label="t('gnss.deviation.deviationView')" value="deviation" />
           <el-option :label="t('gnss.deviation.positionView')" value="position" />
           <el-option :label="t('gnss.deviation.speedView')" value="speed" />
@@ -10,24 +10,28 @@
         </el-select>
         <!-- track/尺寸/reset/清除 三个视图共用：偏差图作用于轨迹渲染，
              位置/速度图作用于点直径与 x 视口跟随 -->
-        <el-switch
-          v-model="isTracking"
-          inline-prompt
-          :active-text="t('gnss.deviation.tracking')"
-          :inactive-text="t('gnss.deviation.tracking')"
+        <el-button
+          size="small"
+          class="tracking-switch panel-icon-action"
+          :class="{ 'panel-icon-action--active': isTracking }"
+          :aria-pressed="isTracking"
           :aria-label="t('gnss.deviation.tracking')"
           :title="t('gnss.deviation.tracking')"
-          class="tracking-switch"
-          @change="toggleTracking"
-        />
+          @click="toggleTracking"
+        >
+          <el-icon aria-hidden="true"><Aim /></el-icon>
+        </el-button>
         <div class="point-size-control">
-          <span class="size-label">{{ t('gnss.deviation.size') }}:</span>
+          <el-icon class="point-size-icon" :title="t('gnss.deviation.size')" aria-hidden="true">
+            <CircleDot />
+          </el-icon>
           <el-slider
             v-model="pointSize"
             :min="5"
             :max="20"
             :step="1"
             :show-tooltip="false"
+            :aria-label="t('gnss.deviation.size')"
             class="point-slider"
             @change="updatePointSize"
             @dblclick="resetPointSize"
@@ -35,7 +39,7 @@
           <span class="size-value">{{ pointSize }}</span>
         </div>
 
-        <div class="right-buttons">
+        <div class="right-buttons panel-icon-actions">
           <input
             ref="referenceTrackInputRef"
             class="comparison-file-input"
@@ -45,52 +49,46 @@
             @change="loadReferenceTrack"
           />
           <el-button
-            type="primary"
             size="small"
-            class="control-btn status-toggle-btn reference-load-btn"
-            :class="{ active: referenceFile !== null }"
+            class="control-btn reference-load-btn panel-icon-action"
+            :class="{ 'panel-icon-action--active': referenceFile !== null }"
             :loading="loadingReference"
             :aria-label="t('gnss.deviation.loadReferenceTrack')"
             :title="referenceFileTitle"
             data-testid="load-reference-track"
             @click="referenceTrackInputRef?.click()"
           >
-            <el-icon><Flag /></el-icon>
-            <span class="status-toggle-copy">{{ t('gnss.deviation.referenceTrack') }}</span>
+            <el-icon aria-hidden="true"><Flag /></el-icon>
           </el-button>
           <el-button
-            type="primary"
             size="small"
-            class="control-btn status-toggle-btn"
-            :class="{ active: statusCardVisible }"
+            class="control-btn status-toggle-btn panel-icon-action"
+            :class="{ 'panel-icon-action--active': statusCardVisible }"
             :aria-pressed="statusCardVisible"
             :aria-label="t('gnss.deviation.toggleStatus')"
             :title="t('gnss.deviation.toggleStatus')"
             @click="statusCardVisible = !statusCardVisible"
           >
-            <el-icon><Odometer /></el-icon>
-            <span class="status-toggle-copy">{{ t('gnss.deviation.positionStatus') }}</span>
+            <el-icon aria-hidden="true"><Odometer /></el-icon>
           </el-button>
           <el-button
-            type="primary"
             size="small"
-            class="control-btn zoom-btn"
+            class="control-btn zoom-btn panel-icon-action"
             :aria-label="t('gnss.deviation.resetLayout')"
             :title="t('gnss.deviation.resetLayout')"
             @click="resetLayout"
-            ><el-icon><RefreshLeft /></el-icon
-            ><span class="control-btn-label">{{ t('gnss.deviation.resetLayout') }}</span></el-button
           >
+            <el-icon aria-hidden="true"><RefreshLeft /></el-icon>
+          </el-button>
           <el-button
-            type="primary"
             size="small"
-            class="control-btn clear-btn"
+            class="control-btn clear-btn panel-icon-action"
             :aria-label="t('gnss.deviation.clear')"
             :title="t('gnss.deviation.clear')"
             @click="clearTrack"
-            ><el-icon><Delete /></el-icon
-            ><span class="control-btn-label">{{ t('gnss.deviation.clear') }}</span></el-button
           >
+            <el-icon aria-hidden="true"><Delete /></el-icon>
+          </el-button>
         </div>
       </div>
     </div>
@@ -225,7 +223,7 @@
         <el-button
           text
           size="small"
-          class="comparison-close"
+          class="comparison-close panel-icon-action"
           :aria-label="t('gnss.deviation.clearReferenceTrack')"
           :title="t('gnss.deviation.clearReferenceTrack')"
           @click="clearReferenceTrack"
@@ -386,7 +384,7 @@
           class="bottom-status-current-quality"
           :style="{ color: currentQualityColor }"
           :data-quality="currentQuality"
-          >{{ currentQuality }}: {{ numberToQuality(currentQuality) }}</span
+          >{{ fixStatusShortLabel(currentQuality) }}</span
         >
         <template v-else-if="!isTracking">
           <span
@@ -394,7 +392,7 @@
             :key="row.quality"
             :style="{ color: fixStatusColor(row.quality) }"
             :data-quality="row.quality"
-            >{{ row.quality }}: {{ row.count }} ({{ row.ratio }}%)</span
+            >{{ fixStatusShortLabel(row.quality) }}:{{ row.count }} ({{ row.ratio }}%)</span
           >
         </template>
       </div>
@@ -405,7 +403,9 @@
 <script setup lang="ts">
 import { computed, inject, onMounted, onUnmounted, reactive, ref, watch, nextTick } from 'vue'
 import { gnssDisplayContext } from '@/composables/gnss/GnssDisplayContext'
+import { CircleDot } from '@lucide/vue'
 import {
+  Aim,
   Close,
   Delete,
   Flag,
@@ -417,7 +417,7 @@ import {
 import { ElMessage, ElNotification } from 'element-plus'
 import { useNmea, numberToQuality } from '@/composables/gnss/useNmea'
 import { useFileTimeline } from '@/composables/useFileTimeline'
-import { fixStatusColor, fixStatusColorRgb01 } from '@/components/windows/gnss/fixStatusColors'
+import { fixStatusColor, fixStatusColorRgb01, fixStatusShortLabel } from '@/components/windows/gnss/fixStatusColors'
 import {
   referenceQualityColor,
   referenceQualityColorRgb01,
@@ -1775,6 +1775,7 @@ function handleDocumentVisibilityChange(): void {
 }
 
 function toggleTracking(): void {
+  isTracking.value = !isTracking.value
   if (!renderer) return
   const latestPoint = getTrackingCenterPoint()
   if (!latestPoint) return
@@ -2275,7 +2276,7 @@ onUnmounted(() => {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 4px 8px;
+  gap: var(--ui-space-xs) var(--ui-space-md);
   min-width: 0;
   color: var(--app-text-secondary);
   font-size: 10px;
@@ -2351,37 +2352,10 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: flex-start;
+  gap: var(--ui-space-md);
   width: 100%;
   min-width: 0;
   position: relative;
-}
-
-.tracking-switch {
-  margin-right: 8px;
-}
-
-.switch-label {
-  font-size: 12px;
-  color: var(--app-text-muted);
-  margin-right: 15px;
-  line-height: 1;
-}
-
-.control-btn {
-  height: 28px;
-  min-height: 28px;
-  box-sizing: border-box;
-  padding: 6px 12px;
-  background-color: var(--app-surface-raised);
-  color: var(--app-text-secondary);
-  border: 1px solid var(--app-border);
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 12px;
-  transition: all 0.2s ease;
-  line-height: 1;
-  display: flex;
-  align-items: center;
 }
 
 .chart-container {
@@ -2434,11 +2408,6 @@ onUnmounted(() => {
   width: min(340px, calc(100% - 28px));
 }
 
-.deviation-status-card.is-comparison .status-card-metric-rms {
-  flex-wrap: wrap;
-  white-space: normal;
-}
-
 .deviation-status-card.is-compact {
   width: fit-content;
   min-width: 0;
@@ -2448,7 +2417,7 @@ onUnmounted(() => {
 .status-card-header {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: var(--ui-space-md);
   width: 100%;
   min-height: 34px;
   padding: 6px 10px;
@@ -2458,14 +2427,14 @@ onUnmounted(() => {
 .deviation-status-card.is-compact .status-card-header {
   width: auto;
   min-height: 34px;
-  gap: 5px;
+  gap: var(--ui-space-xs);
   padding: 6px 8px;
 }
 
 .status-card-heading {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
+  gap: var(--ui-space-md);
   min-width: 0;
   font-size: 12px;
   font-weight: 600;
@@ -2532,12 +2501,12 @@ onUnmounted(() => {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  gap: 8px;
+  gap: var(--ui-space-md);
 }
 
 .status-card-metrics {
   display: grid;
-  gap: 4px;
+  gap: var(--ui-space-xs);
   padding-top: 2px;
   font-size: 10.5px;
 }
@@ -2550,15 +2519,13 @@ onUnmounted(() => {
 }
 
 .status-card-metric-rms {
-  flex-wrap: nowrap;
-  gap: 4px;
-  overflow: hidden;
+  gap: var(--ui-space-tight) var(--ui-space-xs);
   font-size: 10px;
-  white-space: nowrap;
 }
 
 .status-card-metric-rms > span {
   flex: 0 0 auto;
+  white-space: nowrap;
 }
 
 .status-card-metric > span:first-child {
@@ -2589,7 +2556,7 @@ onUnmounted(() => {
   left: 54px;
   flex-direction: column;
   justify-content: center;
-  gap: 4px;
+  gap: var(--ui-space-xs);
   min-width: 74px;
   color: var(--app-text);
   font-size: 10px;
@@ -2603,7 +2570,7 @@ onUnmounted(() => {
 
 .layer-switcher {
   right: 14px;
-  gap: 4px;
+  gap: var(--ui-space-xs);
   padding: 5px;
   overflow: hidden;
   background: color-mix(in srgb, var(--app-surface-raised) 92%, transparent);
@@ -2723,7 +2690,7 @@ onUnmounted(() => {
   display: flex;
   flex: 0 0 auto;
   align-items: center;
-  gap: 10px;
+  gap: var(--ui-space-md);
   min-height: 29px;
   padding: 4px 12px;
   overflow: hidden;
@@ -2752,7 +2719,7 @@ onUnmounted(() => {
 .bottom-status-legend {
   display: flex;
   flex: 0 0 auto;
-  gap: 5px;
+  gap: var(--ui-space-xs);
   align-items: center;
   margin-left: auto;
   overflow-x: auto;
@@ -2774,7 +2741,6 @@ onUnmounted(() => {
 
 .view-switch {
   width: 100px;
-  margin-right: 12px;
   flex-shrink: 0;
 }
 
@@ -2818,17 +2784,17 @@ onUnmounted(() => {
 .point-size-control {
   display: flex;
   align-items: center;
-  margin-left: 10px;
+  gap: var(--ui-space-sm);
 }
 
-.size-label {
-  margin-right: 5px;
-  font-size: 12px;
+.point-size-icon {
+  flex: none;
+  color: var(--app-text-secondary);
+  font-size: 14px;
 }
 
 .point-slider {
   width: 60px;
-  margin: 0 5px;
 }
 
 .size-value {
@@ -2874,38 +2840,9 @@ onUnmounted(() => {
 }
 
 .right-buttons {
-  display: flex;
   flex: 0 0 auto;
-  align-items: center;
-  gap: 6px;
   min-width: 0;
   margin-left: auto;
-}
-
-.right-buttons .control-btn + .control-btn {
-  margin-left: 0;
-}
-
-.status-toggle-btn {
-  height: 28px;
-  min-height: 28px;
-  padding: 0 8px;
-  color: var(--app-text-muted);
-  font-size: 12px;
-  font-weight: 400;
-  gap: 4px;
-  box-sizing: border-box;
-}
-
-.status-toggle-btn.active {
-  color: var(--app-primary);
-}
-
-.status-toggle-copy {
-  font-size: 12px;
-  font-weight: 400;
-  line-height: 1;
-  white-space: nowrap;
 }
 
 @container (max-width: 800px) {
@@ -2915,22 +2852,11 @@ onUnmounted(() => {
 
   .view-switch {
     width: 86px;
-    margin-right: 8px;
-  }
-
-  .tracking-switch {
-    flex-shrink: 0;
-    margin-right: 4px;
-  }
-
-  .size-label {
-    display: none;
   }
 
   .point-size-control {
-    flex: 0 1 84px;
+    flex: 0 1 100px;
     min-width: 0;
-    margin-left: 4px;
   }
 
   .point-slider {
@@ -2938,25 +2864,6 @@ onUnmounted(() => {
     min-width: 24px;
   }
 
-  .status-toggle-btn {
-    width: 28px;
-    padding: 0;
-  }
-
-  .status-toggle-copy,
-  .control-btn-label {
-    display: none;
-  }
-
-  .right-buttons {
-    gap: 4px;
-  }
-
-  .right-buttons .control-btn {
-    width: 28px;
-    padding: 0;
-    justify-content: center;
-  }
 }
 
 @container (max-width: 520px) {
@@ -2965,7 +2872,7 @@ onUnmounted(() => {
   }
 
   .comparison-floating {
-    gap: 4px 6px;
+    gap: var(--ui-space-xs) var(--ui-space-sm);
   }
 
   .comparison-match-info {
@@ -2980,11 +2887,11 @@ onUnmounted(() => {
 @container (max-width: 320px) {
   .view-switch {
     width: 72px;
-    margin-right: 4px;
   }
 
+  .controls,
   .right-buttons {
-    gap: 2px;
+    gap: var(--ui-space-xs);
   }
 }
 

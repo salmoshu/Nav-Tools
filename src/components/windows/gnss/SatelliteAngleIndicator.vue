@@ -41,7 +41,7 @@ const angle = computed(() => {
 .sat-angle {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--ui-space-sm);
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }

@@ -2,13 +2,27 @@ import { validateNmeaChecksum } from '../data/NmeaStreamParser'
 import { RtkSolutionParser, nmeaQualityToRtkQuality } from './RtkSolution'
 import type { RtkPostTimeSpan } from './RtkPostProgress'
 import {
+  rtkLibExPositionMode,
+  validateRtkLibExParameters,
+  type RtkLibExParameters,
+} from './RtkLibExConfig'
+import {
   starRtkProcessing,
+  starRtkRequiresBase,
   stringifyStarRtkConfig,
+  type StarRtkConfigLayout,
   type StarRtkProcessingOptions,
 } from './StarRtkConfig'
 
 export type RtkPostConstellation = 'G' | 'R' | 'E' | 'J' | 'C' | 'I'
-export type RtkPostEngine = 'rnx2rtkp' | 'starrtk'
+// Keep the historical OpenGNSS identifier for existing saved settings.
+export const RTK_POST_ENGINES = ['rtklib-ex', 'rnx2rtkp', 'starrtk'] as const
+export type RtkPostEngine = (typeof RTK_POST_ENGINES)[number]
+export const RTK_POST_ENGINE_LABELS: Readonly<Record<RtkPostEngine, string>> = {
+  rnx2rtkp: 'OpenGNSS',
+  starrtk: 'StarRTK',
+  'rtklib-ex': 'RTKLIB-EX',
+}
 export type RtkPostOutputFormat = 'llh' | 'xyz' | 'enu' | 'nmea'
 export type StarRtkOutputFormat = 'llh' | 'nmea'
 export type RtkPostTimeFormat = 'tow' | 'hms'
@@ -81,6 +95,7 @@ export interface RtkPostOptions {
 export interface RtkPostSettings {
   engine?: RtkPostEngine
   starRtkProcessing?: StarRtkProcessingOptions
+  rtklibExParameters?: RtkLibExParameters
   executablePath: string
   roverObsPath: string
   baseObsPath: string
@@ -239,29 +254,81 @@ export function defaultRtkPostOutputPath(
   const withoutCompression = source.replace(/\.(?:gz|z)$/i, '')
   const extension = withoutCompression.match(/\.[^./\\]+$/)?.[0] ?? ''
   const base = extension ? withoutCompression.slice(0, -extension.length) : withoutCompression
-  return `${base}${engine === 'starrtk' ? '.starrtk' : ''}.${outputFormat === 'nmea' ? 'nmea' : 'pos'}`
+  const suffix = engine === 'starrtk' ? '.starrtk' : engine === 'rtklib-ex' ? '.rtklib-ex' : ''
+  return `${base}${suffix}.${outputFormat === 'nmea' ? 'nmea' : 'pos'}`
+}
+
+export function rtkPostRequiresBase(
+  request: Pick<RtkPostSettings, 'engine' | 'options' | 'starRtkProcessing' | 'rtklibExParameters'>,
+): boolean {
+  if (request.engine === 'starrtk') return starRtkRequiresBase(request.starRtkProcessing)
+  const mode =
+    request.engine === 'rtklib-ex'
+      ? rtkLibExPositionMode(request.rtklibExParameters)
+      : request.options.mode
+  return mode >= 1 && mode <= 6
+}
+
+function starRtkPostPaths(request: RtkPostSettings) {
+  const rover = requiredPath(request.roverObsPath, '流动站 RINEX OBS')
+  const output = requiredPath(request.outputPath, '解决方案输出')
+  requiredPath(request.executablePath, ' StarRTK 可执行文件')
+  const processing = starRtkProcessing(request.starRtkProcessing)
+  const base = starRtkRequiresBase(processing)
+    ? requiredPath(request.baseObsPath, '基站 RINEX OBS')
+    : ''
+  const navigation = Array.isArray(request.navPaths)
+    ? request.navPaths.map(optionalPath).filter(Boolean)
+    : []
+  if (navigation.length !== 1) throw new Error('StarRTK 需要一个 RINEX NAV 文件')
+  if (request.options?.outputFormat !== 'llh' && request.options?.outputFormat !== 'nmea') {
+    throw new Error('StarRTK 支持 POS (LLH) 或 NMEA 输出')
+  }
+  return { processing, rover, base, navigation: navigation[0], output }
+}
+
+export function validateRtkPostSettings(request: RtkPostSettings): void {
+  if (request.engine === 'starrtk') starRtkPostPaths(request)
+  else buildRtkPostArgs(request)
 }
 
 export function buildRtkPostArgs(request: RtkPostRunRequest | RtkPostSettings): string[] {
+  if (request.engine === 'starrtk') {
+    const { processing, base, rover, navigation, output } = starRtkPostPaths(request)
+    if (processing.positioning_mode !== 'rtk') throw new Error('StarRTK SPP 和 RTD 需要 YAML 配置')
+    return ['post', base, rover, navigation, output]
+  }
   const rover = requiredPath(request.roverObsPath, '流动站 RINEX OBS')
   const output = requiredPath(request.outputPath, '解决方案输出')
   const options = request.options
-  if (request.engine === 'starrtk') {
-    requiredPath(request.executablePath, ' StarRTK 可执行文件')
-    const base = requiredPath(request.baseObsPath, '基站 RINEX OBS')
-    const navigation = Array.isArray(request.navPaths)
-      ? request.navPaths.map(optionalPath).filter(Boolean)
-      : []
-    if (navigation.length !== 1) throw new Error('StarRTK 需要一个 RINEX NAV 文件')
-    if (options?.outputFormat !== 'llh' && options?.outputFormat !== 'nmea') {
-      throw new Error('StarRTK 支持 POS (LLH) 或 NMEA 输出')
-    }
-    return ['post', base, rover, navigation[0], output]
-  }
-  if (request.engine !== undefined && request.engine !== 'rnx2rtkp') {
+  const rtklibEx = request.engine === 'rtklib-ex'
+  if (request.engine !== undefined && request.engine !== 'rnx2rtkp' && !rtklibEx) {
     throw new Error('后处理引擎无效')
   }
-  if (!options || !Number.isInteger(options.mode) || options.mode < 0 || options.mode > 9) {
+  if (!options) throw new Error('解算参数无效')
+  if (rtklibEx) {
+    requiredPath(request.executablePath, 'RTKLIB-EX 可执行文件')
+    validateRtkLibExParameters(request.rtklibExParameters ?? {})
+  }
+  const relative = rtkPostRequiresBase(request)
+  const base = relative ? requiredPath(request.baseObsPath, '基站 RINEX OBS') : ''
+  if (!Array.isArray(request.navPaths)) throw new Error('导航文件列表无效')
+  const nav = request.navPaths.filter((path) => path.trim()).map((path) => path.trim())
+  if (nav.length === 0) throw new Error('请至少选择一个导航文件（RINEX NAV/GNAV/HNAV）')
+  const inputPaths = [rover, ...(base ? [base] : []), ...nav]
+  if (inputPaths.length > 16) throw new Error('rnx2rtkp 最多支持 16 个输入文件')
+
+  const args: string[] = []
+  const config = optionalPath(request.configPath)
+  if (config) args.push('-k', config)
+  args.push('-o', output)
+  // EX and OpenGNSS both call their binary rnx2rtkp. Only OpenGNSS gets the
+  // OpenGNSS form's CLI overrides. EX uses its own effective .conf verbatim.
+  if (rtklibEx) {
+    appendRtkPostTimeArgs(args, options)
+    return [...args, ...inputPaths]
+  }
+  if (!Number.isInteger(options.mode) || options.mode < 0 || options.mode > 9) {
     throw new Error('定位模式无效')
   }
   if (![1, 2, 3, 4].includes(options.frequency)) throw new Error('频点数无效')
@@ -284,18 +351,7 @@ export function buildRtkPostArgs(request: RtkPostRunRequest | RtkPostSettings): 
     throw new Error('卫星导航系统选项无效')
   }
 
-  const relative = options.mode >= 1 && options.mode <= 6
-  const base = relative ? requiredPath(request.baseObsPath, '基站 RINEX OBS') : ''
-  if (!Array.isArray(request.navPaths)) throw new Error('导航文件列表无效')
-  const nav = request.navPaths.filter((path) => path.trim()).map((path) => path.trim())
-  if (nav.length === 0) throw new Error('请至少选择一个导航文件（RINEX NAV/GNAV/HNAV）')
-  const inputPaths = [rover, ...(base ? [base] : []), ...nav]
-  if (inputPaths.length > 16) throw new Error('rnx2rtkp 最多支持 16 个输入文件')
-
-  const args: string[] = []
-  const config = optionalPath(request.configPath)
-  if (config) args.push('-k', config)
-  args.push('-o', output, '-p', String(options.mode), '-f', String(options.frequency))
+  args.push('-p', String(options.mode), '-f', String(options.frequency))
   args.push('-m', String(options.elevationMaskDeg), '-sys', constellations.join(','))
   args.push('-v', String(options.ratioThreshold))
   if (options.solutionType === 1) args.push('-b')
@@ -314,6 +370,11 @@ export function buildRtkPostArgs(request: RtkPostRunRequest | RtkPostSettings): 
   args.push('-d', String(options.timeDecimals))
   args.push('-y', String(options.outputStatus), '-x', String(options.traceLevel))
 
+  appendRtkPostTimeArgs(args, options)
+  return [...args, ...inputPaths]
+}
+
+function appendRtkPostTimeArgs(args: string[], options: RtkPostOptions): void {
   const start = optionalTime(options.startTime, '开始时间')
   const end = optionalTime(options.endTime, '结束时间')
   if (start && end && start.epochMs >= end.epochMs) throw new Error('结束时间必须晚于开始时间')
@@ -323,24 +384,29 @@ export function buildRtkPostArgs(request: RtkPostRunRequest | RtkPostSettings): 
     assertRange(options.intervalS, 0.000001, 86400, '历元间隔')
     args.push('-ti', String(options.intervalS))
   }
-  args.push(...inputPaths)
-  return args
 }
 
 export function buildStarRtkPostConfig(
   request: RtkPostSettings,
   outputPath = request.outputPath,
+  layout: StarRtkConfigLayout = 'flat',
 ): string {
-  return stringifyStarRtkConfig({
-    processing: starRtkProcessing(request.starRtkProcessing),
-    post: {
-      base_observations: request.baseObsPath.trim() || undefined,
-      rover_observations: request.roverObsPath.trim() || undefined,
-      navigation: request.navPaths.find((file) => file.trim())?.trim(),
-      solution_file: outputPath.trim() || undefined,
-      solution_format: request.options.outputFormat === 'nmea' ? 'nmea' : 'pos',
+  const processing = starRtkProcessing(request.starRtkProcessing)
+  return stringifyStarRtkConfig(
+    {
+      processing,
+      post: {
+        base_observations: starRtkRequiresBase(processing)
+          ? request.baseObsPath.trim() || undefined
+          : undefined,
+        rover_observations: request.roverObsPath.trim() || undefined,
+        navigation: request.navPaths.find((file) => file.trim())?.trim(),
+        solution_file: outputPath.trim() || undefined,
+        solution_format: request.options.outputFormat === 'nmea' ? 'nmea' : 'pos',
+      },
     },
-  })
+    layout,
+  )
 }
 
 export class RtkPostSolutionParser {
